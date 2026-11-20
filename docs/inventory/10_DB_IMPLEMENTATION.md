@@ -158,11 +158,12 @@ Legacy wrappers keep their live signatures and ACLs: `post_stock_movement`,
 * No negative stock, no override. A shortage posts nothing and writes a
   `stock_exceptions` row (`refused_shortage`); legacy wrappers raise 23514.
 * WAC mirrors valuation.js: `valued_qty / valued_value / unvalued_qty` buckets; unpriced
-  units are never valued at 0 and are NEVER consumed first: an outbound movement takes
-  valued units at the average, records the remainder as unvalued (`stock_movements.valued_qty`,
-  `unvalued_qty`; `value_change` for the valued part only) and an open cost reconciliation;
-  only an approved `inv_cost_reconcile` makes unknown cost known (owner decision 2026-11-20,
-  doc 20 section 3); value-only movements
+  units are never valued at 0, and on a balance holding both valued and unvalued units NO
+  order is assumed (owner decision 2026-11-20, doc 20 section 3): an outbound movement posts
+  only the certainly valued part at the average (`value_change`), the certainly unvalued part
+  with an open cost reconciliation, and carries the rest as pending allocation (no value,
+  one `issue_allocation` record) until an approved `inv_cost_reconcile` decides the split;
+  value-only movements
   (landed_cost, supplier_credit, cost_assignment) change value, not quantity; a reversal
   is the exact negation; a residual or negative value becomes a recorded variance.
   Currencies never mix in one balance or one total.
@@ -192,26 +193,54 @@ Legacy wrappers keep their live signatures and ACLs: `post_stock_movement`,
 
 ### 6.1 Valuation rule and cost reconciliation (owner decision 2026-11-20)
 * `stock_movements` gains `valued_qty`, `unvalued_qty` (magnitudes moved at known / unknown
-  cost); the posting answer carries them as `valued_qty_moved`, `unvalued_qty_moved` (the
-  balance's own `valued_qty` / `unvalued_qty` keys are unchanged).
+  cost), `pending_out_change`, `pending_in_change` (signed change of the balance's undecided
+  units) and `source_receipt_movement_id` (serial / lot-tracked specific identification); the
+  posting answer carries `valued_qty_moved`, `unvalued_qty_moved`, `pending_allocation_qty`,
+  `pending_out_change`, `pending_in_change`, `source_receipt_movement_id`, and the balance's
+  `pending_allocation_out_qty` / `pending_allocation_in_qty`. New `valuation_status` value
+  `pending_allocation`. New movement type `cost_allocation` (internal only; `inv_post_movement`
+  refuses it like `cost_assignment`).
+* `stock_records` gains `pending_allocation_out_qty` (units that left with an undecided split,
+  still inside the buckets) and `pending_allocation_in_qty` (arrived by transfer, in neither
+  bucket); CHECK `stock_records_value_buckets_chk`:
+  `qty_on_hand + pending_out - pending_in = valued_qty + unvalued_qty`.
+* Outbound rule (`_inv_post`): `maxv = least(on_hand, valued + pending_in)`,
+  `maxu = least(on_hand, unvalued + pending_in)`; certainly valued `= greatest(0, q - maxu)` at
+  the average; certainly unvalued `= greatest(0, q - maxv)`; the rest is ambiguous and posts no
+  value. Serial / lot-tracked items on a mixed balance must name `source_receipt_movement_id`
+  (actual receipt cost, never ambiguous) or are refused. While a balance has pending allocation,
+  `cost_assignment` and an opening correction are refused.
 * Table `inventory_cost_reconciliations` (org, country, site, item_id, location_id, stock_id,
-  movement_id, origin_movement_id, kind `unpriced_inbound|consumed|transfer|reversal_return|legacy`,
+  movement_id, origin_movement_id, kind `unpriced_inbound|consumed|transfer|reversal_return|legacy|issue_allocation`,
   consumed, unvalued_qty, currency, status `open|resolved|written_off|cancelled`,
   proposed_resolution / proposed_unit_cost / proposed_by, resolution_source
   `reconciliation|opening_batch|reversal`, resolved_unit_cost, resolved_value, applied_qty,
   not_applied_qty, resolution_movement_id, approval_request_id, resolved_by / resolved_at,
-  evidence, created_by). CHECK `inventory_cost_reconciliations_sod_chk`: a reconciliation-sourced
+  evidence, created_by; for `issue_allocation`: `snapshot` (balance split before the movement),
+  `holder_stock_id` (where transferred undecided units sit), `proposed_valued_qty`,
+  `resolved_valued_qty`, `resolved_unvalued_qty`, `holder_resolution_movement_id`; its
+  `unvalued_qty` holds the undecided quantity). CHECK `inventory_cost_reconciliations_sod_chk`: a reconciliation-sourced
   resolution needs `resolved_by <> created_by`. Blind-count restrictive policy included.
   `cancelled` is a fourth status beyond the brief (open|resolved|written_off): it is set only
   when a reversal or an approved opening correction removes the units.
 * `inv_cost_reconcile(p_payload {reconciliation_id, idempotency_key, note?, evidence?,
-  resolution?, unit_cost?})` -> `{id, status, resolved_value, applied_qty, not_applied_qty,
-  movement_id, posting:'none'}`. Needs `stock:financial_post`, an APPROVED
-  `cost_reconciliation` request whose proposal matches, resolver != creator.
+  resolution?, unit_cost?, valued_qty?})` -> `{id, status, resolved_value, applied_qty, not_applied_qty,
+  movement_id, posting:'none'}` (for an `issue_allocation`: `{id, status, kind,
+  resolved_valued_qty, resolved_unvalued_qty, resolved_value, movement_id, holder_movement_id,
+  posting:'none'}`). Needs `stock:financial_post`, an APPROVED `cost_reconciliation` request
+  whose proposal matches, resolver != creator. For an issue allocation the proposal is
+  `{valued_qty}` (0..undecided qty, evidence or reason required, never written off, must fit the
+  buckets); posting = linked `cost_allocation` movement(s) (`source_doc_type issue_allocation`,
+  `source_doc_id` = the decided movement), then the undecided-unvalued part becomes ordinary
+  consumed / moved reconciliations.
   Direct `cost_assignment` through `inv_post_movement` is now refused (22023).
 * Views: `v_inv_valuation` (stock_id, item_code, ownership, currency, qty_on_hand,
-  valued_qty, unvalued_qty, valued_amount, avg_unit_cost, valuation_complete,
-  open_reconciliations, valuation_status), `v_inv_cost_reconciliations` (money masked
+  valued_qty, unvalued_qty, valued_amount, avg_unit_cost, valuation_complete (false while
+  unvalued OR pending), open_reconciliations, valuation_status (+ `pending_allocation`),
+  pending_allocation_qty, pending_allocation_out_qty, pending_allocation_in_qty,
+  open_allocations), `v_inv_cost_reconciliations` (+ allocation_qty, snapshot, holder_stock_id,
+  proposed_valued_qty, resolved_valued_qty, resolved_unvalued_qty, resolution_movement_id,
+  holder_resolution_movement_id; money masked
   without `stock:view_value`). `inv_valuation_summary` adds `valuation_complete` (top level and
   per currency) and `open_reconciliations`.
 
@@ -277,7 +306,9 @@ Legacy wrappers keep their live signatures and ACLs: `post_stock_movement`,
 | 110000 | 25 rows `where source_module='Inventory Control Center'` in both tables | deletes exactly those 25 ids (only while still owned by that module) |
 | 111000 | insert of an `inventory` schedule accepted (in a rolled-back txn) | refuses while an `inventory` schedule exists; restores the live CHECK |
 
-Edited in place (all unapplied): 100000 (`_inv_post` valued-first, `valued_qty` / `unvalued_qty`
+Edited in place (all unapplied): 100000 (`_inv_post` with no assumed order + pending allocation,
+`cost_allocation`, `inv_reverse_movement` reverses a decided allocation with its movement,
+`valued_qty` / `unvalued_qty`
 columns, `_inv_cost_rec_track` stub hook, `inv_post_movement` refuses `cost_assignment`,
 `transfer_stock_entry` passes `carried_from_stock_id`), 103000 (transfer legs pass
 `carried_from_stock_id`).
@@ -285,20 +316,20 @@ columns, `_inv_cost_rec_track` stub hook, `inv_post_movement` refuses `cost_assi
 ## 7. Test results
 
 `node --test --test-concurrency=1 supabase/tests/inventory_*.test.mjs` (PGlite, synthetic data)
-**66 tests, 65 pass, 0 fail, 1 skipped** (node:test top-level count; the skip is the
+**69 tests, 68 pass, 0 fail, 1 skipped** (node:test top-level count; the skip is the
 real-PostgreSQL concurrency file, which skips itself when the staging cluster is down; ~147 s).
 Real PostgreSQL 16 (staging cluster, throwaway database, then dropped):
-`inventory_concurrency.test.mjs` **1 passing** (skipped automatically when the cluster is down).
+`inventory_concurrency.test.mjs` **2 tests, 2 pass** (re-run 2026-11-20 after the no-assumed-order change; skipped automatically when the cluster is down).
 
 | File | Covers |
 |---|---|
 | `inventory_harness.test.mjs` | all twelve migrations apply over the live-shaped platform (approval engine resolver, parts_consumption, material_issues, metric catalogue, report_schedules copied from production) |
-| `inventory_ledger.test.mjs` | WAC maths, valued-first (owner rule), negative refused -> exception, idempotent retries / key reuse, reversal (once, exact), immutable ledger, direct writes refused, cross-company isolation, country/site scope, legacy wrappers |
+| `inventory_ledger.test.mjs` | WAC maths, mixed balance assumes no order (4 from 5 valued + 3 unpriced: 1 valued -10, 3 pending allocation), negative refused -> exception, idempotent retries / key reuse, reversal (once, exact), immutable ledger, direct writes refused, cross-company isolation, country/site scope, legacy wrappers |
 | `inventory_audits.test.mjs` | blind enforcement via every endpoint, cutoff reconciliation (expected 4, counted 3, value -20), late offline counts, recount via approval by another person, adjustment approval + posting through the ledger, close rules |
-| `inventory_flows.test.mjs` | transfer valued-first (10 at 4 = 40 + 1 unvalued carried; reconciliation travels and splits), reservations, consignment, value-only movements, cost assignment only via approved reconciliation, GRN + three-way match, opening balance via approval (legacy cost record: 1 cancelled, 3 resolved at 7 = 21), master review |
+| `inventory_flows.test.mjs` | transfer with no assumed order (11 of 10 valued + 2 unvalued: 9 valued = 36, 1 unvalued, 1 undecided travelling as pending allocation; partial receipt and return create chained allocations; all three decided in order, value 40 conserved, nothing pending after), reservations, consignment, value-only movements, cost assignment only via approved reconciliation, GRN + three-way match, opening balance via approval (legacy cost record: 1 cancelled, 3 resolved at 7 = 21), master review |
 | `inventory_tyres.test.mjs` | custody derivation, conflicts with evidence, read-only proof, scrap guard, OEM approval |
 | `inventory_api.test.mjs` | payload contract, replay, internals closed, masked views, counter view |
-| `inventory_controls.test.mjs` | receipt -> availability -> reservation -> issue to WO; missing cost (5 at 10 + 3 unpriced, issue 7: -50 valued, 2 unvalued consumed, 1 open), finance view, every SoD refusal, write-off; reversal re-opens the record; policy route (2 stages, role + named person, signature, distinct reviewers, ambiguity refused); count -> discrepancy -> recount -> approval -> adjustment with every refusal (counter, recounter, proposer, requester, wrong recounter, DB CHECKs); opening preparer refused; single-connection lock ordering + double-submit; tyre fit/removal/transfer/scrap custody with tyre_records hash unchanged at each step; supplier vs company stock; company/country/site/role scoping; ERP statuses (matched, qty_diff, value_diff, inventory_only, erp_only incl. other currency, unvalued, no double count); 25 KPIs in sync; DEFINER search_path + no PUBLIC/anon execute; CPK/expense inputs hashed before and after |
+| `inventory_controls.test.mjs` | receipt -> availability -> reservation -> issue to WO; missing cost (5 at 10 + 3 unpriced, issue 7: 4 valued -40, 2 unvalued consumed, 1 undecided issue_allocation with no value), finance view (pending_allocation_qty, valuation_complete false), every SoD refusal, write-off; issue allocation decided with evidence -> linked cost_allocation -10, creator refused, write-off refused, DB sod_chk; reversal of an open allocation cancels it, of a decided one restores the balance exactly; reversal re-opens the record; policy route (2 stages, role + named person, signature, distinct reviewers, ambiguity refused); count -> discrepancy -> recount -> approval -> adjustment with every refusal (counter, recounter, proposer, requester, wrong recounter, DB CHECKs); opening preparer refused; single-connection lock ordering + double-submit; tyre fit/removal/transfer/scrap custody with tyre_records hash unchanged at each step; supplier vs company stock; company/country/site/role scoping; ERP statuses (matched, qty_diff, value_diff, inventory_only, erp_only incl. other currency, unvalued, no double count); 25 KPIs in sync; DEFINER search_path + no PUBLIC/anon execute; CPK/expense inputs hashed before and after |
 | `inventory_rollback.test.mjs` | exact catalog restore across all twelve files, refusals (ledger, locations, approvals, cost reconciliations), apply -> rollback -> apply |
 | `inventory_concurrency.test.mjs` | two real connections: B blocks on A's row lock (~1.1 s) and is refused as shortage, never negative; the same idempotency key from two connections posts once; ledger sum = balance |
 

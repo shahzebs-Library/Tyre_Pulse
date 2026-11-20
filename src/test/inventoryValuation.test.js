@@ -4,7 +4,7 @@ import path from 'node:path'
 import {
   num, roundMoney, emptyBalance, applyMovement, replay, transfer, onHand, averageCost, valuationStatus,
   allocateLandedCost, summarizeValuation, adjustmentValue, ageingBuckets, exposure, tyreStockValuation, MOVEMENT_TYPES,
-  reconcileCost,
+  reconcileCost, resolveAllocation, pendingAllocationQty,
 } from '../lib/inventory/valuation'
 
 const SAR = (over = {}) => emptyBalance({ currency: 'SAR', ...over })
@@ -89,31 +89,54 @@ describe('unvalued stock is never valued at 0', () => {
     expect(valuationStatus(r.balance)).toBe('unvalued')
   })
 
-  it('mixed balance: valued units leave first; only the uncovered part is unvalued (owner decision)', () => {
-    let r = step(SAR(), { type: 'opening', qty: 3 })
-    r = step(r.balance, { type: 'receipt', qty: 2, unitCost: 100 })
-    expect(valuationStatus(r.balance)).toBe('partially_valued')
-    r = step(r.balance, { type: 'issue', qty: 4 })
-    expect(r.valuedQty).toBe(2)
-    expect(r.unvaluedQty).toBe(2)
-    expect(r.unvaluedQtyChange).toBe(-2)
-    expect(r.valueChange).toBe(-200) // valued part only; no cost invented for the other 2
-    expect(r.valuationStatus).toBe('partially_valued')
-    expect(r.reconciliation).toEqual({ required: true, qty: 2, consumed: true, kind: 'consumed' })
-    expect(r.balance.unvaluedQty).toBe(1)
-    expect(r.balance.valuedQty).toBe(0)
-    expect(averageCost(r.balance)).toBe(null)
-  })
-
-  it('an issue fully covered by valued units leaves unpriced units untouched', () => {
+  it('mixed balance: no order is assumed; the ambiguous part is pending allocation with no value (owner decision)', () => {
     let r = step(SAR(), { type: 'opening', qty: 3 })
     r = step(r.balance, { type: 'receipt', qty: 5, unitCost: 10 })
+    expect(valuationStatus(r.balance)).toBe('partially_valued')
+    const before = r.balance
     r = step(r.balance, { type: 'issue', qty: 4 })
+    // up to 3 of the 4 could be the unpriced ones, so only 1 is certainly valued
+    expect(r.valuedQty).toBe(1)
     expect(r.unvaluedQty).toBe(0)
-    expect(r.valueChange).toBe(-40)
+    expect(r.pendingAllocationQty).toBe(3)
+    expect(r.valueChange).toBe(-10) // the certain part only; nothing for the 3
+    expect(r.valuationStatus).toBe('pending_allocation')
     expect(r.reconciliation).toBe(null)
-    expect(r.balance.unvaluedQty).toBe(3)
+    expect(r.allocation).toEqual({ required: true, qty: 3, kind: 'issue_allocation',
+      snapshot: { valuedQty: 5, unvaluedQty: 3, valuedValue: 50, pendingOutQty: 0, pendingInQty: 0 } })
+    // the split is not updated for the 3: buckets keep them, carried as pending
+    expect(r.balance).toMatchObject({ valuedQty: 4, valuedValue: 40, unvaluedQty: 3, pendingOutQty: 3 })
+    expect(onHand(r.balance)).toBe(onHand(before) - 4)
+    expect(valuationStatus(r.balance)).toBe('pending_allocation')
     expect(averageCost(r.balance)).toBe(10)
+  })
+
+  it('what arithmetic proves is never ambiguous (issue more than the valued units)', () => {
+    let r = step(SAR(), { type: 'opening', qty: 3 })
+    r = step(r.balance, { type: 'receipt', qty: 5, unitCost: 10 })
+    r = step(r.balance, { type: 'issue', qty: 7 })
+    expect(r).toMatchObject({ valuedQty: 4, unvaluedQty: 2, pendingAllocationQty: 1, valueChange: -40 })
+    expect(r.reconciliation).toEqual({ required: true, qty: 2, consumed: true, kind: 'consumed' })
+    const all = step(step(step(SAR(), { type: 'opening', qty: 3 }).balance, { type: 'receipt', qty: 5, unitCost: 10 }).balance,
+      { type: 'issue', qty: 8 })
+    expect(all).toMatchObject({ valuedQty: 5, unvaluedQty: 3, pendingAllocationQty: 0, valueChange: -50 })
+  })
+
+  it('a balance with only valued or only unvalued units is never ambiguous', () => {
+    const v = step(step(SAR(), { type: 'receipt', qty: 5, unitCost: 10 }).balance, { type: 'issue', qty: 4 })
+    expect(v).toMatchObject({ valuedQty: 4, pendingAllocationQty: 0, valueChange: -40, allocation: null })
+    const u = step(step(SAR(), { type: 'opening', qty: 3 }).balance, { type: 'issue', qty: 2 })
+    expect(u).toMatchObject({ unvaluedQty: 2, pendingAllocationQty: 0, valueChange: null, allocation: null })
+  })
+
+  it('serial / lot-tracked items name the receipt and use its actual cost', () => {
+    let r = step(SAR(), { type: 'opening', qty: 3 })
+    r = step(r.balance, { type: 'receipt', qty: 5, unitCost: 10 })
+    expect(applyMovement(r.balance, { type: 'issue', qty: 2, tracked: true }).reason).toBe('source_receipt_required')
+    const priced = step(r.balance, { type: 'issue', qty: 2, tracked: true, sourceReceipt: { unitCost: 10 } })
+    expect(priced).toMatchObject({ valuedQty: 2, pendingAllocationQty: 0, valueChange: -20 })
+    const unpriced = step(r.balance, { type: 'issue', qty: 2, tracked: true, sourceReceipt: { unitCost: null } })
+    expect(unpriced).toMatchObject({ unvaluedQty: 2, pendingAllocationQty: 0, valueChange: null })
   })
 
   it('issue entirely from unvalued units has null value and needs a reconciliation', () => {
@@ -171,6 +194,63 @@ describe('cost reconciliation (nothing becomes valued without it)', () => {
   })
   it('only an open reconciliation can be resolved', () => {
     expect(reconcileCost(bal(), { ...rec, status: 'resolved' }, { approved: true }).reason).toBe('not_open')
+  })
+})
+
+describe('issue allocation (the ambiguous part is decided by a person, never assumed)', () => {
+  const mixedIssue = () => {
+    let r = step(SAR(), { type: 'opening', qty: 3 })
+    r = step(r.balance, { type: 'receipt', qty: 5, unitCost: 10 })
+    return step(r.balance, { type: 'issue', qty: 4 })
+  }
+  const alloc = { status: 'open', qty: 3, createdBy: 'u1', proposedBy: 'u2' }
+  const ok = { approved: true, approvedBy: 'u3', resolvedBy: 'u4' }
+  it('resolving posts the value for the units decided valued and clears the pending split', () => {
+    const iss = mixedIssue()
+    const r = resolveAllocation(iss.balance, null, alloc, { ...ok, valuedQty: 2 })
+    expect(r.ok).toBe(true)
+    expect(r.valueChange).toBe(-20)
+    expect(r.source).toMatchObject({ valuedQty: 2, valuedValue: 20, unvaluedQty: 2, pendingOutQty: 0 })
+    expect(onHand(r.source)).toBe(onHand(iss.balance))
+    expect(valuationStatus(r.source)).toBe('partially_valued')
+    expect(r.reconciliation).toEqual({ required: true, qty: 1, consumed: true, kind: 'consumed' })
+  })
+  it('refuses the creator, an unapproved decision, write-off, and an impossible split', () => {
+    const b = mixedIssue().balance
+    expect(resolveAllocation(b, null, alloc, { ...ok, valuedQty: 1, resolvedBy: 'u1' }).reason).toBe('segregation_of_duties')
+    expect(resolveAllocation(b, null, alloc, { valuedQty: 1, approved: false }).reason).toBe('approval_required')
+    expect(resolveAllocation(b, null, alloc, { ...ok, valuedQty: 4 }).reason).toBe('invalid_valued_qty')
+    expect(resolveAllocation(b, null, alloc, { ...ok }).reason).toBe('invalid_valued_qty')
+    expect(reconcileCost(b, { ...alloc, kind: 'issue_allocation' }, { ...ok, resolution: 'written_off' }).reason)
+      .toBe('use_resolve_allocation')
+  })
+  it('an in-stock cost cannot be placed while a split is pending', () => {
+    const b = mixedIssue().balance
+    expect(reconcileCost(b, { status: 'open', qty: 1, consumed: false, createdBy: 'u1' },
+      { ...ok, resolution: 'resolved', unitCost: 5 }).reason).toBe('allocation_pending')
+  })
+  it('a transfer carries the undecided units to the holder; resolution moves value there', () => {
+    let s0 = step(SAR(), { type: 'opening', qty: 3 }).balance
+    s0 = step(s0, { type: 'receipt', qty: 5, unitCost: 10 }).balance
+    const t = transfer(s0, null, 4)
+    expect(t.pendingAllocationQty).toBe(3)
+    expect(t.destination).toMatchObject({ valuedQty: 1, valuedValue: 10, pendingInQty: 3 })
+    expect(onHand(t.destination)).toBe(4)
+    expect(pendingAllocationQty(t.destination)).toBe(3)
+    // the holder cannot resolve anything of its own until the upstream split is decided
+    const iss = step(t.destination, { type: 'issue', qty: 4 })
+    expect(iss.pendingAllocationQty).toBe(3)
+    expect(resolveAllocation(iss.balance, null, alloc, { ...ok, valuedQty: 3 }).reason).toBe('upstream_allocation_open')
+    const r = resolveAllocation(t.source, t.destination, alloc, { ...ok, valuedQty: 3 })
+    expect(r.ok).toBe(true)
+    expect(r.holder).toMatchObject({ valuedQty: 4, valuedValue: 40, unvaluedQty: 0, pendingInQty: 0 })
+    expect(r.source).toMatchObject({ valuedQty: 1, unvaluedQty: 3, pendingOutQty: 0 })
+    expect(r.source.valuedValue + r.holder.valuedValue).toBe(50) // value conserved
+  })
+  it('a reversal of an issue with an open allocation restores the balance exactly', () => {
+    const iss = mixedIssue()
+    const rev = step(iss.balance, { type: 'reversal', original: iss })
+    expect(rev.balance).toMatchObject({ valuedQty: 5, valuedValue: 50, unvaluedQty: 3, pendingOutQty: 0 })
   })
 })
 
@@ -350,6 +430,14 @@ describe('summarizeValuation', () => {
     const s = summarizeValuation(rows)
     expect(s.byCurrency.SAR.consignment.agreedValue).toBe(50)
     expect(s.byCurrency.SAR.supplier.qty).toBe(7)
+  })
+})
+
+describe('summarizeValuation with pending allocation', () => {
+  it('a pending split makes the owned value incomplete', () => {
+    const r = summarizeValuation([{ currency: 'SAR', ownership: 'owned', valuedQty: 4, valuedValue: 40, unvaluedQty: 3, pendingOutQty: 3 }])
+    expect(r.byCurrency.SAR.owned).toMatchObject({ pendingAllocationQty: 3, pendingAllocationLines: 1, valuationComplete: false,
+      value: null, valueReason: 'pending_allocation_present', valuedAmount: 40 })
   })
 })
 

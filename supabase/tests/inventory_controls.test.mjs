@@ -52,7 +52,7 @@ test('purchase receipt to availability, reservation, issue to a work order', asy
   } finally { await db.close() }
 })
 
-test('valuation with missing cost: unvalued quantity preserved, never consumed first, reconciliation required', async t => {
+test('valuation with missing cost: no order assumed, pending allocation, reconciliation required', async t => {
   const { db, L, post, bal } = await setup()
   try {
     const before = await one(db, PROTECTED)
@@ -63,32 +63,45 @@ test('valuation with missing cost: unvalued quantity preserved, never consumed f
     assert.equal(recs.length, 1); assert.equal(recs[0].kind, 'unpriced_inbound'); assert.equal(Number(recs[0].unvalued_qty), 3)
     assert.equal(recs[0].created_by, U.keeper)
 
-    await t.test('an issue takes valued units first; only the uncovered part is unvalued and opens a consumed reconciliation', async () => {
+    let issueMov
+    await t.test('a mixed balance assumes no order: certain parts post, the ambiguous part opens an issue_allocation with no value', async () => {
+      // 5 valued + 3 unvalued, issue 7: at least 4 are valued, at least 2 unvalued, 1 undecided
       const i = await call(db, U.keeper, 'inv_issue', { stock_id: sid, qty: 7 })
-      assert.equal(Number(i.value_change), -50, 'valued part only, no invented cost')
-      assert.equal(Number(i.valued_qty_moved), 5); assert.equal(Number(i.unvalued_qty_moved), 2)
-      assert.equal(i.valuation_status, 'partially_valued')
+      issueMov = i.movement_id
+      assert.equal(Number(i.value_change), -40, 'the certain part only; no value for the undecided unit')
+      assert.equal(Number(i.valued_qty_moved), 4); assert.equal(Number(i.unvalued_qty_moved), 2)
+      assert.equal(Number(i.pending_allocation_qty), 1); assert.equal(i.valuation_status, 'pending_allocation')
       const b = await bal(sid)
-      assert.equal(Number(b.qty_on_hand), 1); assert.equal(Number(b.unvalued_qty), 1); assert.equal(Number(b.valued_value), 0)
-      const all = await q(db, `select kind, consumed, unvalued_qty, status, movement_id from inventory_cost_reconciliations where stock_id = $1 order by consumed, unvalued_qty`, [sid])
-      assert.deepEqual(all.map(x => [x.consumed, Number(x.unvalued_qty), x.status]), [[false, 1, 'open'], [true, 2, 'open']])
-      assert.equal(all[1].movement_id, i.movement_id)
+      assert.equal(Number(b.qty_on_hand), 1)
+      // the split is NOT updated for the undecided unit: it stays in the buckets as pending
+      assert.deepEqual([Number(b.valued_qty), Number(b.valued_value), Number(b.unvalued_qty), Number(b.pending_allocation_out_qty)], [1, 10, 1, 1])
+      const all = await q(db, `select kind, consumed, unvalued_qty, status, movement_id, snapshot from inventory_cost_reconciliations where stock_id = $1 order by kind`, [sid])
+      assert.deepEqual(all.map(x => [x.kind, x.consumed, Number(x.unvalued_qty), x.status]),
+        [['issue_allocation', false, 1, 'open'], ['unpriced_inbound', false, 1, 'open'], ['unpriced_inbound', true, 2, 'open']])
+      assert.equal(all[0].movement_id, i.movement_id)
+      assert.deepEqual([Number(all[0].snapshot.valued_qty), Number(all[0].snapshot.unvalued_qty), Number(all[0].snapshot.valued_value)], [5, 3, 50])
+      assert.equal(all[2].movement_id, i.movement_id)
+      // an in-stock cost cannot be placed while the split is undecided
+      const ledger = await one(db, `select count(*)::int c from stock_movements where stock_id = $1 and movement_type = 'cost_allocation'`, [sid])
+      assert.equal(ledger.c, 0)
     })
 
     await t.test('finance view: valued and unvalued side by side; partial value never labelled total', async () => {
       const v = await asUser(db, U.reviewer, () => one(db, 'select * from v_inv_valuation where stock_id = $1', [sid]))
-      assert.equal(Number(v.valued_qty), 0); assert.equal(Number(v.unvalued_qty), 1); assert.equal(v.valuation_complete, false)
-      assert.equal(v.open_reconciliations, 2); assert.equal(v.currency, 'SAR')
+      assert.equal(Number(v.valued_qty), 1); assert.equal(Number(v.unvalued_qty), 1); assert.equal(v.valuation_complete, false)
+      assert.equal(Number(v.pending_allocation_qty), 1); assert.equal(v.valuation_status, 'pending_allocation')
+      assert.equal(v.open_reconciliations, 3); assert.equal(v.open_allocations, 1); assert.equal(v.currency, 'SAR')
       const hidden = await asUser(db, U.keeper, () => one(db, 'select valued_amount from v_inv_valuation where stock_id = $1', [sid]))
       assert.equal(hidden.valued_amount, null, 'money hidden without stock:view_value')
       const s = await rpc(db, U.reviewer, 'inv_valuation_summary', ['KSA'])
       assert.equal(s.valuation_complete, false); assert.ok(s.open_reconciliations >= 2)
       const sar = s.by_currency.find(x => x.currency === 'SAR')
       assert.equal(sar.owned_value, null); assert.equal(sar.valuation_complete, false)
+      assert.equal(Number(sar.owned_pending_allocation_qty), 1); assert.equal(sar.owned_value_reason, 'pending_allocation_present')
     })
 
     await t.test('nothing is valued without an approved reconciliation; separation of duties on every step', async () => {
-      const consumed = await one(db, `select id from inventory_cost_reconciliations where stock_id = $1 and consumed`, [sid])
+      const consumed = await one(db, `select id from inventory_cost_reconciliations where stock_id = $1 and consumed and kind <> 'issue_allocation'`, [sid])
       await assert.rejects(call(db, U.approver, 'inv_cost_reconcile', { reconciliation_id: consumed.id }), /approval is required/)
       await assert.rejects(call(db, U.keeper, 'inv_request_approval', { entity_type: 'cost_reconciliation', entity_id: consumed.id,
         proposal: { resolution: 'resolved', unit_cost: 9 }, reason: 'x' }), code('42501'), 'keeper has neither financial_post nor view_value')
@@ -118,8 +131,39 @@ test('valuation with missing cost: unvalued quantity preserved, never consumed f
         resolved_by='${U.keeper}', resolved_at=now() where stock_id='${sid}' and status='open'`), /sod_chk/)
     })
 
+    await t.test('an issue allocation is decided by a person with evidence; only then does the value post (linked, append-only)', async () => {
+      const al = await one(db, `select id from inventory_cost_reconciliations where stock_id = $1 and kind = 'issue_allocation'`, [sid])
+      await assert.rejects(call(db, U.reviewer, 'inv_request_approval', { entity_type: 'cost_reconciliation', entity_id: al.id,
+        proposal: { resolution: 'written_off' }, reason: 'x' }), /cannot be written off/)
+      await assert.rejects(call(db, U.reviewer, 'inv_request_approval', { entity_type: 'cost_reconciliation', entity_id: al.id,
+        proposal: { valued_qty: 2 }, reason: 'x' }), code('22023'), 'more than the undecided quantity')
+      await assert.rejects(call(db, U.reviewer, 'inv_request_approval', { entity_type: 'cost_reconciliation', entity_id: al.id,
+        proposal: { valued_qty: 1 } }), /evidence/)
+      const req = await call(db, U.reviewer, 'inv_request_approval', { entity_type: 'cost_reconciliation', entity_id: al.id,
+        proposal: { valued_qty: 1 }, evidence: [{ type: 'grn', ref: 'GRN-15', note: 'the issued unit carried the receipt label' }] })
+      await assert.rejects(call(db, U.approver, 'inv_cost_reconcile', { reconciliation_id: al.id }), /approval is required/)
+      await assert.rejects(call(db, U.reviewer, 'inv_approval_decide', { request_id: req.id, decision: 'approve' }), /requester/)
+      await call(db, U.admin, 'inv_approval_decide', { request_id: req.id, decision: 'approve' })
+      const before = await bal(sid)
+      // the creator of the issue can never decide it, even with financial_post
+      await assert.rejects(call(db, U.keeper, 'inv_cost_reconcile', { reconciliation_id: al.id }), code('42501'))
+      await assert.rejects(call(db, U.approver, 'inv_cost_reconcile', { reconciliation_id: al.id, valued_qty: 0 }), /differs from what was approved/)
+      assert.deepEqual(await bal(sid), before, 'nothing posted by the refused attempts')
+      const done = await call(db, U.approver, 'inv_cost_reconcile', { reconciliation_id: al.id })
+      assert.equal(done.status, 'resolved'); assert.equal(Number(done.resolved_valued_qty), 1); assert.equal(Number(done.resolved_unvalued_qty), 0)
+      assert.equal(Number(done.resolved_value), 10); assert.equal(done.posting, 'none')
+      const m = await one(db, 'select * from stock_movements where id = $1', [done.movement_id])
+      assert.equal(m.movement_type, 'cost_allocation'); assert.equal(Number(m.value_change), -10); assert.equal(Number(m.qty_change), 0)
+      assert.equal(m.source_doc_id, issueMov, 'linked to the issue it decides'); assert.equal(Number(m.pending_out_change), -1)
+      const b = await bal(sid)
+      assert.deepEqual([Number(b.qty_on_hand), Number(b.valued_qty), Number(b.valued_value), Number(b.unvalued_qty), Number(b.pending_allocation_out_qty)], [1, 0, 0, 1, 0])
+      await assert.rejects(db.exec(`update stock_movements set value_change = 0 where id = '${done.movement_id}'`), /append-only/)
+      await assert.rejects(db.exec(`update inventory_cost_reconciliations set status='resolved', resolution_source='reconciliation',
+        resolved_by=created_by, resolved_at=now() where id='${al.id}'`), /sod_chk/)
+    })
+
     await t.test('write-off keeps the unit unvalued for good', async () => {
-      const open = await one(db, `select id from inventory_cost_reconciliations where stock_id = $1 and status = 'open'`, [sid])
+      const open = await one(db, `select id from inventory_cost_reconciliations where stock_id = $1 and status = 'open' and kind = 'unpriced_inbound'`, [sid])
       const req = await call(db, U.reviewer, 'inv_request_approval', { entity_type: 'cost_reconciliation', entity_id: open.id,
         proposal: { resolution: 'written_off' }, reason: 'no document exists for this legacy unit' })
       await call(db, U.admin, 'inv_approval_decide', { request_id: req.id, decision: 'approve' })
@@ -127,6 +171,41 @@ test('valuation with missing cost: unvalued quantity preserved, never consumed f
       assert.equal(w.status, 'written_off'); assert.equal(w.resolved_value, null)
       assert.equal(Number((await bal(sid)).unvalued_qty), 1)
     })
+    assert.deepEqual(await one(db, PROTECTED), before)
+  } finally { await db.close() }
+})
+
+test('reversal of an issue with an issue allocation: open is cancelled, decided is undone exactly', async () => {
+  const { db, L, post, bal } = await setup()
+  try {
+    const before = await one(db, PROTECTED)
+    const r = await post(U.keeper, { idempotency_key: 'ra1', item_id: FILTER, location_id: L.s2, movement_type: 'receipt', qty_change: 4, unit_cost: 5 })
+    await post(U.keeper, { idempotency_key: 'ra2', stock_id: r.stock_id, movement_type: 'receipt', qty_change: 2 })
+    const start = await bal(r.stock_id)
+    const i1 = await call(db, U.keeper, 'inv_issue', { stock_id: r.stock_id, qty: 2 }) // 2 undecided
+    assert.equal(Number(i1.pending_allocation_qty), 2); assert.equal(i1.value_change, null)
+    await call(db, U.approver, 'inv_reverse_movement', { movement_id: i1.movement_id, reason: 'not issued' })
+    let b = await bal(r.stock_id)
+    assert.deepEqual([b.qty_on_hand, b.valued_qty, b.valued_value, b.unvalued_qty, b.pending_allocation_out_qty].map(Number),
+      [start.qty_on_hand, start.valued_qty, start.valued_value, start.unvalued_qty, 0].map(Number))
+    assert.equal((await one(db, `select status from inventory_cost_reconciliations where origin_movement_id = $1`, [i1.movement_id])).status, 'cancelled')
+    const i2 = await call(db, U.keeper, 'inv_issue', { stock_id: r.stock_id, qty: 2 })
+    const al = await one(db, `select id from inventory_cost_reconciliations where origin_movement_id = $1 and kind = 'issue_allocation'`, [i2.movement_id])
+    const req = await call(db, U.reviewer, 'inv_request_approval', { entity_type: 'cost_reconciliation', entity_id: al.id,
+      proposal: { valued_qty: 1 }, reason: 'one carried a receipt label, one did not' })
+    await call(db, U.admin, 'inv_approval_decide', { request_id: req.id, decision: 'approve' })
+    const done = await call(db, U.approver, 'inv_cost_reconcile', { reconciliation_id: al.id })
+    assert.equal(Number(done.resolved_value), 5)
+    b = await bal(r.stock_id)
+    assert.deepEqual([b.qty_on_hand, b.valued_qty, b.valued_value, b.unvalued_qty, b.pending_allocation_out_qty].map(Number), [4, 3, 15, 1, 0])
+    await assert.rejects(call(db, U.approver, 'inv_reverse_movement', { movement_id: done.movement_id, reason: 'x' }), /original movement/)
+    const rev = await call(db, U.approver, 'inv_reverse_movement', { movement_id: i2.movement_id, reason: 'wrong vehicle' })
+    assert.equal(Number(rev.value_change), 5)
+    b = await bal(r.stock_id)
+    assert.deepEqual([b.qty_on_hand, b.valued_qty, b.valued_value, b.unvalued_qty, b.pending_allocation_out_qty].map(Number),
+      [start.qty_on_hand, start.valued_qty, start.valued_value, start.unvalued_qty, 0].map(Number))
+    const openU = await one(db, `select sum(unvalued_qty)::numeric q from inventory_cost_reconciliations where stock_id = $1 and status = 'open' and not consumed and kind <> 'issue_allocation'`, [r.stock_id])
+    assert.equal(Number(openU.q), Number(b.unvalued_qty), 'the consumed record came back with the unit')
     assert.deepEqual(await one(db, PROTECTED), before)
   } finally { await db.close() }
 })

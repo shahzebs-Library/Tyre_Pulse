@@ -7,7 +7,10 @@
 --   organisation / country / site / month / item_code / currency
 -- comparing
 --   * INVENTORY issues: stock_movements issue minus issue_return (and reversals of
---     either), quantity, valued value (the valued part only) and unvalued quantity;
+--     either), quantity, valued value (the valued part only) and unvalued quantity.
+--     Units of an issue whose valued/unvalued split is still undecided (pending
+--     issue allocation) count as unvalued; once a person decides the split, its
+--     cost_allocation movement adds the decided value to the ISSUE's month;
 --   * ERP material: parts_consumption (qty_n, line_cost by event_date) plus
 --     material_issues lines whose issue_number is NOT already in parts_consumption
 --     for that company (so an ERP issue is never counted twice).
@@ -26,17 +29,21 @@ begin;
 create or replace view public.v_inv_erp_reconciliation with (security_invoker = on) as
 with inv as (
   select m.organisation_id, m.country, upper(btrim(coalesce(m.site, ''))) as site,
-         date_trunc('month', m.effective_at)::date as month,
+         date_trunc('month', coalesce(ia.effective_at, m.effective_at))::date as month,
          upper(btrim(mm.item_code)) as item_code, upper(coalesce(m.currency, public.currency_for_country(m.country))) as currency,
          sum(-m.qty_change) as inv_qty,
          sum(-coalesce(m.value_change, 0)) as inv_value,
-         sum(case when m.qty_change < 0 then m.unvalued_qty else -m.unvalued_qty end) as inv_unvalued_qty,
-         count(*) as inv_movements
+         -- unvalued + still undecided; a decided split moves its undecided count to valued/unvalued
+         sum(case when m.qty_change > 0 then -m.unvalued_qty else m.unvalued_qty end + m.pending_out_change) as inv_unvalued_qty,
+         count(*) filter (where m.movement_type <> 'cost_allocation') as inv_movements
     from public.stock_movements m
     join public.material_master mm on mm.id = m.item_id
     left join public.stock_movements o on o.id = m.reverses_movement_id
+    left join public.stock_movements ia on m.movement_type = 'cost_allocation' and m.source_doc_type = 'issue_allocation'
+          and ia.id::text = m.source_doc_id
    where m.movement_type in ('issue', 'issue_return')
       or (m.movement_type = 'reversal' and o.movement_type in ('issue', 'issue_return'))
+      or (m.movement_type = 'cost_allocation' and ia.movement_type = 'issue')
    group by 1, 2, 3, 4, 5, 6
 ), pc as (
   select p.organisation_id, p.country, upper(btrim(coalesce(p.site, ''))) as site,

@@ -30,6 +30,7 @@ with b as (
          sum(s.qty_on_hand) as qty_on_hand, sum(s.qty_reserved) as qty_reserved,
          sum(s.valued_qty) filter (where s.ownership = 'owned') as owned_valued_qty,
          sum(s.unvalued_qty) filter (where s.ownership = 'owned') as owned_unvalued_qty,
+         sum(s.pending_allocation_out_qty + s.pending_allocation_in_qty) filter (where s.ownership = 'owned') as owned_pending_qty,
          sum(s.valued_value) filter (where s.ownership = 'owned') as owned_valued_value,
          count(*) filter (where s.stock_status = 'Critical') as critical_lines,
          count(*) filter (where s.stock_status = 'Low') as low_lines
@@ -40,7 +41,8 @@ with b as (
 select b.organisation_id, b.country, b.site, b.currency, b.balances, b.qty_on_hand, b.qty_reserved,
        coalesce(b.owned_valued_qty, 0) as owned_valued_qty, coalesce(b.owned_unvalued_qty, 0) as owned_unvalued_qty,
        case when (select public.inv_can('view_value')) then round(coalesce(b.owned_valued_value, 0), 2) end as owned_valued_amount,
-       coalesce(b.owned_unvalued_qty, 0) = 0 as valuation_complete,
+       coalesce(b.owned_unvalued_qty, 0) = 0 and coalesce(b.owned_pending_qty, 0) = 0 as valuation_complete,
+       coalesce(b.owned_pending_qty, 0) as owned_pending_allocation_qty,
        b.critical_lines, b.low_lines,
        (select count(*) from public.stock_exceptions x where x.organisation_id = b.organisation_id and x.status = 'open'
           and x.country is not distinct from b.country and x.site is not distinct from b.site)::int as open_exceptions,

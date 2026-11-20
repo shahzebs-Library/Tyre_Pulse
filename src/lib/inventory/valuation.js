@@ -17,12 +17,18 @@
  *     purchase price; see tyreStockValuation()).
  *   - A unit whose cost is unknown is UNVALUED, never 0. It is tracked in its own
  *     bucket (unvaluedQty) so the valued part keeps an honest average.
- *   - Owner decision 2026-11-20 (binding): unpriced units are NEVER consumed first.
- *     An outbound movement takes valued units first at the weighted average, and
- *     only the quantity the valued bucket cannot cover leaves as UNVALUED. That
- *     unvalued part carries no invented cost; it raises a cost reconciliation
- *     (inventory_cost_reconciliations) and only an approved reconciliation can
- *     turn it into a known value (reconcileCost below).
+ *   - Owner decision 2026-11-20 (binding): no order is assumed when a balance holds
+ *     BOTH valued and unvalued units - not priced-first, not unpriced-first, not
+ *     proportional. An outbound movement splits into the part arithmetic proves
+ *     (certainly valued: valued at the weighted average; certainly unvalued: raises a
+ *     cost reconciliation) and the AMBIGUOUS part, which posts no value change and
+ *     opens an 'issue_allocation' reconciliation. Until a person resolves it (with
+ *     evidence, through the approval rule) those units are carried as PENDING
+ *     ALLOCATION: the balance's valued/unvalued split is not touched for them
+ *     (resolveAllocation below). A balance holding only valued or only unvalued units
+ *     is never ambiguous. Serial / lot-tracked items name their source receipt and
+ *     use its actual cost (specific identification), so they are never ambiguous.
+ *     Unknown cost becomes known only through an approved reconciliation (reconcileCost).
  *   - Physical stock can never go negative (owner rule 1, no override). A movement
  *     that would do so is refused, the balance is returned unchanged.
  *   - Currencies are never blended. A movement in another currency is refused.
@@ -84,6 +90,7 @@ export const MOVEMENT_TYPES = Object.freeze({
   supplier_credit: { qty: 0, label: 'Supplier price credit (value only)' },
   landed_cost: { qty: 0, label: 'Landed cost allocation (value only)' },
   cost_assignment: { qty: 0, label: 'Cost assigned to unvalued units (approved cost reconciliation only)' },
+  cost_allocation: { qty: 0, label: 'Approved split of a pending issue allocation (resolveAllocation only)' },
   adjustment_up: { qty: +1, label: 'Approved count adjustment (gain)' },
   adjustment_down: { qty: -1, label: 'Approved count adjustment (loss)' },
   scrap: { qty: -1, label: 'Scrap / write-off' },
@@ -97,6 +104,10 @@ export const MOVEMENT_TYPES = Object.freeze({
 /**
  * A fresh balance. `valuedQty` + `valuedValue` carry the weighted average;
  * `unvaluedQty` holds units whose cost is not known (never priced at 0).
+ * `pendingOutQty`: units that LEFT whose valued/unvalued split is undecided (they
+ * are still inside valuedQty/unvaluedQty until the allocation is resolved).
+ * `pendingInQty`: units that ARRIVED by transfer with an undecided split (not yet
+ * inside either bucket). Invariant: onHand = valuedQty + unvaluedQty - pendingOutQty + pendingInQty.
  */
 export function emptyBalance({ currency = null, ownership = 'owned', ownerSupplierId = null, agreedUnitPrice = null } = {}) {
   return {
@@ -107,14 +118,24 @@ export function emptyBalance({ currency = null, ownership = 'owned', ownerSuppli
     valuedQty: 0,
     valuedValue: 0,
     unvaluedQty: 0,
+    pendingOutQty: 0,
+    pendingInQty: 0,
     lastReceiptAt: null,
     lastIssueAt: null,
   }
 }
 
+const pOut = (b) => num(b?.pendingOutQty) ?? 0
+const pIn = (b) => num(b?.pendingInQty) ?? 0
+
 /** Total physical quantity of a balance. */
 export function onHand(balance) {
-  return (num(balance?.valuedQty) ?? 0) + (num(balance?.unvaluedQty) ?? 0)
+  return (num(balance?.valuedQty) ?? 0) + (num(balance?.unvaluedQty) ?? 0) - pOut(balance) + pIn(balance)
+}
+
+/** Units whose valued/unvalued split is still undecided (out + in). */
+export function pendingAllocationQty(balance) {
+  return pOut(balance) + pIn(balance)
 }
 
 /** Weighted average unit cost of the valued part; null when nothing is valued. */
@@ -124,10 +145,11 @@ export function averageCost(balance) {
   return roundUnit((num(balance.valuedValue) ?? 0) / q)
 }
 
-/** 'valued' | 'partially_valued' | 'unvalued' | 'empty'. */
+/** 'pending_allocation' | 'valued' | 'partially_valued' | 'unvalued' | 'empty'. */
 export function valuationStatus(balance) {
   const v = num(balance?.valuedQty) ?? 0
   const u = num(balance?.unvaluedQty) ?? 0
+  if (pendingAllocationQty(balance) > QTY_EPS) return 'pending_allocation'
   if (v <= QTY_EPS && u <= QTY_EPS) return 'empty'
   if (u <= QTY_EPS) return 'valued'
   if (v <= QTY_EPS) return 'unvalued'
@@ -146,17 +168,39 @@ const refuse = (balance, reason, detail = {}) => ({
 
 const done = (balance, extra) => ({ ok: true, balance, variance: null, consignmentConsumption: null, reconciliation: null, ...extra })
 
-// Take `qty` out of a balance. Valued units go first at the weighted average
-// (owner decision 2026-11-20: never consume unpriced units first, never invent
-// a proportional cost); only the remainder the valued bucket cannot cover
-// leaves as unvalued and needs a cost reconciliation.
-// Returns { next, valueOut (null when no valued unit left), valuedOut, unvaluedOut, unitCost }.
-function takeOut(balance, qty, at) {
-  const valuedOut = Math.min(balance.valuedQty, qty)
-  const unvaluedOut = qty - valuedOut
+// Take `qty` out of a balance (owner decision 2026-11-20: no order is assumed).
+//   maxValued / maxUnvalued = the most units of each kind that can be on the shelf;
+//   certainValued = qty - maxUnvalued (> 0 only when there are not enough possibly
+//   unvalued units), certainUnvalued likewise; the rest is AMBIGUOUS. The certain
+//   valued part leaves at the weighted average, the certain unvalued part needs a
+//   cost reconciliation, the ambiguous part posts no value and becomes pending
+//   allocation (the buckets keep those units until resolveAllocation).
+// sourceReceipt (serial / lot-tracked only): { unitCost | null } = specific
+// identification - the whole qty is valued at that receipt's cost, or unvalued.
+// Returns { next, valueOut (null when no valued unit left), valuedOut, unvaluedOut, allocationQty, unitCost }.
+function takeOut(balance, qty, at, sourceReceipt = null) {
+  const present = onHand(balance)
   const avg = averageCost(balance)
+  let valuedOut
+  let unvaluedOut
+  let allocationQty
+  let unitCost = avg
+  if (sourceReceipt) {
+    const rc = num(sourceReceipt.unitCost)
+    valuedOut = rc === null ? 0 : qty
+    unvaluedOut = rc === null ? qty : 0
+    allocationQty = 0
+    if (rc !== null) unitCost = roundUnit(rc)
+  } else {
+    const maxV = Math.min(present, balance.valuedQty + pIn(balance))
+    const maxU = Math.min(present, balance.unvaluedQty + pIn(balance))
+    valuedOut = Math.max(0, qty - maxU)
+    unvaluedOut = Math.max(0, qty - maxV)
+    allocationQty = qty - valuedOut - unvaluedOut
+    if (isZero(allocationQty)) allocationQty = 0
+  }
   let valueOut = 0
-  const next = { ...balance, unvaluedQty: balance.unvaluedQty - unvaluedOut }
+  const next = { ...balance, unvaluedQty: balance.unvaluedQty - unvaluedOut, pendingOutQty: pOut(balance) + allocationQty }
   if (valuedOut > QTY_EPS) {
     if (isZero(valuedOut - balance.valuedQty)) {
       // last valued units leave: take the whole remaining value (no rounding residue)
@@ -164,7 +208,9 @@ function takeOut(balance, qty, at) {
       next.valuedQty = 0
       next.valuedValue = 0
     } else {
-      valueOut = roundMoney(valuedOut * (balance.valuedValue / balance.valuedQty))
+      valueOut = sourceReceipt
+        ? Math.min(roundMoney(valuedOut * unitCost), balance.valuedValue)
+        : roundMoney(valuedOut * (balance.valuedValue / balance.valuedQty))
       next.valuedQty = balance.valuedQty - valuedOut
       next.valuedValue = roundMoney(balance.valuedValue - valueOut)
     }
@@ -176,7 +222,8 @@ function takeOut(balance, qty, at) {
     valueOut: valuedOut > QTY_EPS ? roundMoney(valueOut) : null,
     valuedOut,
     unvaluedOut,
-    unitCost: avg,
+    allocationQty,
+    unitCost: valuedOut > QTY_EPS ? unitCost : null,
   }
 }
 
@@ -195,7 +242,8 @@ function putIn(balance, qty, unitCost, at) {
   return { next, valueIn }
 }
 
-function movementStatus(valuePart, unvaluedPart) {
+function movementStatus(valuePart, unvaluedPart, allocationPart = 0) {
+  if (allocationPart > QTY_EPS) return 'pending_allocation'
   if (unvaluedPart > QTY_EPS && valuePart === null) return 'unvalued'
   if (unvaluedPart > QTY_EPS) return 'partially_valued'
   return 'valued'
@@ -211,7 +259,10 @@ function movementStatus(valuePart, unvaluedPart) {
  *   currency,             // must equal the balance currency once set
  *   value,                // value-only types: landed_cost / supplier_credit amount
  *   creditUnitCost,       // supplier_return: price the supplier credits
- *   original,             // reversal: the original movement result { type, qtyChange, valueChange, unvaluedQtyChange }
+ *   original,             // reversal: the original movement result { type, qtyChange, valueChange, unvaluedQtyChange,
+ *                         //   pendingOutChange, pendingInChange } (plus its resolved allocation, if any)
+ *   tracked,              // outbound: item is serial / lot tracked (specific identification)
+ *   sourceReceipt,        // outbound, tracked items: { unitCost | null } of the named receipt
  *   at,                   // ISO timestamp (effective_at)
  * }
  *
@@ -263,15 +314,35 @@ export function applyMovement(balance, movement) {
     // separate exception record, never a negative balance.
     return refuse(b, 'insufficient_stock', { onHand: have, requested: qty, shortage: qty - have })
   }
-  const out = takeOut(b, qty, m.at)
+  const mixed = Math.min(have, b.valuedQty + pIn(b)) > QTY_EPS && Math.min(have, b.unvaluedQty + pIn(b)) > QTY_EPS
+  if (m.tracked && mixed && !m.sourceReceipt) {
+    // Serial / lot-tracked: the actual receipt must be named, never guessed.
+    return refuse(b, 'source_receipt_required')
+  }
+  if (m.sourceReceipt && num(m.sourceReceipt.unitCost) !== null && qty - b.valuedQty > QTY_EPS) {
+    return refuse(b, 'source_receipt_exceeds_valued_qty')
+  }
+  if (m.sourceReceipt && num(m.sourceReceipt.unitCost) === null && qty - b.unvaluedQty > QTY_EPS) {
+    return refuse(b, 'source_receipt_exceeds_unvalued_qty')
+  }
+  const out = takeOut(b, qty, m.at, m.sourceReceipt || null)
+  const snapshot = {
+    valuedQty: b.valuedQty, unvaluedQty: b.unvaluedQty, valuedValue: b.valuedValue,
+    pendingOutQty: pOut(b), pendingInQty: pIn(b),
+  }
   const result = done(out.next, {
     qtyChange: -qty,
     valueChange: out.valueOut === null ? null : -out.valueOut,
     unvaluedQtyChange: -out.unvaluedOut,
     valuedQty: out.valuedOut,
     unvaluedQty: out.unvaluedOut,
+    pendingAllocationQty: out.allocationQty,
+    pendingOutChange: out.allocationQty,
+    pendingInChange: 0,
     unitCostApplied: out.unitCost,
-    valuationStatus: movementStatus(out.valueOut, out.unvaluedOut),
+    valuationStatus: movementStatus(out.valueOut, out.unvaluedOut, out.allocationQty),
+    // The ambiguous part: no value moves, one 'issue_allocation' record decides it.
+    allocation: out.allocationQty > QTY_EPS ? { required: true, qty: out.allocationQty, kind: 'issue_allocation', snapshot } : null,
     // The unvalued part keeps no invented cost; it opens a cost reconciliation.
     // A transfer leg moves the open reconciliation with the units instead of
     // creating a second one (see transfer()).
@@ -369,15 +440,20 @@ function reverseMovement(b, original, at) {
   const qtyChange = -num(original.qtyChange)
   const unvaluedChange = -(num(original.unvaluedQtyChange) ?? 0)
   const valueChange = original.valueChange === null || original.valueChange === undefined ? 0 : -num(original.valueChange)
-  const valuedQtyChange = qtyChange - unvaluedChange
+  const outChange = -(num(original.pendingOutChange) ?? 0)
+  const inChange = -(num(original.pendingInChange) ?? 0)
+  // onHand = valued + unvalued - pendingOut + pendingIn
+  const valuedQtyChange = qtyChange - unvaluedChange + outChange - inChange
 
   const next = {
     ...b,
     valuedQty: b.valuedQty + valuedQtyChange,
     unvaluedQty: b.unvaluedQty + unvaluedChange,
     valuedValue: roundMoney(b.valuedValue + valueChange),
+    pendingOutQty: pOut(b) + outChange,
+    pendingInQty: pIn(b) + inChange,
   }
-  if (next.valuedQty < -QTY_EPS || next.unvaluedQty < -QTY_EPS) {
+  if (next.valuedQty < -QTY_EPS || next.unvaluedQty < -QTY_EPS || next.pendingOutQty < -QTY_EPS || next.pendingInQty < -QTY_EPS) {
     return refuse(b, 'insufficient_stock', { onHand: onHand(b), requested: -qtyChange })
   }
   if (isZero(next.valuedQty)) next.valuedQty = 0
@@ -396,6 +472,8 @@ function reverseMovement(b, original, at) {
     qtyChange,
     valueChange: roundMoney(next.valuedValue - b.valuedValue),
     unvaluedQtyChange: unvaluedChange,
+    pendingOutChange: outChange,
+    pendingInChange: inChange,
     unitCostApplied: null,
     valuationStatus: 'valued',
     variance,
@@ -408,16 +486,17 @@ function reverseMovement(b, original, at) {
  * average travels with the units (transfer carries cost); unvalued units stay
  * unvalued at the destination. Refused across currencies (needs approved FX).
  */
-export function transfer(source, destination, qty, { at = null } = {}) {
+export function transfer(source, destination, qty, { at = null, tracked = false, sourceReceipt = null } = {}) {
   const src = source || emptyBalance()
   const dst = destination || emptyBalance({ currency: src.currency })
   if (src.currency && dst.currency && src.currency !== dst.currency) {
     return { ok: false, reason: 'cross_currency_transfer', source: src, destination: dst }
   }
-  const out = applyMovement(src, { type: 'transfer_out', qty, at })
+  const out = applyMovement(src, { type: 'transfer_out', qty, at, tracked, sourceReceipt })
   if (!out.ok) return { ok: false, reason: out.reason, ...out, source: src, destination: dst }
   const unvaluedMoved = -out.unvaluedQtyChange
-  const valuedMoved = num(qty) - unvaluedMoved
+  const pendingMoved = out.pendingAllocationQty ?? 0
+  const valuedMoved = num(qty) - unvaluedMoved - pendingMoved
   let nextDst = { ...dst, currency: dst.currency || src.currency }
   let valueIn = 0
   if (valuedMoved > QTY_EPS) {
@@ -429,6 +508,8 @@ export function transfer(source, destination, qty, { at = null } = {}) {
     valueIn = -(out.valueChange ?? 0)
   }
   if (unvaluedMoved > QTY_EPS) nextDst = { ...nextDst, unvaluedQty: nextDst.unvaluedQty + unvaluedMoved }
+  // Ambiguous units arrive with an undecided split: in neither bucket until resolved.
+  if (pendingMoved > QTY_EPS) nextDst = { ...nextDst, pendingInQty: pIn(nextDst) + pendingMoved }
   if (at) nextDst.lastReceiptAt = at
   return {
     ok: true,
@@ -438,8 +519,11 @@ export function transfer(source, destination, qty, { at = null } = {}) {
     carriedUnitCost: out.unitCostApplied,
     valueMoved: roundMoney(valueIn),
     unvaluedQtyMoved: unvaluedMoved,
+    pendingAllocationQty: pendingMoved,
     // Unvalued units travel with their open reconciliation (one record, never two).
     reconciliation: unvaluedMoved > QTY_EPS ? { required: true, qty: unvaluedMoved, consumed: false, kind: 'transfer' } : null,
+    // Ambiguous units: one issue_allocation record; the destination is its holder.
+    allocation: out.allocation ? { ...out.allocation, holder: true } : null,
   }
 }
 
@@ -448,6 +532,83 @@ export function transfer(source, destination, qty, { at = null } = {}) {
 // ---------------------------------------------------------------------------
 
 export const RECONCILIATION_STATUSES = Object.freeze(['open', 'resolved', 'written_off', 'cancelled'])
+export const RECONCILIATION_KINDS = Object.freeze(['unpriced_inbound', 'consumed', 'transfer', 'reversal_return', 'legacy', 'issue_allocation'])
+
+const sodRefusal = (rec, d) => {
+  if (!d.approved) return 'approval_required'
+  if (d.resolvedBy && rec.createdBy && d.resolvedBy === rec.createdBy) return 'segregation_of_duties'
+  if (d.approvedBy && (d.approvedBy === rec.createdBy || d.approvedBy === rec.proposedBy)) return 'segregation_of_duties'
+  return null
+}
+
+/**
+ * Resolve an 'issue_allocation' (mirror of inv_cost_reconcile for that kind).
+ * A person states how many of the ambiguous units were VALUED (decision.valuedQty,
+ * from evidence: batch, receipt, GRN); the rest were unvalued. Only then does the
+ * value leave the source balance (cost_allocation movement) and, for a transfer,
+ * arrive at the holder balance. Never written off: the split has to be decided.
+ *
+ * allocation = { status, qty, createdBy, proposedBy }
+ * decision   = { valuedQty, approved, approvedBy, resolvedBy }
+ * Returns { ok, source, holder, valuedQty, unvaluedQty, valueChange, reconciliation }.
+ */
+export function resolveAllocation(source, holder, allocation = {}, decision = {}) {
+  const src = source || emptyBalance()
+  const rec = allocation || {}
+  const d = decision || {}
+  const no = (reason) => ({ ok: false, reason, source: src, holder })
+  if ((rec.status ?? 'open') !== 'open') return no('not_open')
+  const sod = sodRefusal(rec, d)
+  if (sod) return no(sod)
+  const amb = num(rec.qty)
+  const a = num(d.valuedQty)
+  if (amb === null || amb <= 0) return no('invalid_quantity')
+  if (a === null || a < 0 || a - amb > QTY_EPS) return no('invalid_valued_qty')
+  if (amb - pOut(src) > QTY_EPS) return no('exceeds_pending_allocation')
+  const u = amb - a
+  // The decided units must fit the buckets that still hold them; units that arrived
+  // undecided (pendingInQty) are in neither bucket, so a split that needs them waits
+  // for that upstream allocation (reason says so).
+  if (a - src.valuedQty > QTY_EPS || u - src.unvaluedQty > QTY_EPS) {
+    return no(pIn(src) > QTY_EPS ? 'upstream_allocation_open' : 'split_not_possible')
+  }
+  let value = 0
+  const nextSrc = { ...src, pendingOutQty: isZero(pOut(src) - amb) ? 0 : pOut(src) - amb, unvaluedQty: src.unvaluedQty - u }
+  if (a > QTY_EPS) {
+    if (isZero(a - src.valuedQty)) {
+      value = src.valuedValue
+      nextSrc.valuedQty = 0
+      nextSrc.valuedValue = 0
+    } else {
+      value = roundMoney(a * (src.valuedValue / src.valuedQty))
+      nextSrc.valuedQty = src.valuedQty - a
+      nextSrc.valuedValue = roundMoney(src.valuedValue - value)
+    }
+  }
+  if (isZero(nextSrc.unvaluedQty)) nextSrc.unvaluedQty = 0
+  let nextHolder = holder ?? null
+  if (holder) {
+    nextHolder = {
+      ...holder,
+      valuedQty: holder.valuedQty + a,
+      valuedValue: roundMoney(holder.valuedValue + value),
+      unvaluedQty: holder.unvaluedQty + u,
+      pendingInQty: isZero(pIn(holder) - amb) ? 0 : pIn(holder) - amb,
+    }
+  }
+  return {
+    ok: true,
+    status: 'resolved',
+    source: nextSrc,
+    holder: nextHolder,
+    valuedQty: a,
+    unvaluedQty: u,
+    valueChange: a > QTY_EPS ? -roundMoney(value) : null,
+    // the unvalued part is now an ordinary cost reconciliation: consumed for an
+    // issue, moved with the units for a transfer
+    reconciliation: u > QTY_EPS ? { required: true, qty: u, consumed: !holder, kind: holder ? 'transfer' : 'consumed' } : null,
+  }
+}
 
 /**
  * Resolve one open cost reconciliation. Nothing becomes valued without it.
@@ -470,10 +631,10 @@ export function reconcileCost(balance, reconciliation = {}, decision = {}) {
   const rec = reconciliation || {}
   const d = decision || {}
   const no = (reason) => ({ ok: false, reason, balance: b })
+  if (rec.kind === 'issue_allocation') return no('use_resolve_allocation')
   if ((rec.status ?? 'open') !== 'open') return no('not_open')
-  if (!d.approved) return no('approval_required')
-  if (d.resolvedBy && rec.createdBy && d.resolvedBy === rec.createdBy) return no('segregation_of_duties')
-  if (d.approvedBy && (d.approvedBy === rec.createdBy || d.approvedBy === rec.proposedBy)) return no('segregation_of_duties')
+  const sod = sodRefusal(rec, d)
+  if (sod) return no(sod)
   const qty = num(rec.qty)
   if (qty === null || qty <= 0) return no('invalid_quantity')
   if (d.resolution === 'written_off') {
@@ -485,6 +646,9 @@ export function reconcileCost(balance, reconciliation = {}, decision = {}) {
   if (rec.consumed) {
     return { ok: true, status: 'resolved', balance: b, recognisedValue: roundMoney(qty * cost), appliedQty: 0, notAppliedQty: 0 }
   }
+  // While part of this balance's split is undecided, an in-stock cost cannot be
+  // placed: it might value a unit that already left. Resolve the allocation first.
+  if (pendingAllocationQty(b) > QTY_EPS) return no('allocation_pending')
   const apply = Math.min(qty, num(b.unvaluedQty) ?? 0)
   if (apply <= QTY_EPS) {
     return { ok: true, status: 'resolved', balance: b, recognisedValue: roundMoney(qty * cost), appliedQty: 0, notAppliedQty: qty }
@@ -579,15 +743,16 @@ export function summarizeValuation(rows = []) {
   const byCurrency = {}
   const noCurrency = { lines: 0, qty: 0 }
   const blank = () => ({
-    owned: { lines: 0, valuedLines: 0, unvaluedLines: 0, partiallyValuedLines: 0, valuedQty: 0, unvaluedQty: 0, valuedValue: 0 },
+    owned: { lines: 0, valuedLines: 0, unvaluedLines: 0, partiallyValuedLines: 0, pendingAllocationLines: 0, valuedQty: 0, unvaluedQty: 0, pendingAllocationQty: 0, valuedValue: 0 },
     consignment: { lines: 0, qty: 0, agreedValue: 0, unpricedLines: 0 },
     supplier: { lines: 0, qty: 0 },
   })
   for (const r of rows) {
     const qtyV = num(r.valuedQty) ?? 0
     const qtyU = num(r.unvaluedQty) ?? 0
-    const qty = qtyV + qtyU
-    if (qty <= QTY_EPS) continue
+    const qtyP = pendingAllocationQty(r)
+    const qty = onHand(r)
+    if (qty <= QTY_EPS && qtyP <= QTY_EPS) continue
     const cur = normCurrency(r.currency)
     const ownership = OWNERSHIP.includes(r.ownership) ? r.ownership : 'owned'
     if (!cur && ownership !== 'supplier') {
@@ -601,9 +766,11 @@ export function summarizeValuation(rows = []) {
       s.owned.lines += 1
       s.owned.valuedQty += qtyV
       s.owned.unvaluedQty += qtyU
+      s.owned.pendingAllocationQty += qtyP
       s.owned.valuedValue = roundMoney(s.owned.valuedValue + (num(r.valuedValue) ?? 0))
       const st = valuationStatus(r)
-      if (st === 'valued') s.owned.valuedLines += 1
+      if (st === 'pending_allocation') s.owned.pendingAllocationLines += 1
+      else if (st === 'valued') s.owned.valuedLines += 1
       else if (st === 'unvalued') s.owned.unvaluedLines += 1
       else s.owned.partiallyValuedLines += 1
     } else if (ownership === 'consignment') {
@@ -621,10 +788,11 @@ export function summarizeValuation(rows = []) {
     const o = s.owned
     const totalQty = o.valuedQty + o.unvaluedQty
     o.pricedPct = totalQty > 0 ? Math.round((o.valuedQty / totalQty) * 1000) / 10 : null
-    o.complete = o.lines > 0 && o.unvaluedLines === 0 && o.partiallyValuedLines === 0
+    o.complete = o.lines > 0 && o.unvaluedLines === 0 && o.partiallyValuedLines === 0 && o.pendingAllocationLines === 0
     // The headline owned value is only a measurement when every line is valued.
     o.value = o.lines === 0 ? null : o.complete ? o.valuedValue : null
-    o.valueReason = o.lines === 0 ? 'no_owned_stock' : o.complete ? null : 'unvalued_stock_present'
+    o.valueReason = o.lines === 0 ? 'no_owned_stock' : o.complete ? null
+      : o.pendingAllocationLines > 0 ? 'pending_allocation_present' : 'unvalued_stock_present'
     // Finance view vocabulary (v_inv_valuation): valuedAmount is the valued PART
     // only and must never be labelled as the total while valuationComplete is false.
     o.valuationComplete = o.complete

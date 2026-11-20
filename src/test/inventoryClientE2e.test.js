@@ -452,3 +452,220 @@ describe('mixed balance: no order assumed; undecided split decided by another pe
     expect([n(line.carried_value) || 0, n(line.carried_unvalued_qty)]).toEqual([0, 1])
   })
 })
+
+describe('opening balance batch: imported, submitted, approved by someone other than the preparer, then posted', () => {
+  let env
+  beforeAll(async () => { env = await fresh() }, 60000)
+
+  it('runs through createOpeningBatch / submit / requestApproval / decideApproval / decideOpeningBatch', async () => {
+    env.as(U.keeper)
+    const cb = await inv.createOpeningBatch({ source: 'manual', filename: 'opening.xlsx', site: 'S1', country: 'KSA',
+      lines: [{ item_code: 'BRK-07', location_code: 'WH1', site: 'S1', qty: 2, unit_cost: 30, currency: 'SAR', condition: 'new' },
+        { item_code: 'FLT-01', location_code: 'WH1', site: 'S1', qty: 3 }] }, key())
+    const batch = cb.batch_id ?? cb.id
+    expect(batch).toBeTruthy()
+    const lines = (await inv.listOpeningLines(batch)).rows
+    expect(lines.map((l) => [l.item_code, l.mapping_status, l.missing_cost])).toEqual([['BRK-07', 'mapped', false], ['FLT-01', 'mapped', true]])
+    await inv.submitOpeningBatch(batch, key())
+    // posting before approval is refused
+    env.as(U.approver)
+    expect((await attempt(() => inv.decideOpeningBatch({ batchId: batch, decision: 'approve', note: 'early' }, key()))).ok).toBe(false)
+    env.as(U.keeper)
+    const rq = await inv.requestApproval({ entityType: 'opening_balance_batch', entityId: batch, reason: 'opening count 2026' }, key())
+    expect((await attempt(() => inv.decideApproval({ requestId: rq.id, decision: 'approve' }, key()))).ok).toBe(false) // preparer
+    env.as(U.approver)
+    const reject = await attempt(() => inv.decideApproval({ requestId: rq.id, decision: 'reject' }, key()))
+    expect(reject.error.code).toBe('INV_NO_NOTE') // a rejection needs a reason
+    await inv.decideApproval({ requestId: rq.id, decision: 'approve', note: 'matches count sheet' }, key())
+    const ok = await inv.decideOpeningBatch({ batchId: batch, decision: 'approve', note: 'checked against count' }, key())
+    expect(ok.status).toBe('approved')
+    env.as(U.reviewer)
+    const b = (await inv.listOpeningBatches({ country: 'KSA' })).rows.find((r) => r.id === batch)
+    expect(b.status).toBe('approved')
+    const v = (await inv.loadValuation({ country: 'KSA', site: 'S1' })).rows
+    expect(n(v.find((r) => r.item_id === BRAKE).valued_amount)).toBe(60)
+    const flt = v.find((r) => r.item_id === FILTER)
+    expect([n(flt.unvalued_qty), flt.valuation_complete]).toEqual([3, false]) // missing cost is flagged, never zero
+  })
+})
+
+describe('ERP reconciliation: statuses through the read-only view; nothing written', () => {
+  let env
+  beforeAll(async () => { env = await fresh() }, 60000)
+
+  it('lists matched / qty_diff / value_diff / inventory_only / erp_only / unvalued and changes no expense figure', async () => {
+    const month = new Date().toISOString().slice(0, 8) + '01'
+    for (const [code, qty, value] of [['FLT-01', 4, 40], ['BRK-07', 3, 60], ['TYR-315', 1, 900], ['ERP-ONLY', 2, 10], ['UNV-1', 1, 5]]) {
+      await env.api.exec(`insert into parts_consumption(organisation_id, country, site, issue_number, item_code, qty_n, line_cost, currency, event_date)
+        values ('${ORG_A}','KSA','S1','ISS-${code}','${code}',${qty},${value},'SAR','${month}')`)
+    }
+    await env.api.exec(`insert into material_master(id, organisation_id, country, item_code, item_name, category) values
+      ('${id(105)}','${ORG_A}','KSA','INV-ONLY','Only in stock','spare_part'),('${id(106)}','${ORG_A}','KSA','UNV-1','Unpriced','spare_part')`)
+    const before = (await env.api.sql(PROTECTED))[0]
+    env.as(U.keeper)
+    const recv = (item, qty, cost) => inv.receiveGoods({ country: 'KSA', site: 'S1', lines: [{ item_id: item, location_id: env.L.s1, qty_received: qty, unit_cost: cost, currency: cost == null ? null : 'SAR' }] }, key())
+    const stockOf = async (code) => (await inv.listBalances({ country: 'KSA', site: 'S1', search: code })).rows[0].id
+    await recv(FILTER, 10, 10); await inv.issueStock({ stockId: await stockOf('FLT-01'), qty: 4 }, key())
+    await recv(BRAKE, 10, 20); await inv.issueStock({ stockId: await stockOf('BRK-07'), qty: 2 }, key())
+    await recv(TYRE, 1, 950); await inv.issueStock({ stockId: await stockOf('TYR-315'), qty: 1 }, key())
+    await recv(id(105), 2, 1); await inv.issueStock({ stockId: await stockOf('INV-ONLY'), qty: 1 }, key())
+    await recv(id(106), 2, null); await inv.issueStock({ stockId: await stockOf('UNV-1'), qty: 1 }, key())
+    env.as(U.reviewer)
+    const all = await inv.listErpReconciliation({ country: 'KSA', site: 'S1', status: 'all', pageSize: 50 })
+    const st = Object.fromEntries(all.rows.map((r) => [r.item_code, r.status]))
+    expect(st).toEqual({ 'BRK-07': 'qty_diff', 'ERP-ONLY': 'erp_only', 'FLT-01': 'matched', 'INV-ONLY': 'inventory_only', 'TYR-315': 'value_diff', 'UNV-1': 'unvalued' })
+    const diff = await inv.listErpReconciliation({ country: 'KSA', site: 'S1', status: 'differences', pageSize: 50 })
+    expect(diff.rows.map((r) => r.status)).not.toContain('matched')
+    const exp = await inv.loadErpReconciliationRows({ country: 'KSA', site: 'S1' })
+    expect([exp.status, exp.rows.length, exp.truncated]).toEqual(['ok', 6, false])
+    env.as(U.keeper)
+    expect((await inv.listErpReconciliation({ country: 'KSA', status: 'all' })).rows.find((r) => r.item_code === 'TYR-315').value_difference).toBeNull()
+    env.as(U.adminB)
+    expect((await inv.listErpReconciliation({ status: 'all' })).rows).toEqual([])
+    expect((await env.api.sql(PROTECTED))[0]).toEqual(before)
+  })
+})
+
+describe('reversal through the service; the ledger is append-only', () => {
+  let env
+  beforeAll(async () => { env = await fresh() }, 60000)
+
+  it('reverses exactly once and refuses UPDATE / DELETE on the ledger for the user and the owner', async () => {
+    env.as(U.keeper)
+    await inv.receiveGoods({ country: 'KSA', site: 'S1', lines: [{ item_id: BRAKE, location_id: env.L.s1, qty_received: 5, unit_cost: 12, currency: 'SAR' }] }, key())
+    const sid = (await inv.listBalances({ country: 'KSA', site: 'S1', search: 'BRK' })).rows[0].id
+    const iss = await inv.issueStock({ stockId: sid, qty: 2 }, key())
+    // a reversal needs the adjustment_approve permission; the keeper is told so in plain words
+    expect((await attempt(() => inv.reverseMovement({ movementId: iss.movement_id, reason: 'x' }, key()))).error.message)
+      .toBe('You do not have the inventory permission "adjustment approve".')
+    env.as(U.approver)
+    const rev = await inv.reverseMovement({ movementId: iss.movement_id, reason: 'issued to the wrong job card' }, key())
+    expect(rev.movement_id || rev.id).toBeTruthy()
+    expect((await attempt(() => inv.reverseMovement({ movementId: iss.movement_id, reason: 'again' }, key()))).ok).toBe(false)
+    const ms = (await inv.listMovements({ country: 'KSA', site: 'S1' })).rows.filter((m) => m.stock_id === sid)
+    expect(ms.map((m) => [m.movement_type, n(m.qty_change)]).sort()).toEqual([['issue', -2], ['receipt', 5], ['reversal', 2]])
+    expect(ms.find((m) => m.movement_type === 'reversal').reverses_movement_id).toBe(iss.movement_id)
+    env.as(U.keeper)
+    expect(n((await inv.listBalances({ country: 'KSA', site: 'S1', search: 'BRK' })).rows[0].qty_on_hand)).toBe(5)
+    // direct client writes on the ledger and the balance are refused (grants + RLS)
+    for (const who of [U.keeper, U.admin, U.super]) {
+      env.as(who)
+      const upd = await env.api.from('stock_movements').update({ qty_change: 99 }).eq('id', iss.movement_id)
+      const del = await env.api.from('stock_movements').delete().eq('id', iss.movement_id)
+      const bal = await env.api.from('stock_records').update({ qty_on_hand: 999 }).eq('id', sid)
+      const ins = await env.api.from('stock_movements').insert({ stock_id: sid, movement_type: 'receipt', qty_change: 1 })
+      for (const r of [upd, del, bal, ins]) expect(r.error?.code || `affected:${r.count}`).toMatch(/42501|P0001|affected:0/)
+    }
+    // even the database owner cannot rewrite history
+    await expect(env.api.exec(`update stock_movements set qty_change = 99 where id = '${iss.movement_id}'`)).rejects.toThrow(/append-only|not allowed|immutable|cannot/i)
+    await expect(env.api.exec(`delete from stock_movements where id = '${iss.movement_id}'`)).rejects.toThrow(/append-only|not allowed|immutable|cannot/i)
+    const still = (await env.api.sql('select qty_change from stock_movements where id = $1', [iss.movement_id]))[0]
+    expect(n(still.qty_change)).toBe(-2)
+  })
+})
+
+describe('company, country, site and role restrictions through the client', () => {
+  let env; let s1; let s2
+  beforeAll(async () => {
+    env = await fresh()
+    env.as(U.admin) // a KSA-scoped admin cannot create a UAE location
+    const refused = await attempt(() => inv.saveLocation({ country: 'UAE', site: 'U1', location_type: 'warehouse', code: 'UWH' }, key()))
+    expect(refused.error.message).toBe('Location is outside your country or site scope.')
+    env.as(U.super)
+    const uae = (await inv.saveLocation({ country: 'UAE', site: 'U1', location_type: 'warehouse', code: 'UWH' }, key())).id
+    env.as(U.keeper)
+    await inv.receiveGoods({ country: 'KSA', site: 'S1', lines: [{ item_id: BRAKE, location_id: env.L.s1, qty_received: 3, unit_cost: 5, currency: 'SAR' }] }, key())
+    await inv.receiveGoods({ country: 'KSA', site: 'S2', lines: [{ item_id: BRAKE, location_id: env.L.s2, qty_received: 4, unit_cost: 5, currency: 'SAR' }] }, key())
+    env.as(U.uaeOnly)
+    await inv.receiveGoods({ country: 'UAE', site: 'U1', lines: [{ item_id: id(102), location_id: uae, qty_received: 7, unit_cost: 2, currency: 'AED' }] }, key())
+    env.as(U.admin)
+    const rows = (await inv.listBalances({})).rows
+    s1 = rows.find((r) => r.location_id === env.L.s1).id
+    s2 = rows.find((r) => r.location_id === env.L.s2).id
+  }, 60000)
+
+  it('another company sees nothing and cannot act on this company\'s stock', async () => {
+    env.as(U.adminB)
+    // company B sees only its own legacy row, never company A's balances or movements
+    expect((await inv.listBalances({})).rows.map((r) => r.id)).toEqual([id(402)])
+    expect((await inv.listMovements({})).rows.filter((m) => [s1, s2].includes(m.stock_id))).toEqual([])
+    expect((await inv.listLocations({})).rows).toEqual([])
+    expect((await inv.listAudits({})).rows).toEqual([])
+    expect((await inv.loadValuation({})).rows.filter((r) => [s1, s2].includes(r.stock_id))).toEqual([])
+    expect((await inv.listPendingApprovals({})).rows).toEqual([])
+    const r = await attempt(() => inv.issueStock({ stockId: s1, qty: 1 }, key()))
+    expect(r.ok).toBe(false)
+  })
+
+  it('country and site scope narrow reads and writes', async () => {
+    env.as(U.uaeOnly)
+    const uae = (await inv.listBalances({})).rows
+    expect(uae.every((r) => r.country === 'UAE')).toBe(true)
+    expect(uae.length).toBe(1)
+    env.as(U.site2Only)
+    const s2rows = (await inv.listBalances({})).rows
+    expect(s2rows.map((r) => r.site)).toEqual(['S2'])
+    expect((await attempt(() => inv.issueStock({ stockId: s1, qty: 1 }, key()))).ok).toBe(false)
+    const ok = await inv.issueStock({ stockId: s2, qty: 1 }, key())
+    expect(ok.status).toBe('posted')
+  })
+
+  it('role: a viewer reads but cannot post, and is told why in plain words', async () => {
+    env.as(U.viewer)
+    expect((await inv.listBalances({})).rows.length).toBeGreaterThan(0)
+    const r = await attempt(() => inv.issueStock({ stockId: s1, qty: 1 }, key()))
+    expect(r.ok).toBe(false)
+    expect(r.error.message).toBe('You do not have the inventory permission "issue".')
+    expect(n((await inv.listBalances({ site: 'S1' })).rows[0].avg_unit_cost)).toBeFalsy() // no view_value
+  })
+
+  it('anon reaches nothing', async () => {
+    env.as(null)
+    await expect(inv.listBalances({})).rejects.toMatchObject({ message: 'You do not have permission to do that.' })
+    expect((await attempt(() => inv.issueStock({ stockId: s1, qty: 1 }, key()))).ok).toBe(false)
+  })
+})
+
+describe('transfers: web dispatch / receive and the Flutter payloads', () => {
+  let env; let sid
+  beforeAll(async () => {
+    env = await fresh()
+    env.as(U.keeper)
+    await inv.receiveGoods({ country: 'KSA', site: 'S1', lines: [{ item_id: BRAKE, location_id: env.L.s1, qty_received: 10, unit_cost: 8, currency: 'SAR' }] }, key())
+    sid = (await inv.listBalances({ country: 'KSA', site: 'S1', search: 'BRK' })).rows[0].id
+  }, 60000)
+
+  it('web: dispatch, list with the item embed, partial receipt, then the rest', async () => {
+    env.as(U.keeper)
+    const k = key()
+    const tr = await inv.dispatchTransfer({ fromLocationId: env.L.s1, toLocationId: env.L.s2, remarks: 'to S2', lines: [{ stock_id: sid, qty: 4 }] }, k)
+    expect((await inv.dispatchTransfer({ fromLocationId: env.L.s1, toLocationId: env.L.s2, lines: [{ stock_id: sid, qty: 4 }] }, k)).replayed).toBe(true)
+    const list = await inv.listTransfers({ status: 'open' })
+    const t = list.rows.find((r) => r.id === tr.transfer_id)
+    expect(t.lines[0].itm.item_code).toBe('BRK-07')
+    await inv.receiveTransfer({ transferId: tr.transfer_id, lines: [{ line_id: t.lines[0].id, received_qty: 3 }] }, key())
+    expect((await inv.listTransfers({ status: 'all' })).rows.find((r) => r.id === tr.transfer_id).status).toBe('partially_received')
+    await inv.receiveTransfer({ transferId: tr.transfer_id, lines: [{ line_id: t.lines[0].id, received_qty: 1 }] }, key())
+    expect((await inv.listTransfers({ status: 'all' })).rows.find((r) => r.id === tr.transfer_id).status).toBe('completed')
+    const dest = (await inv.listBalances({ site: 'S2' })).rows.find((r) => r.item_id === BRAKE && r.location_id === env.L.s2)
+    expect(n(dest.qty_on_hand)).toBe(4)
+  })
+
+  it('Flutter: dispatch by scanned TP:STK label and receive with the app\'s line shape', async () => {
+    env.as(U.keeper)
+    const ikey = randomUUID()
+    const d = await env.api.rpc('inv_transfer_dispatch', { p_payload: { idempotency_key: ikey, from_location_id: env.L.s1, to_location_id: env.L.s1b,
+      remarks: null, lines: [{ scanned_code: `TP:STK:${sid}`, qty: 2 }] } })
+    expect(d.error).toBeNull()
+    // the Flutter list read: '*, stock_transfer_lines(*, itm:material_master(item_code, item_name))' ordered by dispatched_at, id
+    const rows = await env.api.from('stock_transfers').select('*, stock_transfer_lines(*, itm:material_master(item_code, item_name))')
+      .order('dispatched_at', { ascending: false }).order('id').limit(50)
+    const t = rows.data.find((r) => r.id === d.data.transfer_id)
+    expect(t.stock_transfer_lines[0].itm.item_code).toBe('BRK-07')
+    const rcv = await env.api.rpc('inv_transfer_receive', { p_payload: { idempotency_key: randomUUID(), transfer_id: t.id,
+      lines: [{ line_id: t.stock_transfer_lines[0].id, received_qty: 2, condition: 'damaged', remarks: 'crushed corner' }] } })
+    expect(rcv.error).toBeNull()
+    const lines = (await inv.listBalances({ site: 'S1' })).rows.filter((r) => r.location_id === env.L.s1b)
+    expect(lines.map((r) => [r.condition, n(r.qty_on_hand)])).toEqual([['damaged', 2]])
+  })
+})

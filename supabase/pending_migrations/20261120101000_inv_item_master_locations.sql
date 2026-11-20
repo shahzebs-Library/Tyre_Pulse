@@ -52,10 +52,16 @@ alter table public.material_master
   add column if not exists barcode text,
   add column if not exists manufacturer text;
 
+-- Only rows whose values actually change are touched (PG17 rehearsal 2026-11-20): the
+-- BEFORE UPDATE trigger set_material_master_updated_at stamps updated_at = now() on every
+-- updated row, and base_uom is null on all 22,162 live rows, so the former predicate
+-- rewrote every row and replaced its last-edited time. Live: 188 tyre rows change, 0 rows
+-- carry a uom.
 update public.material_master set
   base_uom = coalesce(base_uom, nullif(btrim(uom), '')),
   serial_tracked = (category = 'tyre')
-where base_uom is null or (category = 'tyre' and not serial_tracked);
+where (base_uom is null and nullif(btrim(uom), '') is not null)
+   or (serial_tracked is distinct from (category = 'tyre'));
 
 alter table public.material_master
   add constraint material_master_status_chk check (status in ('active','inactive','obsolete')),

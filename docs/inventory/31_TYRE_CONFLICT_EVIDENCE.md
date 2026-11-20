@@ -110,3 +110,10 @@ matches; the correction may be `correct_serial` on the UAE row.
   condition, never which serial it is.
 * The slot mapping above is an inference from the position codes; the investigator confirms it.
 * Nothing in this pack changes a record. The decisions belong to the PMV Manager through the workflow.
+
+## PG17 rehearsal note (2026-11-20)
+
+The UAE tyre (YMA4*, TM204 RHF1) carries a scrap mark stamped country **KSA** in production. The
+original derivation matched marks by country and serial and produced only 6 conflicts; 105000 now
+matches a mark by serial within the company (as `inv_tyre_scrap_flag` already did), so all 7 open.
+Evidence: `93_REHEARSAL_EVIDENCE.md` gate 10.

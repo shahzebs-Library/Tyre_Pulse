@@ -12,6 +12,137 @@ Valuation rule: `20_VALUATION_RULES.md`. Client map: `91_CLIENT_INTEGRATION.md`.
 
 ---
 
+## 0. Production-like PG17 rehearsal (2026-11-20) and the production procedure
+
+Evidence: **`93_REHEARSAL_EVIDENCE.md`** (tooling `93_rehearsal_tooling/`). This section supersedes
+anything below that says "staging PG16" or "not rehearsed".
+
+### 0.1 Release identity
+* Branch `claude/inventory-upgrade-7rxp2t`; rehearsal started from `cb7ee7de`; the rehearsed file set is
+  the commit that adds `93_REHEARSAL_EVIDENCE.md` (see 0.10). The sha256 values below pin every file:
+  **apply only files whose sha256 matches this table.**
+* Rehearsal fixes (four real defects PGlite could not show, all in pending files): F1 105000 scrap mark
+  matched by serial, not mark country (7 conflicts, was 6); F2 101000 backfill touches only changed rows
+  (`material_master.updated_at` of 22,162 rows was overwritten); F3 115000 removes client write grants
+  that production default privileges put on 22 new views, 2 sequences and 2 helpers; F4 100000 ROLLBACK
+  restores the integer quantity columns (exact catalog restore).
+
+### 0.2 Files, order, dependencies, hashes
+
+Strictly sequential: every file depends on all earlier ones (100000 creates `_inv_secure_table` /
+`inv_can` / `_inv_post` used by all; 112000 guards 107000's `_inv_issue` / `_inv_transfer_dispatch`;
+113000 guards live `validate_policy` and 108000's `_inv_approval_block_reason`; 114000 guards 108000 /
+105000 functions; 115000 hardens objects of 100000-114000). Never skip or reorder.
+
+| # | Forward file | sha256 | Rollback file sha256 |
+|---|---|---|---|
+| 1 | 20261120100000_inv_p0_ledger_integrity.sql | 1f88d1df0cf4e8da8fc28e95e4eaa7ccf0704f4105d7f8ac11b6eb356b00bb45 | 2054555b02d9e0131fcca397c254e9ffc86654b82f7a522c3760fc51ee29bb48 |
+| 2 | 20261120101000_inv_item_master_locations.sql | 2cfcc19bdd086e8ce5c6429657295a28b95117f5a5d165f7f4d52dd8c6389532 | a929a39ae941b77b13f978ef1eee977bf8ae484963d8f75c0a87b9d7f549819b |
+| 3 | 20261120102000_inv_physical_audits.sql | 8fe0e83b1339f02f99b1b4592f12c2825b1b148b079d2d9aea098165e81c0ffa | dfa3518030d9423829fbc75c42e661b85ce2c6089bae7aaa4bfcc65446d76212 |
+| 4 | 20261120103000_inv_transfers_procurement.sql | cecfeb5bc97e73fb20dcf1f133591e0d61c4689c0b389ba47945dc22ae9fd5b4 | 1757bb4cc7cf0be21871cc4a82d00f3494dec529beb67d6e5901a52fb9e2ed59 |
+| 5 | 20261120104000_inv_valuation.sql | 446569816ed1575b8b2db7e84d0143463fd65d77cdcf887277f41deca96fff8d | 0fc57fa99fabe7c30611f4a9daff6a4e5aa3b24dc45f6130377833005ad4d664 |
+| 6 | 20261120105000_inv_tyre_items.sql | e0934823b833867b2ebe1c8fe00398be680be582f000c17d4c4a4da477d49f72 | 61414d34240606dd99e682a00a152558069c35440faf9276316ccdf0a58a8e4f |
+| 7 | 20261120106000_inv_oem_fitments.sql | 7380c5cc8dccde4e44e08ec8c04f725d9e062d2bafe13f58e5647857d68ef8de | 649ad940ff174f9c105f5f4747f8cd878c6957ca97cb18fac33b22b7b3488646 |
+| 8 | 20261120107000_inv_api_contract.sql | cebc8ba48d278393046acb7616792511d0db0739945976f84d92c2276fc5beec | 6e41ea08cc3ef85e41044750572ccf5420d2625b51d2b64a10ff546db95e7e09 |
+| 9 | 20261120108000_inv_approvals.sql | 33e5a644d2c2038335547d953224bad06c7f4f57485bf4413a3b0a01fa47b456 | c31770276a696c6268417dc2170640c8be6d7b806ba10d30b735080db764f349 |
+| 10 | 20261120109000_inv_erp_reconciliation.sql | 833da63e377812f0125791d6711a36bc724f703d753f6d7a111cdbb22148513b | 12415a782ecf8b512c0acd14c0c63657e78ae827c1a212972e6e054d4e3c1701 |
+| 11 | 20261120110000_inv_metric_catalogue.sql | faa6c7fe87b994edb1b8d0db353d8037093159cfb78c24def06cc50bd0b3e0e8 | 2e41550a0fe6f80af88c6bf4693b70091833def4a1cd73c730a213061ece1d02 |
+| 12 | 20261120111000_inv_report_schedules.sql | a918c2ae51a285f0ed91c020e4c83ce54e2006b65c9044664ac40035617a57bf | b3d89352ff859f279bfab0bb533150d7b34ca1c48a54bb76faa1b25a6744e67d |
+| 13 | 20261120112000_inv_source_receipt.sql | c11d6d4c12456e88440ea8854a84e1ffc12baa013c0c4a0a056915d5f619cf3c | 98573a25509807766f20c0d7d2c4d398daa96173d03e43193e877e782fbdeee4 |
+| 14 | 20261120113000_inv_approval_roles.sql | b4c44de134753f3211956a6893118b376a3427e3fc37cb6f05ec181b590884d9 | 75a6d34bb756e2dd7d52393098d0f4e504e872336ef114e80dbc1646c05e97e0 |
+| 15 | 20261120114000_inv_tyre_conflict_investigation.sql | 19713c8bcdf9550bd7245eb4ada56b7681501520bd093e376072c575c70911cd | 97b2ae85f480f9dc60183dd35dee178a0157128ee96a319c0f4d0652f5a7b58f |
+| 16 | 20261120115000_inv_hardening.sql | 873fed0154ad5b06569861a6362579974a4844e6cbf181cd5a895370c7d429be | 095bcc23f36fa88eb6d9b7648568ddb4d3fac44e266de6890fa4de418320de4a |
+
+### 0.3 Rehearsal and rollback results
+PG 17.6, production role model (postgres not superuser, BYPASSRLS; production default privileges;
+`max_locks_per_transaction` 64), sanitized snapshot whose 156 functions are byte-identical to production.
+16/16 forward OK as `postgres` (total 3.2 s on the sample); doc-90 verify queries all as expected;
+reverse rollback 16/16 OK; catalog after rollback identical to the snapshot (residues: `_bak.inv_p0_snapshot`
+kept; `updated_at` of the 188 tyre items whose `serial_tracked` flipped); re-apply identical to the first
+apply. Gates 4-12: 121 checks, 121 pass. Gate 13 (browser) NOT TESTED (no PostgREST obtainable).
+
+### 0.4 Role / permission diff (what changes for people)
+* No profile role, module_permissions row or user_access_grants row is changed.
+* New custom roles in every company: `Inventory Controller`, `Finance Manager` (0 holders).
+* New RPCs callable by `authenticated` only (never anon / PUBLIC); every write is capability-gated by the
+  existing stock module capabilities. **Today only Admin / super admin hold the stock posting
+  capabilities**: Store Keeper has `view` + `create` only (measured with the production `app_user_can` on
+  the snapshot). Store Keepers cannot receive, issue, transfer or count until the owner grants
+  receive / issue / transfer / count in Access Control; approvers need adjustment_approve /
+  discrepancy_review / financial_post / scrap_approve.
+* Direct client writes removed: stock_movements (append-only for everyone), stock_records quantities
+  (only through RPCs), the legacy procurement tables keep their live restrictive policies.
+* `authenticated` keeps SELECT on the new views (RLS / security_invoker decide rows); no write privilege
+  on any new relation (F3).
+
+### 0.5 Data reconciliation expected on production
+stock_records 43 rows / 345 units unchanged in quantity; 33 rows / 302 units become unvalued with 33 open
+`legacy` cost reconciliations; 7 priced rows valued at their recorded cost; 7 drift rows (all in the
+second company: DEMO YARD / DEMO PLANT) recorded as `uncertain` when that company seeds its batch;
+stock_movements 78 rows keep their values (types widened to numeric), get `legacy:` keys and sequence
+numbers; audit_log_v2 receives the backfill updates (sample: 274 rows; production about 78 x 3 + 43);
+material_master: 188 tyre items get `serial_tracked = true` (and a new `updated_at`), no other row is
+written; tyre_records, tyre_status_marks, parts_consumption, CPK inputs, permissions unchanged.
+After the first `inv_tyre_item_sync`: 7 open `scrapped_but_active` conflicts.
+**Owner data action:** one stock row (NHC, 35 units) has no country and joins no opening batch: set it.
+
+### 0.6 Backup / restore evidence
+pg_dump of the applied copy (custom format) restored into a new database with 0 errors; catalog and
+business-data fingerprints identical (owner-only ACLs restored as the equivalent default). This proves
+the dump/restore path of the new objects; it is **not** the production backup: confirm a Supabase backup
+/ PITR point in the dashboard (paid action, owner) before file 1.
+
+### 0.7 Blockers before production
+* B-R1 Owner approval of this exact file set (0.2) - **required**.
+* B-R2 Backup / PITR confirmed in the Supabase dashboard immediately before file 1 - **required**.
+* B-R3 No browser test against a real database (gate 13). Recommended on a Supabase branch / staging
+  project; not a data-safety blocker (DB behaviour proven by gates 4-12).
+* B-R4 Capability grants for the people who will post / approve (0.4) - needed before use, not before apply.
+* B-R5 The null-country stock row (0.5) - before the opening count, not before apply.
+
+### 0.8 Exact production procedure (owner-approved window)
+1. Confirm backup / PITR point (dashboard). Note the time.
+2. Read-only pre-checks (all must hold, else STOP):
+   `select count(*) from pg_proc where proname like 'inv\_%' or proname like '\_inv\_%';` -> 0;
+   `select count(*), sum(stock_qty) from stock_records;` -> 43, 345; `select count(*) from stock_movements;` -> 78;
+   function fingerprints (md5 of `pg_get_functiondef`, chr(13) stripped, first 8): post_stock_movement 12d9a6a0,
+   set_stock_count 28e9e4d6, save_stock_entry 964c2e8c, transfer_stock_entry 34faec25, reserve_work_order_stock
+   91f34acb, release_work_order_stock 04ef02db, private.reserve_work_order_stock_internal f0552081,
+   private.release_work_order_stock_internal 91d1c71a, approval_private.validate_policy b76c1c97;
+   `select count(*) from material_master where category = 'tyre';` -> 188.
+3. Verify each file's sha256 against 0.2.
+4. Apply files 1..16 **one per apply**, as `postgres`, each followed by its verify query (section 3). Each
+   file is one transaction; a failed file rolls itself back completely.
+5. After 16: smoke tests 0.9.
+6. Record each apply in `supabase_migrations` naming (the MCP `apply_migration` auto-timestamps; keep the
+   repo file names in the description).
+
+### 0.9 Smoke tests (as real users, rolled back where they write)
+Section 3 "Post-apply smoke", plus: `select count(*) from tyre_custody_conflicts where status='open'` after
+one sync per country -> 7; `select count(*) from pg_class c where relnamespace='public'::regnamespace and
+relname like 'v\_inv\_%' and has_table_privilege('authenticated', c.oid, 'INSERT')` -> 0;
+`select count(*) from material_master where updated_at > <apply start>` -> 188; tyre_records /
+parts_consumption hashes equal to the values taken in step 2.
+
+### 0.10 Reverse rollback
+ROLLBACK files in reverse order (115000 first ... 100000 last), one per apply. Files refuse when the new
+ledger / cases were used unless `set local inv.rollback_discard = 'on'` (export first). Rehearsed: 16/16,
+catalog restored identical to the pre-apply snapshot except `_bak.inv_p0_snapshot` (kept) and the 188
+material_master `updated_at` values. If a forward file fails mid-way, roll back only the files already
+committed, in reverse.
+
+### 0.11 STOP conditions
+Stop and do not continue (roll back what was applied) if: any pre-check in 0.8 differs; a file's sha256
+differs; any file raises (including a fingerprint guard "differs from the reviewed definition"); a verify
+query returns an unexpected value; "out of shared memory" (do not combine files); tyre_records /
+tyre_status_marks / parts_consumption hash changes; any API error rate rise in the hour after.
+
+### 0.12 Owner approval required
+Apply of the 16 files (0.2) to production; backup confirmation; capability grants; deploy of
+`send-scheduled-reports`; Flutter reserved patch + builds. None of these was done by the rehearsal.
+
+---
+
 ## 1. Verdict
 
 **Audited inventory control is ready for owner approval to apply on staging, then production.**
@@ -98,13 +229,10 @@ After all 16: `select anum_integration.apply_reader_policies();` already runs in
 
 ### Production pre-checks (owner)
 1. Supabase backup confirmed in the dashboard (PITR tier noted) **before** file 1.
-2. Rehearse the 13 files on staging `/var/lib/postgresql/tp-staging` (port 54329, start as postgres with
-   `pg_ctl`; disk ~1.8 GB free, drop scratch databases after) on a fresh copy of the production mirror.
+2. ~~Rehearse on staging PG16~~ **Done on PG17.6 (2026-11-20), section 0 and doc 93.**
 3. Guards confirmed against live data (section 7): no negative quantity, no negative cost, no null-org
    movement, no orphan movement, no duplicate PO per company, constraint lists identical.
-4. Note: production is **PostgreSQL 17.6**, staging PG 16. The anchored replace in 112000 and the P0
-   snapshot read `pg_get_functiondef`; the guard aborts cleanly if the text differs, so a mismatch
-   cannot half-apply.
+4. Production is **PostgreSQL 17.6**; the rehearsal ran on 17.6 and every fingerprint guard passed.
 
 ### Post-apply smoke (as real users, rolled back where it writes)
 1. Keeper: receive 1 unit with a cost, issue 1 -> balance back, ledger has 2 rows, `parts_consumption` and `tyre_records` hashes unchanged.
@@ -157,11 +285,11 @@ After all 16: `select anum_integration.apply_reader_policies();` already runs in
 | 19 | Flutter payloads: `inv_audit_counter_view`, `inv_count_submit {p_payload}`, transfer dispatch by `TP:STK:` label, receive line shape, list embed | PASS | E2E (exact maps from the Dart repositories) |
 | 20 | Two simultaneous postings cannot oversell; double submit posts once (real connections) | PASS | `inventory_concurrency.test.mjs` on PG16 staging, 2/2 |
 | 21 | Every inv_* DEFINER function pins `search_path` | PASS | security acceptance (104 functions) |
-| 22 | No inv_* DEFINER function executable by PUBLIC or anon | PASS | security acceptance |
-| 23 | No anon privilege on any new table / view; RLS + org RESTRICTIVE policy on every new table; no direct client write | PASS | security acceptance (31 tables, 21 views) |
+| 22 | No inv_* DEFINER function executable by PUBLIC or anon | PASS | security acceptance; re-proved on PG17 with production default privileges (doc 93 gate 7) |
+| 23 | No anon privilege on any new table / view; RLS + org RESTRICTIVE policy on every new table; no direct client write | PASS | security acceptance (31 tables, 21 views); **on PG17 the production default privileges added client write grants on 22 views: fixed in 115000 (F3), re-proved** |
 | 24 | Every new view `security_invoker` | PASS | security acceptance |
 | 25 | Rollback restores the pre-inventory catalog exactly (all 13 files) | PASS | `inventory_rollback.test.mjs` |
-| 26 | Browser test of the web against a real database | NOT RUN | no test login / no apply; UI proven on fakes (doc 91) |
+| 26 | Browser test of the web against a real database | NOT RUN | no PostgREST obtainable in the PG17 rehearsal (doc 93 gate 13); UI proven on fakes (doc 91) |
 | 27 | Device test of the Flutter screens | NOT RUN | standing rule: no mobile builds |
 | 28 | Production apply + smoke | NOT RUN | needs owner approval |
 
@@ -212,7 +340,7 @@ connection concurrency (covered by the staging race).
 | existing `inv_*` objects in production | 0 functions, 0 tables, none of the new columns | clean first apply |
 | legacy writers / helpers the migrations wrap or call | all 12 present | P0 snapshot captures them |
 | `parts_consumption` rows | 219,356 | never written by inventory |
-| **Scrapped-but-active tyres** | **7** (KSA 6, UAE 1) | become 7 open `scrapped_but_active` conflicts after the first sync; nothing is corrected |
+| **Scrapped-but-active tyres** | **7** (KSA 6, UAE 1) | become 7 open `scrapped_but_active` conflicts after the first sync (PG17 rehearsal: 6 before fix F1, because the UAE tyre's scrap mark is stamped KSA); nothing is corrected |
 
 The 7 tyres (serials truncated): KSA `L520*` MP078 RHF1, `YMM1*` TM589 RHRO, `YMM2*` TM643 RHCI,
 `YMM6*` TM619 LHRI, `YMU4*` TM411 LHCI, `YMY4*` TM635 RHCI; UAE `YMA4*` TM204 RHF1. Evidence: for all

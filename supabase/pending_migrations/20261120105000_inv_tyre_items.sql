@@ -152,11 +152,23 @@ begin
   select count(*) into v_weak from public.tyre_records r
    where r.organisation_id = v_org and not public.tyre_serial_is_strong(r.serial_no)
      and (p_country is null or lower(r.country) = lower(p_country));
+  -- A scrap mark is keyed by serial (unique (serial, mark_type)), not by country: a mark
+  -- stamped with another country than the tyre record still marks that tyre. The mark
+  -- therefore takes the country of the company's tyre record(s) for the serial, and its
+  -- own country only when no record exists (PG17 rehearsal 2026-11-20: live mark for the
+  -- UAE tyre YMA4* / TM204 RHF1 is stamped KSA and was missed by a country-equal match).
   create temp table _tc_marks on commit drop as
-    select upper(btrim(coalesce(m.country, ''))) as country, public.inv_canon_serial(m.serial) as serial, m.created_at, m.reason
-      from public.tyre_status_marks m
-     where m.organisation_id = v_org and m.mark_type = 'scrap' and public.tyre_serial_is_strong(m.serial)
-       and (p_country is null or lower(m.country) = lower(p_country));
+    with rc as (
+      select distinct upper(btrim(coalesce(r.country, ''))) as country, public.inv_canon_serial(r.serial_no) as serial
+        from public.tyre_records r
+       where r.organisation_id = v_org and public.tyre_serial_is_strong(r.serial_no)),
+    mk as (
+      select upper(btrim(coalesce(m.country, ''))) as mark_country, public.inv_canon_serial(m.serial) as serial, m.created_at, m.reason
+        from public.tyre_status_marks m
+       where m.organisation_id = v_org and m.mark_type = 'scrap' and public.tyre_serial_is_strong(m.serial))
+    select coalesce(rc.country, mk.mark_country) as country, mk.serial, mk.created_at, mk.reason
+      from mk left join rc on rc.serial = mk.serial
+     where p_country is null or lower(coalesce(rc.country, mk.mark_country)) = lower(p_country);
   create temp table _tc_keys on commit drop as
     select country, serial from _tc_rows union select country, serial from _tc_marks
     union select country, serial from public.tyre_store_holdings h where h.organisation_id = v_org and h.active

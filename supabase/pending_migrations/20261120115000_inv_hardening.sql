@@ -95,4 +95,36 @@ begin
   end loop;
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- PG17 production-like rehearsal (2026-11-20, docs/inventory/93_REHEARSAL_EVIDENCE.md):
+-- production's default privileges for role postgres in schema public grant
+-- authenticated INSERT/UPDATE/REFERENCES/MAINTAIN on every new view, USAGE/SELECT/UPDATE
+-- on every new sequence and EXECUTE on every new function (pg_default_acl, read
+-- 2026-11-20). PGlite has no such defaults, so the security acceptance test could not see
+-- them. Writes through the views were already refused (security_invoker checks the base
+-- table as the caller), but no client write privilege may exist on a new relation:
+-- keep SELECT where it was granted, remove everything else. Version-agnostic (no MAINTAIN
+-- keyword) so the same file runs on PG17 and PGlite.
+-- ---------------------------------------------------------------------------
+do $$
+declare r record; v_sel boolean;
+begin
+  for r in select c.relname from pg_class c
+            where c.relnamespace = 'public'::regnamespace and c.relkind = 'v'
+              and (c.relname like 'v\_inv\_%' or c.relname in ('v_inventory_valuation','v_tyre_stock_valuation','v_validated_compatibility'))
+  loop
+    v_sel := has_table_privilege('authenticated', format('public.%I', r.relname), 'SELECT');
+    execute format('revoke all on public.%I from authenticated, anon, public', r.relname);
+    if v_sel then execute format('grant select on public.%I to authenticated', r.relname); end if;
+  end loop;
+  for r in select c.relname from pg_class c
+            where c.relnamespace = 'public'::regnamespace and c.relkind = 'S'
+              and c.relname in ('stock_movements_movement_seq_seq','tyre_item_events_id_seq')
+  loop
+    execute format('revoke all on sequence public.%I from authenticated, anon, public', r.relname);
+  end loop;
+end $$;
+revoke all on function public._inv_secure_table(text, boolean, boolean) from authenticated, service_role, anon, public;
+revoke all on function public._inv_master_allowed_keys() from authenticated, service_role, anon, public;
+
 commit;

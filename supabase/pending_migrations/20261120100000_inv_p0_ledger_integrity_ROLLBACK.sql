@@ -11,8 +11,9 @@
 -- idempotency keys of anything posted through the new ledger. The rollback therefore
 -- refuses when the new ledger was used, unless `set local inv.rollback_discard = 'on'`.
 -- Kept on purpose:
---   * stock_movements qty_before/qty_change/qty_after stay NUMERIC (narrowing back to
---     integer could fail on a fractional count; numeric is a superset for readers).
+--   * stock_movements qty_before/qty_change/qty_after return to INTEGER when every stored
+--     value is whole (exact restore); they stay NUMERIC only if a fractional quantity
+--     was recorded (never truncated).
 --   * Constraints that legacy rows may no longer satisfy (a new movement type, a
 --     po_number repeated across companies) are re-added NOT VALID with a notice.
 begin;
@@ -140,6 +141,21 @@ alter table public.stock_records
   drop column if exists valued_value, drop column if exists unvalued_qty, drop column if exists last_receipt_at,
   drop column if exists pending_allocation_out_qty, drop column if exists pending_allocation_in_qty,
   drop column if exists last_issue_at, drop column if exists uom, drop column if exists version;
+
+-- 6b. qty columns back to INTEGER when every stored value is whole, so the catalog returns
+--     to the live definition byte for byte (PG17 rehearsal 2026-11-20). If a fractional
+--     quantity was ever recorded they stay NUMERIC (never truncated) and a notice says so.
+do $$ begin
+  if not exists (select 1 from public.stock_movements
+                  where qty_before <> trunc(qty_before) or qty_change <> trunc(qty_change) or qty_after <> trunc(qty_after)) then
+    alter table public.stock_movements
+      alter column qty_before type integer using qty_before::integer,
+      alter column qty_change type integer using qty_change::integer,
+      alter column qty_after  type integer using qty_after::integer;
+  else
+    raise notice 'stock_movements quantities kept NUMERIC: fractional quantities exist.';
+  end if;
+end $$;
 
 -- 7. grants + view
 revoke update (min_level, critical_level, reorder_qty, management_action) on public.stock_records from authenticated;

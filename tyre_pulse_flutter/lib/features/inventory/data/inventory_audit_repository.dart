@@ -37,6 +37,23 @@ abstract interface class InventoryAuditRepository {
   });
 }
 
+/// The `inv_count_submit` arguments: `{p_payload: {audit_id, device_id,
+/// lines}}`. Exposed so the shape is pinned by a test.
+Map<String, Object?> countSubmitParams({
+  required String auditId,
+  required String deviceId,
+  required List<CountLine> lines,
+}) =>
+    <String, Object?>{
+      'p_payload': <String, Object?>{
+        'audit_id': auditId,
+        'device_id': deviceId,
+        'lines': <Map<String, Object?>>[
+          for (final CountLine l in lines) l.toSubmitJson(),
+        ],
+      },
+    };
+
 final class SupabaseInventoryAuditRepository
     with SupabaseGateway
     implements InventoryAuditRepository {
@@ -87,13 +104,15 @@ final class SupabaseInventoryAuditRepository
     return guard<CountSubmitResult>(() async {
       final Object? raw = await _client.rpc<Object?>(
         InventoryRpcs.countSubmit,
-        params: <String, Object?>{
-          'p_audit_id': auditId,
-          'p_device_id': deviceId,
-          'p_lines': <Map<String, Object?>>[
-            for (final CountLine l in lines) l.toSubmitJson(),
-          ],
-        },
+        // DB contract (docs/inventory/10 section 3): ONE p_payload argument.
+        // Its outer idempotency key is optional for this call only: every
+        // line is idempotent on its own client_uuid, so an offline replay
+        // resends lines, never a call.
+        params: countSubmitParams(
+          auditId: auditId,
+          deviceId: deviceId,
+          lines: lines,
+        ),
       );
       return CountSubmitResult.fromJson(raw);
     });

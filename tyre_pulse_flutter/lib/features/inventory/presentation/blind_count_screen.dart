@@ -384,6 +384,14 @@ class _BlindCountScreenState extends ConsumerState<BlindCountScreen> {
             ),
         ],
         const SizedBox(height: TpSpace.lg),
+        // Interim workflow: no background sync until the reserved-file patch
+        // (docs/inventory_reserved_patch.md) lands, so the screen says so.
+        Text(
+          copy('manualSendNote'),
+          key: const Key('inventory.count.manualSendNote'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: TpSpace.sm),
         SizedBox(
           height: inventoryTouchTarget,
           child: FilledButton.icon(
@@ -443,6 +451,8 @@ class _OfflineDraftView extends StatelessWidget {
           ),
         ),
         Text(copy.count('unsyncedLines', session.pending.length)),
+        const SizedBox(height: TpSpace.sm),
+        Text(copy('manualSendNote')),
         const SizedBox(height: TpSpace.md),
         SizedBox(
           height: inventoryTouchTarget,

@@ -46,8 +46,14 @@ final class SupabaseInventoryTransferRepository
       // cannot find fails the whole request, and the DB lane owns the shape.
       final List<Map<String, dynamic>> rows = await _client
           .from(InventoryTables.stockTransfers)
-          .select('*, ${InventoryTables.stockTransferLines}(*)')
-          .order('created_at', ascending: false)
+          // Item codes come from the item master through the line's FK;
+          // stock_transfers has no created_at (dispatched_at is its time), and
+          // ordering on a missing column would fail the whole request.
+          .select(
+            '*, ${InventoryTables.stockTransferLines}'
+            '(*, itm:material_master(item_code, item_name))',
+          )
+          .order('dispatched_at', ascending: false)
           .order('id')
           .limit(limit);
       return rows

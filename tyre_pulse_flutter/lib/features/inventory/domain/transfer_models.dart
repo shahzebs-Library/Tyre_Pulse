@@ -34,8 +34,8 @@ final class StockTransferLine {
       StockTransferLine(
         id: _text(json['id']) ?? '',
         itemId: _text(json['item_id']),
-        itemCode: _text(json['item_code']),
-        description: _text(json['description']),
+        itemCode: _text(json['item_code']) ?? _embedded(json, 'item_code'),
+        description: _text(json['description']) ?? _embedded(json, 'item_name'),
         serialNo: _text(json['serial_no']),
         qtyDispatched: _num(json['qty_dispatched'] ?? json['qty']),
         qtyReceived: _num(json['qty_received']),
@@ -168,4 +168,10 @@ String? receiveProblem(List<ReceiveLineDraft> lines) {
     return 'invalidQty';
   }
   return null;
+}
+
+/// A value from the `itm` item-master embed of a transfer line.
+String? _embedded(Map<String, Object?> json, String key) {
+  final Object? itm = json['itm'];
+  return itm is Map ? _text(itm[key]) : null;
 }

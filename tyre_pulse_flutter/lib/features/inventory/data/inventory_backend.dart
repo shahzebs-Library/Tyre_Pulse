@@ -18,6 +18,12 @@ abstract final class InventoryRpcs {
   /// Blind, idempotent count submit (client_uuid per line).
   static const String countSubmit = 'inv_count_submit';
 
+  /// Ends counting (status in_progress / recount -> counting_completed).
+  /// Same `p_payload {audit_id, idempotency_key}` the web "Finish counting"
+  /// action sends (`src/lib/api/inventory.js` completeCounting). Without it
+  /// an audit counted on a phone can never reach reconciliation.
+  static const String auditCompleteCounting = 'inv_audit_complete_counting';
+
   static const String transferDispatch = 'inv_transfer_dispatch';
   static const String transferReceive = 'inv_transfer_receive';
 }

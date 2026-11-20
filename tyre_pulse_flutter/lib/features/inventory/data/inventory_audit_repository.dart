@@ -29,6 +29,14 @@ abstract interface class InventoryAuditRepository {
     required String deviceId,
   });
 
+  /// Ends counting on [auditId]. Online only: whether counting may end
+  /// depends on the audit's CURRENT status, so it is never queued. The
+  /// server replays the stored answer for a repeated [idempotencyKey].
+  Future<Object?> completeCounting({
+    required String auditId,
+    required String idempotencyKey,
+  });
+
   /// Uploads one local photo for a count line and returns its reference.
   Future<String> uploadPhoto({
     required String auditId,
@@ -51,6 +59,20 @@ Map<String, Object?> countSubmitParams({
         'lines': <Map<String, Object?>>[
           for (final CountLine l in lines) l.toSubmitJson(),
         ],
+      },
+    };
+
+/// The `inv_audit_complete_counting` arguments: `{p_payload: {audit_id,
+/// idempotency_key}}` - the exact shape the web sends (its `rpcWrite` merges
+/// `idempotency_key` into the payload). Exposed so a test pins it.
+Map<String, Object?> completeCountingParams({
+  required String auditId,
+  required String idempotencyKey,
+}) =>
+    <String, Object?>{
+      'p_payload': <String, Object?>{
+        'audit_id': auditId,
+        'idempotency_key': idempotencyKey,
       },
     };
 
@@ -117,6 +139,21 @@ final class SupabaseInventoryAuditRepository
       return CountSubmitResult.fromJson(raw);
     });
   }
+
+  @override
+  Future<Object?> completeCounting({
+    required String auditId,
+    required String idempotencyKey,
+  }) =>
+      guard<Object?>(
+        () => _client.rpc<Object?>(
+          InventoryRpcs.auditCompleteCounting,
+          params: completeCountingParams(
+            auditId: auditId,
+            idempotencyKey: idempotencyKey,
+          ),
+        ),
+      );
 
   @override
   Future<String> uploadPhoto({

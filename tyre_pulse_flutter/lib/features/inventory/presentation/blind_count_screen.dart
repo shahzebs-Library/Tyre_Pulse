@@ -18,9 +18,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/inventory/data/count_finisher.dart';
 import 'package:tyre_pulse/features/inventory/data/count_submitter.dart';
 import 'package:tyre_pulse/features/inventory/domain/count_models.dart';
 import 'package:tyre_pulse/features/inventory/domain/count_session.dart';
+import 'package:tyre_pulse/features/inventory/domain/finish_counting.dart';
 import 'package:tyre_pulse/features/inventory/inventory_providers.dart';
 import 'package:tyre_pulse/features/inventory/presentation/count_line_sheet.dart';
 import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
@@ -45,6 +47,10 @@ class _BlindCountScreenState extends ConsumerState<BlindCountScreen> {
   Object? _draftError;
   bool _resumed = false;
   bool _submitting = false;
+  // _finishing blocks a second tap for the whole press (connectivity check,
+  // confirmation, call); _finishSending only spins while the call is out.
+  bool _finishing = false;
+  bool _finishSending = false;
 
   @override
   void initState() {
@@ -176,6 +182,90 @@ class _BlindCountScreenState extends ConsumerState<BlindCountScreen> {
       if (mounted) _snack(copy('submitFailed'));
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// "Finish counting": refuses with unsent lines or offline, confirms,
+  /// then ends counting with ONE idempotency key minted for this press.
+  Future<void> _finish(AuditCounterView view) async {
+    if (_finishing || _submitting) return;
+    final InventoryCopy copy = InventoryCopy.of(context);
+    final CountSession? session = _session;
+    final FinishGate gate =
+        finishCountingGate(audit: view.audit, session: session);
+    if (gate == FinishGate.unsentLines) {
+      _snack(copy.count('finishUnsent', session?.pending.length ?? 0));
+      return;
+    }
+    if (gate == FinishGate.notOpen) {
+      _snack(copy('finishNotOpen'));
+      return;
+    }
+    setState(() => _finishing = true);
+    try {
+      final bool online = await ref.read(inventoryOnlineCheckProvider)();
+      if (!mounted) return;
+      if (!online) {
+        _snack(copy('finishOffline'));
+        return;
+      }
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) => AlertDialog(
+          key: const Key('inventory.count.finishConfirm'),
+          title: Text(copy('finishConfirmTitle')),
+          content: Text(copy('finishConfirmBody')),
+          actions: <Widget>[
+            TextButton(
+              key: const Key('inventory.count.finishCancel'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(copy('finishCancel')),
+            ),
+            FilledButton(
+              key: const Key('inventory.count.finishGo'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(copy('finishCounting')),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      // One key per confirmed press; never re-minted inside this call.
+      final String key = ref.read(inventoryIdFactoryProvider)();
+      setState(() => _finishSending = true);
+      final FinishOutcome outcome =
+          await ref.read(countFinisherProvider).finish(
+                audit: view.audit,
+                session: _session,
+                idempotencyKey: key,
+              );
+      if (!mounted) return;
+      _snack(
+        switch (outcome.status) {
+          FinishStatus.done => copy('finishDone'),
+          FinishStatus.offline => copy('finishOffline'),
+          FinishStatus.unsentLines =>
+            copy.count('finishUnsent', outcome.unsent),
+          FinishStatus.notOpen => copy('finishNotOpen'),
+          FinishStatus.notProvisioned => copy('notProvisionedBody'),
+          FinishStatus.refused =>
+            outcome.failure?.error.message ?? copy('finishFailed'),
+        },
+      );
+      if (outcome.status == FinishStatus.done) {
+        ref
+          ..invalidate(auditCounterViewProvider(widget.auditId))
+          ..invalidate(myInventoryAuditsProvider);
+      }
+    } on Object {
+      if (mounted) _snack(copy('finishFailed'));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _finishing = false;
+          _finishSending = false;
+        });
+      }
     }
   }
 
@@ -410,6 +500,35 @@ class _BlindCountScreenState extends ConsumerState<BlindCountScreen> {
             ),
           ),
         ),
+        if (offersFinishCounting(view.audit)) ...<Widget>[
+          const SizedBox(height: TpSpace.lg),
+          Text(
+            session.pending.isEmpty
+                ? copy('finishNote')
+                : copy.count('finishUnsent', session.pending.length),
+            key: const Key('inventory.count.finishNote'),
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: TpSpace.sm),
+          SizedBox(
+            height: inventoryTouchTarget,
+            child: OutlinedButton.icon(
+              key: const Key('inventory.count.finish'),
+              // Enabled even with unsent lines, so a tap says WHY it cannot
+              // finish instead of a silent grey button.
+              onPressed: _finishing || _submitting
+                  ? null
+                  : () => unawaited(_finish(view)),
+              icon: _finishSending
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.task_alt_rounded),
+              label: Text(copy('finishCounting')),
+            ),
+          ),
+        ],
       ],
     );
   }

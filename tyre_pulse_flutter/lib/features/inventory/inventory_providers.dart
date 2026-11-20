@@ -1,11 +1,13 @@
 library;
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show FutureProviderFamily;
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/inventory/data/count_draft_store.dart';
+import 'package:tyre_pulse/features/inventory/data/count_finisher.dart';
 import 'package:tyre_pulse/features/inventory/data/count_photo_capture.dart';
 import 'package:tyre_pulse/features/inventory/data/count_submitter.dart';
 import 'package:tyre_pulse/features/inventory/data/inventory_audit_repository.dart';
@@ -42,6 +44,23 @@ final Provider<CountSubmitter> countSubmitterProvider =
     repository: ref.watch(inventoryAuditRepositoryProvider),
     drafts: ref.watch(countDraftStoreProvider),
     discardPhotos: CountPhotoCapture.discardUploaded,
+  ),
+);
+
+/// True when the device reports any network. Overridden in tests.
+final Provider<Future<bool> Function()> inventoryOnlineCheckProvider =
+    Provider<Future<bool> Function()>(
+  (Ref ref) => () async {
+    final List<ConnectivityResult> results =
+        await Connectivity().checkConnectivity();
+    return results.any((ConnectivityResult r) => r != ConnectivityResult.none);
+  },
+);
+
+final Provider<CountFinisher> countFinisherProvider = Provider<CountFinisher>(
+  (Ref ref) => CountFinisher(
+    repository: ref.watch(inventoryAuditRepositoryProvider),
+    isOnline: ref.watch(inventoryOnlineCheckProvider),
   ),
 );
 

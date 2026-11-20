@@ -33,6 +33,20 @@ void main() {
     expect(params.containsKey('p_lines'), isFalse);
   });
 
+  test(
+      'inv_audit_complete_counting takes one p_payload '
+      '{audit_id, idempotency_key} (same shape as the web)', () {
+    final Map<String, Object?> params = completeCountingParams(
+      auditId: 'audit-1',
+      idempotencyKey: 'key-1',
+    );
+    expect(params.keys, <String>['p_payload']);
+    expect(params['p_payload'], <String, Object?>{
+      'audit_id': 'audit-1',
+      'idempotency_key': 'key-1',
+    });
+  });
+
   test('transfer lines take the item code from the item-master embed', () {
     final StockTransferLine line =
         StockTransferLine.fromJson(const <String, Object?>{

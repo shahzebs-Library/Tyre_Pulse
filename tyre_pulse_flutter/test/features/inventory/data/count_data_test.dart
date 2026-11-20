@@ -64,6 +64,13 @@ final class _Repo implements InventoryAuditRepository {
   }
 
   @override
+  Future<Object?> completeCounting({
+    required String auditId,
+    required String idempotencyKey,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<String> uploadPhoto({
     required String auditId,
     required String clientUuid,

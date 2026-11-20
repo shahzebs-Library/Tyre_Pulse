@@ -49,6 +49,11 @@ void main() {
       'needTo',
       'sameLocation',
       'needLines',
+      'finishUnsent',
+      'finishNotOpen',
+      'finishOffline',
+      'finishDone',
+      'finishFailed',
       'scan_locationSelected',
       'scan_serialItemSelected',
       'scan_locationOutOfScope',
@@ -68,6 +73,32 @@ void main() {
     final Set<String> missing =
         <String>{..._usedKeys(), ...dynamicKeys}.difference(en);
     expect(missing, isEmpty, reason: 'missing copy keys: $missing');
+  });
+
+  test('the finish-counting copy exists in every language (catalog pinned)',
+      () {
+    const List<String> finishKeys = <String>[
+      'finishCounting',
+      'finishNote',
+      'finishUnsent',
+      'finishNotOpen',
+      'finishOffline',
+      'finishConfirmTitle',
+      'finishConfirmBody',
+      'finishCancel',
+      'finishDone',
+      'finishFailed',
+    ];
+    for (final String lang in <String>['en', 'ar', 'ur']) {
+      final Map<String, String> c = _catalog(lang, 'inventoryCopyCatalog');
+      // Pinned entry count of the packed catalog: 125 + 10 finish keys.
+      expect(c.length, 135, reason: lang);
+      for (final String k in finishKeys) {
+        expect(c[k], isNotNull, reason: '$lang $k');
+        expect(c[k]!.trim(), isNotEmpty, reason: '$lang $k');
+      }
+      expect(c['finishUnsent'], contains('%n'));
+    }
   });
 
   test('placeholders use %n, never braces (braces become ICU args)', () {

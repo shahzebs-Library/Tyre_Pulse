@@ -187,6 +187,9 @@ const DATASETS = {
     cols:    ['country', 'site', 'currency', 'balances', 'qty_on_hand', 'qty_reserved', 'owned_valued_qty', 'owned_unvalued_qty', 'owned_valued_amount', 'valuation_complete', 'critical_lines', 'low_lines', 'open_exceptions', 'open_discrepancies', 'open_cost_reconciliations', 'pending_approvals'],
     headers: ['Country', 'Site', 'Currency', 'Balance Lines', 'Qty On Hand', 'Qty Reserved', 'Owned Valued Qty', 'Owned Qty At Unknown Cost', 'Owned Valued Amount (valued part)', 'Valuation Complete', 'Critical Lines', 'Low Lines', 'Open Shortages', 'Open Discrepancies', 'Open Cost Reconciliations', 'Pending Approvals'],
     currentState: true,
+    // No money KPI cards in the PDF summary: amounts are per currency (never summed)
+    // and the generic detector read the quantity column 'owned_valued_qty' as money.
+    summaryMoney: false,
   },
 }
 

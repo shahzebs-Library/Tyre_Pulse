@@ -377,7 +377,15 @@ export async function getCounterView(auditId) {
     throw toServiceError(error)
   }
   const lines = Array.isArray(data) ? data : (data?.lines || [])
-  return { audit: Array.isArray(data) ? null : (data?.audit || null), lines: sanitizeCounterLines(lines) }
+  // The server returns each line's location_id and, separately, the audit's
+  // locations (id, code, name). Without joining them the counter saw the same
+  // item three times with no shelf named (web acceptance test, 2026-11-20).
+  const locs = new Map((Array.isArray(data?.locations) ? data.locations : []).map((x) => [x.id, x]))
+  const named = lines.map((l) => {
+    const loc = l.location_id ? locs.get(l.location_id) : null
+    return loc && !l.location_code ? { ...l, location_code: loc.code, location_name: loc.name || null } : l
+  })
+  return { audit: Array.isArray(data) ? null : (data?.audit || null), lines: sanitizeCounterLines(named) }
 }
 
 /** Submit counted lines. Each line carries its own client_uuid (offline-safe retries). */

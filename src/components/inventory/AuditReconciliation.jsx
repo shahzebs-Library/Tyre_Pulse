@@ -33,7 +33,9 @@ export default function AuditReconciliation({ audit, can, userId, people = [], o
   const sum = useMemo(() => summarizeReconciliation(rows), [rows])
   const visible = filter === 'all' ? rows : rows.filter((r) => r.status !== 'match')
   const recountRows = rows.filter((r) => needsRecount(r))
-  const eligible = people.filter((p) => p.id !== audit.counter_id && p.id !== userId)
+  // Mirrors inv_recount_assign: not the counter, an earlier recounter, the audit's
+  // approver, or yourself (the approver was offered and then refused server-side).
+  const eligible = people.filter((p) => ![audit.counter_id, audit.recount_counter_id, audit.approver_id, userId].includes(p.id))
 
   const run = async (fn) => {
     setBusy(true); setErr('')

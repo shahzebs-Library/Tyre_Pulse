@@ -202,7 +202,7 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
                   <Field label={t('inventory.recon.recounter')}>
                     <select className="cc-select" value={recounter} onChange={(e) => setRecounter(e.target.value)}>
                       <option value="">{t('inventory.common.choose')}</option>
-                      {people.filter((p) => p.id !== audit?.counter_id && p.id !== audit?.recount_counter_id && p.id !== userId)
+                      {people.filter((p) => ![audit?.counter_id, audit?.recount_counter_id, audit?.approver_id, userId].includes(p.id))
                         .map((p) => <option key={p.id} value={p.id}>{p.full_name || p.username}</option>)}
                     </select>
                   </Field>

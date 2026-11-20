@@ -158,7 +158,7 @@ export default function AuditsSection({ scope, can, userId, onNavigate }) {
             <Field label={t('inventory.audits.instructions')} error={errors.instructions && t(errors.instructions)} full>
               <textarea className="inv-input" value={creating.draft.instructions} maxLength={2000} onChange={(e) => set('instructions')(e.target.value)} />
             </Field>
-            {peopleErr && <div className="inv-full"><ErrorNote error={peopleErr} /></div>}
+            {peopleErr && <div className="inv-full"><ErrorNote error={peopleErr} load /></div>}
             {err && <div className="inv-full"><ErrorNote error={err} /></div>}
           </div>
         )}

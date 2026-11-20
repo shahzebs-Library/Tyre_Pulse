@@ -1,0 +1,35 @@
+import { open, close } from './pw.mjs'
+import { go, field, text, snap } from './ui.mjs'
+const who = process.argv[2] || 'invctl'
+const { page, log } = await open(who)
+await go(page, 'audits')
+await page.getByRole('button', { name: 'New audit' }).click()
+await page.waitForTimeout(1500)
+const dlg = page.getByRole('dialog')
+const ty = field(dlg, 'Audit type'); const tyo = await ty.locator('option').allTextContents(); console.log('types', tyo.join(','))
+await ty.selectOption({ label: 'Full count' })
+const site = field(dlg, 'Site')
+if ((await site.evaluate((e) => e.tagName)) === 'SELECT') await site.selectOption({ label: 'NHC' }); else await site.fill('NHC')
+for (const [lab, nm] of [['Counter', 'QA Store Keeper'], ['Reviewer', 'QA Inventory Controller'], ['Approver', 'QA Manager']]) {
+  const s = field(dlg, lab)
+  if (await s.count() === 0) { console.log('no field', lab); continue }
+  const o = await s.locator('option').allTextContents()
+  const hit = o.find((x) => x.includes(nm))
+  if (hit) await s.selectOption({ label: hit }); else console.log('option not found', lab, nm)
+}
+await field(dlg, 'Due').click(); await page.waitForTimeout(500); await page.locator('button[aria-label^="25 "]').first().click(); await page.waitForTimeout(300)
+await field(dlg, 'Instructions for the counter').fill('QA acceptance: count NHC WH-A and WH-B').catch(() => {})
+await dlg.getByRole('button', { name: 'Create audit' }).click()
+await page.waitForTimeout(3000)
+await snap(page, `t06_${who}_created`)
+let t = await text(page)
+console.log('after create:', (t.match(/(Not [^|]*|refused[^|]*|[^|]*error[^|]*|AUD-[^|]*)/gi) || []).slice(0, 6))
+const row = page.locator('tbody tr').first()
+await row.click(); await page.waitForTimeout(2000)
+const start = page.getByRole('button', { name: 'Start', exact: true })
+if (await start.count()) { await start.click(); await page.waitForTimeout(3000) } else console.log('no Start button')
+await snap(page, `t06_${who}_started`)
+t = await text(page)
+console.log('after start:', t.slice(t.indexOf('Audit actions') > 0 ? t.indexOf('Audit actions') : 0).slice(0, 700))
+console.log(log.filter((l) => l.startsWith('http') && !/organisation_configuration|org_branding|country_addresses|subscription|corrective_actions/.test(l)).join('\n'))
+await close()

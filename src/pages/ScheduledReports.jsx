@@ -1126,6 +1126,7 @@ export default function ScheduledReports() {
           base, 'landscape', reportCompany,
           {
             currency: activeCurrency, branding, dateRange: label,
+            ...(dataset.summaryMoney === false ? { summaryMoney: false } : {}),
             emptyHint: td('schedreports.gen.emptyHint', 'No records in the selected coverage window. Widen the period or clear the country filter.'),
             ...(inspectionTable ? {
               extraTable: {

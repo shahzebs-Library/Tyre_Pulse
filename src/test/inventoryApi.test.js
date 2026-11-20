@@ -83,6 +83,14 @@ describe('inventory service', () => {
     expect(v.lines[0]).toEqual({ item_code: 'X' })
   })
 
+  it('names each counter line\'s location from the payload locations list', async () => {
+    state.rpc = { data: { audit: { id: 'a' }, locations: [{ id: 'L1', code: 'WH-A', name: 'Main store' }, { id: 'L2', code: 'WH-B' }],
+      lines: [{ item_code: 'X', location_id: 'L1' }, { item_code: 'X', location_id: 'L2' }, { item_code: 'Y', location_id: 'L9' }] }, error: null }
+    const v = await getCounterView('a')
+    expect(v.lines.map((l) => l.location_code)).toEqual(['WH-A', 'WH-B', undefined])
+    expect(v.lines[0].location_name).toBe('Main store')
+  })
+
   it('reports setup per table and generates unique keys', async () => {
     state.result = { data: null, error: { code: 'PGRST205' }, count: null }
     const s = await probeInventorySetup()

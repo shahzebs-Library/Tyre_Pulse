@@ -23,6 +23,7 @@
     "notSetUpTitle": "{what} is not set up yet",
     "notSetUpBody": "The database part of this section has not been installed for your company. Nothing is shown until it is, so no figure on this screen is invented.",
     "errorTitle": "This could not be loaded",
+    "actionErrorTitle": "This was not done",
     "deniedTitle": "You do not have access to this",
     "deniedBody": "This needs the \"{cap}\" permission for inventory. Ask an administrator if you need it.",
     "truncated": "Showing the first 20,000 lines only. Narrow the site or country to see everything.",

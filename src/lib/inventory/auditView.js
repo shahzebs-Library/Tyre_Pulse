@@ -91,8 +91,11 @@ export function availableActions(audit, userId, can = () => false) {
   const isCounter = roles.has('counter') || roles.has('recounter')
   const out = []
   if (['draft', 'scheduled', 'assigned'].includes(s) && (can('audit_create') || roles.has('creator'))) out.push('start')
-  if (['assigned', 'in_progress'].includes(s) && roles.has('counter') && can('count')) out.push('count')
-  if (s === 'recount' && roles.has('recounter') && can('count')) out.push('count')
+  // Counting is by assignment, not capability: inv_count_submit accepts exactly the
+  // audit's counter (round 1) or its approved recounter, whatever they hold. An
+  // approved recounter without the 'count' capability had no Count button.
+  if (['assigned', 'in_progress'].includes(s) && roles.has('counter')) out.push('count')
+  if (s === 'recount' && roles.has('recounter')) out.push('count')
   // Counting ends by the person counting (or the creator / an audit_create holder);
   // without it the audit can never reach reconciliation (server: inv_audit_complete_counting).
   if ((s === 'in_progress' && (roles.has('counter') || roles.has('creator') || can('audit_create')))

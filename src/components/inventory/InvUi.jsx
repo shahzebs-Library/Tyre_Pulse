@@ -80,10 +80,11 @@ export function NotSetUp({ what }) {
   )
 }
 
-export function ErrorNote({ error, onRetry }) {
+export function ErrorNote({ error, onRetry, load = false }) {
   const { t } = useLanguage()
   return (
-    <Note tone="bad" icon={AlertTriangle} title={t('inventory.state.errorTitle')}
+    // A read failure offers Retry; an action refusal (no retry) is not a load failure.
+    <Note tone="bad" icon={AlertTriangle} title={t(onRetry || load ? 'inventory.state.errorTitle' : 'inventory.state.actionErrorTitle')}
       action={onRetry && (
         <button type="button" className="cc-btn-ghost" onClick={onRetry}>
           <RefreshCw size={14} aria-hidden="true" /> {t('inventory.actions.retry')}

@@ -580,6 +580,49 @@ export function decideCustodyConflict({ conflictId, status, note }, key) {
   return rpcWrite('inv_tyre_conflict_decide', { conflict_id: conflictId, status, note: String(note).trim() }, key)
 }
 
+// ---------------------------------------------------------------------------
+// Scrapped-but-active conflicts: investigation workflow (20261120114000).
+// open -> investigating -> proposed -> approved | rejected -> closed. The
+// approval is an ordinary inventory approval request (decideApproval) that only an
+// independent PMV Manager can decide. Closing records the decision; tyre records
+// and scrap marks are never changed from here.
+// ---------------------------------------------------------------------------
+export const CORRECTION_ACTIONS = ['clear_scrap_mark', 'close_active_fitment', 'correct_serial', 'no_change', 'other']
+
+export function assignConflictInvestigator({ conflictId, investigatorId, note }, key) {
+  if (!conflictId) return Promise.reject(new ServiceError('Choose the conflict.', 'INV_NO_ENTITY'))
+  if (!investigatorId) return Promise.reject(new ServiceError('Choose the investigator.', 'INV_NO_ENTITY'))
+  return rpcWrite('inv_tyre_conflict_assign', { conflict_id: conflictId, investigator_id: investigatorId, note: note || null }, key)
+}
+
+export function recordConflictFinding({ conflictId, note, evidence }, key) {
+  if (!conflictId) return Promise.reject(new ServiceError('Choose the conflict.', 'INV_NO_ENTITY'))
+  if (isBlank(note) || !String(note).trim()) return Promise.reject(new ServiceError('Write what was checked and found.', 'INV_NO_NOTE'))
+  return rpcWrite('inv_tyre_conflict_investigate', { conflict_id: conflictId, note: String(note).trim(), evidence: evidence || [] }, key)
+}
+
+export function proposeConflictCorrection({ conflictId, action, detail, tyreRecordId, reason }, key) {
+  if (!conflictId) return Promise.reject(new ServiceError('Choose the conflict.', 'INV_NO_ENTITY'))
+  if (!CORRECTION_ACTIONS.includes(action)) return Promise.reject(new ServiceError('Choose the proposed correction.', 'INV_BAD_DECISION'))
+  if (isBlank(detail) || !String(detail).trim()) return Promise.reject(new ServiceError('Describe the correction for the tyre team.', 'INV_NO_NOTE'))
+  return rpcWrite('inv_tyre_conflict_propose', {
+    conflict_id: conflictId, reason: reason || null,
+    correction: { action, detail: String(detail).trim(), tyre_record_id: tyreRecordId || null },
+  }, key)
+}
+
+export function closeConflictCase({ conflictId, note }, key) {
+  if (!conflictId) return Promise.reject(new ServiceError('Choose the conflict.', 'INV_NO_ENTITY'))
+  return rpcWrite('inv_tyre_conflict_close', { conflict_id: conflictId, note: note || null }, key)
+}
+
+export function listConflictCases({ page, pageSize, investigationStatus } = {}) {
+  return pagedRead('v_inv_tyre_conflict_cases', 'id, serial, country, conflict_type, status, investigation_status, detected_at, evidence, investigator_id, assigned_at, investigation_notes, proposed_correction, proposed_at, approval_request_id, approval_status, decided_correction, closed_at, i_am_investigator', {
+    page, pageSize, order: 'detected_at', ascending: false,
+    build: (q) => (investigationStatus ? q.eq('investigation_status', investigationStatus) : q),
+  })
+}
+
 export function listCustodyConflicts({ page, pageSize, status } = {}) {
   return pagedRead(VIEWS.conflicts, 'id, tyre_item_id, serial_no, country, conflict_type, status, evidence, detected_at, resolved_by, resolved_at, resolution_note, created_at', {
     page, pageSize, order: 'detected_at', ascending: false,

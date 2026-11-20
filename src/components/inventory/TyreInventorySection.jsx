@@ -122,7 +122,8 @@ export default function TyreInventorySection({ scope, can }) {
             <Link className="cc-btn-ghost" to={`/tyre-passport/${encodeURIComponent(conflict.serial_no || '')}`}>
               <ExternalLink size={14} aria-hidden="true" /> {t('inventory.tyres.passport')}
             </Link>
-            {canDecide && (conflict.status === 'open' || conflict.status === 'investigating') && (
+            {conflict.conflict_type === 'scrapped_but_active' && <Note tone="warn">{t('inventory.tyres.investigationRule')}</Note>}
+            {canDecide && conflict.conflict_type !== 'scrapped_but_active' && (conflict.status === 'open' || conflict.status === 'investigating') && (
               <div className="inv-form">
                 <Field label={t('inventory.tyres.decision')}>
                   <select className="cc-select" value={decision.status} onChange={(e) => setDecision((d) => ({ ...d, status: e.target.value }))}>

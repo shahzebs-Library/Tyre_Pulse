@@ -24,6 +24,8 @@ import {
   isMissingRpc, isMixedCurrency, normaliseExecMoney, partsFor, rowCurrency, sumByCurrency,
   sumRowsByCurrency,
 } from './money.ts'
+import { inventoryAttachment, loadInventoryDigest, renderInventoryHtml } from './inventory.ts'
+import { deliverSchedule } from './delivery.ts'
 
 const RIYADH_OFFSET_MIN = 3 * 60 // Gulf standard time, no DST
 
@@ -123,6 +125,7 @@ type Schedule = {
   period: string | null
   period_from: string | null
   period_to: string | null
+  created_by?: string | null
 }
 
 function toRiyadh(d: Date): Date {
@@ -278,6 +281,7 @@ const TYPE_LABEL: Record<string, string> = {
   pm: 'Preventive Maintenance due',
   workshop: 'Workshop Summary',
   workshop_status: 'Workshop Vehicle Status',
+  inventory: 'Inventory Digest',
 }
 
 /** Friendly label for any report_type, incl. custom 'builder:<template-id>' layouts. */
@@ -1281,11 +1285,19 @@ function renderDatasetHtml(s: Schedule, cfg: DatasetDigestCfg, d: DatasetDigest,
  *  period-scoped figure. The fallback branch (unknown report type) keeps the
  *  old header with no window claim. */
 // deno-lint-ignore no-explicit-any
-async function renderForSchedule(svc: any, s: Schedule, appUrl: string, cur: CurrencyContext): Promise<{ subject: string; html: string; shouldSend?: boolean }> {
+async function renderForSchedule(svc: any, s: Schedule, appUrl: string, cur: CurrencyContext): Promise<{ subject: string; html: string; shouldSend?: boolean; attachments?: Array<{ filename: string; content: string }> }> {
   const type = s.report_type ?? ''
   const win = resolvePeriodBounds(s, new Date())
   let html: string
-  if (type === 'tyre_stock_alert') {
+  if (type === 'inventory') {
+    // Current-state digest (balances now), org-scoped, one block per currency; CSV attached.
+    const d = await loadInventoryDigest(svc, s)
+    return {
+      subject: asciiSafe(`TyrePulse Inventory: ${s.name}`),
+      html: asciiSafe(renderInventoryHtml(s, d, `${appUrl.replace(/\/+$/, '')}/stock`)),
+      attachments: d.empty ? [] : [inventoryAttachment(d, new Date().toISOString().slice(0, 10))],
+    }
+  } else if (type === 'tyre_stock_alert') {
     const rows = await lowTyreStock(svc, s.org_id)
     const subject = asciiSafe(`TyrePulse Tyre Low-Stock Alert: ${s.name}`)
     if (!rows.length) return { subject, html: '', shouldSend: false }
@@ -1331,7 +1343,7 @@ async function loadCurrencyContext(svc: any): Promise<CurrencyContext> {
   return { map, fallback: await systemCurrency(svc) }
 }
 
-const SCHEDULE_COLS = 'id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,last_sent_at,next_run_at,org_id,period,period_from,period_to'
+const SCHEDULE_COLS = 'id,name,report_type,frequency,day_of_week,day_of_month,time_of_day,recipients,last_sent_at,next_run_at,org_id,period,period_from,period_to,created_by'
 
 /**
  * On-demand "Send now": an authenticated Admin/Manager/Director posts
@@ -1425,7 +1437,9 @@ async function handleSendNow(req: Request, svc: any): Promise<Response> {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM_EMAIL, to: recipients, subject, html }),
+      body: JSON.stringify(rendered.attachments?.length
+        ? { from: FROM_EMAIL, to: recipients, subject, html, attachments: rendered.attachments }
+        : { from: FROM_EMAIL, to: recipients, subject, html }),
     })
     if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 300)}`)
 
@@ -1493,58 +1507,26 @@ serve(async (req) => {
   let first = true
 
   for (const s of (due ?? []) as Schedule[]) {
-    const recipients = (s.recipients ?? []).filter((r) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r))
-    try {
-      // A schedule with no organisation is never sent (it would be a digest across
-      // every organisation). It lands in the failed branch below: logged, marked
-      // failed with the reason, and backed off for an hour.
-      requireOrg(s.org_id)
-      if (!recipients.length) throw new Error('No valid recipients on the schedule')
-      if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured for edge functions')
-
-      // Resend allows 2 requests/second — pace consecutive sends so a batch of
-      // due schedules never trips the 429 rate limit (observed 2026-07-11).
-      if (!first) await sleep(650)
-      first = false
-
-      // Insurance Claims Summary + custom Report Builder layouts get the
-      // claims-desk digest; every other type the executive digest.
-      const rendered = await renderForSchedule(svc, s, APP_URL, currency)
-      if (rendered.shouldSend === false) {
-        await svc.from('report_schedules')
-          .update({ last_status: 'no_alert', last_error: null, next_run_at: computeNextRun(s, now), updated_at: now.toISOString() })
-          .eq('id', s.id)
-        skipped++
-        continue
-      }
-      const { subject, html } = rendered
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: FROM_EMAIL, to: recipients, subject, html }),
-      })
-      if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 300)}`)
-
-      await svc.from('report_schedules')
-        .update({ last_sent_at: now.toISOString(), last_status: 'sent', last_error: null, next_run_at: computeNextRun(s, now), updated_at: now.toISOString() })
-        .eq('id', s.id)
-      await svc.from('report_send_log').insert({
-        schedule_id: s.id, schedule_name: s.name, report_type: s.report_type,
-        recipients, status: 'sent',
-      })
-      sent++
-    } catch (e) {
-      // back off one hour so a broken schedule doesn't retry every 15 minutes
-      const errMsg = String((e as Error)?.message ?? e).slice(0, 500)
-      await svc.from('report_schedules')
-        .update({ last_status: 'failed', last_error: errMsg, next_run_at: new Date(now.getTime() + 3_600_000).toISOString(), updated_at: now.toISOString() })
-        .eq('id', s.id)
-      await svc.from('report_send_log').insert({
-        schedule_id: s.id, schedule_name: s.name, report_type: s.report_type,
-        recipients, status: 'failed', error: errMsg,
-      })
-      failed++
-    }
+    // Resend allows 2 requests/second: pace consecutive sends so a batch of due
+    // schedules never trips the 429 rate limit (observed 2026-07-11).
+    if (!first) await sleep(650)
+    first = false
+    // Same path for every report type (delivery.ts): a failure is logged to
+    // report_send_log and backed off one hour; the next run after that retries it.
+    // A schedule with no organisation is never sent (it would be a digest across
+    // every organisation); it lands in the failed branch with the reason.
+    const outcome = await deliverSchedule({
+      svc, s, now,
+      render: () => renderForSchedule(svc, s, APP_URL, currency),
+      fetchFn: fetch,
+      resendKey: RESEND_API_KEY,
+      fromEmail: FROM_EMAIL,
+      computeNextRun: () => computeNextRun(s, now),
+      requireOrg,
+    })
+    if (outcome === 'sent') sent++
+    else if (outcome === 'skipped') skipped++
+    else failed++
   }
 
   return new Response(JSON.stringify({ processed: (due ?? []).length, sent, failed, skipped }), {

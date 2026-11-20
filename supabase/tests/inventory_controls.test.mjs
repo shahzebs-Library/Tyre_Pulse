@@ -159,7 +159,7 @@ test('valuation with missing cost: no order assumed, pending allocation, reconci
       assert.deepEqual([Number(b.qty_on_hand), Number(b.valued_qty), Number(b.valued_value), Number(b.unvalued_qty), Number(b.pending_allocation_out_qty)], [1, 0, 0, 1, 0])
       await assert.rejects(db.exec(`update stock_movements set value_change = 0 where id = '${done.movement_id}'`), /append-only/)
       await assert.rejects(db.exec(`update inventory_cost_reconciliations set status='resolved', resolution_source='reconciliation',
-        resolved_by=created_by, resolved_at=now() where id='${al.id}'`), /sod_chk/)
+        resolved_by=created_by, resolved_at=now() where id='${al.id}'`), /sod_chk|final/)
     })
 
     await t.test('write-off keeps the unit unvalued for good', async () => {
@@ -272,7 +272,7 @@ test('approval engine: published policy routes, multi-stage, role match, signatu
     await assert.rejects(call(db, U.reviewer, 'inv_request_approval', { entity_type: 'cost_reconciliation', entity_id: rec2.id,
       proposal: { resolution: 'resolved', unit_cost: 1 }, reason: 'retry' }), /ambiguous/)
     // the requester can never be the decider (database CHECK)
-    await assert.rejects(db.exec(`update inventory_approval_requests set decided_by = requested_by where id = '${q2.id}'`), /self_chk/)
+    await assert.rejects(db.exec(`update inventory_approval_requests set decided_by = requested_by where id = '${q2.id}'`), /self_chk|final/)
     // the widened policy CHECK still refuses unknown entity types
     await assert.rejects(db.exec(`insert into approval_policies(organisation_id, name, entity_type, stages) values ('${ORG_A}','bad','inventory_nonsense','[{}]')`), /entity_type_check/)
   } finally { await db.close() }

@@ -28,6 +28,10 @@ Apply in this order, each one its own transaction (all live in `supabase/pending
 | 10 | `20261120109000_inv_erp_reconciliation.sql` | Read-only `v_inv_erp_reconciliation` (inventory issues vs parts_consumption + material_issues not already in it) |
 | 11 | `20261120110000_inv_metric_catalogue.sql` | Seeds the 25 KPIs of `src/lib/inventory/kpi.js` into `metric_registry` + `metric_versions` (status draft, lineage_domain NULL, insert-only) |
 | 12 | `20261120111000_inv_report_schedules.sql` | `report_schedules.report_type` allows `inventory`; read-only digest view `v_inv_report_snapshot` |
+| 13 | `20261120112000_inv_source_receipt.sql` | `inv_issue` / `inv_transfer_dispatch` forward `source_receipt_movement_id` (fingerprinted in-place patch); `v_inv_receipt_sources` |
+| 14 | `20261120113000_inv_approval_roles.sql` | Inventory Controller + Finance Manager added to `custom_roles`; `inv_approver_roles`; live `approval_private.validate_policy` patched in place (fingerprint b76c1c97) for `inventory_%` stages; `inventory_approval_limits` + `inv_approval_limit_upsert`; `_inv_approval_extra_block` (Store Keeper refusal, role list, thresholds) called by `_inv_approval_block_reason` |
+| 15 | `20261120114000_inv_tyre_conflict_investigation.sql` | Investigation fields on `tyre_custody_conflicts`; `inv_tyre_conflict_assign / _investigate / _propose / _close`; entity type `tyre_conflict_correction` in the approval engine (PMV Manager only); `v_inv_tyre_conflict_cases`; direct decide refused for scrapped_but_active |
+| 16 | `20261120115000_inv_hardening.sql` | The four pure helpers revoked from PUBLIC / anon; `inv_lifecycle_guard` (status graph, terminal rows immutable, no DELETE) on cost reconciliations, approval requests and custody conflicts |
 
 Every new table ends with `anum_integration.apply_reader_policies()` guarded by
 `to_regprocedure(...) is not null`. Every SECURITY DEFINER function pins `search_path`;
@@ -41,7 +45,7 @@ NOT NULL; if not, it leaves it nullable with a NOTICE.
 
 ## 2. Rollback
 
-Every file has a `_ROLLBACK.sql`. Run them in REVERSE order (111000 first, 100000 last).
+Every file has a `_ROLLBACK.sql`. Run them in REVERSE order (115000 first, 100000 last).
 
 * P0 copies every object it replaces into `_bak.inv_p0_snapshot` at apply time, from the
   catalog (`pg_get_functiondef`, `pg_policies`, `pg_get_constraintdef`, `pg_get_viewdef`,

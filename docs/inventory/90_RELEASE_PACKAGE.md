@@ -5,7 +5,7 @@ Branch `claude/inventory-upgrade-7rxp2t`. Lane: final QA + release (owns `docs/i
 
 **Nothing in this package has been applied to production, deployed or merged to main.**
 Production (`jhssdmeruxtrlqnwfksc`) was read with catalog and aggregate SELECTs only (section 7).
-All 13 migrations sit in `supabase/pending_migrations/`.
+All 16 migrations sit in `supabase/pending_migrations/`.
 
 Binding contract: `07_APPROVED_REQUIREMENTS_AND_BUILD_CONTRACT.md`. DB detail: `10_DB_IMPLEMENTATION.md`.
 Valuation rule: `20_VALUATION_RULES.md`. Client map: `91_CLIENT_INTEGRATION.md`.
@@ -61,7 +61,7 @@ en / ar keys added for every new string (parity kept; `webI18nKeyCoverage` green
 ## 3. Migration apply order (production), with verify and rollback
 
 Apply each file in its **own** apply, in this order (the 2026-11-15 rollout hit "out of shared
-memory" with large combined batches). Rollbacks run in **reverse** order (112000 first).
+memory" with large combined batches). Rollbacks run in **reverse** order (115000 first).
 
 | # | File | Verify (expected) | Rollback |
 |---|---|---|---|
@@ -79,7 +79,22 @@ memory" with large combined batches). Rollbacks run in **reverse** order (112000
 | 12 | `20261120111000_inv_report_schedules.sql` | constraint contains `'inventory'` and all 13 previous types (live definition verified identical, section 7) | `..._ROLLBACK.sql` |
 | 13 | `20261120112000_inv_source_receipt.sql` | `select position('source_receipt_movement_id' in pg_get_functiondef('public._inv_issue(jsonb)'::regprocedure)) > 0;` -> t (same for `_inv_transfer_dispatch(jsonb)`); `select count(*) from _bak.inv_112000_snapshot;` -> 2 | `..._ROLLBACK.sql` (re-executes the 2 snapshots, drops the view) |
 
-After all 13: `select anum_integration.apply_reader_policies();` already runs inside each file (guarded).
+| 14 | `20261120113000_inv_approval_roles.sql` | `select md5(replace(pg_get_functiondef('approval_private.validate_policy(approval_policies)'::regprocedure), chr(13), ''));` differs from `b76c1c97d59bc5b384041b5f8b67c867` and contains `inv_approver_roles`; the 3 live inspection policies still validate (`select approval_private.validate_policy(p) from approval_policies p;` no error); `select count(*) from custom_roles where name in ('Inventory Controller','Finance Manager');` -> 2 per organisation | `..._ROLLBACK.sql` (re-executes the snapshot; removes the two roles only while nobody holds them) |
+| 15 | `20261120114000_inv_tyre_conflict_investigation.sql` | `select count(*) from tyre_custody_conflicts where investigation_status <> 'open';` -> 0; tyre_records + tyre_status_marks hash unchanged | `..._ROLLBACK.sql` (refuses once a case has started unless discard is set) |
+| 16 | `20261120115000_inv_hardening.sql` | `select has_function_privilege('anon','public.inv_canon_serial(text)','EXECUTE');` -> f (same for `_inv_posting_on()`, `_inv_cap_for(text)`, `inv_movement_kind(text)`); triggers `trg_inv_lifecycle_guard` on 3 tables | `..._ROLLBACK.sql` |
+
+**Fingerprint guards.** Every in-place rewrite checks an md5 of `pg_get_functiondef` (chr(13) stripped)
+before the anchor check and aborts cleanly on any mismatch: 112000 (`_inv_issue` 761664c2..., `_inv_transfer_dispatch`
+f79392c7..., PGlite output of 100000..111000), 113000 (live `approval_private.validate_policy` b76c1c97...,
+read from production 2026-11-20; `_inv_approval_block_reason` 4fc26414...), 114000 (`_inv_approval_entity`
+183d8b9d..., `_inv_approval_cap` 19fab589..., `_inv_tyre_conflict_decide` 290fad63...). P0 replaces the
+legacy stock writers wholesale (not by anchor) after snapshotting them; their live fingerprints on
+2026-11-20 are recorded for the rehearsal: post_stock_movement 12d9a6a0, set_stock_count 28e9e4d6,
+save_stock_entry 964c2e8c, transfer_stock_entry 34faec25, reserve_work_order_stock 91f34acb,
+release_work_order_stock 04ef02db, private.reserve_work_order_stock_internal f0552081,
+private.release_work_order_stock_internal 91d1c71a. If any differs at apply time, re-review P0 first.
+
+After all 16: `select anum_integration.apply_reader_policies();` already runs inside each file (guarded).
 
 ### Production pre-checks (owner)
 1. Supabase backup confirmed in the dashboard (PITR tier noted) **before** file 1.
@@ -161,6 +176,9 @@ from PUBLIC in a follow-up.
 
 | Suite | Result |
 |---|---|
+| **Controls completion round (2026-11-20)**: DB PGlite `inventory_*.test.mjs` (16 migrations, incl. `inventory_controls_completion.test.mjs` 9 tests / 25 checks, rollback proof for all 16) | **104 tests, 103 pass, 0 fail, 1 skipped** (staging race, not re-run this round) |
+| Vitest inventory + ratchets + scheduled reports + `scheduledReportInventory.test.js` (11) | **307 / 307 pass, 22 files** |
+| ESLint (changed web files) / `vite build` | 0 errors / exit 0 |
 | DB PGlite `node --test --test-concurrency=1 supabase/tests/inventory_*.test.mjs` (13 migrations) | **79 tests, 78 pass, 0 fail, 1 skipped** (the staging race, run separately) |
 | Staging race `inventory_concurrency.test.mjs` on PG16 port 54329 (cluster started, test, stopped) | **2 / 2 pass** |
 | Security acceptance `inventory_security_acceptance.test.mjs` | **10 / 10 pass** (included in the 79) |
@@ -204,17 +222,84 @@ date is earlier - a re-load of an older fitment, not a new fitment. The UAE row 
 
 No guard would abort on this data.
 
-## 8. Owner decisions needed
+## 8. Owner decisions (2026-11-20) and how they were built
 
-1. **Approval policy roles.** `approval_private.validate_policy` only lets an inventory stage name
-   Admin or a named person. To route stages to Inventory Controller / Finance Manager / Site Manager,
-   widen its role list (DB change, owner approval).
-2. **Scheduled digest email.** `send-scheduled-reports` has no `inventory` branch; deploy one (edge
-   deploy, owner approval). Until then an `inventory` schedule emails the generic fallback.
-3. Apply approval for the 13 files (section 3), after backup + staging rehearsal.
-4. The 7 tyre conflicts: who decides, and whether the tyre team corrects the re-loaded fitment rows
-   in tyre records (inventory never does).
-5. Optional hardening: revoke PUBLIC from the four pure anon-executable helpers (section 5).
+### 8.1 Approval roles (113000)
+
+Role records mapped from the live catalog (read-only, 2026-11-20):
+
+| Contract role | Live role record | Holders today | May approve (inv_approver_roles) |
+|---|---|---|---|
+| Admin | profiles.role `Admin` (built in) | 2 | adjustment, recount, opening balance, cost reconciliation |
+| Director / Manager | built in | 0 / 3 | adjustment, recount, opening balance, cost reconciliation |
+| Inventory Controller | **missing** -> added to `custom_roles` | 0 | adjustment, recount, opening balance |
+| Finance Officer / Manager | **missing** -> `Finance Manager` added to `custom_roles` | 0 | adjustment, opening balance, cost reconciliation |
+| Site Manager | `Workshop Area Manager`, `Workshop Maintenance Area Manager` (custom) | 0 / 1 | adjustment, recount |
+| Tyre / PMV Engineer | `Tire Planning Engineer` (custom) | 1 | investigates tyre conflicts (never approves) |
+| PMV Manager | `PMV Manager` (custom) | 1 | adjustment, recount, **tyre conflict correction (only role)** |
+| Store Keeper | `Store Keeper` (custom) | 7 | **nothing** (prepares receipts, counts, stock requests) |
+
+No module_permissions row or capability was changed. Approving still needs the stock capability of
+the stage (adjustment_approve / discrepancy_review / financial_post / scrap_approve): a new
+Inventory Controller, Finance Manager or the PMV Manager needs those granted in Access Control
+(owner action) before they can decide.
+
+Enforced in the database: `validate_policy` only accepts the roles above for an `inventory_*` stage
+(named people included); at decision time `_inv_approval_block_reason` keeps all its checks and then
+calls `_inv_approval_extra_block`: Store Keeper refused for adjustments, opening balances and cost
+reconciliations, role list, company / country / site scope (`_inv_scope_ok`), and thresholds from
+`inventory_approval_limits` (per company, type, role, optional country / site / currency; max value and
+max quantity; a role with no limit or a larger request waits for a higher-limit approver; an unknown
+value never passes a value cap). Separation of duties stays keyed on user id: the preparer, counter,
+recounter, proposer or investigator is refused whatever roles or capabilities they hold.
+
+### 8.2 The seven tyre conflicts (114000, doc 31)
+Investigation workflow, evidence pack in `31_TYRE_CONFLICT_EVIDENCE.md`. Web service functions exist
+(`assignConflictInvestigator`, `recordConflictFinding`, `proposeConflictCorrection`, `closeConflictCase`,
+`listConflictCases`); the web screen shows the rule and no longer offers the direct decision for this
+conflict type. A full assign / findings / propose screen is not built yet (see section 9).
+
+### 8.3 Four anon-executable helpers (115000)
+`_inv_posting_on()`, `_inv_cap_for(text)`, `inv_movement_kind(text)`, `inv_canon_serial(text)`: SECURITY
+INVOKER, read no table, called only by definer functions or the definer scrap trigger. anon reads no
+inventory table and calls no inventory RPC, so nothing needs them: **revoked from PUBLIC and anon**,
+granted explicitly to authenticated and service_role. Test: anon refused, authenticated works, the
+scrap flag trigger still fires on an authenticated insert.
+
+### 8.4 Scheduled inventory e-mail (edge code, NOT deployed)
+`send-scheduled-reports`: `inventory.ts` (pure builder, org-filtered reads, one block per currency,
+valued / unvalued / pending separate, money only when the schedule creator is an Admin or super admin,
+honest empty state, CSV attachment in the Resend shape) and `delivery.ts` (the cron step for every
+type, extracted unchanged: failure logged to report_send_log and retried after one hour). Deno is not
+available here, so the modules are tested with vitest (`src/test/scheduledReportInventory.test.js`, 11):
+build, empty, org isolation, attachment, failure logged and retried. **Deploy is an owner step.**
+
+### 8.5 Architect review items (a to d)
+* **(a) Fingerprints**: section 3. A changed function aborts the file before anything is applied (test).
+* **(b) Mutability by table**: ledgers (stock_movements, tyre_item_events, inventory_approval_decisions)
+  append-only for every role. `inventory_cost_reconciliations`, `inventory_approval_requests` and
+  `tyre_custody_conflicts`: no API role may write them (privilege), and a trigger (115000) enforces the
+  status graph, makes terminal rows immutable and refuses DELETE for every role including the owner.
+  Tested as authenticated, Admin and super admin, and as the owner.
+* **(c) Legacy procurement RLS**: the harness now carries the live restrictive country / site write
+  policies and the admin-only delete guard on purchase_orders, goods_receipts, requisitions,
+  suppliers and materials (read from production). Direct-SQL tests as distinct users: another company
+  sees, inserts, updates and deletes nothing; an out-of-country or out-of-site user updates and deletes
+  nothing (suppliers carry no site, as live).
+* **(d) Id injection**: one cross-company test per definer family (ledger, reversal, reserve, issue,
+  source receipt, transfer both ways, audit start / count / reviewer / counter, PO line, receive, supplier
+  invoice, location parent / responsible person, approval request, approval limit scope, cost
+  reconciliation, tyre case). It found and fixed six gaps, all in pending files: `inv_receive_goods`
+  stored a foreign `po_id` / `supplier_id` (103000), `inv_supplier_invoice_create` a foreign `po_id`,
+  PO line or item (103000), `inv_location_upsert` a foreign parent or responsible person (101000),
+  `inv_audit_create` a foreign reviewer / approver and `inv_audit_schedule` a foreign counter (102000),
+  `inv_opening_batch_add_line` a foreign supplier (101000).
+
+### 8.6 Still the owner's
+1. Apply approval for the 16 files (section 3), after backup + staging rehearsal.
+2. Grant stock approval capabilities to the people who will hold Inventory Controller, Finance
+   Manager and PMV Manager; set `inventory_approval_limits` if thresholds are wanted.
+3. Deploy `send-scheduled-reports`.
 
 ## 9. Remaining blockers (genuine)
 
@@ -236,7 +321,8 @@ No guard would abort on this data.
   `test/app/localization` 46 / 46 (new: `count_finisher_test.dart` 10, `finish_counting_screen_test.dart`
   5, contract 1, copy 1). Not run: device test (standing no-mobile-build rule).
 * **B4 - Flutter background sync of count lines** is in the reserved patch (section 10), not applied.
-* **B5 - emailed inventory digest** (decision 2).
+* **B5 - emailed inventory digest**: code + tests done (8.4); deploy is the owner's.
+* **B6 - tyre investigation screen**: service layer and DB done; the web form to assign, record findings and propose is not built.
 
 ## 10. Flutter reserved patch (human)
 

@@ -79,7 +79,7 @@ test('approvals and cost reconciliations are never discarded silently by a rollb
   await db.exec("insert into test_caps values ('" + U.approver + "','financial_post')")
   await rpc(db, U.approver, 'inv_request_approval', [JSON.stringify({ idempotency_key: 'rc-3', entity_type: 'cost_reconciliation', entity_id: rec, proposal: { resolution: 'written_off' }, reason: 'x' })])
   const idx = f => ROLLBACKS.findIndex(x => x.startsWith(f))
-  for (const f of ['20261120111000', '20261120110000', '20261120109000']) await db.exec(sqlOf(ROLLBACKS[idx(f)]))
+  for (const f of ['20261120115000', '20261120114000', '20261120113000', '20261120112000', '20261120111000', '20261120110000', '20261120109000']) await db.exec(sqlOf(ROLLBACKS[idx(f)]))
   await assert.rejects(db.exec(sqlOf(ROLLBACKS[idx('20261120108000')])), /export them/)
   await db.exec('rollback')
   await db.exec(sqlOf(ROLLBACKS[idx('20261120108000')]).replace(/^begin;/m, "begin;\nset local inv.rollback_discard = 'on';"))

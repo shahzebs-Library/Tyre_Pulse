@@ -30,7 +30,8 @@ test('api contract: payload writes, idempotency, closed internals, masked views'
       const pub = await q(db, `select p.proname, pg_get_function_identity_arguments(p.oid) as a from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'inv\\_%'
         and p.prokind = 'f' and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-        and pg_get_function_result(p.oid) <> 'trigger' and p.proname not in ('inv_can','inv_blind_hides_balance','inv_canon_serial','inv_movement_kind')`)
+        and pg_get_function_result(p.oid) <> 'trigger' and p.proname not in ('inv_can','inv_blind_hides_balance','inv_canon_serial','inv_movement_kind',
+          'inv_approver_roles','inv_tyre_investigator_roles')`) // the last two: read-only role lists (113000 / 114000)
       const odd = pub.filter(x => x.a !== 'p_payload jsonb' && !['inv_audit_counter_view', 'inv_valuation_summary'].includes(x.proname))
       assert.deepEqual(odd, [], 'every client write takes exactly p_payload jsonb')
       for (const x of await q(db, `select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace

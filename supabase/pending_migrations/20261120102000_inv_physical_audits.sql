@@ -276,6 +276,11 @@ begin
        and (organisation_id = v_org or org_id = v_org)) then
     raise exception 'The counter must belong to your company.' using errcode = '22023';
   end if;
+  if exists (select 1 from (values (nullif(p->>'reviewer_id', '')), (nullif(p->>'approver_id', ''))) x(u)
+              where x.u is not null and not exists (select 1 from public.profiles pr where pr.id = x.u::uuid
+                and (pr.organisation_id = v_org or pr.org_id = v_org))) then
+    raise exception 'The reviewer and approver must belong to your company.' using errcode = '22023';
+  end if;
   insert into public.inventory_audits(id, organisation_id, ref, country, site, audit_type, scope, location_ids, item_ids,
     blind, counter_id, reviewer_id, approver_id, due_at, instructions, tolerance_qty, tolerance_pct)
   values (v_id, v_org, 'AUD-' || to_char(now(), 'YYYYMMDD') || '-' || upper(left(v_id::text, 8)), p->>'country', v_site,
@@ -298,6 +303,10 @@ begin
   if v.status not in ('draft','scheduled','assigned') then raise exception 'Audit already started.' using errcode = '22023'; end if;
   if p_counter is not null and p_counter in (v.reviewer_id, v.approver_id) then
     raise exception 'The counter cannot also review or approve this audit.' using errcode = '42501';
+  end if;
+  if p_counter is not null and not exists (select 1 from public.profiles where id = p_counter
+       and (organisation_id = v.organisation_id or org_id = v.organisation_id)) then
+    raise exception 'The counter must belong to your company.' using errcode = '22023';
   end if;
   update public.inventory_audits set due_at = coalesce(p_due_at, due_at), counter_id = coalesce(p_counter, counter_id),
     status = case when coalesce(p_counter, counter_id) is null then 'scheduled' else 'assigned' end, updated_at = now()

@@ -24,6 +24,7 @@ import EstimatePanel from '../components/workforce/EstimatePanel'
 import {listWorkEvidence,uploadWorkEvidence,openWorkEvidence} from '../lib/api/workforceEvidence'
 import {addDailyEntry,getMyDailyReport,getDailyReportForReview,ensureDailyReport,submitDailyReport,listReviewQueue,reviewDailyReport,correctDailyEntry,DAILY_ENTRY_CATEGORIES,DAILY_REASON_CATEGORIES} from '../lib/api/workforceDaily'
 import {accountDay,categoryLabel} from '../lib/workforceTimeAccounting'
+import {supabase} from '../lib/supabase'
 ChartJS.register(CategoryScale,LinearScale,BarElement,Tooltip,Legend)
 const dateNow=()=>new Date().toLocaleDateString('en-CA')
 const categories=DAILY_ENTRY_CATEGORIES||['productive','coordination','reporting','training','break','blocked','unassigned']
@@ -89,6 +90,16 @@ export default function WorkforceDailyWork(){
  // eslint-disable-next-line react-hooks/exhaustive-deps -- t only labels fallback messages
  },[date,isManager])
  useEffect(()=>{load()},[load])
+ useEffect(()=>{
+  let timer
+  const refresh=()=>{clearTimeout(timer);timer=setTimeout(()=>load(),500)}
+  const channel=supabase.channel('workforce-daily-live')
+   .on('postgres_changes',{event:'*',schema:'public',table:'workforce_assignments'},refresh)
+   .on('postgres_changes',{event:'*',schema:'public',table:'workforce_daily_entries'},refresh)
+   .on('postgres_changes',{event:'*',schema:'public',table:'workforce_daily_reports'},refresh)
+   .subscribe()
+  return()=>{clearTimeout(timer);supabase.removeChannel(channel)}
+ },[load])
  const board=useMemo(()=>{
   if(!summaryKpi)return workforceBoardKpis(work,queue)
   const b=summaryKpi.by_status||{}

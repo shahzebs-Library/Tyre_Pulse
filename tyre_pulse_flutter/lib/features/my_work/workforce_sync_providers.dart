@@ -1,6 +1,8 @@
 /// Providers and the sync coordinator for offline assignment updates.
 library;
 
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 import 'package:tyre_pulse/core/auth/auth_controller.dart';
@@ -41,6 +43,40 @@ final workforceAssignmentsProvider =
   // of silently re-querying in the background.
   retry: (int retryCount, Object error) => null,
 );
+
+/// Refreshes the signed-in field worker's assignment snapshot when a manager
+/// creates or changes one of their assignments. The channel is identity scoped
+/// and RLS remains the authority for which rows the client may observe.
+final workforceAssignmentChangesProvider =
+    StreamProvider.autoDispose<DateTime>((Ref ref) {
+  final String? userId = ref.watch(workforceUserIdProvider);
+  if (userId == null) return const Stream<DateTime>.empty();
+
+  final SupabaseClient client = ref.watch(supabaseClientProvider);
+  final StreamController<DateTime> changes = StreamController<DateTime>();
+  final channel = client
+      .channel('workforce-assignments-$userId')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'workforce_assignments',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'assigned_to',
+          value: userId,
+        ),
+        callback: (_) => changes.add(DateTime.now().toUtc()),
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    unawaited(() async {
+      await client.removeChannel(channel);
+      await changes.close();
+    }());
+  });
+  return changes.stream;
+});
 
 /// Online-only evidence upload and per-assignment counts.
 final Provider<WorkforceEvidenceSource> workforceEvidenceSourceProvider =
@@ -114,6 +150,9 @@ final workforceQueuedProvider =
 /// pending updates on top.
 final workforceAssignmentViewsProvider =
     FutureProvider.autoDispose<WorkforceAssignmentViewState>((Ref ref) async {
+  // A Realtime event invalidates this derived snapshot and reloads server
+  // state. Offline queue overlays remain applied on top of that snapshot.
+  ref.watch(workforceAssignmentChangesProvider);
   final WorkforceAssignmentSnapshot snapshot =
       await ref.watch(workforceAssignmentsProvider.future);
   final List<QueuedWorkforceTransition> queued =

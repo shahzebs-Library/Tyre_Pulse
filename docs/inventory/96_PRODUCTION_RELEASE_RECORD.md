@@ -125,3 +125,13 @@ with stock unvalued, 3 at zero), 7 `uncertain` legacy-drift lines; tyre sync UAE
 * Map the 18 NHC legacy lines through opening batches before the first full count (doc 94 section 16).
 * Rollback files are in `supabase/rollbacks/` and also stored in `_bak.inv_release_sql`.
 * Mobile: HOLD (no build).
+
+## 8. Web, edge and mobile
+
+| Item | Result |
+|---|---|
+| PR | #569 squash-merged to main as `fd85a466` (head `48454c19`, all CI green: web lint + tests + build, database tests, Flutter analyze / test / Android / iOS builds, CodeQL) |
+| Vercel | `tyre-pulse` production deployment `dpl_2PDzxvEBaXKQScRwsiFoMZD6QJGZ` READY on `fd85a466` (alias app.tyrepulse.app); 0 runtime errors in the 30 minutes after |
+| CI fix on the way | `reportCorrections` test: the PDF stream extractor dropped a page whenever the compressed bytes ended in 0x0D (date-dependent; it failed locally with main's code too) |
+| Edge `send-scheduled-reports` | **NOT deployed.** Live v28 (verify_jwt false) predates main's money.ts / delivery.ts / inventory.ts. The only route available to the agent was hand-inlining ~116 KB of source through MCP in one call, which the project rule forbids (truncation / transcription risk to every scheduled e-mail; a restore would need the same 73 KB inline). Owner step: `supabase functions deploy send-scheduled-reports --project-ref jhssdmeruxtrlqnwfksc --no-verify-jwt` from main, then compare with `supabase functions download`. Until then a scheduled `inventory` report e-mails the fallback digest; "Generate now" works in the app. |
+| Mobile | HOLD (no build) |

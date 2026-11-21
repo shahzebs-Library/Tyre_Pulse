@@ -9,9 +9,9 @@ unchanged `92e69b66...`). The migration needs the owner's approval.
 
 | File | sha256 |
 |---|---|
-| `supabase/pending_migrations/20261121110000_inv_tyre_sync_perf.sql` | `f1475d6bf3683ca49011d7c102885cb4a6ae309b6e339f3e3fed0d1d0a8ac171` |
+| `supabase/pending_migrations/20261121110000_inv_tyre_sync_perf.sql` | `abff81a32b73065a9b986fd2c80e70f0e82e6cf734004e3c6cb394d95dbf269f` (revision 2, commit `22f7d660`, after the PR #574 review) |
 | `supabase/pending_migrations/20261121110000_inv_tyre_sync_perf_ROLLBACK.sql` | `2731a776c44f2812ff83d76a40e5099fba8aaceaf821eb308dd32cae6534c70d` |
-| Test | `supabase/tests/inventory_tyre_sync_perf.test.mjs` (PGlite, 9/9) |
+| Test | `supabase/tests/inventory_tyre_sync_perf.test.mjs` (PGlite, 10/10) |
 
 Guard: the file refuses to run unless `md5(pg_get_functiondef('public._inv_tyre_item_sync(text)'))` (CR removed)
 equals `92e69b6622a88dddc3358ddea0ff1276` (production, 2026-11-21; the PGlite harness carries the same body).
@@ -49,10 +49,17 @@ are IMMUTABLE and run once per row when the temp table is built).
 * Idempotent: conflicts keep `ON CONFLICT (organisation_id, country, serial, conflict_type) WHERE status='open'
   DO NOTHING`.
 * Repeat guard: `pg_advisory_xact_lock` per (company, country scope) serialises concurrent refreshes; table
-  `public.inv_tyre_sync_runs` (RLS, select own company, no client write) stores the last run's source
-  fingerprint (tyre_records, scrap marks, holdings, dispositions, conflict statuses). A request with the same
-  fingerprint within 60 s returns the stored result with `cached: true`, `new_conflicts: 0`,
-  `state_changes: 0`. Any source change (a new tyre row, a disposition, a decided conflict) rescans.
+  `public.inv_tyre_sync_runs` stores the last run's source fingerprint (tyre_records, scrap marks, holdings,
+  dispositions, conflict statuses). A request with the same fingerprint within 60 s returns the stored result
+  with `cached: true`, `new_conflicts: 0`, `state_changes: 0`. Any source change (a new tyre row, a disposition,
+  a decided conflict) rescans.
+* The cache table is **private to the SECURITY DEFINER function** (review P1): RLS on, no grant to anon or
+  authenticated, no permissive policy (only the restrictive `anum_reader_*` policies the project adds to every
+  table). No client can read any company's or country's run result.
+* The fingerprint is captured **before** the derivation (review P2). After the run the sources are fingerprinted
+  again and the conflicts are compared with "before + exactly the rows this run inserted" (`RETURNING`). If
+  anything changed meanwhile (another session's commit, visible under READ COMMITTED), the run is stored as
+  `not-cacheable:<uuid>` and returns `source_changed_during_sync: true`, so the next request rescans.
 * Not touched: `tyre_records`, `tyre_status_marks`, costs, CPK inputs, the wrapper `inv_tyre_item_sync(jsonb)`,
   the ACL (`_inv_tyre_item_sync` stays owner/service_role only), the response keys the web reads (`items`,
   `new_conflicts`).
@@ -92,11 +99,19 @@ YMM68731, YMU41519, YMY44573 (`scrapped_but_active`); the UAE one is YMA44467. S
 * tyre_records / tyre_status_marks hashes unchanged; authenticated cannot execute the inner function or write
   the cache table; a viewer is refused 42501.
 * Re-apply is a no-op; the rollback restores md5 `92e69b66...` and removes the cache table.
+* Cache table private: authenticated / anon have no SELECT or INSERT, RLS on, 0 permissive policies.
+* Concurrent change (P2): a test trigger commits a disposition while the sync inserts conflicts; the run returns
+  `source_changed_during_sync: true` and is stored not-cacheable; the next call rescans (not cached) and picks up
+  the new tyre; the third call is cached.
+
+Revision 2 re-measured on production (rolled back, 2026-11-21): KSA 2,039 ms (6,032 items, 6 conflicts), UAE
+890 ms, Egypt 622 ms, KSA rescan after the UAE run 1,277 ms (0 rows written), KSA cached repeat 26 ms; authenticated
+SELECT on the cache table false, 4 policies all restrictive `anum_reader_*`.
 
 ## 6. Apply (when approved)
 
 Same method as doc 96 section 3: fetch the file from GitHub raw at the merge commit via `pg_net` into
-`_bak.inv_release_sql`, check sha256 `f1475d6b...` in the database, `_bak.inv_release_run(file, sha)`, verify in
+`_bak.inv_release_sql`, check sha256 `abff81a3...` in the database, `_bak.inv_release_run(file, sha)`, verify in
 the same transaction (VERIFY block at the end of the file), ledger `20261121110000 inv_tyre_sync_perf`. Then
 as an Admin: `inv_tyre_item_sync({country:'KSA'})` for real (this materialises the 6 KSA conflicts and 6,032
 tyre items for the first time), then UAE and Egypt.

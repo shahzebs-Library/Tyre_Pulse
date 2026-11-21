@@ -138,7 +138,7 @@ test('tyre sync perf: same derivation as the released function, faster, idempote
         has_table_privilege('anon','public.inv_tyre_sync_runs','SELECT') anon_sel,
         (select relrowsecurity from pg_class where oid = 'public.inv_tyre_sync_runs'::regclass) rls,
         (select count(*)::int from pg_policies where schemaname = 'public' and tablename = 'inv_tyre_sync_runs'
-           and 'authenticated' = any(roles)) client_policies`)
+           and permissive = 'PERMISSIVE') client_policies`)
       assert.deepEqual([p.inner_fn, p.wrapper, p.ins, p.sel, p.anon_sel, p.rls, p.client_policies],
         [false, true, false, false, false, true, 0], 'cache table is private to the definer function')
       await assert.rejects(call(newDb, U.viewer, 'inv_tyre_item_sync', {}), /42501|authorised/)

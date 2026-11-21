@@ -5,7 +5,9 @@
 -- The stock ledger is APPEND-ONLY by design (stock_movements guard trigger), so
 -- this script does not delete fixture stock, movements or audit history. It
 -- closes everything that is still open, through the same RPCs the app uses:
---   1. every still-open fixture audit ('[demo-acceptance ...]') is cancelled;
+--   1. every still-open fixture audit ('[demo-acceptance ...]') is cancelled; one that has
+--      already posted an adjustment is closed instead (it cannot be cancelled); one that cannot
+--      be closed yet (open discrepancy) is reported and left, without stopping the teardown;
 --   2. every still-open fixture transfer returns its remaining quantity to source;
 --   3. the fixture stock grants (note = demo_fleet_inventory_acceptance) are removed;
 --   4. (the Demo "Store Keeper" custom role and its Demo module rows are kept; they
@@ -28,7 +30,7 @@ declare
   c_mgr   constant uuid := 'c2f9a806-1d9c-4c3a-9a38-0bd7fefb087e';
   c_owner constant uuid := 'd2d43a5f-0906-4f7a-9577-e36d89164914';
   c_tag   constant text := 'demo_fleet_inventory_acceptance';
-  v_a record; v_tr record; v_t text; v_col text; v_n int; v_bad text := '';
+  v_a record; v_tr record; v_skipped text := ''; v_t text; v_col text; v_n int; v_bad text := '';
   v_epoch bigint := (txid_current() >> 32) * 4294967296;
   v_xid0  bigint := txid_current() % 4294967296;
 begin
@@ -40,11 +42,28 @@ begin
     jsonb_build_object('sub', c_mgr, 'role', 'authenticated', 'aal', 'aal1')::text, true);
   if public.app_current_org() is distinct from c_org then raise exception 'demo.manager session not in Demo - refusing.'; end if;
 
-  for v_a in select id from public.inventory_audits
-              where organisation_id = c_org and instructions like '[demo-acceptance %'
-                and status not in ('closed','cancelled','rejected') loop
-    perform public.inv_audit_close(jsonb_build_object('idempotency_key', 'demo-inv-acc:teardown:aud:' || v_a.id,
-      'audit_id', v_a.id, 'cancel', true, 'reason', 'Acceptance fixture teardown'));
+  -- Pre-posting audits are cancelled. An audit that already posted an adjustment cannot be
+  -- cancelled (_inv_audit_cancel refuses), so it goes through the normal close instead; if the
+  -- close is refused too (an open discrepancy), that one audit is left as it is and reported,
+  -- and the rest of the teardown still runs.
+  for v_a in select a.id, a.status,
+                    (a.status in ('reconciliation','adjustment_posted','investigation','approval')
+                     or exists (select 1 from public.inventory_adjustments j
+                                 where j.audit_id = a.id and j.status = 'posted')) as close_path
+               from public.inventory_audits a
+              where a.organisation_id = c_org and a.instructions like '[demo-acceptance %'
+                and a.status not in ('closed','cancelled','rejected') loop
+    begin
+      if v_a.close_path then
+        perform public.inv_audit_close(jsonb_build_object('idempotency_key', 'demo-inv-acc:teardown:close:' || v_a.id,
+          'audit_id', v_a.id, 'note', 'Acceptance fixture teardown'));
+      else
+        perform public.inv_audit_close(jsonb_build_object('idempotency_key', 'demo-inv-acc:teardown:aud:' || v_a.id,
+          'audit_id', v_a.id, 'cancel', true, 'reason', 'Acceptance fixture teardown'));
+      end if;
+    exception when sqlstate '22023' then
+      v_skipped := v_skipped || v_a.id::text || ' (' || v_a.status || ': ' || sqlerrm || ') ';
+    end;
   end loop;
 
   for v_tr in select t.id, (select jsonb_agg(jsonb_build_object('line_id', l.id,
@@ -82,5 +101,8 @@ begin
     if v_n > 0 then v_bad := v_bad || v_t || '=' || v_n || ' '; end if;
   end loop;
   if v_bad <> '' then raise exception 'Isolation guard: rows outside the Demo company (%). Rolled back.', v_bad; end if;
+  if v_skipped <> '' then
+    raise notice 'Audits left open (resolve their discrepancies on the web, then re-run): %', v_skipped;
+  end if;
 end
 $td$;

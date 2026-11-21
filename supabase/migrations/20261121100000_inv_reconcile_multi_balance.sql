@@ -1,9 +1,11 @@
 -- =============================================================================
 -- 20261121100000_inv_reconcile_multi_balance.sql
--- STATUS: AUTHORED, NOT APPLIED. FOLLOW-UP to the 2026-11-20 inventory release; needs
---         separate owner approval (the approval of 2026-11-20 covers exactly 16 files).
+-- STATUS: APPLIED to production 2026-11-21 05:48:59 UTC on the owner's approval (ledger
+--         20261121100000 inv_reconcile_multi_balance; executed body = this file at commit
+--         fd85a466, sha256 5b7ea51349d0b2d8b53d5fa72decbe6d405790020ed27940ead43e88f6c9f6a1,
+--         i.e. before this header edit). Evidence: docs/inventory/96 section 9.
 -- Requires 20261120100000..115000 (applied in production 2026-11-20).
--- Rollback: 20261121100000_inv_reconcile_multi_balance_ROLLBACK.sql (same folder)
+-- Rollback: supabase/rollbacks/20261121100000_inv_reconcile_multi_balance_ROLLBACK.sql
 --
 -- Defect (Codex review on PR #569, confirmed in code): _inv_audit_reconcile ties a
 -- count line that names no stock balance (no stock_id: Flutter scans, web "found

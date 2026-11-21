@@ -95,12 +95,12 @@ with stock unvalued, 3 at zero), 7 `uncertain` legacy-drift lines; tyre sync UAE
 
 ## 7. Open operational items
 
-* **KSA tyre custody sync is too slow**: `inv_tyre_item_sync('KSA')` did not finish in 55 s (UAE, 2,087 items:
+* **KSA tyre custody sync is too slow - RESOLVED 2026-11-21 (section 11: `20261121110000_inv_tyre_sync_perf` applied, KSA 2.4 s, 7 conflicts materialised, doc 99).** Before the fix: `inv_tyre_item_sync('KSA')` did not finish in 55 s (UAE, 2,087 items:
   10.6 s; Egypt, 500: 1.2 s) because `_inv_tyre_item_sync` builds `_tc_derived` with correlated subqueries over
   unindexed temp tables. A web "Refresh" for KSA will hit the API statement timeout. Needs a follow-up migration
   (index the temp tables or rewrite as joins); the 7 conflicts are therefore not yet materialised in KSA.
-* **Follow-up migration awaiting owner approval (NOT applied):**
-  `supabase/pending_migrations/20261121100000_inv_reconcile_multi_balance.sql` (+ `_ROLLBACK`). Review
+* **Follow-up migration 20261121100000 - APPLIED 2026-11-21 on owner approval (see section 9):**
+  `supabase/migrations/20261121100000_inv_reconcile_multi_balance.sql` (+ `_ROLLBACK`). Review
   finding on PR #569: `_inv_audit_reconcile` ties a count line that names no balance to ONE snapshot balance
   (`limit 1`) when an item/location holds several balances (condition / ownership split), so the count is
   credited to an arbitrary balance and the others show false shortages. The fix reconciles such an
@@ -110,7 +110,7 @@ with stock unvalued, 3 at zero), 7 `uncertain` legacy-drift lines; tyre sync UAE
   `_bak.inv_121100_snapshot`. PGlite: defect reproduced before, 0 false discrepancies after, short count = one
   item/location shortage, rollback restores the original (`supabase/tests/inventory_reconcile_multi_balance.test.mjs`).
   **Production impact today: none** - read-only check 2026-11-20: 0 item/location groups with more than one
-  balance (no `stock_records` row carries an `item_id` yet), 0 audits. **Operational rule until it is applied:**
+  balance (no `stock_records` row carries an `item_id` yet), 0 audits. **Operational rule (obsolete since 2026-11-21, kept for history):**
   before starting an audit, check that no item/location in its scope has more than one balance
   (`select item_id, location_id from stock_records where item_id is not null group by 1,2 having count(*) > 1`);
   if one does, count those items by scanning the balance label (`TP:STK:<id>`, which names the balance) or
@@ -136,7 +136,26 @@ with stock unvalued, 3 at zero), 7 `uncertain` legacy-drift lines; tyre sync UAE
 | Edge `send-scheduled-reports` | **NOT deployed.** Live v28 (verify_jwt false) predates main's money.ts / delivery.ts / inventory.ts. The only route available to the agent was hand-inlining ~116 KB of source through MCP in one call, which the project rule forbids (truncation / transcription risk to every scheduled e-mail; a restore would need the same 73 KB inline). Owner step: `supabase functions deploy send-scheduled-reports --project-ref jhssdmeruxtrlqnwfksc --no-verify-jwt` from main, then compare with `supabase functions download`. Until then a scheduled `inventory` report e-mails the fallback digest; "Generate now" works in the app. |
 | Mobile | HOLD (no build) |
 
-## 9. Edge function `send-scheduled-reports` deployed (2026-11-21, owner authorised)
+## 9. Follow-up 20261121100000_inv_reconcile_multi_balance - applied 2026-11-21
+
+Owner approval recorded 2026-11-21. Same method as section 3 (one file, one call).
+
+| Item | Value |
+|---|---|
+| Recovery point | 2026-11-21 05:48:31 UTC, LSN `1A6/BB012000`; WAL archiving healthy (8,585 archived, last `00000001000001A6000000BA` 05:48:19, 0 failures) |
+| Snapshot | `_bak.inv_121100_pre` (function definition + ACL + fingerprints); `_bak.inv_121100_snapshot` (definition replaced, written by the file itself) |
+| Preflight | live md5 of `_inv_audit_reconcile(uuid)` = `ba9845b1df32d899ff58bd87d8372bf0` (= the file's guard); last migration `20261120115000` |
+| Fetch | `raw.githubusercontent.com/.../fd85a466a2806a7ab0007200bb0cd79f8d82e525/supabase/pending_migrations/20261121100000_inv_reconcile_multi_balance.sql` (HTTP 200), sha256 in the database `5b7ea51349d0b2d8b53d5fa72decbe6d405790020ed27940ead43e88f6c9f6a1` = repo (rollback fetched too, `2cc2b8e0...`) |
+| Applied | 05:48:59 UTC, 39 ms, `_bak.inv_release_run`; verify in the same transaction: `amb_counted` present, not executable by authenticated or anon, snapshot 1 row; ledger `20261121100000 inv_reconcile_multi_balance` |
+| After | new md5 `0f22d82014e1651e171b76b4eaac4ddf`; ACL unchanged `{postgres=X, service_role=X}`, SECURITY DEFINER kept; LSN `1A6/BB01C000` |
+| Baseline | stock_records 43 (md5 equal), stock_movements 78 (equal), inventory_audits / count lines / snapshot lines 0 (equal): no data row touched |
+| PGlite | `inventory_reconcile_multi_balance.test.mjs` 5/5 (now reads the file from `supabase/migrations` / `supabase/rollbacks`) |
+| Smoke (rolled back, super admin Admin `d2d43a5f` + second Admin as counter, aal2) | location NHC warehouse + bin; one item (`290581-O`) received 6 good + 4 damaged = **two balances**; audit create -> schedule -> start (2 snapshot lines); counter submits ONE line of 5 naming no balance; complete; reconcile -> `matched 0, discrepancies 1`: **one item/location shortage, stock_id NULL, expected 10, counted 5, variance -5, value -25**. Afterwards audits 0, movements 78, stock_records 43, smoke locations 0, discrepancies 0 |
+| Advisors | security: 0 ERROR |
+
+The file in the repo carries an updated STATUS header; the executed body is the one at `fd85a466` (sha above).
+
+## 10. Edge function `send-scheduled-reports` deployed (2026-11-21, owner authorised)
 
 Supersedes the "NOT deployed" row in section 8.
 
@@ -150,3 +169,40 @@ Supersedes the "NOT deployed" row in section 8.
 | Schema check | Live columns used by the function exist (`report_schedules.created_by/last_status/last_error/period*`, `report_send_log.*`, `stock_records.ownership/valued_value`, `v_inv_report_snapshot`); the report_type CHECK allows `inventory`. `report_exec_money_by_country` is not installed, so the executive digest uses its labelled legacy money fallback (handled by `isMissingRpc`). |
 | Tests after deploy | pg_net calls: no auth = **401** `Missing bearer token`; wrong cron secret + fake JWT = **401** `Invalid session`; correct cron secret = **200** `{"processed":0,"sent":0,"failed":0,"skipped":0}` (boots, imports resolve; no schedule was due, so no e-mail went out). Inventory digest rendered from the live production snapshot (4 KSA sites, 302 unvalued units, 4 critical lines, 33 open cost reconciliations) with the deployed `inventory.ts`: ASCII-only HTML and a 5-line CSV, values withheld or shown per rule. Vitest: scheduledReportInventory / scheduledReportMoney / scheduledReports.api 51/51. |
 | Not verified | No customer e-mail was sent. Only one schedule is active (`inspection`, next run 2026-11-22 05:00 UTC); its `report_send_log` row after that tick is the first live check of the new build. No `inventory` schedule exists yet; the first one created will be the first live inventory e-mail. |
+
+## 11. Follow-up 20261121110000_inv_tyre_sync_perf - applied 2026-11-21, first real tyre sync
+
+Owner approval recorded 2026-11-21 (PR #574 @ `39fa57f6`, CI green, review threads resolved). One file, one call.
+
+| Item | Value |
+|---|---|
+| Recovery point | 2026-11-21 07:21:24 UTC, LSN `1A6/EB01CFA0`; WAL archiving healthy (8,633 archived, last `00000001000001A6000000EA` 07:20:41, 0 failures) |
+| Snapshot | `_bak.inv_121110_pre` (old function definition + ACL + 19 fingerprints, 07:22:15 UTC, LSN `1A6/EB04C000`); `_bak.inv_121110_pre_tyre_items` / `_pre_conflicts` / `_pre_item_events` (all 0 rows before); `_bak.inv_121110_snapshot` (written by the file) |
+| Preflight | live md5 of `_inv_tyre_item_sync(text)` = `92e69b6622a88dddc3358ddea0ff1276` (= the file's guard); signature unchanged |
+| Fetch | pg_net from `raw.githubusercontent.com/.../39fa57f6.../supabase/pending_migrations/20261121110000_inv_tyre_sync_perf.sql` (HTTP 200, req 8345); sha256 in the database `abff81a32b73065a9b986fd2c80e70f0e82e6cf734004e3c6cb394d95dbf269f` = repo. Rollback req 8346, `2731a776...` = repo |
+| Applied | 07:23:11 UTC, 2,292 ms, DO/EXECUTE of the stored body; ledger `20261121110000 inv_tyre_sync_perf` |
+| After | new md5 `909a2379fd7fa97e1c34d971e2fca9ff`; ACL `{postgres=X, service_role=X}`, SECURITY DEFINER, search_path `public, pg_temp`. `inv_tyre_sync_runs` private (no grant to authenticated/anon; only the restrictive anum_reader policies). LSN `1A6/EC85F880` |
+| Advisors | security: 6 lints (5 WARN, 1 INFO), 0 ERROR |
+
+First real sync, through the web entry point `inv_tyre_item_sync({country})` as the owner super admin (aal2):
+
+| Run | Items | Written | New conflicts | Weak-serial rows | Duration |
+|---|---|---|---|---|---|
+| KSA first | 6,032 | 6,032 | 6 | 1,791 | 2,365 ms |
+| UAE first | 2,087 | 2,087 | 1 | 44 | 998 ms |
+| Egypt first | 500 | 500 | 0 | 7 | 658 ms |
+| KSA re-run (fingerprint changed by the UAE conflict, so rescan) | 6,032 | 0 | 0 | - | 1,274 ms |
+| KSA immediate repeat | - | 0 | - | - | cached, about 39 ms |
+| KSA concurrent pair (two pg_cron jobs started 07:28:00) | B rescanned 1,448 ms, wrote 0; A waited on the advisory lock and returned `cached=true` (last_run_at = B's run) | | | | no duplicates |
+
+Old function on the same data: KSA timed out above 55 s (doc 97). The temporary cron jobs were removed after the test.
+
+| tyre_items (8,619) | fitted | removed_pending | scrapped | unknown (conflict) |
+|---|---|---|---|---|
+| KSA | 2,401 | 2,724 | 901 | 6 |
+| UAE | 1,358 | 726 | 2 | 1 |
+| EGYPT | 411 | 89 | 0 | 0 |
+
+Conflicts: exactly 7 open, all `scrapped_but_active`, one row each (no duplicates): KSA L52043311, YMM18886, YMM22455, YMM68731, YMU41519, YMY44573; UAE YMA44467. Not corrected; evidence and recommendations in docs/inventory/99.
+
+Data unchanged (recomputed with the snapshot expressions after the sync): tyre_records (11,274; column and full-row md5), tyre_status_marks (907), tyre_price_provenance (428), tyre_cost_corrections (2,246), tyre_replacement_log (56), parts_consumption (219,356), engine_hours_logs, stock_records, stock_movements, tyre_store_holdings, tyre_dispositions: all equal. odometer_logs 2,999 -> 3,001 and vehicle_fleet km changed for exactly WL040 and TM369: two Mobile readings by field users at 09:28 and 09:58 UTC (normal use, the existing odometer trigger); nothing written by the sync.

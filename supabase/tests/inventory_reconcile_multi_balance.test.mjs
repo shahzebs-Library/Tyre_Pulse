@@ -1,4 +1,4 @@
-// Follow-up 20261121100000 (pending): an item/location held in several balances
+// Follow-up 20261121100000 (applied 2026-11-21): an item/location held in several balances
 // (condition / ownership) and counted without naming a balance is reconciled ONCE
 // for the item/location, never credited to an arbitrary balance (PGlite).
 import { test } from 'node:test'
@@ -9,8 +9,8 @@ import { buildDb, rpc, q, one, id, U, call } from './inventory_harness.test.mjs'
 
 const j = JSON.stringify
 const FILTER = id(100); const BRAKE = id(104)
-const FIX = readFileSync(new URL('../pending_migrations/20261121100000_inv_reconcile_multi_balance.sql', import.meta.url), 'utf8')
-const FIX_RB = readFileSync(new URL('../pending_migrations/20261121100000_inv_reconcile_multi_balance_ROLLBACK.sql', import.meta.url), 'utf8')
+const FIX = readFileSync(new URL('../migrations/20261121100000_inv_reconcile_multi_balance.sql', import.meta.url), 'utf8')
+const FIX_RB = readFileSync(new URL('../rollbacks/20261121100000_inv_reconcile_multi_balance_ROLLBACK.sql', import.meta.url), 'utf8')
 
 async function scenario (db, { fixed }) {
   const loc = p => call(db, U.admin, 'inv_location_upsert', p).then(r => r.id)

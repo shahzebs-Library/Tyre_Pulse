@@ -95,12 +95,12 @@ with stock unvalued, 3 at zero), 7 `uncertain` legacy-drift lines; tyre sync UAE
 
 ## 7. Open operational items
 
-* **KSA tyre custody sync is too slow**: `inv_tyre_item_sync('KSA')` did not finish in 55 s (UAE, 2,087 items:
+* **KSA tyre custody sync is too slow** (follow-up `20261121110000_inv_tyre_sync_perf` authored, NOT applied, owner approval needed: doc 97): `inv_tyre_item_sync('KSA')` did not finish in 55 s (UAE, 2,087 items:
   10.6 s; Egypt, 500: 1.2 s) because `_inv_tyre_item_sync` builds `_tc_derived` with correlated subqueries over
   unindexed temp tables. A web "Refresh" for KSA will hit the API statement timeout. Needs a follow-up migration
   (index the temp tables or rewrite as joins); the 7 conflicts are therefore not yet materialised in KSA.
-* **Follow-up migration awaiting owner approval (NOT applied):**
-  `supabase/pending_migrations/20261121100000_inv_reconcile_multi_balance.sql` (+ `_ROLLBACK`). Review
+* **Follow-up migration 20261121100000 - APPLIED 2026-11-21 on owner approval (see section 9):**
+  `supabase/migrations/20261121100000_inv_reconcile_multi_balance.sql` (+ `_ROLLBACK`). Review
   finding on PR #569: `_inv_audit_reconcile` ties a count line that names no balance to ONE snapshot balance
   (`limit 1`) when an item/location holds several balances (condition / ownership split), so the count is
   credited to an arbitrary balance and the others show false shortages. The fix reconciles such an
@@ -110,7 +110,7 @@ with stock unvalued, 3 at zero), 7 `uncertain` legacy-drift lines; tyre sync UAE
   `_bak.inv_121100_snapshot`. PGlite: defect reproduced before, 0 false discrepancies after, short count = one
   item/location shortage, rollback restores the original (`supabase/tests/inventory_reconcile_multi_balance.test.mjs`).
   **Production impact today: none** - read-only check 2026-11-20: 0 item/location groups with more than one
-  balance (no `stock_records` row carries an `item_id` yet), 0 audits. **Operational rule until it is applied:**
+  balance (no `stock_records` row carries an `item_id` yet), 0 audits. **Operational rule (obsolete since 2026-11-21, kept for history):**
   before starting an audit, check that no item/location in its scope has more than one balance
   (`select item_id, location_id from stock_records where item_id is not null group by 1,2 having count(*) > 1`);
   if one does, count those items by scanning the balance label (`TP:STK:<id>`, which names the balance) or
@@ -135,3 +135,22 @@ with stock unvalued, 3 at zero), 7 `uncertain` legacy-drift lines; tyre sync UAE
 | CI fix on the way | `reportCorrections` test: the PDF stream extractor dropped a page whenever the compressed bytes ended in 0x0D (date-dependent; it failed locally with main's code too) |
 | Edge `send-scheduled-reports` | **NOT deployed.** Live v28 (verify_jwt false) predates main's money.ts / delivery.ts / inventory.ts. The only route available to the agent was hand-inlining ~116 KB of source through MCP in one call, which the project rule forbids (truncation / transcription risk to every scheduled e-mail; a restore would need the same 73 KB inline). Owner step: `supabase functions deploy send-scheduled-reports --project-ref jhssdmeruxtrlqnwfksc --no-verify-jwt` from main, then compare with `supabase functions download`. Until then a scheduled `inventory` report e-mails the fallback digest; "Generate now" works in the app. |
 | Mobile | HOLD (no build) |
+
+## 9. Follow-up 20261121100000_inv_reconcile_multi_balance - applied 2026-11-21
+
+Owner approval recorded 2026-11-21. Same method as section 3 (one file, one call).
+
+| Item | Value |
+|---|---|
+| Recovery point | 2026-11-21 05:48:31 UTC, LSN `1A6/BB012000`; WAL archiving healthy (8,585 archived, last `00000001000001A6000000BA` 05:48:19, 0 failures) |
+| Snapshot | `_bak.inv_121100_pre` (function definition + ACL + fingerprints); `_bak.inv_121100_snapshot` (definition replaced, written by the file itself) |
+| Preflight | live md5 of `_inv_audit_reconcile(uuid)` = `ba9845b1df32d899ff58bd87d8372bf0` (= the file's guard); last migration `20261120115000` |
+| Fetch | `raw.githubusercontent.com/.../fd85a466a2806a7ab0007200bb0cd79f8d82e525/supabase/pending_migrations/20261121100000_inv_reconcile_multi_balance.sql` (HTTP 200), sha256 in the database `5b7ea51349d0b2d8b53d5fa72decbe6d405790020ed27940ead43e88f6c9f6a1` = repo (rollback fetched too, `2cc2b8e0...`) |
+| Applied | 05:48:59 UTC, 39 ms, `_bak.inv_release_run`; verify in the same transaction: `amb_counted` present, not executable by authenticated or anon, snapshot 1 row; ledger `20261121100000 inv_reconcile_multi_balance` |
+| After | new md5 `0f22d82014e1651e171b76b4eaac4ddf`; ACL unchanged `{postgres=X, service_role=X}`, SECURITY DEFINER kept; LSN `1A6/BB01C000` |
+| Baseline | stock_records 43 (md5 equal), stock_movements 78 (equal), inventory_audits / count lines / snapshot lines 0 (equal): no data row touched |
+| PGlite | `inventory_reconcile_multi_balance.test.mjs` 5/5 (now reads the file from `supabase/migrations` / `supabase/rollbacks`) |
+| Smoke (rolled back, super admin Admin `d2d43a5f` + second Admin as counter, aal2) | location NHC warehouse + bin; one item (`290581-O`) received 6 good + 4 damaged = **two balances**; audit create -> schedule -> start (2 snapshot lines); counter submits ONE line of 5 naming no balance; complete; reconcile -> `matched 0, discrepancies 1`: **one item/location shortage, stock_id NULL, expected 10, counted 5, variance -5, value -25**. Afterwards audits 0, movements 78, stock_records 43, smoke locations 0, discrepancies 0 |
+| Advisors | security: 0 ERROR |
+
+The file in the repo carries an updated STATUS header; the executed body is the one at `fd85a466` (sha above).

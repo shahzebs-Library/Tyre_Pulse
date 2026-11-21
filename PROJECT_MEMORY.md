@@ -5,6 +5,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-21 — INVENTORY FOLLOW-UPS. 121100 APPLIED (owner approved); 121110 tyre sync perf AUTHORED, NOT APPLIED. Next free migration after 20261121110000.
+- `20261121100000_inv_reconcile_multi_balance` applied 05:48:59 UTC (39 ms) via pg_net fetch at fd85a466 + `_bak.inv_release_run`; recovery LSN 1A6/BB012000, `_bak.inv_121100_pre`; ledger row; data fingerprints unchanged; rolled-back smoke: 2 balances, count 5 of 10 -> ONE item/location shortage -5 / -25. Evidence docs/inventory/96 s9.
+- Tyre custody sync root cause: `_tc_derived` = 9 correlated subqueries per serial over unindexed temp tables (300 KSA keys = 3.0 s). KSA released 87.2 s -> set-based 1.9 s (prod, rolled back), cached repeat 26 ms. Pending file `20261121110000_inv_tyre_sync_perf.sql` sha abff81a3 (rev 2 after Codex P1/P2), md5 guard 92e69b66; adds PRIVATE `inv_tyre_sync_runs` (fingerprint taken before derivation, run with a concurrent change never cached, 60 s cooldown, advisory lock). Only difference vs released: exact-tie serials now pick by id (UAE 3, Egypt 8). Doc 97. NOTE tyre_items is still EMPTY in production (no sync ever committed) - the 7 conflicts appear on the first real run after approval.
+- TRICK: compare two versions of a writing function on production inside ONE rolled-back DO block: run old inside `begin ... raise ... exception when raise_exception` (subtransaction rolls back, plpgsql variables survive), then execute the new body and run it, then raise.
+
 # ⚑ 2026-11-20 22:33-22:38 UTC — INVENTORY RELEASE APPLIED TO PRODUCTION (owner-approved, doc 94 s16). Record: docs/inventory/96_PRODUCTION_RELEASE_RECORD.md
 - 16 files `20261120100000..115000` (now in supabase/migrations, rollbacks in supabase/rollbacks) + NHC country fix applied; ledger 16 rows. Fetched by pg_net from commit aefb9ee0 into `_bak.inv_release_sql`, sha256 checked in DB, run by `_bak.inv_release_run(file, sha)`.
 - Recovery point 22:32:43 UTC LSN 1A5/DD001FD0, WAL archiving healthy; logical snapshot `_bak.inv_release_20261120_*` (20 tables + fn + pol + baseline).

@@ -244,8 +244,9 @@ Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT
 - `20261119100000_oem_review_items_source_row.sql` - APPLIED 2026-11-19, moved to `supabase/migrations/`
   (rollback in `supabase/rollbacks/`).
 
-## Inventory follow-up (2026-11-20) - NOT applied, owner approval required
+## Inventory follow-ups
 
 | File | What |
 |---|---|
-| 20261121100000_inv_reconcile_multi_balance.sql (+ _ROLLBACK) | `_inv_audit_reconcile`: an item/location with several balances counted without naming one is reconciled once for the item/location instead of crediting one arbitrary balance (`limit 1`). Guarded by the live md5; PGlite: `supabase/tests/inventory_reconcile_multi_balance.test.mjs`. See docs/inventory/96 section 7. |
+| ~~20261121100000_inv_reconcile_multi_balance.sql~~ | APPLIED to production 2026-11-21; moved to `supabase/migrations/` (rollback in `supabase/rollbacks/`). docs/inventory/96 section 9. |
+| 20261121110000_inv_tyre_sync_perf.sql (+ _ROLLBACK) | NOT applied, owner approval required. `_inv_tyre_item_sync` set-based (was 9 correlated subqueries per serial over unindexed temp tables): KSA 87.2 s -> 1.9 s on production (rolled back), cached repeat 26 ms. Guarded by the live md5 `92e69b66...`. PGlite: `supabase/tests/inventory_tyre_sync_perf.test.mjs`. See docs/inventory/97. |

@@ -35,6 +35,12 @@ on:
 permissions:
   contents: read
 
+# One release at a time: the preflight picks "highest uploaded build + 1", so two
+# overlapping runs would choose the same number. Queue, never cancel, a second run.
+concurrency:
+  group: flutter-release-ios
+  cancel-in-progress: false
+
 defaults:
   run:
     working-directory: tyre_pulse_flutter

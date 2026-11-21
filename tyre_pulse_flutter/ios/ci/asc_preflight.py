@@ -105,7 +105,8 @@ def main():
             try:
                 highest = max(highest, int(str(b["attributes"]["version"]).split(".")[0]))
             except (KeyError, ValueError):
-                pass
+                # A build without a numeric version cannot raise the floor; skip it.
+                continue
         for inc in body.get("included") or []:
             if inc.get("type") == "preReleaseVersions" and not latest_version:
                 latest_version = inc.get("attributes", {}).get("version") or ""

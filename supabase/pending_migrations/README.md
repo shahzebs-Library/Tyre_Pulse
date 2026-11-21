@@ -255,3 +255,8 @@ Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT
   registration and company-wide identification (docs/inventory/102). DRAFT for the owner's approval.
   Additive except `material_aliases.item_id` becoming nullable (0 rows in production). Proven in
   PGlite by `supabase/tests/inventory_physical_master.test.mjs` (apply, rollback, re-apply).
+- `20261122120000_inv_location_setup.sql` (+ `_ROLLBACK.sql`) - warehouse and bin setup: one new
+  RPC `inv_location_bulk_create(p_payload jsonb)` (rack / shelf / bin layout under an existing store,
+  dry-run preview, existing codes reused, Admin/Manager/Director only, store must be a registered
+  active `sites` row). No table or data change. DRAFT for the owner's approval; apply after
+  20261122100000. Proven in PGlite by `supabase/tests/inventory_location_setup.test.mjs`.

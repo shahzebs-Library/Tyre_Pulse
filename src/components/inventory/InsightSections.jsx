@@ -15,6 +15,9 @@ import { loadBalanceSnapshot, compatibilityCounts } from '../../lib/api/inventor
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { reorderSignals, summarizeBalances } from '../../lib/inventory/balanceView'
 import { useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, alignNumeric } from './InvUi'
+import StrategyScenarioPanel from './StrategyScenarioPanel'
+
+const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' }
 
 function useSnapshot(scope) {
   return useInvQuery(() => loadBalanceSnapshot(scope), [scope.country, scope.site])
@@ -61,6 +64,9 @@ export function PlanningSection({ scope }) {
           ? <Note tone="warn" title={t('inventory.ident.noCompat')}>{t('inventory.planning.simNoData')}</Note>
           : <Note>{t('inventory.planning.simReady', { n: validated })}</Note>}
         <p className="cc-card-sub">{t('inventory.planning.simHonesty')}</p>
+      </SectionCard>
+      <SectionCard title={t('inventory.planning.sim.title')} sub={t('inventory.planning.sim.sub')}>
+        <StrategyScenarioPanel defaultCurrency={COUNTRY_CURRENCY[scope.country] || ''} />
       </SectionCard>
     </div>
   )

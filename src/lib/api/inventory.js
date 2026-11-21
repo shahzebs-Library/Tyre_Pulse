@@ -1113,3 +1113,13 @@ export async function loadReportSnapshot({ country, site } = {}) {
     throw toServiceError(err)
   }
 }
+
+/** One investigation case by conflict id (null when not visible / not found). */
+export async function getConflictCase(conflictId) {
+  if (!conflictId) return null
+  const { data, error } = await supabase.from('v_inv_tyre_conflict_cases')
+    .select('id, serial, country, conflict_type, status, investigation_status, detected_at, evidence, investigator_id, assigned_at, investigation_notes, proposed_correction, proposed_at, approval_request_id, approval_status, decided_correction, closed_at, i_am_investigator')
+    .eq('id', conflictId).maybeSingle()
+  if (error) throw toServiceError(error)
+  return data || null
+}

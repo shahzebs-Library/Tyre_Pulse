@@ -5,11 +5,12 @@
  * evidence for an authorised decision; they are never corrected from here.
  * Holding time in stock is not tyre running life, so no km or life is shown.
  */
-import { Fragment, useState } from 'react'
+import { Fragment, lazy, Suspense, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ExternalLink, RefreshCw, Gavel } from 'lucide-react'
 import SideDrawer from '../ui/SideDrawer'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useAuth } from '../../contexts/AuthContext'
 import {
   listTyreItems, countTyreItemsByState, listCustodyConflicts, syncTyreItems, decideCustodyConflict, CONFLICT_DECISIONS, newIdempotencyKey,
 } from '../../lib/api/inventory'
@@ -18,8 +19,12 @@ import { summarizeCustody, conflictEvidence, CUSTODY_TONE } from '../../lib/inve
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
 import { useInvQuery, PagedTable, SearchBox, Note, ErrorNote, StatusPill, SectionCard, Field, fmtDateTime } from './InvUi'
 
-export default function TyreInventorySection({ scope, can }) {
+const TyreInvestigationPanel = lazy(() => import('./TyreInvestigationPanel'))
+
+export default function TyreInventorySection({ scope, can, onNavigate }) {
   const { t } = useLanguage()
+  const { profile, isSuperAdmin } = useAuth()
+  const who = { role: profile?.role, isSuperAdmin: isSuperAdmin === true || profile?.is_super_admin === true }
   const [state, setState] = useState('all')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -122,7 +127,12 @@ export default function TyreInventorySection({ scope, can }) {
             <Link className="cc-btn-ghost" to={`/tyre-passport/${encodeURIComponent(conflict.serial_no || '')}`}>
               <ExternalLink size={14} aria-hidden="true" /> {t('inventory.tyres.passport')}
             </Link>
-            {conflict.conflict_type === 'scrapped_but_active' && <Note tone="warn">{t('inventory.tyres.investigationRule')}</Note>}
+            {conflict.conflict_type === 'scrapped_but_active' && (
+              <Suspense fallback={<p className="cc-card-sub">{t('inventory.actions.searching')}</p>}>
+                <TyreInvestigationPanel conflictId={conflict.id} who={who} onNavigate={onNavigate}
+                  onChanged={() => conflicts.retry()} />
+              </Suspense>
+            )}
             {canDecide && conflict.conflict_type !== 'scrapped_but_active' && (conflict.status === 'open' || conflict.status === 'investigating') && (
               <div className="inv-form">
                 <Field label={t('inventory.tyres.decision')}>

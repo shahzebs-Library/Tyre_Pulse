@@ -66,12 +66,15 @@ import 'package:tyre_pulse/app/config/app_config.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/dao/scoped_media_dao.dart';
 import 'package:tyre_pulse/core/network/supabase_bootstrap.dart';
+import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
 import 'package:tyre_pulse/core/storage/secure_slot_store_impl.dart';
 import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
 import 'package:tyre_pulse/core/sync/accident_evidence_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/inventory_count_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/sync_engine.dart';
+import 'package:tyre_pulse/features/inventory/data/physical_inventory_repository.dart';
+import 'package:tyre_pulse/features/inventory/data/physical_outbox_runner.dart';
 import 'package:uuid/uuid.dart';
 import 'package:workmanager/workmanager.dart';
 
@@ -146,13 +149,16 @@ Future<bool> _runBackgroundSync() async {
     return true;
   }
 
+  // The real, production `SecureKeyValueStore` - constructed directly
+  // rather than read from `secureStoreProvider`, because there is no
+  // Riverpod container in this isolate to read it from. Mirrors exactly
+  // what that provider builds. One instance serves both the Supabase session
+  // and the physical inventory outbox below.
+  final SecureKeyValueStore secureStore =
+      StagedSecureStore(slots: FlutterSecureSlotStore());
   await initializeSupabase(
     config: configResult.config,
-    // The real, production `SecureKeyValueStore` - constructed directly
-    // rather than read from `secureStoreProvider`, because there is no
-    // Riverpod container in this isolate to read it from. Mirrors exactly
-    // what that provider builds.
-    localStorage: StagedSecureStore(slots: FlutterSecureSlotStore()),
+    localStorage: secureStore,
   );
 
   // The SAME on-disk database file the foreground app uses, opened through
@@ -210,6 +216,19 @@ Future<bool> _runBackgroundSync() async {
     await engine.runOnce(
       workspaceId: workspace.workspaceId,
       now: DateTime.now().toUtc(),
+    );
+
+    // Physical inventory captures and photos live in their own encrypted
+    // per-user outbox (the shared command registry is reserved wiring), so
+    // they are flushed here after the queue pass. Only the signed-in user's
+    // outbox, and only when it is the cached workspace's user. A failure is
+    // contained: everything stays on the phone for the next run.
+    await flushPhysicalOutboxInBackground(
+      store: secureStore,
+      repository: SupabasePhysicalInventoryRepository(client),
+      signedInUserId: client.auth.currentUser?.id,
+      workspaceUserId: workspace.userId,
+      orgId: workspace.tenantId ?? workspace.workspaceId,
     );
     return true;
   } finally {

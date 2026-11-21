@@ -114,10 +114,21 @@ dismisses it. Local files are deleted only after the server confirmed the photo.
 that fail to upload are kept and offered for retry on the same capture; the company folder comes from
 `app_current_org()` (the signed-in profile does not carry it). Another user on the same phone never sees these captures.
 
-**For a human (reserved wiring, AGENTS.md):** to send captures while the app is closed, register
-`PhysicalCaptureOutbox.flush` in the background worker / sync engine (`lib/core/sync/*`). Agents may
-not edit those files. The screen is pushed with Navigator from the stock screen; a named route needs
-`lib/app/router/*` (also reserved).
+**When the app is closed:** the background worker (`lib/core/sync/background_sync.dart`, periodic
+15 min and the connectivity one-off) flushes the outbox after its queue pass, through
+`lib/features/inventory/data/physical_outbox_runner.dart`. It flushes only the outbox of the user
+who is signed in now, and only when that user is the cached workspace's user; another person on the
+phone is never read or sent. A failure there is contained and everything stays for the next run.
+While the app is open, `PhysicalOutboxSyncBinding` (mounted in `main.dart`) flushes on sign-in,
+on return to the foreground and when the network comes back, on any screen. No reserved file was
+changed: the outbox is not a sync-engine command. The screen is still pushed with Navigator from the
+stock screen; a named route needs `lib/app/router/*` (reserved).
+
+**Capture screen:** the store is picked from the existing stores (active `warehouse` locations in
+`inventory_locations`); the phone never creates or types a store. Scanning a `TP:LOC:<id>` label
+picks its store on the start view and selects the bin on the capture view (a bin from another store
+is refused; offline the label is kept and checked by the server). Quantity has a large -10/-1/+1/+10
+stepper beside the field; Save and next sits in the bottom bar.
 
 ## 7. What the owner must do next
 

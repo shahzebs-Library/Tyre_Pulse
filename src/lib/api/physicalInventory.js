@@ -167,10 +167,42 @@ export const requestTransfer = ({ itemId, site, fromSite, qty, reason }, key) =>
 export const decideTransferRequest = ({ requestId, decision, note }, key) =>
   rpc('inv_transfer_request_decide', { request_id: requestId, decision, note: note || null }, key)
 
-export function listTransferRequests({ page, pageSize, status = 'requested' } = {}) {
-  return paged('inventory_transfer_requests', 'id, country, site, from_site, item_id, qty, reason, status, requested_by, requested_at, decided_at, decision_note', {
-    page, pageSize, order: 'requested_at', build: (q) => (status && status !== 'all' ? q.eq('status', status) : q),
-  })
+export const TRANSFER_REQUEST_COLS = 'id, country, site, from_site, item_id, qty, reason, status, requested_by, requested_at, decided_at, decision_note, ' +
+  'item:material_master(item_code, item_name)'
+
+export async function listTransferRequests({ page, pageSize, status = 'requested', country } = {}) {
+  const build = (q) => {
+    let x = status && status !== 'all' ? q.eq('status', status) : q
+    if (country) x = x.eq('country', country)
+    return x
+  }
+  const opts = { page, pageSize, order: 'requested_at', build }
+  try {
+    return await paged('inventory_transfer_requests', TRANSFER_REQUEST_COLS, opts)
+  } catch (err) {
+    // The item embed needs the FK relationship; fall back to the plain columns rather than failing the list.
+    if (err?.cause?.code === 'PGRST200' || err?.code === 'PGRST200') {
+      return paged('inventory_transfer_requests', TRANSFER_REQUEST_COLS.replace(/, item:material_master\(item_code, item_name\)$/, ''), opts)
+    }
+    throw err
+  }
+}
+
+/**
+ * Names of the sites that already hold stock or inventory locations in a
+ * country: these are the physical stores offered first when a count starts.
+ * Best effort: a failed read returns [] and the full site list still works.
+ */
+export async function listStoreSiteHints(country) {
+  if (!country) return []
+  const read = async (table) => {
+    try {
+      const { data, error } = await supabase.from(table).select('site').eq('country', country).not('site', 'is', null).limit(1000)
+      return error ? [] : (data || []).map((r) => r.site)
+    } catch { return [] }
+  }
+  const [stock, locs] = await Promise.all([read('stock_records'), read('inventory_locations')])
+  return [...new Set([...stock, ...locs].map((s) => String(s || '').trim().toUpperCase()).filter(Boolean))]
 }
 
 // ── Corrections ─────────────────────────────────────────────────────────────

@@ -1,9 +1,10 @@
 # 102 - Physical inventory registration and identification (operational guide)
 
-Status 2026-11-21: **code merged, database DRAFT NOT APPLIED.** The screens are live in the web
-Inventory Control Center (`/stock?section=physical`) and in the Flutter app (Stock > Physical
-inventory), but every call answers "Not set up yet" until the owner applies
-`supabase/pending_migrations/20261122100000_inv_physical_inventory_master.sql`.
+Status 2026-11-21: **LIVE.** `supabase/migrations/20261122100000_inv_physical_inventory_master.sql`
+applied to production 2026-11-21 21:25 UTC (owner-approved; record in doc 96 section 12), with
+`20261122110000_inv_transfer_return_remaining_fix` and `20261122120000_inv_location_setup`. Web:
+Inventory Control Center (`/stock?section=physical`, Locations section for bins). Flutter: Stock >
+Physical inventory (needs the next app build).
 
 ## 1. What it is (one paragraph)
 
@@ -88,16 +89,24 @@ store.
 1. Inventory manager: create each store's warehouse / rack / shelf / bin under **Locations** (print
    the `TP:LOC:` labels). The three stores already exist as sites; nothing new is created for them.
 2. Counter (web or phone): **Physical inventory > Start physical inventory** > choose the store
-   (and bin if known) > Start.
+   (and bin if known) > Start. On the web the stores are large one-tap buttons: sites whose type is
+   warehouse / depot, or that already hold stock or locations (no new site is ever created); every
+   other active site stays in the "Other site" list.
 3. For each item: scan / type the code > pick the material (genuine and aftermarket are listed
    separately) or open "Not found? Describe the item" > quantity, unit, condition, ownership,
-   location note, photos > **Save and next**.
+   location note, photos > **Save and next**. The web desk has a camera **Scan** button (browser
+   BarcodeDetector; hidden where unsupported, typing / USB scanner still works), large +/- quantity
+   buttons, a photo button that adds shots one by one, and a scanned `TP:LOC:` label selects the bin.
 4. Close the session. A different person reviews **Identification review** (map, create, reject),
    approves **Company materials** and links ERP SKUs per country.
-5. **Prepare opening balance** on the closed session. Then Controls > Opening balances: map any
+5. **Prepare opening balance** on the closed session (the session then offers **Open in Opening balances**). Then Controls > Opening balances: map any
    `needs_review` lines, submit, and a different person approves (this is the only step that posts
    stock).
-6. **Dashboard** shows items collected / identified / missing SKU / OEM / aftermarket, duplicates,
+6. **Material search** shows availability per store and a **Request transfer** button instead of
+   buying again; the **Transfer requests** list below it lets the sending store approve / reject (not
+   the requester) and the requester cancel. Approval does not move stock: dispatch it through Stock
+   flows > Transfer.
+7. **Dashboard** shows items collected / identified / missing SKU / OEM / aftermarket, duplicates,
    pending corrections, genuine vs aftermarket, condition, valuation completeness, approval status and
    progress by employee and location, with Excel and PDF export.
 
@@ -114,20 +123,31 @@ dismisses it. Local files are deleted only after the server confirmed the photo.
 that fail to upload are kept and offered for retry on the same capture; the company folder comes from
 `app_current_org()` (the signed-in profile does not carry it). Another user on the same phone never sees these captures.
 
-**For a human (reserved wiring, AGENTS.md):** to send captures while the app is closed, register
-`PhysicalCaptureOutbox.flush` in the background worker / sync engine (`lib/core/sync/*`). Agents may
-not edit those files. The screen is pushed with Navigator from the stock screen; a named route needs
-`lib/app/router/*` (also reserved).
+**When the app is closed:** the background worker (`lib/core/sync/background_sync.dart`, periodic
+15 min and the connectivity one-off) flushes the outbox after its queue pass, through
+`lib/features/inventory/data/physical_outbox_runner.dart`. It flushes only the outbox of the user
+who is signed in now, and only when that user is the cached workspace's user; another person on the
+phone is never read or sent. A failure there is contained and everything stays for the next run.
+While the app is open, `PhysicalOutboxSyncBinding` (mounted in `main.dart`) flushes on sign-in,
+on return to the foreground and when the network comes back, on any screen. No reserved file was
+changed: the outbox is not a sync-engine command. The screen is still pushed with Navigator from the
+stock screen; a named route needs `lib/app/router/*` (reserved).
+
+**Capture screen:** the store is picked from the existing stores (active `warehouse` locations in
+`inventory_locations`); the phone never creates or types a store. Scanning a `TP:LOC:<id>` label
+picks its store on the start view and selects the bin on the capture view (a bin from another store
+is refused; offline the label is kept and checked by the server). Quantity has a large -10/-1/+1/+10
+stepper beside the field; Save and next sits in the bottom bar.
 
 ## 7. What the owner must do next
 
-1. Approve and apply `supabase/pending_migrations/20261122100000_inv_physical_inventory_master.sql`
-   (own transaction, after the Supabase backup; staging first). Rollback file next to it. Verify block
-   in its header. Then move it to `supabase/migrations/` and note it in doc 96.
+1. Done 2026-11-21: migration applied (doc 96 section 12).
 2. Grant `stock:count` to the store keepers who will count and `stock:engineering_approve` to the
    engineer / master-data person who identifies (Console > Access Control).
-3. Create the bin locations of the three stores.
-4. Release a Flutter build when convenient (the phone screen needs a build; no Play upload was done).
+3. Mark the three store sites as `site_type` warehouse or depot (Site Management) so only they are
+   offered as stores, then create their bins (Locations > Bulk setup, print the QR labels). No bins exist
+   yet; none were invented.
+4. Install the internal APK (workflow `flutter-internal-apk.yml`, no Play upload) for device acceptance.
 
 ## 8. Tests
 

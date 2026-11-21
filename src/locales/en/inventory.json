@@ -64,13 +64,14 @@
     "addTitle": "Add location", "editTitle": "Edit location", "edit": "Edit {code}", "printOne": "Print label for {code}",
     "labels": "Print labels ({n})", "code": "Code", "name": "Name", "type": "Type", "parent": "Inside", "noParent": "Top level (no parent)",
     "active": "Active", "inactive": "Inactive", "empty": "No locations yet. Add a warehouse, then its zones and bins.",
-    "readOnly": "You can view locations. Adding or changing them needs the transfer permission.",
+    "readOnly": "You can view locations. Adding or changing them needs an Admin, Manager or Director.",
     "labelSheet": "Location labels", "labelSheetSub": "Each label carries TP:LOC and the location id. Scan it on the phone to open that bin.",
     "qrAlt": "QR label for location {code}",
+    "store": "Store", "noStores": "No active store is registered for this country. Stores are managed in Site Management, not here.", "labelSize": "Label size", "labelCount": "{n} labels, {perPage} per A4 page", "sizes": {"sm": "Small ({mm} mm)", "md": "Medium ({mm} mm)", "lg": "Large ({mm} mm)"}, "bulk": {"open": "Bulk setup", "title": "Bulk rack, shelf and bin setup", "sub": "Describe the layout once. You see every code before anything is saved.", "topOfStore": "Top of the store", "prefix": "Code prefix", "racks": "Racks (for example A-C or 1-4)", "shelves": "Shelves per rack", "bins": "Bins per shelf", "start": "First number", "pad": "Number digits", "sep": "Code style", "names": "Names (rack, shelf, bin)", "summary": "This creates {racks} racks, {shelves} shelves and {bins} bins. {existing} codes already exist and will be reused.", "example": "Codes", "preview": "Preview", "checking": "Checking...", "back": "Back", "create": "Create {n} locations", "previewNote": "{created} new locations will be created at {site}. {existing} already exist and are kept as they are. Nothing is saved until you press Create.", "more": "{n} more rows are not shown here but are included.", "done": "Saved: {created} created, {existing} already existed.", "printNew": "Print labels ({n})", "status": {"new": "New", "existing": "Already exists"}, "errors": {"site": "Choose the store.", "parent": "The chosen parent is not in this list any more.", "parentSite": "The parent belongs to another store.", "range": "Check the range: the end must come after the start (at most 100).", "rackCode": "Rack codes use letters, numbers, dot or underscore.", "nothing": "Enter racks, shelves or bins to create.", "prefix": "Enter a code prefix or rack codes so every code is unique at the store.", "codeFormat": "A generated code is too long or uses a character that is not allowed.", "duplicate": "Two generated codes are the same. Change the prefix or style.", "tooMany": "At most {max} locations can be created at once."}},
     "errors": {
       "code": "Enter a code.", "codeFormat": "Use letters, numbers, dot, dash or underscore (up to 40).",
       "codeTaken": "This code is already used at this site.", "name": "Enter a name.", "type": "Choose a type.",
-      "site": "Enter the site.", "selfParent": "A location cannot be inside itself."
+      "site": "Choose the store.", "selfParent": "A location cannot be inside itself."
     }
   },
   "locationTypes": {
@@ -768,7 +769,7 @@
       "location": "Location in the store",
       "wholeStore": "Whole store (no bin)",
       "noLocations": "This store has no locations yet. Ask an inventory manager to create its warehouse, racks and bins under Locations. You can still record captures with a location note.",
-      "button": "Start"
+      "button": "Start", "stores": "Stores", "otherSite": "Other site"
     },
     "sessions": {
       "title": "Physical inventory sessions",
@@ -780,7 +781,7 @@
       "prepare": "Prepare opening balance",
       "prepared": "Opening-balance batch prepared with {n} lines; {skipped} captures left out (not identified or no ERP SKU).",
       "batchReady": "Opening batch prepared",
-      "ledgerRule": "Official stock only changes when the opening-balance batch is approved by someone other than its preparer (Controls > Opening balances). Missing prices stay unvalued for Finance."
+      "ledgerRule": "Official stock only changes when the opening-balance batch is approved by someone other than its preparer (Controls > Opening balances). Missing prices stay unvalued for Finance.", "openBatch": "Open in Opening balances"
     },
     "capture": {
       "frozenNote": "This item was not confirmed by the server. Saving again sends exactly the same item (no duplicate). Changes you make now are not included; discard it only if you are sure it was not saved.",
@@ -814,7 +815,7 @@
       "err": {
         "quantity": "Enter a quantity of zero or more.",
         "session": "Start or resume a session first."
-      }
+      }, "scan": "Scan", "scanCamera": "Scan with camera", "scanHint": "Hold the barcode or QR label inside the frame.", "cameraDenied": "Camera permission was refused. Allow camera access in the browser, or type or use a scanner.", "cameraFailed": "The camera could not be opened. Type the code or use a scanner.", "locationScanned": "Location {code} selected from its label.", "qtyLess": "Decrease quantity", "qtyMore": "Increase quantity", "takePhoto": "Take or add photo", "clearPhotos": "Remove photos"
     },
     "common": {
       "when": "When",
@@ -1085,6 +1086,8 @@
       "genuine": "Genuine and OES need evidence such as an invoice, catalogue or manufacturer confirmation. An OEM number printed on packaging is not proof.",
       "reviewer": "Identification keeps the original quantity, location, photos and the counter's name.",
       "corrections": "Corrections only change identification data. Stock, ledger, ERP records and costs are never edited from here."
-    }
+    },
+    "transfers": {"title": "Transfer requests", "sub": "Requests from other stores for stock you hold. The sending store approves or rejects; the requester can cancel.", "empty": "No transfer requests.", "done": "Saved.", "prev": "Previous", "next": "Next", "rule": "Approving a request does not move stock. Dispatch it through Stock flows > Transfer.", "status": {"requested": "Requested", "approved": "Approved", "rejected": "Rejected", "cancelled": "Cancelled", "dispatched": "Dispatched", "all": "All"}}
+  
   }
 }

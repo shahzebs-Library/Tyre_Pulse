@@ -11,7 +11,7 @@
  * engineering / master-data review.
  */
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
-import { Camera, ClipboardList, FileDown, Play, Save, ScanLine, Search, Square } from 'lucide-react'
+import { Camera, ClipboardList, FileDown, Minus, Play, Plus, Save, ScanLine, Search, Square, Store } from 'lucide-react'
 import { Tabs, Kpi } from '../commandCenter/kit'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useSettings } from '../../contexts/SettingsContext'
@@ -20,11 +20,13 @@ import { listSites } from '../../lib/api/sites'
 import { listLocations, newIdempotencyKey } from '../../lib/api/inventory'
 import {
   listSessions, startSession, closeSession, prepareOpeningBatch, recordCapture, listCaptures, searchMaterials,
-  uploadPhoto, loadDashboard,
+  uploadPhoto, loadDashboard, listStoreSiteHints,
 } from '../../lib/api/physicalInventory'
+import CodeScanCamera, { codeScanSupported } from './CodeScanCamera'
 import {
   CONDITIONS, OWNERSHIPS, CODE_TYPES, PHOTO_ROLES, captureAttempt, guessCodeType, groupVariants,
   identificationTone, classificationTone, dashboardTiles, identificationProgress, dashboardExportRows, newClientUuid,
+  storeChoices, stepQuantity, locationFromScan,
 } from '../../lib/inventory/physicalInventory'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/inventory/errorText'
@@ -39,6 +41,7 @@ const EMPTY_FORM = { scanned_code: '', scanned_code_type: '', picked: null, refs
 
 function SessionStart({ scope, onStarted, t }) {
   const [sites, setSites] = useState([])
+  const [hints, setHints] = useState([])
   const [site, setSite] = useState(scope.site && scope.site !== 'all' ? scope.site : '')
   const [loc, setLoc] = useState('')
   const [notes, setNotes] = useState('')
@@ -48,9 +51,11 @@ function SessionStart({ scope, onStarted, t }) {
   const locations = useInvQuery(() => (site ? listLocations({ country: scope.country, site }) : Promise.resolve({ status: 'ok', rows: [] })), [scope.country, site])
   useEffect(() => {
     let live = true
-    listSites({ country: scope.country, activeOnly: true }).then((r) => { if (live) setSites(r.map((x) => x.name).filter(Boolean)) }).catch(() => { if (live) setSites([]) })
+    listSites({ country: scope.country, activeOnly: true }).then((r) => { if (live) setSites(r || []) }).catch(() => { if (live) setSites([]) })
+    listStoreSiteHints(scope.country).then((h) => { if (live) setHints(h) }).catch(() => { if (live) setHints([]) })
     return () => { live = false }
   }, [scope.country])
+  const choices = useMemo(() => storeChoices(sites, hints), [sites, hints])
   const storage = (locations.data?.rows || []).filter((l) => l.active !== false && !['in_transit', 'supplier_custody', 'vehicle_custody'].includes(l.location_type))
 
   const start = async () => {
@@ -66,10 +71,23 @@ function SessionStart({ scope, onStarted, t }) {
     <SectionCard title={t('inventory.pi.start.title')} sub={t('inventory.pi.start.sub')}>
       {!scope.country && <Note tone="warn">{t('inventory.pi.start.pickCountry')}</Note>}
       <div className="inv-form">
-        <Field label={t('inventory.pi.start.store')}>
+        {choices.primary.length > 0 && (
+          <div className="inv-full" role="group" aria-label={t('inventory.pi.start.stores')}>
+            <p className="cc-card-sub">{t('inventory.pi.start.stores')}</p>
+            <div className="inv-pi-stores">
+              {choices.primary.map((s) => (
+                <button key={s} type="button" className={`inv-pi-store ${site === s ? 'active' : ''}`} aria-pressed={site === s}
+                  onClick={() => { setSite(s); setLoc('') }}>
+                  <Store size={18} aria-hidden="true" /> {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <Field label={choices.primary.length ? t('inventory.pi.start.otherSite') : t('inventory.pi.start.store')}>
           <select className="cc-select" value={site} onChange={(e) => { setSite(e.target.value); setLoc('') }}>
             <option value="">{t('inventory.pi.start.chooseStore')}</option>
-            {sites.map((s) => <option key={s} value={s}>{s}</option>)}
+            {[...choices.primary, ...choices.others].map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
         <Field label={t('inventory.pi.start.location')}>
@@ -137,15 +155,29 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
   const clientUuid = useRef(newClientUuid())
   const frozen = useRef(null)
   const [retry, setRetry] = useState(null)
+  const [camera, setCamera] = useState(false)
+  const [locNote, setLocNote] = useState('')
+  const canScan = codeScanSupported()
   const locations = useInvQuery(() => listLocations({ country: session.country, site: session.site }), [session.id])
   const captures = useInvQuery(() => listCaptures({ sessionId: session.id, page, pageSize: size }), [session.id, page, size, stamp])
+  const locs = (locations.data?.rows || []).filter((l) => l.active !== false)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const bump = (delta) => setForm((f) => ({ ...f, quantity: stepQuantity(f.quantity, delta) }))
   const setRef = (k) => (e) => setForm((f) => ({ ...f, refs: { ...f.refs, [k]: e.target.value } }))
 
-  const lookup = async () => {
-    const code = form.scanned_code.trim()
+  const lookup = async (raw) => {
+    const code = String(raw ?? form.scanned_code).trim()
     if (!code) return
-    setErr('')
+    setErr(''); setLocNote('')
+    // A printed TP:LOC: label picks the bin instead of searching for a material.
+    const loc = locationFromScan(code, locs)
+    if (loc) {
+      setForm((f) => ({ ...f, location_id: loc.id, scanned_code: '', scanned_code_type: '' }))
+      setLocNote(loc.code)
+      codeRef.current?.focus()
+      return
+    }
+    if (raw !== undefined) setForm((f) => ({ ...f, scanned_code: code }))
     setForm((f) => ({ ...f, scanned_code_type: f.scanned_code_type || guessCodeType(code) }))
     try { setResult(await searchMaterials(code)) } catch (x) { setErr(toUserMessage(x)) }
   }
@@ -195,7 +227,6 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
 
   const discardFrozen = () => { frozen.current = null; clientUuid.current = newClientUuid(); setErr('') }
 
-  const locs = (locations.data?.rows || []).filter((l) => l.active !== false)
   const cols = [
     { key: 'captured_at', header: t('inventory.pi.common.when'), cell: (r) => fmtDateTime(r.captured_at) },
     { key: 'what', header: t('inventory.pi.common.material'), cell: (r) => r.canonical_description || r.temp_ref || r.scanned_code || 'N/A' },
@@ -211,8 +242,8 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
       <SectionCard title={t('inventory.pi.capture.title')} sub={t('inventory.pi.capture.sub')}>
         <form onSubmit={save} className="inv-hub" style={{ gap: 12 }}>
           <div className="cc-filters">
-            <div className="cc-search" style={{ flex: 2 }}>
-              <ScanLine size={15} aria-hidden="true" />
+            <div className="cc-search inv-pi-scan" style={{ flex: 2 }}>
+              <ScanLine size={20} aria-hidden="true" />
               <input ref={codeRef} autoFocus value={form.scanned_code} onChange={set('scanned_code')}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookup() } }}
                 placeholder={t('inventory.pi.capture.codePlaceholder')} aria-label={t('inventory.pi.capture.codePlaceholder')} autoComplete="off" />
@@ -221,8 +252,15 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
               <option value="">{t('inventory.pi.capture.codeTypeAuto')}</option>
               {CODE_TYPES.map((c) => <option key={c} value={c}>{t(`inventory.pi.codeType.${c}`)}</option>)}
             </select>
-            <button type="button" className="cc-btn" onClick={lookup} disabled={!form.scanned_code.trim()}><Search size={14} aria-hidden="true" /> {t('inventory.pi.capture.find')}</button>
+            {canScan && (
+              <button type="button" className="cc-btn inv-pi-big" onClick={() => setCamera(true)} aria-label={t('inventory.pi.capture.scanCamera')}>
+                <Camera size={18} aria-hidden="true" /> {t('inventory.pi.capture.scan')}
+              </button>
+            )}
+            <button type="button" className="cc-btn inv-pi-big" onClick={() => lookup()} disabled={!form.scanned_code.trim()}><Search size={18} aria-hidden="true" /> {t('inventory.pi.capture.find')}</button>
           </div>
+          {locNote && <Note tone="good">{t('inventory.pi.capture.locationScanned', { code: locNote })}</Note>}
+          <CodeScanCamera open={camera} t={t} onClose={() => setCamera(false)} onCode={(c) => { setCamera(false); lookup(c) }} />
           {form.picked
             ? <Note tone="good" title={t('inventory.pi.capture.picked')} action={<button type="button" className="cc-btn-ghost" onClick={() => setForm((f) => ({ ...f, picked: null }))}>{t('inventory.pi.capture.clearPick')}</button>}>{form.picked.label}</Note>
             : <PickResults result={result} t={t} onPick={(p) => setForm((f) => ({ ...f, picked: p }))} />}
@@ -240,9 +278,14 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
             </details>
           )}
           <div className="inv-form">
-            <Field label={t('inventory.pi.common.qty')}>
-              <input className="inv-input" inputMode="decimal" value={form.quantity} onChange={set('quantity')} required />
-            </Field>
+            <div className="cc-field" style={{ minWidth: 0 }}>
+              <span id="pi-qty-label">{t('inventory.pi.common.qty')}</span>
+              <div className="inv-pi-qty">
+                <button type="button" className="cc-btn inv-pi-big" onClick={() => bump(-1)} aria-label={t('inventory.pi.capture.qtyLess')}><Minus size={20} aria-hidden="true" /></button>
+                <input className="inv-input inv-pi-qty-input" inputMode="decimal" value={form.quantity} onChange={set('quantity')} required aria-labelledby="pi-qty-label" />
+                <button type="button" className="cc-btn inv-pi-big" onClick={() => bump(1)} aria-label={t('inventory.pi.capture.qtyMore')}><Plus size={20} aria-hidden="true" /></button>
+              </div>
+            </div>
             <Field label={t('inventory.pi.common.uom')}>
               <input className="inv-input" value={form.uom} onChange={set('uom')} maxLength={20} />
             </Field>
@@ -268,9 +311,14 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
             <Field label={t('inventory.pi.common.remarks')} full>
               <input className="inv-input" value={form.remarks} onChange={set('remarks')} maxLength={500} />
             </Field>
-            <Field label={t('inventory.pi.capture.photos')}>
-              <input type="file" accept="image/*" capture="environment" multiple onChange={(e) => setForm((f) => ({ ...f, photos: [...(e.target.files || [])].slice(0, 6) }))} />
-            </Field>
+            <div className="cc-field" style={{ minWidth: 0 }}>
+              <span>{t('inventory.pi.capture.photos')}</span>
+              <label className="cc-btn inv-pi-big inv-pi-file">
+                <Camera size={18} aria-hidden="true" /> {t('inventory.pi.capture.takePhoto')}
+                <input type="file" accept="image/*" capture="environment" multiple className="sr-only" aria-label={t('inventory.pi.capture.photos')}
+                  onChange={(e) => { const picked = [...(e.target.files || [])]; e.target.value = ''; setForm((f) => ({ ...f, photos: [...f.photos, ...picked].slice(0, 6) })) }} />
+              </label>
+            </div>
             <Field label={t('inventory.pi.capture.photoRole')}>
               <select className="cc-select" value={form.photoRole} onChange={set('photoRole')}>
                 {PHOTO_ROLES.map((r) => <option key={r} value={r}>{t(`inventory.pi.photoRole.${r}`)}</option>)}
@@ -294,8 +342,9 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
             </Note>
           )}
           <div className="inv-actions">
-            <button type="submit" className="cc-btn-primary" disabled={busy}><Save size={14} aria-hidden="true" /> {busy ? t('inventory.actions.saving') : t('inventory.pi.capture.saveNext')}</button>
+            <button type="submit" className="cc-btn-primary inv-pi-save" disabled={busy}><Save size={20} aria-hidden="true" /> {busy ? t('inventory.actions.saving') : t('inventory.pi.capture.saveNext')}</button>
             <span className="cc-na"><Camera size={13} aria-hidden="true" /> {t('inventory.pi.capture.photoCount', { n: form.photos.length })}</span>
+            {form.photos.length > 0 && <button type="button" className="cc-btn-ghost" onClick={() => setForm((f) => ({ ...f, photos: [] }))}>{t('inventory.pi.capture.clearPhotos')}</button>}
           </div>
         </form>
       </SectionCard>
@@ -307,7 +356,7 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
   )
 }
 
-function CaptureTab({ scope, orgId, t }) {
+function CaptureTab({ scope, orgId, t, onNavigate }) {
   const [active, setActive] = useState(null)
   const [stamp, setStamp] = useState(0)
   const [msg, setMsg] = useState(null)
@@ -338,6 +387,7 @@ function CaptureTab({ scope, orgId, t }) {
                   {s.status === 'open' && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => act(async () => { await closeSession({ sessionId: s.id }, newIdempotencyKey()); if (active === s.id) setActive(null); return t('inventory.pi.sessions.closed') })}><Square size={14} aria-hidden="true" /> {t('inventory.pi.sessions.close')}</button>}
                   {s.status === 'closed' && !s.opening_batch_id && <button type="button" className="cc-btn" disabled={busy} onClick={() => act(async () => { const r = await prepareOpeningBatch(s.id, newIdempotencyKey()); return t('inventory.pi.sessions.prepared', { n: r.lines, skipped: (r.skipped || []).length }) })}>{t('inventory.pi.sessions.prepare')}</button>}
                   {s.opening_batch_id && <span className="cc-pill info">{t('inventory.pi.sessions.batchReady')}</span>}
+                  {s.opening_batch_id && onNavigate && <button type="button" className="cc-btn" onClick={() => onNavigate('controls', 'opening')}>{t('inventory.pi.sessions.openBatch')}</button>}
                 </div>
               </div>
             ))}
@@ -406,7 +456,7 @@ function DashboardTab({ scope, t, can }) {
   )
 }
 
-export default function PhysicalInventorySection({ scope, can, userId, tab: linkedTab, onTab }) {
+export default function PhysicalInventorySection({ scope, can, userId, tab: linkedTab, onTab, onNavigate }) {
   const { t } = useLanguage()
   const { profile } = useAuth()
   // null: uploadPhoto resolves the company from the database (app_current_org); the
@@ -418,7 +468,7 @@ export default function PhysicalInventorySection({ scope, can, userId, tab: link
     <div className="inv-hub">
       <Note title={t('inventory.pi.title')}>{t('inventory.pi.lead')}</Note>
       <Tabs variant="line" label={t('inventory.pi.title')} value={tab} tabs={tabs} onChange={setTab} />
-      {tab === 'capture' && <CaptureTab scope={scope} orgId={orgId} t={t} />}
+      {tab === 'capture' && <CaptureTab scope={scope} orgId={orgId} t={t} onNavigate={onNavigate} />}
       {tab === 'dashboard' && <DashboardTab scope={scope} t={t} can={can} />}
       {['review', 'materials', 'corrections', 'search'].includes(tab) && (
         <Suspense fallback={<div className="cc-skel" style={{ height: 120 }} />}>

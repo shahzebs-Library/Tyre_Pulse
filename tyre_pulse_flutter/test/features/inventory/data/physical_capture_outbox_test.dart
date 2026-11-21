@@ -73,6 +73,12 @@ final class _Repo implements PhysicalInventoryRepository {
       const <PhysicalSession>[];
 
   @override
+  Future<List<InventoryPlace>> stores() async => const <InventoryPlace>[];
+
+  @override
+  Future<InventoryPlace?> placeById(String id) async => null;
+
+  @override
   Future<List<MaterialPick>> search(String query) async =>
       const <MaterialPick>[];
 
@@ -239,8 +245,8 @@ void main() {
       () async {
     await outbox.add(_capture('c1'));
     store.failReads = true;
-    expect(
-      () => outbox.add(_capture('c2')),
+    await expectLater(
+      outbox.add(_capture('c2')),
       throwsA(isA<StorageReadFailure>()),
     );
     store.failReads = false;

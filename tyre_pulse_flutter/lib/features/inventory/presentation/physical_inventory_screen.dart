@@ -19,6 +19,7 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_capture_outbox.dart';
+import 'package:tyre_pulse/features/inventory/domain/inventory_scan.dart';
 import 'package:tyre_pulse/features/inventory/domain/physical_capture.dart';
 import 'package:tyre_pulse/features/inventory/inventory_providers.dart';
 import 'package:tyre_pulse/features/inventory/physical_inventory_providers.dart';
@@ -41,7 +42,8 @@ class PhysicalInventoryScreen extends ConsumerStatefulWidget {
 class _PhysicalInventoryScreenState
     extends ConsumerState<PhysicalInventoryScreen> with WidgetsBindingObserver {
   PhysicalSession? _session;
-  final TextEditingController _store = TextEditingController();
+  InventoryPlace? _storePick;
+  InventoryPlace? _bin;
   final TextEditingController _qty = TextEditingController();
   final TextEditingController _uom = TextEditingController();
   final TextEditingController _hint = TextEditingController();
@@ -78,9 +80,6 @@ class _PhysicalInventoryScreenState
     WidgetsBinding.instance.addObserver(this);
     _captureUuid = ref.read(inventoryIdFactoryProvider)();
     _startKey = ref.read(inventoryIdFactoryProvider)();
-    final List<String> sites =
-        ref.read(workspaceContextProvider)?.activeSites ?? const <String>[];
-    if (sites.isNotEmpty) _store.text = sites.first;
     _net = Connectivity()
         .onConnectivityChanged
         .listen((List<ConnectivityResult> r) {
@@ -101,7 +100,6 @@ class _PhysicalInventoryScreenState
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_net?.cancel());
     for (final TextEditingController c in <TextEditingController>[
-      _store,
       _qty,
       _uom,
       _hint,
@@ -167,8 +165,10 @@ class _PhysicalInventoryScreenState
   }
 
   Future<void> _start(InventoryCopy copy) async {
-    final String? country = ref.read(workspaceContextProvider)?.activeCountry;
-    if (country == null || _store.text.trim().isEmpty) {
+    final InventoryPlace? store = _storePick;
+    final String? country =
+        store?.country ?? ref.read(workspaceContextProvider)?.activeCountry;
+    if (store == null || country == null) {
       setState(() => _message = copy('pi_pickStore'));
       return;
     }
@@ -178,11 +178,13 @@ class _PhysicalInventoryScreenState
           await ref.read(physicalInventoryRepositoryProvider).startSession(
                 idempotencyKey: _startKey,
                 country: country,
-                site: _store.text.trim(),
+                site: store.site,
+                locationId: store.id,
               );
       _startKey = ref.read(inventoryIdFactoryProvider)();
       setState(() {
         _session = s;
+        _bin = null;
         _message = null;
       });
     } on SupabaseFailure catch (f) {
@@ -193,6 +195,93 @@ class _PhysicalInventoryScreenState
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// A scan in the capture view: a `TP:LOC:` label selects the bin, anything
+  /// else is searched as an item code.
+  Future<void> _onCaptureScan(String raw, InventoryCopy copy) async {
+    final InventoryScan? scan = parseInventoryScan(raw);
+    if (scan == null) return;
+    if (scan.kind == InventoryScanKind.location) {
+      await _selectBin(scan.value, copy);
+      return;
+    }
+    await _search(scan.value, copy);
+  }
+
+  Future<void> _selectBin(String id, InventoryCopy copy) async {
+    final PhysicalSession? s = _session;
+    if (s == null) return;
+    try {
+      final InventoryPlace? place =
+          await ref.read(physicalInventoryRepositoryProvider).placeById(id);
+      if (!mounted) return;
+      if (place == null) {
+        setState(() => _message = copy('pi_binUnknown'));
+        return;
+      }
+      if (place.site.toUpperCase() != s.site.toUpperCase()) {
+        setState(() => _message = copy('pi_binOtherStore'));
+        return;
+      }
+      setState(() {
+        _bin = place;
+        _message = null;
+      });
+    } on SupabaseFailure catch (f) {
+      if (!mounted) return;
+      if (f.isConnectivity) {
+        // Offline: keep the scanned label; the server checks it on send.
+        setState(() {
+          _bin = InventoryPlace(
+            id: id,
+            site: s.site,
+            code: id.length > 8 ? id.substring(0, 8) : id,
+            locationType: 'bin',
+            country: s.country,
+          );
+          _message = copy('pi_binOffline');
+        });
+      } else {
+        setState(() => _message = f.error.message);
+      }
+    }
+  }
+
+  /// A scan on the start view: a `TP:LOC:` label picks its store.
+  Future<void> _onStartScan(
+    String raw,
+    List<InventoryPlace> stores,
+    InventoryCopy copy,
+  ) async {
+    final InventoryScan? scan = parseInventoryScan(raw);
+    if (scan == null || scan.kind != InventoryScanKind.location) {
+      setState(() => _message = copy('pi_scanStoreLabel'));
+      return;
+    }
+    InventoryPlace? store;
+    for (final InventoryPlace p in stores) {
+      if (p.id == scan.value) store = p;
+    }
+    if (store == null) {
+      try {
+        final InventoryPlace? place = await ref
+            .read(physicalInventoryRepositoryProvider)
+            .placeById(scan.value);
+        if (place != null) store = storeForPlace(place, stores);
+      } on SupabaseFailure {
+        store = null;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      if (store == null) {
+        _message = copy('pi_binUnknown');
+      } else {
+        _storePick = store;
+        _message = null;
+      }
+    });
   }
 
   Future<void> _search(String code, InventoryCopy copy) async {
@@ -258,7 +347,7 @@ class _PhysicalInventoryScreenState
       uom: _uom.text.trim().isEmpty ? null : _uom.text.trim(),
       condition: _condition,
       ownership: _ownership,
-      locationId: s.locationId,
+      locationId: _bin?.id ?? s.locationId,
       locationHint: _hint.text.trim().isEmpty ? null : _hint.text.trim(),
       remarks: _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
       photos: <PendingPhoto>[
@@ -290,6 +379,9 @@ class _PhysicalInventoryScreenState
     }
   }
 
+  static String _fmtQty(num v) =>
+      v == v.roundToDouble() ? '${v.toInt()}' : '$v';
+
   Widget _dropdown(
     String label,
     String value,
@@ -317,6 +409,8 @@ class _PhysicalInventoryScreenState
     final PhysicalSession? s = _session;
     final AsyncValue<List<PhysicalSession>> open =
         ref.watch(openPhysicalSessionsProvider);
+    final AsyncValue<List<InventoryPlace>> stores =
+        ref.watch(physicalStoresProvider);
     return TpScaffold(
       appBar: TpAppBar(
         title: copy('pi_title'),
@@ -331,6 +425,32 @@ class _PhysicalInventoryScreenState
             ),
         ],
       ),
+      // Save and next stays at the bottom edge, in thumb reach, however far
+      // the form is scrolled.
+      bottomNavigationBar: s == null
+          ? null
+          : SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  TpSpace.lg,
+                  TpSpace.sm,
+                  TpSpace.lg,
+                  TpSpace.md,
+                ),
+                child: SizedBox(
+                  height: inventoryTouchTarget,
+                  child: TpButton.primary(
+                    key: const Key('pi.save'),
+                    label: copy('pi_saveNext'),
+                    icon: Icons.save_outlined,
+                    isBusy: _busy,
+                    isFullWidth: true,
+                    onPressed: _busy ? null : () => unawaited(_save(copy)),
+                  ),
+                ),
+              ),
+            ),
       body: ListView(
         padding: const EdgeInsets.all(TpSpace.lg),
         children: <Widget>[
@@ -363,11 +483,54 @@ class _PhysicalInventoryScreenState
           if (s == null) ...<Widget>[
             Text(copy('pi_startLead')),
             const SizedBox(height: TpSpace.md),
-            TextField(
-              key: const Key('pi.store'),
-              controller: _store,
-              decoration: InputDecoration(labelText: copy('pi_store')),
-              textCapitalization: TextCapitalization.characters,
+            Text(
+              copy('pi_store'),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: TpSpace.sm),
+            ...stores.when(
+              loading: () => <Widget>[const TpLoadingState()],
+              error: (Object e, StackTrace _) => <Widget>[
+                InventoryFailureView(
+                  error: e,
+                  copy: copy,
+                  onRetry: () => ref.invalidate(physicalStoresProvider),
+                ),
+              ],
+              data: (List<InventoryPlace> rows) => <Widget>[
+                if (rows.isEmpty)
+                  Text(copy('pi_noStores'), key: const Key('pi.noStores')),
+                for (final InventoryPlace p in rows)
+                  Card(
+                    child: ListTile(
+                      key: Key('pi.store.${p.id}'),
+                      minTileHeight: inventoryTouchTarget,
+                      selected: _storePick?.id == p.id,
+                      leading: Icon(
+                        _storePick?.id == p.id
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                      ),
+                      title: Text(p.title),
+                      subtitle: Text(p.site),
+                      onTap: () => setState(() {
+                        _storePick = p;
+                        _message = null;
+                      }),
+                    ),
+                  ),
+                if (rows.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: TpSpace.sm),
+                  InventoryScanField(
+                    key: const Key('pi.storeScan'),
+                    hint: copy('pi_scanStoreLabel'),
+                    copy: copy,
+                    autofocus: false,
+                    onScan: (String code) =>
+                        unawaited(_onStartScan(code, rows, copy)),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: TpSpace.md),
             TpButton.primary(
@@ -376,7 +539,9 @@ class _PhysicalInventoryScreenState
               icon: Icons.play_arrow_rounded,
               isBusy: _busy,
               isFullWidth: true,
-              onPressed: _busy ? null : () => unawaited(_start(copy)),
+              onPressed: _busy || _storePick == null
+                  ? null
+                  : () => unawaited(_start(copy)),
             ),
             const SizedBox(height: TpSpace.lg),
             ...open.when(
@@ -397,7 +562,10 @@ class _PhysicalInventoryScreenState
                       title: Text(o.reference),
                       subtitle: Text(o.site),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: () => setState(() => _session = o),
+                      onTap: () => setState(() {
+                        _session = o;
+                        _bin = null;
+                      }),
                     ),
                   ),
               ],
@@ -406,8 +574,22 @@ class _PhysicalInventoryScreenState
             InventoryScanField(
               hint: copy('pi_scanHint'),
               copy: copy,
-              onScan: (String code) => unawaited(_search(code, copy)),
+              onScan: (String code) => unawaited(_onCaptureScan(code, copy)),
             ),
+            if (_bin != null)
+              Card(
+                child: ListTile(
+                  key: const Key('pi.bin'),
+                  minTileHeight: inventoryTouchTarget,
+                  leading: const Icon(Icons.inventory_2_outlined),
+                  title: Text('${copy('pi_bin')}: ${_bin!.title}'),
+                  trailing: IconButton(
+                    tooltip: copy('pi_clearBin'),
+                    icon: const Icon(Icons.close),
+                    onPressed: () => setState(() => _bin = null),
+                  ),
+                ),
+              ),
             if (_scanned != null) Text('${copy('pi_scanned')}: $_scanned'),
             if (_pick != null)
               Card(
@@ -458,11 +640,18 @@ class _PhysicalInventoryScreenState
               ),
             ],
             const SizedBox(height: TpSpace.md),
+            InventoryQtyStepper(
+              value: parseQty(_qty.text),
+              copy: copy,
+              onChanged: (num v) => setState(() => _qty.text = _fmtQty(v)),
+            ),
+            const SizedBox(height: TpSpace.sm),
             Row(
               children: <Widget>[
                 Expanded(
                   child: TextField(
                     key: const Key('pi.qty'),
+                    onChanged: (_) => setState(() {}),
                     controller: _qty,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
@@ -519,32 +708,30 @@ class _PhysicalInventoryScreenState
                   ),
                 ),
                 const SizedBox(width: TpSpace.md),
-                IconButton.filledTonal(
-                  key: const Key('pi.photo'),
-                  tooltip: copy('pi_takePhoto'),
-                  iconSize: 28,
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  onPressed: _photos.length >= 6
-                      ? null
-                      : () => unawaited(_takePhoto()),
+                SizedBox(
+                  width: inventoryTouchTarget,
+                  height: inventoryTouchTarget,
+                  child: IconButton.filledTonal(
+                    key: const Key('pi.photo'),
+                    tooltip: copy('pi_takePhoto'),
+                    iconSize: 28,
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    onPressed: _photos.length >= 6
+                        ? null
+                        : () => unawaited(_takePhoto()),
+                  ),
                 ),
               ],
             ),
             Text(copy.count('pi_photosN', _photos.length)),
             const SizedBox(height: TpSpace.lg),
-            TpButton.primary(
-              key: const Key('pi.save'),
-              label: copy('pi_saveNext'),
-              icon: Icons.save_outlined,
-              isBusy: _busy,
-              isFullWidth: true,
-              onPressed: _busy ? null : () => unawaited(_save(copy)),
-            ),
-            const SizedBox(height: TpSpace.sm),
             TpButton.secondary(
               label: copy('pi_leave'),
               isFullWidth: true,
-              onPressed: () => setState(() => _session = null),
+              onPressed: () => setState(() {
+                _session = null;
+                _bin = null;
+              }),
             ),
             const SizedBox(height: TpSpace.md),
             Text(copy('pi_ledgerRule')),

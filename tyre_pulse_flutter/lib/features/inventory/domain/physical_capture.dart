@@ -378,3 +378,62 @@ final class MaterialPick {
     return out;
   }
 }
+
+/// A stock location from `inventory_locations` (a store/warehouse, or a bin
+/// inside one). The phone only ever picks existing locations; it never
+/// creates one.
+final class InventoryPlace {
+  const InventoryPlace({
+    required this.id,
+    required this.site,
+    required this.code,
+    required this.locationType,
+    this.country,
+    this.name,
+    this.parentId,
+  });
+
+  factory InventoryPlace.fromJson(Map<String, Object?> j) => InventoryPlace(
+        id: '${j['id'] ?? ''}',
+        site: '${j['site'] ?? ''}',
+        code: '${j['code'] ?? ''}',
+        locationType: '${j['location_type'] ?? ''}',
+        country: j['country'] as String?,
+        name: j['name'] as String?,
+        parentId: j['parent_id'] as String?,
+      );
+
+  final String id;
+  final String site;
+  final String code;
+  final String locationType;
+  final String? country;
+  final String? name;
+  final String? parentId;
+
+  bool get isStore => locationType == 'warehouse';
+
+  /// "CODE - name" when a name exists.
+  String get title =>
+      (name == null || name!.trim().isEmpty) ? code : '$code - ${name!.trim()}';
+}
+
+/// The store a scanned location belongs to: the location itself when it is a
+/// store, else the only store on the same site and country. Null when the
+/// owner store cannot be told (none, or several on that site).
+InventoryPlace? storeForPlace(
+  InventoryPlace place,
+  List<InventoryPlace> stores,
+) {
+  for (final InventoryPlace s in stores) {
+    if (s.id == place.id) return s;
+  }
+  final List<InventoryPlace> sameSite = <InventoryPlace>[
+    for (final InventoryPlace s in stores)
+      if (s.site.toUpperCase() == place.site.toUpperCase() &&
+          (s.country ?? '').toLowerCase() ==
+              (place.country ?? '').toLowerCase())
+        s,
+  ];
+  return sameSite.length == 1 ? sameSite.single : null;
+}

@@ -9,7 +9,7 @@ import {
   correctionDiff, dashboardTiles, identificationProgress, dashboardExportRows, photoPath, newClientUuid, topicForField,
 } from '../lib/inventory/physicalInventory'
 
-const SQL = readFileSync(resolve('supabase/pending_migrations/20261122100000_inv_physical_inventory_master.sql'), 'utf8')
+const SQL = readFileSync(resolve('supabase/migrations/20261122100000_inv_physical_inventory_master.sql'), 'utf8')
 
 describe('physical inventory rules mirror the draft migration', () => {
   it('normalises references exactly like material_ref_norm()', () => {
@@ -144,5 +144,49 @@ describe('retry freezes the payload (Codex P2)', () => {
     expect(retry.payload.captured_at).toBe('2026-11-21T08:00:00.000Z')
     expect(retry.payload.quantity).toBe(3)
     expect(captureAttempt(null, { ...form, quantity: '' }, { sessionId: 's' }).error).toBe('quantity')
+  })
+})
+
+describe('physical inventory web gaps (stores, scan, quantity, transfers)', () => {
+  it('offers the existing stores first, never invents a site', async () => {
+    const { storeChoices } = await import('../lib/inventory/physicalInventory')
+    const sites = [
+      { name: 'NHC', site_type: 'other' }, { name: 'DIRIYAH', site_type: 'other' }, { name: 'Central Warehouse', site_type: 'warehouse' },
+      { name: 'RIY-MET', site_type: 'other' }, { name: 'AMAALA', site_type: 'other' }, { name: 'nhc', site_type: 'other' }, { name: '' },
+    ]
+    const c = storeChoices(sites, ['nhc', 'DIRIYAH', 'RIY-MET', 'NOT A SITE'])
+    expect(c.primary).toEqual(['Central Warehouse', 'DIRIYAH', 'NHC', 'RIY-MET'])
+    expect(c.others).toEqual(['AMAALA'])
+    expect(storeChoices([], ['X'])).toEqual({ primary: [], others: [] })
+  })
+  it('steps quantities without going below zero', async () => {
+    const { stepQuantity } = await import('../lib/inventory/physicalInventory')
+    expect(stepQuantity('', 1)).toBe('1')
+    expect(stepQuantity('0', -1)).toBe('0')
+    expect(stepQuantity('2,5', 1)).toBe('3.5')
+    expect(stepQuantity('abc', 1)).toBe('abc')
+  })
+  it('a scanned location label picks the bin', async () => {
+    const { locationFromScan } = await import('../lib/inventory/physicalInventory')
+    const id = '11111111-2222-4333-8444-555555555555'
+    expect(locationFromScan(`TP:LOC:${id.toUpperCase()}`, [{ id, code: 'A-01' }])).toEqual({ id, code: 'A-01' })
+    expect(locationFromScan('ABC-123', [{ id, code: 'A-01' }])).toBeNull()
+    expect(locationFromScan(`TP:LOC:${id}`, [])).toBeNull()
+  })
+  it('transfer requests: requester cancels, another person decides (mirrors inv_transfer_request_decide)', async () => {
+    const { transferActions } = await import('../lib/inventory/physicalInventory')
+    expect(transferActions({ status: 'requested', requested_by: 'u1' }, 'u1')).toEqual({ decide: false, cancel: true })
+    expect(transferActions({ status: 'requested', requested_by: 'u1' }, 'u2')).toEqual({ decide: true, cancel: false })
+    expect(transferActions({ status: 'approved', requested_by: 'u1' }, 'u2')).toEqual({ decide: false, cancel: false })
+    expect(SQL).toContain('The requester cannot approve their own transfer request.')
+    expect(SQL).toContain('Only the requester can cancel.')
+  })
+  it('new strings exist in English and Arabic', () => {
+    for (const d of [en.pi, ar.pi]) {
+      for (const k of ['stores', 'otherSite']) expect(typeof d.start[k]).toBe('string')
+      for (const k of ['scan', 'scanCamera', 'scanHint', 'cameraDenied', 'cameraFailed', 'locationScanned', 'qtyLess', 'qtyMore', 'takePhoto', 'clearPhotos']) expect(typeof d.capture[k]).toBe('string')
+      expect(typeof d.sessions.openBatch).toBe('string')
+      for (const s of ['requested', 'approved', 'rejected', 'cancelled', 'dispatched', 'all']) expect(typeof d.transfers.status[s]).toBe('string')
+    }
   })
 })

@@ -250,8 +250,6 @@ Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT
 |---|---|
 | ~~20261121100000_inv_reconcile_multi_balance.sql~~ | APPLIED to production 2026-11-21; moved to `supabase/migrations/` (rollback in `supabase/rollbacks/`). docs/inventory/96 section 9. |
 | ~~20261121110000_inv_tyre_sync_perf.sql (+ _ROLLBACK)~~ | APPLIED to production 2026-11-21 07:23 UTC; moved to `supabase/migrations/` (rollback in `supabase/rollbacks/`). First real sync KSA 2.4 s / UAE 1.0 s / Egypt 0.7 s, 8,619 tyre items, 7 open conflicts (docs/inventory/99). docs/inventory/96 section 11. |
-
-- `20261122100000_inv_physical_inventory_master.sql` (+ `_ROLLBACK.sql`) — physical inventory
-  registration and company-wide identification (docs/inventory/102). DRAFT for the owner's approval.
-  Additive except `material_aliases.item_id` becoming nullable (0 rows in production). Proven in
-  PGlite by `supabase/tests/inventory_physical_master.test.mjs` (apply, rollback, re-apply).
+| ~~20261122100000_inv_physical_inventory_master.sql~~ | APPLIED to production 2026-11-21 21:25 UTC; moved to `supabase/migrations/`. docs/inventory/96 section 12. |
+| ~~20261122110000_inv_transfer_return_remaining_fix.sql~~ | APPLIED 2026-11-21 21:32 UTC; moved to `supabase/migrations/`. doc 96 section 12. |
+| ~~20261122120000_inv_location_setup.sql~~ | APPLIED 2026-11-21 21:35 UTC; moved to `supabase/migrations/`. doc 96 section 12. |

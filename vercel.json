@@ -180,7 +180,8 @@
       "claude/erp-followup-v2-7rxp2t": false,
       "claude/tenancy-main-7rxp2t": false,
       "claude/staging-main-7rxp2t": false,
-      "claude/auth-captcha-7rxp2t": false
+      "claude/auth-captcha-7rxp2t": false,
+      "claude/inventory-closure-7rxp2t": false
     }
   },
   "ignoreCommand": "node scripts/vercel-ignore-build.mjs"

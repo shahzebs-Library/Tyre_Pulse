@@ -221,3 +221,53 @@ export function newClientUuid() {
   const h = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0')
   return `${h()}${h()}-${h()}-4${h().slice(1)}-8${h().slice(1)}-${h()}${h()}${h()}`
 }
+
+/** Site types that are physical stores (V109 vocabulary in src/lib/api/sites.js). */
+export const STORE_SITE_TYPES = ['warehouse', 'depot']
+
+/**
+ * The stores offered as large one-tap buttons when a count starts. Nothing new
+ * is created: these are the existing `sites` rows. A site is a store when its
+ * type says so, or when it already holds stock or inventory locations
+ * (`hints`, upper-cased site names). Every other active site stays reachable
+ * from the full list, so nobody is ever blocked from counting somewhere.
+ */
+export function storeChoices(sites, hints = []) {
+  const hinted = new Set([...(hints || [])].map((h) => String(h || '').trim().toUpperCase()).filter(Boolean))
+  const seen = new Set()
+  const primary = []
+  const others = []
+  for (const s of sites || []) {
+    const name = String(s?.name || '').trim()
+    const key = name.toUpperCase()
+    if (!name || seen.has(key)) continue
+    seen.add(key)
+    const isStore = STORE_SITE_TYPES.includes(String(s?.site_type || '').toLowerCase()) || hinted.has(key)
+    ;(isStore ? primary : others).push(name)
+  }
+  const byName = (a, b) => a.localeCompare(b)
+  return { primary: primary.sort(byName), others: others.sort(byName) }
+}
+
+/** Large +/- quantity buttons: never below zero, keeps decimals, blank counts as 0. */
+export function stepQuantity(value, delta) {
+  const raw = String(value ?? '').trim().replace(',', '.')
+  const n = raw === '' ? 0 : Number(raw)
+  if (!Number.isFinite(n)) return String(value ?? '')
+  const next = Math.max(0, Math.round((n + delta) * 1000) / 1000)
+  return String(next)
+}
+
+/** A scanned TP:LOC: label -> the matching location row (or null). */
+export function locationFromScan(code, locations) {
+  const id = parseLocationLabel(code)
+  if (!id) return null
+  return (locations || []).find((l) => String(l?.id || '').toLowerCase() === id) || null
+}
+
+/** Transfer request rows the current user may act on (decide = not the requester; cancel = the requester). */
+export function transferActions(row, userId) {
+  if (!row || row.status !== 'requested') return { decide: false, cancel: false }
+  const own = !!userId && row.requested_by === userId
+  return { decide: !own, cancel: own }
+}

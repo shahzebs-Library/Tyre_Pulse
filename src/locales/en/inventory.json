@@ -768,7 +768,7 @@
       "location": "Location in the store",
       "wholeStore": "Whole store (no bin)",
       "noLocations": "This store has no locations yet. Ask an inventory manager to create its warehouse, racks and bins under Locations. You can still record captures with a location note.",
-      "button": "Start"
+      "button": "Start", "stores": "Stores", "otherSite": "Other site"
     },
     "sessions": {
       "title": "Physical inventory sessions",
@@ -780,7 +780,7 @@
       "prepare": "Prepare opening balance",
       "prepared": "Opening-balance batch prepared with {n} lines; {skipped} captures left out (not identified or no ERP SKU).",
       "batchReady": "Opening batch prepared",
-      "ledgerRule": "Official stock only changes when the opening-balance batch is approved by someone other than its preparer (Controls > Opening balances). Missing prices stay unvalued for Finance."
+      "ledgerRule": "Official stock only changes when the opening-balance batch is approved by someone other than its preparer (Controls > Opening balances). Missing prices stay unvalued for Finance.", "openBatch": "Open in Opening balances"
     },
     "capture": {
       "frozenNote": "This item was not confirmed by the server. Saving again sends exactly the same item (no duplicate). Changes you make now are not included; discard it only if you are sure it was not saved.",
@@ -814,7 +814,7 @@
       "err": {
         "quantity": "Enter a quantity of zero or more.",
         "session": "Start or resume a session first."
-      }
+      }, "scan": "Scan", "scanCamera": "Scan with camera", "scanHint": "Hold the barcode or QR label inside the frame.", "cameraDenied": "Camera permission was refused. Allow camera access in the browser, or type or use a scanner.", "cameraFailed": "The camera could not be opened. Type the code or use a scanner.", "locationScanned": "Location {code} selected from its label.", "qtyLess": "Decrease quantity", "qtyMore": "Increase quantity", "takePhoto": "Take or add photo", "clearPhotos": "Remove photos"
     },
     "common": {
       "when": "When",
@@ -1085,6 +1085,8 @@
       "genuine": "Genuine and OES need evidence such as an invoice, catalogue or manufacturer confirmation. An OEM number printed on packaging is not proof.",
       "reviewer": "Identification keeps the original quantity, location, photos and the counter's name.",
       "corrections": "Corrections only change identification data. Stock, ledger, ERP records and costs are never edited from here."
-    }
+    },
+    "transfers": {"title": "Transfer requests", "sub": "Requests from other stores for stock you hold. The sending store approves or rejects; the requester can cancel.", "empty": "No transfer requests.", "done": "Saved.", "prev": "Previous", "next": "Next", "rule": "Approving a request does not move stock. Dispatch it through Stock flows > Transfer.", "status": {"requested": "Requested", "approved": "Approved", "rejected": "Rejected", "cancelled": "Cancelled", "dispatched": "Dispatched", "all": "All"}}
+  
   }
 }

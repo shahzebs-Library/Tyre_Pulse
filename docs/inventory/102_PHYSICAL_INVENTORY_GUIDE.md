@@ -88,16 +88,24 @@ store.
 1. Inventory manager: create each store's warehouse / rack / shelf / bin under **Locations** (print
    the `TP:LOC:` labels). The three stores already exist as sites; nothing new is created for them.
 2. Counter (web or phone): **Physical inventory > Start physical inventory** > choose the store
-   (and bin if known) > Start.
+   (and bin if known) > Start. On the web the stores are large one-tap buttons: sites whose type is
+   warehouse / depot, or that already hold stock or locations (no new site is ever created); every
+   other active site stays in the "Other site" list.
 3. For each item: scan / type the code > pick the material (genuine and aftermarket are listed
    separately) or open "Not found? Describe the item" > quantity, unit, condition, ownership,
-   location note, photos > **Save and next**.
+   location note, photos > **Save and next**. The web desk has a camera **Scan** button (browser
+   BarcodeDetector; hidden where unsupported, typing / USB scanner still works), large +/- quantity
+   buttons, a photo button that adds shots one by one, and a scanned `TP:LOC:` label selects the bin.
 4. Close the session. A different person reviews **Identification review** (map, create, reject),
    approves **Company materials** and links ERP SKUs per country.
-5. **Prepare opening balance** on the closed session. Then Controls > Opening balances: map any
+5. **Prepare opening balance** on the closed session (the session then offers **Open in Opening balances**). Then Controls > Opening balances: map any
    `needs_review` lines, submit, and a different person approves (this is the only step that posts
    stock).
-6. **Dashboard** shows items collected / identified / missing SKU / OEM / aftermarket, duplicates,
+6. **Material search** shows availability per store and a **Request transfer** button instead of
+   buying again; the **Transfer requests** list below it lets the sending store approve / reject (not
+   the requester) and the requester cancel. Approval does not move stock: dispatch it through Stock
+   flows > Transfer.
+7. **Dashboard** shows items collected / identified / missing SKU / OEM / aftermarket, duplicates,
    pending corrections, genuine vs aftermarket, condition, valuation completeness, approval status and
    progress by employee and location, with Excel and PDF export.
 

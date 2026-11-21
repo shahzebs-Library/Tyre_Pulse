@@ -16,10 +16,11 @@ import { newIdempotencyKey, searchItems } from '../../lib/api/inventory'
 import {
   listCaptures, mapCapture, listMaterials, listVariants, decideMaterial, decideVariant, linkErpItem, searchMaterials,
   listCorrections, listCorrectionHistory, requestCorrection, decideCorrection, requestTransfer, listPhotos, proposeVariant,
+  listTransferRequests, decideTransferRequest,
 } from '../../lib/api/physicalInventory'
 import {
   CLASSIFICATIONS, CORRECTABLE_FIELDS, REFERENCE_TYPES, groupVariants, sumAvailability, transferSources, correctionDiff,
-  identificationTone, classificationTone, topicForField,
+  identificationTone, classificationTone, topicForField, transferActions,
 } from '../../lib/inventory/physicalInventory'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, ErrorNote, NotSetUp, Note, Field, SectionCard, StatusPill, PagedTable, SearchBox, fmtDateTime } from './InvUi'
@@ -493,12 +494,68 @@ function SearchView({ scope, t }) {
   )
 }
 
+function TransferRequestRow({ row, userId, onDone, t }) {
+  const a = useAction()
+  const [note, setNote] = useState('')
+  const act = transferActions(row, userId)
+  const decide = (decision) => a.run((k) => decideTransferRequest({ requestId: row.id, decision, note }, k), t('inventory.pi.transfers.done')).then((ok) => ok && onDone())
+  return (
+    <div className="inv-pi-result">
+      <div>
+        <strong>{row.item?.item_code || 'N/A'}</strong> {row.item?.item_name || ''} <span className="cc-na">{row.qty} / {row.from_site} &rarr; {row.site} / {fmtDateTime(row.requested_at)}</span>
+        {' '}<StatusPill value={row.status} tone={row.status === 'requested' ? 'warn' : row.status === 'approved' ? 'good' : 'muted'} label={t(`inventory.pi.transfers.status.${row.status}`)} />
+      </div>
+      <div className="cc-na">{t('inventory.pi.corr.reason')}: {row.reason}{row.decision_note ? ` / ${row.decision_note}` : ''}</div>
+      {(act.decide || act.cancel) && (
+        <div className="inv-actions">
+          {act.decide && <input className="inv-input" placeholder={t('inventory.pi.common.note')} value={note} onChange={(e) => setNote(e.target.value)} aria-label={t('inventory.pi.common.note')} />}
+          {act.decide && <button type="button" className="cc-btn" disabled={a.busy} onClick={() => decide('approve')}><Check size={14} aria-hidden="true" /> {t('inventory.pi.actions.approve')}</button>}
+          {act.decide && <button type="button" className="cc-btn-ghost" disabled={a.busy || !note.trim()} onClick={() => decide('reject')}><X size={14} aria-hidden="true" /> {t('inventory.pi.actions.reject')}</button>}
+          {act.cancel && <button type="button" className="cc-btn-ghost" disabled={a.busy} onClick={() => decide('cancel')}>{t('inventory.pi.corr.cancel')}</button>}
+        </div>
+      )}
+      {a.msg && <Note tone={a.msg.tone}>{a.msg.text}</Note>}
+    </div>
+  )
+}
+
+function TransferRequestsPanel({ scope, userId, t }) {
+  const [status, setStatus] = useState('requested')
+  const [page, setPage] = useState(0)
+  const [stamp, setStamp] = useState(0)
+  const size = 20
+  const q = useInvQuery(() => listTransferRequests({ status, page, pageSize: size, country: scope.country }), [status, page, scope.country, stamp])
+  const rows = q.data?.rows || []
+  const total = q.data?.total || 0
+  if (q.data?.status === 'not_provisioned') return null
+  return (
+    <SectionCard title={t('inventory.pi.transfers.title')} sub={t('inventory.pi.transfers.sub')}>
+      <select className="cc-select" value={status} onChange={(e) => { setStatus(e.target.value); setPage(0) }} aria-label={t('inventory.pi.common.status')}>
+        {['requested', 'approved', 'rejected', 'cancelled', 'dispatched', 'all'].map((s) => <option key={s} value={s}>{t(`inventory.pi.transfers.status.${s}`)}</option>)}
+      </select>
+      {q.error && <ErrorNote error={q.error} onRetry={q.retry} />}
+      {!q.error && rows.length === 0 && !q.loading && <p className="cc-na">{t('inventory.pi.transfers.empty')}</p>}
+      <div className="inv-pi-results">
+        {rows.map((r) => <TransferRequestRow key={r.id} row={r} userId={userId} t={t} onDone={() => setStamp((x) => x + 1)} />)}
+      </div>
+      {total > size && (
+        <div className="inv-actions">
+          <button type="button" className="cc-btn-ghost" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>{t('inventory.pi.transfers.prev')}</button>
+          <span className="cc-na">{page * size + 1}-{Math.min(total, (page + 1) * size)} / {total}</span>
+          <button type="button" className="cc-btn-ghost" disabled={(page + 1) * size >= total} onClick={() => setPage((p) => p + 1)}>{t('inventory.pi.transfers.next')}</button>
+        </div>
+      )}
+      <Note>{t('inventory.pi.transfers.rule')}</Note>
+    </SectionCard>
+  )
+}
+
 export default function PhysicalInventoryReview({ view, scope, userId }) {
   const { t } = useLanguage()
   const body = useMemo(() => view, [view])
   if (body === 'review') return <ReviewView scope={scope} t={t} />
   if (body === 'materials') return <MaterialsView scope={scope} t={t} />
   if (body === 'corrections') return <CorrectionsView userId={userId} t={t} />
-  if (body === 'search') return <SearchView scope={scope} t={t} />
+  if (body === 'search') return <><SearchView scope={scope} t={t} /><TransferRequestsPanel scope={scope} userId={userId} t={t} /></>
   return <Note><ImageIcon size={14} aria-hidden="true" /> {t('inventory.pi.lead')}</Note>
 }

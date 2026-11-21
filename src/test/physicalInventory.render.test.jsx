@@ -10,13 +10,14 @@ const api = vi.hoisted(() => ({
   searchMaterials: vi.fn(),
   loadDashboard: vi.fn(),
   uploadPhoto: vi.fn(),
+  listStoreSiteHints: vi.fn(),
 }))
 vi.mock('../lib/api/physicalInventory', async (orig) => ({ ...(await orig()), ...api }))
 vi.mock('../lib/api/inventory', async (orig) => ({
   ...(await orig()),
   listLocations: vi.fn().mockResolvedValue({ status: 'ok', rows: [] }),
 }))
-vi.mock('../lib/api/sites', () => ({ listSites: vi.fn().mockResolvedValue([{ name: 'NHC' }]) }))
+vi.mock('../lib/api/sites', () => ({ listSites: vi.fn().mockResolvedValue([{ name: 'NHC', site_type: 'other' }, { name: 'AMAALA', site_type: 'other' }]) }))
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'u1', organisation_id: 'org1' } }) }))
 vi.mock('../contexts/SettingsContext', () => ({ useSettings: () => ({ appSettings: {}, activeCountry: 'KSA' }) }))
 
@@ -27,7 +28,34 @@ const SCOPE = { country: 'KSA', site: 'all' }
 const ui = () => render(<LanguageProvider><PhysicalInventorySection scope={SCOPE} can={() => true} userId="u1" /></LanguageProvider>)
 
 describe('PhysicalInventorySection', () => {
-  beforeEach(() => Object.values(api).forEach((f) => f.mockReset()))
+  beforeEach(() => { Object.values(api).forEach((f) => f.mockReset()); api.listStoreSiteHints.mockResolvedValue([]) })
+
+  it('offers the existing stores as large buttons and keeps every other site in the list', async () => {
+    api.listSessions.mockResolvedValue({ status: 'ok', rows: [], total: 0 })
+    api.listStoreSiteHints.mockResolvedValue(['NHC'])
+    ui()
+    const store = await screen.findByRole('button', { name: /NHC/ })
+    expect(screen.queryByRole('button', { name: /AMAALA/ })).toBeNull()
+    fireEvent.click(store)
+    expect(store.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('option', { name: 'AMAALA' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^start$/i }).disabled).toBe(false)
+  })
+
+  it('quantity steppers never go below zero', async () => {
+    api.listSessions.mockResolvedValue({ status: 'ok', rows: [{ id: 's1', reference: 'PI-1', site: 'NHC', country: 'KSA', status: 'open', started_at: '2026-11-21T08:00:00Z' }], total: 1 })
+    api.listCaptures.mockResolvedValue({ status: 'ok', rows: [], total: 0 })
+    ui()
+    fireEvent.click(await screen.findByRole('button', { name: /resume/i }))
+    const qty = await screen.findByLabelText('Quantity')
+    fireEvent.click(screen.getByRole('button', { name: /increase quantity/i }))
+    fireEvent.click(screen.getByRole('button', { name: /increase quantity/i }))
+    expect(qty.value).toBe('2')
+    fireEvent.click(screen.getByRole('button', { name: /decrease quantity/i }))
+    fireEvent.click(screen.getByRole('button', { name: /decrease quantity/i }))
+    fireEvent.click(screen.getByRole('button', { name: /decrease quantity/i }))
+    expect(qty.value).toBe('0')
+  })
 
   it('says "not set up" instead of an empty list before the migration exists', async () => {
     api.listSessions.mockResolvedValue({ status: 'not_provisioned', rows: [], total: 0 })

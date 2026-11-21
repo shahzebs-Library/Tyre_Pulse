@@ -169,6 +169,9 @@ final class TelemetryService implements TelemetryReporter {
         // no console breadcrumbs (they can hold anything ever printed).
         options.sendDefaultPii = false;
         options.attachScreenshot = false;
+        // Experimental in sentry_flutter 9, but setting it off is the point:
+        // if the SDK ever flips the default, the hierarchy still stays off.
+        // ignore: experimental_member_use
         options.attachViewHierarchy = false;
         options.enablePrintBreadcrumbs = false;
         options.replay.sessionSampleRate = 0;

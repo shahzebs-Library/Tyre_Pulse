@@ -31,6 +31,8 @@ const SECTION_COMPONENTS = {
   tyres: lazy(() => import('./TyreInventorySection')),
   identification: lazy(() => import('./IdentificationSection')),
   valuation: lazy(() => import('./ValuationPanels')),
+  kpis: lazy(() => import('./KpiCatalogueSection')),
+  classification: lazy(() => import('./ClassificationSection')),
   planning: lazy(() => import('./InsightSections').then((m) => ({ default: m.PlanningSection }))),
   reports: lazy(() => import('./ReportsSection')),
 }

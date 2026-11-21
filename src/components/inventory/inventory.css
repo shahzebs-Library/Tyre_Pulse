@@ -112,3 +112,21 @@ button.inv-tile[aria-pressed="true"] { border-color: var(--cc-green); background
   border: 0; border-bottom: 1px solid var(--cc-inner-border); color: var(--cc-ink); font-size: 13px; cursor: pointer; }
 .inv-picklist button:hover, .inv-picklist button:focus-visible { background: var(--cc-inner); outline: none; }
 .inv-flag { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; }
+
+/* KPI catalogue tiles (KpiCatalogueSection) */
+.inv-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: space-between; }
+.inv-kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.inv-kpi-tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--cc-line, var(--border-subtle)); background: var(--cc-panel, var(--surface-raised)); }
+.inv-kpi-tile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.inv-kpi-tile-head h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--cc-ink); line-height: 1.3; }
+.inv-kpi-tile-value strong { font-size: 22px; font-weight: 700; color: var(--cc-ink); }
+.inv-kpi-cur { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; font-size: 13px; color: var(--cc-ink-2); }
+.inv-kpi-hidden { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--cc-ink-3); }
+.inv-kpi-tile-note { margin: 0; font-size: 12px; color: var(--cc-ink-2); }
+.inv-kpi-tile-meta { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--cc-ink-3); }
+.inv-kpi-tile-def summary { cursor: pointer; font-size: 12px; color: var(--cc-ink-2); }
+.inv-kpi-tile-def p { margin: 6px 0 0; font-size: 12px; color: var(--cc-ink-2); }
+.inv-class-matrix { border-collapse: collapse; font-size: 13px; }
+.inv-class-matrix th, .inv-class-matrix td { padding: 6px 10px; border: 1px solid var(--cc-line, var(--border-subtle)); text-align: center; }
+.inv-class-tile.active { outline: 2px solid var(--cc-green); outline-offset: -2px; }

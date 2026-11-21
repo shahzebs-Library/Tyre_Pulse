@@ -9,7 +9,7 @@
     "overview": "Overview", "register": "Stock register", "locations": "Locations", "movements": "Movements",
     "audits": "Physical audits", "discrepancies": "Discrepancies", "controls": "Controls", "procurement": "Procurement",
     "receiving": "Receiving & issue", "supplier": "Supplier stock", "tyres": "Tyre inventory", "identification": "Identification",
-    "valuation": "Valuation", "planning": "Planning & simulation", "reports": "Reports"
+    "valuation": "Valuation", "planning": "Planning & simulation", "kpis": "Inventory KPIs", "classification": "Stock classification", "reports": "Reports"
   },
   "scope": {
     "country": "Country", "allCountries": "All countries", "countryHint": "Change the country from the working context at the top of the app.",
@@ -463,5 +463,287 @@
     "conditions": { "good": "Good", "damaged": "Damaged", "quarantine": "Quarantine" },
     "confirmReceipt": "Confirm receipt",
     "transferStatus": { "dispatched": "Dispatched", "in_transit": "In transit", "partially_received": "Partly received", "completed": "Completed", "cancelled": "Cancelled" }
+  },
+
+  "kpis": {
+    "title": "Inventory KPIs",
+    "lead": "The inventory KPI catalogue for the selected country and site. Stock value and discrepancies are on the Overview. Every figure states its period; a figure that cannot be measured says why.",
+    "window": "Period",
+    "lastDays": "Last {n} days",
+    "exportExcel": "Export Excel",
+    "exportPdf": "Export PDF",
+    "loading": "Loading KPIs",
+    "someFailed": "{n} data source(s) could not be loaded; the KPIs that depend on them say so.",
+    "valueHiddenNote": "Money figures are hidden: you need the view value permission for stock.",
+    "hidden": "Needs view value permission",
+    "noFigure": "No figure",
+    "definition": "Definition",
+    "unitLabel": "Unit",
+    "groups": {
+      "availability": "Availability",
+      "accuracy": "Count accuracy",
+      "value": "Value and movement",
+      "supplier": "Suppliers and procurement"
+    },
+    "groupSub": {
+      "availability": "Can stores meet demand right now.",
+      "accuracy": "From the latest physical count that reached reconciliation.",
+      "value": "Owned stock only. Balance-sheet value, never part of CPK or cost per m3.",
+      "supplier": "Orders placed in the selected period."
+    },
+    "period": {
+      "asAt": "As at {date}",
+      "window": "{from} to {to}",
+      "year": "Last 12 months to {date}",
+      "count": "Count {ref}",
+      "noCount": "Latest count (none yet)"
+    },
+    "unit": {
+      "pct": "Percent",
+      "qtyCurrency": "Quantity and value per currency",
+      "currency": "Value per currency",
+      "lines": "Lines and quantity",
+      "times": "Times per year",
+      "days": "Days",
+      "currencyQty": "Value per currency and quantity",
+      "timesPct": "Times",
+      "pctBook": "Percent and book value per currency",
+      "count": "Count"
+    },
+    "state": {
+      "loadFailed": "Could not load the data for this KPI.",
+      "notSetUp": "The data for this KPI is not set up yet."
+    },
+    "col": {
+      "group": "Group",
+      "kpi": "KPI",
+      "value": "Value",
+      "period": "Period",
+      "note": "Note",
+      "definition": "Definition"
+    },
+    "items": {
+      "inv_critical_availability": {
+        "label": "Critical item availability",
+        "def": "Vital items whose available quantity (on hand minus reserved) is at or above safety stock, or above zero when no safety stock is set, out of all vital items held at this scope."
+      },
+      "inv_stockout_frequency": {
+        "label": "Stock-out frequency",
+        "def": "Requests that could not be met from stock (recorded shortages and backorders) out of all requests with a known outcome (issues posted plus shortages) in the period."
+      },
+      "inv_reserved_not_issued": {
+        "label": "Reserved but not issued",
+        "def": "Quantity still reserved and not issued on active reservations older than 14 days, with its value per currency."
+      },
+      "inv_accuracy_exact_line": {
+        "label": "Inventory accuracy (exact line)",
+        "def": "Counted lines whose count matches the expected quantity within tolerance, out of all counted lines in the latest count. Serial-tracked lines have zero tolerance."
+      },
+      "inv_accuracy_quantity": {
+        "label": "Inventory accuracy (quantity)",
+        "def": "One minus the total absolute variance divided by the total expected quantity in the latest count."
+      },
+      "inv_accuracy_serial": {
+        "label": "Serial accuracy",
+        "def": "Serials found where expected, out of all serials expected or found in the latest count. Missing and unexpected serials both count against it."
+      },
+      "inv_gross_shortage": {
+        "label": "Gross shortage",
+        "def": "Total quantity counted below expected in the latest count, and its value per currency at the snapshot cost. Shown separately from excess."
+      },
+      "inv_gross_excess": {
+        "label": "Gross excess",
+        "def": "Total quantity counted above expected in the latest count, and its value per currency at the snapshot cost. Shown separately from shortage."
+      },
+      "inv_count_completion": {
+        "label": "Count completion",
+        "def": "Lines counted or confirmed zero, out of all lines in the scope of the latest count."
+      },
+      "inv_unvalued_stock": {
+        "label": "Unvalued stock",
+        "def": "Owned stock lines (and their quantity) with no known cost. Zero is a real answer."
+      },
+      "inv_adjustment_value": {
+        "label": "Adjustment value",
+        "def": "Net value of approved count adjustments in the period per currency, with the gross gain and gross loss beside it."
+      },
+      "inv_turnover": {
+        "label": "Inventory turnover",
+        "def": "Valued issues in the last 12 months divided by the average month-end stock value, per currency. Month-end values are rebuilt from the stock ledger."
+      },
+      "inv_dio": {
+        "label": "Days inventory outstanding",
+        "def": "Days in the period divided by turnover, per currency."
+      },
+      "inv_dead_stock": {
+        "label": "Dead stock",
+        "def": "Value of owned stock with no issue in 365 days and no open reservation. Lines with too little history are counted as unknown, not dead."
+      },
+      "inv_slow_stock": {
+        "label": "Slow-moving stock",
+        "def": "Value of owned stock whose last issue was 180 to 364 days ago."
+      },
+      "inv_excess_stock": {
+        "label": "Excess stock",
+        "def": "Value of the owned quantity above the item maximum. Lines without a maximum are counted as unknown."
+      },
+      "inv_obsolescence_exposure": {
+        "label": "Obsolescence exposure",
+        "def": "Value of owned stock whose item is marked obsolete in the item master."
+      },
+      "inv_supplier_otif": {
+        "label": "Supplier delivery performance (OTIF)",
+        "def": "Purchase order lines received on or before the expected delivery date and in full, out of all lines that were due, for orders placed in the period."
+      },
+      "inv_lead_time_variance": {
+        "label": "Lead-time variance",
+        "def": "Average of actual lead days (order date to first receipt) minus the agreed lead time from the active supplier agreement, for orders placed in the period."
+      },
+      "inv_outstanding_po_qty": {
+        "label": "Outstanding PO quantity",
+        "def": "Quantity ordered and not yet received on open purchase order lines placed in the period, with its value per currency at the order price."
+      },
+      "inv_consignment_utilisation": {
+        "label": "Consignment utilisation",
+        "def": "Consigned quantity issued in the period divided by the consigned quantity held now, per active consignment agreement."
+      },
+      "inv_emergency_purchase_rate": {
+        "label": "Emergency purchase rate",
+        "def": "Purchase orders with an emergency or urgent priority out of all orders placed in the period (cancelled excluded), with the emergency value share per currency."
+      },
+      "inv_purchase_avoidance": {
+        "label": "Purchase avoidance",
+        "def": "Requests met from stock or reusable stock instead of buying, out of all resolved requests. The value is the book value of stock used, not a saving."
+      }
+    },
+    "reason": {
+      "not_measurable": "Cannot be measured from the data in scope.",
+      "mixed_currency": "More than one currency in scope: see each currency below; currencies are never added together.",
+      "no_valued_data": "No stock with a known cost in scope.",
+      "value_incomplete": "Some lines have no known cost, so the total cannot be stated.",
+      "now_required": "Cannot be measured without the current date.",
+      "mixed_units": "Lines use different units of measure, so quantities cannot be added.",
+      "fewer_than_3_complete_snapshots": "Needs 3 complete month-end values; the stock ledger does not cover enough months yet.",
+      "average_stock_value_zero": "Average stock value is zero, so turnover cannot be calculated.",
+      "issue_value_incomplete": "Some issues have no known cost.",
+      "issue_coverage_below_80pct": "Less than 80% of issued quantity has a known cost.",
+      "turnover_zero": "Turnover is zero, so days outstanding cannot be calculated.",
+      "no_data": "No issues or stock values in scope.",
+      "expected_total_zero": "The latest count expected no stock, so quantity accuracy cannot be calculated.",
+      "no_adjustments": "No approved adjustments in the period.",
+      "no_consigned_stock_held": "No consigned stock is held under the active agreements.",
+      "no_counted_lines": "The latest count has no counted lines yet.",
+      "no_lines_due": "No purchase order lines were due yet (none received and none past the expected delivery date).",
+      "no_lines_in_scope": "The latest count has no lines in scope.",
+      "no_owned_stock": "No owned stock in scope.",
+      "no_purchase_orders": "No purchase orders in the period.",
+      "no_received_line_with_agreed_lead_time": "No received line has an agreed lead time (set it on the supplier agreement).",
+      "no_requests_with_known_outcome": "No requests with a known outcome in the period.",
+      "no_resolved_requests": "No resolved requests in the period.",
+      "no_vital_items": "No item in scope is marked vital in the item master (criticality not recorded).",
+      "nothing_expected_or_found": "The latest count had no serial-tracked lines."
+    },
+    "empty": {
+      "noStock": "No stock balances recorded yet for {scope}.",
+      "noRequests": "No stock issues or recorded shortages yet for {scope} in this period.",
+      "noReservations": "No active stock reservations for {scope}.",
+      "noCount": "No physical count has reached reconciliation yet for {scope}.",
+      "noSerialCount": "The latest count for {scope} had no serial-tracked lines.",
+      "noAdjustments": "No approved count adjustments recorded yet for {scope} in this period.",
+      "noMovements": "No stock movements recorded yet for {scope} in the last 12 months.",
+      "noOrders": "No purchase orders recorded yet for {scope} in this period.",
+      "noPoLines": "Purchase orders for {scope} in this period have no lines recorded.",
+      "noConsignment": "No active consignment agreement for {scope}.",
+      "fulfilmentNotRecorded": "Not recorded yet: requests do not record whether they were met from stock or by buying, so this cannot be measured for {scope}."
+    }
+  },
+  "classify": {
+    "title": "Stock classification",
+    "axesLabel": "Classification",
+    "summaryLabel": "Items per class",
+    "axis": {
+      "abc": "ABC (value)",
+      "fsn": "FSN (movement)",
+      "ved": "VED (criticality)"
+    },
+    "method": {
+      "abc": "Items ranked by valued issue value in the last 12 months, inside one currency. A: up to {a}% of cumulative value, B: up to {b}%, C: the rest. An item with unknown value is unclassified, never C.",
+      "fsn": "Months with at least one issue in the last {window}. F: {fast} or more months, S: 1 or more, N: none across the full window. Items or ledgers younger than the window are unclassified.",
+      "ved": "From the criticality recorded in the item master: V vital, E essential, D desirable. Not recorded is unassessed, never D. A vital item that does not move is a critical insurance spare, not dead stock."
+    },
+    "class": {
+      "abc": {
+        "A": "A",
+        "B": "B",
+        "C": "C",
+        "unclassified": "Unclassified"
+      },
+      "fsn": {
+        "F": "F (fast)",
+        "S": "S (slow)",
+        "N": "N (non-moving)",
+        "unclassified": "Unclassified"
+      },
+      "ved": {
+        "V": "V (vital)",
+        "E": "E (essential)",
+        "D": "D (desirable)",
+        "unassessed": "Unassessed"
+      }
+    },
+    "col": {
+      "name": "Name",
+      "category": "Category",
+      "consumption": "Consumption value (12 months)",
+      "share": "Share",
+      "cumulative": "Cumulative share",
+      "issues": "Issues",
+      "activeMonths": "Active months",
+      "criticality": "Criticality",
+      "onHand": "On hand",
+      "disposition": "Disposition",
+      "reason": "Why"
+    },
+    "export": {
+      "item_code": "Item",
+      "item_name": "Name",
+      "category": "Category",
+      "class": "Class",
+      "consumption": "Consumption value",
+      "currency": "Currency",
+      "share": "Share",
+      "activeMonths": "Active months",
+      "criticality": "Criticality",
+      "onHand": "On hand",
+      "disposition": "Disposition",
+      "reason": "Why"
+    },
+    "tableTitle": "Items by {axis}",
+    "tableSub": "{n} of {total} items",
+    "search": "Search item code, name or category",
+    "classFilter": "Class",
+    "allClasses": "All classes",
+    "empty": "No stocked items or stock issues recorded yet for {scope}.",
+    "noMatch": "No items match the filters.",
+    "notRecorded": "Not recorded",
+    "valueHidden": "Consumption values are hidden: you need the view value permission for stock.",
+    "reason": {
+      "consumption_value_unknown": "Consumption value unknown (an issue has no cost or issues are in more than one currency).",
+      "currency_unknown": "Currency unknown.",
+      "no_consumption_in_period": "No issues in the last 12 months.",
+      "now_required": "Cannot be classified without the current date.",
+      "item_younger_than_window": "Item is newer than the 12-month window.",
+      "ledger_shorter_than_window": "The stock ledger is shorter than 12 months, so non-moving cannot be proven yet.",
+      "criticality_not_recorded": "Criticality not recorded in the item master.",
+      "criticality_not_recognised": "Criticality value not recognised."
+    },
+    "disposition": {
+      "critical_insurance_spare": "Critical insurance spare (keep)",
+      "critical_slow_mover": "Critical slow mover",
+      "dead_stock_candidate": "Dead stock candidate (review)",
+      "slow_mover": "Slow mover",
+      "active": "Active",
+      "insufficient_history": "Insufficient history"
+    }
   }
 }

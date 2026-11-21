@@ -5,7 +5,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
-# ⚑ 2026-11-21 07:23 UTC — `20261121110000_inv_tyre_sync_perf` APPLIED TO PRODUCTION (owner-approved, PR #574). Record: docs/inventory/96 section 10.
+# ⚑ 2026-11-21 07:23 UTC — `20261121110000_inv_tyre_sync_perf` APPLIED TO PRODUCTION (owner-approved, PR #574). Record: docs/inventory/96 section 11.
 - Recovery point LSN 1A6/EB01CFA0; snapshot `_bak.inv_121110_pre`. New `_inv_tyre_item_sync` md5 909a2379; cache table `inv_tyre_sync_runs` private; advisors 0 ERROR.
 - First real tyre sync done: KSA 2.4 s (was >55 s timeout), UAE 1.0 s, Egypt 0.7 s; cached repeat ~39 ms; concurrent KSA runs serialise on the advisory lock (no duplicates). tyre_items 8,619.
 - 7 open `scrapped_but_active` conflicts (6 KSA + UAE YMA44467) NOT corrected - owner decisions in docs/inventory/99. tyre_records/marks/prices/expenses/stock byte-identical after.

@@ -95,7 +95,7 @@ with stock unvalued, 3 at zero), 7 `uncertain` legacy-drift lines; tyre sync UAE
 
 ## 7. Open operational items
 
-* **KSA tyre custody sync is too slow** (follow-up `20261121110000_inv_tyre_sync_perf` authored, NOT applied, owner approval needed: doc 97): `inv_tyre_item_sync('KSA')` did not finish in 55 s (UAE, 2,087 items:
+* **KSA tyre custody sync is too slow - RESOLVED 2026-11-21 (section 11: `20261121110000_inv_tyre_sync_perf` applied, KSA 2.4 s, 7 conflicts materialised, doc 99).** Before the fix: `inv_tyre_item_sync('KSA')` did not finish in 55 s (UAE, 2,087 items:
   10.6 s; Egypt, 500: 1.2 s) because `_inv_tyre_item_sync` builds `_tc_derived` with correlated subqueries over
   unindexed temp tables. A web "Refresh" for KSA will hit the API statement timeout. Needs a follow-up migration
   (index the temp tables or rewrite as joins); the 7 conflicts are therefore not yet materialised in KSA.
@@ -155,7 +155,22 @@ Owner approval recorded 2026-11-21. Same method as section 3 (one file, one call
 
 The file in the repo carries an updated STATUS header; the executed body is the one at `fd85a466` (sha above).
 
-## 10. Follow-up 20261121110000_inv_tyre_sync_perf - applied 2026-11-21, first real tyre sync
+## 10. Edge function `send-scheduled-reports` deployed (2026-11-21, owner authorised)
+
+Supersedes the "NOT deployed" row in section 8.
+
+| Item | Result |
+|---|---|
+| Rollback point | Live **v28** (single file `index.ts`, 73,085 chars, verify_jwt false, ezbr `e9189806...`) saved before the deploy in the agent scratchpad (`rollback_v28/index.ts`). Restore = redeploy that file as `index.ts` with verify_jwt false. |
+| Deployed | **v29** from main `3f5134ff` (same function source as `fd85a466`): `index.ts`, `money.ts`, `inventory.ts`, `delivery.ts`, entrypoint `index.ts`, ezbr `ee671eb8...` |
+| Byte check | All four deployed files fetched back and compared with `cmp` against the repo files: **identical** (sha256 equal). No backslash-u escapes in the source; the non-ASCII characters in `index.ts` comments / `asciiSafe` survived intact. |
+| verify_jwt | Kept **false**, as v28. Evidence that the function authenticates every path itself: the cron path needs `x-cron-secret` equal (constant-time) to `cron_config.cron_secret` (service-role-only table); every other request goes to Send now, which needs a Bearer JWT validated with `auth.getUser`, an approved, unlocked profile with role Admin / Manager / Director, and reads the schedule through the caller's RLS client (a schedule the caller cannot see is a 404). `true` would add nothing for Send now and the pg_cron caller sends no user JWT. |
+| Security review | No gap found, no source change. Every service-role read is filtered by the schedule's `org_id` (`requireOrg` / `requireInventoryOrg`, refused when blank); inventory money only when the schedule creator is an approved, unlocked Admin of that org or a super admin; currencies never added together; recipients regex-filtered; Send now has a 300 s per-schedule cooldown that fails closed; provider errors stay in `report_send_log`. Existing types route unchanged (claims, executive, dataset digests, builder:*, tyre_stock_alert, fallback). |
+| Schema check | Live columns used by the function exist (`report_schedules.created_by/last_status/last_error/period*`, `report_send_log.*`, `stock_records.ownership/valued_value`, `v_inv_report_snapshot`); the report_type CHECK allows `inventory`. `report_exec_money_by_country` is not installed, so the executive digest uses its labelled legacy money fallback (handled by `isMissingRpc`). |
+| Tests after deploy | pg_net calls: no auth = **401** `Missing bearer token`; wrong cron secret + fake JWT = **401** `Invalid session`; correct cron secret = **200** `{"processed":0,"sent":0,"failed":0,"skipped":0}` (boots, imports resolve; no schedule was due, so no e-mail went out). Inventory digest rendered from the live production snapshot (4 KSA sites, 302 unvalued units, 4 critical lines, 33 open cost reconciliations) with the deployed `inventory.ts`: ASCII-only HTML and a 5-line CSV, values withheld or shown per rule. Vitest: scheduledReportInventory / scheduledReportMoney / scheduledReports.api 51/51. |
+| Not verified | No customer e-mail was sent. Only one schedule is active (`inspection`, next run 2026-11-22 05:00 UTC); its `report_send_log` row after that tick is the first live check of the new build. No `inventory` schedule exists yet; the first one created will be the first live inventory e-mail. |
+
+## 11. Follow-up 20261121110000_inv_tyre_sync_perf - applied 2026-11-21, first real tyre sync
 
 Owner approval recorded 2026-11-21 (PR #574 @ `39fa57f6`, CI green, review threads resolved). One file, one call.
 

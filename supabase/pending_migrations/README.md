@@ -249,4 +249,4 @@ Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT
 | File | What |
 |---|---|
 | ~~20261121100000_inv_reconcile_multi_balance.sql~~ | APPLIED to production 2026-11-21; moved to `supabase/migrations/` (rollback in `supabase/rollbacks/`). docs/inventory/96 section 9. |
-| ~~20261121110000_inv_tyre_sync_perf.sql (+ _ROLLBACK)~~ | APPLIED to production 2026-11-21 07:23 UTC; moved to `supabase/migrations/` (rollback in `supabase/rollbacks/`). First real sync KSA 2.4 s / UAE 1.0 s / Egypt 0.7 s, 8,619 tyre items, 7 open conflicts (docs/inventory/99). docs/inventory/96 section 10. |
+| ~~20261121110000_inv_tyre_sync_perf.sql (+ _ROLLBACK)~~ | APPLIED to production 2026-11-21 07:23 UTC; moved to `supabase/migrations/` (rollback in `supabase/rollbacks/`). First real sync KSA 2.4 s / UAE 1.0 s / Egypt 0.7 s, 8,619 tyre items, 7 open conflicts (docs/inventory/99). docs/inventory/96 section 11. |

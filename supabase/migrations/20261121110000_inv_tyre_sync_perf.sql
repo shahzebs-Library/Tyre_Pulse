@@ -3,7 +3,7 @@
 -- STATUS: APPLIED to production 2026-11-21 07:23:11 UTC on the owner's approval (ledger
 --         20261121110000 inv_tyre_sync_perf; executed body = this file at commit
 --         39fa57f6, sha256 abff81a32b73065a9b986fd2c80e70f0e82e6cf734004e3c6cb394d95dbf269f,
---         i.e. before this header edit). Evidence: docs/inventory/96 section 10.
+--         i.e. before this header edit). Evidence: docs/inventory/96 section 11.
 -- Requires 20261120105000 + 20261120107000 (applied in production 2026-11-20).
 -- Rollback: supabase/rollbacks/20261121110000_inv_tyre_sync_perf_ROLLBACK.sql
 -- Evidence and timings: docs/inventory/97_TYRE_SYNC_PERF.md

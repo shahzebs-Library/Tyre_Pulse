@@ -1,7 +1,7 @@
 # 99 - Tyre custody conflicts for owner approval
 
 Production project `jhssdmeruxtrlqnwfksc`. Found by the first complete tyre custody synchronization on
-2026-11-21 (07:23 UTC, after `20261121110000_inv_tyre_sync_perf` was applied; doc 96 section 10).
+2026-11-21 (07:23 UTC, after `20261121110000_inv_tyre_sync_perf` was applied; doc 96 section 11).
 
 **Nothing below has been changed.** Each conflict is stored as an `open` row in `tyre_custody_conflicts`
 and the tyre is shown as custody state `unknown` (basis `conflict`) in `tyre_items` until a person decides.

@@ -15,12 +15,12 @@ import { Note, Field, StatusPill } from './InvUi'
 const STRATEGY_FIELDS = {
   bulk_purchase: [['bulkQty', 'qty'], ['bulkDiscountRate', 'pct']],
   company_warehouse: [['orderQty', 'qty']],
-  supplier_managed: [['servicePremiumRate', 'pct'], ['minCommitmentValue', 'money'], ['commitmentYears', 'qty'], ['exitFee', 'money'], ['onSiteBufferQty', 'qty']],
-  consignment: [['consignmentPremiumRate', 'pct'], ['minCommitmentValue', 'money'], ['commitmentYears', 'qty'], ['buybackRate', 'pct'], ['onSiteQty', 'qty']],
-  framework: [['frameworkDiscountRate', 'pct'], ['minCommitmentValue', 'money'], ['commitmentYears', 'qty']],
+  supplier_managed: [['servicePremiumRate', 'pct'], ['minCommitmentValue', 'money'], ['commitmentYears', 'years'], ['exitFee', 'money'], ['onSiteBufferQty', 'qty']],
+  consignment: [['consignmentPremiumRate', 'pct'], ['minCommitmentValue', 'money'], ['commitmentYears', 'years'], ['buybackRate', 'pct'], ['onSiteQty', 'qty']],
+  framework: [['frameworkDiscountRate', 'pct'], ['minCommitmentValue', 'money'], ['commitmentYears', 'years']],
 }
 const BASE_FIELDS = [
-  ['annualDemandQty', 'qty'], ['unitPrice', 'money'], ['years', 'qty'], ['holdingCostRate', 'pct'],
+  ['annualDemandQty', 'qty'], ['unitPrice', 'money'], ['years', 'years'], ['holdingCostRate', 'pct'],
   ['obsolescenceRate', 'pct'], ['priceEscalationRate', 'pct'], ['leadTimeDays', 'qty'], ['safetyStockQty', 'qty'],
 ]
 const RISK_TONE = { low: 'good', medium: 'warning', high: 'bad', unknown: 'muted' }
@@ -30,7 +30,17 @@ export function readScenarioField(raw, kind) {
   if (raw === undefined || raw === null || String(raw).trim() === '') return undefined
   const n = Number(String(raw).replace(/,/g, ''))
   if (!Number.isFinite(n)) return undefined
+  if (kind === 'years' && !(Number.isInteger(n) && n >= 1)) return undefined
   return kind === 'pct' ? n / 100 : n
+}
+
+/** Fields whose typed text is present but not usable (junk, or years not a whole number >= 1). */
+export function invalidScenarioFields(fields, values) {
+  return fields.filter(([k, kind]) => {
+    const raw = values[k]
+    if (raw === undefined || raw === null || String(raw).trim() === '') return false
+    return readScenarioField(raw, kind) === undefined
+  }).map(([k]) => k)
 }
 
 export function buildScenarioParams(fields, values) {
@@ -48,13 +58,24 @@ export default function StrategyScenarioPanel({ defaultCurrency }) {
   const [baseline, setBaseline] = useState({ strategy: 'bulk_purchase', values: {} })
   const [alternative, setAlternative] = useState({ strategy: 'supplier_managed', values: {} })
 
+  const invalid = useMemo(() => [...new Set([
+    ...invalidScenarioFields(BASE_FIELDS, base),
+    ...invalidScenarioFields(STRATEGY_FIELDS[baseline.strategy], baseline.values),
+    ...invalidScenarioFields(STRATEGY_FIELDS[alternative.strategy], alternative.values),
+  ])], [base, baseline, alternative])
+
   const result = useMemo(() => {
+    if (invalid.length) return { runs: [], comparisons: [] }
     const baseParams = { ...buildScenarioParams(BASE_FIELDS, base), currency: String(base.currency || '').trim().toUpperCase() || undefined }
-    return runScenarioSet(baseParams, [
-      { strategy: baseline.strategy, params: buildScenarioParams(STRATEGY_FIELDS[baseline.strategy], baseline.values) },
-      { strategy: alternative.strategy, params: buildScenarioParams(STRATEGY_FIELDS[alternative.strategy], alternative.values) },
-    ])
-  }, [base, baseline, alternative])
+    try {
+      return runScenarioSet(baseParams, [
+        { strategy: baseline.strategy, params: buildScenarioParams(STRATEGY_FIELDS[baseline.strategy], baseline.values) },
+        { strategy: alternative.strategy, params: buildScenarioParams(STRATEGY_FIELDS[alternative.strategy], alternative.values) },
+      ])
+    } catch {
+      return { runs: [], comparisons: [], failed: true }
+    }
+  }, [invalid, base, baseline, alternative])
 
   const label = (k) => t(`inventory.planning.sim.fields.${k}`)
   const input = (values, set, k, kind) => (
@@ -90,7 +111,11 @@ export default function StrategyScenarioPanel({ defaultCurrency }) {
       {side('baseline', baseline, setBaseline)}
       {side('alternative', alternative, setAlternative)}
 
-      {!cmp?.ok ? (
+      {invalid.length ? (
+        <Note tone="warn">{t('inventory.planning.sim.invalid', { fields: invalid.map((m) => label(m)).join(', ') })}</Note>
+      ) : result.failed ? (
+        <Note tone="warn">{t('inventory.planning.sim.failed')}</Note>
+      ) : !cmp?.ok ? (
         <Note>{missing.length
           ? t('inventory.planning.sim.missing', { fields: missing.map((m) => label(m)).join(', ') })
           : t('inventory.planning.sim.incomplete')}</Note>

@@ -25,6 +25,8 @@ export default function TyreInvestigationPanel({ conflictId, who, onChanged, onN
   const [row, setRow] = useState(undefined)
   const [loadErr, setLoadErr] = useState('')
   const [people, setPeople] = useState([])
+  const [peopleErr, setPeopleErr] = useState('')
+  const [peopleNonce, setPeopleNonce] = useState(0)
   const [nonce, setNonce] = useState(0)
   const [assign, setAssign] = useState({ investigatorId: '', note: '', ...fresh() })
   const [finding, setFinding] = useState({ note: '', ...fresh() })
@@ -44,9 +46,12 @@ export default function TyreInvestigationPanel({ conflictId, who, onChanged, onN
   useEffect(() => {
     if (!acts.assign) return undefined
     let live = true
-    listAssignablePeople().then((p) => { if (live) setPeople(p) }).catch(() => { if (live) setPeople([]) })
+    setPeopleErr('')
+    listAssignablePeople()
+      .then((p) => { if (live) setPeople(p) })
+      .catch((e) => { if (live) { setPeople([]); setPeopleErr(toUserMessage(e)) } })
     return () => { live = false }
-  }, [acts.assign])
+  }, [acts.assign, peopleNonce])
   const candidates = useMemo(() => investigatorCandidates(people), [people])
   const nameOf = (id) => people.find((p) => p.id === id)?.full_name || (id ? t('inventory.tyres.inv.assignedSomeone') : 'N/A')
 
@@ -106,7 +111,9 @@ export default function TyreInvestigationPanel({ conflictId, who, onChanged, onN
           <Field label={t('inventory.tyres.inv.note')} full>
             <textarea className="inv-input" maxLength={500} value={assign.note} onChange={(e) => setAssign((s) => ({ ...s, note: e.target.value }))} />
           </Field>
-          {!candidates.length && <p className="cc-card-sub inv-full">{t('inventory.tyres.inv.noCandidates')}</p>}
+          {peopleErr
+            ? <div className="inv-full"><ErrorNote error={peopleErr} onRetry={() => setPeopleNonce((n) => n + 1)} /></div>
+            : !candidates.length && <p className="cc-card-sub inv-full">{t('inventory.tyres.inv.noCandidates')}</p>}
           <div className="inv-actions inv-full">
             <button type="button" className="cc-btn-primary" disabled={assign.busy || !assign.investigatorId}
               onClick={() => run(setAssign, assign, (k) => assignConflictInvestigator({ conflictId: row.id, investigatorId: assign.investigatorId, note: assign.note }, k))}>

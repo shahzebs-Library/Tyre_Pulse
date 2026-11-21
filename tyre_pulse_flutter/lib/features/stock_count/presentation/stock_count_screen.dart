@@ -12,7 +12,9 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
 import 'package:tyre_pulse/features/inventory/presentation/my_audits_screen.dart';
+import 'package:tyre_pulse/features/inventory/presentation/physical_inventory_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/transfers_screen.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/stock_count_copy.dart';
@@ -251,6 +253,14 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
             icon: const Icon(Icons.fact_check_outlined),
             onPressed: () =>
                 unawaited(Navigator.of(context).push(MyAuditsScreen.route())),
+          ),
+          IconButton(
+            key: const Key('stock.physicalInventory'),
+            tooltip: InventoryCopy.of(context)('pi_entry'),
+            icon: const Icon(Icons.inventory_2_outlined),
+            onPressed: () => unawaited(
+              Navigator.of(context).push(PhysicalInventoryScreen.route()),
+            ),
           ),
           IconButton(
             key: const Key('stock.transfers'),

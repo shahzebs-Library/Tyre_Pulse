@@ -9,7 +9,7 @@
     "overview": "Overview", "register": "Stock register", "locations": "Locations", "movements": "Movements",
     "audits": "Physical audits", "discrepancies": "Discrepancies", "controls": "Controls", "procurement": "Procurement",
     "receiving": "Receiving & issue", "supplier": "Supplier stock", "tyres": "Tyre inventory", "identification": "Identification",
-    "valuation": "Valuation", "planning": "Planning & simulation", "kpis": "Inventory KPIs", "classification": "Stock classification", "reports": "Reports"
+    "valuation": "Valuation", "planning": "Planning & simulation", "kpis": "Inventory KPIs", "classification": "Stock classification", "reports": "Reports", "physical": "Physical inventory"
   },
   "scope": {
     "country": "Country", "allCountries": "All countries", "countryHint": "Change the country from the working context at the top of the app.",
@@ -746,6 +746,339 @@
       "slow_mover": "Slow mover",
       "active": "Active",
       "insufficient_history": "Insufficient history"
+    }
+  },
+  "pi": {
+    "title": "Physical inventory",
+    "lead": "Register what is physically on the shelves. A capture is evidence and never changes official stock: identified items go to an opening-balance batch that another person approves.",
+    "tabs": {
+      "capture": "Start physical inventory",
+      "review": "Identification review",
+      "materials": "Company materials",
+      "corrections": "Corrections",
+      "search": "Material search",
+      "dashboard": "Dashboard"
+    },
+    "start": {
+      "title": "Start physical inventory",
+      "sub": "Pick the store and, if you know it, the warehouse, rack, shelf or bin.",
+      "pickCountry": "Choose a single country in the working context first.",
+      "store": "Store",
+      "chooseStore": "Choose a store",
+      "location": "Location in the store",
+      "wholeStore": "Whole store (no bin)",
+      "noLocations": "This store has no locations yet. Ask an inventory manager to create its warehouse, racks and bins under Locations. You can still record captures with a location note.",
+      "button": "Start"
+    },
+    "sessions": {
+      "title": "Physical inventory sessions",
+      "sub": "Open sessions can be resumed on any device.",
+      "empty": "No sessions yet.",
+      "resume": "Resume",
+      "close": "Close session",
+      "closed": "Session closed.",
+      "prepare": "Prepare opening balance",
+      "prepared": "Opening-balance batch prepared with {n} lines; {skipped} captures left out (not identified or no ERP SKU).",
+      "batchReady": "Opening batch prepared",
+      "ledgerRule": "Official stock only changes when the opening-balance batch is approved by someone other than its preparer (Controls > Opening balances). Missing prices stay unvalued for Finance."
+    },
+    "capture": {
+      "title": "Capture",
+      "sub": "Scan or type a barcode, company SKU, OEM or aftermarket number, or search by manufacturer or description. Save and go to the next item.",
+      "codePlaceholder": "Scan or type a code, part number or description",
+      "codeType": "Code type",
+      "codeTypeAuto": "Code type: automatic",
+      "find": "Find",
+      "noMatch": "No approved material matches. Describe the item below and save it; it gets a temporary reference for review.",
+      "pickWithoutVariant": "This material (variant not known)",
+      "picked": "Selected material",
+      "clearPick": "Change",
+      "describe": "Not found? Describe the item",
+      "unidentifiedHint": "Price, purchase order and full identification are not needed to save. Unidentified items cannot be issued until they are identified and approved.",
+      "locationHint": "Location note (rack, shelf, bin)",
+      "photos": "Photos (item, label, location)",
+      "photoRole": "Photo shows",
+      "photoCount": "{n} photos attached",
+      "saveNext": "Save and next",
+      "saved": "Saved.",
+      "savedUnknown": "Saved with temporary reference {ref}.",
+      "next": "Ready for the next item.",
+      "photosFailed": "{n} photos could not be uploaded. Attach them again from Identification review.",
+      "sessionLocation": "Session location",
+      "listTitle": "Captures in this session",
+      "empty": "Nothing captured yet.",
+      "err": {
+        "quantity": "Enter a quantity of zero or more.",
+        "session": "Start or resume a session first."
+      }
+    },
+    "common": {
+      "when": "When",
+      "material": "Material",
+      "location": "Location",
+      "qty": "Quantity",
+      "uom": "Unit",
+      "condition": "Condition",
+      "ownership": "Ownership",
+      "status": "Status",
+      "photos": "Photos",
+      "captures": "captures",
+      "notes": "Notes",
+      "note": "Note",
+      "remarks": "Remarks",
+      "ref": "Reference",
+      "by": "Captured by",
+      "noCompanySku": "no company SKU"
+    },
+    "status": {
+      "identified": "Identified",
+      "pending_review": "Waiting for review",
+      "mapped": "Identified by review",
+      "rejected": "Rejected",
+      "all": "All",
+      "proposed": "Proposed",
+      "active": "Approved",
+      "obsolete": "Replaced",
+      "retired": "Retired"
+    },
+    "sessionStatus": {
+      "open": "Open",
+      "closed": "Closed",
+      "cancelled": "Cancelled"
+    },
+    "cond": {
+      "new": "New",
+      "used": "Used",
+      "refurbished": "Refurbished",
+      "repairable": "Repairable",
+      "damaged": "Damaged",
+      "scrap": "Scrap",
+      "unknown": "Unknown"
+    },
+    "own": {
+      "owned": "Company owned",
+      "consignment": "Consignment",
+      "supplier": "Supplier owned",
+      "customer": "Customer owned",
+      "unknown": "Unknown"
+    },
+    "cls": {
+      "genuine": "Genuine",
+      "oes": "OES",
+      "aftermarket": "Aftermarket",
+      "unknown": "Not verified",
+      "not_identified": "Not identified yet"
+    },
+    "codeType": {
+      "barcode": "Barcode",
+      "company_sku": "Company SKU",
+      "erp_sku": "ERP SKU",
+      "oem": "OEM part number",
+      "aftermarket": "Aftermarket part number",
+      "manufacturer": "Manufacturer",
+      "description": "Description",
+      "label": "Location label"
+    },
+    "photoRole": {
+      "item": "Item",
+      "label": "Label",
+      "location": "Location",
+      "packaging": "Packaging",
+      "damage": "Damage",
+      "other": "Other"
+    },
+    "purpose": {
+      "identification": "Identification photo",
+      "count_proof": "Count proof"
+    },
+    "ref": {
+      "description": "Description",
+      "manufacturer": "Manufacturer",
+      "brand": "Brand",
+      "oem": "OEM part number",
+      "aftermarket": "Aftermarket part number",
+      "company_sku": "Company SKU",
+      "erp_sku": "ERP SKU",
+      "scanned_code": "Scanned code",
+      "barcode": "Barcode",
+      "part_number": "Part number"
+    },
+    "field": {
+      "description": "Description",
+      "company_sku": "Company SKU",
+      "category": "Category",
+      "base_uom": "Unit of measure",
+      "manufacturer": "Manufacturer",
+      "brand": "Brand",
+      "variant_manufacturer": "Variant manufacturer",
+      "part_number": "Part number",
+      "part_classification": "Genuine, OES or aftermarket",
+      "country_of_manufacture": "Country of manufacture",
+      "evidence": "Evidence (one per line: invoice, catalogue page, manufacturer letter)"
+    },
+    "review": {
+      "title": "Identification review",
+      "sub": "Unidentified and proposed items. The person who counted an item cannot identify it.",
+      "searchPlaceholder": "Temporary reference, code or description",
+      "empty": "Nothing waiting for review.",
+      "dupCol": "Possible duplicates",
+      "capture": "Capture",
+      "entered": "Entered at the shelf",
+      "noPhotos": "No photos.",
+      "photoUnavailable": "This photo is not available.",
+      "duplicates": "{n} possible duplicates in the company",
+      "decision": "Decision",
+      "notDuplicate": "Why this is not a duplicate",
+      "done": "Saved.",
+      "mode": {
+        "map_existing": "Same as an approved material",
+        "create_new": "New material",
+        "reject": "Not a stock item"
+      },
+      "do": {
+        "map_existing": "Identify",
+        "create_new": "Create and identify",
+        "reject": "Reject"
+      }
+    },
+    "materials": {
+      "title": "Materials waiting for approval",
+      "sub": "A proposal from any store is checked against every record of the company. After approval it can be selected at every authorised location.",
+      "empty": "Nothing waiting.",
+      "variantsTitle": "Variants waiting for approval",
+      "evidenceN": "{n} evidence entries",
+      "addVariantTitle": "Add a variant",
+      "addVariantSub": "A manufacturer's version of an approved material. Stock and cost stay separate per variant.",
+      "proposeVariant": "Propose variant",
+      "variantProposed": "Variant proposed for approval.",
+      "linkTitle": "Link an ERP SKU",
+      "linkSub": "Map a country ERP item to the material or variant. Country ERP numbers are kept as they are.",
+      "erpSku": "ERP SKU (search)",
+      "link": "Link",
+      "linked": "ERP SKU linked."
+    },
+    "corr": {
+      "title": "Master-data corrections",
+      "sub": "Every change is a request with evidence, approved by a different person. Historical and financial records are never changed.",
+      "empty": "No correction requests.",
+      "noun": "requests",
+      "topic": "Topic",
+      "actionCol": "Change",
+      "reason": "Reason",
+      "field": "Field",
+      "before": "Current",
+      "after": "Proposed",
+      "history": "History",
+      "cancel": "Cancel my request",
+      "ownNote": "You raised this request, so someone else must decide it.",
+      "newTitle": "Propose a correction",
+      "newSub": "Find the material, then describe the change and give evidence.",
+      "refType": "Reference type",
+      "newValue": "New value",
+      "keep": "Material to keep",
+      "submit": "Submit for approval",
+      "submitted": "Correction submitted for approval.",
+      "action": {
+        "field_update": "Change a field",
+        "add_reference": "Add a reference",
+        "retire_reference": "Retire a reference",
+        "duplicate": "Mark as duplicate"
+      },
+      "status": {
+        "submitted": "Waiting",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "cancelled": "Cancelled",
+        "all": "All"
+      },
+      "event": {
+        "submitted": "Submitted",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "cancelled": "Cancelled",
+        "applied": "Applied"
+      }
+    },
+    "topic": {
+      "company_sku": "Company SKU",
+      "oem": "OEM number",
+      "aftermarket": "Aftermarket number",
+      "description": "Description",
+      "brand": "Brand",
+      "manufacturer": "Manufacturer",
+      "classification": "Genuine or aftermarket",
+      "uom": "Unit of measure",
+      "category": "Category",
+      "specs": "Specification",
+      "country_of_manufacture": "Country of manufacture",
+      "part_number": "Part number",
+      "duplicate": "Duplicate",
+      "reference": "Reference"
+    },
+    "search": {
+      "title": "Material search",
+      "sub": "One search across company SKUs, ERP SKUs, OEM and aftermarket numbers, barcodes, descriptions, manufacturers and validated compatibility.",
+      "placeholder": "Part number, SKU, barcode, manufacturer or description",
+      "noStock": "No stock you can see.",
+      "avail": "{a} available, {r} reserved, {it} in transit, {d} damaged, {q} quarantined",
+      "matchedOn": "matched on",
+      "erp": "ERP SKUs",
+      "refs": "References",
+      "historical": "historical",
+      "unassigned": "Stock not assigned to a variant",
+      "requestFrom": "Request transfer from {site} ({n} available)",
+      "transferTitle": "Request a stock transfer",
+      "sendRequest": "Send request",
+      "transferSent": "Transfer requested. The sending store decides it.",
+      "pickStore": "Choose your store in the site filter to request a transfer instead of buying again."
+    },
+    "dash": {
+      "captures": "Items collected",
+      "identified": "Identified",
+      "pending_review": "Waiting for review",
+      "missing_company_sku": "Missing company SKU",
+      "missing_erp_sku": "Missing ERP SKU",
+      "missing_oem": "Missing OEM number",
+      "missing_aftermarket": "Aftermarket without part number",
+      "duplicate_candidates": "Possible duplicates",
+      "pending_corrections": "Pending corrections",
+      "pending_materials": "Materials to approve",
+      "classification": "Genuine and aftermarket",
+      "condition": "Condition",
+      "approval": "Opening-balance approval",
+      "valuation": "Valuation completeness",
+      "byEmployee": "Progress by employee (identified / collected)",
+      "byLocation": "Progress by location",
+      "progressTitle": "Identification progress",
+      "progress": "{pct}% of collected items are identified.",
+      "noCaptures": "No items collected yet.",
+      "pendingN": "{n} waiting",
+      "section": "Section",
+      "name": "Name",
+      "value": "Value",
+      "extra": "Detail"
+    },
+    "batch": {
+      "not_prepared": "Not prepared",
+      "draft": "Draft",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled"
+    },
+    "val": {
+      "promoted": "In an opening batch",
+      "unvalued": "Unvalued (no price)",
+      "not_promoted": "Identified, not yet prepared"
+    },
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject"
+    },
+    "rules": {
+      "genuine": "Genuine and OES need evidence such as an invoice, catalogue or manufacturer confirmation. An OEM number printed on packaging is not proof.",
+      "reviewer": "Identification keeps the original quantity, location, photos and the counter's name.",
+      "corrections": "Corrections only change identification data. Stock, ledger, ERP records and costs are never edited from here."
     }
   }
 }

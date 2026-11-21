@@ -1,7 +1,7 @@
 /**
  * Inventory Control Center - section catalogue (pure, no I/O).
  *
- * ONE hub (`/stock`, src/pages/StockManagement.jsx) with seventeen sections
+ * ONE hub (`/stock`, src/pages/StockManagement.jsx) with eighteen sections
  * grouped into five tabs. The section lives in the URL (`?section=`), so a
  * link to "Physical audits" survives a refresh and can be shared.
  *
@@ -28,6 +28,7 @@ export const SECTIONS = [
   { key: 'overview', group: 'operate', icon: 'LayoutDashboard', cap: 'view' },
   { key: 'register', group: 'operate', icon: 'Boxes', cap: 'view' },
   { key: 'locations', group: 'operate', icon: 'MapPin', cap: 'view' },
+  { key: 'physical', group: 'operate', icon: 'ScanLine', cap: 'view' },
   { key: 'movements', group: 'operate', icon: 'ArrowLeftRight', cap: 'view' },
   { key: 'audits', group: 'control', icon: 'ClipboardCheck', cap: 'view' },
   { key: 'discrepancies', group: 'control', icon: 'AlertTriangle', cap: 'view' },

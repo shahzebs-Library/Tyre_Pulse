@@ -21,6 +21,7 @@ import './inventory.css'
 const SECTION_COMPONENTS = {
   overview: lazy(() => import('./OverviewSection')),
   locations: lazy(() => import('./LocationsSection')),
+  physical: lazy(() => import('./PhysicalInventorySection')),
   movements: lazy(() => import('./MovementsSection')),
   audits: lazy(() => import('./AuditsSection')),
   discrepancies: lazy(() => import('./DiscrepanciesSection')),

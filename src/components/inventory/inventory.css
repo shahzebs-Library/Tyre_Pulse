@@ -76,6 +76,10 @@ button.inv-tile[aria-pressed="true"] { border-color: var(--cc-green); background
 .inv-label img { width: 120px; height: 120px; }
 .inv-label b { display: block; font-size: 13px; }
 .inv-label small { display: block; font-size: 11px; color: #475467; overflow-wrap: anywhere; }
+.inv-labels-sm { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.inv-labels-sm .inv-label img { width: 90px; height: 90px; }
+.inv-labels-lg { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.inv-labels-lg .inv-label img { width: 160px; height: 160px; }
 
 .inv-num { font-variant-numeric: tabular-nums; }
 .inv-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

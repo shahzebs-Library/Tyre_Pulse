@@ -304,6 +304,14 @@ export function saveLocation(draft, idempotencyKey) {
   }, idempotencyKey)
 }
 
+/**
+ * inv_location_bulk_create (pending 20261122120000): a whole rack / shelf / bin
+ * layout under one existing store. `dryRun` returns the plan and writes nothing.
+ */
+export function bulkCreateLocations(payload, idempotencyKey, { dryRun = false } = {}) {
+  return rpcWrite('inv_location_bulk_create', { ...payload, dry_run: !!dryRun }, idempotencyKey)
+}
+
 // ── Movements (append-only ledger) ───────────────────────────────────────────
 
 const MOVEMENT_COLS = 'id, movement_seq, movement_type, item_id, item_code, site, country, location_id, location_code, qty_before, qty_change, qty_after, unit_cost, value_change, currency, ownership, source_doc_type, source_doc_id, reverses_movement_id, reason, reference_no, actor_id, created_by, approval_ref, posted_at, effective_at, created_at, unvalued_qty_change, valuation_status, stock_id'

@@ -36,6 +36,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Pinned to the toolchain flutter-ci.yml verifies. Unpinned stable
+          # (3.50.1) requires AGP >= 9.1.1 while android/settings.gradle.kts
+          # pins 9.1.0, so the Gradle build refuses to start.
+          flutter-version: 3.47.2
           cache: true
 
       - name: Create platform folder

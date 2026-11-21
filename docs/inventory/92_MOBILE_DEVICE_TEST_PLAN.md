@@ -22,6 +22,34 @@ below is therefore marked Not Tested. A person runs it on a real phone from a bu
 * The manual Send button stays as "send now"; the note under the lines no longer says background
   sending is a later update.
 
+## Internal test build (2026-11-21)
+
+Not a Play release. Built by `.github/workflows/flutter-internal-apk.yml` (workflow_dispatch only, no Play
+upload step), signed with the same release key as the Play Closed testing build.
+
+| Field | Value |
+|---|---|
+| Workflow run | 44875779894 (https://github.com/shahzebs-Library/Tyre_Pulse/actions/runs/44875779894) |
+| Artifact | `tyre-pulse-internal-apk` (ID 14696240812), https://github.com/shahzebs-Library/Tyre_Pulse/actions/runs/44875779894/artifacts/14696240812 |
+| Artifact expires | 2026-12-05 (14-day retention); re-run the workflow on main for a fresh one |
+| File | `tyre-pulse-internal-0.1.1-7.apk`, universal release APK, 191.2 MB (zip 126 MB) |
+| Version | versionName 0.1.1, versionCode 7 (pubspec `0.1.1+7`), `APP_ENV=production`, Flutter 3.47.2 |
+| App code | identical to main `8ef9ca4` (the branch only pinned the workflow's Flutter version) |
+| Crash reporting | OFF in this build: the `FLUTTER_SENTRY_DSN` secret is not set |
+
+How to install:
+1. Download the artifact from the link above while signed in to GitHub, then unzip it.
+2. Phone: Settings > Apps > Special access > Install unknown apps > allow the browser or file manager
+   you will open the APK with. Or from a computer, with USB debugging on: `adb install -r tyre-pulse-internal-0.1.1-7.apk`.
+3. Because it carries the same package (`com.shahzebrahman.tyrepulse`) and the same signing key as the Play
+   Closed testing build, it installs over that build. To test the D19 upgrade case, install the previous
+   Play build first, then this APK on top. Uninstall first only if you want a clean-install run (D01).
+4. Sign in ONLY with dedicated test accounts (P2: the Store Keeper test account and the account without
+   `stock`). Never use a live employee account: this build points at the PRODUCTION Supabase project, so
+   every count, transfer and photo it sends is real data.
+
+Every case below stays Not Tested until someone runs it on a phone from this build and records evidence.
+
 ## Preconditions
 
 | # | Precondition |

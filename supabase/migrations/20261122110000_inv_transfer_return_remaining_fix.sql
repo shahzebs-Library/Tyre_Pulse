@@ -1,8 +1,8 @@
 -- =============================================================================
 -- 20261122110000_inv_transfer_return_remaining_fix.sql
--- STATUS: AUTHORED, NOT APPLIED. Lives in supabase/pending_migrations/ so no deploy
---         can apply it. Requires the applied inventory release 20261120100000..115000.
---         Rollback: 20261122110000_inv_transfer_return_remaining_fix_ROLLBACK.sql
+-- STATUS: APPLIED TO PRODUCTION 2026-11-21 21:32 UTC (owner request item 2). Fetched by pg_net from commit
+--         fe0af9d5, sha256 d36001a1964dd95d22d79d87186993da4ea7e93d5f8ee7e00dd8ecf7063c070a checked in DB.
+--         Rollback: supabase/rollbacks/20261122110000_inv_transfer_return_remaining_fix_ROLLBACK.sql
 --
 -- DEFECT (live, read 2026-11-21 via pg_get_functiondef; live == repo bodies)
 --   inv_transfer_return_remaining -> _inv_transfer_return_remaining -> _inv_transfer_move.

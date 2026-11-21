@@ -1,5 +1,5 @@
 // inv_transfer_return_remaining fix
-// (supabase/pending_migrations/20261122110000_inv_transfer_return_remaining_fix.sql, NOT APPLIED).
+// (supabase/migrations/20261122110000_inv_transfer_return_remaining_fix.sql, applied 2026-11-21).
 // Before the fix a call without `lines` (or with []) flipped an in_transit transfer to
 // partially_received while no stock moved. PGlite over the live-shaped inventory harness.
 import { test } from 'node:test'
@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildDb, rpc, call, q, one, id, U, code } from './inventory_harness.test.mjs'
 
-const PENDING = f => readFileSync(new URL(`../pending_migrations/${f}`, import.meta.url), 'utf8')
+const PENDING = f => readFileSync(new URL(`../${f.endsWith('_ROLLBACK.sql') ? 'rollbacks' : 'migrations'}/${f}`, import.meta.url), 'utf8')
 const UP = PENDING('20261122110000_inv_transfer_return_remaining_fix.sql')
 const DOWN = PENDING('20261122110000_inv_transfer_return_remaining_fix_ROLLBACK.sql')
 const FILTER = id(100); const BRAKE = id(104)

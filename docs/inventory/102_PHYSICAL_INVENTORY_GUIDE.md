@@ -1,9 +1,10 @@
 # 102 - Physical inventory registration and identification (operational guide)
 
-Status 2026-11-21: **code merged, database DRAFT NOT APPLIED.** The screens are live in the web
-Inventory Control Center (`/stock?section=physical`) and in the Flutter app (Stock > Physical
-inventory), but every call answers "Not set up yet" until the owner applies
-`supabase/pending_migrations/20261122100000_inv_physical_inventory_master.sql`.
+Status 2026-11-21: **LIVE.** `supabase/migrations/20261122100000_inv_physical_inventory_master.sql`
+applied to production 2026-11-21 21:25 UTC (owner-approved; record in doc 96 section 12), with
+`20261122110000_inv_transfer_return_remaining_fix` and `20261122120000_inv_location_setup`. Web:
+Inventory Control Center (`/stock?section=physical`, Locations section for bins). Flutter: Stock >
+Physical inventory (needs the next app build).
 
 ## 1. What it is (one paragraph)
 
@@ -140,13 +141,13 @@ stepper beside the field; Save and next sits in the bottom bar.
 
 ## 7. What the owner must do next
 
-1. Approve and apply `supabase/pending_migrations/20261122100000_inv_physical_inventory_master.sql`
-   (own transaction, after the Supabase backup; staging first). Rollback file next to it. Verify block
-   in its header. Then move it to `supabase/migrations/` and note it in doc 96.
+1. Done 2026-11-21: migration applied (doc 96 section 12).
 2. Grant `stock:count` to the store keepers who will count and `stock:engineering_approve` to the
    engineer / master-data person who identifies (Console > Access Control).
-3. Create the bin locations of the three stores.
-4. Release a Flutter build when convenient (the phone screen needs a build; no Play upload was done).
+3. Mark the three store sites as `site_type` warehouse or depot (Site Management) so only they are
+   offered as stores, then create their bins (Locations > Bulk setup, print the QR labels). No bins exist
+   yet; none were invented.
+4. Install the internal APK (workflow `flutter-internal-apk.yml`, no Play upload) for device acceptance.
 
 ## 8. Tests
 

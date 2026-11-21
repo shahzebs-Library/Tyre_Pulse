@@ -1,4 +1,4 @@
-// Warehouse and bin setup (supabase/pending_migrations/20261122120000_inv_location_setup.sql, DRAFT).
+// Warehouse and bin setup (supabase/migrations/20261122120000_inv_location_setup.sql, applied 2026-11-21).
 // PGlite over the live-shaped inventory harness: bulk create under a registered store,
 // preview writes nothing, existing codes are reused, stores are never created,
 // permission + scope + company isolation, idempotent replay, clean rollback.
@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildDb, call, q, one, U, ORG_A, ORG_B, code } from './inventory_harness.test.mjs'
 
-const PENDING = f => readFileSync(new URL(`../pending_migrations/${f}`, import.meta.url), 'utf8')
+const PENDING = f => readFileSync(new URL(`../${f.endsWith('_ROLLBACK.sql') ? 'rollbacks' : 'migrations'}/${f}`, import.meta.url), 'utf8')
 const UP = PENDING('20261122120000_inv_location_setup.sql')
 const DOWN = PENDING('20261122120000_inv_location_setup_ROLLBACK.sql')
 

@@ -206,3 +206,22 @@ Old function on the same data: KSA timed out above 55 s (doc 97). The temporary 
 Conflicts: exactly 7 open, all `scrapped_but_active`, one row each (no duplicates): KSA L52043311, YMM18886, YMM22455, YMM68731, YMU41519, YMY44573; UAE YMA44467. Not corrected; evidence and recommendations in docs/inventory/99.
 
 Data unchanged (recomputed with the snapshot expressions after the sync): tyre_records (11,274; column and full-row md5), tyre_status_marks (907), tyre_price_provenance (428), tyre_cost_corrections (2,246), tyre_replacement_log (56), parts_consumption (219,356), engine_hours_logs, stock_records, stock_movements, tyre_store_holdings, tyre_dispositions: all equal. odometer_logs 2,999 -> 3,001 and vehicle_fleet km changed for exactly WL040 and TM369: two Mobile readings by field users at 09:28 and 09:58 UTC (normal use, the existing odometer trigger); nothing written by the sync.
+
+## 12. Physical inventory release - applied 2026-11-21 (owner-approved)
+
+Method as section 1: each file fetched by pg_net from its merged/pushed commit into `_bak.inv_release_sql`, sha256 checked in the database against the repo, run by `_bak.inv_release_run(file, sha)`, recorded in `supabase_migrations.schema_migrations`.
+
+| Version | Commit | sha256 | Applied (UTC) |
+|---|---|---|---|
+| 20261122100000_inv_physical_inventory_master | 9e17a1a7 | 4898c971f96a3523fc14f6136fecd3612665adff531c7ff026281902017becbe | 21:25:12 |
+| 20261122110000_inv_transfer_return_remaining_fix | fe0af9d5 | d36001a1964dd95d22d79d87186993da4ea7e93d5f8ee7e00dd8ecf7063c070a | 21:32:13 |
+| 20261122120000_inv_location_setup | 93d03d90 | e3c97f231f9b7aa56da587c938d4143f5bec4d2c34d8cab42f174d2f605296bb | 21:35:27 |
+
+- Backup: WAL recovery position 1A8/927E8000 at 21:24:10 UTC (archiver healthy: 0 failed, last archive 21:24:29); logical snapshot `_bak.physinv_20261121_{material_aliases,fn,pol,baseline}` (1,506 function bodies, 4,929 policies, fingerprints) and `_bak.xferfix_20261121_fn` (the three pre-fix transfer bodies).
+- Staging: the local staging clusters have no inventory baseline, so the rehearsal ran on production inside rolled-back transactions plus the PGlite suite (inventory 14 files, all pass). Apply rehearsal 3.2 s; rollback rehearsal removed all 9 tables and 7 RPCs, 0 function bodies changed, material_aliases byte-identical, item_id NOT NULL restored.
+- Data preserved: material_master (22,166), material_aliases (0), stock_records (50), stock_movements (86), opening_balance_lines (0), inventory_locations (4), tyre_records (11,274) full-row md5 identical before and after.
+- Security after apply: 0 tables without RLS, authenticated cannot INSERT captures, anon cannot execute `inv_pi_*` or `inv_location_bulk_create`, `_inv_pi_*` helpers not executable by authenticated.
+- Web workflow verified live as two super admins (rolled back): location, canonical propose (self-approve refused 42501, second person approves), variant, ERP link, session, identified capture (replay returns the same row), unidentified capture (UNK- reference), mapping, correction request and approval, search by normalised OEM number, close, opening batch (NHC held needs_review: 18 unmapped legacy balances; AMAALA mapped), approval request, approval by the other person, post: qty +4, one ledger row, line posted.
+- Transfer fix verified on the Demo Fleet in-transit transfer (rolled back): before the fix an empty return flipped the status to partially_received with 0 ledger rows; after it returned all 3 remaining units (2 ledger rows, Demo stock total unchanged), a replay returned `replayed=true`, a second call with nothing left was refused 22023 with status unchanged.
+- Location bulk setup verified (rolled back): dry run wrote 0 rows, real run created rack/shelf/bin under DEMO YARD, an unregistered store refused. No production bins were created.
+- Demo Fleet: the three acceptance sign-ins were created through the app's own public sign-up (pending Reporter), then `supabase/fixtures/demo_fleet_inventory_accounts.sql` (sha d69d0d7d) bound them to the Demo company (Store Keeper A/B, no-stock account) and `demo_fleet_inventory_verify.sql` passed. 0 real staff in the Demo company.

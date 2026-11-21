@@ -1,7 +1,8 @@
 -- =============================================================================
 -- 20261122120000_inv_location_setup.sql
--- STATUS: AUTHORED, NOT APPLIED. Pending owner approval. Rollback:
---   supabase/pending_migrations/20261122120000_inv_location_setup_ROLLBACK.sql
+-- STATUS: APPLIED TO PRODUCTION 2026-11-21 21:35 UTC (owner request item 6). Fetched by pg_net from
+--   commit 93d03d90, sha256 e3c97f231f9b7aa56da587c938d4143f5bec4d2c34d8cab42f174d2f605296bb checked in DB.
+--   Rollback: supabase/rollbacks/20261122120000_inv_location_setup_ROLLBACK.sql
 --
 -- Warehouse and bin setup (owner requirement 6). One new client RPC:
 --   inv_location_bulk_create(p_payload jsonb)

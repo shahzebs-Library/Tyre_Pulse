@@ -10,6 +10,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - Recovery point 22:32:43 UTC LSN 1A5/DD001FD0, WAL archiving healthy; logical snapshot `_bak.inv_release_20261120_*` (20 tables + fn + pol + baseline).
 - Deviation: 108000 committed before 107000 (parallel calls); proven equivalent (disjoint objects; 112000/113000 fingerprint guards passed). Doc 90 verify-8 omits `_inv_secure_table`/`_inv_master_allowed_keys` (granted until 115000).
 - Post: tyre/CPK/parts/permissions/profiles identical; get_fleet_cpk output identical; 0 anon inv fns; advisors 0 ERROR.
+- Web: PR #569 squash `fd85a466`, Vercel prod dpl_2PDzxvEBaXKQScRwsiFoMZD6QJGZ READY, 0 runtime errors. Review fixes shipped (count submit ids/rejections/stable uuids, reviewer sums). Pending (NOT applied, owner): `20261121100000_inv_reconcile_multi_balance` (prod has 0 multi-balance item/locations). Edge send-scheduled-reports NOT deployed (needs CLI; v28 live).
 - OPEN: `inv_tyre_item_sync('KSA')` > 55 s (quadratic temp-table subqueries) - web refresh will time out, KSA conflicts not materialised; Store Keeper grants NOT given (sites {ALL}); no IC/FM/KSA PMV Manager; map 18 NHC legacy lines before first count; mobile HOLD.
 
 # ⚑ 2026-11-17 — RECONCILED #546 + #550 (draft, nothing live). #550 now contains #546; sign-in fn does resolve_sign_in_user (code/username) AND fail-closed/8s timeouts/Turnstile. ARB pin 2523 (2514+8+1). See docs/commercial-readiness/PHASE2_STATUS.md.

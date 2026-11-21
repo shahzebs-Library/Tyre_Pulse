@@ -110,7 +110,7 @@ const UPLOAD_ROLES = ['Admin', 'Integration Admin', 'Data Engineer', 'Automation
 const CLEANING_ROLES = ['Admin', 'Integration Admin', 'Data Engineer']
 const AUDIT_ROLES = ['Admin', 'Integration Admin']
 
-// Eight operational workspaces (directive Phase 5) + Overview. Every route is
+// Nine operational workspaces (directive Phase 5) + Overview. Every route is
 // unchanged - pages are only regrouped and no journey is removed.
 // The single "Executive" entry stands for two pages that keep their own access
 // rules. It is shown to exactly the people who saw either of the old entries:
@@ -130,6 +130,15 @@ const NAV_GROUPS = [
       { to: '/approvals',         label: 'Approvals',          icon: CheckSquare, roles: ANALYTICS_ROLES, flag: 'automation_platform' },
       { to: '/my-checklists',          label: 'My Checklists',       icon: ClipboardList },
       { to: '/broadcast',            label: 'Message the Team',   icon: Megaphone, adminOnly: A },
+    ],
+  },
+  {
+    label: 'Team Operations',
+    items: [
+      { to: '/workforce-daily', label: 'Team Work', parent: 'Work', icon: ClipboardCheck },
+      { to: '/workshop-absence', label: 'Absence & Attendance', parent: 'People', icon: CalendarCheck2, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/shifts', label: 'Shift Scheduling', parent: 'People', icon: CalendarClock, adminOnly: A },
+      { to: '/technician-scorecard', label: 'Technician Scorecard', parent: 'Performance', icon: Award, adminOnly: A },
     ],
   },
   {
@@ -201,10 +210,6 @@ const NAV_GROUPS = [
       { to: '/downtime',        label: 'Downtime Tracker', parent: 'Maintenance',   icon: Clock, adminOnly: A },
       { to: '/dtc',             label: 'DTC Diagnostics', parent: 'Maintenance',    icon: Cpu, adminOnly: A },
       { to: '/vehicle-washing', label: 'Vehicle Washing', parent: 'Maintenance',    icon: Droplet },
-      { to: '/workshop-absence', label: 'Absence & Attendance', parent: 'People', icon: CalendarCheck2, roles: ['Admin', 'Manager', 'Director'] },
-      { to: '/technician-scorecard', label: 'Technician Scorecard', parent: 'People', icon: Award, adminOnly: A },
-      { to: '/shifts',              label: 'Shift Scheduling', parent: 'People',   icon: CalendarClock, adminOnly: A },
-      { to: '/workforce-daily', label: 'My Day & Team Reviews', parent: 'People', icon: ClipboardCheck },
       { to: '/parts-requests', label: 'Parts Requests', parent: 'Parts & Tools', icon: Boxes, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/equipment',       label: 'Tool & Equipment', parent: 'Parts & Tools',   icon: Wrench, adminOnly: A },
       { to: '/workshop-analytics', label: 'Workshop Analytics', parent: 'Analysis', icon: TrendingUp, roles: ['Admin', 'Manager', 'Director'] },

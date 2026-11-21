@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 23890)
-Total output lines: 1634
-
 import { WorkspaceNavigationContext } from '../contexts/WorkspaceNavigationContext'
 import useAppShellScrollLock from '../hooks/useAppShellScrollLock'
 import { moduleAvailable } from '../lib/workspaceAccess'
@@ -457,7 +454,494 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   const grantKey = NAV_MODULE_KEY[item.to]
   // The GRANT check uses the same key the route guard resolves (NAV_MODULE_KEY,
   // else the route slug), so a page that has no NAV_MODULE_KEY entry - e.g.
-  // /serial-tracker -> 'serial_tracker' - still…5890 tokens truncated…eading, label: navLabelFor(t, item.to, item.label) })
+  // /serial-tracker -> 'serial_tracker' - still becomes visible once an admin
+  // grants it. The matrix check below deliberately stays NAV_MODULE_KEY-only:
+  // widening it to the slug would make permissive built-in roles (Manager,
+  // Director) SEE admin-only items they would then be denied at the route.
+  const routeGrantKey = governingModuleKey(item.to)
+  if (profile?.role !== 'Data Monitor Officer' && routeGrantKey && grantedModules && grantedModules.has(routeGrantKey)) return true
+  if (profile?.role === 'Inspector') {
+    return item.to === '/inspections' || item.to === '/settings' || item.to === '/request-access'
+  }
+  // Admin-defined custom roles: sidebar derived from granted module access.
+  if (profile?.role === 'Data Monitor Officer' || isCustomNavRole(profile?.role)) {
+    return navItemAllowedForCustomRole(item.to, hasPermission)
+  }
+  // Checklist-only role (Maintenance Supervisor): sidebar shows only checklists.
+  if (isChecklistOnlyRole(profile?.role)) {
+    return isChecklistPathAllowed(item.to, hasPermission) && isChecklistNavVisible(item.to, profile?.role, isSuperAdmin)
+  }
+  // The Audit Pack route admits CHECKLIST_AUTHOR_ROLES (and super admins), so the
+  // sidebar follows exactly that list.
+  if (item.to === '/checklist-audit') return canAuthorChecklists(profile?.role, isSuperAdmin)
+  // If this nav item maps to a module, its visibility follows the access matrix +
+  // per-user grants/revokes via hasPermission - so an admin turning a module OFF for
+  // a role (or revoking a user) actually HIDES it from the sidebar, and turning it
+  // on / granting shows it. Admin + Super Admin always resolve true inside hasPermission.
+  if (grantKey) return hasPermission(grantKey)
+  if (item.adminOnly) return profile?.role === 'Admin' || isSuperAdmin === true
+  if (item.roles) return item.roles.includes(profile?.role)
+  return true
+}
+
+// ── Label resolvers ──────────────────────────────────────────────────────────
+// The nav, the sub-headings and the Favourites section must all name a module
+// the SAME way, so the lookup + English fallback lives in one place. An
+// untranslated key renders the plain English label rather than leaking
+// "nav.items./tyres" to the UI.
+function tOr(t, key, fallback) {
+  const raw = t(key)
+  return (!raw || raw === key) ? fallback : raw
+}
+
+/** DOM-safe id fragment for a nav group key (keys can carry spaces and '&'). */
+function groupDomId(key) {
+  return String(key || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'group'
+}
+
+/** Display label for a nav item's route. */
+function navLabelFor(t, to, fallback) {
+  return tOr(t, `nav.items.${to}`, fallback)
+}
+
+/**
+ * Display heading for a group. A super-admin rename in the Navigation Customizer
+ * WINS over the translation - they typed that name deliberately.
+ */
+function groupHeadingFor(t, group) {
+  const groupId = group.key || group.label
+  const renamed = group.label && group.label !== groupId
+  return renamed ? group.label : tOr(t, `nav.groups.${groupId}`, group.label)
+}
+
+// Translated role label; a CUSTOM role has no i18n entry, so the raw key
+// ("roles.Fleet Supervisor") would leak to the UI - show the plain name instead.
+function roleLabel(t, role) {
+  if (!role) return ''
+  const key = `roles.${role}`
+  const v = t(key)
+  return v === key ? role : v
+}
+
+/**
+ * Pin/unpin control for one nav item.
+ *
+ * Rendered as a SIBLING of the NavLink inside a relative wrapper, never nested
+ * inside it: an interactive control inside an anchor is invalid markup and one
+ * stray click would navigate instead of pinning. Reveal is pure CSS
+ * (group-hover / group-focus-within) - a React hover handler here would set
+ * state on the Layout and re-run the permission filter over ~210 nav items on
+ * every frame of a mouse movement, which is a defect this sidebar has had before.
+ */
+function FavStar({ pinned, label, onToggle, t }) {
+  const action = pinned
+    ? tOr(t, 'nav.favorites.remove', 'Remove from favourites')
+    : tOr(t, 'nav.favorites.add', 'Add to favourites')
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={`${action}: ${label}`}
+      aria-label={`${action}: ${label}`}
+      aria-pressed={pinned}
+      className={`absolute end-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
+        rounded-md transition-opacity duration-150 focus-visible:opacity-100 hover:bg-green-400/10
+        ${pinned
+          ? 'opacity-100 text-amber-300'
+          : 'opacity-0 text-gray-600 hover:text-amber-300 group-hover/fav:opacity-100 group-focus-within/fav:opacity-100'}`}
+    >
+      <Star size={11} strokeWidth={2} fill={pinned ? 'currentColor' : 'none'} />
+    </button>
+  )
+}
+
+function roleBadgeClass(role) {
+  switch (role) {
+    case 'Admin':     return 'bg-red-900/40 text-red-300 border border-red-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Manager':   return 'bg-orange-900/40 text-orange-300 border border-orange-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Inspector': return 'bg-purple-900/40 text-purple-300 border border-purple-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Director':  return 'bg-blue-900/40 text-blue-300 border border-blue-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Tyre Man':  return 'bg-teal-900/40 text-teal-300 border border-teal-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Integration Admin': return 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Data Engineer':     return 'bg-cyan-900/40 text-cyan-300 border border-cyan-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Automation':        return 'bg-indigo-900/40 text-indigo-300 border border-indigo-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    default:          return 'bg-gray-800/60 text-gray-400 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+  }
+}
+
+// Mirrors the mobile app's tyre_man tab bar (Inspect · Records · Work Orders ·
+// Scan · Profile). Alerts moves to a header bell so the bottom bar stays at the
+// five primary field actions, matching the native inspector experience.
+const TYRE_MAN_TABS = [
+  { to: '/inspections', tk: 'inspect', label: 'Inspect',   icon: ClipboardCheck, end: false },
+  { to: '/tyres',       tk: 'records', label: 'Records',   icon: Layers },
+  // The person's own assigned jobs. Shown only when Work Orders is switched on for them, so the
+  // tab never leads to Access Restricted.
+  { to: '/my-jobs',     tk: 'work',    label: 'Work',      icon: Wrench, moduleKey: 'work_orders' },
+  { to: '/scan',        tk: 'scan',    label: 'Scan',      icon: ScanLine },
+  { to: '/settings',    tk: 'profile', label: 'Profile',   icon: User },
+]
+
+function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
+  const hasCustomIcon = Boolean(customAppIcon)
+  const { signOut, profile, hasPermission } = useAuth()
+  const { t } = useLanguage()
+  const location = useLocation()
+  const tabs = TYRE_MAN_TABS.filter((tab) => !tab.moduleKey
+    || (typeof hasPermission === 'function' && hasPermission(tab.moduleKey) === true))
+  const { acquire: acquireWakeLock, release: releaseWakeLock } = useWakeLock()
+  const [pendingCount, setPendingCount] = useState(0)
+  const [failedCount, setFailedCount]   = useState(0)
+  const [retrying, setRetrying]         = useState(false)
+
+  // Force light theme for the TyreMan mobile shell
+  useEffect(() => {
+    const prev = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    document.documentElement.classList.remove('dark')
+    document.documentElement.classList.add('light')
+    return () => {
+      // Restore previous theme when TyreMan shell unmounts (e.g. logout)
+      const saved = localStorage.getItem('tyrepulse-theme') || prev
+      document.documentElement.classList.remove('dark', 'light')
+      document.documentElement.classList.add(saved)
+    }
+  }, [])
+
+  // Acquire wake lock while on inspections checklist
+  useEffect(() => {
+    const onInspections = location.pathname === '/inspections'
+    if (onInspections) {
+      acquireWakeLock()
+    } else {
+      releaseWakeLock()
+    }
+    return () => releaseWakeLock()
+  }, [location.pathname, acquireWakeLock, releaseWakeLock])
+
+  // Sync offline queue when coming back online
+  useEffect(() => {
+    async function syncAndCount() {
+      if (navigator.onLine) {
+        await syncPendingInspections(supabase)
+      }
+      const [pending, failed] = await Promise.all([getPendingCount(), getFailedCount()])
+      setPendingCount(pending)
+      setFailedCount(failed)
+    }
+    syncAndCount()
+    window.addEventListener('online', syncAndCount)
+    return () => window.removeEventListener('online', syncAndCount)
+  }, [])
+
+  // Requeue dead-lettered inspections (exhausted their auto-retries) and flush.
+  const retryFailedSyncs = useCallback(async () => {
+    if (retrying) return
+    setRetrying(true)
+    try {
+      const failed = await getFailedInspections()
+      await Promise.all(failed.map(f => retryFailedInspection(f._queueId)))
+      if (navigator.onLine) await syncPendingInspections(supabase)
+      const [pending, stillFailed] = await Promise.all([getPendingCount(), getFailedCount()])
+      setPendingCount(pending)
+      setFailedCount(stillFailed)
+    } finally {
+      setRetrying(false)
+    }
+  }, [retrying])
+
+  return (
+    <MotionConfig reducedMotion="user">
+    <div
+      className="h-screen min-h-0 flex flex-col overflow-hidden"
+      style={{ background: '#f0f5f1', height: '100dvh' }}
+    >
+      <a href="#main-content" className="tp-skip-link">
+        {tOr(t, 'shell.skipToContent', 'Skip to main content')}
+      </a>
+      {/* Fixed top header - light */}
+      <header
+        className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4"
+        style={{
+          height: 'calc(52px + env(safe-area-inset-top))',
+          paddingTop: 'env(safe-area-inset-top)',
+          background: 'rgba(255,255,255,0.97)',
+          borderBottom: '1px solid rgba(22,163,74,0.15)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          boxShadow: '0 1px 12px rgba(0,0,0,0.06)',
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.22)' }}
+          >
+            <BrandIcon src={appIcon} custom={hasCustomIcon} size={16} />
+          </div>
+          <span
+            className="font-extrabold text-sm tracking-tight"
+            style={{ color: '#166534' }}
+          >
+            TyrePulse
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {pendingCount > 0 && (
+            <span
+              className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}
+              title={`${pendingCount} inspection${pendingCount !== 1 ? 's' : ''} queued offline`}
+            >
+              ⏳ {pendingCount}
+            </span>
+          )}
+          {failedCount > 0 && (
+            <button
+              type="button"
+              onClick={retryFailedSyncs}
+              disabled={retrying}
+              className="text-[9px] font-bold px-2 py-0.5 rounded-full disabled:opacity-60"
+              style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca' }}
+              title={`${failedCount} inspection${failedCount !== 1 ? 's' : ''} failed to sync, tap to retry`}
+            >
+              {retrying ? '…' : `⚠ ${failedCount}`}
+            </button>
+          )}
+          <LanguageSwitcher />
+          <ThemeToggle
+            size={15}
+            className="tp-touch-target w-7 h-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-green-600 transition-colors hover:bg-green-500/10"
+          />
+          <NavLink
+            to="/alerts"
+            className="tp-touch-target relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: '#6b7280' }}
+            aria-label={`Alerts${alertCount > 0 ? ` (${alertCount})` : ''}`}
+          >
+            <Bell size={15} />
+            {alertCount > 0 && (
+              <span
+                className="absolute -top-0.5 -end-0.5 min-w-[14px] h-[14px] flex items-center justify-center text-[8px] font-bold bg-red-500 text-white rounded-full px-0.5"
+                style={{ boxShadow: '0 0 5px rgba(239,68,68,0.5)' }}
+              >
+                {alertCount > 9 ? '9+' : alertCount}
+              </span>
+            )}
+          </NavLink>
+          <span className="text-xs max-w-[84px] truncate" style={{ color: '#6b7280' }}>
+            {profile?.full_name}
+          </span>
+          <button
+            type="button"
+            onClick={signOut}
+            className="tp-touch-target w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: '#9ca3af' }}
+            aria-label="Sign out"
+          >
+            <LogOut size={14} />
+          </button>
+        </div>
+      </header>
+
+      {/* Role-based first-run onboarding (field light theme) */}
+      <OnboardingWizard />
+
+      {/* Scrollable content */}
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex-1 min-h-0 min-w-0 overflow-auto overscroll-y-contain px-3 outline-none"
+        style={{
+          paddingTop: 'calc(52px + env(safe-area-inset-top))',
+          paddingBottom: 'calc(66px + env(safe-area-inset-bottom))',
+        }}
+      >
+        {children}
+      </main>
+
+      {/* Fixed bottom tab bar - light */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-30"
+        aria-label="Tyre Man navigation"
+        style={{
+          background: 'rgba(255,255,255,0.97)',
+          borderTop: '1px solid rgba(22,163,74,0.15)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+          boxShadow: '0 -2px 16px rgba(0,0,0,0.06)',
+        }}
+      >
+        <div className="flex items-stretch h-[54px]">
+          {tabs.map(({ to, label, tk, icon: Icon, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              style={({ isActive }) => ({
+                color: isActive ? '#16a34a' : '#9ca3af',
+              })}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:opacity-60"
+            >
+              {({ isActive }) => (
+                <>
+                  <div className="relative">
+                    <Icon size={20} strokeWidth={isActive ? 2.2 : 1.7} />
+                    {to === '/alerts' && alertCount > 0 && (
+                      <span
+                        className="absolute -top-1.5 -end-2 min-w-[15px] h-[15px] flex items-center justify-center text-[9px] font-bold bg-red-500 text-white rounded-full px-0.5"
+                        style={{ boxShadow: '0 0 6px rgba(239,68,68,0.5)' }}
+                      >
+                        {alertCount > 9 ? '9+' : alertCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[9.5px] font-semibold tracking-wide">{tk ? t(`shell.tabs.${tk}`) : label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
+    </div>
+    </MotionConfig>
+  )
+}
+
+// Desktop keeps the module rail visible when the contextual sidebar closes.
+const SIDEBAR_EXPANDED = 280
+const SIDEBAR_COLLAPSED = 0
+// Mobile drawer: min(86vw, MOBILE_DRAWER_MAX) so it fits a 360px phone and does
+// not sprawl on a tablet. Was a flat 240px on every device.
+const MOBILE_DRAWER_MAX = 360
+
+export default function Layout({ children }) {
+  useAppShellScrollLock()
+  // useRealtimeSync() REMOVED - it opened 12 postgres_changes subscriptions per open
+  // tab and every one of them invalidated a TanStack Query key that NOTHING READS.
+  // Measured: 231 pages, 0 call useQuery (only useBilling.js and the dead
+  // useSupabaseQuery.js do), so ['tyres'], ['dashboard'], ['work-orders'] and the rest
+  // have no reader. The cost was not free: Supabase Realtime decodes WAL and runs
+  // realtime.apply_rls() per change PER SUBSCRIBER, and on this instance that WAL
+  // decoder is the single largest database consumer by a factor of ~15 - 454,844 calls
+  // and 1.19 BILLION buffer accesses over six days against a 256 MB shared_buffers.
+  // The live features that genuinely need realtime keep their own subscriptions:
+  // useRealtimeAlerts (alerts/notifications/tyre_records), AuthContext (profiles,
+  // user_access_grants, module_permissions - the V227 live access refresh),
+  // SettingsContext (system_config), WorkshopLive, UploadApprovals, ConsoleSystemHealth.
+  // DO NOT re-add a global subscribe-to-everything hook. If a page needs live data,
+  // subscribe in that page to that table and consume the payload.
+
+  const auth = useAuth()
+  const { profile, hasPermission, grantedModules, isSuperAdmin, moduleStatus } = auth
+  const canLoadAlerts = moduleAvailable(auth, 'alerts')
+  const alertModules = ['stock', 'corrective_actions', 'tyre_records', 'inspections'].filter(key => moduleAvailable(auth, key)).join(',')
+  const { t, isRTL }                        = useLanguage()
+  const { branding }                        = useTenant()
+  // Org-assigned app icon (V120); falls back to the built-in mark so an
+  // unbranded org renders exactly as before. A custom (usually navy/coloured)
+  // logo is framed on a light chip via <BrandIcon> so it stays legible on the
+  // dark/green badges.
+  const customAppIcon = resolveBrandLogo(branding, 'app_icon')
+  // Second fallback: the Console -> Report Colors company logo (same chain the
+  // PDF reports use), so the org's real mark shows in the header without a
+  // separate app-icon upload. Best-effort; the built-in mark still closes the chain.
+  const [companyLogo, setCompanyLogo] = useState('')
+  useEffect(() => {
+    if (customAppIcon) return
+    let on = true
+    getCompanyLogo().then((url) => { if (on && url) setCompanyLogo(url) }).catch(() => {})
+    return () => { on = false }
+  }, [customAppIcon])
+  const appIcon = customAppIcon || companyLogo || TpLogo
+  const hasCustomIcon = Boolean(customAppIcon || companyLogo)
+  // `contextKey` changes whenever the working context (country/region/site)
+  // changes. It is folded into the routed content's React key below so pages
+  // REMOUNT on a context switch. Without it a stale in-flight response can land
+  // after the switch and paint the previous country's rows under the new label:
+  // 0 pages use react-query and 188 of 247 have no cancellation guard, so this
+  // one key is the honest fix rather than retrofitting every page.
+  const { activeCountry, contextKey } = useSettings()
+  const navigate     = useNavigate()
+  const location     = useLocation()
+
+  const { setOpen: setCmdOpen } = useCommandPalette()
+  const { isEnabled: isFlagEnabled } = useFeatureFlags()
+
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 768,
+  )
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window !== 'undefined' ? window.innerWidth >= 768 : true,
+  )
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set())
+  const [selectedWorkspace, setSelectedWorkspace] = useState(null)
+  const [moduleQuery, setModuleQuery] = useState('')
+  const moduleSearchRef = useRef(null)
+  const normalizedModuleQuery = moduleQuery.trim().toLocaleLowerCase()
+  const helpWorkspace = location.pathname === '/help' && (!selectedWorkspace || selectedWorkspace === '__help')
+  const [alertCount, setAlertCount]           = useState(0)
+  // NOTE: there was a `hoveredItem` state here, set by onMouseEnter/onMouseLeave
+  // on every nav link and READ BY NOTHING. Moving the mouse across the sidebar
+  // therefore re-rendered this whole component, which re-ran the permission
+  // filter over ~186 nav items on every frame of the movement. Deleted rather
+  // than memoised: dead state is not worth keeping fast. If a hover effect is
+  // ever wanted, do it in CSS (:hover) or inside the leaf NavLink, so it cannot
+  // re-render the nav tree again.
+  // Org-wide sidebar customization (super-admin Navigation Customizer). Loaded
+  // once, best-effort; {} → applyNavLayout returns the built-in defaults, so this
+  // is a no-op when no layout is configured. Applied BEFORE role/flag filtering
+  // below, so gating still runs on the reordered/regrouped set.
+  const [navLayout, setNavLayout]             = useState({})
+
+  useEffect(() => {
+    let alive = true
+    getNavLayout().then((layout) => { if (alive) setNavLayout(layout || {}) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const effectiveGroups = useMemo(() => applyNavLayout(NAV_GROUPS, navLayout), [navLayout])
+
+  // Navigation search filters only the permission-checked catalogue below.
+  const matchesModule = (item, group) => !normalizedModuleQuery || [
+    navLabelFor(t, item.to, item.label), groupHeadingFor(t, group),
+    item.parent && tOr(t, `nav.parents.${item.parent}`, item.parent),
+  ].filter(Boolean).some(value => value.toLocaleLowerCase().includes(normalizedModuleQuery))
+
+  useEffect(() => {
+    setModuleQuery('')
+    const activeGroup = effectiveGroups.find(group => group.items.some(item =>
+      item.to === location.pathname || (item.to !== '/' && location.pathname.startsWith(`${item.to}/`)),
+    ))
+    setSelectedWorkspace(location.pathname === '/help' ? '__help' : activeGroup ? (activeGroup.key || activeGroup.label) : null)
+    if (activeGroup) setCollapsedGroups(previous => {
+      const next = new Set(previous)
+      next.delete(activeGroup.key || activeGroup.label)
+      return next
+    })
+  }, [location.pathname, effectiveGroups])
+
+  // ── Favourites + recents ───────────────────────────────────────────────────
+  // Storage holds ROUTES ONLY (see src/lib/navFavorites.js). Everything a
+  // favourite renders - its label, its group, and whether the user may open it
+  // at all - is resolved HERE, against the same `effectiveGroups` the sidebar
+  // draws, so a renamed module cannot show a stale name, a route removed by the
+  // Navigation Customizer disappears, and a module revoked in the access matrix
+  // can never linger as a clickable shortcut.
+  const [favorites, setFavorites] = useState(loadFavorites)
+  const [favNote, setFavNote]     = useState('')
+
+  // Route -> the live nav item + its group heading. Built from effectiveGroups
+  // BEFORE permission filtering: the filter is applied by `canSeeRoute` below,
+  // so there is exactly one permission rule rather than two that can drift.
+  const navByRoute = useMemo(() => {
+    const map = new Map()
+    for (const group of effectiveGroups) {
+      const heading = groupHeadingFor(t, group)
+      for (const item of group.items || []) {
+        if (!item?.to || map.has(item.to)) continue
+        map.set(item.to, { item, groupAllowed: shouldShowGroup(group, profile), group: heading, label: navLabelFor(t, item.to, item.label) })
       }
     }
     return map

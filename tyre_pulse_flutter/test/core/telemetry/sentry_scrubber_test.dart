@@ -9,6 +9,30 @@ void main() {
       expect(scrubText('{"otp": "123456"}'), '{"otp": "[redacted]"}');
     });
 
+    test('redacts a whole quoted secret, spaces and punctuation included', () {
+      expect(
+        scrubText('{"password": "correct horse battery staple"}'),
+        '{"password": "[redacted]"}',
+      );
+      expect(
+        scrubText('{"password": "&private123"}'),
+        '{"password": "[redacted]"}',
+      );
+      expect(
+        scrubText(r'{"token": "a\"b, c;d"} next'),
+        '{"token": "[redacted]"} next',
+      );
+      expect(
+        scrubText("password='it is, ok' done"),
+        "password='[redacted]' done",
+      );
+    });
+
+    test('redacts an unquoted secret that starts with punctuation', () {
+      expect(scrubText('pin=&secret99 next'), 'pin=[redacted] next');
+      expect(scrubText('(otp=123456)'), '(otp=[redacted])');
+    });
+
     test('redacts JWTs, bearer values and Supabase keys', () {
       final String out = scrubText(
         'token eyJhbGciOiJIUzI1.eyJzdWIiOiIx.sig Bearer abc.def '

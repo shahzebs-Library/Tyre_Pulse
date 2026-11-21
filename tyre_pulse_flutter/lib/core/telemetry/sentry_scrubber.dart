@@ -23,6 +23,11 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 
 const String _redacted = '[redacted]';
 
+/// A key naming a secret, its optional quotes and the `:` / `=` after it.
+/// Group 1 is kept; only the value that follows is replaced.
+const String _secretKey =
+    r'''(["']?\b(?:password|passwd|pwd|otp|otp_code|verification_code|pin|token|access_token|refresh_token|id_token|secret|api_?key|apikey|authorization|session)\b["']?\s*[:=]\s*)''';
+
 final List<(RegExp, String)> _textRules = <(RegExp, String)>[
   // JSON Web Tokens (Supabase access tokens).
   (
@@ -35,16 +40,22 @@ final List<(RegExp, String)> _textRules = <(RegExp, String)>[
     r'$1 [redacted]',
   ),
   // Supabase keys.
+  (RegExp(r'\bsb_(publishable|secret)_[A-Za-z0-9_-]+'), '[redacted-key]'),
+  // "key": "value" / key='value' pairs whose key names a secret. A quoted
+  // value is redacted through its closing quote, escaped quotes included, so
+  // spaces and punctuation inside the secret never leak.
   (
-    RegExp(r'\bsb_(publishable|secret)_[A-Za-z0-9_-]+'),
-    '[redacted-key]',
+    RegExp('$_secretKey"(?:[^"\\\\]|\\\\.)*"', caseSensitive: false),
+    r'$1"[redacted]"',
   ),
-  // key=value / "key": "value" pairs whose key names a secret.
   (
-    RegExp(
-      r'''(["']?\b(?:password|passwd|pwd|otp|otp_code|verification_code|pin|token|access_token|refresh_token|id_token|secret|api_?key|apikey|authorization|session)\b["']?\s*[:=]\s*["']?)[^\s"'&,;})]+''',
-      caseSensitive: false,
-    ),
+    RegExp("$_secretKey'(?:[^'\\\\]|\\\\.)*'", caseSensitive: false),
+    r"$1'[redacted]'",
+  ),
+  // Unquoted key=value pairs: the value runs to whitespace or a separator;
+  // `&` ends it only when another `name=` follows (a query string).
+  (
+    RegExp('$_secretKey((?:(?!&\\w+=)[^\\s"\',;})])+)', caseSensitive: false),
     r'$1[redacted]',
   ),
   // Query strings: PostgREST filters carry serials, names, asset codes.

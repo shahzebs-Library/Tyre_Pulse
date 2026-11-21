@@ -1,4 +1,4 @@
-// Pending 20261121110000 (inv_tyre_sync_perf): the set-based tyre custody derivation
+// Applied 20261121110000 (2026-11-21) (inv_tyre_sync_perf): the set-based tyre custody derivation
 // produces EXACTLY the same tyre_items / conflicts as the released function, finds the
 // seven production conflict patterns, never duplicates on re-run, never touches the tyre
 // source tables, and is much faster (PGlite, synthetic data).
@@ -7,8 +7,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildDb, call, q, one, U, ORG_A } from './inventory_harness.test.mjs'
 
-const FIX = readFileSync(new URL('../pending_migrations/20261121110000_inv_tyre_sync_perf.sql', import.meta.url), 'utf8')
-const FIX_RB = readFileSync(new URL('../pending_migrations/20261121110000_inv_tyre_sync_perf_ROLLBACK.sql', import.meta.url), 'utf8')
+const FIX = readFileSync(new URL('../migrations/20261121110000_inv_tyre_sync_perf.sql', import.meta.url), 'utf8')
+const FIX_RB = readFileSync(new URL('../rollbacks/20261121110000_inv_tyre_sync_perf_ROLLBACK.sql', import.meta.url), 'utf8')
 const OLD_MD5 = '92e69b6622a88dddc3358ddea0ff1276'
 const SRC_HASH = `select (select md5(string_agg(to_jsonb(t)::text, ',' order by id)) from tyre_records t) tr,
   (select md5(string_agg(to_jsonb(m)::text, ',' order by id)) from tyre_status_marks m) tm`

@@ -154,3 +154,40 @@ Owner approval recorded 2026-11-21. Same method as section 3 (one file, one call
 | Advisors | security: 0 ERROR |
 
 The file in the repo carries an updated STATUS header; the executed body is the one at `fd85a466` (sha above).
+
+## 10. Follow-up 20261121110000_inv_tyre_sync_perf - applied 2026-11-21, first real tyre sync
+
+Owner approval recorded 2026-11-21 (PR #574 @ `39fa57f6`, CI green, review threads resolved). One file, one call.
+
+| Item | Value |
+|---|---|
+| Recovery point | 2026-11-21 07:21:24 UTC, LSN `1A6/EB01CFA0`; WAL archiving healthy (8,633 archived, last `00000001000001A6000000EA` 07:20:41, 0 failures) |
+| Snapshot | `_bak.inv_121110_pre` (old function definition + ACL + 19 fingerprints, 07:22:15 UTC, LSN `1A6/EB04C000`); `_bak.inv_121110_pre_tyre_items` / `_pre_conflicts` / `_pre_item_events` (all 0 rows before); `_bak.inv_121110_snapshot` (written by the file) |
+| Preflight | live md5 of `_inv_tyre_item_sync(text)` = `92e69b6622a88dddc3358ddea0ff1276` (= the file's guard); signature unchanged |
+| Fetch | pg_net from `raw.githubusercontent.com/.../39fa57f6.../supabase/pending_migrations/20261121110000_inv_tyre_sync_perf.sql` (HTTP 200, req 8345); sha256 in the database `abff81a32b73065a9b986fd2c80e70f0e82e6cf734004e3c6cb394d95dbf269f` = repo. Rollback req 8346, `2731a776...` = repo |
+| Applied | 07:23:11 UTC, 2,292 ms, DO/EXECUTE of the stored body; ledger `20261121110000 inv_tyre_sync_perf` |
+| After | new md5 `909a2379fd7fa97e1c34d971e2fca9ff`; ACL `{postgres=X, service_role=X}`, SECURITY DEFINER, search_path `public, pg_temp`. `inv_tyre_sync_runs` private (no grant to authenticated/anon; only the restrictive anum_reader policies). LSN `1A6/EC85F880` |
+| Advisors | security: 6 lints (5 WARN, 1 INFO), 0 ERROR |
+
+First real sync, through the web entry point `inv_tyre_item_sync({country})` as the owner super admin (aal2):
+
+| Run | Items | Written | New conflicts | Weak-serial rows | Duration |
+|---|---|---|---|---|---|
+| KSA first | 6,032 | 6,032 | 6 | 1,791 | 2,365 ms |
+| UAE first | 2,087 | 2,087 | 1 | 44 | 998 ms |
+| Egypt first | 500 | 500 | 0 | 7 | 658 ms |
+| KSA re-run (fingerprint changed by the UAE conflict, so rescan) | 6,032 | 0 | 0 | - | 1,274 ms |
+| KSA immediate repeat | - | 0 | - | - | cached, about 39 ms |
+| KSA concurrent pair (two pg_cron jobs started 07:28:00) | B rescanned 1,448 ms, wrote 0; A waited on the advisory lock and returned `cached=true` (last_run_at = B's run) | | | | no duplicates |
+
+Old function on the same data: KSA timed out above 55 s (doc 97). The temporary cron jobs were removed after the test.
+
+| tyre_items (8,619) | fitted | removed_pending | scrapped | unknown (conflict) |
+|---|---|---|---|---|
+| KSA | 2,401 | 2,724 | 901 | 6 |
+| UAE | 1,358 | 726 | 2 | 1 |
+| EGYPT | 411 | 89 | 0 | 0 |
+
+Conflicts: exactly 7 open, all `scrapped_but_active`, one row each (no duplicates): KSA L52043311, YMM18886, YMM22455, YMM68731, YMU41519, YMY44573; UAE YMA44467. Not corrected; evidence and recommendations in docs/inventory/99.
+
+Data unchanged (recomputed with the snapshot expressions after the sync): tyre_records (11,274; column and full-row md5), tyre_status_marks (907), tyre_price_provenance (428), tyre_cost_corrections (2,246), tyre_replacement_log (56), parts_consumption (219,356), engine_hours_logs, stock_records, stock_movements, tyre_store_holdings, tyre_dispositions: all equal. odometer_logs 2,999 -> 3,001 and vehicle_fleet km changed for exactly WL040 and TM369: two Mobile readings by field users at 09:28 and 09:58 UTC (normal use, the existing odometer trigger); nothing written by the sync.

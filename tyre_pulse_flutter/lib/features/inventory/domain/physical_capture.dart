@@ -73,6 +73,7 @@ final class PendingPhoto {
     required this.role,
     this.storagePath,
     this.attached = false,
+    this.lost = false,
   });
 
   factory PendingPhoto.fromJson(Map<String, Object?> j) => PendingPhoto(
@@ -81,6 +82,7 @@ final class PendingPhoto {
         role: '${j['role'] ?? 'item'}',
         storagePath: j['storage_path'] as String?,
         attached: j['attached'] == true,
+        lost: j['lost'] == true,
       );
 
   final String clientUuid;
@@ -93,12 +95,19 @@ final class PendingPhoto {
   /// True once `inv_pi_photo_attach` confirmed the link.
   final bool attached;
 
-  PendingPhoto copyWith({String? storagePath, bool? attached}) => PendingPhoto(
+  /// True when the local file no longer exists (cleared by the OS). It is
+  /// NOT attached: the capture stays in the outbox, flagged, until the person
+  /// acknowledges the loss ([PhysicalCaptureOutbox.dismiss]).
+  final bool lost;
+
+  PendingPhoto copyWith({String? storagePath, bool? attached, bool? lost}) =>
+      PendingPhoto(
         clientUuid: clientUuid,
         localPath: localPath,
         role: role,
         storagePath: storagePath ?? this.storagePath,
         attached: attached ?? this.attached,
+        lost: lost ?? this.lost,
       );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -107,6 +116,7 @@ final class PendingPhoto {
         'role': role,
         'storage_path': storagePath,
         'attached': attached,
+        'lost': lost,
       };
 }
 

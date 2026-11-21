@@ -16,6 +16,7 @@ import { sanitizeSearchTerm, escapeLike } from '../searchFilter'
 import { NOT_SET_UP_CODE, NOT_SET_UP_MESSAGE, inventoryRefusalText, newIdempotencyKey } from './inventory'
 import { resolveStorageUrlMap } from '../storageRefs'
 import { photoPath, newClientUuid } from '../inventory/physicalInventory'
+import { currentOrgId, isOrgId } from './companyScope'
 
 export const PHOTO_BUCKET = 'tyre-photos'
 const MAX_PHOTO_BYTES = 20 * 1024 * 1024
@@ -248,12 +249,15 @@ export function validatePhoto(file) {
  */
 export async function uploadPhoto(file, { orgId, sessionId, target = {}, role = 'item', purpose, clientUuid = newClientUuid() } = {}) {
   validatePhoto(file)
-  if (!orgId) throw new ServiceError('Your company could not be determined. Sign in again.', 'INV_PHOTO')
+  // The company folder comes from the database (app_current_org), the same value the
+  // server checks the path against; the signed-in profile does not carry it.
+  const org = isOrgId(orgId) ? orgId : await currentOrgId()
+  if (!org) throw new ServiceError('Your company could not be determined. Sign in again.', 'INV_PHOTO')
   const full = await resizeImage(file, 1600, 0.72)
   const thumb = await resizeImage(file, 320, 0.6)
   const hash = await sha256Hex(full)
-  const path = photoPath(orgId, sessionId, clientUuid, 'jpg')
-  const thumbPath = photoPath(orgId, sessionId, clientUuid, 'jpg', 'thumb')
+  const path = photoPath(org, sessionId, clientUuid, 'jpg')
+  const thumbPath = photoPath(org, sessionId, clientUuid, 'jpg', 'thumb')
   for (const [p, body] of [[path, full], [thumbPath, thumb]]) {
     const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(p, body, { contentType: 'image/jpeg', upsert: false })
     if (error && !/already exists|duplicate/i.test(error.message || '')) throw toServiceError(error, 'The photo could not be uploaded. Try again.')

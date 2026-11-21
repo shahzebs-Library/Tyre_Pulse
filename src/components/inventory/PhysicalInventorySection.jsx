@@ -23,7 +23,7 @@ import {
   uploadPhoto, loadDashboard,
 } from '../../lib/api/physicalInventory'
 import {
-  CONDITIONS, OWNERSHIPS, CODE_TYPES, PHOTO_ROLES, buildCapturePayload, guessCodeType, groupVariants,
+  CONDITIONS, OWNERSHIPS, CODE_TYPES, PHOTO_ROLES, captureAttempt, guessCodeType, groupVariants,
   identificationTone, classificationTone, dashboardTiles, identificationProgress, dashboardExportRows, newClientUuid,
 } from '../../lib/inventory/physicalInventory'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
@@ -135,6 +135,8 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
   const [stamp, setStamp] = useState(0)
   const codeRef = useRef(null)
   const clientUuid = useRef(newClientUuid())
+  const frozen = useRef(null)
+  const [retry, setRetry] = useState(null)
   const locations = useInvQuery(() => listLocations({ country: session.country, site: session.site }), [session.id])
   const captures = useInvQuery(() => listCaptures({ sessionId: session.id, page, pageSize: size }), [session.id, page, size, stamp])
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -148,22 +150,31 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
     try { setResult(await searchMaterials(code)) } catch (x) { setErr(toUserMessage(x)) }
   }
 
+  const uploadAll = async (files, captureId, role, purpose) => {
+    const failed = []
+    for (const file of files) {
+      try {
+        await uploadPhoto(file, { orgId, sessionId: session.id, target: { captureId }, role, purpose })
+      } catch { failed.push(file) }
+    }
+    return failed
+  }
+
   const save = async (e) => {
     e?.preventDefault()
-    const built = buildCapturePayload(form, { sessionId: session.id, clientUuid: clientUuid.current, deviceId: 'web' })
-    if (built.error) { setErr(t(`inventory.pi.capture.err.${built.error}`)); return }
+    const attempt = captureAttempt(frozen.current, form, { sessionId: session.id, clientUuid: clientUuid.current, deviceId: 'web' })
+    if (attempt.error) { setErr(t(`inventory.pi.capture.err.${attempt.error}`)); return }
+    frozen.current = attempt.frozen
     setBusy(true); setErr('')
     try {
-      const r = await recordCapture(built.payload)
-      let failed = 0
-      for (const file of form.photos) {
-        try {
-          await uploadPhoto(file, { orgId, sessionId: session.id, target: { captureId: r.id }, role: form.photoRole,
-            purpose: built.payload.kind === 'identified' ? 'count_proof' : 'identification' })
-        } catch { failed += 1 }
-      }
-      setLast({ ...r, failedPhotos: failed })
+      const r = await recordCapture(attempt.payload)
+      frozen.current = null
       clientUuid.current = newClientUuid()
+      const purpose = attempt.payload.kind === 'identified' ? 'count_proof' : 'identification'
+      const failed = await uploadAll(form.photos, r.id, form.photoRole, purpose)
+      // Files that did not upload are kept (never cleared) and offered for retry on this capture.
+      setRetry(failed.length ? { captureId: r.id, files: failed, role: form.photoRole, purpose } : null)
+      setLast({ ...r, failedPhotos: failed.length })
       setForm((f) => ({ ...EMPTY_FORM, location_id: f.location_id, location_hint: f.location_hint, condition: f.condition, ownership: f.ownership }))
       setResult(null)
       setStamp((s) => s + 1)
@@ -171,6 +182,18 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
       codeRef.current?.focus()
     } catch (x) { setErr(toUserMessage(x)) } finally { setBusy(false) }
   }
+
+  const retryPhotos = async () => {
+    if (!retry) return
+    setBusy(true)
+    const failed = await uploadAll(retry.files, retry.captureId, retry.role, retry.purpose)
+    setRetry(failed.length ? { ...retry, files: failed } : null)
+    setLast((l) => (l ? { ...l, failedPhotos: failed.length } : l))
+    setStamp((s) => s + 1)
+    setBusy(false)
+  }
+
+  const discardFrozen = () => { frozen.current = null; clientUuid.current = newClientUuid(); setErr('') }
 
   const locs = (locations.data?.rows || []).filter((l) => l.active !== false)
   const cols = [
@@ -255,6 +278,16 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
             </Field>
           </div>
           {err && <ErrorNote error={err} />}
+          {err && frozen.current && (
+            <Note tone="warn" action={<button type="button" className="cc-btn-ghost" onClick={discardFrozen}>{t('inventory.pi.capture.discardFrozen')}</button>}>
+              {t('inventory.pi.capture.frozenNote')}
+            </Note>
+          )}
+          {retry && (
+            <Note tone="warn" action={<button type="button" className="cc-btn" disabled={busy} onClick={retryPhotos}>{t('inventory.pi.capture.retryPhotos')}</button>}>
+              {t('inventory.pi.capture.photosKept', { n: retry.files.length })}
+            </Note>
+          )}
           {last && (
             <Note tone={last.failedPhotos ? 'warn' : 'good'} title={last.temp_ref ? t('inventory.pi.capture.savedUnknown', { ref: last.temp_ref }) : t('inventory.pi.capture.saved')}>
               {last.failedPhotos ? t('inventory.pi.capture.photosFailed', { n: last.failedPhotos }) : t('inventory.pi.capture.next')}
@@ -376,6 +409,8 @@ function DashboardTab({ scope, t, can }) {
 export default function PhysicalInventorySection({ scope, can, userId, tab: linkedTab, onTab }) {
   const { t } = useLanguage()
   const { profile } = useAuth()
+  // null: uploadPhoto resolves the company from the database (app_current_org); the
+  // profile select in AuthContext does not load organisation_id.
   const orgId = profile?.organisation_id || profile?.org_id || null
   const [tab, setTab] = useHubTab(linkedTab, onTab, TABS, 'capture')
   const tabs = useMemo(() => TABS.map((k) => ({ key: k, label: t(`inventory.pi.tabs.${k}`) })), [t])

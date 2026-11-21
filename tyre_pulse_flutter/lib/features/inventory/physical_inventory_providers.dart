@@ -2,7 +2,6 @@
 library;
 
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
@@ -19,13 +18,13 @@ final Provider<PhysicalInventoryRepository>
   ),
 );
 
-Future<Uint8List?> _readFile(String path) async {
+Future<PhotoRead> _readFile(String path) async {
+  final File f = File(path);
+  if (!f.existsSync()) return const PhotoMissing();
   try {
-    final File f = File(path);
-    if (!f.existsSync()) return null;
-    return await f.readAsBytes();
-  } on Object {
-    return null;
+    return PhotoBytes(await f.readAsBytes());
+  } on Object catch (e) {
+    return PhotoReadError(e);
   }
 }
 

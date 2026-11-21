@@ -36,6 +36,32 @@ import 'package:tyre_pulse/features/inventory/data/physical_inventory_repository
 import 'package:tyre_pulse/features/inventory/domain/physical_capture.dart';
 
 /// The result of one [PhysicalCaptureOutbox.flush].
+/// The outcome of reading a photo file. "Missing" (the file is gone) and
+/// "read error" (it exists but could not be read just now) are different:
+/// a read error is retried later; a missing file is flagged for the person.
+/// Neither is ever treated as uploaded.
+sealed class PhotoRead {
+  const PhotoRead();
+}
+
+final class PhotoBytes extends PhotoRead {
+  const PhotoBytes(this.bytes);
+  final Uint8List bytes;
+}
+
+final class PhotoMissing extends PhotoRead {
+  const PhotoMissing();
+}
+
+final class PhotoReadError extends PhotoRead {
+  const PhotoReadError(this.error);
+  final Object error;
+}
+
+/// Error codes stored on a capture for the screen to translate.
+const String piErrPhotoMissing = 'photo_missing';
+const String piErrPhotoReadFailed = 'photo_read_failed';
+
 final class OutboxFlushResult {
   const OutboxFlushResult({
     required this.sent,
@@ -53,13 +79,13 @@ final class OutboxFlushResult {
 final class PhysicalCaptureOutbox {
   PhysicalCaptureOutbox(
     this._store, {
-    required Future<Uint8List?> Function(String path) readBytes,
+    required Future<PhotoRead> Function(String path) readBytes,
     Future<void> Function(String path)? deleteFile,
   })  : _readBytes = readBytes,
         _deleteFile = deleteFile;
 
   final SecureKeyValueStore _store;
-  final Future<Uint8List?> Function(String path) _readBytes;
+  final Future<PhotoRead> Function(String path) _readBytes;
   final Future<void> Function(String path)? _deleteFile;
   bool _flushing = false;
 
@@ -105,6 +131,26 @@ final class PhysicalCaptureOutbox {
         return all.isEmpty ? null : _encode(all);
       });
 
+  /// Removes a capture the person has acknowledged (e.g. a photo file the OS
+  /// deleted). Only a capture the server already holds can be dismissed, so
+  /// unsent evidence is never thrown away from here. Returns true when removed.
+  Future<bool> dismiss(String userId, String clientUuid) async {
+    bool removed = false;
+    await _store.updateValue(slotFor(userId), (String? current) {
+      final List<PendingCapture> all = _decode(current, userId);
+      final List<PendingCapture> keep = <PendingCapture>[
+        for (final PendingCapture c in all)
+          if (c.clientUuid == clientUuid && c.captureSent)
+            ...<PendingCapture>[]
+          else
+            c,
+      ];
+      removed = keep.length != all.length;
+      return keep.isEmpty ? null : _encode(keep);
+    });
+    return removed;
+  }
+
   /// Sends everything it can. Stops at the first connectivity failure (the
   /// rest waits for the network); a refusal is recorded on that capture and
   /// the next capture is tried.
@@ -141,16 +187,33 @@ final class PhysicalCaptureOutbox {
             await _replace(userId, c);
           }
           final List<PendingPhoto> photos = <PendingPhoto>[...c.photos];
+          String? photoProblem;
           for (int i = 0; i < photos.length; i++) {
             PendingPhoto p = photos[i];
-            if (p.attached) continue;
-            final Uint8List? bytes = await _readBytes(p.localPath);
-            if (bytes == null) {
-              // The file is gone (cleared by the OS). The capture itself is
-              // kept on the server; the photo cannot be recovered.
-              photos[i] = p.copyWith(attached: true);
+            if (p.attached || p.lost) {
+              if (p.lost) photoProblem ??= piErrPhotoMissing;
               continue;
             }
+            final PhotoRead read = await _readBytes(p.localPath);
+            if (read is PhotoMissing) {
+              photos[i] = p.copyWith(lost: true);
+              photoProblem ??= piErrPhotoMissing;
+              await _replace(
+                userId,
+                c.copyWith(photos: photos, lastError: piErrPhotoMissing),
+              );
+              continue;
+            }
+            if (read is PhotoReadError) {
+              // Exists but unreadable right now: keep it pending, try again later.
+              photoProblem = piErrPhotoReadFailed;
+              await _replace(
+                userId,
+                c.copyWith(photos: photos, lastError: piErrPhotoReadFailed),
+              );
+              continue;
+            }
+            final Uint8List bytes = (read as PhotoBytes).bytes;
             final String path =
                 p.storagePath ?? piPhotoPath(orgId, c.sessionId, p.clientUuid);
             if (p.storagePath == null) {
@@ -172,9 +235,13 @@ final class PhysicalCaptureOutbox {
             photos[i] = p.copyWith(attached: true);
             await _replace(userId, c.copyWith(photos: photos));
           }
+          if (photoProblem != null) {
+            // Not done: a photo is missing or unreadable. Kept, and shown.
+            continue;
+          }
           await _remove(userId, c.clientUuid);
-          for (final PendingPhoto p in c.photos) {
-            await _deleteFile?.call(p.localPath);
+          for (final PendingPhoto p in photos) {
+            if (p.attached) await _deleteFile?.call(p.localPath);
           }
           sent += 1;
         } on SupabaseFailure catch (f) {

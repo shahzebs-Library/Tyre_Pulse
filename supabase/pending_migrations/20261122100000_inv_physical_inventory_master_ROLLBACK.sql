@@ -66,6 +66,7 @@ drop table if exists public.material_canonical;
 
 drop function if exists public._inv_pi_dup_candidates(uuid, jsonb, text, uuid);
 drop function if exists public._inv_pi_country_item(uuid, text, uuid, uuid);
+drop function if exists public._inv_pi_country_item_candidates(uuid, text, uuid, uuid);
 drop function if exists public._inv_pi_target_snapshot(text, uuid);
 drop function if exists public._inv_pi_evidence_guard();
 drop function if exists public._inv_pi_append_only();

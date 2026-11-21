@@ -133,3 +133,16 @@ describe('locale coverage for the dynamic key families', () => {
     }
   })
 })
+
+describe('retry freezes the payload (Codex P2)', () => {
+  it('a retry sends exactly the first payload, including captured_at', async () => {
+    const { captureAttempt } = await import('../lib/inventory/physicalInventory')
+    const form = { quantity: '3', refs: {}, condition: 'new', ownership: 'owned' }
+    const first = captureAttempt(null, form, { sessionId: 's', clientUuid: 'u1', capturedAt: '2026-11-21T08:00:00.000Z' })
+    const retry = captureAttempt(first.frozen, { ...form, quantity: '9' }, { sessionId: 's', clientUuid: 'u1', capturedAt: '2026-11-21T09:00:00.000Z' })
+    expect(retry.payload).toBe(first.payload)
+    expect(retry.payload.captured_at).toBe('2026-11-21T08:00:00.000Z')
+    expect(retry.payload.quantity).toBe(3)
+    expect(captureAttempt(null, { ...form, quantity: '' }, { sessionId: 's' }).error).toBe('quantity')
+  })
+})

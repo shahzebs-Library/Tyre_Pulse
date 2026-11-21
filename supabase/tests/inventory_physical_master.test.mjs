@@ -118,6 +118,18 @@ test('physical inventory master: identification, capture, review, corrections, i
       const replay = await rpc(db, U.keeper, 'inv_pi_capture', [JSON.stringify({ session_id: session.id, client_uuid: uuid(1), kind: 'identified',
         variant_id: genuine, quantity: 5 })])
       assert.equal(replay.duplicate, true); assert.equal(replay.id, known.id)
+      // a retry with a different device timestamp (same client_uuid) is still a replay, never refused
+      const replay2 = await call(db, U.keeper, 'inv_pi_capture', { idempotency_key: uuid(1), session_id: session.id, client_uuid: uuid(1),
+        kind: 'identified', variant_id: genuine, quantity: 5, captured_at: new Date(Date.now() - 60000).toISOString() })
+      assert.equal(replay2.duplicate, true); assert.equal(replay2.id, known.id)
+      // a material picked without its variant has two KSA ERP SKUs (genuine and aftermarket): never pick one silently
+      const amb = await rpc(db, U.keeper, 'inv_pi_capture', [JSON.stringify({ session_id: session.id, client_uuid: uuid(5), kind: 'identified',
+        canonical_id: canonA, quantity: 2 })])
+      assert.equal(amb.item_id, null)
+      assert.deepEqual(amb.review_flags, ['ambiguous_erp_sku'])
+      // customer-owned goods on the shelf are recorded, never turned into owned stock later
+      await rpc(db, U.keeper, 'inv_pi_capture', [JSON.stringify({ session_id: session.id, client_uuid: uuid(6), kind: 'identified',
+        variant_id: genuine, quantity: 1, ownership: 'customer' })])
       unknown = await rpc(db, U.keeper, 'inv_pi_capture', [JSON.stringify({ session_id: session.id, client_uuid: uuid(2), kind: 'unidentified',
         quantity: 3, condition: 'used', location_hint: 'rack B shelf 2', refs: { description: 'grey pump seal kit', aftermarket: 'SK-44' } })])
       assert.match(unknown.temp_ref, /^UNK-/)
@@ -189,6 +201,9 @@ test('physical inventory master: identification, capture, review, corrections, i
       assert.equal(ob.lines, 1, 'only the identified capture with a KSA ERP SKU')
       assert.ok(ob.skipped.some(s => s.reason === 'not_identified'), 'unidentified stays out')
       assert.ok(ob.skipped.some(s => s.reason === 'no_erp_sku_for_country'), 'a new material without a KSA ERP SKU waits for the link')
+      assert.ok(ob.skipped.some(s => s.reason === 'ambiguous_erp_sku'), 'ambiguous ERP SKU waits for a person to choose')
+      assert.ok(ob.skipped.some(s => s.reason === 'ownership_needs_decision' && s.ownership === 'customer'), 'customer stock is never posted as owned')
+      assert.equal((await one(db, `select count(*)::int n from opening_balance_lines where batch_id='${ob.id}' and ownership <> 'owned'`)).n, 0)
       const lines = await q(db, `select mapping_status, missing_cost, issues from opening_balance_lines where batch_id='${ob.id}'`)
       assert.equal(lines.length, 1)
       assert.equal(lines[0].mapping_status, 'needs_review')
@@ -206,7 +221,9 @@ test('physical inventory master: identification, capture, review, corrections, i
       assert.equal((await asUser(db, U.adminB, () => q(db, 'select * from material_canonical'))).length, 0)
       assert.equal((await asUser(db, U.adminB, () => q(db, 'select * from v_inv_pi_captures'))).length, 0)
       const mine = await rpc(db, U.admin, 'inv_pi_dashboard', [JSON.stringify({ site: 'S1' })])
-      assert.equal(Number(mine.captures), 3)
+      assert.equal(Number(mine.captures), 5)
+      assert.equal(Number(mine.ambiguous_erp_sku), 1)
+      assert.equal(Number(mine.ownership_needs_decision), 1)
       assert.equal(Number(mine.pending_review), 1)
       assert.equal(mine.by_employee[0].user_id, U.keeper)
     })

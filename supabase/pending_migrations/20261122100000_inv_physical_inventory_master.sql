@@ -237,6 +237,7 @@ create table if not exists public.physical_inventory_captures (
   ownership text not null default 'owned' check (ownership in ('owned','consignment','supplier','customer','unknown')),
   remarks text,
   duplicate_candidates jsonb not null default '[]'::jsonb,
+  review_flags text[] not null default '{}',
   identification_status text not null default 'pending_review'
     check (identification_status in ('identified','pending_review','mapped','rejected')),
   mapped_by uuid, mapped_at timestamptz, mapping_note text,
@@ -435,14 +436,26 @@ begin
      and not exists (select 1 from public.material_canonical_items ci where ci.item_id = m.id)), '[]'::jsonb);
 end $fn$;
 
--- Resolve the session-country ERP item for a canonical / variant.
-create or replace function public._inv_pi_country_item(p_org uuid, p_country text, p_canonical uuid, p_variant uuid)
-returns uuid language sql stable security definer set search_path = public as $$
-  select ci.item_id from public.material_canonical_items ci join public.material_master m on m.id = ci.item_id
+-- How many ERP items of the session country could stand for a canonical / variant.
+create or replace function public._inv_pi_country_item_candidates(p_org uuid, p_country text, p_canonical uuid, p_variant uuid)
+returns integer language sql stable security definer set search_path = public as $$
+  select count(*)::int from public.material_canonical_items ci join public.material_master m on m.id = ci.item_id
    where ci.organisation_id = p_org and lower(coalesce(m.country, '')) = lower(coalesce(p_country, ''))
      and ((p_variant is not null and ci.variant_id = p_variant)
           or (p_variant is null and ci.canonical_id = p_canonical))
-   order by (ci.variant_id is null), ci.linked_at limit 1
+$$;
+
+-- Resolve the session-country ERP item for a canonical / variant ONLY when exactly one
+-- candidate exists. Several candidates (e.g. a material without a variant whose
+-- variants carry different ERP SKUs) are ambiguous: NULL, and the caller flags the
+-- capture 'ambiguous_erp_sku' for a person to choose. Never pick one silently.
+create or replace function public._inv_pi_country_item(p_org uuid, p_country text, p_canonical uuid, p_variant uuid)
+returns uuid language sql stable security definer set search_path = public as $$
+  select case when count(*) = 1 then (array_agg(ci.item_id))[1] end
+    from public.material_canonical_items ci join public.material_master m on m.id = ci.item_id
+   where ci.organisation_id = p_org and lower(coalesce(m.country, '')) = lower(coalesce(p_country, ''))
+     and ((p_variant is not null and ci.variant_id = p_variant)
+          or (p_variant is null and ci.canonical_id = p_canonical))
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -655,16 +668,21 @@ declare r jsonb; v_org uuid := public.app_current_org(); s public.physical_inven
   v_can uuid := nullif(p_payload->>'canonical_id', '')::uuid; v_var uuid := nullif(p_payload->>'variant_id', '')::uuid;
   v_item uuid := nullif(p_payload->>'item_id', '')::uuid; v_loc uuid := nullif(p_payload->>'location_id', '')::uuid;
   v_status text; v_can_status text; v_temp text; v_dups jsonb := '[]'::jsonb; v_id uuid := gen_random_uuid(); v_qty numeric;
+  v_flags text[] := '{}';
 begin
-  r := public._inv_req_begin('inv_pi_capture', p_payload, true); if r is not null then return r; end if;
   if not public._inv_pi_can_capture() then
     raise exception 'Recording a physical inventory capture needs stock:count, stock:receive or an elevated role.' using errcode = '42501';
   end if;
   if v_cu is null then raise exception 'client_uuid is required.' using errcode = '22023'; end if;
+  -- The capture is keyed by client_uuid: a replay returns the stored row even when the
+  -- retried payload differs (e.g. a new device timestamp), before the request store
+  -- could refuse it as a different request. The FIRST payload is the evidence.
   select * into v_ex from public.physical_inventory_captures where organisation_id = v_org and client_uuid = v_cu;
   if found then
-    return jsonb_build_object('id', v_ex.id, 'temp_ref', v_ex.temp_ref, 'identification_status', v_ex.identification_status, 'duplicate', true);
+    return jsonb_build_object('id', v_ex.id, 'temp_ref', v_ex.temp_ref, 'identification_status', v_ex.identification_status,
+      'item_id', v_ex.item_id, 'review_flags', to_jsonb(v_ex.review_flags), 'duplicate', true);
   end if;
+  r := public._inv_req_begin('inv_pi_capture', p_payload, true); if r is not null then return r; end if;
   select * into s from public.physical_inventory_sessions where id = (p_payload->>'session_id')::uuid;
   if not found or s.organisation_id is distinct from v_org then raise exception 'Session not found.' using errcode = 'P0002'; end if;
   if s.status <> 'open' then raise exception 'This physical inventory session is %.', s.status using errcode = '22023'; end if;
@@ -697,6 +715,9 @@ begin
       if v_can_status is null then raise exception 'Material not found in your company.' using errcode = 'P0002'; end if;
       if v_can_status not in ('proposed','active') then raise exception 'This material is %; pick the replacement.', v_can_status using errcode = '22023'; end if;
       v_item := coalesce(v_item, public._inv_pi_country_item(v_org, s.country, v_can, v_var));
+      if v_item is null and public._inv_pi_country_item_candidates(v_org, s.country, v_can, v_var) > 1 then
+        v_flags := array['ambiguous_erp_sku'];
+      end if;
     end if;
     v_status := case when v_can is null or v_can_status = 'active' then 'identified' else 'pending_review' end;
   else
@@ -710,15 +731,15 @@ begin
   end if;
   insert into public.physical_inventory_captures(id, organisation_id, session_id, country, site, location_id, location_hint,
     capture_kind, temp_ref, canonical_id, variant_id, item_id, scanned_code, scanned_code_type, entered_refs, quantity, uom,
-    condition, ownership, remarks, duplicate_candidates, identification_status, captured_at, device_id, client_uuid)
+    condition, ownership, remarks, duplicate_candidates, review_flags, identification_status, captured_at, device_id, client_uuid)
   values (v_id, v_org, s.id, s.country, s.site, coalesce(v_loc, s.location_id), nullif(btrim(p_payload->>'location_hint'), ''),
     v_kind, v_temp, v_can, v_var, v_item, nullif(btrim(p_payload->>'scanned_code'), ''), nullif(p_payload->>'scanned_code_type', ''),
     coalesce(p_payload->'refs', '{}'::jsonb), v_qty, nullif(p_payload->>'uom', ''),
     coalesce(nullif(p_payload->>'condition', ''), 'unknown'), coalesce(nullif(p_payload->>'ownership', ''), 'owned'),
-    nullif(btrim(p_payload->>'remarks'), ''), v_dups, v_status,
+    nullif(btrim(p_payload->>'remarks'), ''), v_dups, v_flags, v_status,
     least(coalesce(nullif(p_payload->>'captured_at', '')::timestamptz, now()), now()), nullif(p_payload->>'device_id', ''), v_cu);
   return public._inv_req_end('inv_pi_capture', p_payload, jsonb_build_object('id', v_id, 'temp_ref', v_temp,
-    'identification_status', v_status, 'item_id', v_item, 'duplicates', v_dups, 'duplicate', false));
+    'identification_status', v_status, 'item_id', v_item, 'review_flags', to_jsonb(v_flags), 'duplicates', v_dups, 'duplicate', false));
 end $fn$;
 
 create or replace function public.inv_pi_photo_attach(p_payload jsonb) returns jsonb
@@ -839,6 +860,8 @@ begin
   end if;
   v_item := coalesce(v_item, public._inv_pi_country_item(v_org, c.country, v_can, v_var));
   update public.physical_inventory_captures set canonical_id = v_can, variant_id = v_var, item_id = v_item,
+    review_flags = case when v_item is null and public._inv_pi_country_item_candidates(v_org, c.country, v_can, v_var) > 1
+                        then array['ambiguous_erp_sku'] else '{}'::text[] end,
     identification_status = 'mapped', mapped_by = auth.uid(), mapped_at = now(), mapping_note = nullif(btrim(p_payload->>'note'), '')
   where id = c.id;
   -- identification photos of this capture become reusable photos of the material (count proof stays on the capture)
@@ -1155,14 +1178,20 @@ begin
     if c.identification_status not in ('identified','mapped') then
       v_skipped := v_skipped || jsonb_build_object('capture_id', c.id, 'temp_ref', c.temp_ref, 'reason', 'not_identified');
     elsif c.item_id is null then
-      v_skipped := v_skipped || jsonb_build_object('capture_id', c.id, 'reason', 'no_erp_sku_for_country');
+      v_skipped := v_skipped || jsonb_build_object('capture_id', c.id, 'reason',
+        case when 'ambiguous_erp_sku' = any (c.review_flags) then 'ambiguous_erp_sku' else 'no_erp_sku_for_country' end);
+    elsif c.ownership <> 'owned' then
+      -- Customer, supplier, consignment or unknown ownership is never posted as owned
+      -- stock. Those need an explicit ownership decision (supplier agreement / consignment
+      -- receipt through Supply) and stay out of the opening balance.
+      v_skipped := v_skipped || jsonb_build_object('capture_id', c.id, 'reason', 'ownership_needs_decision', 'ownership', c.ownership);
     elsif c.opening_line_id is not null then
       v_skipped := v_skipped || jsonb_build_object('capture_id', c.id, 'reason', 'already_promoted');
     elsif c.quantity = 0 then
       v_skipped := v_skipped || jsonb_build_object('capture_id', c.id, 'reason', 'zero_quantity');
     else
       v_lines := v_lines || jsonb_strip_nulls(jsonb_build_object('item_id', c.item_id, 'location_id', c.location_id, 'qty', c.quantity,
-        'condition', c.condition, 'ownership', case when c.ownership in ('owned','consignment','supplier') then c.ownership else 'owned' end,
+        'condition', c.condition, 'ownership', 'owned',
         'uom', c.uom, 'source_ref', 'capture:' || c.id, 'description', coalesce(c.location_hint, ''),
         'notes', 'physical inventory ' || s.reference));
     end if;
@@ -1224,6 +1253,8 @@ language sql stable security invoker set search_path = public, pg_temp as $fn$
     'rejected', (select count(*) from cap where identification_status = 'rejected'),
     'missing_company_sku', (select count(*) from cap where identification_status in ('identified','mapped') and company_sku is null),
     'missing_erp_sku', (select count(*) from cap where identification_status in ('identified','mapped') and item_id is null),
+    'ambiguous_erp_sku', (select count(*) from cap where 'ambiguous_erp_sku' = any (review_flags)),
+    'ownership_needs_decision', (select count(*) from cap where ownership <> 'owned'),
     'missing_oem', (select count(*) from cap where identification_status in ('identified','mapped') and not has_oem),
     'missing_aftermarket', (select count(*) from cap where cls = 'aftermarket' and not has_aftermarket),
     'duplicate_candidates', (select count(*) from cap where jsonb_array_length(duplicate_candidates) > 0 and identification_status = 'pending_review'),
@@ -1256,7 +1287,7 @@ select c.id, c.organisation_id, c.session_id, s.reference as session_reference, 
        l.code as location_code, c.location_hint, c.capture_kind, c.temp_ref, c.canonical_id, cn.company_sku,
        cn.description as canonical_description, c.variant_id, v.part_number, v.manufacturer as variant_manufacturer,
        v.part_classification, c.item_id, m.item_code as erp_sku, c.scanned_code, c.scanned_code_type, c.entered_refs,
-       c.quantity, c.uom, c.condition, c.ownership, c.remarks, c.duplicate_candidates, c.identification_status,
+       c.quantity, c.uom, c.condition, c.ownership, c.remarks, c.duplicate_candidates, c.review_flags, c.identification_status,
        c.identification_status in ('identified','mapped') as issuable_identity,
        c.mapped_by, c.mapped_at, c.mapping_note, c.captured_by, p.full_name as captured_by_name, c.captured_at,
        c.device_id, c.opening_line_id,
@@ -1276,6 +1307,7 @@ grant select on public.v_inv_pi_captures to authenticated;
 -- ---------------------------------------------------------------------------
 revoke all on function public._inv_pi_can_capture(), public._inv_pi_can_master(),
   public._inv_pi_dup_candidates(uuid, jsonb, text, uuid), public._inv_pi_country_item(uuid, text, uuid, uuid),
+  public._inv_pi_country_item_candidates(uuid, text, uuid, uuid),
   public._inv_pi_target_snapshot(text, uuid), public._inv_pi_evidence_guard(), public._inv_pi_append_only()
   from public, anon, authenticated;
 revoke all on function public.material_ref_norm(text) from public, anon;

@@ -783,6 +783,10 @@
       "ledgerRule": "Official stock only changes when the opening-balance batch is approved by someone other than its preparer (Controls > Opening balances). Missing prices stay unvalued for Finance."
     },
     "capture": {
+      "frozenNote": "This item was not confirmed by the server. Saving again sends exactly the same item (no duplicate). Changes you make now are not included; discard it only if you are sure it was not saved.",
+      "discardFrozen": "Discard and start a new item",
+      "retryPhotos": "Retry photos",
+      "photosKept": "{n} photos did not upload and are kept here.",
       "title": "Capture",
       "sub": "Scan or type a barcode, company SKU, OEM or aftermarket number, or search by manufacturer or description. Save and go to the next item.",
       "codePlaceholder": "Scan or type a code, part number or description",
@@ -1033,6 +1037,8 @@
       "pickStore": "Choose your store in the site filter to request a transfer instead of buying again."
     },
     "dash": {
+      "ambiguous_erp_sku": "ERP SKU to choose",
+      "ownership_needs_decision": "Ownership to decide",
       "captures": "Items collected",
       "identified": "Identified",
       "pending_review": "Waiting for review",

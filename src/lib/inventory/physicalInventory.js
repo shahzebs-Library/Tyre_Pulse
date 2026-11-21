@@ -94,7 +94,8 @@ export function transferSources(result, site) {
 }
 
 /** The quick-capture form -> inv_pi_capture payload. Returns { payload } or { error }. */
-export function buildCapturePayload(form, { sessionId, clientUuid, deviceId = 'web' } = {}) {
+export function buildCapturePayload(form, opts = {}) {
+  const { sessionId, clientUuid, deviceId = 'web' } = opts
   const qty = Number(String(form?.quantity ?? '').replace(',', '.'))
   if (!sessionId) return { error: 'session' }
   if (form?.quantity === '' || form?.quantity == null || !Number.isFinite(qty) || qty < 0) return { error: 'quantity' }
@@ -124,9 +125,23 @@ export function buildCapturePayload(form, { sessionId, clientUuid, deviceId = 'w
       ownership: OWNERSHIPS.includes(form?.ownership) ? form.ownership : 'owned',
       remarks: String(form?.remarks || '').trim() || null,
       device_id: deviceId,
-      captured_at: new Date().toISOString(),
+      captured_at: opts.capturedAt || new Date().toISOString(),
     },
   }
+}
+
+/**
+ * The payload for the next save attempt. Once a payload was sent for a
+ * client_uuid it is FROZEN: a retry after a timeout or error sends exactly the
+ * same body (same captured_at), so the server treats it as a replay and never
+ * as a different request. A new payload is built only when nothing is frozen.
+ * Returns { frozen, payload } or { error }.
+ */
+export function captureAttempt(frozen, form, opts = {}) {
+  if (frozen?.payload) return { frozen, payload: frozen.payload }
+  const built = buildCapturePayload(form, opts)
+  if (built.error) return built
+  return { frozen: { payload: built.payload }, payload: built.payload }
 }
 
 /** Old vs new rows for the side-by-side correction view. */
@@ -161,6 +176,8 @@ export function dashboardTiles(d) {
     { key: 'pending_review', value: n(d.pending_review), tone: n(d.pending_review) > 0 ? 'warn' : null },
     { key: 'missing_company_sku', value: n(d.missing_company_sku) },
     { key: 'missing_erp_sku', value: n(d.missing_erp_sku) },
+    { key: 'ambiguous_erp_sku', value: n(d.ambiguous_erp_sku), tone: n(d.ambiguous_erp_sku) > 0 ? 'warn' : null },
+    { key: 'ownership_needs_decision', value: n(d.ownership_needs_decision), tone: n(d.ownership_needs_decision) > 0 ? 'warn' : null },
     { key: 'missing_oem', value: n(d.missing_oem) },
     { key: 'missing_aftermarket', value: n(d.missing_aftermarket) },
     { key: 'duplicate_candidates', value: n(d.duplicate_candidates), tone: n(d.duplicate_candidates) > 0 ? 'warn' : null },

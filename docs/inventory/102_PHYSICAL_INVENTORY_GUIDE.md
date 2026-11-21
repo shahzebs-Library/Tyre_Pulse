@@ -56,7 +56,15 @@ variant), `physical_inventory_sessions`, `physical_inventory_captures`, `physica
 6. **No double counting.** `inv_pi_to_opening_batch` marks a line `needs_review` when the item already
    holds a balance at that location or the store still has unmapped legacy balances. Missing prices
    stay unvalued (`missing_cost`), for Finance.
-7. **Corrections never touch history or money.** They change only identification data
+7. **No silent ERP SKU pick.** A material picked without its variant, when several ERP SKUs of the
+   country could stand for it, is saved with `item_id` empty and the flag `ambiguous_erp_sku`; it stays
+   out of the opening balance until a person chooses the variant / ERP SKU.
+8. **Ownership is never guessed.** Only captures recorded as company-owned reach the opening balance;
+   customer, supplier, consignment and unknown ownership are skipped as `ownership_needs_decision`
+   (handled through Supply: supplier agreements / consignment receipt).
+9. **Replays.** A capture replay with the same `client_uuid` returns the stored row even if the retried
+   body differs; the web screen also freezes the payload of an unconfirmed save and resends it exactly.
+10. **Corrections never touch history or money.** They change only identification data
    (material / variant / references); an old company SKU or part number stays findable as a
    historical reference; a duplicate is marked obsolete with `superseded_by`, never deleted; country
    ERP item fields go through the existing master review. A stale request (record changed after it
@@ -100,7 +108,11 @@ secure store) and are sent when the screen opens, after every save, when connect
 when the app returns to the foreground. Photos are resized by the picker (1280 px, quality 60),
 copied to app storage, uploaded once (a retry after an upload skips straight to attach) and hashed
 (SHA-256) so the server stores the same bytes once. A server refusal is kept with its reason;
-nothing is dropped. Another user on the same phone never sees these captures.
+nothing is dropped. A photo file that cannot be read right now stays pending and is retried; a file
+the OS deleted is flagged (never treated as uploaded) and the capture stays listed until the person
+dismisses it. Local files are deleted only after the server confirmed the photo. On the web, photos
+that fail to upload are kept and offered for retry on the same capture; the company folder comes from
+`app_current_org()` (the signed-in profile does not carry it). Another user on the same phone never sees these captures.
 
 **For a human (reserved wiring, AGENTS.md):** to send captures while the app is closed, register
 `PhysicalCaptureOutbox.flush` in the background worker / sync engine (`lib/core/sync/*`). Agents may

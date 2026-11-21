@@ -106,16 +106,21 @@ void main() {
   late _Store store;
   late _Repo repo;
   late List<String> deleted;
+  bool lockedFails = true;
   late PhysicalCaptureOutbox outbox;
 
   setUp(() {
     store = _Store();
     repo = _Repo();
     deleted = <String>[];
+    lockedFails = true;
     outbox = PhysicalCaptureOutbox(
       store,
-      readBytes: (String p) async =>
-          p == 'missing.jpg' ? null : Uint8List.fromList(utf8.encode('img:$p')),
+      readBytes: (String p) async => switch (p) {
+        'missing.jpg' => const PhotoMissing(),
+        'locked.jpg' when lockedFails => PhotoReadError(StateError('locked')),
+        _ => PhotoBytes(Uint8List.fromList(utf8.encode('img:$p'))),
+      },
       deleteFile: (String p) async => deleted.add(p),
     );
   });
@@ -280,5 +285,65 @@ void main() {
       picks.map((MaterialPick p) => p.variantId),
       <String?>['g', 'a', null],
     );
+  });
+
+  test('a missing photo file is never treated as uploaded or deleted',
+      () async {
+    await outbox.add(
+      _capture(
+        'c1',
+        photos: const <PendingPhoto>[
+          PendingPhoto(
+            clientUuid: 'p1',
+            localPath: 'missing.jpg',
+            role: 'item',
+          ),
+        ],
+      ),
+    );
+    await outbox.flush(userId: 'u1', orgId: 'org', repository: repo);
+    final PendingCapture left = (await outbox.pending('u1')).single;
+    expect(left.captureSent, isTrue);
+    expect(left.photos.single.attached, isFalse);
+    expect(left.photos.single.lost, isTrue);
+    expect(left.lastError, piErrPhotoMissing);
+    expect(repo.uploads, isEmpty);
+    expect(repo.attached, isEmpty);
+    expect(deleted, isEmpty);
+    // the person acknowledges the loss; only then is it removed
+    expect(await outbox.dismiss('u1', 'c1'), isTrue);
+    expect(await outbox.pending('u1'), isEmpty);
+  });
+
+  test('a read error keeps the photo pending and retries later', () async {
+    await outbox.add(
+      _capture(
+        'c1',
+        photos: const <PendingPhoto>[
+          PendingPhoto(clientUuid: 'p1', localPath: 'locked.jpg', role: 'item'),
+        ],
+      ),
+    );
+    await outbox.flush(userId: 'u1', orgId: 'org', repository: repo);
+    PendingCapture left = (await outbox.pending('u1')).single;
+    expect(left.photos.single.attached, isFalse);
+    expect(left.photos.single.lost, isFalse);
+    expect(left.lastError, piErrPhotoReadFailed);
+    expect(deleted, isEmpty);
+    lockedFails = false;
+    await outbox.flush(userId: 'u1', orgId: 'org', repository: repo);
+    expect(await outbox.pending('u1'), isEmpty);
+    expect(repo.attached.length, 1);
+    expect(deleted, <String>['locked.jpg']);
+    left = _capture('c2');
+    expect(await outbox.dismiss('u1', left.clientUuid), isFalse);
+  });
+
+  test('an unsent capture can never be dismissed', () async {
+    await outbox.add(_capture('c1'));
+    repo.captureFailure = _fail(SupabaseFailureCause.offline);
+    await outbox.flush(userId: 'u1', orgId: 'org', repository: repo);
+    expect(await outbox.dismiss('u1', 'c1'), isFalse);
+    expect((await outbox.pending('u1')).length, 1);
   });
 }

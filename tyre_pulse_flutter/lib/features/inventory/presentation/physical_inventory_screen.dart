@@ -68,6 +68,7 @@ class _PhysicalInventoryScreenState
   String _startKey = '';
   bool _busy = false;
   int _pending = 0;
+  List<PendingCapture> _attention = const <PendingCapture>[];
   String? _message;
   StreamSubscription<List<ConnectivityResult>>? _net;
 
@@ -115,7 +116,9 @@ class _PhysicalInventoryScreenState
   String? get _userId => ref.read(workspaceContextProvider)?.userId;
   String? get _orgId {
     final ctx = ref.read(workspaceContextProvider);
-    return ctx?.companyId ?? ctx?.tenantId;
+    // app_current_org() reads profiles.org_id (tenantId); the server checks the
+    // photo path against it.
+    return ctx?.tenantId ?? ctx?.companyId;
   }
 
   Future<void> _flush() async {
@@ -132,7 +135,15 @@ class _PhysicalInventoryScreenState
         repository: ref.read(physicalInventoryRepositoryProvider),
         deviceId: device,
       );
-      if (mounted) setState(() => _pending = r.remaining);
+      final List<PendingCapture> left = await outbox.pending(user);
+      if (mounted) {
+        setState(() {
+          _pending = r.remaining;
+          _attention = left
+              .where((PendingCapture c) => c.lastError != null)
+              .toList(growable: false);
+        });
+      }
     } on Object {
       // The outbox keeps everything; the pending count is refreshed next time.
       try {
@@ -142,6 +153,17 @@ class _PhysicalInventoryScreenState
         // unreadable store: leave the counter as it was
       }
     }
+  }
+
+  Future<void> _dismiss(PendingCapture c) async {
+    final String? user = _userId;
+    if (user == null) return;
+    try {
+      await ref.read(physicalCaptureOutboxProvider).dismiss(user, c.clientUuid);
+    } on Object {
+      // unreadable store: nothing removed; shown again next flush
+    }
+    await _flush();
   }
 
   Future<void> _start(InventoryCopy copy) async {
@@ -312,6 +334,27 @@ class _PhysicalInventoryScreenState
       body: ListView(
         padding: const EdgeInsets.all(TpSpace.lg),
         children: <Widget>[
+          for (final PendingCapture a in _attention)
+            Card(
+              key: Key('pi.attention.${a.clientUuid}'),
+              child: ListTile(
+                leading: const Icon(Icons.warning_amber_rounded),
+                title: Text(a.tempRef ?? a.label ?? copy('pi_attention')),
+                subtitle: Text(
+                  switch (a.lastError) {
+                    piErrPhotoMissing => copy('pi_err_photo_missing'),
+                    piErrPhotoReadFailed => copy('pi_err_photo_read_failed'),
+                    _ => a.lastError ?? '',
+                  },
+                ),
+                trailing: a.captureSent
+                    ? TextButton(
+                        onPressed: () => unawaited(_dismiss(a)),
+                        child: Text(copy('pi_dismiss')),
+                      )
+                    : null,
+              ),
+            ),
           if (_message != null)
             Padding(
               padding: const EdgeInsets.only(bottom: TpSpace.md),

@@ -67,7 +67,12 @@ jobs:
         run: |
           old_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyre_pulse"
           new_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyrepulse"
-          if [ -d "$old_kt_dir" ]; then
+          # The COMMITTED tyrepulse/MainActivity.kt carries the biometric and
+          # push method channels - never overwrite it with the generated empty
+          # scaffold. Only fall back to relocating the scaffold if it is absent.
+          if [ -f "$new_kt_dir/MainActivity.kt" ]; then
+            rm -rf "$old_kt_dir"
+          elif [ -d "$old_kt_dir" ]; then
             mkdir -p "$new_kt_dir"
             for f in "$old_kt_dir"/*; do
               sed 's/com\.shahzebrahman\.tyre_pulse/com.shahzebrahman.tyrepulse/' \
@@ -75,6 +80,7 @@ jobs:
             done
             rm -rf "$old_kt_dir"
           fi
+          grep -q "MethodChannel" "$new_kt_dir/MainActivity.kt" || { echo "::error::MainActivity.kt lost its method channels"; exit 1; }
 
       - name: Reconstruct the release keystore from secrets
         # Secrets reach the script through env only. Interpolating them into the

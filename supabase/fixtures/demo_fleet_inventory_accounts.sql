@@ -15,6 +15,7 @@
 --     email name, created in the last 30 days) or already bound to the Demo
 --     company by an earlier run. An approved account in any other company is
 --     never moved.
+--   * Adds a Demo-company "Store Keeper" custom role (roles are per company).
 --   * Profile changes are made as the platform owner (super admin claim) so the
 --     privileged-column guard trigger stays ENABLED.
 --   * Stock grants and audits are Demo-only; the same exact in-progress-row
@@ -60,6 +61,12 @@ begin
   if v_missing <> '' then
     raise exception 'Create these sign-ins first (Authentication > Add user, auto-confirm): %', v_missing;
   end if;
+
+  -- the Store Keeper role is a per-company custom role; the Demo company needs its own row,
+  -- or normalize_profiles_role() silently turns the role into Reporter
+  insert into public.custom_roles(organisation_id, name, description, active)
+  select c_org, 'Store Keeper', 'Stores and stock counting (Demo company, acceptance tests).', true
+   where not exists (select 1 from public.custom_roles where organisation_id = c_org and lower(btrim(name)) = 'store keeper');
 
   -- profile changes as the platform owner (keeps trg_guard_profile_privileged enabled)
   perform set_config('request.jwt.claims',
@@ -109,7 +116,8 @@ begin
       ('stock_records','organisation_id'), ('stock_movements','organisation_id'), ('inventory_audits','organisation_id'),
       ('inventory_audit_snapshot_lines','organisation_id'), ('inventory_rpc_requests','organisation_id'),
       ('inventory_locations','organisation_id'), ('tyre_items','organisation_id'),
-      ('profiles','organisation_id'), ('profiles','org_id'), ('user_access_grants','org_id')) x(t, c) loop
+      ('profiles','organisation_id'), ('profiles','org_id'), ('user_access_grants','org_id'),
+      ('custom_roles','organisation_id')) x(t, c) loop
     execute format('select count(*) from public.%I where %I is distinct from $1
                      and (case when xmin::text::bigint >= $3
                                then pg_xact_status(($2 + xmin::text::bigint)::text::xid8) end) = %L',

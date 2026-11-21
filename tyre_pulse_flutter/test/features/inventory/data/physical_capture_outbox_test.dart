@@ -73,6 +73,12 @@ final class _Repo implements PhysicalInventoryRepository {
       const <PhysicalSession>[];
 
   @override
+  Future<List<InventoryPlace>> stores() async => const <InventoryPlace>[];
+
+  @override
+  Future<InventoryPlace?> placeById(String id) async => null;
+
+  @override
   Future<List<MaterialPick>> search(String query) async =>
       const <MaterialPick>[];
 

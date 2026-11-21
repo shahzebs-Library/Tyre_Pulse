@@ -18,10 +18,19 @@ abstract final class PhysicalInventoryRpcs {
   static const String photoAttach = 'inv_pi_photo_attach';
   static const String search = 'inv_material_search';
   static const String sessions = 'physical_inventory_sessions';
+  static const String locations = 'inventory_locations';
 }
 
 abstract interface class PhysicalInventoryRepository {
   Future<List<PhysicalSession>> openSessions();
+
+  /// The active stores (warehouse locations) the person can see. The phone
+  /// picks from these; it never creates a store.
+  Future<List<InventoryPlace>> stores();
+
+  /// One location by id (a scanned `TP:LOC:<id>` label). Null when the
+  /// person cannot see it or it does not exist.
+  Future<InventoryPlace?> placeById(String id);
 
   Future<PhysicalSession> startSession({
     required String idempotencyKey,
@@ -66,6 +75,38 @@ final class SupabasePhysicalInventoryRepository
         return rows
             .map((Map<String, dynamic> r) => PhysicalSession.fromJson(r))
             .toList(growable: false);
+      });
+
+  static const String _placeCols =
+      'id, country, site, parent_id, location_type, code, name, active';
+
+  @override
+  Future<List<InventoryPlace>> stores() =>
+      guard<List<InventoryPlace>>(() async {
+        final List<Map<String, dynamic>> rows = await _client
+            .from(PhysicalInventoryRpcs.locations)
+            .select(_placeCols)
+            .eq('location_type', 'warehouse')
+            .eq('active', true)
+            .order('site')
+            .order('code')
+            .order('id')
+            .limit(200);
+        return rows
+            .map((Map<String, dynamic> r) => InventoryPlace.fromJson(r))
+            .toList(growable: false);
+      });
+
+  @override
+  Future<InventoryPlace?> placeById(String id) =>
+      guard<InventoryPlace?>(() async {
+        final List<Map<String, dynamic>> rows = await _client
+            .from(PhysicalInventoryRpcs.locations)
+            .select(_placeCols)
+            .eq('id', id)
+            .eq('active', true)
+            .limit(1);
+        return rows.isEmpty ? null : InventoryPlace.fromJson(rows.first);
       });
 
   @override

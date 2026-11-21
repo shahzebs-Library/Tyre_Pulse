@@ -15,6 +15,7 @@ import 'package:tyre_pulse/features/inventory/data/count_photo_capture.dart';
 import 'package:tyre_pulse/features/inventory/data/count_submitter.dart';
 import 'package:tyre_pulse/features/inventory/data/inventory_audit_repository.dart';
 import 'package:tyre_pulse/features/inventory/data/inventory_transfer_repository.dart';
+import 'package:tyre_pulse/features/inventory/data/physical_outbox_runner.dart';
 import 'package:tyre_pulse/features/inventory/domain/count_models.dart';
 import 'package:tyre_pulse/features/inventory/domain/transfer_models.dart';
 import 'package:uuid/uuid.dart';
@@ -93,7 +94,7 @@ final Provider<String Function()> inventoryIdFactoryProvider =
 final FutureProvider<String> inventoryDeviceIdProvider =
     FutureProvider<String>((Ref ref) async {
   final SecureKeyValueStore store = ref.watch(secureStoreProvider);
-  const String slot = 'inventory_device_id_v1';
+  const String slot = inventoryDeviceIdSlot;
   final read = await store.read(slot);
   if (read.isOk && (read.value ?? '').isNotEmpty) return read.value!;
   final String id = ref.read(inventoryIdFactoryProvider)();

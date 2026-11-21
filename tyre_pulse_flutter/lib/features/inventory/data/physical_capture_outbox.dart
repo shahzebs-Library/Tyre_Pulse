@@ -20,9 +20,11 @@
 ///   a lost response store nothing twice. A photo already uploaded is not
 ///   uploaded again ([PendingPhoto.storagePath]).
 ///
-/// The human-owned sync wiring could later call [flush] from the background
-/// worker; until then the screen flushes on open, after every save, when the
-/// network comes back and when the app returns to the foreground
+/// [flush] runs from the capture screen (open, after every save), app-wide
+/// from `PhysicalOutboxSyncBinding` (sign-in, foreground, network back) and
+/// from the background worker after its queue pass (`background_sync.dart`,
+/// periodic and connectivity one-off), always through
+/// `physical_outbox_runner.dart`, which enforces the signed-in-user rule
 /// (docs/inventory/102_PHYSICAL_INVENTORY_GUIDE.md section 6).
 library;
 

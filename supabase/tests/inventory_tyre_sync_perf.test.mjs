@@ -133,8 +133,14 @@ test('tyre sync perf: same derivation as the released function, faster, idempote
       assert.deepEqual(await one(newDb, SRC_HASH), before)
       const p = await one(newDb, `select has_function_privilege('authenticated','public._inv_tyre_item_sync(text)','EXECUTE') inner_fn,
         has_function_privilege('authenticated','public.inv_tyre_item_sync(jsonb)','EXECUTE') wrapper,
-        has_table_privilege('authenticated','public.inv_tyre_sync_runs','INSERT') ins`)
-      assert.deepEqual([p.inner_fn, p.wrapper, p.ins], [false, true, false])
+        has_table_privilege('authenticated','public.inv_tyre_sync_runs','INSERT') ins,
+        has_table_privilege('authenticated','public.inv_tyre_sync_runs','SELECT') sel,
+        has_table_privilege('anon','public.inv_tyre_sync_runs','SELECT') anon_sel,
+        (select relrowsecurity from pg_class where oid = 'public.inv_tyre_sync_runs'::regclass) rls,
+        (select count(*)::int from pg_policies where schemaname = 'public' and tablename = 'inv_tyre_sync_runs'
+           and 'authenticated' = any(roles)) client_policies`)
+      assert.deepEqual([p.inner_fn, p.wrapper, p.ins, p.sel, p.anon_sel, p.rls, p.client_policies],
+        [false, true, false, false, false, true, 0], 'cache table is private to the definer function')
       await assert.rejects(call(newDb, U.viewer, 'inv_tyre_item_sync', {}), /42501|authorised/)
     })
 
@@ -148,6 +154,35 @@ test('tyre sync perf: same derivation as the released function, faster, idempote
     console.log(`# timing (600 serials x 3 scopes): released ${o.ms} ms, set-based ${n.ms} ms`)
     assert.ok(n.ms < o.ms, `set-based (${n.ms} ms) must be faster than released (${o.ms} ms)`)
   } finally { await oldDb.close(); await newDb.close() }
+})
+
+test('tyre sync perf: a source change committed during the derivation is never cached', async () => {
+  const db = await buildDb()
+  try {
+    await db.exec(FIX)
+    await seedSeven(db)
+    // Simulates another session committing a disposition while the sync derives (visible to
+    // the sync's later statements under READ COMMITTED): fires when the sync inserts conflicts.
+    await db.exec(`create function public._test_concurrent_change() returns trigger language plpgsql as $$
+      begin
+        insert into public.tyre_dispositions(organisation_id, country, serial, state, reason, decided_by)
+        values ('${ORG_A}', 'KSA', 'ZZ7777777', 'reusable', 'concurrent', '${U.admin}');
+        return null;
+      end $$;
+      create trigger _test_concurrent after insert on public.tyre_custody_conflicts
+        for each statement execute function public._test_concurrent_change();`)
+    const r1 = await call(db, U.reviewer, 'inv_tyre_item_sync', { country: 'KSA' })
+    assert.equal(r1.cached, false); assert.equal(r1.new_conflicts, 6)
+    assert.equal(r1.source_changed_during_sync, true)
+    assert.match((await one(db, "select fingerprint f from inv_tyre_sync_runs where scope = 'KSA'")).f, /^not-cacheable:/)
+    await db.exec('drop trigger _test_concurrent on public.tyre_custody_conflicts; drop function public._test_concurrent_change()')
+    const r2 = await call(db, U.reviewer, 'inv_tyre_item_sync', { country: 'KSA' })
+    assert.equal(r2.cached, false, 'the change made during the first run is picked up, not served from cache')
+    assert.equal(r2.new_conflicts, 0)
+    assert.equal((await one(db, "select count(*)::int n from tyre_items where serial = 'ZZ7777777'")).n, 1)
+    const r3 = await call(db, U.reviewer, 'inv_tyre_item_sync', { country: 'KSA' })
+    assert.equal(r3.cached, true, 'a clean run is cacheable')
+  } finally { await db.close() }
 })
 
 test('tyre sync perf: KSA-scale volume (7,000 serials) completes quickly', async () => {

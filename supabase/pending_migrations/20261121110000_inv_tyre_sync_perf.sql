@@ -31,7 +31,9 @@
 --     refreshes; a request whose source fingerprint (tyre_records, scrap marks, holdings,
 --     dispositions, conflicts) equals the last completed run within 60 s returns that
 --     run's result with cached = true and new_conflicts = state_changes = 0 instead of
---     rescanning. A changed source always rescans.
+--     rescanning. A changed source always rescans. The fingerprint is taken BEFORE the
+--     derivation; a run during which a source changed is stored as not cacheable.
+--     public.inv_tyre_sync_runs is private to the function (no client grant or policy).
 -- Writes nothing to tyre_records, tyre_status_marks, costs or CPK inputs.
 -- Method: full CREATE OR REPLACE guarded by the live md5 92e69b6622a88dddc3358ddea0ff1276
 -- (production 2026-11-21); original kept in _bak.inv_121110_snapshot; the rollback
@@ -47,7 +49,8 @@ create table if not exists _bak.inv_121110_snapshot (
 );
 revoke all on _bak.inv_121110_snapshot from public;
 
--- Last completed sync per company and country scope (written only by the function).
+-- Last completed sync per company and country scope. PRIVATE to the SECURITY DEFINER
+-- function: RLS on, no client policy, no client grant (review P1 on PR #574).
 create table if not exists public.inv_tyre_sync_runs (
   organisation_id uuid not null references public.organisations(id),
   scope text not null,
@@ -59,10 +62,6 @@ create table if not exists public.inv_tyre_sync_runs (
 );
 alter table public.inv_tyre_sync_runs enable row level security;
 revoke all on public.inv_tyre_sync_runs from public, anon, authenticated;
-drop policy if exists inv_tyre_sync_runs_read on public.inv_tyre_sync_runs;
-create policy inv_tyre_sync_runs_read on public.inv_tyre_sync_runs for select to authenticated
-  using (organisation_id = (select public.app_current_org()));
-grant select on public.inv_tyre_sync_runs to authenticated;
 
 do $do$
 declare
@@ -94,7 +93,8 @@ create or replace function public._inv_tyre_item_sync(p_country text default nul
 as $function$
 declare v_org uuid := public.app_current_org(); v_items int := 0; v_written int := 0; v_changed int := 0; v_conf int := 0; v_weak int;
   v_scope text := coalesce(upper(btrim(p_country)), '*'); v_fp text; v_t0 timestamptz := clock_timestamp();
-  v_last public.inv_tyre_sync_runs%rowtype; v_res jsonb;
+  v_last public.inv_tyre_sync_runs%rowtype; v_res jsonb; v_src0 text; v_src1 text;
+  v_cf_n0 bigint; v_cf_h0 numeric; v_cf_n1 bigint; v_cf_h1 numeric; v_ins_h numeric;
 begin
   if not public.is_approved_and_unlocked() or not (public.app_is_elevated() or public.inv_can('audit_create')) then
     raise exception 'Not authorised to derive tyre custody.' using errcode = '42501';
@@ -103,7 +103,8 @@ begin
 
   -- One refresh at a time per company and scope; a second click waits, then sees the result.
   perform pg_advisory_xact_lock(hashtextextended('inv_tyre_sync:' || v_org::text || ':' || v_scope, 0));
-  v_fp := md5(concat_ws('|',
+  -- Source fingerprint captured BEFORE the derivation (review P2 on PR #574).
+  v_src0 := md5(concat_ws('|',
     (select count(*) || ':' || coalesce(sum(hashtextextended(concat_ws('~', r.id, r.serial_no, r.country, r.asset_no,
         r.tyre_position, r.status, r.issue_date, r.removal_date, r.created_at, r.brand, r.size, r.site, r.cost_per_tyre), 0)), 0)
        from public.tyre_records r where r.organisation_id = v_org),
@@ -112,9 +113,10 @@ begin
     (select count(*) || ':' || coalesce(sum(hashtextextended(to_jsonb(h)::text, 0)), 0)
        from public.tyre_store_holdings h where h.organisation_id = v_org),
     (select count(*) || ':' || coalesce(sum(hashtextextended(to_jsonb(d)::text, 0)), 0)
-       from public.tyre_dispositions d where d.organisation_id = v_org),
-    (select count(*) || ':' || coalesce(sum(hashtextextended(c.id::text || c.status, 0)), 0)
-       from public.tyre_custody_conflicts c where c.organisation_id = v_org)));
+       from public.tyre_dispositions d where d.organisation_id = v_org)));
+  select count(*), coalesce(sum(hashtextextended(c.id::text || c.status, 0)), 0)
+       from public.tyre_custody_conflicts c where c.organisation_id = v_org into v_cf_n0, v_cf_h0;
+  v_fp := md5(v_src0 || '|' || v_cf_n0 || ':' || v_cf_h0);
   select * into v_last from public.inv_tyre_sync_runs s where s.organisation_id = v_org and s.scope = v_scope;
   if found and v_last.fingerprint = v_fp and v_last.finished_at > now() - interval '60 seconds' then
     return v_last.result || jsonb_build_object('cached', true, 'new_conflicts', 0, 'state_changes', 0, 'items_written', 0,
@@ -213,6 +215,7 @@ begin
   from agg a;
 
   -- Conflicts with evidence (never auto-resolved). Evidence only for conflicting keys.
+  with ins as (
   insert into public.tyre_custody_conflicts(organisation_id, country, serial, conflict_type, evidence, detected_by)
   select v_org, d.country, d.serial, c.t, c.ev, 'sync'
     from (select * from _tc_derived x where x.c_scrapped_active or x.c_fitted_stock or x.c_two_assets) d
@@ -233,8 +236,9 @@ begin
           from _tc_rows r where r.country = d.country and r.serial = d.serial and r.is_active), '[]'::jsonb)))
     ) as c(t, hit, ev)
    where c.hit
-  on conflict (organisation_id, country, serial, conflict_type) where status = 'open' do nothing;
-  get diagnostics v_conf = row_count;
+  on conflict (organisation_id, country, serial, conflict_type) where status = 'open' do nothing
+  returning id, status)
+  select count(*), coalesce(sum(hashtextextended(ins.id::text || ins.status, 0)), 0) into v_conf, v_ins_h from ins;
 
   create temp table _tc_final on commit drop as
   select d.country, d.serial, d.fitments,
@@ -296,8 +300,11 @@ begin
   v_res := jsonb_build_object('items', v_items, 'items_written', v_written, 'state_changes', v_changed, 'new_conflicts', v_conf,
     'weak_serial_rows', v_weak, 'tyre_records_written', 0, 'cached', false,
     'duration_ms', round(extract(epoch from clock_timestamp() - v_t0) * 1000));
-  -- Fingerprint after the run (conflicts inserted above change it; recompute that part only).
-  v_fp := md5(concat_ws('|',
+  -- Cache only when nothing changed while deriving: the sources are byte-for-byte what they
+  -- were BEFORE the derivation, and the conflicts differ only by the rows this run inserted.
+  -- Otherwise (a change committed meanwhile, visible under READ COMMITTED) the run is
+  -- recorded as not cacheable, so the next request rescans.
+  v_src1 := md5(concat_ws('|',
     (select count(*) || ':' || coalesce(sum(hashtextextended(concat_ws('~', r.id, r.serial_no, r.country, r.asset_no,
         r.tyre_position, r.status, r.issue_date, r.removal_date, r.created_at, r.brand, r.size, r.site, r.cost_per_tyre), 0)), 0)
        from public.tyre_records r where r.organisation_id = v_org),
@@ -306,9 +313,15 @@ begin
     (select count(*) || ':' || coalesce(sum(hashtextextended(to_jsonb(h)::text, 0)), 0)
        from public.tyre_store_holdings h where h.organisation_id = v_org),
     (select count(*) || ':' || coalesce(sum(hashtextextended(to_jsonb(d)::text, 0)), 0)
-       from public.tyre_dispositions d where d.organisation_id = v_org),
-    (select count(*) || ':' || coalesce(sum(hashtextextended(c.id::text || c.status, 0)), 0)
-       from public.tyre_custody_conflicts c where c.organisation_id = v_org)));
+       from public.tyre_dispositions d where d.organisation_id = v_org)));
+  select count(*), coalesce(sum(hashtextextended(c.id::text || c.status, 0)), 0)
+       from public.tyre_custody_conflicts c where c.organisation_id = v_org into v_cf_n1, v_cf_h1;
+  if v_src1 = v_src0 and v_cf_n1 = v_cf_n0 + v_conf and v_cf_h1 = v_cf_h0 + v_ins_h then
+    v_fp := md5(v_src0 || '|' || v_cf_n1 || ':' || v_cf_h1);
+  else
+    v_fp := 'not-cacheable:' || gen_random_uuid()::text;
+    v_res := v_res || jsonb_build_object('source_changed_during_sync', true);
+  end if;
   insert into public.inv_tyre_sync_runs(organisation_id, scope, fingerprint, finished_at, duration_ms, result)
   values (v_org, v_scope, v_fp, now(), (v_res->>'duration_ms')::int, v_res)
   on conflict (organisation_id, scope) do update set fingerprint = excluded.fingerprint, finished_at = excluded.finished_at,

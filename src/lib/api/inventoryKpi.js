@@ -25,7 +25,7 @@ function applySite(q, site) {
 }
 
 /** One bounded full read; never throws (the failure is reported on the source). */
-async function boundedRead(table, cols, { country, site, siteScoped = true, countryScoped = true, build, order = 'id', max = MAX } = {}) {
+async function boundedRead(table, cols, { country, site, siteScoped = true, countryScoped = true, build, order = 'id', tiebreak = 'id', max = MAX } = {}) {
   try {
     const { data, error, truncated } = await fetchAllPages((from, to) => {
       let q = supabase.from(table).select(cols)
@@ -33,7 +33,8 @@ async function boundedRead(table, cols, { country, site, siteScoped = true, coun
       if (siteScoped) q = applySite(q, site)
       if (build) q = build(q)
       q = q.order(order, { ascending: true })
-      if (order !== 'id') q = q.order('id', { ascending: true })
+      // The tiebreak must be a real unique column of the relation (a view may not have `id`).
+      if (tiebreak && tiebreak !== order) q = q.order(tiebreak, { ascending: true })
       return q.range(from, to)
     }, { max })
     if (error) {
@@ -52,14 +53,18 @@ async function readByIds(table, cols, col, ids) {
   const uniq = [...new Set((ids || []).filter(Boolean))]
   if (!uniq.length) return { status: 'ok', rows: [], truncated: false, error: null }
   const out = []
+  let truncated = false
   for (let i = 0; i < uniq.length; i += 100) {
     const chunk = uniq.slice(i, i + 100)
     const r = await boundedRead(table, cols, { siteScoped: false, countryScoped: false, build: (q) => q.in(col, chunk), max: 5000 })
-    if (r.status !== 'ok') return r
+    if (r.status !== 'ok') return { ...r, truncated: truncated || !!r.truncated }
+    truncated = truncated || !!r.truncated
     out.push(...r.rows)
   }
-  return { status: 'ok', rows: out, truncated: false, error: null }
+  return { status: 'ok', rows: out, truncated, error: null }
 }
+
+export { boundedRead as _boundedRead, readByIds as _readByIds }
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d)
 
@@ -86,7 +91,7 @@ const MOVEMENT_COLS = 'id, movement_type, item_id, stock_id, site, country, qty_
  */
 export async function loadStockHistory({ country, site, historyFrom } = {}) {
   const [valuation, movements, startAt] = await Promise.all([
-    boundedRead('v_inventory_valuation', VALUATION_COLS, { country, site, order: 'stock_id' }),
+    boundedRead('v_inventory_valuation', VALUATION_COLS, { country, site, order: 'stock_id', tiebreak: null }),
     boundedRead('v_inv_movements', MOVEMENT_COLS, {
       country, site, order: 'posted_at',
       build: (q) => (historyFrom ? q.gte('posted_at', iso(historyFrom)) : q),

@@ -102,3 +102,34 @@ describe('classifyForScreen', () => {
     expect(counts.ved.V).toBe(1)
   })
 })
+
+describe('classifyForScreen source availability', () => {
+  it('carries the ABC share and cumulative share through', () => {
+    const { rows } = classifyForScreen(populatedSources(), { now: NOW })
+    const p1 = rows.find((r) => r.item_code === 'P-1')
+    expect(p1.share).toBe(1)
+    expect(p1.cumulativeShare).toBe(1)
+  })
+
+  it('never invents C / N / dead-stock candidates when the ledger could not be read', () => {
+    const s = populatedSources()
+    s.movements = { status: 'error', rows: [], error: 'Network error' }
+    const { rows, historyOk } = classifyForScreen(s, { now: NOW })
+    expect(historyOk).toBe(false)
+    for (const r of rows) {
+      expect(r.abc).toBe('unclassified')
+      expect(r.fsn).toBe('unclassified')
+      expect(r.abcReason).toBe('history_unavailable')
+      expect(r.disposition).toBe('insufficient_history')
+    }
+    const s2 = populatedSources()
+    s2.movements = { status: 'not_provisioned', rows: [] }
+    expect(classifyForScreen(s2, { now: NOW }).rows.every((r) => r.fsn === 'unclassified')).toBe(true)
+  })
+
+  it('marks VED unassessed when the item master could not be read', () => {
+    const s = populatedSources()
+    s.items = { status: 'error', rows: [], error: 'x' }
+    expect(classifyForScreen(s, { now: NOW }).rows.every((r) => r.ved === 'unassessed' && r.vedReason === 'item_master_unavailable')).toBe(true)
+  })
+})

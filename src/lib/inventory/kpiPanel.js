@@ -19,7 +19,7 @@ import {
   turnoverAndDio, exposureKpis, stockoutFrequency, criticalAvailability, supplierDeliveryPerformance, leadTimeVariance,
   outstandingPoQty, consignmentUtilisation, emergencyPurchaseRate, reservedNotIssued, purchaseAvoidance,
 } from './kpi'
-import { classifyItems, classificationMatrix, DEFAULT_THRESHOLDS } from './classification'
+import { classifyItems, classifyAbc, classificationMatrix, DEFAULT_THRESHOLDS } from './classification'
 import { buildReconciliationRows } from './auditView'
 import { formatMoney, formatQty } from './inventoryMoney'
 
@@ -444,15 +444,35 @@ export function buildClassificationItems({ valuation = [], items = [], movements
   })
 }
 
-/** Classified rows for the screen (engine output joined back to item details). */
+/**
+ * Classified rows for the screen (engine output joined back to item details).
+ * Without a readable ledger (movements) consumption and movement are unknown:
+ * ABC and FSN are 'unclassified' with reason 'history_unavailable', never C or N.
+ * Without the item master, VED is 'unassessed' with 'item_master_unavailable'.
+ */
 export function classifyForScreen(sources = {}, { now = new Date() } = {}) {
+  const historyOk = !sources.movements || sources.movements.status === 'ok'
+  const itemsOk = !sources.items || sources.items.status === 'ok'
   const items = buildClassificationItems({
     valuation: rowsOf(sources.valuation), items: rowsOf(sources.items), movements: rowsOf(sources.movements),
   }, { now })
   const classified = classifyItems(items, { now: new Date(now).toISOString(), ledgerStartAt: sources.ledgerStartAt || null })
+  // classifyItems keeps only the class; the ABC shares come from the same engine call shape.
+  const abc = new Map(classifyAbc(items).map((r) => [r.item_id, r]))
   const byId = new Map(items.map((i) => [i.item_id, i]))
-  const rows = classified.map((c) => ({ ...byId.get(c.item_id), ...c }))
-  return { rows, ...classificationMatrix(rows) }
+  const rows = classified.map((c) => {
+    const a = abc.get(c.item_id) || {}
+    const row = { ...byId.get(c.item_id), ...c, share: a.share ?? null, cumulativeShare: a.cumulativeShare ?? null }
+    if (!historyOk) {
+      Object.assign(row, {
+        abc: 'unclassified', abcReason: 'history_unavailable', fsn: 'unclassified', fsnReason: 'history_unavailable',
+        activeMonths: null, consumptionValue: null, share: null, cumulativeShare: null, issues: null, disposition: 'insufficient_history',
+      })
+    }
+    if (!itemsOk) Object.assign(row, { ved: 'unassessed', vedReason: 'item_master_unavailable' })
+    return row
+  })
+  return { rows, historyOk, itemsOk, ...classificationMatrix(rows) }
 }
 
 export const ABC_CLASSES = Object.freeze(['A', 'B', 'C', 'unclassified'])

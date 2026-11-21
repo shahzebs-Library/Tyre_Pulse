@@ -735,7 +735,9 @@
       "item_younger_than_window": "الصنف أحدث من نافذة الأشهر الاثني عشر.",
       "ledger_shorter_than_window": "سجل الحركات أقصر من 12 شهرا، لذلك لا يمكن إثبات عدم الحركة بعد.",
       "criticality_not_recorded": "الأهمية غير مسجلة في سجل الأصناف.",
-      "criticality_not_recognised": "قيمة الأهمية غير معروفة."
+      "criticality_not_recognised": "قيمة الأهمية غير معروفة.",
+      "history_unavailable": "تعذر قراءة سجل الحركات، لذلك لا يمكن تصنيف القيمة والحركة.",
+      "item_master_unavailable": "تعذر قراءة سجل الأصناف، لذلك الأهمية غير معروفة."
     },
     "disposition": {
       "critical_insurance_spare": "قطعة احتياطية حرجة (تحفظ)",

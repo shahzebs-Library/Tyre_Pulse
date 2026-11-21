@@ -72,6 +72,7 @@ describe('Inventory classification screen', () => {
     wrap(<ClassificationSection scope={scope} can={all} />)
     expect(await screen.findByText('P-1')).toBeTruthy()
     expect(screen.getByRole('tab', { name: 'ABC (value)' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getAllByText('100.0%').length).toBeGreaterThan(0) // share and cumulative share shown
     fireEvent.click(screen.getByRole('tab', { name: 'VED (criticality)' }))
     expect(screen.getAllByText('V (vital)').length).toBeGreaterThan(0)
     fireEvent.change(screen.getByRole('searchbox', { name: /Search item code/ }), { target: { value: 'filter' } })

@@ -735,7 +735,9 @@
       "item_younger_than_window": "Item is newer than the 12-month window.",
       "ledger_shorter_than_window": "The stock ledger is shorter than 12 months, so non-moving cannot be proven yet.",
       "criticality_not_recorded": "Criticality not recorded in the item master.",
-      "criticality_not_recognised": "Criticality value not recognised."
+      "criticality_not_recognised": "Criticality value not recognised.",
+      "history_unavailable": "The stock ledger could not be read, so value and movement cannot be classified.",
+      "item_master_unavailable": "The item master could not be read, so criticality is unknown."
     },
     "disposition": {
       "critical_insurance_spare": "Critical insurance spare (keep)",

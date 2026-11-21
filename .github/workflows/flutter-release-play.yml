@@ -36,7 +36,7 @@ jobs:
     name: Build signed AAB (publish to Closed testing only when asked)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build
         id: build
@@ -59,7 +59,7 @@ jobs:
           keytool -printcert -jarfile build/app/outputs/bundle/release/app-release.aab | grep -E "Owner|SHA256" || echo "::warning::could not print the AAB certificate"
 
       - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tyre-pulse-release-aab
           path: tyre_pulse_flutter/build/app/outputs/bundle/release/app-release.aab

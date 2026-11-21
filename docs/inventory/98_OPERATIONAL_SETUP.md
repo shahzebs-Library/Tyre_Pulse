@@ -19,6 +19,7 @@ Workbook with the same tables: `docs/inventory/98_operational_setup.xlsx`.
   - **false:** `receive`, `issue`, `transfer`, `count`, `edit`, `adjustment_approve`, `view_value`
 - **Required** (from `94_prepared/store_keeper_capabilities.sql`): `receive`, `issue`, `transfer`, `count`.
   All four are missing for all 7 people. The prepared SQL adds 28 grant rows (7 people x 4 capabilities).
+  They may run only for people whose verified site is set (see Notes below).
 
 ### People, scope and site evidence
 
@@ -40,8 +41,18 @@ The evidence for each person comes from their own records in these tables:
 | MUHAMMAD NASIR HUSSAIN | muhammadnasir | No records, no audit rows. One sign-in (2026-07-20). | None, owner to name |
 
 Notes:
-- Narrowing `profiles.sites` is optional block 3 of the prepared SQL. It is the narrowest
-  scope the release can enforce, because there is no per-warehouse user table.
+- **Verified site assignment is a mandatory prerequisite, not optional.** Owner decision record:
+  `94_PRODUCTION_APPROVAL_PACKAGE.md` section 16 approves the grants only "restricted to each
+  person's verified assigned sites". Granting while a person holds `sites = {ALL}` would let
+  them receive, issue, transfer and count at every site.
+- So the grants stay **blocked** for any Store Keeper whose site is unconfirmed or still `{ALL}`.
+  Today that is **all 7**. Order per person:
+  1. the owner confirms the site;
+  2. the site is set in Console > Users;
+  3. that person's grant rows are run.
+- The site is the narrowest scope the release can enforce, because there is no per-warehouse
+  user table. Block 3 of the prepared SQL (narrowing `profiles.sites`) must therefore run, or the
+  sites must already be set in Console, before block 2 runs for that person.
 - Four of the seven have never recorded anything, so there is no evidence to suggest a site
   for them. The owner has to name one.
 - MD JAHID also touched NHC and RIY-MET once each. If his site is narrowed to DIRIYAH only,

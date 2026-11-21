@@ -15,7 +15,9 @@
 --     email name, created in the last 30 days) or already bound to the Demo
 --     company by an earlier run. An approved account in any other company is
 --     never moved.
---   * Adds a Demo-company "Store Keeper" custom role (roles are per company).
+--   * Adds a Demo-company "Store Keeper" custom role and copies the global Store
+--     Keeper module rows (web + phone) to the Demo company (a custom role in a
+--     non-legacy company reads only its own company's matrix).
 --   * Profile changes are made as the platform owner (super admin claim) so the
 --     privileged-column guard trigger stays ENABLED.
 --   * Stock grants and audits are Demo-only; the same exact in-progress-row
@@ -67,6 +69,14 @@ begin
   insert into public.custom_roles(organisation_id, name, description, active)
   select c_org, 'Store Keeper', 'Stores and stock counting (Demo company, acceptance tests).', true
    where not exists (select 1 from public.custom_roles where organisation_id = c_org and lower(btrim(name)) = 'store keeper');
+  -- a custom role in a non-legacy company reads only ITS company's module matrix
+  -- (_global_matrix_applies), so copy the global Store Keeper web + phone module rows to the Demo company
+  insert into public.module_permissions(module_key, role, org_id, enabled, updated_at)
+  select g.module_key, g.role, c_org, g.enabled, now()
+    from public.module_permissions g
+   where g.role = 'Store Keeper' and g.org_id is null
+     and not exists (select 1 from public.module_permissions d where d.role = g.role
+                       and d.module_key = g.module_key and d.org_id = c_org);
 
   -- profile changes as the platform owner (keeps trg_guard_profile_privileged enabled)
   perform set_config('request.jwt.claims',
@@ -117,7 +127,7 @@ begin
       ('inventory_audit_snapshot_lines','organisation_id'), ('inventory_rpc_requests','organisation_id'),
       ('inventory_locations','organisation_id'), ('tyre_items','organisation_id'),
       ('profiles','organisation_id'), ('profiles','org_id'), ('user_access_grants','org_id'),
-      ('custom_roles','organisation_id')) x(t, c) loop
+      ('custom_roles','organisation_id'), ('module_permissions','org_id')) x(t, c) loop
     execute format('select count(*) from public.%I where %I is distinct from $1
                      and (case when xmin::text::bigint >= $3
                                then pg_xact_status(($2 + xmin::text::bigint)::text::xid8) end) = %L',

@@ -8,7 +8,9 @@
 --   1. every still-open fixture audit ('[demo-acceptance ...]') is cancelled;
 --   2. every still-open fixture transfer returns its remaining quantity to source;
 --   3. the fixture stock grants (note = demo_fleet_inventory_acceptance) are removed;
---   4. the three test sign-ins are set back to NOT approved (they can no longer
+--   4. (the Demo "Store Keeper" custom role and its Demo module rows are kept; they
+--      grant nothing without an approved account)
+--   5. the three test sign-ins are set back to NOT approved (they can no longer
 --      sign in) - their rows stay in the Demo company.
 -- demo.manager stays as it was before the fixture (its fixture grants are removed).
 -- Everything remains inside the Demo company; the same in-progress-row guard as
@@ -45,12 +47,17 @@ begin
       'audit_id', v_a.id, 'cancel', true, 'reason', 'Acceptance fixture teardown'));
   end loop;
 
-  for v_tr in select t.id from public.stock_transfers t
+  for v_tr in select t.id, (select jsonb_agg(jsonb_build_object('line_id', l.id,
+                       'qty', l.qty_dispatched - l.qty_received - l.qty_returned))
+                    from public.stock_transfer_lines l
+                   where l.transfer_id = t.id and l.qty_dispatched - l.qty_received - l.qty_returned > 0) lines
+               from public.stock_transfers t
               where t.organisation_id = c_org and t.notes like '[demo-acceptance %'
                 and t.status in ('dispatched','in_transit','partially_received') loop
+    if v_tr.lines is null then continue; end if;
     perform public.inv_transfer_return_remaining(jsonb_build_object(
       'idempotency_key', 'demo-inv-acc:teardown:trf:' || v_tr.id, 'transfer_id', v_tr.id,
-      'reason', 'Acceptance fixture teardown'));
+      'lines', v_tr.lines, 'reason', 'Acceptance fixture teardown'));
   end loop;
   perform set_config('request.jwt.claims', '', true);
 

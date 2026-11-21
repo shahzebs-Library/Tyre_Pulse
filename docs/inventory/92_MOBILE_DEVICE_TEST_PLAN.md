@@ -62,21 +62,86 @@ Play's last uploaded build is `0.1.1+7` (run 40346435257); `+8` is above it. Not
 the old workflow, which overwrote the committed `MainActivity`, so it shipped WITHOUT biometric unlock and
 the `alerts` push channel. `0.1.2+8` keeps the committed `MainActivity` (CI-guarded).
 
-## Test accounts and data isolation (checked on production 2026-11-21)
+## Test accounts and data isolation
 
 **No test receipt, issue, count or transfer may be made against real stock.** The app points at the
-production Supabase project.
+production Supabase project. All acceptance data lives in the separate company **Tyre Pulse Demo Fleet**
+(organisation `a50e2d87-39fb-4d1e-83dc-c2c3feb1eef7`). Never test with a Default Organisation account
+(`testuser123` and every staff account are the REAL company).
 
-| Account | Organisation | Isolated from real stock? |
+### Fixture (applied on production 2026-11-21 16:42 UTC)
+
+Scripts in `supabase/fixtures/`. Applied by the pg_net fetch + sha256 runner (`_bak.inv_release_run`) from
+commit `13bf6ca2` (`demo_fleet_inventory_acceptance.sql`, sha256 `67ed50a9...d5de17`). Recovery point
+taken first: LSN `1A8/4000060` at 16:42:33 UTC. Every stock write goes through the app's own inventory RPCs
+signed in as `demo.manager`, so the company always comes from the session, and a final guard rolls the run
+back if the transaction wrote any row outside the Demo company (proved to fire on a planted row).
+
+| What | Value | Used by |
 |---|---|---|
-| `demo.manager` (Manager) | Tyre Pulse Demo Fleet (7 stock rows, 0 locations, 0 audits) | Yes |
-| `testuser123` (Manager) | Default Organisation = the REAL company (771 users, real stock) | **No - do not use for stock tests** |
-| Store Keeper test account | none exists | - |
+| Site | `DEMO YARD` (KSA) | all |
+| Locations | `DEMO-WH-A` (Store A), `DEMO-WH-B` (Store B), `DEMO-WH-C` (Store C), `IN-TRANSIT` (auto). Labels `TP:LOC:<id>` (print from the web Locations page) | P5 |
+| Quantity items | `DEMO-Q-001` Valve cap, `DEMO-Q-002` Tyre repair patch kit (barcode = item code) | D04-D09, D11, D12, D15 |
+| Serial tyre item | `DEMO-T-001` 315/80R22.5 (serial tracked); serials `DEMOST0001`-`DEMOST0004` in custody `new_stock` at `DEMO-WH-A` | D13 |
+| Unexpected-item label | `DEMO-X-001` Wheel nut: held only at `DEMO-WH-B`, so scanning it at `DEMO-WH-A` is unexpected | D14 |
+| Opening stock (one GRN `DEMO-GRN-R1`) | WH-A: Q-001 17 (20 received, 3 in transit), Q-002 10. WH-B: Q-001 8, Q-002 6, X-001 2. WH-C: Q-002 4 | D04-D12 |
+| Open transfer | `TRF-20261121-0BC7C4A7` WH-A -> WH-B, 3 x Q-001, status in transit | D16 (receive 1 full / partial) |
+| Audit A | `AUD-20261121-88637EDA`, partial, blind, WH-A + WH-B | D04-D09, D11, D12, D14 |
+| Audit B | `AUD-20261121-9A0CE05B`, tyre_serial, WH-A, 4 serials | D13 |
+| Audit C | `AUD-20261121-9A0A91F0`, partial, WH-C; cancel it on the web during D10 | D10 |
+| demo.manager | Manager; fixture grants stock receive/issue/transfer/count/audit_create/recount (Demo only) | web operator for D10, D12 |
 
-Blocker before D01-D16: an administrator must create, inside **Tyre Pulse Demo Fleet** only, (a) a Store
-Keeper test account with `stock` and KSA scope, (b) a second account without `stock`, (c) two inventory
-locations, one serial item and one quantity item, an `in_progress` audit and one open transfer (P2/P3).
-Never create these in Default Organisation.
+The audits are created in `draft` with `demo.manager` as reviewer. They become `in_progress`, with Store
+Keeper A as the blind counter, when the accounts script below runs (a counter is needed to start an audit).
+
+### Test accounts (owner step - no safe way exists to create sign-ins from SQL)
+
+There is no RPC or edge function that creates a sign-in in a chosen company (`org_invite_member` invites
+into the caller's own company, and the Demo company has no Admin). So:
+
+1. Supabase dashboard > Authentication > Users > **Add user > Create new user**, tick **Auto Confirm User**,
+   for each email below, with a password you choose (keep it out of chat, docs and the repo):
+   * `demo.storekeeper.a@users.tyrepulse.app`
+   * `demo.storekeeper.b@users.tyrepulse.app`
+   * `demo.nostock@users.tyrepulse.app`
+   Each lands as a pending (not approved) Reporter in the default company, so it can see nothing yet.
+2. Run `supabase/fixtures/demo_fleet_inventory_accounts.sql` (SQL editor, or ask the agent to apply it
+   with the runner). It refuses unless all three exist and are fresh pending sign-ups, then:
+   moves them to Tyre Pulse Demo Fleet, approves them, country KSA, sites `DEMO YARD` + `DEMO PLANT`;
+   adds a Demo-company `Store Keeper` role and its web + phone module rows; grants both Store Keepers
+   stock receive/issue/transfer/count; explicitly revokes stock (web and phone) for `demo.nostock`;
+   assigns Store Keeper A to audits A/B/C and starts them. Re-running changes nothing.
+3. Sign in on the phone with the **username** (`demo.storekeeper.a`, `demo.storekeeper.b`,
+   `demo.nostock`). To change a password later use Console > Users > reset (admin flow).
+
+| Username | Role | Stock | Used by |
+|---|---|---|---|
+| `demo.storekeeper.a` | Store Keeper | receive, issue, transfer, count; counter of audits A, B, C | D01, D03-D15, D17-D21 |
+| `demo.storekeeper.b` | Store Keeper | receive, issue, transfer, count | D16 (receiving Store Keeper), D21 (other user) |
+| `demo.nostock` | Reporter | none (explicit revoke) | D02 |
+| `demo.manager` | Manager | as above | web operator (D10 cancel audit C, D12 recount) |
+
+Rehearsed in a rolled-back transaction on production before applying: Store Keeper A gets
+view/count/receive/transfer (not audit_create) on web and phone, sees 0 rows of any other company;
+Store Keeper B can receive the open transfer; the no-stock account has no stock access.
+
+### Isolation proof (2026-11-21, after the apply)
+
+* Default Organisation fingerprint (stock_records, stock_movements, material_master, inventory_locations,
+  inventory_audits, count lines, transfers, goods receipts, tyre_items, store holdings, tyre_records,
+  profiles, user_access_grants) md5 `be21853ec45f4e5d1d7176d2b524c737` before AND after: identical.
+* Impersonation, rolled back: `demo.manager` reads only Demo stock (14 rows) and 0 locations, movements,
+  audits, items or tyre items of any other company; a real Store Keeper and a real Manager of the Default
+  Organisation read 0 Demo stock, locations, movements, audits, items and transfers.
+* Re-check any time with `supabase/fixtures/demo_fleet_inventory_verify.sql` (read only).
+
+### Reset / teardown
+
+The stock ledger is append-only, so fixture history is never deleted. `demo_fleet_inventory_teardown.sql`
+cancels every open fixture audit, returns any open fixture transfer to its source, removes the fixture
+grants and sets the three test sign-ins back to not approved. For a fresh round: run the teardown, change
+`c_run` from `r1` to `r2` in both the fixture and the accounts script, apply the fixture, then the accounts
+script (new GRN, transfer and audits; locations and items are reused).
 
 ## Classification of the 21 cases
 
@@ -88,7 +153,7 @@ Never create these in Default Organisation.
 
 ## Physical-phone checklist (run in this order)
 
-1. [ ] Admin set up the Demo Fleet accounts and data above. Confirm the signed-in user's company is Tyre Pulse Demo Fleet before any count.
+1. [ ] Fixture applied (done 2026-11-21). Owner created the three sign-ins and the accounts script ran (audits A/B/C show `in_progress`). Confirm the signed-in user's company is Tyre Pulse Demo Fleet before any count.
 2. [ ] Install: Play Closed track, or uninstall then side-load (see Signing note). Record versionName/versionCode from Settings > Apps.
 3. [ ] Biometric unlock prompt appears when enabled (proves the committed `MainActivity` is in the build).
 4. [ ] D01, D02, D03.
@@ -107,8 +172,8 @@ Never create these in Default Organisation.
 | # | Precondition |
 |---|---|
 | P1 | A release or debug build of this branch installed on (a) one mid-range Android phone and (b) one low-memory phone (2 GB RAM class, Android 13+). |
-| P2 | A Store Keeper test account in the test company, with the `stock` module enabled and a KSA scope. A second account WITHOUT the `stock` module. |
-| P3 | On the web: one inventory audit in `in_progress`, assigned to the Store Keeper, with at least two locations; one serial-tracked tyre item and one quantity item in scope. One open stock transfer between two locations the Store Keeper can see. |
+| P2 | A Store Keeper test account in the test company, with the `stock` module enabled and a KSA scope. A second account WITHOUT the `stock` module. Provided: `demo.storekeeper.a` / `demo.nostock` (see Test accounts). |
+| P3 | On the web: one inventory audit in `in_progress`, assigned to the Store Keeper, with at least two locations; one serial-tracked tyre item and one quantity item in scope. One open stock transfer between two locations the Store Keeper can see. Provided: audits A/B/C and `TRF-20261121-0BC7C4A7` (see Fixture). |
 | P4 | Access to the web audit screen (or SQL read) to confirm what the server received: `inventory_count_lines` rows, their `photos`, `counted_at`, `round`. |
 | P5 | Location and item labels printed, plus one label for an item NOT in a location's list (for the unexpected-item case). |
 | P6 | Airplane mode can be switched on and off. Developer options available to force "Don't keep activities" for the memory case. |

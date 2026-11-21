@@ -5,6 +5,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-21 — FLUTTER ANDROID RELEASE LANE (branch claude/flutter-play-release-7rxp2t). NO PLAY UPLOAD (owner: not until physical-device acceptance passes).
+- Shared build prep = composite action `.github/actions/flutter-android-build` (Flutter PINNED 3.47.2, JDK 17, flutter create, keystore, gradle, APP_ENV=production, SENTRY_DSN). Both `flutter-internal-apk.yml` (APK) and `flutter-release-play.yml` (AAB) use it. Guard test `src/test/flutterReleaseWorkflows.test.js`.
+- BUG FIXED: old Play workflow overwrote the committed `kotlin/com/shahzebrahman/tyrepulse/MainActivity.kt`, so Play build 0.1.1+7 shipped WITHOUT the device_security (biometric) MethodChannel and the `alerts` push channel. The action now deletes only the scaffold and fails if the real MainActivity is missing those.
+- `flutter-release-play.yml` input `upload_to_play` (default false): builds + verifies a signed AAB artifact `tyre-pulse-release-aab`; Play upload (alpha only) runs only when true.
+- Version 0.1.2+8 (Play last had +7). Upload key SHA-256 1B:31:EE:...:E5:3E unchanged. Play App Signing likely on -> side-loaded APK cannot upgrade a Play install.
+- Sentry: `lib/core/telemetry/sentry_scrubber.dart` (beforeSend/beforeBreadcrumb strip tokens/passwords/OTP/emails/phones/query strings/media paths; user = id only; no screenshots/view hierarchy/replay). Flutter DSN secret `FLUTTER_SENTRY_DSN` is separate from Expo; still unset.
+- Test isolation: only org "Tyre Pulse Demo Fleet" is isolated; `testuser123` sits in the REAL company. No Store Keeper test account / locations / audit exist in Demo Fleet yet (blocker for D01-D16). Plan + checklist: docs/inventory/92_MOBILE_DEVICE_TEST_PLAN.md.
+- iOS: workflow already pinned + correct; export blocked by App Store Connect API key access ("No Accounts with App Store Connect Access") = owner action.
+
 # ⚑ 2026-11-20 22:33-22:38 UTC — INVENTORY RELEASE APPLIED TO PRODUCTION (owner-approved, doc 94 s16). Record: docs/inventory/96_PRODUCTION_RELEASE_RECORD.md
 - 16 files `20261120100000..115000` (now in supabase/migrations, rollbacks in supabase/rollbacks) + NHC country fix applied; ledger 16 rows. Fetched by pg_net from commit aefb9ee0 into `_bak.inv_release_sql`, sha256 checked in DB, run by `_bak.inv_release_run(file, sha)`.
 - Recovery point 22:32:43 UTC LSN 1A5/DD001FD0, WAL archiving healthy; logical snapshot `_bak.inv_release_20261120_*` (20 tables + fn + pol + baseline).

@@ -245,8 +245,8 @@ void main() {
       () async {
     await outbox.add(_capture('c1'));
     store.failReads = true;
-    expect(
-      () => outbox.add(_capture('c2')),
+    await expectLater(
+      outbox.add(_capture('c2')),
       throwsA(isA<StorageReadFailure>()),
     );
     store.failReads = false;

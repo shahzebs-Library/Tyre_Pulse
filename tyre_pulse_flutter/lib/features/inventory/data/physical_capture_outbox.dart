@@ -10,6 +10,10 @@
 /// * Encrypted, per-user slot in [SecureKeyValueStore]
 ///   (`inventory_pi_outbox_v1:<userId>`). Another user on a shared phone never
 ///   sees or sends someone else's captures.
+/// * Every write is one read-modify-write inside [OutboxLock] (shared by
+///   the foreground app and the background worker through a lock file), and
+///   re-reads the slot inside the lock, so one instance can never overwrite
+///   a capture another instance just saved.
 /// * Every write goes through `updateValue`, which refuses when the read
 ///   failed, so a Keystore hiccup cannot replace the queue with nothing.
 /// * A capture is the only copy until the server has it: it is removed ONLY
@@ -34,6 +38,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
+import 'package:tyre_pulse/features/inventory/data/outbox_lock.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_inventory_repository.dart';
 import 'package:tyre_pulse/features/inventory/domain/physical_capture.dart';
 
@@ -83,12 +88,19 @@ final class PhysicalCaptureOutbox {
     this._store, {
     required Future<PhotoRead> Function(String path) readBytes,
     Future<void> Function(String path)? deleteFile,
+    OutboxLock? lock,
   })  : _readBytes = readBytes,
-        _deleteFile = deleteFile;
+        _deleteFile = deleteFile,
+        _lock = lock ?? IsolateOutboxLock();
 
   final SecureKeyValueStore _store;
   final Future<PhotoRead> Function(String path) _readBytes;
   final Future<void> Function(String path)? _deleteFile;
+
+  /// Held around EVERY mutation (one read-modify-write of the slot), never
+  /// across a network call. The device outbox uses a lock file shared by
+  /// every isolate and process (`outbox_lock.dart`).
+  final OutboxLock _lock;
   bool _flushing = false;
 
   static String slotFor(String userId) => 'inventory_pi_outbox_v1:$userId';
@@ -103,59 +115,123 @@ final class PhysicalCaptureOutbox {
     return _decode(read.value, userId);
   }
 
-  /// Adds [capture] (a replay of the same client_uuid replaces nothing).
-  Future<void> add(PendingCapture capture) => _store.updateValue(
-        slotFor(capture.userId),
-        (String? current) {
-          final List<PendingCapture> all = _decode(current, capture.userId);
-          if (all
-              .any((PendingCapture c) => c.clientUuid == capture.clientUuid)) {
-            return _encode(all);
-          }
-          return _encode(<PendingCapture>[...all, capture]);
-        },
+  /// One locked read-modify-write. [change] receives the list exactly as it
+  /// is stored NOW (re-read inside the lock) and returns the new list, so no
+  /// caller can ever write back an older snapshot.
+  Future<void> _mutate(
+    String userId,
+    List<PendingCapture> Function(List<PendingCapture> current) change,
+  ) =>
+      _lock.run(
+        () => _store.updateValue(slotFor(userId), (String? raw) {
+          final List<PendingCapture> next = change(_decode(raw, userId));
+          return next.isEmpty ? null : _encode(next);
+        }),
       );
 
-  Future<void> _replace(String userId, PendingCapture updated) =>
-      _store.updateValue(slotFor(userId), (String? current) {
-        final List<PendingCapture> all = <PendingCapture>[
-          for (final PendingCapture c in _decode(current, userId))
-            if (c.clientUuid == updated.clientUuid) updated else c,
-        ];
-        return _encode(all);
+  /// Adds [capture] (a replay of the same client_uuid replaces nothing).
+  Future<void> add(PendingCapture capture) =>
+      _mutate(capture.userId, (List<PendingCapture> all) {
+        if (all.any((PendingCapture c) => c.clientUuid == capture.clientUuid)) {
+          return all;
+        }
+        return <PendingCapture>[...all, capture];
       });
 
-  Future<void> _remove(String userId, String clientUuid) =>
-      _store.updateValue(slotFor(userId), (String? current) {
-        final List<PendingCapture> all = _decode(current, userId)
-            .where((PendingCapture c) => c.clientUuid != clientUuid)
-            .toList();
-        return all.isEmpty ? null : _encode(all);
+  /// Applies [change] to the STORED version of one capture and returns it, or
+  /// null when that capture is no longer stored (another instance finished
+  /// or dismissed it). Every other capture is left exactly as stored.
+  Future<PendingCapture?> _patch(
+    String userId,
+    String clientUuid,
+    PendingCapture Function(PendingCapture current) change,
+  ) async {
+    PendingCapture? result;
+    await _mutate(userId, (List<PendingCapture> all) {
+      final List<PendingCapture> next = <PendingCapture>[];
+      for (final PendingCapture c in all) {
+        if (c.clientUuid == clientUuid) {
+          result = change(c);
+          next.add(result!);
+        } else {
+          next.add(c);
+        }
+      }
+      return next;
+    });
+    return result;
+  }
+
+  /// Moves one photo forward (never back): a known storage path, attached
+  /// and lost are only ever set, never cleared, whatever order two flushes
+  /// record them in.
+  Future<PendingCapture?> _patchPhoto(
+    String userId,
+    String clientUuid,
+    String photoUuid, {
+    String? storagePath,
+    bool attached = false,
+    bool lost = false,
+    String? error,
+  }) =>
+      _patch(userId, clientUuid, (PendingCapture c) {
+        return c.copyWith(
+          lastError: error,
+          photos: <PendingPhoto>[
+            for (final PendingPhoto p in c.photos)
+              if (p.clientUuid == photoUuid)
+                p.copyWith(
+                  storagePath: p.storagePath ?? storagePath,
+                  attached: p.attached || attached,
+                  lost: p.lost || lost,
+                )
+              else
+                p,
+          ],
+        );
       });
+
+  /// Removes the capture only if its STORED version is complete (sent, every
+  /// photo attached). Returns the removed capture, or null.
+  Future<PendingCapture?> _removeIfDone(
+    String userId,
+    String clientUuid,
+  ) async {
+    PendingCapture? removed;
+    await _mutate(userId, (List<PendingCapture> all) {
+      final List<PendingCapture> next = <PendingCapture>[];
+      for (final PendingCapture c in all) {
+        if (c.clientUuid == clientUuid && c.done) {
+          removed = c;
+        } else {
+          next.add(c);
+        }
+      }
+      return next;
+    });
+    return removed;
+  }
 
   /// Removes a capture the person has acknowledged (e.g. a photo file the OS
   /// deleted). Only a capture the server already holds can be dismissed, so
   /// unsent evidence is never thrown away from here. Returns true when removed.
   Future<bool> dismiss(String userId, String clientUuid) async {
     bool removed = false;
-    await _store.updateValue(slotFor(userId), (String? current) {
-      final List<PendingCapture> all = _decode(current, userId);
+    await _mutate(userId, (List<PendingCapture> all) {
       final List<PendingCapture> keep = <PendingCapture>[
         for (final PendingCapture c in all)
-          if (c.clientUuid == clientUuid && c.captureSent)
-            ...<PendingCapture>[]
-          else
-            c,
+          if (!(c.clientUuid == clientUuid && c.captureSent)) c,
       ];
       removed = keep.length != all.length;
-      return keep.isEmpty ? null : _encode(keep);
+      return keep;
     });
     return removed;
   }
 
   /// Sends everything it can. Stops at the first connectivity failure (the
   /// rest waits for the network); a refusal is recorded on that capture and
-  /// the next capture is tried.
+  /// the next capture is tried. Local state is always re-read from the store
+  /// after each step, so a capture another instance finished is skipped.
   Future<OutboxFlushResult> flush({
     required String userId,
     required String orgId,
@@ -176,73 +252,18 @@ final class PhysicalCaptureOutbox {
     int refused = 0;
     bool offline = false;
     try {
-      for (PendingCapture c in await pending(userId)) {
+      for (final PendingCapture snapshot in await pending(userId)) {
+        final String id = snapshot.clientUuid;
         try {
-          if (!c.captureSent) {
-            final Map<String, Object?> r =
-                await repository.capture(c.toPayload(deviceId: deviceId));
-            c = c.copyWith(
-              serverId: '${r['id']}',
-              tempRef: r['temp_ref'] as String?,
-              clearError: true,
-            );
-            await _replace(userId, c);
-          }
-          final List<PendingPhoto> photos = <PendingPhoto>[...c.photos];
-          String? photoProblem;
-          for (int i = 0; i < photos.length; i++) {
-            PendingPhoto p = photos[i];
-            if (p.attached || p.lost) {
-              if (p.lost) photoProblem ??= piErrPhotoMissing;
-              continue;
-            }
-            final PhotoRead read = await _readBytes(p.localPath);
-            if (read is PhotoMissing) {
-              photos[i] = p.copyWith(lost: true);
-              photoProblem ??= piErrPhotoMissing;
-              await _replace(
-                userId,
-                c.copyWith(photos: photos, lastError: piErrPhotoMissing),
-              );
-              continue;
-            }
-            if (read is PhotoReadError) {
-              // Exists but unreadable right now: keep it pending, try again later.
-              photoProblem = piErrPhotoReadFailed;
-              await _replace(
-                userId,
-                c.copyWith(photos: photos, lastError: piErrPhotoReadFailed),
-              );
-              continue;
-            }
-            final Uint8List bytes = (read as PhotoBytes).bytes;
-            final String path =
-                p.storagePath ?? piPhotoPath(orgId, c.sessionId, p.clientUuid);
-            if (p.storagePath == null) {
-              await repository.upload(path, bytes);
-              p = p.copyWith(storagePath: path);
-              photos[i] = p;
-              await _replace(userId, c.copyWith(photos: photos));
-            }
-            await repository.attachPhoto(<String, Object?>{
-              'client_uuid': p.clientUuid,
-              'capture_id': c.serverId,
-              'storage_path': path,
-              'photo_role': p.role,
-              'purpose':
-                  c.kind == 'identified' ? 'count_proof' : 'identification',
-              'sha256': crypto.sha256.convert(bytes).toString(),
-              'byte_size': bytes.length,
-            });
-            photos[i] = p.copyWith(attached: true);
-            await _replace(userId, c.copyWith(photos: photos));
-          }
-          if (photoProblem != null) {
-            // Not done: a photo is missing or unreadable. Kept, and shown.
-            continue;
-          }
-          await _remove(userId, c.clientUuid);
-          for (final PendingPhoto p in photos) {
+          final PendingCapture? done = await _flushOne(
+            snapshot,
+            userId: userId,
+            orgId: orgId,
+            repository: repository,
+            deviceId: deviceId,
+          );
+          if (done == null) continue;
+          for (final PendingPhoto p in done.photos) {
             if (p.attached) await _deleteFile?.call(p.localPath);
           }
           sent += 1;
@@ -252,7 +273,11 @@ final class PhysicalCaptureOutbox {
             break;
           }
           refused += 1;
-          await _replace(userId, c.copyWith(lastError: f.error.message));
+          await _patch(
+            userId,
+            id,
+            (PendingCapture cur) => cur.copyWith(lastError: f.error.message),
+          );
         }
       }
     } finally {
@@ -265,6 +290,107 @@ final class PhysicalCaptureOutbox {
       refused: refused,
       stoppedOffline: offline,
     );
+  }
+
+  /// Sends one capture and its photos. Returns the capture once it was
+  /// removed from the phone (sent and every photo attached), else null (kept:
+  /// a photo is missing or unreadable, or another instance finished it).
+  /// Every step re-reads the stored capture, so state only moves forward.
+  Future<PendingCapture?> _flushOne(
+    PendingCapture snapshot, {
+    required String userId,
+    required String orgId,
+    required PhysicalInventoryRepository repository,
+    String? deviceId,
+  }) async {
+    final String id = snapshot.clientUuid;
+    PendingCapture cur = snapshot;
+    if (!cur.captureSent) {
+      final Map<String, Object?> r =
+          await repository.capture(cur.toPayload(deviceId: deviceId));
+      final PendingCapture? next = await _patch(
+        userId,
+        id,
+        (PendingCapture c) => c.captureSent
+            ? c.copyWith(clearError: true)
+            : c.copyWith(
+                serverId: '${r['id']}',
+                tempRef: r['temp_ref'] as String?,
+                clearError: true,
+              ),
+      );
+      if (next == null) return null;
+      cur = next;
+    }
+    String? photoProblem;
+    for (final PendingPhoto original in snapshot.photos) {
+      final String pid = original.clientUuid;
+      final PendingPhoto? p = _photoIn(cur, pid);
+      if (p == null) continue;
+      if (p.attached || p.lost) {
+        if (p.lost) photoProblem ??= piErrPhotoMissing;
+        continue;
+      }
+      final PhotoRead read = await _readBytes(p.localPath);
+      if (read is PhotoMissing) {
+        photoProblem ??= piErrPhotoMissing;
+        final PendingCapture? next = await _patchPhoto(
+          userId,
+          id,
+          pid,
+          lost: true,
+          error: piErrPhotoMissing,
+        );
+        if (next == null) return null;
+        cur = next;
+        continue;
+      }
+      if (read is PhotoReadError) {
+        // Exists but unreadable right now: keep it pending, retry later.
+        photoProblem = piErrPhotoReadFailed;
+        final PendingCapture? next = await _patch(
+          userId,
+          id,
+          (PendingCapture c) => c.copyWith(lastError: piErrPhotoReadFailed),
+        );
+        if (next == null) return null;
+        cur = next;
+        continue;
+      }
+      final Uint8List bytes = (read as PhotoBytes).bytes;
+      String path = p.storagePath ?? piPhotoPath(orgId, cur.sessionId, pid);
+      if (p.storagePath == null) {
+        await repository.upload(path, bytes);
+        final PendingCapture? next =
+            await _patchPhoto(userId, id, pid, storagePath: path);
+        if (next == null) return null;
+        cur = next;
+        path = _photoIn(cur, pid)?.storagePath ?? path;
+      }
+      await repository.attachPhoto(<String, Object?>{
+        'client_uuid': pid,
+        'capture_id': cur.serverId,
+        'storage_path': path,
+        'photo_role': p.role,
+        'purpose': cur.kind == 'identified' ? 'count_proof' : 'identification',
+        'sha256': crypto.sha256.convert(bytes).toString(),
+        'byte_size': bytes.length,
+      });
+      final PendingCapture? next =
+          await _patchPhoto(userId, id, pid, attached: true);
+      if (next == null) return null;
+      cur = next;
+    }
+    // Not done while a photo is missing or unreadable: kept, and shown.
+    if (photoProblem != null) return null;
+    return _removeIfDone(userId, id);
+  }
+
+  static PendingPhoto? _photoIn(PendingCapture c, String photoUuid) {
+    for (final PendingPhoto p in c.photos) {
+      if (p.clientUuid == photoUuid) return p;
+    }
+    return null;
   }
 
   static List<PendingCapture> _decode(String? raw, String userId) {

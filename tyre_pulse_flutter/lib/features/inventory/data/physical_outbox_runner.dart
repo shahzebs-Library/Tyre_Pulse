@@ -14,7 +14,9 @@
 /// # Safe to run from two isolates
 ///
 /// The foreground screen and the background worker may flush at the same
-/// time. Nothing is duplicated because the server keys the capture and every
+/// time. Nothing is lost because every outbox mutation is one locked
+/// read-modify-write over the stored list (`outbox_lock.dart`). Nothing is
+/// duplicated because the server keys the capture and every
 /// photo by its own client_uuid, a photo's storage path is deterministic
 /// (`piPhotoPath`) and an object already at that path counts as uploaded
 /// (`PhysicalInventoryRepository.upload`). A capture is removed from the phone
@@ -23,8 +25,10 @@ library;
 
 import 'dart:io';
 
+import 'package:path_provider/path_provider.dart';
 import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
 import 'package:tyre_pulse/features/inventory/data/count_photo_capture.dart';
+import 'package:tyre_pulse/features/inventory/data/outbox_lock.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_capture_outbox.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_inventory_repository.dart';
 
@@ -46,12 +50,27 @@ Future<PhotoRead> readPhysicalPhotoFile(String path) async {
 
 /// The device outbox, reading and deleting real photo files. Files are
 /// deleted only after the server confirmed them (inside `flush`).
-PhysicalCaptureOutbox buildDevicePhysicalOutbox(SecureKeyValueStore store) =>
+///
+/// Every mutation is serialised by [physicalOutboxDeviceLock], a lock file in
+/// the app support directory shared by the foreground app and the background
+/// worker (separate isolates, sometimes separate processes).
+PhysicalCaptureOutbox buildDevicePhysicalOutbox(
+  SecureKeyValueStore store, {
+  OutboxLock? lock,
+}) =>
     PhysicalCaptureOutbox(
       store,
       readBytes: readPhysicalPhotoFile,
       deleteFile: (String p) => CountPhotoCapture.discardUploaded(<String>[p]),
+      lock: lock ?? physicalOutboxDeviceLock,
     );
+
+/// The one lock file every isolate and process on this device uses for the
+/// physical inventory outbox.
+final OutboxLock physicalOutboxDeviceLock = FileOutboxLock(() async {
+  final Directory dir = await getApplicationSupportDirectory();
+  return '${dir.path}${Platform.pathSeparator}inventory_pi_outbox.lock';
+});
 
 /// The saved device id, or null when none was saved yet or the store could
 /// not be read. Never creates one: only the foreground provider does that.

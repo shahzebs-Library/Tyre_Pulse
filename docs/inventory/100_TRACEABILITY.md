@@ -19,8 +19,8 @@ Status vocabulary:
 | Fully operational | 4 |
 | Released, awaiting configuration | 9 |
 | Awaiting physical testing | 1 |
-| Not implemented | 0 |
-| **Total** | **14** |
+| Not implemented | 1 (row 15 awaits the database) |
+| **Total** | **15** |
 
 ## Production state at measurement
 
@@ -68,6 +68,7 @@ Status vocabulary:
 | 12 | Remaining KPI catalogue (turnover, DIO, stock-out, supplier OTIF, lead-time variance, consignment utilisation...) and ABC / FSN / VED classification | `src/lib/inventory/kpi.js` (25 functions), `classification.js` - pure engines, tested; adapter `src/lib/inventory/kpiPanel.js` (reshapes rows, computes nothing); reads `src/lib/api/inventoryKpi.js` | `KpiCatalogueSection.jsx` (Insight > Inventory KPIs: the 23 KPIs not on Overview, 4 groups, definition/unit/period/reason per tile, per-currency money, Excel/PDF) and `ClassificationSection.jsx` (Insight > Stock classification: ABC/FSN/VED tabs, class summary, search, class filter, sortable table, Excel/PDF) | ABC and money KPIs need `view_value`; export needs `export` | `inventoryKpiPanel.test.js`, `inventoryKpiScreens.render.test.jsx` (populated + empty + no view_value + failed source) | 2026-11-21: stock_movements 86, stock_records 50, reservations 0, stock exceptions 0, PO lines 0, supplier agreements 0, count lines 0, items with criticality 0 - most tiles show their empty-source sentence; VED is all Unassessed | **Released, awaiting data/configuration** - fills as counts, POs, agreements, reservations and item criticality are recorded. Purchase avoidance stays unmeasurable until requests record how they were fulfilled |
 | 13 | Reports and the inventory email | 20261120111000 report types; edge fn `send-scheduled-reports` v29 (deployed) | `ReportsSection.jsx`, `src/lib/inventory/reportCatalog.js` | - | `src/test/scheduledReportInventory.test.js` | 0 inventory schedules | **Released, awaiting configuration** - create a schedule and recipients |
 | 14 | Role-based security (capabilities, country/site scope, anon closed) | `inv_can`/`app_user_can('stock', cap)`, `_inv_scope_ok`, 20261120115000 hardening | `InventoryHub.jsx` capability-gated sections | Flutter module gate `stock_count` | `inventory_security_acceptance.test.mjs`, `inventory_rollback.test.mjs` | doc 96 s6: 0 anon-executable inventory functions; advisors 0 ERROR | **Fully operational** (Store Keeper grants are configuration, row 2) |
+| 15 | Physical inventory registration and identification (company-wide material master, OEM / aftermarket / company SKU references, variants, unidentified review, photos, corrections, global search with availability and transfer request, opening-balance hand-off, dashboard) | DRAFT `supabase/pending_migrations/20261122100000_inv_physical_inventory_master.sql` (+ ROLLBACK): `material_canonical`, `material_variants`, `material_canonical_items`, extended `material_aliases`, `physical_inventory_*`, `material_correction_*`, `inventory_transfer_requests`, `inv_pi_*` / `inv_material_*` / `inv_correction_*` / `inv_transfer_request*` | `PhysicalInventorySection.jsx`, `PhysicalInventoryReview.jsx` (section `physical`) | `presentation/physical_inventory_screen.dart`, `data/physical_capture_outbox.dart` (offline, photos) | `supabase/tests/inventory_physical_master.test.mjs` 15 / 15 subtests; `src/test/physicalInventory.test.js`; Flutter `physical_capture_outbox_test.dart` (CI) | Not applied. Production read-only probe 2026-11-21: `material_master` 22,162 (KSA 9,443 / UAE 9,321 / Egypt 3,398), `material_aliases` 0, `inventory_locations` 0 | **Not implemented in production** - awaiting owner approval of the draft migration (doc 102 s7) |
 
 ## Gaps closed in this branch
 
@@ -85,3 +86,9 @@ Status vocabulary:
 ## New database migrations
 
 None. Both gaps were closed with client code over RPCs already applied in production.
+
+## 2026-11-21 addition: physical inventory (row 15)
+
+Branch `claude/physical-inventory-master-7rxp2t`. Client code and tests merge safely because the only
+database change is a DRAFT in `supabase/pending_migrations/`; every screen answers "Not set up yet"
+until it is applied. Operational guide and owner steps: `102_PHYSICAL_INVENTORY_GUIDE.md`.

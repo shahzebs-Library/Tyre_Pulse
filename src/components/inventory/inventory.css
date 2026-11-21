@@ -130,3 +130,26 @@ button.inv-tile[aria-pressed="true"] { border-color: var(--cc-green); background
 .inv-class-matrix { border-collapse: collapse; font-size: 13px; }
 .inv-class-matrix th, .inv-class-matrix td { padding: 6px 10px; border: 1px solid var(--cc-line, var(--border-subtle)); text-align: center; }
 .inv-class-tile.active { outline: 2px solid var(--cc-green); outline-offset: -2px; }
+
+/* Physical inventory (PhysicalInventorySection / Review) */
+.inv-pi-results { display: grid; gap: 8px; }
+.inv-pi-result { border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 10px; display: grid; gap: 6px; min-width: 0; }
+.inv-pi-variants { display: flex; flex-wrap: wrap; gap: 6px; }
+.inv-pi-variants button { min-height: 44px; }
+.inv-pi-describe summary { cursor: pointer; font-weight: 650; min-height: 44px; display: flex; align-items: center; }
+.inv-pi-sessions { display: grid; gap: 8px; }
+.inv-pi-session { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+  border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 10px; }
+.inv-pi-session.active { border-color: var(--cc-accent, var(--cc-green)); }
+.inv-pi-dash { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.inv-pi-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.inv-pi-list li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--cc-inner-border); min-width: 0; }
+.inv-pi-list li span { overflow-wrap: anywhere; }
+.inv-pi-diff { width: 100%; border-collapse: collapse; }
+.inv-pi-diff td, .inv-pi-diff th { padding: 6px 8px; border-bottom: 1px solid var(--cc-inner-border); text-align: start; overflow-wrap: anywhere; }
+.inv-pi-diff .changed td { background: var(--cc-inner); font-weight: 650; }
+.inv-pi-photos { display: flex; flex-wrap: wrap; gap: 8px; }
+.inv-pi-photos button { padding: 0; border: 1px solid var(--cc-inner-border); border-radius: 6px; background: transparent; cursor: zoom-in; }
+.inv-pi-photos img { width: 96px; height: 96px; object-fit: cover; border-radius: 6px; display: block; }
+.inv-pi-full { max-width: 100%; max-height: 75vh; display: block; margin: 0 auto; }
+.inv-pi-avail { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; font-size: 13px; }

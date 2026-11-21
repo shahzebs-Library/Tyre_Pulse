@@ -12,8 +12,8 @@ import { makeReportRef, describeFilters, exportRowsFor, reportByKey } from '../l
 import { available, belowReorder, summarizeBalances, reorderSignals } from '../lib/inventory/balanceView'
 
 describe('hub sections', () => {
-  it('has the seventeen sections and resolves unknown params to overview', () => {
-    expect(SECTION_KEYS).toHaveLength(17)
+  it('has the eighteen sections (seventeen + physical inventory) and resolves unknown params to overview', () => {
+    expect(SECTION_KEYS).toHaveLength(18)
     expect(resolveSection('AUDITS')).toBe('audits')
     expect(resolveSection('nope')).toBe('overview')
     expect(resolveSection(undefined)).toBe('overview')

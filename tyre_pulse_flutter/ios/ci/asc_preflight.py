@@ -71,6 +71,10 @@ def main():
     if status == 401:
         fail("App Store Connect refused the API key (401). Check APPSTORE_KEY_ID and APPSTORE_ISSUER_ID match the "
              "key in App Store Connect > Users and Access > Integrations, and that the key is not revoked. " + detail(body))
+    if status == 403 and "AGREEMENT" in json.dumps(body).upper():
+        fail("Apple refuses every API call until the Account Holder accepts the latest agreement "
+             "(App Store Connect > Business, and developer.apple.com > Account > Agreements). Xcode reports this as "
+             "'No Accounts with App Store Connect Access'. Accept it, then re-run this workflow. " + detail(body))
     if status != 200:
         fail(f"Could not read the app record ({status}). " + detail(body))
     apps = body.get("data") or []

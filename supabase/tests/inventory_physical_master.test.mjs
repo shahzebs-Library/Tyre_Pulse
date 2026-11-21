@@ -1,5 +1,5 @@
 // Physical inventory registration + company-wide identification
-// (supabase/pending_migrations/20261122100000_inv_physical_inventory_master.sql, DRAFT).
+// (supabase/migrations/20261122100000_inv_physical_inventory_master.sql, applied 2026-11-21).
 // PGlite over the live-shaped inventory harness: three stores, duplicate proposals,
 // company-wide search, variants, offline replay, photos, correction approval, opening
 // balance hand-off, two-company isolation and a clean rollback.
@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildDb, rpc, call, q, one, id, U, ORG_A, code, asUser } from './inventory_harness.test.mjs'
 
-const PENDING = f => readFileSync(new URL(`../pending_migrations/${f}`, import.meta.url), 'utf8')
+const PENDING = f => readFileSync(new URL(`../${f.endsWith('_ROLLBACK.sql') ? 'rollbacks' : 'migrations'}/${f}`, import.meta.url), 'utf8')
 const UP = PENDING('20261122100000_inv_physical_inventory_master.sql')
 const DOWN = PENDING('20261122100000_inv_physical_inventory_master_ROLLBACK.sql')
 const KSA_FILTER = id(100); const UAE_FILTER = id(102); const BRAKE = id(104)

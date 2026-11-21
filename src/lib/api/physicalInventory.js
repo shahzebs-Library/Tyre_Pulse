@@ -1,7 +1,7 @@
 /**
  * Physical inventory registration + company-wide material identification
- * (service layer). Server objects: supabase/pending_migrations/
- * 20261122100000_inv_physical_inventory_master.sql (DRAFT until the owner
+ * (service layer). Server objects: supabase/migrations/
+ * 20261122100000_inv_physical_inventory_master.sql (applied 2026-11-21; was DRAFT until the owner
  * applies it). Until then every read returns `{ status: 'not_provisioned' }`
  * and every write throws INV_NOT_PROVISIONED, so the screen says "Not set up"
  * instead of showing an empty list as if nothing was ever counted.

@@ -9,7 +9,7 @@ import {
   correctionDiff, dashboardTiles, identificationProgress, dashboardExportRows, photoPath, newClientUuid, topicForField,
 } from '../lib/inventory/physicalInventory'
 
-const SQL = readFileSync(resolve('supabase/pending_migrations/20261122100000_inv_physical_inventory_master.sql'), 'utf8')
+const SQL = readFileSync(resolve('supabase/migrations/20261122100000_inv_physical_inventory_master.sql'), 'utf8')
 
 describe('physical inventory rules mirror the draft migration', () => {
   it('normalises references exactly like material_ref_norm()', () => {

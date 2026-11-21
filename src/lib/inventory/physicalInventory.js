@@ -1,7 +1,7 @@
 /**
  * Physical inventory registration and identification - pure rules (no I/O).
  *
- * Mirrors the draft migration supabase/pending_migrations/
+ * Mirrors the migration supabase/migrations/
  * 20261122100000_inv_physical_inventory_master.sql. The database is the
  * boundary; these helpers only decide what the screen offers and how it reads.
  *

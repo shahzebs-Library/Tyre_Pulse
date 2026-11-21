@@ -1,8 +1,8 @@
 -- =============================================================================
 -- 20261122100000_inv_physical_inventory_master.sql
--- STATUS: DRAFT, NOT APPLIED. Lives in supabase/pending_migrations/ so no deploy
---         can apply it. Requires the applied inventory release 20261120100000..115000
---         (+ 20261121100000 / 110000). Rollback: 20261122100000_inv_physical_inventory_master_ROLLBACK.sql
+-- STATUS: APPLIED TO PRODUCTION 2026-11-21 21:25:12 UTC (owner-approved). Fetched by pg_net from commit
+--         9e17a1a7, sha256 4898c971f96a3523fc14f6136fecd3612665adff531c7ff026281902017becbe checked in DB,
+--         run by _bak.inv_release_run. Rollback: supabase/rollbacks/20261122100000_inv_physical_inventory_master_ROLLBACK.sql
 --
 -- PURPOSE
 --   One integrated physical-inventory registration and identification system built

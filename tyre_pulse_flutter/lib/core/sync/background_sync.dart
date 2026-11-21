@@ -69,6 +69,7 @@ import 'package:tyre_pulse/core/network/supabase_bootstrap.dart';
 import 'package:tyre_pulse/core/storage/secure_slot_store_impl.dart';
 import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
 import 'package:tyre_pulse/core/sync/accident_evidence_command_pusher.dart';
+import 'package:tyre_pulse/core/sync/inventory_count_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/sync_engine.dart';
 import 'package:uuid/uuid.dart';
@@ -185,10 +186,16 @@ Future<bool> _runBackgroundSync() async {
         userId: workspace.userId,
         currentUserId: () => client.auth.currentUser?.id,
       ),
-      pusher: AccidentEvidenceCommandPusher(
-        delegate: SupabaseCommandPusher(client),
-        queueDao: db.queueDao,
-        mediaDao: db.mediaDao,
+      // Inventory count lines upload their photos first, then call the RPC;
+      // every other command passes straight through both decorators.
+      pusher: InventoryCountCommandPusher.supabase(
+        client: client,
+        db: db,
+        delegate: AccidentEvidenceCommandPusher(
+          delegate: SupabaseCommandPusher(client),
+          queueDao: db.queueDao,
+          mediaDao: db.mediaDao,
+        ),
       ),
       uploader: SupabaseMediaUploader(client),
       // A fresh id per execution, not a fixed constant - see

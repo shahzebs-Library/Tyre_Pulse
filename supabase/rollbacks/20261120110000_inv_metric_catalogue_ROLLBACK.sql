@@ -1,0 +1,8 @@
+-- ROLLBACK of 20261120110000_inv_metric_catalogue.sql: removes exactly the 25 seeded inventory
+-- metrics (metric_versions cascade from metric_registry). Only rows still matching the
+-- seeded source_module are removed, so a metric someone re-owned is kept.
+begin;
+delete from public.metric_versions where metric_id in ('inv_accuracy_exact_line', 'inv_accuracy_quantity', 'inv_accuracy_serial', 'inv_gross_shortage', 'inv_gross_excess', 'inv_count_completion', 'inv_stock_value', 'inv_unvalued_stock', 'inv_adjustment_value', 'inv_turnover', 'inv_dio', 'inv_dead_stock', 'inv_slow_stock', 'inv_excess_stock', 'inv_obsolescence_exposure', 'inv_stockout_frequency', 'inv_critical_availability', 'inv_supplier_otif', 'inv_lead_time_variance', 'inv_discrepancies', 'inv_outstanding_po_qty', 'inv_consignment_utilisation', 'inv_emergency_purchase_rate', 'inv_reserved_not_issued', 'inv_purchase_avoidance')
+  and metric_id in (select metric_id from public.metric_registry where source_module = 'Inventory Control Center');
+delete from public.metric_registry where metric_id in ('inv_accuracy_exact_line', 'inv_accuracy_quantity', 'inv_accuracy_serial', 'inv_gross_shortage', 'inv_gross_excess', 'inv_count_completion', 'inv_stock_value', 'inv_unvalued_stock', 'inv_adjustment_value', 'inv_turnover', 'inv_dio', 'inv_dead_stock', 'inv_slow_stock', 'inv_excess_stock', 'inv_obsolescence_exposure', 'inv_stockout_frequency', 'inv_critical_availability', 'inv_supplier_otif', 'inv_lead_time_variance', 'inv_discrepancies', 'inv_outstanding_po_qty', 'inv_consignment_utilisation', 'inv_emergency_purchase_rate', 'inv_reserved_not_issued', 'inv_purchase_avoidance') and source_module = 'Inventory Control Center';
+commit;

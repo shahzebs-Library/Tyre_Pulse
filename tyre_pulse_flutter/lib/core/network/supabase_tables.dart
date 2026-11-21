@@ -101,6 +101,10 @@ abstract final class SupabaseTables {
   static const String techActivityEvents = 'tech_activity_events';
 
   static const String stockRecords = 'stock_records';
+
+  /// Blind count lines. Written ONLY by the `inv_count_submit` RPC
+  /// (supabase/pending_migrations/20261120102000_inv_physical_audits.sql).
+  static const String inventoryCountLines = 'inventory_count_lines';
   static const String pmPrograms = 'pm_programs';
   static const String pendingUploads = 'pending_uploads';
   static const String odometerLogs = 'odometer_logs';
@@ -219,6 +223,7 @@ abstract final class SupabaseTables {
     workOrders,
     techActivityEvents,
     stockRecords,
+    inventoryCountLines,
     pmPrograms,
     pendingUploads,
     odometerLogs,

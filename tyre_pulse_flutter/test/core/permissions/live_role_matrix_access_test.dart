@@ -65,9 +65,9 @@ void main() {
   });
 
   test('a role the app has no token for still honours its matrix rows', () {
-    // Store Keeper is held by real people and has no phone token. The matrix
-    // is the only thing that should open anything for it.
-    final Set<ModuleKey> allowed = reach('Store Keeper', <String, Object?>{
+    // Insurance Officer is held by real people and has no phone token. The
+    // matrix is the only thing that should open anything for it.
+    final Set<ModuleKey> allowed = reach('Insurance Officer', <String, Object?>{
       'mobile:stock': true,
       'mobile:stockManage': true,
       'mobile:tasks': true,

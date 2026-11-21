@@ -243,3 +243,9 @@ Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT
   file header.
 - `20261119100000_oem_review_items_source_row.sql` - APPLIED 2026-11-19, moved to `supabase/migrations/`
   (rollback in `supabase/rollbacks/`).
+
+## Inventory follow-up (2026-11-20) - NOT applied, owner approval required
+
+| File | What |
+|---|---|
+| 20261121100000_inv_reconcile_multi_balance.sql (+ _ROLLBACK) | `_inv_audit_reconcile`: an item/location with several balances counted without naming one is reconciled once for the item/location instead of crediting one arbitrary balance (`limit 1`). Guarded by the live md5; PGlite: `supabase/tests/inventory_reconcile_multi_balance.test.mjs`. See docs/inventory/96 section 7. |

@@ -1,6 +1,9 @@
 import DateField from '../components/ui/DateField'
 import { classifyMovement } from '../lib/stockLedger'
 import StockMovementsPanel from '../components/stock/StockMovementsPanel'
+import { useSearchParams } from 'react-router-dom'
+import InventoryHub from '../components/inventory/InventoryHub'
+import { resolveSection } from '../lib/inventory/hubSections'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { stock } from '../lib/api'
 import { listSites } from '../lib/api/sites'
@@ -126,7 +129,42 @@ function SortedPagedTable({ columns, rows, defaultSort, getRowId, emptyMessage, 
   )
 }
 
+/**
+ * Inventory Control Center (`/stock`). One hub, fifteen sections in five
+ * groups (docs/inventory/07). The section lives in `?section=`. The Stock
+ * register section is the original stock register below, kept whole so every
+ * existing workflow (quick entry, transfers, approvals, timeline) still works.
+ */
 export default function StockManagement() {
+  const [params, setParams] = useSearchParams()
+  const section = resolveSection(params.get('section'))
+  const tab = params.get('tab') || null
+  // onSection(section, tab?): a link may also name the tab inside the section
+  // ("Open evidence" -> Controls > Opening balances). Changing section without a
+  // tab clears it, so the next section opens on its own default tab.
+  const onSection = useCallback((next, nextTab) => {
+    setParams((prev) => {
+      const p = new URLSearchParams(prev)
+      if (!next || next === 'overview') p.delete('section')
+      else p.set('section', next)
+      if (nextTab) p.set('tab', nextTab)
+      else p.delete('tab')
+      return p
+    }, { replace: false })
+  }, [setParams])
+  const onTab = useCallback((nextTab) => {
+    setParams((prev) => {
+      const p = new URLSearchParams(prev)
+      if (nextTab) p.set('tab', nextTab)
+      else p.delete('tab')
+      return p
+    }, { replace: true })
+  }, [setParams])
+  return <InventoryHub section={section} tab={tab} onSection={onSection} onTab={onTab} renderRegister={() => <StockRegisterView embedded />} />
+}
+
+/** The stock register (formerly the whole /stock page). */
+function StockRegisterView({ embedded = false }) {
   const { t } = useLanguage()
   const { profile, hasCapability } = useAuth()
   const { appSettings, activeCountry, workingContext } = useSettings()
@@ -730,7 +768,7 @@ export default function StockManagement() {
     <div className="stock-workspace space-y-4">
       <PageHeader
         className="stock-register-heading"
-        title={t('stock.title')}
+        title={embedded ? t('inventory.sections.register') : t('stock.title')}
         subtitle={t('stock.subtitle', { count: records.length })}
         icon={Package}
         actions={

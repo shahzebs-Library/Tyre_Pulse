@@ -340,6 +340,25 @@ List<RouteBase> _buildRoutes() => <RouteBase>[
                 TpRoutePaths.stockCount,
                 TpRouteId.stockCount,
                 (TpRouteParameters _) => const StockCountRoute(),
+                routes: <RouteBase>[
+                  // Literal segments first, so `counts` is never read as an
+                  // audit id.
+                  _route(
+                    TpRoutePaths.inventoryAudits,
+                    TpRouteId.inventoryAudits,
+                    (TpRouteParameters _) => const InventoryAuditsRoute(),
+                  ),
+                  _route(
+                    TpRoutePaths.inventoryTransfers,
+                    TpRouteId.inventoryTransfers,
+                    (TpRouteParameters _) => const InventoryTransfersRoute(),
+                  ),
+                  _route(
+                    TpRoutePaths.inventoryCount,
+                    TpRouteId.inventoryCount,
+                    InventoryCountRoute.parse,
+                  ),
+                ],
               ),
               _route(
                 TpRoutePaths.tasks,

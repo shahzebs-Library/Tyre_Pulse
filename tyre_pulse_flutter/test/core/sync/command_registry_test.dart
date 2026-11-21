@@ -15,8 +15,10 @@ void main() {
       }
     });
 
-    test('there are exactly 14 commands - 16 minus the two excluded', () {
-      expect(CommandType.values, hasLength(14));
+    test(
+        'there are exactly 15 commands - 16 minus the two excluded, plus '
+        'INVENTORY_COUNT_LINE', () {
+      expect(CommandType.values, hasLength(15));
     });
 
     test('CHECKLIST_APPROVAL and REPAIR_REQUEST cannot be expressed', () {
@@ -49,6 +51,7 @@ void main() {
         CommandType.reportAccident: 'REPORT_ACCIDENT',
         CommandType.washRecord: 'WASH_RECORD',
         CommandType.workshopEvent: 'WORKSHOP_EVENT',
+        CommandType.inventoryCountLine: 'INVENTORY_COUNT_LINE',
       };
 
       expect(expected, hasLength(CommandType.values.length));
@@ -87,6 +90,7 @@ void main() {
         CommandType.reportAccident: SupabaseTables.accidents,
         CommandType.washRecord: SupabaseTables.washRecords,
         CommandType.workshopEvent: SupabaseTables.techActivityEvents,
+        CommandType.inventoryCountLine: SupabaseTables.inventoryCountLines,
       };
 
       for (final MapEntry<CommandType, String> entry in expected.entries) {
@@ -118,7 +122,8 @@ void main() {
 
     test('every other command is an insert with no match column', () {
       for (final CommandType type in CommandType.values) {
-        if (updateTypes.contains(type)) {
+        if (updateTypes.contains(type) ||
+            type == CommandType.inventoryCountLine) {
           continue;
         }
         final CommandSpec spec = CommandRegistry.specFor(type);
@@ -244,6 +249,36 @@ void main() {
     test('no allow-list is empty', () {
       for (final CommandSpec spec in CommandRegistry.specs.values) {
         expect(spec.fieldAllowList, isNotEmpty, reason: '${spec.type}');
+      }
+    });
+  });
+
+  group('inventory (docs/inventory_reserved_patch.md)', () {
+    test('INVENTORY_COUNT_LINE is the one RPC command, on inv_count_submit',
+        () {
+      final CommandSpec spec =
+          CommandRegistry.specFor(CommandType.inventoryCountLine);
+      expect(spec.operation, CommandOperation.rpc);
+      expect(spec.rpc, 'inv_count_submit');
+      expect(spec.matchColumn, isNull);
+      expect(spec.fieldAllowList, <String>{'audit_id', 'device_id', 'lines'});
+      for (final CommandType t in CommandType.values) {
+        if (t == CommandType.inventoryCountLine) continue;
+        expect(
+          CommandRegistry.specFor(t).operation,
+          isNot(CommandOperation.rpc),
+          reason: '$t',
+        );
+      }
+    });
+
+    test('STOCK_ADJUST is retired and is the only retired command', () {
+      for (final CommandType t in CommandType.values) {
+        expect(
+          CommandRegistry.specFor(t).retiredMessage != null,
+          t == CommandType.stockAdjust,
+          reason: '$t',
+        );
       }
     });
   });

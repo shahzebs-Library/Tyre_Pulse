@@ -45,7 +45,7 @@
 ///    two real people are using today".
 library;
 
-/// The sixteen roles this application recognises.
+/// The eighteen roles this application recognises.
 ///
 /// Ported from the `UserRole` union and the `normaliseRole` allowlist in
 /// `mobile/lib/types.ts`, cross-checked against the built-in allowlist inside
@@ -132,6 +132,23 @@ enum RoleId {
     token: 'fleet_incharge',
     databaseName: 'Fleet Incharge',
     isBuiltIn: false,
+  ),
+
+  /// A real `custom_roles` row (seeded by V592, named in V282) held by real
+  /// people who run the stores. The web granted it `stock:create`
+  /// (2026-10-12) and the Expo app reached it only through its `reporter`
+  /// fallback. Until this token existed the phone resolved it to
+  /// [UserRole.unknown], which denied every module, so a Store Keeper could
+  /// not open Stock Count or the inventory counts at all
+  /// (docs/inventory/05_mobile_identification_audit.md finding 1). Its module
+  /// reach is stated in `flutterRoleDefaultExtensions` (the `stock` module
+  /// only), NOT in the phone-parity role lists, because the frozen Expo
+  /// registry never learned this role. The server stays the boundary: every
+  /// inventory write is an `inv_*` RPC that re-checks the capability.
+  storeKeeper(
+    token: 'store_keeper',
+    databaseName: 'Store Keeper',
+    isBuiltIn: false,
   );
 
   const RoleId({
@@ -188,7 +205,6 @@ const List<String> knownUnmappedDatabaseRoles = <String>[
   'Automation',
   // Custom roles seeded by V592 and named in V282 with no mobile token.
   'Data Monitor Officer',
-  'Store Keeper',
   'Insurance Officer',
   // RECORDED live 2026-08-18: a real assigned role that appears in no module
   // list and in no allowlist, so that person is currently a reporter on the

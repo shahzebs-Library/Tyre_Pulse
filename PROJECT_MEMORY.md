@@ -5,6 +5,13 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-20 22:33-22:38 UTC — INVENTORY RELEASE APPLIED TO PRODUCTION (owner-approved, doc 94 s16). Record: docs/inventory/96_PRODUCTION_RELEASE_RECORD.md
+- 16 files `20261120100000..115000` (now in supabase/migrations, rollbacks in supabase/rollbacks) + NHC country fix applied; ledger 16 rows. Fetched by pg_net from commit aefb9ee0 into `_bak.inv_release_sql`, sha256 checked in DB, run by `_bak.inv_release_run(file, sha)`.
+- Recovery point 22:32:43 UTC LSN 1A5/DD001FD0, WAL archiving healthy; logical snapshot `_bak.inv_release_20261120_*` (20 tables + fn + pol + baseline).
+- Deviation: 108000 committed before 107000 (parallel calls); proven equivalent (disjoint objects; 112000/113000 fingerprint guards passed). Doc 90 verify-8 omits `_inv_secure_table`/`_inv_master_allowed_keys` (granted until 115000).
+- Post: tyre/CPK/parts/permissions/profiles identical; get_fleet_cpk output identical; 0 anon inv fns; advisors 0 ERROR.
+- OPEN: `inv_tyre_item_sync('KSA')` > 55 s (quadratic temp-table subqueries) - web refresh will time out, KSA conflicts not materialised; Store Keeper grants NOT given (sites {ALL}); no IC/FM/KSA PMV Manager; map 18 NHC legacy lines before first count; mobile HOLD.
+
 # ⚑ 2026-11-17 — RECONCILED #546 + #550 (draft, nothing live). #550 now contains #546; sign-in fn does resolve_sign_in_user (code/username) AND fail-closed/8s timeouts/Turnstile. ARB pin 2523 (2514+8+1). See docs/commercial-readiness/PHASE2_STATUS.md.
 
 # ⚑ 2026-11-16 — AUTH HARDENING ROUND CLOSED. Handover: docs/commercial-readiness/auth/HANDOVER.md. NOTHING LIVE.

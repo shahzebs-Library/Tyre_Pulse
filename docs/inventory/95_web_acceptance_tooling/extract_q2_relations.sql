@@ -1,0 +1,21 @@
+with rels as (select c.oid, n.nspname sch, c.relname rel, c.relkind kind from pg_class c join pg_namespace n on n.oid=c.relnamespace
+ where n.nspname||'.'||c.relname = any(array['public.approval_policies','public.custom_roles','public.goods_receipts','public.material_issue_lines','public.material_issues','public.material_master','public.materials','public.metric_registry','public.metric_versions','public.organisations','public.parts_consumption','public.profiles','public.purchase_orders','public.report_schedules','public.requisitions','public.sites','public.stock','public.stock_entry_requests','public.stock_movements','public.stock_records','public.suppliers','public.tyre_records','public.tyre_status_marks','public.work_order_stock_reservation_lines','public.work_order_stock_reservations','public.work_orders','public.workflow_instances','public.v_stock_balance_reconcile','anum_integration.reader_tables','anum_integration.readers','approval_private.permits','approval_private.tyre_execution_permits','auth.mfa_factors','auth.users','public.access_audit','public.alerts','public.app_settings','public.approval_delegations','public.approval_execution_requests','public.approval_matrix','public.audit_log_v2','public.brain_cache','public.checklist_submissions','public.checklist_templates','public.classification_feedback','public.closure_review_config','public.country_currency','public.domain_events','public.expense_import_rejects','public.inspections','public.material_issue_counters','public.material_issue_number_config','public.module_permissions','public.modules','public.notifications','public.org_admin_events','public.org_alias_overrides','public.org_invitations','public.org_module_overrides','public.org_subscriptions','public.organisation_settings','public.settings','public.site_aliases','public.store_site_map','public.subscription_plans','public.system_config','public.tyre_learned_facts','public.user_access_grants','public.vehicle_fleet','public.wo_assignments','public.wo_tasks','public.work_order_role_rules','public.workflow_step_events']))
+select r.sch, r.rel, r.kind, pg_get_userbyid(c.relowner) owner, c.relacl::text acl, c.relrowsecurity rls, c.relforcerowsecurity force_rls,
+ case when r.kind='v' then pg_get_viewdef(r.oid) end viewdef,
+ (select jsonb_agg(jsonb_build_object('n',a.attname,'t',format_type(a.atttypid,a.atttypmod),
+   'coll',case when a.attcollation<>0 and a.attcollation<>ty.typcollation then (select collname from pg_collation where oid=a.attcollation) end,
+   'gen',a.attgenerated,'ident',a.attidentity,'nn',a.attnotnull,'def',pg_get_expr(d.adbin,d.adrelid),'acl',a.attacl::text) order by a.attnum)
+   from pg_attribute a join pg_type ty on ty.oid=a.atttypid left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+   where a.attrelid=r.oid and a.attnum>0 and not a.attisdropped) cols,
+ (select jsonb_agg(jsonb_build_object('n',co.conname,'type',co.contype,'def',pg_get_constraintdef(co.oid),
+   'ref',case when co.contype='f' then co.confrelid::regclass::text end) order by co.contype desc, co.conname)
+   from pg_constraint co where co.conrelid=r.oid) cons,
+ (select jsonb_agg(pg_get_indexdef(i.indexrelid) order by i.indexrelid::regclass::text) from pg_index i
+   where i.indrelid=r.oid and not exists (select 1 from pg_constraint co where co.conindid=i.indexrelid and co.conrelid=r.oid)) idx,
+ (select jsonb_agg(jsonb_build_object('n',p.polname,'cmd',p.polcmd,'perm',p.polpermissive,
+   'roles',(select coalesce(jsonb_agg(case when x=0 then 'public' else pg_get_userbyid(x) end),'[]') from unnest(p.polroles) x),
+   'using',pg_get_expr(p.polqual,p.polrelid),'check',pg_get_expr(p.polwithcheck,p.polrelid)) order by p.polname)
+   from pg_policy p where p.polrelid=r.oid) pols,
+ (select jsonb_agg(jsonb_build_object('n',t.tgname,'def',pg_get_triggerdef(t.oid),'enabled',t.tgenabled) order by t.tgname)
+   from pg_trigger t where t.tgrelid=r.oid and not t.tgisinternal) trgs
+from rels r join pg_class c on c.oid=r.oid order by r.sch, r.rel

@@ -41,14 +41,66 @@ How to install:
 1. Download the artifact from the link above while signed in to GitHub, then unzip it.
 2. Phone: Settings > Apps > Special access > Install unknown apps > allow the browser or file manager
    you will open the APK with. Or from a computer, with USB debugging on: `adb install -r tyre-pulse-internal-0.1.1-7.apk`.
-3. Because it carries the same package (`com.shahzebrahman.tyrepulse`) and the same signing key as the Play
-   Closed testing build, it installs over that build. To test the D19 upgrade case, install the previous
-   Play build first, then this APK on top. Uninstall first only if you want a clean-install run (D01).
+3. Signing: this APK is signed with the UPLOAD key (SHA-256 `1B:31:EE:57:...:E5:3E`). If Play App Signing is
+   on for `com.shahzebrahman.tyrepulse` (Play Console > Test and release > App integrity; it is mandatory for
+   apps created since 2021), phones that installed from Play carry Google's app-signing key, and this APK will
+   NOT install over them (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`). In that case either install the release
+   through Play Closed testing, or uninstall first (this deletes the offline queue). For D19 (upgrade over an
+   old queue) install a self-built previous APK (`0.1.1+7` from run 44875779894) first, then this one on top.
 4. Sign in ONLY with dedicated test accounts (P2: the Store Keeper test account and the account without
    `stock`). Never use a live employee account: this build points at the PRODUCTION Supabase project, so
    every count, transfer and photo it sends is real data.
 
 Every case below stays Not Tested until someone runs it on a phone from this build and records evidence.
+
+## Release candidate build 0.1.2+8 (AAB, not uploaded)
+
+Built by `.github/workflows/flutter-release-play.yml` with `upload_to_play=false` (owner decision 2026-11-21:
+no Play upload until physical-device acceptance below passes). The AAB is a GitHub Actions artifact only.
+Build details (run, commit, artifact link, signing fingerprint) are in the PR that introduced this section.
+Play's last uploaded build is `0.1.1+7` (run 40346435257); `+8` is above it. Note: that Play build was made by
+the old workflow, which overwrote the committed `MainActivity`, so it shipped WITHOUT biometric unlock and
+the `alerts` push channel. `0.1.2+8` keeps the committed `MainActivity` (CI-guarded).
+
+## Test accounts and data isolation (checked on production 2026-11-21)
+
+**No test receipt, issue, count or transfer may be made against real stock.** The app points at the
+production Supabase project.
+
+| Account | Organisation | Isolated from real stock? |
+|---|---|---|
+| `demo.manager` (Manager) | Tyre Pulse Demo Fleet (7 stock rows, 0 locations, 0 audits) | Yes |
+| `testuser123` (Manager) | Default Organisation = the REAL company (771 users, real stock) | **No - do not use for stock tests** |
+| Store Keeper test account | none exists | - |
+
+Blocker before D01-D16: an administrator must create, inside **Tyre Pulse Demo Fleet** only, (a) a Store
+Keeper test account with `stock` and KSA scope, (b) a second account without `stock`, (c) two inventory
+locations, one serial item and one quantity item, an `in_progress` audit and one open transfer (P2/P3).
+Never create these in Default Organisation.
+
+## Classification of the 21 cases
+
+| Type | Cases | Status |
+|---|---|---|
+| Automated (logic covered by `flutter test` in `flutter-ci.yml`, green on main `fd85a466`) | D02, D03 (`inventory_routes*_test`), D07, D08 (`inventory_count_background_sync_test`, `inventory_count_line_sync_test`: duplicate = done, one row), D09 logic (failed photo upload keeps the line queued), D10 logic (refusal stored, never resent), D13, D14 (`count_session_test`), D19, D20 logic (retired `STOCK_ADJUST` failed with the fixed message; `command_registry` test), D21 logic (`sync_engine_test` user scoping) | Pass in CI; still repeat on a phone where a physical row exists below |
+| Physical phone only | D01, D04, D05, D06 (OS background task), D09 (real network drop), D11, D17 (RTL rendering), D18 (2 GB phone), D19 (install over old build) | Not Tested |
+| Staff participation (web operator or a second Store Keeper) | D10 (close audit on web), D12 (raise recount on web), D15/D16 (dispatching + receiving Store Keeper), P3/P4 setup | Not Tested |
+
+## Physical-phone checklist (run in this order)
+
+1. [ ] Admin set up the Demo Fleet accounts and data above. Confirm the signed-in user's company is Tyre Pulse Demo Fleet before any count.
+2. [ ] Install: Play Closed track, or uninstall then side-load (see Signing note). Record versionName/versionCode from Settings > Apps.
+3. [ ] Biometric unlock prompt appears when enabled (proves the committed `MainActivity` is in the build).
+4. [ ] D01, D02, D03.
+5. [ ] D04, D05, D06 (swipe the app away, wait up to 15 min), D07, D08.
+6. [ ] D09 (toggle network mid-upload), D10 with the web operator.
+7. [ ] D11, D12 with the web operator.
+8. [ ] D13, D14.
+9. [ ] D15 and D16 with a second Store Keeper (both in Demo Fleet).
+10. [ ] D17 in Arabic, quick pass in Urdu.
+11. [ ] D18 on the 2 GB phone with "Don't keep activities".
+12. [ ] D19 (install `0.1.1+7` APK, queue a STOCK_ADJUST offline, install `0.1.2+8` over it), D20, D21.
+13. [ ] Record Pass/Fail + evidence in the table below. Only when the exit criteria pass may the owner order the Play upload (`upload_to_play=true`).
 
 ## Preconditions
 

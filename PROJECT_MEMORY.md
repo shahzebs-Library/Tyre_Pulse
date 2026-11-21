@@ -5,6 +5,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-21 — FLUTTER ANDROID RELEASE LANE (branch claude/flutter-play-release-7rxp2t). NO PLAY UPLOAD (owner: not until physical-device acceptance passes).
+- Shared build prep = composite action `.github/actions/flutter-android-build` (Flutter PINNED 3.47.2, JDK 17, flutter create, keystore, gradle, APP_ENV=production, SENTRY_DSN). Both `flutter-internal-apk.yml` (APK) and `flutter-release-play.yml` (AAB) use it. Guard test `src/test/flutterReleaseWorkflows.test.js`.
+- BUG FIXED: old Play workflow overwrote the committed `kotlin/com/shahzebrahman/tyrepulse/MainActivity.kt`, so Play build 0.1.1+7 shipped WITHOUT the device_security (biometric) MethodChannel and the `alerts` push channel. The action now deletes only the scaffold and fails if the real MainActivity is missing those.
+- `flutter-release-play.yml` input `upload_to_play` (default false): builds + verifies a signed AAB artifact `tyre-pulse-release-aab`; Play upload (alpha only) runs only when true.
+- Version 0.1.2+8 (Play last had +7). Upload key SHA-256 1B:31:EE:...:E5:3E unchanged. Play App Signing likely on -> side-loaded APK cannot upgrade a Play install.
+- Sentry: `lib/core/telemetry/sentry_scrubber.dart` (beforeSend/beforeBreadcrumb strip tokens/passwords/OTP/emails/phones/query strings/media paths; user = id only; no screenshots/view hierarchy/replay). Flutter DSN secret `FLUTTER_SENTRY_DSN` is separate from Expo; still unset.
+- Test isolation: only org "Tyre Pulse Demo Fleet" is isolated; `testuser123` sits in the REAL company. No Store Keeper test account / locations / audit exist in Demo Fleet yet (blocker for D01-D16). Plan + checklist: docs/inventory/92_MOBILE_DEVICE_TEST_PLAN.md.
+- iOS: workflow already pinned + correct; export blocked by App Store Connect API key access ("No Accounts with App Store Connect Access") = owner action.
+
 # ⚑ 2026-11-21 07:23 UTC — `20261121110000_inv_tyre_sync_perf` APPLIED TO PRODUCTION (owner-approved, PR #574). Record: docs/inventory/96 section 11.
 - Recovery point LSN 1A6/EB01CFA0; snapshot `_bak.inv_121110_pre`. New `_inv_tyre_item_sync` md5 909a2379; cache table `inv_tyre_sync_runs` private; advisors 0 ERROR.
 - First real tyre sync done: KSA 2.4 s (was >55 s timeout), UAE 1.0 s, Egypt 0.7 s; cached repeat ~39 ms; concurrent KSA runs serialise on the advisory lock (no duplicates). tyre_items 8,619.

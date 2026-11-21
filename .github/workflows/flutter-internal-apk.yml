@@ -3,12 +3,12 @@ name: Flutter Internal APK (no Play upload)
 # Builds an INSTALLABLE, release-signed APK of the Flutter app
 # (com.shahzebrahman.tyrepulse) for internal device testing and uploads it as a
 # GitHub Actions artifact (14-day retention). It NEVER uploads to Google Play:
-# there is no Play step and no Play service-account secret is read. Public /
-# closed Play releases stay on flutter-release-play.yml (owner's call only).
+# there is no Play step and no Play service-account secret is read.
 #
-# Build steps are copied from flutter-release-play.yml (same platform-folder
-# generation, MainActivity package fix, signing config, dart-defines incl.
-# APP_ENV=production) so the APK behaves exactly like the Play build.
+# All build preparation (pinned Flutter, platform files, MainActivity guard,
+# signing, dart-defines incl. APP_ENV=production) lives in the shared
+# .github/actions/flutter-android-build action, which flutter-release-play.yml
+# uses too, so the APK and the Play AAB can never diverge.
 # workflow_dispatch only - never fires on push or PR.
 
 on:
@@ -17,10 +17,6 @@ on:
 permissions:
   contents: read
 
-defaults:
-  run:
-    working-directory: tyre_pulse_flutter
-
 jobs:
   build_apk:
     name: Build signed release APK (internal, no Play upload)
@@ -28,248 +24,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Build
+        id: build
+        uses: ./.github/actions/flutter-android-build
         with:
-          distribution: temurin
-          java-version: "17"
+          artifact: apk
+          keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          supabase-url: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
+          sentry-dsn: ${{ secrets.FLUTTER_SENTRY_DSN || secrets.SENTRY_DSN_FLUTTER || '' }}
 
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          # Pinned to the toolchain flutter-ci.yml verifies. Unpinned stable
-          # (3.50.1) requires AGP >= 9.1.1 while android/settings.gradle.kts
-          # pins 9.1.0, so the Gradle build refuses to start.
-          flutter-version: 3.47.2
-          cache: true
-
-      - name: Create platform folder
-        # android/ is deliberately not committed (see flutter-ci.yml's
-        # identical step and docs/BOOTSTRAP.md) - generated fresh here just
-        # to get every OTHER file flutter create produces (Gradle wrapper,
-        # manifest, Kotlin scaffold, ios/ for parity). build.gradle.kts is
-        # fully overwritten with known-good content in a later step below,
-        # so nothing here needs to patch that one. MainActivity.kt is a
-        # SEPARATE file with its own package declaration that build.gradle.kts
-        # cannot fix by itself - see the next step.
-        run: flutter create --platforms=android,ios --org com.shahzebrahman --project-name tyre_pulse .
-
-      - name: Fix MainActivity.kt's package to match the Gradle namespace
-        # flutter create writes MainActivity.kt under
-        # android/app/src/main/kotlin/com/shahzebrahman/tyre_pulse/ and
-        # declares `package com.shahzebrahman.tyre_pulse` inside the file
-        # itself. The next step overwrites build.gradle.kts's namespace and
-        # applicationId to com.shahzebrahman.tyrepulse, but that alone does
-        # not relocate or repatch this file. Left as-is,
-        # AndroidManifest.xml's android:name=".MainActivity" resolves
-        # against the new Gradle namespace while the compiled class only
-        # exists under the OLD package - Android throws
-        # ClassNotFoundException and the app crashes on the very first
-        # launch. This is the exact bug that crashed the first build this
-        # workflow ever published to Internal Testing (versionCode 1,
-        # reproduced and confirmed on a real device). flutter-ci.yml carries
-        # the identical fix for the identical reason.
+      - name: Name the APK by version
+        working-directory: tyre_pulse_flutter
         run: |
-          old_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyre_pulse"
-          new_kt_dir="android/app/src/main/kotlin/com/shahzebrahman/tyrepulse"
-          # The COMMITTED tyrepulse/MainActivity.kt carries the biometric and
-          # push method channels - never overwrite it with the generated empty
-          # scaffold. Only fall back to relocating the scaffold if it is absent.
-          if [ -f "$new_kt_dir/MainActivity.kt" ]; then
-            rm -rf "$old_kt_dir"
-          elif [ -d "$old_kt_dir" ]; then
-            mkdir -p "$new_kt_dir"
-            for f in "$old_kt_dir"/*; do
-              sed 's/com\.shahzebrahman\.tyre_pulse/com.shahzebrahman.tyrepulse/' \
-                "$f" > "$new_kt_dir/$(basename "$f")"
-            done
-            rm -rf "$old_kt_dir"
-          fi
-          grep -q "MethodChannel" "$new_kt_dir/MainActivity.kt" || { echo "::error::MainActivity.kt lost its method channels"; exit 1; }
-
-      - name: Reconstruct the release keystore from secrets
-        # Secrets reach the script through env only. Interpolating them into the
-        # script text let a password containing $, a backtick or a quote be
-        # evaluated by the shell (or break the step).
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          # `tr -d '[:space:]'` first: a base64 secret pasted through a browser
-          # UI can pick up an embedded newline or trailing whitespace, which
-          # `base64 -d` would otherwise fold into the decoded bytes and
-          # corrupt the keystore (this is exactly what happened the first
-          # time this workflow ran - "Tag number over 30 is not supported"
-          # is DER-parsing-speak for "this file's bytes are not a valid
-          # keystore").
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > android/app/release.jks
-          {
-            printf 'storePassword=%s\n' "$ANDROID_KEYSTORE_PASSWORD"
-            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
-            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
-            printf 'storeFile=release.jks\n'
-          } > android/key.properties
-
-      - name: Verify the reconstructed keystore is readable
-        # Fails fast, with a clear message, rather than 6+ minutes into a
-        # release build only to fail at the final signing step on a
-        # keystore that was never valid to begin with.
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          keytool -list \
-            -keystore android/app/release.jks \
-            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
-            -alias "$ANDROID_KEY_ALIAS" \
-          || { echo "::error::The reconstructed keystore is not readable - ANDROID_KEYSTORE_BASE64 is likely corrupted (a stray newline/whitespace from copy-paste is the usual cause). Re-copy it from a single unbroken line and re-add the secret."; exit 1; }
-
-      - name: Wire the signing config into build.gradle.kts
-        # Written directly rather than patched with a regex on freshly
-        # generated boilerplate - that boilerplate's exact comment text is
-        # not a contract Flutter guarantees to keep stable across versions,
-        # and a regex that silently fails to match would leave the release
-        # build signed with the DEBUG key without erroring. This is the
-        # same content already built and verified locally for this app.
-        run: |
-          cat > android/app/build.gradle.kts <<'EOF'
-          import java.util.Properties
-          import java.io.FileInputStream
-
-          plugins {
-              id("com.android.application")
-              id("dev.flutter.flutter-gradle-plugin")
-              // Firebase Cloud Messaging: reads the COMMITTED
-              // android/app/google-services.json (declared in the committed
-              // android/settings.gradle.kts, which flutter create leaves alone).
-              id("com.google.gms.google-services")
-          }
-
-          val keystorePropertiesFile = rootProject.file("key.properties")
-          val keystoreProperties = Properties()
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-          }
-
-          android {
-              namespace = "com.shahzebrahman.tyrepulse"
-              compileSdk = 37
-              ndkVersion = flutter.ndkVersion
-
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-              }
-
-              defaultConfig {
-                  applicationId = "com.shahzebrahman.tyrepulse"
-                  minSdk = flutter.minSdkVersion
-                  targetSdk = flutter.targetSdkVersion
-                  versionCode = flutter.versionCode
-                  versionName = flutter.versionName
-              }
-
-              signingConfigs {
-                  create("release") {
-                      keyAlias = keystoreProperties["keyAlias"] as String
-                      keyPassword = keystoreProperties["keyPassword"] as String
-                      storeFile = file(keystoreProperties["storeFile"] as String)
-                      storePassword = keystoreProperties["storePassword"] as String
-                  }
-              }
-
-              buildTypes {
-                  release {
-                      signingConfig = signingConfigs.getByName("release")
-                  }
-              }
-          }
-
-          kotlin {
-              compilerOptions {
-                  jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-              }
-          }
-
-          flutter {
-              source = "../.."
-          }
-
-          // Kept identical to the committed android/app/build.gradle.kts:
-          // MainActivity.kt imports androidx.biometric.
-          dependencies {
-              implementation("androidx.appcompat:appcompat:1.7.1")
-              implementation("androidx.biometric:biometric:1.1.0")
-          }
-          EOF
-          cat android/app/build.gradle.kts
-
-      - name: Firebase config present
-        # Push (FCM) needs the committed android/app/google-services.json;
-        # without it the google-services Gradle plugin fails the build with a
-        # less obvious message.
-        run: test -f android/app/google-services.json || { echo "::error::android/app/google-services.json is missing - push notifications need it (it is committed on purpose)."; exit 1; }
-
-      - name: Resolve dependencies
-        run: flutter pub get
-
-      - name: Generate sources
-        run: dart run build_runner build --delete-conflicting-outputs
-
-      - name: Build signed release APK
-        # main.dart / app_config.dart validate SUPABASE_URL and
-        # SUPABASE_ANON_KEY at startup and, if either is missing, render a
-        # deliberate "This app is not set up correctly" screen instead of
-        # crashing - which is exactly what the first build out of this fixed
-        # workflow did (versionCode 2, confirmed on a real device): it opened
-        # cleanly (the MainActivity fix above worked) straight into that
-        # screen, because this step never passed either value in. The
-        # anon/publishable key is safe to embed in a compiled binary - RLS is
-        # the real access boundary, the same reasoning already written out in
-        # app_config.dart and already acted on in build-native-android.yml
-        # and mobile/eas.json, both of which ship this exact literal key.
-        # SUPABASE_ANON_KEY_PROD is read here (not a new secret) so a future
-        # key rotation only has to touch one place across every workflow.
-        env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
-          # Crash reporting. ONLY the Flutter app's own Sentry project is used:
-          # the FLUTTER_SENTRY_DSN secret (the older SENTRY_DSN_FLUTTER name is
-          # still honoured so an existing secret keeps working). There is
-          # deliberately NO fallback to another project's DSN - mixing the
-          # retired Expo app's crashes with this app's makes both unreadable.
-          # When neither secret is set the build compiles with an empty DSN,
-          # which AppConfig.hasTelemetry reads as "telemetry off" (Sentry is
-          # never initialised), and the step below prints a warning.
-          SENTRY_DSN: ${{ secrets.FLUTTER_SENTRY_DSN || secrets.SENTRY_DSN_FLUTTER || '' }}
-        run: |
-          # APP_VERSION is the pubspec version name (before the +build). It is
-          # what the forced-update gate compares against
-          # system_config.flutter_min_version. Without it the app defaults to
-          # 999.0.0 and the gate can never block anything.
-          APP_VERSION="$(grep -E '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/')"
-          if [ -z "$APP_VERSION" ]; then echo "::error::Could not read version from pubspec.yaml"; exit 1; fi
-          echo "Building APP_VERSION=$APP_VERSION"
-          if [ -z "$SENTRY_DSN" ]; then
-            echo "::warning::FLUTTER_SENTRY_DSN secret is not set - this release is built with crash reporting DISABLED. Add the Flutter Sentry project's DSN as the FLUTTER_SENTRY_DSN repository secret."
-          fi
-          flutter build apk --release \
-            --dart-define=SUPABASE_URL="$SUPABASE_URL" \
-            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-            --dart-define=APP_ENV=production \
-            --dart-define=APP_VERSION="$APP_VERSION" \
-            --dart-define=SENTRY_DSN="$SENTRY_DSN"
-
-      - name: Report version and APK size
-        run: |
-          ls -l build/app/outputs/flutter-apk/app-release.apk
-          grep -E '^version:' pubspec.yaml
-          SIZE=$(stat -c %s build/app/outputs/flutter-apk/app-release.apk)
-          if [ "$SIZE" -lt 5000000 ]; then echo "::error::APK is suspiciously small ($SIZE bytes)"; exit 1; fi
           VERSION="$(grep -E '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//')"
-          echo "### Internal APK" >> "$GITHUB_STEP_SUMMARY"
-          echo "version: $VERSION, size: $SIZE bytes, commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           cp build/app/outputs/flutter-apk/app-release.apk "build/tyre-pulse-internal-$(echo "$VERSION" | tr '+' '-').apk"
 
       - name: Upload APK artifact
@@ -283,4 +54,5 @@ jobs:
       # The signing key and its passwords must not outlive the job.
       - name: Remove signing files
         if: always()
+        working-directory: tyre_pulse_flutter
         run: rm -f android/app/release.jks android/key.properties

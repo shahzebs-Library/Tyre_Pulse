@@ -80,8 +80,10 @@ jobs:
           BUNDLE_ID: com.shahzebrahman.tyrepulseinspector
           MIN_BUILD: ${{ github.run_number }}
         run: |
-          python3 -m pip install --quiet --disable-pip-version-check "pyjwt[crypto]==2.9.0"
-          ASC_KEY_PATH="$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" python3 ios/ci/asc_preflight.py
+          # The runner's Homebrew Python is externally managed (PEP 668): use a private venv.
+          python3 -m venv "$RUNNER_TEMP/ascvenv"
+          "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check "pyjwt[crypto]==2.9.0"
+          ASC_KEY_PATH="$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" "$RUNNER_TEMP/ascvenv/bin/python" ios/ci/asc_preflight.py
 
       - uses: subosito/flutter-action@v2
         with:

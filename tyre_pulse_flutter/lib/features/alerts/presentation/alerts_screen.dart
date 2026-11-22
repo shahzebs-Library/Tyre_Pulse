@@ -299,8 +299,7 @@ class _AlertsList extends StatelessWidget {
                   child: TpEmptyState(
                     icon: Icons.notifications_none_rounded,
                     title: copy('emptyTitle'),
-                    message:
-                        hasFilter
+                    message: hasFilter
                         ? copy('emptyFilter')
                         : AppLocalizations.of(context).alertsEmptyMessage,
                   ),

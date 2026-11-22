@@ -391,11 +391,11 @@ class _NotificationCard extends StatelessWidget {
                         const SizedBox(width: TpSpace.sm),
                         Text(
                           '\u00d7$count',
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: palette.textSecondary,
-                                fontWeight: FontWeight.w800,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    color: palette.textSecondary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                         ),
                       ],
                       if (!isRead) ...<Widget>[

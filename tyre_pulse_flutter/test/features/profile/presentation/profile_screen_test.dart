@@ -237,7 +237,8 @@ void main() {
       expect(find.text('Theme'), findsOneWidget);
       expect(find.text('Light'), findsOneWidget);
       expect(find.text('Offline & data'), findsOneWidget);
-      expect(find.text('All'), findsNWidgets(2));
+      // Organisation-wide site scope is stated once, in the header.
+      expect(find.text('All'), findsNWidgets(1));
       expect(find.text('Platform administrator'), findsNothing);
       expect(find.byKey(ProfileScreenKeys.status), findsOneWidget);
       // The old header wrongly reused an inspection's "Synced" status as an
@@ -643,13 +644,14 @@ void main() {
       expect(find.text('\u2068Manager\u2069'), findsOneWidget);
       expect(find.text('2 modules'), findsOneWidget);
       expect(find.text('Checklist content language'), findsOneWidget);
-      expect(find.text('Independent from app language'), findsOneWidget);
+      expect(find.text('Independent from app language'), findsNothing);
       await tester.scrollUntilVisible(
         find.byKey(ProfileScreenKeys.offlineDraftsRow),
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text('Captured · updated 12 Aug'), findsOneWidget);
+      expect(find.text('Captured'), findsOneWidget);
+      expect(find.text('12 Aug'), findsOneWidget);
       expect(find.text('2 stored on this device'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

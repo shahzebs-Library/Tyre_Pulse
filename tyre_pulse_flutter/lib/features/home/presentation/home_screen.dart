@@ -429,7 +429,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             context.push(const NotificationsRoute().location),
                       ),
                     ),
-                    if (canInspect || canSeeAccidents) ...<Widget>[
+                    if (canInspect ||
+                        canSeeAccidents ||
+                        canReportAccident) ...<Widget>[
                       const SizedBox(height: 18),
                       _Entrance(
                         index: 1,
@@ -444,14 +446,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   onTap: () => context
                                       .go(const NewInspectionRoute().location),
                                 ),
-                              if (canInspect && canSeeAccidents)
+                              if (canInspect &&
+                                  (canSeeAccidents || canReportAccident))
                                 const SizedBox(height: 12),
-                              if (canSeeAccidents)
+                              if (canSeeAccidents || canReportAccident)
                                 _AccidentCommandShortcut(
                                   l10n: l10n,
-                                  onTap: () => context.go(
-                                    const AccidentDashboardRoute().location,
-                                  ),
+                                  reports: canReportAccident,
+                                  onTap: () => canReportAccident
+                                      ? context.push(
+                                          const AccidentReportRoute().location,
+                                        )
+                                      : context.go(
+                                          const AccidentDashboardRoute()
+                                              .location,
+                                        ),
                                 ),
                             ],
                           ),
@@ -531,15 +540,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     canWash: canWash,
                     canSeeVehicles: canSeeVehicles,
                     canReportIssue: canReportIssue,
-                    canReportAccident: canReportAccident,
                     onScanner: () =>
                         context.push(const ScannerRoute().location),
                     onWashing: () => context.go(const WashingRoute().location),
                     onAsset: () => context.push(const VehiclesRoute().location),
                     onReportIssue: () =>
                         context.push(const ReportIssueRoute().location),
-                    onAccident: () =>
-                        context.push(const AccidentReportRoute().location),
                     onMore: () => _showServices(sections, l10n),
                   ),
                 ],
@@ -2081,9 +2087,17 @@ class _StatusTag extends StatelessWidget {
 }
 
 class _AccidentCommandShortcut extends StatelessWidget {
-  const _AccidentCommandShortcut({required this.l10n, required this.onTap});
+  const _AccidentCommandShortcut({
+    required this.l10n,
+    required this.reports,
+    required this.onTap,
+  });
 
   final AppLocalizations l10n;
+
+  /// True when the person can file an accident: the card then says so and
+  /// opens the report form; otherwise it opens the command centre.
+  final bool reports;
   final VoidCallback onTap;
 
   @override
@@ -2145,10 +2159,12 @@ class _AccidentCommandShortcut extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: <Widget>[
                               Text(
-                                _catalogLabel(
-                                  l10n.accidentCopyCatalog,
-                                  'dashboardTitle',
-                                ),
+                                reports
+                                    ? l10n.homeReportAccidentAction
+                                    : _catalogLabel(
+                                        l10n.accidentCopyCatalog,
+                                        'dashboardTitle',
+                                      ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context)
@@ -2157,19 +2173,6 @@ class _AccidentCommandShortcut extends StatelessWidget {
                                     ?.copyWith(
                                       color: palette.text,
                                       fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                l10n.homeReportAccidentAction,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelMedium
-                                    ?.copyWith(
-                                      color: tone.base,
-                                      fontWeight: FontWeight.w700,
                                     ),
                               ),
                             ],
@@ -2203,12 +2206,10 @@ class _DashboardQuickActions extends StatelessWidget {
     required this.canWash,
     required this.canSeeVehicles,
     required this.canReportIssue,
-    required this.canReportAccident,
     required this.onScanner,
     required this.onWashing,
     required this.onAsset,
     required this.onReportIssue,
-    required this.onAccident,
     required this.onMore,
   });
 
@@ -2217,12 +2218,10 @@ class _DashboardQuickActions extends StatelessWidget {
   final bool canWash;
   final bool canSeeVehicles;
   final bool canReportIssue;
-  final bool canReportAccident;
   final VoidCallback onScanner;
   final VoidCallback onWashing;
   final VoidCallback onAsset;
   final VoidCallback onReportIssue;
-  final VoidCallback onAccident;
   final VoidCallback onMore;
 
   @override
@@ -2265,13 +2264,6 @@ class _DashboardQuickActions extends StatelessWidget {
           gem: TpGemSpec.reportIssue,
           onTap: onReportIssue,
         ),
-      if (canReportAccident)
-        (
-          id: 'accident',
-          label: l10n.homeReportAccidentAction,
-          gem: TpGemSpec.reportAccident,
-          onTap: onAccident,
-        ),
       (
         id: 'more',
         label: l10n.homeMoreAction,
@@ -2283,21 +2275,29 @@ class _DashboardQuickActions extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final int perRow = constraints.maxWidth >= 280 ? 3 : 2;
-        final int columns = actions.length < perRow ? actions.length : perRow;
-        final double width =
-            (constraints.maxWidth - (columns - 1) * 10) / columns;
+        // The last row shares the full width between its own items, so an
+        // odd count never leaves an empty slot beside the final tile.
+        final int fullRowsEnd = (actions.length ~/ perRow) * perRow;
+        final int tail = actions.length - fullRowsEnd;
+        double widthFor(int index) {
+          final int columns = index >= fullRowsEnd && tail > 0
+              ? tail
+              : (actions.length < perRow ? actions.length : perRow);
+          return (constraints.maxWidth - (columns - 1) * 10) / columns;
+        }
+
         return Wrap(
           spacing: 10,
           runSpacing: 10,
           children: <Widget>[
-            for (final action in actions)
+            for (int i = 0; i < actions.length; i++)
               SizedBox(
-                width: width,
+                width: widthFor(i),
                 child: _DashboardActionCard(
-                  key: HomeScreenKeys.action(action.id),
-                  label: action.label,
-                  gem: action.gem,
-                  onTap: action.onTap,
+                  key: HomeScreenKeys.action(actions[i].id),
+                  label: actions[i].label,
+                  gem: actions[i].gem,
+                  onTap: actions[i].onTap,
                 ),
               ),
           ],

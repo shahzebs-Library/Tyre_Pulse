@@ -33,8 +33,6 @@ abstract final class AccidentDashboardScreenKeys {
 
   /// Always-visible app-bar entry, so reporting an accident stays one tap
   /// away after the in-list primary button scrolls off screen.
-  static const Key reportAppBarAction =
-      Key('accident.dashboard.reportAppBarAction');
   static const Key search = Key('accident.dashboard.search');
   static const Key allCases = Key('accident.dashboard.allCases');
   static const Key reportedByMe = Key('accident.dashboard.reportedByMe');
@@ -148,18 +146,9 @@ class _AccidentDashboardScreenState
     return TpScaffold(
       // The mock family's tinted canvas: a white command band with one
       // lifted green primary action, then the register as one grouped card.
-      backgroundColor: TpPalette.of(context).surfaceAlt,
+      backgroundColor: TpPalette.of(context).background,
       appBar: TpAppBar(
         title: copy('dashboardTitle'),
-        subtitle: copy('dashboardSubtitle'),
-        actions: <Widget>[
-          IconButton(
-            key: AccidentDashboardScreenKeys.reportAppBarAction,
-            tooltip: copy('reportAction'),
-            icon: const Icon(Icons.add_alert_outlined),
-            onPressed: _report,
-          ),
-        ],
       ),
       body: _body(copy),
     );
@@ -174,9 +163,6 @@ class _AccidentDashboardScreenState
       );
 
   Widget _intro(AccidentCopy copy) {
-    final TpPalette palette = TpPalette.of(context);
-    final TextTheme text = Theme.of(context).textTheme;
-    final TpStatusColors alert = palette.forStatus(TpStatus.critical);
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         TpSpace.lg,
@@ -195,76 +181,6 @@ class _AccidentDashboardScreenState
               icon: Icons.add_a_photo_outlined,
               isFullWidth: true,
               onPressed: _report,
-            ),
-          ),
-          const SizedBox(height: TpSpace.lg),
-          // The register's purpose, set on a soft alert-tinted panel so the
-          // command centre reads as safety work at a glance.
-          Container(
-            padding: const EdgeInsets.all(TpSpace.md),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(TpRadius.lg),
-              border: Border.all(color: alert.base.withValues(alpha: 0.18)),
-              gradient: LinearGradient(
-                begin: AlignmentDirectional.topStart,
-                end: AlignmentDirectional.bottomEnd,
-                colors: <Color>[alert.soft, palette.surface],
-              ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: palette.surface,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: alert.base.withValues(alpha: 0.25),
-                    ),
-                  ),
-                  child: TpIcon(
-                    Icons.car_crash_outlined,
-                    color: alert.base,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: TpSpace.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        copy('dashboardEyebrow').toUpperCase(),
-                        style: text.labelSmall?.copyWith(
-                          color: alert.onSoft,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: TpSpace.xs),
-                      Semantics(
-                        header: true,
-                        child: Text(
-                          copy('dashboardHeroTitle'),
-                          style: text.titleMedium?.copyWith(
-                            color: palette.text,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: TpSpace.xs),
-                      Text(
-                        copy('dashboardHeroMessage'),
-                        style: text.bodySmall?.copyWith(
-                          color: palette.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ),
           ),
           const SizedBox(height: TpSpace.lg),

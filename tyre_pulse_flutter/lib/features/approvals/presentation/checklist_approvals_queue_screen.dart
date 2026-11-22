@@ -194,7 +194,7 @@ class _ChecklistApprovalsQueueScreenState
       backFallback: fallback,
       // The tinted canvas behind one grouped white card - see the
       // inspection queue.
-      backgroundColor: TpPalette.of(context).surfaceAlt,
+      backgroundColor: TpPalette.of(context).background,
       appBar: TpAppBar(
         title: l10n.checklistApprovalsTitle,
         subtitle: _loading

@@ -132,8 +132,30 @@ void main() {
       // "bright near-white surfaces". Relative luminance is 0 for pure
       // black and 1 for pure white.
       expect(TpPalette.light.text.computeLuminance(), lessThan(0.05));
-      expect(TpPalette.light.background.computeLuminance(), greaterThan(0.85));
+      expect(TpPalette.light.background.computeLuminance(), greaterThan(0.7));
       expect(TpPalette.light.surface.computeLuminance(), greaterThan(0.85));
+    });
+
+    double ratio(Color a, Color b) {
+      final double x = a.computeLuminance();
+      final double y = b.computeLuminance();
+      return (x > y ? x + 0.05 : y + 0.05) / (x > y ? y + 0.05 : x + 0.05);
+    }
+
+    for (final TpPalette p in <TpPalette>[TpPalette.light, TpPalette.dark]) {
+      final String name = p.brightness.name;
+      test('$name: cards separate from the page canvas', () {
+        expect(ratio(p.background, p.surface), greaterThanOrEqualTo(1.2));
+        expect(ratio(p.border, p.background), greaterThanOrEqualTo(1.25));
+      });
+    }
+
+    test('light: text stays readable on the tinted canvas', () {
+      const TpPalette p = TpPalette.light;
+      expect(ratio(p.text, p.background), greaterThanOrEqualTo(7));
+      expect(ratio(p.textSecondary, p.background), greaterThanOrEqualTo(7));
+      expect(ratio(p.textMuted, p.background), greaterThanOrEqualTo(4.5));
+      expect(ratio(p.controlBorder, p.background), greaterThanOrEqualTo(3));
     });
   });
 

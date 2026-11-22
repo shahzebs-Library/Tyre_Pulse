@@ -120,7 +120,7 @@ class _VehicleDetailBody extends ConsumerWidget {
     return TpScaffold(
       // A softly tinted canvas so the white hero, metric and detail cards
       // carry the mock's depth.
-      backgroundColor: TpPalette.of(context).surfaceAlt,
+      backgroundColor: TpPalette.of(context).background,
       appBar: TpAppBar(
         title: l10n.vehiclesDetailSubtitle,
         onBack: () => Navigator.of(context).maybePop(),

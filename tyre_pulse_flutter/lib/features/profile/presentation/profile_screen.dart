@@ -132,6 +132,7 @@ import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
@@ -484,8 +485,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: TpSpace.md),
-                    const DriverWorkspaceEntry(),
+                    // Traffic fines and driver records belong to drivers (and
+                    // the administrator who supports them), not to every role.
+                    if (profile.role.id == RoleId.driver ||
+                        profile.role.isAdministrator) ...<Widget>[
+                      const SizedBox(height: TpSpace.md),
+                      const DriverWorkspaceEntry(),
+                    ],
                     const SizedBox(height: TpSpace.md),
                     _ProfileStatusStrip(
                       drafts: drafts,
@@ -1207,14 +1213,16 @@ class _SettingsColumn extends StatelessWidget {
           return l10n.profileFixSignatureCouldNotCheck;
         }
         if (value == null) return l10n.clMockSignatureNotSaved;
-        final DateTime? at = value.updatedAt?.toLocal();
-        return at == null
-            ? l10n.clMockSignatureCaptured
-            : l10n.clMockSignatureCapturedOn(
-                DateFormat('d MMM', locale).format(at),
-              );
+        return l10n.clMockSignatureCaptured;
       },
     );
+    // The date sits on its own caption line so the long sentence never
+    // squeezes the row label onto several lines.
+    final DateTime? signatureAt =
+        savedSignature.asData?.value.signature?.updatedAt?.toLocal();
+    final String? signatureCaption = signatureAt == null
+        ? null
+        : DateFormat('d MMM', locale).format(signatureAt);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1223,13 +1231,16 @@ class _SettingsColumn extends StatelessWidget {
           key: ProfileScreenKeys.access,
           title: l10n.profileSectionWorkspace,
           rows: <Widget>[
-            _SettingsRow(
-              key: ProfileScreenKeys.siteRow,
-              icon: Icons.location_city_outlined,
-              tone: palette.warning,
-              label: l10n.clMockActiveSite,
-              value: _siteScopeLabel(profile, l10n),
-            ),
+            // Organisation-wide scope is already stated in the header
+            // ("All sites"), so the row appears only for a named-site scope.
+            if (!profile.siteScope.isOrganisationWide)
+              _SettingsRow(
+                key: ProfileScreenKeys.siteRow,
+                icon: Icons.location_city_outlined,
+                tone: palette.warning,
+                label: l10n.clMockActiveSite,
+                value: _siteScopeLabel(profile, l10n),
+              ),
             // Omitted when the profile carries neither a country nor a
             // currency: a row reading "Unavailable" teaches nothing.
             if (countriesKnown ||
@@ -1277,7 +1288,6 @@ class _SettingsColumn extends StatelessWidget {
               tone: palette.info,
               label: l10n.clMockChecklistLanguage,
               value: langMeta(checklistLanguage).native,
-              caption: l10n.clMockChecklistLanguageCaption,
               onTap: onChooseChecklistLanguage,
             ),
             _SettingsRow(
@@ -1300,6 +1310,7 @@ class _SettingsColumn extends StatelessWidget {
               tone: palette.ok,
               label: l10n.clMockSavedSignature,
               value: signatureValue,
+              caption: signatureCaption,
               valueColor: signatureUnknown ? palette.textMuted : null,
               onTap: onOpenSignature,
             ),

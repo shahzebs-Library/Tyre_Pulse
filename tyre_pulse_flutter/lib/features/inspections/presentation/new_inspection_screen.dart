@@ -452,17 +452,16 @@ class _InspectionHeaderHero extends StatelessWidget {
           ),
           const SizedBox(width: TpSpace.md),
           Expanded(
-            child: Text(
-              // The app bar already says "New inspection"; the hero names the
-              // step instead of repeating the page title.
-              l10n.inspectionStepOfTotal(1, 3),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              // The numbered track is the step indicator; the sentence that
+              // repeated it is gone, but a screen reader still hears it.
+              child: Semantics(
+                label: l10n.inspectionStepOfTotal(1, 3),
+                child: const ExcludeSemantics(child: _StepTrack(current: 1)),
+              ),
             ),
           ),
-          const SizedBox(width: TpSpace.sm),
-          const _StepTrack(current: 1),
         ],
       ),
     );
@@ -1203,7 +1202,7 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
             ],
           )
         else if (!browsing)
-          Text(l10n.inspectionSearchToBeginHint, style: text.bodySmall)
+          const SizedBox.shrink()
         else if (matches.isEmpty)
           Text(l10n.inspectionVehicleNoMatch, style: text.bodySmall)
         else ...<Widget>[

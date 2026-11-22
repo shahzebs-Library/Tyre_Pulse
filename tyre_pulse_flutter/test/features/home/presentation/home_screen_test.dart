@@ -413,7 +413,6 @@ void main() {
         'washing',
         'asset',
         'reportIssue',
-        'accident',
         'accidents',
         'more',
       ]) {
@@ -583,7 +582,9 @@ void main() {
     expect(find.byKey(HomeScreenKeys.workRow('draft')), findsOneWidget);
     expect(find.byKey(HomeScreenKeys.action('asset')), findsOneWidget);
     expect(find.byKey(HomeScreenKeys.action('reportIssue')), findsOneWidget);
-    expect(find.byKey(HomeScreenKeys.action('accident')), findsOneWidget);
+    // One accident entry on Home: the shortcut card (no duplicate tile).
+    expect(find.byKey(HomeScreenKeys.action('accident')), findsNothing);
+    expect(find.byKey(HomeScreenKeys.action('accidents')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -616,8 +617,6 @@ void main() {
         ),
       );
       expect(find.text('My Inspections'), findsOneWidget);
-      expect(find.text('Accident command centre'), findsWidgets);
-      expect(find.text('Report an accident'), findsWidgets);
       // Scrolled to, not dragged a fixed distance: the sheet's length changes
       // whenever a module tile is added (Workshop Status, 2026-10-07).
       final Finder sheetScroll = find.descendant(
@@ -630,6 +629,9 @@ void main() {
         scrollable: sheetScroll,
       );
       expect(find.text('Maintenance Control Center'), findsOneWidget);
+      // The accident modules live in this section of the sheet.
+      expect(find.text('Accident command centre'), findsWidgets);
+      expect(find.text('Report an accident'), findsWidgets);
       expect(find.text('Maintenance & workshop'), findsWidgets);
       await tester.scrollUntilVisible(
         find.text('Workshop Status'),

@@ -171,7 +171,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         !_exporting;
 
     return TpScaffold(
-      backgroundColor: TpPalette.of(context).surfaceAlt,
+      backgroundColor: TpPalette.of(context).background,
       appBar: TpAppBar(
         title: l10n.fleetMockFinReportTitle,
         onBack: () => Navigator.of(context).maybePop(),

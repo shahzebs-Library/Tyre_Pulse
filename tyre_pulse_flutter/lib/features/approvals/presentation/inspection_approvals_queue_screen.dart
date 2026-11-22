@@ -211,7 +211,7 @@ class _InspectionApprovalsQueueScreenState
       backFallback: fallback,
       // A softly tinted canvas so each date group reads as one white card,
       // the depth the mock family's list sections carry.
-      backgroundColor: TpPalette.of(context).surfaceAlt,
+      backgroundColor: TpPalette.of(context).background,
       appBar: TpAppBar(
         title: l10n.inspectionApprovalsTitle,
         backFallback: fallback,
@@ -716,7 +716,8 @@ class _QueueRow extends StatelessWidget {
       // carries only the time of day - the mock's trailing "10m ago" slot.
       time: _formatTime(item.createdAt, locale),
       tags: <Widget>[
-        QueueStatusTag(label: label, status: status),
+        // No per-row status chip: every row on a tab shares that tab's
+        // status, which the selected tab already states.
         if (signed)
           Icon(
             Icons.draw_outlined,

@@ -264,9 +264,11 @@ class _HeaderStep extends ConsumerWidget {
                   value: state.odometerText,
                   label: l10n.inspectionOdometerLabel,
                   hint: l10n.inspectionOdometerHint,
-                  errorText: state.odometerInput.isInvalid
-                      ? l10n.meterLogInvalidReadingTitle
-                      : null,
+                  errorText: state.odometerInput.looksLikeDate
+                      ? l10n.inspectionMeterLooksLikeDate
+                      : state.odometerInput.isInvalid
+                          ? l10n.meterLogInvalidReadingTitle
+                          : null,
                   helperText: odometerWarning,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
@@ -280,9 +282,11 @@ class _HeaderStep extends ConsumerWidget {
                   value: state.hourMeterText,
                   label: l10n.inspectionHourMeterLabel,
                   hint: l10n.inspectionHourMeterHint,
-                  errorText: state.hourMeterInput.isInvalid
-                      ? l10n.meterLogInvalidReadingTitle
-                      : null,
+                  errorText: state.hourMeterInput.looksLikeDate
+                      ? l10n.inspectionMeterLooksLikeDate
+                      : state.hourMeterInput.isInvalid
+                          ? l10n.meterLogInvalidReadingTitle
+                          : null,
                   helperText: hoursWarning,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,

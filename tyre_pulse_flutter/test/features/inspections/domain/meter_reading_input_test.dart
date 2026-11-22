@@ -42,4 +42,19 @@ void main() {
     expect(MeterReadingInput.parse('12345.5').wholeValue, isNull);
     expect(MeterReadingInput.parse('').wholeValue, isNull);
   });
+
+  test('a date typed as a reading is refused, a real reading is not', () {
+    // Seen in production: 20261122 saved as km on a wheel loader on 2026-11-22.
+    final MeterReadingInput date = MeterReadingInput.parse('20261122');
+    expect(date.isInvalid, isTrue);
+    expect(date.looksLikeDate, isTrue);
+    expect(date.value, isNull);
+    // Not a calendar date (month 13, 31 February): kept as typed.
+    expect(MeterReadingInput.parse('20261322').looksLikeDate, isFalse);
+    expect(MeterReadingInput.parse('20260231').looksLikeDate, isFalse);
+    // Ordinary readings, including a high one, stay valid.
+    expect(MeterReadingInput.parse('20884').value, 20884);
+    expect(MeterReadingInput.parse('1,250,300').isInvalid, isFalse);
+    expect(MeterReadingInput.parse('20261122.5').looksLikeDate, isFalse);
+  });
 }

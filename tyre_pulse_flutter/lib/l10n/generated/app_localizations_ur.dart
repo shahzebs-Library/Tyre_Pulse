@@ -8731,4 +8731,16 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get captchaRefused =>
       'سیکیورٹی چیک قبول نہیں ہوا۔ اسے دوبارہ مکمل کریں اور پھر کوشش کریں۔';
+
+  @override
+  String vehicle360TyreMapFrom(String date) {
+    return '$date کے معائنے سے';
+  }
+
+  @override
+  String get vehicle360TyreMapLoadFailed => 'ٹائر ریڈنگز لوڈ نہیں ہو سکیں';
+
+  @override
+  String get inspectionMeterLooksLikeDate =>
+      'یہ تاریخ ہے، ریڈنگ نہیں۔ اگر مشین پر میٹر نہیں ہے تو خالی چھوڑ دیں۔';
 }

@@ -70,3 +70,32 @@ describe('Flutter Android release pipeline', () => {
     expect(publish).toMatch(/^ {10}packageName: com\.shahzebrahman\.tyrepulse$/m)
   })
 })
+
+describe('Flutter iOS TestFlight pipeline', () => {
+  const WF = '.github/workflows/flutter-release-ios.yml'
+  const code = () => read(WF).split('\n').filter((l) => !l.trim().startsWith('#')).join('\n')
+
+  it('stays workflow_dispatch only', () => {
+    const text = code()
+    const on = text.slice(text.indexOf('\non:'), text.indexOf('\npermissions:'))
+    expect(on).toContain('workflow_dispatch')
+    expect(on).not.toMatch(/\b(push|pull_request|schedule):/)
+  })
+
+  it('signs manually with per-run API material, never cloud/automatic signing', () => {
+    const text = code()
+    expect(text).toContain('ios/ci/asc_signing.py setup')
+    expect(text).toContain('<key>signingStyle</key><string>manual</string>')
+    expect(text).not.toContain('-allowProvisioningUpdates')
+    expect(text).not.toContain('CODE_SIGNING_ALLOWED=NO')
+    expect(text).toContain('PROVISIONING_PROFILE_SPECIFIER')
+  })
+
+  it('always revokes the per-run certificate/profile and checks the team id', () => {
+    const text = code()
+    const cleanup = text.slice(text.lastIndexOf('- name:', text.indexOf('asc_signing.py cleanup')))
+    expect(cleanup).toMatch(/if: always\(\)/)
+    expect(cleanup).toContain('security delete-keychain')
+    expect(text).toMatch(/APPLE_TEAM_ID[\s\S]*?"\$TEAM" != "\$api_team"/)
+  })
+})

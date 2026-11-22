@@ -88,26 +88,74 @@ final class _Repo implements PhysicalInventoryRepository {
       throw UnimplementedError();
 }
 
+Future<_Repo> _pumpCapture(
+  WidgetTester tester, {
+  Locale locale = const Locale('en'),
+  double textScale = 1,
+}) async {
+  final _Repo repo = _Repo();
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: <Override>[
+        workspaceContextProvider.overrideWithValue(null as WorkspaceContext?),
+        physicalInventoryRepositoryProvider.overrideWithValue(repo),
+        openPhysicalSessionsProvider
+            .overrideWith((Ref ref) async => const <PhysicalSession>[]),
+      ],
+      child: MaterialApp(
+        locale: locale,
+        localizationsDelegates: TpLocalizations.delegates,
+        supportedLocales: TpLocalizations.supportedLocales,
+        builder: (BuildContext context, Widget? child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: child!,
+        ),
+        home: const PhysicalInventoryScreen(),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return repo;
+}
+
+/// Scrolls the screen's list (either way) until [f] is built and on screen.
+Future<void> _reveal(WidgetTester tester, Finder f) async {
+  final Finder list = find
+      .descendant(
+        of: find.byType(ListView),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  if (f.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(f, 200, scrollable: list);
+  }
+  await tester.ensureVisible(f);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapVisible(WidgetTester tester, Finder f) async {
+  await _reveal(tester, f);
+  await tester.tap(f);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _startStoreA(WidgetTester tester) async {
+  await _tapVisible(tester, find.byKey(const Key('pi.store.wh-a')));
+  await _tapVisible(tester, find.byKey(const Key('pi.start')));
+  // Back to the top of the capture form.
+  await tester.drag(find.byType(ListView), const Offset(0, 5000));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('stores are picked from the list; a bin label selects the bin',
       (WidgetTester tester) async {
-    final _Repo repo = _Repo();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: <Override>[
-          workspaceContextProvider.overrideWithValue(null as WorkspaceContext?),
-          physicalInventoryRepositoryProvider.overrideWithValue(repo),
-          openPhysicalSessionsProvider
-              .overrideWith((Ref ref) async => const <PhysicalSession>[]),
-        ],
-        child: const MaterialApp(
-          localizationsDelegates: TpLocalizations.delegates,
-          supportedLocales: TpLocalizations.supportedLocales,
-          home: PhysicalInventoryScreen(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(800, 3200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final _Repo repo = await _pumpCapture(tester);
 
     // No free-text store field: existing stores only, and Start waits for one.
     expect(find.byKey(const Key('pi.store')), findsNothing);
@@ -118,16 +166,28 @@ void main() {
       greaterThanOrEqualTo(48),
     );
 
-    await tester.tap(find.byKey(const Key('pi.store.wh-a')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('pi.start')));
-    await tester.pumpAndSettle();
+    await _startStoreA(tester);
     expect(repo.startedLocation, 'wh-a');
 
-    // Save and next is in the bottom bar, at least 48dp tall.
+    // Mockup layout: title + connection pill, location bar, search, fields.
+    expect(find.text('Initial Physical Inventory'), findsOneWidget);
+    expect(find.byKey(const Key('pi.connection')), findsOneWidget);
+    expect(find.byKey(const Key('pi.location')), findsOneWidget);
+    expect(find.textContaining('Store A'), findsWidgets);
+    expect(find.byKey(const Key('pi.classification')), findsOneWidget);
+    expect(find.byKey(const Key('pi.ownership')), findsOneWidget);
+    for (final String c in <String>['new', 'used', 'repairable', 'damaged']) {
+      expect(find.byKey(Key('pi.cond.$c')), findsOneWidget);
+    }
+    for (final String r in <String>['item', 'label', 'location']) {
+      expect(find.byKey(Key('pi.photo.$r')), findsOneWidget);
+    }
+    expect(find.byKey(const Key('pi.photo.damage')), findsNothing);
+
+    // Save & count next is in the bottom bar, at least 56dp tall.
     final Finder save = find.byKey(const Key('pi.save'));
     expect(save, findsOneWidget);
-    expect(tester.getSize(save).height, greaterThanOrEqualTo(48));
+    expect(tester.getSize(save).height, greaterThanOrEqualTo(56));
     expect(
       tester.getBottomLeft(save).dy,
       greaterThan(
@@ -135,10 +195,13 @@ void main() {
       ),
     );
 
-    // The big stepper fills the quantity.
-    await tester.tap(find.byKey(const Key('inventory.qty.plus10')));
+    // The big stepper fills the quantity (tap = 1, hold = 10), never < 0.
+    final Finder plus = find.byKey(const Key('pi.qty.plus'));
+    await _reveal(tester, plus);
+    expect(tester.getSize(plus).height, greaterThanOrEqualTo(56));
+    await tester.longPress(plus);
     await tester.pump();
-    await tester.tap(find.byKey(const Key('inventory.qty.plus1')));
+    await tester.tap(plus);
     await tester.pump();
     expect(
       tester
@@ -147,15 +210,71 @@ void main() {
           .text,
       '11',
     );
-
-    // A TP:LOC label selects the bin.
-    await tester.enterText(
-      find.byKey(const Key('inventory.scan.field')),
-      'TP:LOC:bin-7',
+    for (int i = 0; i < 2; i++) {
+      await tester.longPress(find.byKey(const Key('pi.qty.minus')));
+      await tester.pump();
+    }
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('pi.qty')))
+          .controller!
+          .text,
+      '0',
     );
+
+    // A damaged item opens the damage photo slot.
+    await _tapVisible(tester, find.byKey(const Key('pi.cond.damaged')));
+    expect(find.byKey(const Key('pi.photo.damage')), findsOneWidget);
+
+    // Saving without a photo is refused with a clear message.
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('pi.message')), findsOneWidget);
+    expect(find.text('Take at least one photo before saving.'), findsOneWidget);
+
+    // A TP:LOC label selects the bin (shown in the location bar).
+    final Finder scan = find.byKey(const Key('inventory.scan.field')).first;
+    await _reveal(tester, scan);
+    await tester.enterText(scan, 'TP:LOC:bin-7');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('pi.bin')), findsOneWidget);
     expect(find.textContaining('BIN-7'), findsOneWidget);
   });
+
+  for (final Locale locale in const <Locale>[Locale('en'), Locale('ar')]) {
+    testWidgets(
+        'capture layout fits a small phone at 2x text (${locale.languageCode})',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 690);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pumpCapture(tester, locale: locale, textScale: 2);
+      await _startStoreA(tester);
+      if (locale.languageCode == 'ar') {
+        expect(
+          Directionality.of(tester.element(find.byKey(const Key('pi.save')))),
+          TextDirection.rtl,
+        );
+      }
+      // Scroll the whole form: every section must lay out without overflow.
+      for (final String k in <String>[
+        'pi.location',
+        'pi.classification',
+        'pi.qty.plus',
+        'pi.cond.scrap',
+        'pi.ownership',
+        'pi.photo.location',
+        'pi.remarks',
+        'pi.describe',
+      ]) {
+        await _reveal(tester, find.byKey(Key(k)));
+        expect(tester.takeException(), isNull, reason: k);
+      }
+      expect(
+        tester.getSize(find.byKey(const Key('pi.save'))).height,
+        greaterThanOrEqualTo(56),
+      );
+    });
+  }
 }

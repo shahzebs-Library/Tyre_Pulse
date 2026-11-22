@@ -139,6 +139,17 @@ picks its store on the start view and selects the bin on the capture view (a bin
 is refused; offline the label is kept and checked by the server). Quantity has a large -10/-1/+1/+10
 stepper beside the field; Save and next sits in the bottom bar.
 
+**Capture layout (owner mockup, 2026-11-22):** title with an Online / Offline / "n waiting to send"
+pill; an accent-outlined location bar (store, bin, rack text; tap to scan a bin label or clear it);
+the scan/search field; the matched item card with its classification badge; OEM part number
+(`refs.oem`) and manufacturer part number (`refs.part_number`); Classification (read-only from the
+catalog when matched; otherwise the counter's claim, sent as `refs.classification_claim` for the
+reviewer and never as the variant classification); a big -/+ quantity stepper (hold for 10); a
+condition chip grid; ownership; three photo slots Item / Part number / Location (plus Damage when
+the condition is damaged, repairable or scrap), each saved with its own photo role; remarks
+(250 characters). At least one photo is required before Save & count next item. The accent is the
+theme primary (safety yellow on the dark theme, fleet green on light).
+
 ## 7. What the owner must do next
 
 1. Done 2026-11-21: migration applied (doc 96 section 12).

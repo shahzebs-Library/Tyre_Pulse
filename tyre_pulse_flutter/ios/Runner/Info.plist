@@ -36,6 +36,8 @@
 	<string>Tyre Pulse uses Face ID to confirm it is you before sign-in.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>TyrePulse tags inspections with your current location so fleet managers can see where tyre checks were performed.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>TyrePulse tags inspections with your current location so fleet managers can see where tyre checks were performed. Location is only read while you are using the app.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>TyrePulse needs photo access to attach images to inspections, checklists, maintenance, and incident reports.</string>
 	<key>UIApplicationSceneManifest</key>

@@ -84,7 +84,7 @@ def main():
     app_id = apps[0]["id"]
     print(f"App record found for {bundle}.")
 
-    # Cloud-managed signing (the export step) needs a key that may manage certificates and profiles.
+    # Per-run manual signing (asc_signing.py) needs a key that may manage certificates and profiles.
     status, body = get(tok, "certificates", {"limit": 1})
     if status in (401, 403):
         fail("This API key may not manage signing certificates (" + str(status) + "). Xcode reports this as "

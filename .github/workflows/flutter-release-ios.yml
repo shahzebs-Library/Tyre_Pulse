@@ -15,8 +15,11 @@ name: Flutter Release - iOS TestFlight
 #   GOOGLE_SERVICE_INFO_PLIST - content of the Firebase iOS app's GoogleService-Info.plist
 #                         (raw XML or base64). Required for push; injected at build time,
 #                         never committed. See docs/message-team-canonical-handoff.md (iOS push / APNs checklist).
-# The key needs the App Manager role so Xcode can create the distribution
-# certificate and provisioning profile (cloud signing) by itself.
+# The key needs the Admin role: the job creates its OWN Apple Distribution
+# certificate and App Store provisioning profile through the API (manual signing,
+# ios/ci/asc_signing.py), signs with them, and revokes/deletes both at the end.
+# No Xcode account and no cloud-managed signing is involved (that path failed with
+# "No Accounts with App Store Connect Access").
 
 on:
   workflow_dispatch:
@@ -151,37 +154,130 @@ jobs:
             --dart-define=SENTRY_DSN="$SENTRY_DSN" \
             --dart-define=APP_STORE_ID="$APP_STORE_ID"
 
-      - name: Archive (unsigned; signing happens at export)
+      - name: Create per-run signing key and CSR
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          # Archiving signed with automatic signing needs a registered test
-          # device for a Development profile, which this account does not have.
-          # Archive unsigned instead; the export step signs with the cloud
-          # managed Apple Distribution certificate and App Store profile.
+          SIGN_DIR="$RUNNER_TEMP/signing"
+          rm -rf "$SIGN_DIR"; mkdir -p "$SIGN_DIR"; chmod 700 "$SIGN_DIR"
+          echo "SIGN_DIR=$SIGN_DIR" >> "$GITHUB_ENV"
+          echo "RUN_MARKER=gha-${RUN_ID}-${RUN_ATTEMPT}" >> "$GITHUB_ENV"
+          # /usr/bin/openssl (LibreSSL) on purpose: its PKCS#12 defaults (3DES/SHA1)
+          # are what macOS `security import` reads; OpenSSL 3 defaults are not.
+          /usr/bin/openssl genrsa -out "$SIGN_DIR/dist.key" 2048 2>/dev/null
+          /usr/bin/openssl req -new -key "$SIGN_DIR/dist.key" -out "$SIGN_DIR/dist.csr" \
+            -subj "/CN=Tyre Pulse CI/O=Tyre Pulse/C=SA"
+
+      - name: Create distribution certificate and App Store profile (API)
+        env:
+          ASC_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          BUNDLE_ID: com.shahzebrahman.tyrepulseinspector
+        run: |
+          ASC_KEY_PATH="$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" STATE_DIR="$SIGN_DIR" CSR_PATH="$SIGN_DIR/dist.csr" \
+            "$RUNNER_TEMP/ascvenv/bin/python" ios/ci/asc_signing.py setup
+
+      - name: Guard - APPLE_TEAM_ID must equal the team that owns the App ID
+        env:
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          api_team="$(cat "$SIGN_DIR/team_id")"
+          if [ "$TEAM" != "$api_team" ]; then
+            echo "::error::The APPLE_TEAM_ID secret does not match the team that owns the App ID in App Store Connect (the API key's team). Fix the APPLE_TEAM_ID secret."
+            exit 1
+          fi
+          echo "APPLE_TEAM_ID matches the App ID's team."
+
+      - name: Install certificate into a temporary keychain and install the profile
+        run: |
+          KC="$RUNNER_TEMP/signing.keychain-db"
+          KC_PW="$(/usr/bin/openssl rand -hex 24)"
+          P12_PW="$(/usr/bin/openssl rand -hex 24)"
+          echo "::add-mask::$KC_PW"
+          echo "::add-mask::$P12_PW"
+          echo "SIGN_KEYCHAIN=$KC" >> "$GITHUB_ENV"
+          /usr/bin/openssl x509 -inform DER -in "$SIGN_DIR/cert.der" -out "$SIGN_DIR/dist.pem"
+          /usr/bin/openssl pkcs12 -export -inkey "$SIGN_DIR/dist.key" -in "$SIGN_DIR/dist.pem" \
+            -name "Tyre Pulse CI" -out "$SIGN_DIR/dist.p12" -passout "pass:$P12_PW"
+          security create-keychain -p "$KC_PW" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PW" "$KC"
+          # Intermediate CA that issues Apple Distribution certificates (usually already
+          # in the runner's System keychain; importing it again is harmless).
+          if curl -fsSL --retry 3 -o "$SIGN_DIR/AppleWWDRCAG3.cer" https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer; then
+            security import "$SIGN_DIR/AppleWWDRCAG3.cer" -k "$KC" -T /usr/bin/codesign >/dev/null 2>&1 || true
+          fi
+          security import "$SIGN_DIR/dist.p12" -k "$KC" -P "$P12_PW" -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KC" >/dev/null
+          # Put the temp keychain first in the user search list, keeping the existing ones.
+          existing="$(security list-keychains -d user | tr -d '"' | xargs)"
+          # shellcheck disable=SC2086
+          security list-keychains -d user -s "$KC" $existing
+          security find-identity -v -p codesigning "$KC" | grep -q "Apple Distribution" \
+            || { echo "::error::The Apple Distribution identity did not land in the temporary keychain."; exit 1; }
+          rm -f "$SIGN_DIR/dist.p12"
+          # Profile: the classic location and the one Xcode 16+ reads.
+          uuid="$(cat "$SIGN_DIR/profile_uuid")"
+          for d in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$d"
+            cp "$SIGN_DIR/profile.mobileprovision" "$d/$uuid.mobileprovision"
+          done
+          # The App Store profile must carry the push entitlement Runner.entitlements asks for.
+          security cms -D -i "$SIGN_DIR/profile.mobileprovision" > "$SIGN_DIR/profile.plist"
+          aps="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:aps-environment' "$SIGN_DIR/profile.plist" 2>/dev/null || true)"
+          [ "$aps" = "production" ] || { echo "::error::The App Store profile has no production aps-environment entitlement. Enable Push Notifications on the App ID."; exit 1; }
+
+      - name: Set manual signing on the Runner target only
+        # Target-scoped on purpose: command-line build settings would also hit the
+        # Swift package targets (FlutterGeneratedPluginSwiftPackage), which reject a
+        # provisioning profile. This edits the CI checkout only, never the repo.
+        run: |
+          gem list -i xcodeproj >/dev/null 2>&1 || sudo gem install xcodeproj --no-document
+          TEAM_ID="$(cat "$SIGN_DIR/team_id")" PROFILE_NAME="$(cat "$SIGN_DIR/profile_name")" ruby -rxcodeproj -e '
+            p = Xcodeproj::Project.open("ios/Runner.xcodeproj")
+            t = p.targets.find { |x| x.name == "Runner" } or abort("Runner target not found")
+            c = t.build_configurations.find { |x| x.name == "Release" } or abort("Release config not found")
+            s = c.build_settings
+            s["CODE_SIGN_STYLE"] = "Manual"
+            s["DEVELOPMENT_TEAM"] = ENV.fetch("TEAM_ID")
+            s["CODE_SIGN_IDENTITY"] = "Apple Distribution"
+            s["CODE_SIGN_IDENTITY[sdk=iphoneos*]"] = "Apple Distribution"
+            s["PROVISIONING_PROFILE_SPECIFIER"] = ENV.fetch("PROFILE_NAME")
+            s.delete("PROVISIONING_PROFILE")
+            p.save
+            puts "Runner Release signing set to manual."
+          '
+
+      - name: Archive (signed, manual)
+        run: |
           xcodebuild archive \
             -workspace ios/Runner.xcworkspace \
             -scheme Runner \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+            OTHER_CODE_SIGN_FLAGS="--keychain $SIGN_KEYCHAIN"
 
-      - name: Export and upload to App Store Connect
-        env:
-          KEYID: ${{ secrets.APPSTORE_KEY_ID }}
-          ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
-          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+      - name: Export the IPA (manual signing, no Xcode account)
         run: |
+          TEAM_ID="$(cat "$SIGN_DIR/team_id")"
+          PROFILE_NAME="$(cat "$SIGN_DIR/profile_name")"
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
             <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
-            <key>teamID</key><string>$TEAM</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.shahzebrahman.tyrepulseinspector</key><string>$PROFILE_NAME</string>
+            </dict>
+            <key>manageAppVersionAndBuildNumber</key><false/>
             <key>uploadSymbols</key><true/>
           </dict>
           </plist>
@@ -189,11 +285,40 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -exportPath "$RUNNER_TEMP/export" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8" \
-            -authenticationKeyID "$KEYID" \
-            -authenticationKeyIssuerID "$ISSUER"
+            -exportPath "$RUNNER_TEMP/export"
+          ls "$RUNNER_TEMP"/export/*.ipa
+
+      - name: Upload to App Store Connect
+        # Uploads with the API key directly, separate from export, so no Xcode
+        # account is needed at any step (the old export+upload failed on exactly that).
+        env:
+          KEYID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          IPA="$(ls "$RUNNER_TEMP"/export/*.ipa | head -n 1)"
+          API_PRIVATE_KEYS_DIR="$RUNNER_TEMP/keys" xcrun altool --upload-app \
+            -f "$IPA" -t ios \
+            --apiKey "$KEYID" --apiIssuer "$ISSUER"
+
+      - name: Revoke per-run certificate, delete per-run profile, remove keychain
+        if: always()
+        env:
+          ASC_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          BUNDLE_ID: com.shahzebrahman.tyrepulseinspector
+        run: |
+          if [ -n "${SIGN_DIR:-}" ] && [ -x "$RUNNER_TEMP/ascvenv/bin/python" ] && [ -f "$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" ]; then
+            ASC_KEY_PATH="$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" STATE_DIR="$SIGN_DIR" \
+              "$RUNNER_TEMP/ascvenv/bin/python" ios/ci/asc_signing.py cleanup \
+              || echo "::warning::Signing cleanup reported a problem; see above."
+          fi
+          if [ -n "${SIGN_KEYCHAIN:-}" ]; then security delete-keychain "$SIGN_KEYCHAIN" 2>/dev/null || true; fi
+          if [ -n "${SIGN_DIR:-}" ] && [ -f "$SIGN_DIR/profile_uuid" ]; then
+            uuid="$(cat "$SIGN_DIR/profile_uuid")"
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision" \
+                  "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/$uuid.mobileprovision"
+          fi
+          if [ -n "${SIGN_DIR:-}" ]; then rm -rf "$SIGN_DIR"; fi
 
       - name: Remove the API key and Firebase plist from the runner
         if: always()

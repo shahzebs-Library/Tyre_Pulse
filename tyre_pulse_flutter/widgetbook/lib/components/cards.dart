@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_stats.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_stat_row.dart';
 import 'package:widgetbook/widgetbook.dart';
 import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
 import 'package:widgetbook_workspace/components/catalogue_support.dart';
@@ -157,3 +159,28 @@ class TextScaledTile extends StatelessWidget {
 
 @widgetbook.UseCase(name: 'Text-scaled fixed tile', type: TextScaledTile, path: CataloguePath.cards)
 Widget textScaledTile(BuildContext context) => const TextScaledTile();
+
+/// The real tyre diagram stat row: four stat cards side by side. On a 320 dp
+/// phone each card is about 70 dp wide, so a three-digit count at large text
+/// is the hardest case this card meets in the app.
+@widgetbook.UseCase(
+  name: 'Tyre diagram row (four across)',
+  type: TyreDiagramStatRow,
+  path: CataloguePath.tyres,
+)
+Widget tyreStatRow(BuildContext context) {
+  final int total = context.knobs.int.input(label: 'Total', initialValue: 128);
+  return CatalogueFrame(
+    children: <Widget>[
+      TyreDiagramStatRow(
+        stats: TyreDiagramStats(
+          total: total,
+          ok: total - 14,
+          monitor: 9,
+          critical: 5,
+          unrecorded: 6,
+        ),
+      ),
+    ],
+  );
+}

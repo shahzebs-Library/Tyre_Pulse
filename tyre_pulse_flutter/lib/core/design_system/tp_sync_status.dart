@@ -26,6 +26,7 @@ import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/tp_text_scale.dart';
 
 /// What the device knows about its connection.
 enum TpConnectivity {
@@ -248,19 +249,28 @@ class TpSyncIndicator extends StatelessWidget {
         horizontal: TpSpace.sm,
         vertical: TpSpace.xs,
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: TpSizing.iconSm, color: colors.onSoft),
-          const SizedBox(width: TpSpace.xs),
-          Text(
-            label,
-            style: Theme.of(context)
-                .textTheme
-                .labelMedium
-                ?.copyWith(color: colors.onSoft),
-          ),
-        ],
+      // Measured so the label can wrap where the row has a width to fit
+      // (a page) and stays capped where it does not (AppBar actions).
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints c) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: TpSizing.iconSm, color: colors.onSoft),
+            const SizedBox(width: TpSpace.xs),
+            tpRowLabel(
+              bounded: c.maxWidth.isFinite,
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelMedium
+                    ?.copyWith(color: colors.onSoft),
+              ),
+            ),
+          ],
+        ),
       ),
     );
 

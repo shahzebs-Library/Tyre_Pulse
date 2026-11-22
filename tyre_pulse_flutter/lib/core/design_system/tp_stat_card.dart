@@ -137,9 +137,17 @@ class TpStatCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: TpSpace.sm),
-          Text(
-            displayValue,
-            style: text.headlineMedium?.copyWith(color: valueColor),
+          // A number is one token: it must never break across lines. In a
+          // narrow tile at a large text size it shrinks to fit instead.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              displayValue,
+              maxLines: 1,
+              softWrap: false,
+              style: text.headlineMedium?.copyWith(color: valueColor),
+            ),
           ),
           if (displayCaption != null) ...<Widget>[
             const SizedBox(height: TpSpace.xs),

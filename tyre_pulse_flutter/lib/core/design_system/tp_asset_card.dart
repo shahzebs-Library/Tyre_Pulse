@@ -63,49 +63,58 @@ class TpAssetCard extends StatelessWidget {
       onTap: onTap,
       margin: const EdgeInsets.only(bottom: TpSpace.sm),
       padding: const EdgeInsets.all(TpSpace.lg),
-      child: Row(
+      // The status chip shares the first line with the asset number only.
+      // The description and site lines below get the full card width, so a
+      // wide chip (a long Arabic status, a large text size) no longer
+      // squeezes them down to a few letters on a narrow phone.
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                TpIdentifierText(
-                  asset.assetNo,
-                  style:
-                      TpTypography.identifier(palette).copyWith(fontSize: 16),
+          // Asset numbers are short codes and always shown whole, at the
+          // start of the line. The chip takes the rest of the line and only
+          // ellipsises when even that is not enough.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              TpIdentifierText(
+                asset.assetNo,
+                style: TpTypography.identifier(palette).copyWith(fontSize: 16),
+              ),
+              const SizedBox(width: TpSpace.md),
+              Expanded(
+                child: Align(
+                  alignment: AlignmentDirectional.topEnd,
+                  child: TpStatusChip(
+                    status: asset.status,
+                    label: asset.statusLabel,
+                    isCompact: true,
+                  ),
                 ),
-                if (asset.description != null) ...<Widget>[
-                  const SizedBox(height: 2),
-                  Text(
-                    asset.description!,
-                    style: text.bodyMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                if (asset.siteName != null || asset.detail != null) ...<Widget>[
-                  const SizedBox(height: TpSpace.xs),
-                  Text(
-                    <String>[
-                      if (asset.siteName != null) asset.siteName!,
-                      if (asset.detail != null) asset.detail!,
-                    ].join('  |  '),
-                    style: text.labelSmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ],
+              ),
+            ],
+          ),
+          if (asset.description != null) ...<Widget>[
+            const SizedBox(height: 2),
+            Text(
+              asset.description!,
+              style: text.bodyMedium,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          const SizedBox(width: TpSpace.md),
-          TpStatusChip(
-            status: asset.status,
-            label: asset.statusLabel,
-            isCompact: true,
-          ),
+          ],
+          if (asset.siteName != null || asset.detail != null) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Text(
+              <String>[
+                if (asset.siteName != null) asset.siteName!,
+                if (asset.detail != null) asset.detail!,
+              ].join('  |  '),
+              style: text.labelSmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ],
       ),
     );

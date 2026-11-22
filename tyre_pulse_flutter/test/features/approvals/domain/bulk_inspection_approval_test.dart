@@ -84,7 +84,8 @@ void main() {
     );
   });
 
-  test('bulk is never looser than the single Approve: incomplete tyre '
+  test(
+      'bulk is never looser than the single Approve: incomplete tyre '
       'evidence is skipped, not approved', () async {
     final _Repo repo = _Repo(<String, InspectionApprovalItem>{
       'ok': _mixer('ok', complete: true),

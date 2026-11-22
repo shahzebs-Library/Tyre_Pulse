@@ -1690,12 +1690,10 @@ class _DecisionForm extends StatelessWidget {
                         Expanded(
                           child: Text(
                             l10n.clMockSavedSignatureApplied,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: TpPalette.of(context).textMuted,
-                                ),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: TpPalette.of(context).textMuted,
+                                    ),
                           ),
                         ),
                       ],

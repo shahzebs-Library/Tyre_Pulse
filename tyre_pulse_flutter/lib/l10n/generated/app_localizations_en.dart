@@ -248,6 +248,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusUnknown => 'Not measured';
 
   @override
+  String get statusPending => 'Waiting to sync';
+
+  @override
   String get vehiclesTitle => 'Vehicles';
 
   @override

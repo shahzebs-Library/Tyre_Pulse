@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
+import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -243,7 +244,7 @@ void main() {
     final Material tabSurface = tester.widget<Material>(
       find.ancestor(of: selectedTab, matching: find.byType(Material)).first,
     );
-    expect(tabSurface.color, const Color(0xFFFFD400));
+    expect(tabSurface.color, TpPalette.dark.primary);
     expect(find.byKey(const Key('alerts.list')), findsOneWidget);
     expect(tester.takeException(), isNull);
     await expectLater(

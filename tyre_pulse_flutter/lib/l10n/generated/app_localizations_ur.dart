@@ -247,6 +247,9 @@ class AppLocalizationsUr extends AppLocalizations {
   String get statusUnknown => 'ناپا نہیں گیا';
 
   @override
+  String get statusPending => 'ہم آہنگی کا منتظر';
+
+  @override
   String get vehiclesTitle => 'گاڑیاں';
 
   @override

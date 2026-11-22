@@ -138,11 +138,12 @@ void main() {
   });
 
   group('TpStatus vocabulary', () {
-    test('exactly six statuses exist', () {
+    test('exactly seven statuses exist', () {
       // forStatus is a switch EXPRESSION with no default, so the compiler
       // already refuses a build where a new status is unhandled. This pins
       // the count as a readable regression marker alongside that guarantee.
-      expect(TpStatus.values.length, 6);
+      // Seventh: pending (saved on phone, waiting to sync), owner decision 4.
+      expect(TpStatus.values.length, 7);
       expect(
         TpStatus.values,
         containsAll(const <TpStatus>[
@@ -152,6 +153,7 @@ void main() {
           TpStatus.info,
           TpStatus.neutral,
           TpStatus.unknown,
+          TpStatus.pending,
         ]),
       );
     });

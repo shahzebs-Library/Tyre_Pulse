@@ -252,6 +252,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get statusUnknown => 'لم يُقَس';
 
   @override
+  String get statusPending => 'بانتظار المزامنة';
+
+  @override
   String get vehiclesTitle => 'المركبات';
 
   @override

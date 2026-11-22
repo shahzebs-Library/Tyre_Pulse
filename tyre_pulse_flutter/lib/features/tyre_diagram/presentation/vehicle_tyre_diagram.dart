@@ -941,6 +941,7 @@ IconData _captureStatusIcon(TpStatus tone) => switch (tone) {
       TpStatus.warning => Icons.priority_high_rounded,
       TpStatus.unknown => Icons.remove_rounded,
       TpStatus.info || TpStatus.neutral => Icons.circle,
+      TpStatus.pending => Icons.cloud_upload_outlined,
     };
 
 /// The dashed leader from a card to the vehicle, ending in a small

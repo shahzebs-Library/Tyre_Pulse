@@ -81,6 +81,7 @@
   "statusInfo": "معلومة",
   "statusNeutral": "محايد",
   "statusUnknown": "لم يُقَس",
+  "statusPending": "بانتظار المزامنة",
 
   "vehiclesTitle": "المركبات",
   "vehiclesCount": "{count, plural, zero{لا توجد مركبات في الأسطول} one{مركبة واحدة في الأسطول} two{مركبتان في الأسطول} few{{count} مركبات في الأسطول} many{{count} مركبةً في الأسطول} other{{count} مركبة في الأسطول}}",

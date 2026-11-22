@@ -440,6 +440,7 @@ class _TyrePositionEditorSheetState
         TpStatus.info => l10n.statusInfo,
         TpStatus.neutral => l10n.statusNeutral,
         TpStatus.unknown => l10n.statusUnknown,
+        TpStatus.pending => l10n.statusPending,
       };
 }
 

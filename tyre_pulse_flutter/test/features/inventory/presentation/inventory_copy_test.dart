@@ -93,9 +93,11 @@ void main() {
       final Map<String, String> c = _catalog(lang, 'inventoryCopyCatalog');
       // Pinned entry count of the packed catalog: 125 + 10 finish keys
       // + submitQueued (background sync) + 68 physical inventory keys
-      // (pi_*, docs/inventory/102; +7 store picker / bin label keys).
-      expect(c.length, 204, reason: lang);
-      expect(c.keys.where((String k) => k.startsWith('pi_')).length, 68);
+      // (pi_*, docs/inventory/102; +7 store picker / bin label keys)
+      // + 21 capture-mockup keys (connection pill, location bar, photo
+      // slots, classification claim).
+      expect(c.length, 225, reason: lang);
+      expect(c.keys.where((String k) => k.startsWith('pi_')).length, 89);
       expect(c['submitQueued'], contains('%n'), reason: lang);
       expect(
         c['manualSendNote']!.toLowerCase(),

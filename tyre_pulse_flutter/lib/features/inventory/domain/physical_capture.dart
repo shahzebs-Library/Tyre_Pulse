@@ -33,6 +33,23 @@ const List<String> piPhotoRoles = <String>[
   'other',
 ];
 
+/// What the counter may claim about an item that matched nothing. Sent as
+/// the entered reference `classification_claim`; the variant classification
+/// itself is decided on review, with evidence.
+const List<String> piClassificationChoices = <String>[
+  'genuine',
+  'aftermarket',
+  'unknown',
+];
+
+/// Folds a catalog classification onto [piClassificationChoices] for display
+/// (OES is sold as genuine-equivalent; anything else is unknown).
+String piClassificationFor(String? catalog) => switch (catalog) {
+      'genuine' || 'oes' => 'genuine',
+      'aftermarket' => 'aftermarket',
+      _ => 'unknown',
+    };
+
 /// Same rule as SQL `material_ref_norm()`: upper case, letters and digits.
 String? normRef(String? value) {
   final String s =
@@ -59,6 +76,7 @@ String captureKindFor({
     'oem',
     'aftermarket',
     'company_sku',
+    'part_number',
   ]) {
     if ((refs[k] ?? '').trim().isNotEmpty) return 'proposed_new';
   }

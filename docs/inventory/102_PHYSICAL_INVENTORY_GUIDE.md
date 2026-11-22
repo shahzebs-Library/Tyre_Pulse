@@ -139,6 +139,23 @@ picks its store on the start view and selects the bin on the capture view (a bin
 is refused; offline the label is kept and checked by the server). Quantity has a large -10/-1/+1/+10
 stepper beside the field; Save and next sits in the bottom bar.
 
+**Capture layout (owner mockup, 2026-11-22):** title with an Online / Offline / "n waiting to send"
+pill; an accent-outlined location bar (store, bin, rack text; tap to scan a bin label or clear it);
+the scan/search field; the matched item card with its classification badge; OEM part number
+(`refs.oem`) and manufacturer part number (`refs.part_number`); Classification (read-only from the
+catalog when matched; otherwise the counter's claim, sent as `refs.classification_claim` for the
+reviewer and never as the variant classification); a big -/+ quantity stepper (hold for 10); a
+condition chip grid; ownership; three photo slots Item / Part number / Location (plus Damage when
+the condition is damaged, repairable or scrap), each saved with its own photo role; remarks
+(250 characters). At least one photo is required before Save & count next item. The accent is
+safety yellow on BOTH themes: the screen wraps itself in a local theme
+(`lib/features/inventory/presentation/inventory_theme.dart`); on light that is white / light grey
+surfaces, dark ink and light grey borders, with yellow used only as a fill behind dark ink (Save
+button, selected condition chip, stepper, badge) or as the location bar outline over a pale yellow
+fill. Material's own `colorScheme.primary` is dark ink there, so no stock widget draws yellow text
+on white. The rest of the app's light theme is unchanged (fleet green). Screenshots:
+`docs/inventory/screenshots/flutter/`.
+
 ## 7. What the owner must do next
 
 1. Done 2026-11-21: migration applied (doc 96 section 12).

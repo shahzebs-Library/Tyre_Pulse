@@ -108,7 +108,7 @@ export function buildBulkPlan(spec = {}, existingRows = []) {
   const nodes = []
   const seen = new Set()
   const num = (i) => String(start + i).padStart(pad, '0')
-  const push = (type, code, parentRef) => {
+  const push = (type, code, parentRef, nameOverride) => {
     const ref = `n${nodes.length + 1}`
     if (!CODE_RE.test(code)) errors.push('inventory.locations.bulk.errors.codeFormat')
     if (seen.has(code)) errors.push('inventory.locations.bulk.errors.duplicate')
@@ -116,7 +116,7 @@ export function buildBulkPlan(spec = {}, existingRows = []) {
     const ex = existing.get(code)
     nodes.push({
       ref, parentRef, parentId: parentRef ? null : (parent?.id || null), location_type: type, code,
-      name: `${labels[type]} ${code}`, existingId: ex?.id || null,
+      name: nameOverride || `${labels[type]} ${code}`, existingId: ex?.id || null,
       depth: nodes.length ? (parentRef ? nodes.find((n) => n.ref === parentRef).depth + 1 : 0) : 0,
     })
     return ref
@@ -132,21 +132,25 @@ export function buildBulkPlan(spec = {}, existingRows = []) {
       addBins(code, ref)
     }
   }
+  // Optional zone above the racks (a shipping container or a small room).
+  const zoneCode = up(spec.zoneCode)
+  if (zoneCode && !CODE_RE.test(zoneCode)) errors.push('inventory.locations.bulk.errors.codeFormat')
   if (!errors.length) {
+    const zoneRef = zoneCode ? push('zone', zoneCode, null, String(spec.zoneName || '').trim() || zoneCode) : null
     if (racks.length) {
       for (const r of racks) {
         const code = join(sep, prefix, r)
-        const ref = push('rack', code, null)
+        const ref = push('rack', code, zoneRef, spec.rackNames?.[r] ? `${spec.rackNames[r]} ${code}` : undefined)
         addShelves(code, ref)
         if (nodes.length > BULK_MAX_NODES) break
       }
     } else {
-      addShelves(prefix, null)
+      addShelves(prefix, zoneRef)
     }
   }
   if (nodes.length > BULK_MAX_NODES) errors.push('inventory.locations.bulk.errors.tooMany')
   const uniq = [...new Set(errors)]
-  const counts = { rack: 0, shelf: 0, bin: 0, total: nodes.length, new: 0, existing: 0 }
+  const counts = { zone: 0, rack: 0, shelf: 0, bin: 0, total: nodes.length, new: 0, existing: 0 }
   for (const n of nodes) {
     counts[n.location_type] += 1
     if (n.existingId) counts.existing += 1; else counts.new += 1
@@ -161,5 +165,49 @@ export function bulkPayload({ country, site, parentId, nodes }) {
     site: up(site),
     parent_id: parentId || null,
     nodes: (nodes || []).map((n) => ({ ref: n.ref, parent_ref: n.parentRef || null, code: n.code, name: n.name, location_type: n.location_type })),
+  }
+}
+
+/**
+ * Store templates. Most stores are shipping containers (two wall racks, Left
+ * and Right) plus a few small rooms (racks A, B ...). A template becomes a
+ * zone (NHC-C01 "Container 01") with racks, shelves and bins below it, so a
+ * bin code reads NHC-C01-L-01-03.
+ */
+export const BULK_TEMPLATES = {
+  container: { zoneTag: 'C', zonePad: 2, nameKey: 'container', racks: 'L R', shelves: 4, bins: 5, sizes: ['20ft', '40ft'], rackNames: { L: 'Left wall', R: 'Right wall' } },
+  room: { zoneTag: 'RM', zonePad: 1, nameKey: 'room', racks: 'A-B', shelves: 4, bins: 5, rackNames: null },
+}
+
+/** Next free zone number for a template at a site, e.g. 3 when C01 and C02 exist. */
+export function nextZoneNumber(rows, site, kind, extraCodes = []) {
+  const tpl = BULK_TEMPLATES[kind]
+  if (!tpl) return 1
+  const s = up(site)
+  const re = new RegExp(`^${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-${tpl.zoneTag}(\\d{1,4})$`)
+  let max = 0
+  const codes = [...(rows || []).filter((r) => up(r.site) === s).map((r) => up(r.code)), ...(extraCodes || []).map(up)]
+  for (const c of codes) {
+    const m = re.exec(c)
+    if (m) max = Math.max(max, Number(m[1]))
+  }
+  return max + 1
+}
+
+/**
+ * The spec fields a template fills in. `zoneName` is built by the caller from
+ * a translated word (Container / Room) so it stays in the user language.
+ */
+export function templateSpec(kind, { site, rows, extraCodes, word, size = '20ft' } = {}) {
+  const tpl = BULK_TEMPLATES[kind]
+  if (!tpl || !up(site)) return null
+  const n = nextZoneNumber(rows, site, kind, extraCodes)
+  const tag = String(n).padStart(tpl.zonePad, '0')
+  const zoneCode = `${up(site)}-${tpl.zoneTag}${tag}`
+  return {
+    template: kind, parentId: '', zoneCode, prefix: zoneCode, containerSize: kind === 'container' ? size : null,
+    // The size travels in the name (no size column exists): "Container 01 40ft".
+    zoneName: `${word || kind} ${tag}${kind === 'container' && size === '40ft' ? ' 40ft' : ''}`,
+    racks: tpl.racks, shelves: tpl.shelves, bins: tpl.bins, start: 1, pad: 2, sep: '-', rackNames: tpl.rackNames,
   }
 }

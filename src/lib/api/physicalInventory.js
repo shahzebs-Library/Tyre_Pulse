@@ -13,7 +13,7 @@
  */
 import { supabase, ServiceError, toServiceError, isNotProvisioned, isMissingColumn } from './_client'
 import { sanitizeSearchTerm, escapeLike } from '../searchFilter'
-import { NOT_SET_UP_CODE, NOT_SET_UP_MESSAGE, inventoryRefusalText, newIdempotencyKey } from './inventory'
+import { NOT_SET_UP_CODE, NOT_SET_UP_MESSAGE, inventoryRefusalText, newIdempotencyKey, listLocations, loadBalanceSnapshot } from './inventory'
 import { resolveStorageUrlMap } from '../storageRefs'
 import { photoPath, newClientUuid } from '../inventory/physicalInventory'
 import { currentOrgId, isOrgId } from './companyScope'
@@ -209,12 +209,14 @@ export async function listStoreSiteHints(country) {
 export const CORRECTION_COLS = 'id, target_kind, target_id, action, topic, old_value, new_value, evidence, photo_ids, reason, status, ' +
   'requested_by, requested_at, decided_by, decided_at, decision_note'
 
-export function listCorrections({ page, pageSize, status = 'submitted', topic } = {}) {
+export function listCorrections({ page, pageSize, status = 'submitted', topic, targetIds } = {}) {
   return paged('material_correction_requests', CORRECTION_COLS, {
     page, pageSize, order: 'requested_at',
     build: (q) => {
       if (status && status !== 'all') q = q.eq('status', status)
       if (topic && topic !== 'all') q = q.eq('topic', topic)
+      // One material's corrections: its canonical id and any of its variant ids.
+      if (Array.isArray(targetIds) && targetIds.length) q = q.in('target_id', targetIds.filter(Boolean).slice(0, 100))
       return q
     },
   })
@@ -326,4 +328,74 @@ export async function listPhotos({ captureId, canonicalId } = {}) {
     url: urls[`tp-storage://${PHOTO_BUCKET}/${r.storage_path}`] || null,
     thumbUrl: r.thumb_path ? urls[`tp-storage://${PHOTO_BUCKET}/${r.thumb_path}`] || null : null,
   }))
+}
+
+// ── Store 3D layout ─────────────────────────────────────────────────────────
+/**
+ * Everything the 3D store view needs for ONE store: its locations, the stock
+ * balance lines in it and today's physical-inventory captures. Each part
+ * degrades on its own (a missing view returns []), and the caller is told.
+ */
+export async function loadStoreLayoutData({ country, site }) {
+  const start = new Date(); start.setHours(0, 0, 0, 0)
+  const scoped = { country: country || null, site }
+  const [locs, bal, caps] = await Promise.all([
+    listLocations(scoped),
+    loadBalanceSnapshot(scoped),
+    (async () => {
+      try {
+        let q = supabase.from('v_inv_pi_captures').select('id, location_id, captured_at, quantity, canonical_description, company_sku')
+          .eq('site', String(site || '').toUpperCase()).gte('captured_at', start.toISOString()).order('captured_at', { ascending: false }).limit(1000)
+        if (country) q = q.eq('country', country)
+        const { data, error } = await q
+        if (error) {
+          if (notProvisioned(error)) return []
+          throw toServiceError(error)
+        }
+        return data || []
+      } catch (err) {
+        if (notProvisioned(err)) return []
+        throw toServiceError(err)
+      }
+    })(),
+  ])
+  return {
+    status: locs.status,
+    locations: locs.rows || [],
+    balances: bal.rows || [],
+    captures: caps,
+    truncated: !!(locs.truncated || bal.truncated),
+  }
+}
+
+/**
+ * Live updates for the 3D view: stock balance changes (stock_records is in the
+ * realtime publication) and physical-inventory captures (delivered only once
+ * that table is added to the publication; the view also re-reads every minute).
+ * Calls `onChange({ table, locationId })`. Returns an unsubscribe function.
+ */
+export function subscribeStoreChanges(site, onChange) {
+  const s = String(site || '').toUpperCase()
+  if (!s || typeof supabase.channel !== 'function') return () => {}
+  const ch = supabase.channel(`inv-store-3d-${s}-${Math.random().toString(36).slice(2, 8)}`)
+  const hand = (table) => (payload) => {
+    const row = payload?.new || payload?.record || {}
+    if (row.site && String(row.site).toUpperCase() !== s) return
+    onChange({ table, locationId: row.location_id || null })
+  }
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'stock_records' }, hand('stock_records'))
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'physical_inventory_captures' }, hand('physical_inventory_captures'))
+    .subscribe()
+  return () => { try { supabase.removeChannel(ch) } catch { /* ignore */ } }
+}
+
+/** One company material (approval dates, decision note) for the Material Master detail. */
+export async function getMaterial(id) {
+  if (!id) return null
+  const { data, error } = await supabase.from('material_canonical').select(CANONICAL_COLS).eq('id', id).maybeSingle()
+  if (error) {
+    if (notProvisioned(error)) return null
+    throw toServiceError(error)
+  }
+  return data || null
 }

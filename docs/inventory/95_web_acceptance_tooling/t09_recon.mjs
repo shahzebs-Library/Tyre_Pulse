@@ -1,0 +1,22 @@
+import { open, close } from './pw.mjs'
+import { go, field, snap } from './ui.mjs'
+const who = process.argv[2] || 'invctl'
+const { page, log } = await open(who)
+await go(page, 'audits')
+await page.locator('tbody tr').first().click(); await page.waitForTimeout(2500)
+const drawer = page.getByRole('dialog')
+await drawer.getByRole('button', { name: 'Reconcile', exact: true }).click(); await page.waitForTimeout(2500)
+await drawer.getByRole('button', { name: 'Run reconciliation' }).click(); await page.waitForTimeout(3500)
+await snap(page, `t09_${who}_reconciled`)
+let t = (await drawer.innerText()).replace(/\n+/g, ' | ')
+console.log('after run:', (t.match(/(Posted[^|]*|Not [^|]*|refused[^|]*|discrepanc[^|]*|error[^|]*)/gi) || []).slice(0, 6))
+const sel = field(drawer, 'Recount by')
+const o = await sel.locator('option').allTextContents()
+await sel.selectOption({ label: o.find((x) => x.includes(process.argv[3] || 'QA PMV Manager')) })
+await drawer.getByRole('button', { name: 'Assign recount' }).click(); await page.waitForTimeout(3500)
+await snap(page, `t09_${who}_recount`)
+t = (await drawer.innerText()).replace(/\n+/g, ' | ')
+const i = t.indexOf('outside tolerance')
+console.log('after assign:', t.slice(i, i + 600))
+console.log(log.filter((l) => l.startsWith('http') && !/organisation_configuration|org_branding|country_addresses|subscription|corrective_actions/.test(l)).join('\n'))
+await close()

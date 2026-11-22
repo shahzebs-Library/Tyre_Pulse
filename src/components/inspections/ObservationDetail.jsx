@@ -4,7 +4,7 @@
  * has since been replaced. "Open full inspection" is still one click away, but
  * a reviewer no longer has to find the finding inside the whole sheet.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ExternalLink, Wrench, ImageOff, Download } from 'lucide-react'
 import SideDrawer from '../ui/SideDrawer'
@@ -13,6 +13,14 @@ import { resolveStorageUrl } from '../../lib/storageRefs'
 import { safeImageSrc } from '../../lib/safeUrl'
 import { TYRE_NOW_META } from '../../lib/observationTracking'
 import { downloadObservationReport, observationReportId, observationRevision } from '../../lib/observationReportPdf'
+import ObservationErpEvidence from './ObservationErpEvidence'
+import { getObservationErpLink, isErpReviewNotProvisioned } from '../../lib/api/observationErpEvidence'
+import StoredPdfPanel from '../pdf/StoredPdfPanel'
+import { getOrCreatePdf, deliverPdf } from '../../lib/pdfCache/service'
+import { observationPdfRequest } from '../../lib/pdfCache/reportRequests'
+import { applyExportPolicy } from '../../lib/exportUtils'
+import { toUserMessage } from '../../lib/safeError'
+import { useAuth } from '../../contexts/AuthContext'
 
 const fmtDay = (d) => {
   if (!d) return 'N/A'
@@ -55,8 +63,46 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
   const [checkedKeys, setCheckedKeys] = useState([])
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfError, setPdfError] = useState('')
+  const [pdfNote, setPdfNote] = useState('')
+  const [pdfRev, setPdfRev] = useState(0)
+  const { profile, isSuperAdmin } = useAuth() || {}
+  const role = String(profile?.role || '').toLowerCase()
+  const isAdmin = !!isSuperAdmin || role === 'admin'
   const findings = observations.length ? observations : first ? [first] : []
   const obs = findings.find((f) => f.key === selected) || findings[0]
+  const sourceRow = obs?.row || null
+
+  // The observation report for this inspection: served from the stored copy when the
+  // current revision is already saved, otherwise drawn here once (same generator) and stored.
+  const ensureObservationPdf = useCallback(async (opts = {}) => {
+    const req = await observationPdfRequest(sourceRow, findings)
+    return getOrCreatePdf({
+      ...req, ...opts,
+      generate: async () => {
+        const links = {}
+        let unreadable = false
+        const actionIds = [...new Set(findings.map(f => f.actionRecord?.id).filter(Boolean))]
+        await Promise.all(actionIds.map(async id => {
+          try { links[id] = await getObservationErpLink(id) }
+          // Review not set up in the database yet: there is no link to read, which is
+          // "not confirmed", not an unreadable record.
+          catch (e) { if (!isErpReviewNotProvisioned(e)) unreadable = true }
+        }))
+        const warnings = []
+        const doc = await downloadObservationReport(sourceRow, findings, {
+          svgEl: diagramRef.current?.querySelector('svg[data-tyre-map]') || diagramRef.current?.querySelector('svg'),
+          erpLinks: links, erpUnreadable: unreadable, save: false, warnings,
+        })
+        return { bytes: doc.output('arraybuffer'), fileName: req.fileName, warnings }
+      },
+    })
+  }, [sourceRow, findings])
+  // The panel re-reads only when what the report prints changes (findings are rebuilt
+  // by the parent on every render, so their identity cannot be the trigger).
+  const findingsRef = useRef(findings)
+  findingsRef.current = findings
+  const findingsSig = findings.map((f) => `${f.key}:${f.tyreNow?.state || ''}:${f.actionRecord?.status || ''}`).join('|')
+  const buildPdfRequest = () => observationPdfRequest(sourceRow, findingsRef.current)
   const eligible = findings.filter((f) => f.kind === 'tyre' && !f.actionRaised && f.tyreNow?.state !== 'replaced')
   const checked = eligible.filter((f) => checkedKeys.includes(f.key))
   if (!obs) return null
@@ -73,9 +119,16 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
       footer={(
         <div className="cc iw-od-foot">
           <button type="button" className="cc-btn" disabled={pdfBusy} onClick={async () => {
-            setPdfBusy(true); setPdfError('')
-            try { await downloadObservationReport(obs.row, findings, { svgEl: diagramRef.current?.querySelector('svg[data-tyre-map]') || diagramRef.current?.querySelector('svg') }) }
-            catch (e) { setPdfError(e?.message || 'Could not download the observation report.') }
+            setPdfBusy(true); setPdfError(''); setPdfNote('')
+            try {
+              const result = await ensureObservationPdf()
+              // A stored copy skips the generator, so the export switch and audit are applied here.
+              if (result.cached) applyExportPolicy([], 'Observation PDF ' + observationReportId(obs.row))
+              await deliverPdf(result)
+              if (result.note) setPdfNote(result.note)
+              setPdfRev((n) => n + 1)
+            }
+            catch (e) { setPdfError(toUserMessage(e, 'Could not download the observation report. Retry.')) }
             finally { setPdfBusy(false) }
           }}><Download size={14} aria-hidden="true" /> {pdfBusy ? 'Preparing PDF...' : 'Download observation PDF'}</button>
           {eligible.length > 0 && onRaiseAction && (
@@ -93,6 +146,20 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
     >
       <div className="cc iw-od">
         {pdfError && <p role="alert" className="iw-od-muted">{pdfError}</p>}
+        {pdfNote && <p role="status" className="iw-od-muted">{pdfNote}</p>}
+        {sourceRow?.id && (
+          <StoredPdfPanel
+            refreshKey={`${sourceRow.id}:${pdfRev}:${findingsSig}`}
+            buildRequest={buildPdfRequest}
+            canRegenerate={isAdmin || role === 'manager' || role === 'director'}
+            isAdmin={isAdmin}
+            onRegenerate={async ({ reason }) => {
+              const result = await ensureObservationPdf({ regenerate: true, reason })
+              if (result.note) setPdfNote(result.note)
+              setPdfRev((n) => n + 1)
+            }}
+          />
+        )}
         <section className="iw-od-block" aria-label="Inspection report reference">
           <h4>Inspection details</h4>
           <dl className="iw-od-facts">
@@ -173,9 +240,11 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
             </section>
 
             <section className="iw-od-block">
-              <h4>Photo of this tyre</h4>
+              <h4>Inspection photo</h4>
               <Photo refValue={obs.photo} />
             </section>
+
+            <ObservationErpEvidence observation={obs} />
           </>
         )}
 

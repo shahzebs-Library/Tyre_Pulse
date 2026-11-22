@@ -47,6 +47,7 @@ export const REPORT_TYPES = [
   { value: 'pm',         label: 'Preventive Maintenance' },
   { value: 'workshop',   label: 'Workshop Summary' },
   { value: 'workshop_status', label: 'Workshop Vehicle Status' },
+  { value: 'inventory',  label: 'Inventory Control' },
 ]
 
 export const FREQUENCIES = [
@@ -170,6 +171,25 @@ const DATASETS = {
     nullFilter: ['deleted_at'],
     orderAscending: true,
     currentState: true,
+  },
+  inventory: {
+    // Inventory Control Center digest (DB lane view v_inv_report_snapshot): one
+    // row per country / site / currency, as at now. A current-state snapshot,
+    // so the coverage period is not applied. The view has no id: rows order by
+    // their key (country, site, currency). Value is the VALUED part of owned
+    // stock with its completeness flag and the unvalued quantity beside it;
+    // currencies are never added together. The emailed digest for this type
+    // is NOT built: the send-scheduled-reports edge function needs a deploy that
+    // is pending owner approval, so a schedule emails the generic fallback.
+    table: 'v_inv_report_snapshot', dateCol: null, title: 'Inventory Control Digest',
+    queryCols: ['*'],
+    orderCols: ['country', 'site', 'currency'],
+    cols:    ['country', 'site', 'currency', 'balances', 'qty_on_hand', 'qty_reserved', 'owned_valued_qty', 'owned_unvalued_qty', 'owned_valued_amount', 'valuation_complete', 'critical_lines', 'low_lines', 'open_exceptions', 'open_discrepancies', 'open_cost_reconciliations', 'pending_approvals'],
+    headers: ['Country', 'Site', 'Currency', 'Balance Lines', 'Qty On Hand', 'Qty Reserved', 'Owned Valued Qty', 'Owned Qty At Unknown Cost', 'Owned Valued Amount (valued part)', 'Valuation Complete', 'Critical Lines', 'Low Lines', 'Open Shortages', 'Open Discrepancies', 'Open Cost Reconciliations', 'Pending Approvals'],
+    currentState: true,
+    // No money KPI cards in the PDF summary: amounts are per currency (never summed)
+    // and the generic detector read the quantity column 'owned_valued_qty' as money.
+    summaryMoney: false,
   },
 }
 
@@ -360,8 +380,12 @@ export async function fetchReportRows(reportType, { from, to, country } = {}) {
     if (ds.eqFilter) for (const [col, val] of Object.entries(ds.eqFilter)) q = q.eq(col, val)
     if (ds.nullFilter) for (const col of ds.nullFilter) q = q.is(col, null)
     if (ds.orFilter) q = q.or(ds.orFilter)
-    // id tiebreak keeps page boundaries stable on a non-unique date.
-    return q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false }).order('id', { ascending: true })
+    // id tiebreak keeps page boundaries stable on a non-unique date. A dataset
+    // with no date column (a snapshot view) orders by id only.
+    if (ds.dateCol) q = q.order(ds.dateCol, { ascending: ds.orderAscending === true, nullsFirst: false })
+    // A view with no id passes its own unique key as orderCols.
+    if (ds.orderCols) return ds.orderCols.reduce((acc, col) => acc.order(col, { ascending: true }), q)
+    return q.order('id', { ascending: true })
   }
   // The server caps one response at 1000 rows, so page up to the report ceiling.
   const { data, error, truncated } = await fetchAllPages((a, b) => build().range(a, b), { pageSize: 1000, max: REPORT_ROW_MAX })

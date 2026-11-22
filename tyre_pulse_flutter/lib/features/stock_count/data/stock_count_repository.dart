@@ -1,13 +1,40 @@
 library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
-import 'package:tyre_pulse/core/sync/command_registry.dart';
-import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
+
+/// PostgREST caps every response at 1000 rows whatever `.limit()` asks for,
+/// so a single read silently truncates the register once it passes the cap
+/// (docs/inventory/05 finding 4). This reads page after page until a short
+/// page proves the end, up to [maxRows].
+///
+/// [maxRows] is a safety ceiling, not a target. Reaching it throws rather than
+/// returning a list that looks complete, because a Stock Count screen showing
+/// part of the store as the whole store is the defect this exists to stop.
+Future<List<Map<String, dynamic>>> fetchStockPages(
+  Future<List<Map<String, dynamic>>> Function(int from, int to) readPage, {
+  int pageSize = 1000,
+  int maxRows = 50000,
+}) async {
+  final List<Map<String, dynamic>> all = <Map<String, dynamic>>[];
+  int from = 0;
+  while (true) {
+    final List<Map<String, dynamic>> page =
+        await readPage(from, from + pageSize - 1);
+    all.addAll(page);
+    if (page.length < pageSize) return all;
+    from += pageSize;
+    if (from >= maxRows) {
+      throw StateError(
+        'The stock register has more than $maxRows rows; refusing to show '
+        'a partial list as complete.',
+      );
+    }
+  }
+}
 
 abstract interface class StockCountRepository {
   Future<List<StockItem>> list({String? country});
@@ -22,8 +49,9 @@ abstract interface class StockCountRepository {
   /// Quick +/- adjustment by a signed [delta] (Expo `adjustStock`,
   /// `mobile/lib/stock.ts`): the audited `post_stock_movement` RPC
   /// (`adjustment_up` / `adjustment_down`) when online, an absolute
-  /// `STOCK_ADJUST` from the last-known quantity when the network is down.
-  /// Returns true when the change was queued offline.
+  /// Online only since STOCK_ADJUST was retired: a lost connection is
+  /// thrown for the screen to report (count it as a blind count instead).
+  /// Returns false (nothing is queued).
   Future<bool> adjust({
     required StockItem item,
     required int delta,
@@ -69,24 +97,28 @@ String stockStatusFor(int quantity, int? minimum, int? critical) {
 final class DefaultStockCountRepository
     with SupabaseGateway
     implements StockCountRepository {
-  DefaultStockCountRepository(this._client, this._commands);
+  DefaultStockCountRepository(this._client);
 
   final SupabaseClient _client;
-  final QueuedCommandRepository _commands;
 
   @override
   Future<List<StockItem>> list({String? country}) {
     return guard<List<StockItem>>(() async {
-      var query = _client.from(SupabaseTables.stockRecords).select(
-            'id,site,description,stock_qty,min_level,critical_level,'
-            'stock_status,updated_at',
-          );
       final String scope = country?.trim() ?? '';
-      if (scope.isNotEmpty && scope != 'All') {
-        query = query.or('country.eq.$scope,country.is.null');
-      }
-      final List<Map<String, dynamic>> rows =
-          await query.order('site').limit(1000);
+      final List<Map<String, dynamic>> rows = await fetchStockPages(
+        (int from, int to) {
+          var query = _client.from(SupabaseTables.stockRecords).select(
+                'id,site,description,stock_qty,min_level,critical_level,'
+                'stock_status,updated_at',
+              );
+          if (scope.isNotEmpty && scope != 'All') {
+            query = query.or('country.eq.$scope,country.is.null');
+          }
+          // The id tiebreak is load-bearing: ordering a paged read on a
+          // non-unique key (site) drops or repeats rows at a page boundary.
+          return query.order('site').order('id').range(from, to);
+        },
+      );
       return rows
           .map(_fromRow)
           .where((StockItem item) => item.id.isNotEmpty)
@@ -102,38 +134,20 @@ final class DefaultStockCountRepository
     required WorkspaceContext workspace,
   }) async {
     final num whole = count.floor();
-    try {
-      await guard<Object?>(
-        () => _client.rpc<Object?>(
-          SupabaseRpcs.setStockCount,
-          params: <String, Object?>{
-            'p_stock_id': item.id,
-            'p_count': whole,
-            'p_reason': _text(reason),
-          },
-        ),
-      );
-      return false;
-    } on SupabaseFailure catch (failure) {
-      if (!failure.isConnectivity) rethrow;
-    }
-
-    final DateTime now = DateTime.now();
-    await _commands.enqueue(
-      type: CommandType.stockAdjust,
-      entityId: item.id,
-      payload: <String, Object?>{
-        'id': item.id,
-        'stock_qty': whole,
-        'stock_status': stockStatus(whole, item.minimum, item.critical),
-        'updated_by': workspace.userId,
-        'updated_at': now.toUtc().toIso8601String(),
-      },
-      workspace: workspace,
-      now: now,
-      country: workspace.activeCountry,
+    await guard<Object?>(
+      () => _client.rpc<Object?>(
+        SupabaseRpcs.setStockCount,
+        params: <String, Object?>{
+          'p_stock_id': item.id,
+          'p_count': whole,
+          'p_reason': _text(reason),
+        },
+      ),
     );
-    return true;
+    // STOCK_ADJUST is retired: nothing is queued offline (an absolute
+    // quantity replayed later would bypass the movement ledger). A lost
+    // connection is thrown for the screen to report.
+    return false;
   }
 
   @override
@@ -143,42 +157,22 @@ final class DefaultStockCountRepository
     required WorkspaceContext workspace,
   }) async {
     if (delta == 0) return false;
-    try {
-      await guard<Object?>(
-        () => _client.rpc<Object?>(
-          SupabaseRpcs.postStockMovement,
-          params: <String, Object?>{
-            'p_stock_id': item.id,
-            'p_type': delta > 0 ? 'adjustment_up' : 'adjustment_down',
-            'p_qty': delta.abs(),
-            'p_reason': null,
-            'p_reference': null,
-          },
-        ),
-      );
-      return false;
-    } on SupabaseFailure catch (failure) {
-      if (!failure.isConnectivity) rethrow;
-    }
-
-    final int next =
-        (item.quantity.floor() + delta) < 0 ? 0 : item.quantity.floor() + delta;
-    final DateTime now = DateTime.now();
-    await _commands.enqueue(
-      type: CommandType.stockAdjust,
-      entityId: item.id,
-      payload: <String, Object?>{
-        'id': item.id,
-        'stock_qty': next,
-        'stock_status': stockStatus(next, item.minimum, item.critical),
-        'updated_by': workspace.userId,
-        'updated_at': now.toUtc().toIso8601String(),
-      },
-      workspace: workspace,
-      now: now,
-      country: workspace.activeCountry,
+    await guard<Object?>(
+      () => _client.rpc<Object?>(
+        SupabaseRpcs.postStockMovement,
+        params: <String, Object?>{
+          'p_stock_id': item.id,
+          'p_type': delta > 0 ? 'adjustment_up' : 'adjustment_down',
+          'p_qty': delta.abs(),
+          'p_reason': null,
+          'p_reference': null,
+        },
+      ),
     );
-    return true;
+    // STOCK_ADJUST is retired: nothing is queued offline (an absolute
+    // quantity replayed later would bypass the movement ledger). A lost
+    // connection is thrown for the screen to report.
+    return false;
   }
 
   @override

@@ -5,16 +5,16 @@ export const PLATFORM_PAGES = [
   { href: "/platform/maintenance", label: "Maintenance and workshop", text: "Work orders, technicians, parts", labelAr: "الصيانة والورشة", textAr: "أوامر العمل والفنيون وقطع الغيار" },
   { href: "/platform/inspections", label: "Inspections and safety", text: "Checklists, defects, sign-off", labelAr: "الفحوصات والسلامة", textAr: "قوائم الفحص والأعطال والاعتماد" },
   { href: "/platform/tyre-lifecycle", label: "Tyre lifecycle", text: "Serials, fitment to removal, cost per km", labelAr: "دورة حياة الإطارات", textAr: "الأرقام التسلسلية من التركيب إلى الإزالة والتكلفة لكل كيلومتر" },
-  { href: "/platform/inventory", label: "Inventory and procurement", text: "Stores, purchasing, suppliers", labelAr: "المخزون والمشتريات", textAr: "المستودعات والمشتريات والموردون" },
+  { href: "/platform/inventory", label: "Inventory and stores", text: "Stock by site, parts issued to jobs", labelAr: "المخزون والمستودعات", textAr: "مخزون كل موقع وصرف القطع على بطاقات العمل" },
   { href: "/platform/reports", label: "Reports and dashboards", text: "Dashboards, scheduled reports, shared boards", labelAr: "التقارير ولوحات المتابعة", textAr: "لوحات المتابعة والتقارير المجدولة واللوحات المشتركة" },
 ] as const;
 
 export const SOLUTION_PAGES = [
-  { href: "/solutions/tyre-management", label: "Tyre management", text: "Cost per km, life forecasts, TPMS via telematics", labelAr: "إدارة الإطارات", textAr: "التكلفة لكل كيلومتر وتوقع العمر وضغط الإطارات عبر أنظمة التتبع" },
+  { href: "/solutions/tyre-management", label: "Tyre management", text: "Cost per km, life forecasts, serial history", labelAr: "إدارة الإطارات", textAr: "التكلفة لكل كيلومتر وتوقع العمر وسجل كل إطار برقمه التسلسلي" },
   { href: "/solutions/ready-mix-fleet", label: "Ready-mix fleet", text: "Mixers, pumps, downtime, cost per m3", labelAr: "أسطول الخرسانة الجاهزة", textAr: "الخلاطات والمضخات والتوقف والتكلفة لكل متر مكعب" },
   { href: "/solutions/spreadsheets-to-platform", label: "Spreadsheets to platform", text: "Compare approaches and move your files", labelAr: "من الجداول إلى المنصة", textAr: "قارن الطرق وانقل ملفاتك" },
   { href: "/industries", label: "Industries", text: "Construction, ready-mix, transport, buses", labelAr: "القطاعات", textAr: "الإنشاءات والخرسانة الجاهزة والنقل والحافلات" },
-  { href: "/pricing", label: "Pricing", text: "Plans by fleet size and modules", labelAr: "الأسعار", textAr: "خطط حسب حجم الأسطول والوحدات" },
+  { href: "/pricing", label: "Pricing", text: "Packages by fleet size and modules", labelAr: "الأسعار", textAr: "باقات حسب حجم الأسطول والوحدات" },
 ] as const;
 
 export const RESOURCE_PAGES = [

@@ -47,6 +47,7 @@ final class VehicleAsset {
     this.engineNo,
     this.capacity,
     this.opsStatus,
+    this.organisationId,
   });
 
   /// Decodes a raw PostgREST row, whether it came from the live
@@ -92,6 +93,7 @@ final class VehicleAsset {
       engineNo: _stringOrNull(row['engine_no']),
       capacity: _stringOrNull(row['capacity']),
       opsStatus: _stringOrNull(row['ops_status']),
+      organisationId: _stringOrNull(row['organisation_id']),
     );
   }
 
@@ -137,6 +139,12 @@ final class VehicleAsset {
   /// Operational availability recorded by fleet operations. This is not the
   /// same field as [status], which represents the master-record lifecycle.
   final String? opsStatus;
+
+  /// `vehicle_fleet.organisation_id`: the company this machine belongs to.
+  /// An asset code is unique per company, so per-asset reads (financials,
+  /// timeline, 360 facts) pin this company. Null for a row decoded from the
+  /// offline cache, which does not store it.
+  final String? organisationId;
 
   /// The identifier to show and to navigate with: [assetNo] when present,
   /// falling back to [fleetNumber]. Null when the row carries neither -
@@ -198,7 +206,8 @@ final class VehicleAsset {
           other.serialNo == serialNo &&
           other.engineNo == engineNo &&
           other.capacity == capacity &&
-          other.opsStatus == opsStatus);
+          other.opsStatus == opsStatus &&
+          other.organisationId == organisationId);
 
   @override
   int get hashCode => Object.hash(
@@ -221,7 +230,7 @@ final class VehicleAsset {
         serialNo,
         engineNo,
         capacity,
-        opsStatus,
+        Object.hash(opsStatus, organisationId),
       );
 
   @override

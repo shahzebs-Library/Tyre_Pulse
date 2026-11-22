@@ -1,0 +1,29 @@
+import { open, close } from './pw.mjs'
+import { go, text, snap } from './ui.mjs'
+const who = process.argv[2] || 'admin'
+const ref = process.argv[3] || 'GCKR/JC/QA1'
+const { page, log } = await open(who)
+await go(page, 'movements')
+await page.waitForTimeout(1500)
+const row = page.locator('tr').filter({ hasText: ref }).first()
+console.log('ledger row:', (await row.innerText()).replace(/\s+/g, ' '))
+const aria = await row.locator('button').evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label') || b.textContent))
+console.log('row buttons:', JSON.stringify(aria))
+const all = await page.getByRole('button').allTextContents()
+console.log('edit-like buttons on page:', all.filter((b) => /edit|change|modify/i.test(b)).join(', ') || 'none')
+await snap(page, `t05_${who}_ledger`)
+const rev = row.getByRole('button', { name: /Reverse/i })
+if (await rev.count()) {
+  await rev.first().click()
+  await page.waitForTimeout(1000)
+  const dlg = page.getByRole('dialog')
+  const ta = dlg.locator('textarea, input[type=text]').first()
+  if (await ta.count()) await ta.fill('QA acceptance: wrong job card')
+  await dlg.getByRole('button', { name: /Reverse/i }).last().click()
+  await page.waitForTimeout(3000)
+  await snap(page, `t05_${who}_reversed`)
+  const t = await text(page)
+  console.log('after reverse:', t.match(/(Posted[^|]*|Not posted[^|]*|refused[^|]*|reversal[^|]*)/gi)?.slice(0, 5))
+} else console.log('no reverse button for', who)
+console.log(log.filter((l) => l.startsWith('http') && !/organisation_configuration|org_branding|country_addresses|subscription|corrective_actions/.test(l)).join('\n'))
+await close()

@@ -12,6 +12,7 @@ import { listModuleStatuses } from '../lib/api/modulesRegistry'
 import { configNum, configBool } from '../lib/api/systemConfig'
 import { checkSsoPasswordLogin } from '../lib/api/accessPolicies'
 import { signInWithIdentifier } from '../lib/api/loginGuard'
+import { normalizeSignInIdentifier } from '../lib/signInIdentifier'
 
 // Exported so the isolated System Console can supply its own Provider value via
 // ConsoleAuthBridge, letting main-app admin pages render verbatim inside /console.
@@ -568,7 +569,10 @@ export function AuthProvider({ children }) {
   }, [profile, canExport])
 
   const signIn = useCallback(async (identifier, password, captchaToken) => {
-    let email = identifier.trim()
+    // "code/username" (another company) and a bare username both reach the
+    // server unchanged apart from tidying; get_email_by_identifier and the
+    // sign-in function resolve either form (public._resolve_sign_in_profile).
+    let email = normalizeSignInIdentifier(identifier)
 
     // Field accounts carry a made-up @users.tyrepulse.app address, which reveals
     // nothing, so get_email_by_identifier still returns it and the sign-in goes

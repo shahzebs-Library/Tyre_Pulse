@@ -1065,7 +1065,11 @@ export async function exportToPdf(rows, columns, title, filename = 'report', ori
     if (catCol) break
   }
   const numCols = columns.filter(c => _colIsNumeric(rows, c.key))
-  const costCol = numCols.find(c => /cost|amount|price|sar|spend|value|total|budget|expense/i.test((c.key || '') + (c.header || ''))) || numCols[0]
+  // opts.summaryMoney === false: the dataset has no single-currency money column
+  // (inventory digest: a quantity named 'owned_valued_qty' matched /value/ and was
+  // printed as "SAR 11", and its amounts span currencies that must never be added).
+  const costCol = opts.summaryMoney === false ? null
+    : (numCols.find(c => /cost|amount|price|sar|spend|value|total|budget|expense/i.test((c.key || '') + (c.header || ''))) || numCols[0])
 
   const showSummary = rows.length > 0 && (riskCol || catCol || costCol)
 
@@ -2266,6 +2270,8 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
         } catch { embedded = false }
       }
       if (!embedded) {
+        // Reported to the caller only (no drawing): a copy with a missing photo must not be stored for reuse.
+        if (Array.isArray(opts.warnings)) opts.warnings.push('photo_unavailable')
         doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...P.mist)
         doc.text('Image unavailable', x + boxW / 2, rowTop + imgH / 2, { align: 'center' })
       }

@@ -6,6 +6,7 @@
  * never silently truncated. Classification lives in `src/lib/fitmentValidation.js`.
  */
 import { supabase, applyCountry, fetchAllOrThrow, unwrap } from './_client'
+import { firstForCallerCompany } from './companyScope'
 
 const VEHICLE_COLS =
   'id,asset_no,make,model,vehicle_type,site,country,status,is_active,tyre_size'
@@ -90,7 +91,7 @@ const TYRE_LOOKUP_COLS =
   'position,tyre_position,country'
 
 const VEHICLE_LOOKUP_COLS =
-  'id,asset_no,make,model,vehicle_type,tyre_size,site,country,status'
+  'id,asset_no,make,model,vehicle_type,tyre_size,site,country,status,organisation_id'
 
 /** True when the failure is "table does not exist yet" (pre-V208). */
 export function isMissingRelation(err) {
@@ -275,9 +276,12 @@ export async function findVehicleByAsset(assetNo, { country } = {}) {
     .from('vehicle_fleet')
     .select(VEHICLE_LOOKUP_COLS)
     .eq('asset_no', a)
-    .limit(1)
+    .order('id')
+    .limit(20)
+  // An asset code is unique per company: a super admin's read can match one
+  // machine per company, so the caller's company's machine is the one used.
   const rows = unwrap(await applyCountry(q, country)) || []
-  return rows[0] || null
+  return firstForCallerCompany(rows)
 }
 
 /**

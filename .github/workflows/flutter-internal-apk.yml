@@ -1,0 +1,58 @@
+name: Flutter Internal APK (no Play upload)
+
+# Builds an INSTALLABLE, release-signed APK of the Flutter app
+# (com.shahzebrahman.tyrepulse) for internal device testing and uploads it as a
+# GitHub Actions artifact (14-day retention). It NEVER uploads to Google Play:
+# there is no Play step and no Play service-account secret is read.
+#
+# All build preparation (pinned Flutter, platform files, MainActivity guard,
+# signing, dart-defines incl. APP_ENV=production) lives in the shared
+# .github/actions/flutter-android-build action, which flutter-release-play.yml
+# uses too, so the APK and the Play AAB can never diverge.
+# workflow_dispatch only - never fires on push or PR.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build_apk:
+    name: Build signed release APK (internal, no Play upload)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build
+        id: build
+        uses: ./.github/actions/flutter-android-build
+        with:
+          artifact: apk
+          keystore-base64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          keystore-password: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key-password: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          key-alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          supabase-url: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
+          sentry-dsn: ${{ secrets.FLUTTER_SENTRY_DSN || secrets.SENTRY_DSN_FLUTTER || '' }}
+
+      - name: Name the APK by version
+        working-directory: tyre_pulse_flutter
+        run: |
+          VERSION="$(grep -E '^version:' pubspec.yaml | sed -E 's/^version:[[:space:]]*//')"
+          cp build/app/outputs/flutter-apk/app-release.apk "build/tyre-pulse-internal-$(echo "$VERSION" | tr '+' '-').apk"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: tyre-pulse-internal-apk
+          path: tyre_pulse_flutter/build/tyre-pulse-internal-*.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      # The signing key and its passwords must not outlive the job.
+      - name: Remove signing files
+        if: always()
+        working-directory: tyre_pulse_flutter
+        run: rm -f android/app/release.jks android/key.properties

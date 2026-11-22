@@ -374,6 +374,19 @@ final class SyncEngine {
     }
     final CommandSpec spec = CommandRegistry.specFor(type);
 
+    final String? retired = spec.retiredMessage;
+    if (retired != null) {
+      // A retired command never reaches the server: replaying it is exactly
+      // the behaviour that was removed.
+      await _fail(
+        command,
+        now: now,
+        message: retired,
+        errorClass: SyncErrorClass.validation,
+      );
+      return _CommandOutcome.failed;
+    }
+
     if (spec.requiresMediaReady) {
       final bool ready = await _mediaDao.commandMediaReady(command.id);
       if (!ready) {
@@ -455,6 +468,15 @@ final class SyncEngine {
         expectedPriorStatus: expectedPriorStatus,
       );
 
+      if (spec.operation == CommandOperation.rpc) {
+        return await _settleRpcAnswer(
+          command,
+          spec: spec,
+          answer: rows.isEmpty ? null : rows.first,
+          now: now,
+        );
+      }
+
       if (spec.requiresOptimisticStatusMatch && rows.isEmpty) {
         await _fail(
           command,
@@ -491,6 +513,47 @@ final class SyncEngine {
           ? _CommandOutcome.conflicted
           : _CommandOutcome.failed;
     }
+  }
+
+  /// Reads an RPC command's answer `{accepted, duplicates, rejected}`.
+  /// Accepted or duplicate (an idempotent replay) is synced. A refusal is a
+  /// CONFLICT and is not retried: retrying a deterministic refusal forever is
+  /// the PostgREST retry-loop class recorded in PROJECT_MEMORY.
+  Future<_CommandOutcome> _settleRpcAnswer(
+    PendingCommand command, {
+    required CommandSpec spec,
+    required Map<String, Object?>? answer,
+    required DateTime now,
+  }) async {
+    final String key = command.idempotencyKey;
+    bool listed(String field) {
+      final Object? v = answer?[field];
+      return v is List && v.any((Object? x) => x == key);
+    }
+
+    if (listed('accepted') || listed('duplicates')) {
+      await _markCommandSynced(command, spec: spec, now: now);
+      return _CommandOutcome.synced;
+    }
+    String? reason;
+    final Object? rejected = answer?['rejected'];
+    if (rejected is List) {
+      for (final Object? r in rejected) {
+        if (r is Map && r['client_uuid'] == key) {
+          final Object? why = r['reason'];
+          reason = why is String && why.trim().isNotEmpty ? why.trim() : null;
+          reason ??= 'This count was not accepted by the server.';
+        }
+      }
+    }
+    await _fail(
+      command,
+      now: now,
+      message: reason ?? 'The server did not confirm this count was stored.',
+      errorClass:
+          reason != null ? SyncErrorClass.conflict : SyncErrorClass.validation,
+    );
+    return reason != null ? _CommandOutcome.conflicted : _CommandOutcome.failed;
   }
 
   Future<void> _markCommandSynced(

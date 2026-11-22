@@ -30,6 +30,7 @@ export const PUBLIC_CONFIG_KEYS = Object.freeze([
   'require_approval', 'app_version', 'session_timeout_hours', 'two_factor_required',
   'password_min_length', 'default_currency', 'mobile_login_hero',
   'auth_google_enabled', 'auth_microsoft_enabled', 'qr_login_enabled',
+  'single_tenant_mode',
 ])
 
 /** App defaults — the effective value when a key is unset/unreadable. Enforcement
@@ -54,6 +55,7 @@ export const CONFIG_DEFAULTS = Object.freeze({
   backup_enabled: true,
   export_enabled: true,
   max_export_rows: 50000,
+  pdf_bulk_limit: 50,            // reports in one bulk PDF download: 10, 50 or 100
   max_upload_rows: 100000,
   data_retention_months: 0,      // 0 = keep forever
   audit_retention_days: 0,       // 0 = keep forever

@@ -43,3 +43,213 @@ ever wanted. The reconcile is therefore closed by deletion, not re-application.
   456 MB). The next nightly run after applying removes 16 nights of snapshots, which is
   a removal of stored data, so it is not applied unattended. It frees disk only; no
   measured query gets faster from it.
+
+## Closure workflow drafts (2026-11-15, owner decisions; NOT applied)
+
+Apply in this order, each after a rolled-back check on production. Test: `supabase/tests/closure/run_staging.sh`
+(local staging only). Report: `docs/commercial-readiness/audit/CLOSURE_ROUND2.md`.
+
+- `20261116100000_clo_corrective_action_review.sql` - per-company review settings (`closure_review_config`),
+  review columns on `corrective_actions` (status vocabulary unchanged), append-only
+  `corrective_action_review_events`, the submit / review writers, the exception REQUEST and DECISION
+  writers (the person who asks can never decide; no company switch relaxes that) and the guard trigger.
+  Round 3 (owner, 2026-11-15): a Tire Planning Engineer may ask for an exception with optional
+  evidence (`exception_evidence`, request writer now `(uuid, text, jsonb)`) only inside their company,
+  country and sites; whoever ever asked for an exception on an action can never decide it or close
+  the action (review approval or direct close), read from the append-only history. Staging T01-T11.
+- `20261116101000_clo_checklist_acknowledge_exception.sql` - depends on the file above. Adds the
+  `acknowledged` checklist outcome, `acknowledge_checklist_faults()`, `v_checklist_fault_compliance`,
+  append-only `checklist_decision_events`, and per-company extra final signer roles. Contains one
+  `drop constraint` + `add constraint` pair (a CHECK cannot be widened in place), so the MCP confirm
+  prompt will appear. The blocking-mark rule (`guard_checklist_approval_stages`) is not touched.
+- `20261116102000_clo_supervisor_actions_visibility.sql` - depends on `20261116100000`. Switches the
+  `corrective_actions` module on for Workshop Supervisor and Maintenance Supervisor so a default
+  reviewer can open the review screen (browser test defect C1). Two rows, no rights change.
+## Work order permissions (draft PR #519, owner decisions 2026-11-15)
+
+AUTHORED, NOT APPLIED. Proven only on a private copy of the local staging database (synthetic
+companies) by `supabase/tests/staging_work_order_permissions.sh`. Renumbered on 2026-11-15 from
+`20261115160000 / 160500 / 161000` so they no longer share a number with the tenant drafts of PR #518.
+Apply in this order, after the web build that carries the matching screens is live:
+
+1. `20261113130000_cur_work_orders_manager_director_default.sql` (PR #511; needed first)
+2. `20261115140000_wo_permission_resolver.sql` - rule table `work_order_role_rules` (31 built-in rows),
+   `work_order_can`, `work_order_scope`, `work_order_my_access`. Changes no behaviour alone.
+3. `20261115140500_wo_policies_and_guards.sql` - policies and guards read the resolver: site and
+   assignment scoped rights, closed and approved-cost locks, final closure needs the `close` right.
+4. `20261115141000_wo_supervisor_module_visibility.sql` - menu switches: Work Orders and Live Control
+   for the supervisor roles, Work Orders (the My Jobs screen) for Tyre Man and the trade roles.
+5. `20261115141500_wo_cost_approval_not_collector.sql` - a Tyre Data Collector is no longer an
+   eligible approver of work order scope and cost in the approval engine.
+
+None of them rewrites a stored work order, cost or approval. Rollback is in each file's header.
+
+## Multi-company drafts gathered for the full sequence (2026-11-15, stream COMMERCIAL2)
+
+NOT applied. Order, dependencies, the check after each step and the point of no easy return are in
+`docs/commercial-readiness/audit/MULTI_COMPANY_MIGRATION_SEQUENCE.md`; the local runner is
+`supabase/tests/multi_company_sequence/`.
+
+- `20261113100000` to `20261113115000` (13 files, TEN-1 to TEN-9 with 1b, 4b, 5b, 7b): copied unchanged
+  from PR #506.
+- `20261113150000` to `20261113156000` (8 files, COM): copied unchanged from PR #510. `154500` must ship
+  with the client line `src/lib/api/tyreExchange.js:48`.
+- `20261115160000_ten6b_entitlement_switch_preflight.sql` — new. Preflight report and the only supported
+  way to turn plan enforcement on; refuses when the current company would be limited.
+- `20261115161000_ten7c_role_matrix_own_company_read.sql` — new. A company reads only its own role rows
+  and the built-in defaults; `get_org_role_matrix()`; optional seed of own rows.
+- `20261115162000_ten8b_invitation_company_code_signup.sql` — new. Invitation preview before sign-in,
+  company code, and a code that never grants membership.
+- `20261115163000_ten9b_sign_in_company_code.sql` — new. One sign-in resolver; "company code/name";
+  the current company keeps signing in with a bare name.
+- `20261115164000_ten10_storage_company_folders.sql` : new. A file path that starts with a company id can be
+  used only by that company (restrictive policy on `storage.objects`; legacy paths untouched).
+- `20261115165000_ten11_ai_spend_per_company.sql` : new. AI month spend and budget per company in
+  `ai_orchestrator_reserve_budget`; the current company never gets a company cap. Patches the live function
+  body by three anchored replacements. Edge functions chat-ai and ai-tyre-inspection are NOT covered.
+- `20261115166000_ten12_company_admin_audit.sql` : new. `org_admin_events` (append-only, written by triggers)
+  and `get_org_admin_audit()` for the company Admin. Creates a table, ends with the reader policies call.
+- `20261115167000_ten13_company_export_own_data.sql` : new. `org_export_manifest()` and `org_export_page()`:
+  a company Admin reads the company's own rows of the export list. Reads only. Purge stays HOLD.
+- `20261115168000_ten9d_company_code_guard_and_admin_set.sql` : new (PR #546 test matrix). DEFECT FIX: the
+  "only the platform sets a company code" guard never fired (SECURITY DEFINER, so `current_user` was the
+  owner) and `slug` was unguarded; a company Admin could set or rename its sign-in code by a direct UPDATE.
+  Guard made SECURITY INVOKER, `slug` added to the platform columns. Adds `org_set_my_sign_in_code()`
+  (company Admin, once, refused while `single_tenant_mode` is true) and `get_my_org_sign_in_code()`.
+- `20261115168500_ten9e_invitation_signup_refuses_cleanly.sql` : new. A sign-up whose invitation no
+  longer holds (used, cancelled, expired, wrong email, wrong code, code alone) is ABORTED instead of
+  creating an orphan account with no company that burns the username. `get_public_config()` also returns
+  `single_tenant_mode` (the sign-in hint shows only once multi-company is on).
+- TEN-9f moved to its own PR #548: `20261116100000_ten9f_login_lockout_per_account.sql` (+ROLLBACK).
+  The copy here is byte-identical and only used by the staging harness; apply it from #548, once.
+- `20261115168800_ten9g_code_form_cannot_be_squatted.sql` : new (2026-11-16). A username or employee
+  id containing "/" or "\\" could shadow a "code/name" sign-in (step 1 exact match ran first): staging
+  proved `resolve_sign_in_user('beta-haulage/beta.admin')` returning a self-registered impostor. The
+  resolver now tries the code form first when the separator is present; a trigger refuses NEW or
+  CHANGED names carrying a separator (existing rows untouched). Preflight count in the file header.
+- `20261115169000_ten9c_HOLD_per_company_usernames.sql` — new, HOLD. Removes the global username and
+  employee id keys. Contains `drop`. Point of no easy return; not part of the sequence proper.
+
+Test for TEN-8b/9b/9c/9d/9e/9f/9g + gap matrix `tests_gaps.sql` (local staging only): `supabase/tests/multi_company_auth/run_staging.sh`.
+Sign-in edge function run locally against staging: `e2e/multi_company/sign_in_edge_local.mjs`.
+
+Status per finding (TEN-1 to TEN-13): `docs/commercial-readiness/audit/TENANCY_STATUS.md`.
+
+## Tyre position service and ERP observation follow-up (2026-11-15)
+
+`supabase/migrations/20261115120000_observation_erp_reconciliation.sql` is APPLIED to production (version
+20261115090615). These are FOLLOW-UP drafts on top of it, apply in this order, neither applied anywhere
+but the local staging copy:
+
+- `20261116084000_observation_erp_confirm_interim_lock.sql` : interim restriction. Three REVOKE
+  statements so no signed-in user can record an ERP job card decision until the corrected function
+  is installed. Independent; reversible by three GRANT statements (in its header).
+- `20261116085000_tyre_layout_versions_and_position_mappings.sql` : layout history
+  (`vehicle_diagram_config_versions`, written by a trigger, append-only) and verified per-layout
+  ERP spellings (`tyre_layout_position_mappings`, ships empty). Apply before 090000.
+- Order: 084000 (alone, first), then 085000, 090000, 091000 together. Owner's approval pack:
+  `docs/commercial-readiness/audit/ERP_FOLLOWUP_APPROVAL_PACK.md`.
+- `20261116090000_tyre_position_service.sql` : pure functions that resolve an inspection slot id or an
+  ERP position code to one canonical wheel on the asset's own layout (SQL mirror of
+  `src/lib/tyrePositionService.js`, pinned by `src/test/fixtures/tyrePositionCases.json`). No table.
+  Its built-in wheel table is generated from the JS: regenerate with
+  `UPDATE_POSITION_FIXTURE=1 npx vitest run src/test/tyrePositionMirror.test.js`.
+- `20261116091000_observation_erp_decide_on_position_service.sql` : `create or replace` of the live
+  `observation_erp_decide` (same signature and result) on the position service, a read-only
+  `observation_erp_evaluate`, and the reader policies the applied migration missed. No table, no removal.
+- `20261116091000_observation_erp_decide_ROLLBACK.sql` : the exact live function, to undo the above.
+
+Tests: `node --test supabase/tests/tyre_position_service.test.mjs` (PGlite) and
+`python3 supabase/tests/staging/observation_erp_position_tests.py` (local staging copy).
+
+## Current production fixes B drafts OPS-1 to OPS-3 (authored 2026-11-12, NOT applied)
+
+Source: `docs/commercial-readiness/audit/CURRENT_PRODUCTION_FIXES_B.md`. PGlite tests:
+`supabase/tests/ops_*.test.mjs`.
+
+- `20261113140000_ops_report_exec_money_by_country.sql`: OPS-1, per-country money in the scheduled
+  executive e-mail (`report_exec_digest`). Ships with the `send-scheduled-reports` edge function change.
+- `20261113141000_ops_webhook_reliable_delivery.sql`: OPS-2, reliable outbound webhook delivery.
+- `20261113142000_ops_backup_coverage_restore_test_health.sql`: OPS-3, wider row snapshots, a restore
+  test over every snapshotted table, and a health answer for an outside uptime monitor.
+
+## Stored report PDFs (2026-11-15)
+
+Drafts for the PDF cache service (`docs/pdf/PDF_ARCHITECTURE_AUDIT.md`, `docs/pdf/PDF_ROLLOUT.md`). None applied
+anywhere but the local staging copy. Apply in this order, only on the owner's go-ahead:
+
+- `20261117090000_report_pdf_cache.sql` : private bucket `report-pdfs`, `report_pdf_files`, `report_pdf_events`,
+  the `pdf_cache_*` functions and the storage policies. Changes no existing object. Contains `drop policy if
+  exists` guards for its own policies, so it needs the SQL editor or the owner present to approve the MCP prompt.
+- `20261117091000_report_pdf_autoqueue.sql` : `report_pdf_queue` and an AFTER trigger on `inspections` that
+  records a request when a record is completed or approved. Reads only; can never block a save.
+- `20261117092000_report_export_jobs_DESIGN.sql` : DESIGN ONLY for a later server ZIP worker. Do not apply.
+
+Tests: `supabase/tests/staging/report_pdf_cache_tests.sh` (local staging), `supabase/tests/report_pdf_cache_key.test.mjs` (PGlite).
+
+## At-risk module fixes, round 2 (ATR, 2026-11-15) - NOT APPLIED
+
+- `20261117100000_atr_user_view_prefs.sql` - creates `user_view_prefs` (personal saved table views; owner-only
+  rows inside the owner's company; reader policies applied). Supersedes the never-applied
+  `supabase/migrations/20260921090000_user_view_prefs.sql`. No dependency. Tested on local staging.
+- `20261117101000_atr_carbon_offsets_blank_is_null.sql` - `carbon_offsets.aed_cost` and `trees_equivalent`
+  become nullable with no default, so a blank is stored as "not recorded" and not 0. Contains `drop default` /
+  `drop not null` (unavoidable), so the apply prompt needs the owner. No dependency. Tested on local staging.
+
+- `20261117102000_recalls_number_unique_per_org.sql` - the recall number key becomes
+  (organisation_id, recall_number, country) NULLS NOT DISTINCT, so two companies can use the same
+  recall number and a country-less number is still policed. `recalls` holds 0 rows. Contains
+  `drop constraint`, so the apply prompt needs the owner. No dependency. Not executed anywhere.
+  The Recall Tracker save 403 itself is fixed in code (src/lib/recallCountry.js), not here.
+
+## Engineering accuracy drafts (PR #513) - executed on local staging, NOT applied to production
+
+Apply in this order. Each saves the definition it replaces to `_bak.fn_defs_eng_20261113` and aborts if an
+anchor is not found exactly once. No draft changes a stored business row (hash proven on staging); 120000
+writes metric registry text only. Staging proof: `supabase/tests/staging/eng_round2_staging.mjs` (23 tests).
+
+1. `20261113120000_eng1_cost_per_km_named_metrics.sql` - named cost per km metrics; km total withheld.
+2. `20261113121000_eng2_running_life_baseline_km_rule.sql` - expected life baseline by the km rule.
+3. `20261113122000_eng3_calc_cpk_km_rule.sql` - `calc_cpk` refuses placeholder fitments (needs nothing else).
+4. `20261113123000_eng4_unit_rule_road_vehicles.sql` - road vehicles with a plant word are km.
+5. `20261113124000_eng5_warranty_spelling_and_tyre_spend_kinds.sql` - warranty spellings, tyre spend by kind.
+6. `20261113125000_eng6_vehicle_km_ignores_placeholder_odometer.sql` - vehicle km ignores the placeholder
+   odometer 1 (round 2 defect R2-D1). Raises cost per vehicle km about 5% KSA and 8% UAE: tell users first.
+
+120000 and 125000 both change what "cost per vehicle km" shows; apply them together.
+
+## By-number joins follow TEN-1b (2026-11-15) - executed on local staging, NOT applied to production
+
+Inventory and test record: `docs/commercial-readiness/audit/BY_NUMBER_JOIN_AUDIT.md`.
+
+- `20261117110000_by_number_org_joins.sql` - adds the company condition to the 8 functions and
+  1 view that joined or looked up a job card by number only (expense classification, site
+  operating cost, disposal register, complaints and monthly-tyre staging, repair-request
+  conversion, owner data audit, tyre cost audit, fitment evidence view). Re-creates each from
+  its live definition (anchored replace, aborts unless each anchor occurs once), saves the old
+  text to `_bak.by_number_org_joins_defs`, re-run is a no-op. No destructive keyword. Outputs
+  byte-identical on staging while numbers do not overlap. Rollback:
+  `20261117110000_by_number_org_joins_ROLLBACK.sql` (restores the saved definitions).
+- `20261117112000_complaints_missing_in_date_reject.sql` - APPLY AFTER `20261117110000`.
+  `process_stg_complaints` skips a row with a blank or unreadable Vehicle In Date and records it
+  in `expense_import_rejects` (`complaint_missing_vehicle_in_date` /
+  `complaint_unreadable_vehicle_in_date`) instead of aborting the whole batch on the NOT NULL
+  `opened_at`. Aborts if the by-number marker is missing. Rollback:
+  `20261117112000_complaints_missing_in_date_reject_ROLLBACK.sql`, run it BEFORE the by-number
+  rollback. Test: `supabase/tests/staging_complaints_in_date.sh` (local staging copy only).
+- `20261117111000_drop_tyre_status_marks_bridge.sql` - removes the temporary
+  `tyre_status_marks_serial_mark_type_bridge` index. OWNER APPROVAL ONLY, after the production
+  web build carries #541. Contains `drop`, so the apply prompt needs the owner. Rollback in the
+  file header.
+- `20261119100000_oem_review_items_source_row.sql` - APPLIED 2026-11-19, moved to `supabase/migrations/`
+  (rollback in `supabase/rollbacks/`).
+
+## Inventory follow-ups
+
+| File | What |
+|---|---|
+| ~~20261121100000_inv_reconcile_multi_balance.sql~~ | APPLIED to production 2026-11-21; moved to `supabase/migrations/` (rollback in `supabase/rollbacks/`). docs/inventory/96 section 9. |
+| ~~20261121110000_inv_tyre_sync_perf.sql (+ _ROLLBACK)~~ | APPLIED to production 2026-11-21 07:23 UTC; moved to `supabase/migrations/` (rollback in `supabase/rollbacks/`). First real sync KSA 2.4 s / UAE 1.0 s / Egypt 0.7 s, 8,619 tyre items, 7 open conflicts (docs/inventory/99). docs/inventory/96 section 11. |
+| ~~20261122100000_inv_physical_inventory_master.sql~~ | APPLIED to production 2026-11-21 21:25 UTC; moved to `supabase/migrations/`. docs/inventory/96 section 12. |
+| ~~20261122110000_inv_transfer_return_remaining_fix.sql~~ | APPLIED 2026-11-21 21:32 UTC; moved to `supabase/migrations/`. doc 96 section 12. |
+| ~~20261122120000_inv_location_setup.sql~~ | APPLIED 2026-11-21 21:35 UTC; moved to `supabase/migrations/`. doc 96 section 12. |

@@ -18,7 +18,11 @@ abstract interface class TyreFitmentRepository {
 final class SupabaseTyreFitmentRepository
     with SupabaseGateway
     implements TyreFitmentRepository {
-  SupabaseTyreFitmentRepository(this._client);
+  SupabaseTyreFitmentRepository(this._client, {String? organisationId})
+      : _organisationId = organisationId;
+
+  /// Pins the read to the caller's company (null = row-level security only).
+  final String? _organisationId;
 
   final SupabaseClient _client;
 
@@ -33,6 +37,10 @@ final class SupabaseTyreFitmentRepository
           .select(_fitmentColumns)
           .eq('asset_no', assetNo.trim())
           .eq('status', 'Active');
+      final String? org = _organisationId;
+      if (org != null && org.isNotEmpty) {
+        query = query.eq('organisation_id', org);
+      }
       final String? scope = country?.trim();
       if (scope != null && scope.isNotEmpty) {
         query = query.or('country.is.null,country.eq.$scope');

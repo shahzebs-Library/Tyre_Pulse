@@ -26,6 +26,7 @@ const NOT_A_MODULE = {
   '/reset-password': 'public auth step',
   '/data-deletion': 'public Play Store deletion page',
   '/delete-account': 'redirect alias of /data-deletion',
+  '/captcha-bridge': 'public security-check page opened by the installed phone app in the system browser',
   '/privacy': 'public legal page',
   '/privacy-policy': 'public legal page',
   '/terms': 'public legal page',
@@ -33,6 +34,7 @@ const NOT_A_MODULE = {
   '/status': 'public status page',
   '/support': 'public support page',
   '/contact': 'public support contact page',
+  '/parts-catalog/oem-preview': 'sub-page of Parts Catalog (opened from its Browse illustrated OEM parts link, Admin/Manager/Director route)',
   '/report-builder': 'sub-page of Reports (SectionTabs, admin-only, governed by report builder access)',
   '/checklist-builder': 'sub-page of Checklists (author roles)',
   '/automation-rules/builder': 'sub-page of Automation Rules',
@@ -41,6 +43,9 @@ const NOT_A_MODULE = {
   '/rfid-registry': 'alias of /rfid',
   '/design-system': 'admin reference page, reachable from search',
   '/my-problems': 'personal page of every user (profile menu), not a module',
+  '/my-jobs': 'a technician\'s own assigned work orders; same work_orders module as /work-orders, which redirects here',
+  '/kpi-engine': 'tab of KPI Center (shared tab bar), same kpi_scorecard module as /kpi',
+  '/kpi-command': 'tab of KPI Center (shared tab bar), same kpi_scorecard module as /kpi',
 }
 
 function appRoutes() {

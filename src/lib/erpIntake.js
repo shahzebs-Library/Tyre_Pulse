@@ -283,7 +283,28 @@ function mapComplaints(dataRows, headerRow, country, acc) {
     const asset = cellAt(r, c.veh)
     if (!wo && !asset) continue
     const outDate = pd(cellAt(r, c.outdt))
-    const openedAt = pd(cellAt(r, c.indt))
+    const rawIn = cellAt(r, c.indt)
+    const openedAt = pd(rawIn)
+    if (!openedAt) {
+      // Same rule as the staging pipe (process_stg_complaints, draft
+      // 20261117112000): a complaint row with no readable Vehicle In Date is
+      // skipped with a row-level reason. It is never given today's date (that
+      // would claim the vehicle came in on the day of the upload) and it never
+      // aborts the rest of the file.
+      const missing = !String(rawIn ?? '').trim()
+      if (acc) {
+        acc.rejected = acc.rejected || []
+        acc.rejected.push({
+          work_order_no: wo || null,
+          asset_no: asset || null,
+          reason: missing ? 'complaint_missing_vehicle_in_date' : 'complaint_unreadable_vehicle_in_date',
+          message: missing
+            ? 'Vehicle In Date is blank'
+            : `Vehicle In Date "${String(rawIn).trim()}" could not be read`,
+        })
+      }
+      continue
+    }
     const notes = [cellAt(r, c.done), cellAt(r, c.qc)].filter(Boolean).join(' | ').slice(0, 1500)
     out.push({
       work_order_no: wo || null, asset_no: asset || null,
@@ -293,9 +314,7 @@ function mapComplaints(dataRows, headerRow, country, acc) {
       notes: notes || null, site: cellAt(r, c.loc) || null, workshop_name: cellAt(r, c.wshop) || null,
       technician_name: cellAt(r, c.driver) || null,
       odometer: numStr(cellAt(r, c.kmhr)) || null,
-      // See the note in mapCombined: an explicit null defeats the NOT NULL
-      // column default and kills the whole batch on one blank date.
-      ...(openedAt ? { opened_at: openedAt } : {}),
+      opened_at: openedAt,
       completed_at: outDate || null,
       custom_data: { source: 'Vehicle Complaints History', ...rawObject(headerRow, r) },
       country,
@@ -476,7 +495,7 @@ export function intakeSheet(aoa = [], { country = 'KSA' } = {}) {
   let tyreRows = [] // combined export: tyre_records rows carried alongside the work orders
   // Tally date cells that carried content but could not be read, so the result
   // screen can say "N dates could not be read" instead of silently dropping them.
-  const dateStats = { unparsed: 0 }
+  const dateStats = { unparsed: 0, rejected: [] }
   if (det.type === REPORT_TYPES.MONTHLY_TYRES) rows = mapMonthlyTyres(kept, det.headerRow, country, dateStats)
   else if (det.type === REPORT_TYPES.COMPLAINTS) rows = mapComplaints(kept, det.headerRow, country, dateStats)
   else if (det.type === REPORT_TYPES.COMBINED) {
@@ -489,9 +508,14 @@ export function intakeSheet(aoa = [], { country = 'KSA' } = {}) {
   // routes type === 'grid' there; intakeSheet returns the detection so the caller knows.
   // FULL ROW ACCOUNTING so nothing is ever silently lost:
   //   read (content rows) = mapped (rows.length) + noKey (had content but no identifier)
+  //                         + rejectedRows (keyed, but skipped with a row-level reason)
   //   total file body     = read + footerRows + blankRows
   const read = kept.length
-  const noKey = Math.max(0, read - rows.length)
+  const rejectedRows = dateStats.rejected
+  const noKey = Math.max(0, read - rows.length - rejectedRows.length)
   const dropped = footerRows + blankRows // back-compat (footer/blank only)
-  return { type: det.type, target: det.target, rows, tyreRows, dropped, read, footerRows, blankRows, noKey, unparsedDates: dateStats.unparsed }
+  return {
+    type: det.type, target: det.target, rows, tyreRows, dropped, read, footerRows, blankRows, noKey,
+    unparsedDates: dateStats.unparsed, rejectedRows,
+  }
 }

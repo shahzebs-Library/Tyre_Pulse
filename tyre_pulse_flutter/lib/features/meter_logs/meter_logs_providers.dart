@@ -18,6 +18,7 @@ import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/meter_logs/data/meter_log_photo_capture.dart';
 import 'package:tyre_pulse/features/meter_logs/data/meter_log_repository.dart';
 
@@ -37,6 +38,7 @@ final Provider<MeterLogRepository> meterLogRepositoryProvider =
   (ref) => SupabaseMeterLogRepository(
     ref.watch(supabaseClientProvider),
     ref.watch(meterLogQueuedCommandRepositoryProvider),
+    organisationId: ref.watch(workspaceContextProvider)?.companyId,
   ),
 );
 

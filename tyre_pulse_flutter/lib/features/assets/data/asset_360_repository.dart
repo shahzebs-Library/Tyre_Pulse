@@ -70,6 +70,9 @@ final class SupabaseAsset360Source
           .select('id, reading_date, engine_hours')
           .eq('asset_no', scope.assetNo);
       if (scope.country != null) q = q.eq('country', scope.country!);
+      if (scope.organisationId != null) {
+        q = q.eq('organisation_id', scope.organisationId!);
+      }
       final List<Map<String, dynamic>> rows = await q
           .order('reading_date', ascending: false)
           .order('id', ascending: false)
@@ -92,6 +95,9 @@ final class SupabaseAsset360Source
       if (scope.country != null) {
         q = q.or('country.eq.${scope.country},country.is.null');
       }
+      if (scope.organisationId != null) {
+        q = q.eq('organisation_id', scope.organisationId!);
+      }
       return q.order('id').limit(100);
     });
   }
@@ -106,6 +112,9 @@ final class SupabaseAsset360Source
           .eq('source_type', 'inspection');
       if (scope.country != null) {
         q = q.or('country.eq.${scope.country},country.is.null');
+      }
+      if (scope.organisationId != null) {
+        q = q.eq('organisation_id', scope.organisationId!);
       }
       return q.order('id').limit(assetTyreActionLimit);
     });

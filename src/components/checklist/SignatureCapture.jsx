@@ -106,7 +106,7 @@ export default function SignatureCapture({ onChange, label = 'Sign here', height
           type="button"
           onClick={clear}
           disabled={!hasInk}
-          className="inline-flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40"
+          className="inline-flex items-center justify-center gap-1 min-h-[44px] min-w-[44px] px-2 -mr-2 rounded-md text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent,#16a34a)]"
         >
           <RotateCcw className="w-3 h-3" /> Clear
         </button>

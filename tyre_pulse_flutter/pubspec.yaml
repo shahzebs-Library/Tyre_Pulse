@@ -5,7 +5,7 @@ publish_to: "none"
 # The Android versionCode is set by CI. Read docs/BOOTSTRAP.md before changing
 # this by hand: the production listing already has a version code and Play
 # rejects a lower one (spec section 69).
-version: 0.1.1+7
+version: 0.1.2+8
 
 environment:
   # Deliberately broad. CI pins the real SDK by using the Flutter stable
@@ -43,6 +43,8 @@ dependencies:
 
   # --- Utilities ---
   uuid: ^4.6.0
+  # SHA-256 of physical-inventory photos (server-side duplicate prevention).
+  crypto: ^3.0.7
   intl: ^0.20.2
 
   # --- Inspections (Phase 5): photo capture, GPS and signature capture.
@@ -77,6 +79,13 @@ dependencies:
   firebase_core: ^4.15.0
   firebase_messaging: ^16.7.0
   device_info_plus: ^13.2.0
+  # Cloudflare Turnstile CAPTCHA on sign-in and self-registration (see
+  # lib/core/auth/captcha/). Turnstile has no native Android/iOS SDK; its
+  # widget only runs in a web page, so the official Flutter WebView hosts a
+  # tiny inline page. Inert unless the build sets TURNSTILE_SITE_KEY.
+  # 4.14.x pulls webview_flutter_wkwebview 3.27, which needs Flutter >= 3.47
+  # (CI pins 3.47.2).
+  webview_flutter: ^4.14.1
 
   # Packages for later phases (PDF and sharing) are added at
   # the phase that needs them. Spec section 64: do not add a package to

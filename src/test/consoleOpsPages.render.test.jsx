@@ -165,6 +165,14 @@ describe('console operations pages on the kit', () => {
     expect(screen.getByTestId('trend').dataset.days).toBe('14')
     expect(screen.getByTestId('bars').textContent).toMatch(/Critical 1, Error 1, Warning 1, Info 0/)
     fireEvent.click(screen.getByRole('button', { name: 'Resolve' }))
+    // Resolve now asks for a reason; the confirm button stays disabled until one is typed.
+    const dialogButtons = await screen.findAllByRole('button', { name: 'Resolve' })
+    const confirm = dialogButtons[dialogButtons.length - 1]
+    expect(confirm.disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: 'Fixed in release 2026-11-16' } })
+    expect(confirm.disabled).toBe(false)
+    fireEvent.click(confirm)
+    expect(h.resolveSystemLog).toHaveBeenCalledWith('log-1', 'Fixed in release 2026-11-16')
     // Used to be swallowed silently; a failed resolve is now stated, in plain words.
     const err = await screen.findByText(/permission/i)
     expect(err.textContent).not.toMatch(/system_logs/)

@@ -103,7 +103,11 @@ describe('mirror does not drift from the Flutter module registry', () => {
     flutter[key].roles = [...new Set([...flutter[key].roles, ...roleSet(body)])]
   }
   const groupName = Object.fromEntries([...registry.matchAll(/^\s*([a-z]+)\('([A-Za-z]+)'\)[,;]/gm)].map(([, n, label]) => [n, label]))
-  const aliasBlock = registry.slice(registry.indexOf('webModuleKeyAliases ='), registry.indexOf('ModuleKey? moduleKeyFromMobileAliasKey'))
+  // The alias map only: it ends at its own closing brace. The registry also holds
+  // webModuleStatusKeys (Module Control twins), which lists identical keys and is
+  // not an alias map.
+  const aliasStart = registry.indexOf('webModuleKeyAliases =')
+  const aliasBlock = registry.slice(aliasStart, registry.indexOf('};', aliasStart))
   const aliases = Object.fromEntries([...aliasBlock.matchAll(/'([a-z_]+)':\s*ModuleKey\.([a-zA-Z]+)/g)].map(([, w, k]) => [w, k]))
 
   it('found the Flutter registry to compare against', () => {

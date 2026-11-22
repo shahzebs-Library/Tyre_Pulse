@@ -10,7 +10,7 @@ import { FaqBlock, Modules, Problem, StartList, Steps, type Faq } from "../Solut
 
 const PATH = "/solutions/ready-mix-fleet";
 const TITLE = "Ready-mix fleet maintenance software";
-const DESCRIPTION = "Preventive maintenance by engine hours, breakdown downtime split into waiting and repair time, and cost per m3 for mixers, pumps and plant.";
+const DESCRIPTION = "Breakdown downtime split into waiting and repair time, cost per m3 for mixers, pumps and plant, and service plans by engine hours set up on request.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -26,17 +26,17 @@ const PAINS = [
 ] as const;
 
 const STEPS = [
-  ["Plan service on the meter.", "Mixers, pumps, loaders and generators get service plans by engine hours, kilometres or calendar. Overdue work shows before it turns into a breakdown."],
+  ["Plan service on the meter.", "Mixers, pumps, loaders and generators can follow service plans by engine hours, kilometres or calendar. Service plans are set up on request, with your own intervals."],
   ["Time every breakdown.", "Job cards record when the machine left production, entered and left the workshop, and returned. Waiting time and repair time are reported separately."],
   ["Divide cost by concrete.", "Workshop, tyre and service-contract cost is divided by the approved cubic metres your plants delivered, by region and month."],
 ] as const;
 
 const MODULES = [
-  { href: "/platform/maintenance", label: "Maintenance and workshop", text: "Preventive plans, job cards, technicians and parts for every machine type." },
+  { href: "/platform/maintenance", label: "Maintenance and workshop", text: "Job cards, technicians and parts for every machine type, with preventive plans on request." },
   { href: "/platform/fleet-assets", label: "Fleet and assets", text: "One record per mixer, pump and plant item, with hours, kilometres and site." },
   { href: "/platform/inspections", label: "Inspections and safety", text: "Daily walk-round checks on the phone, with defects raised as job cards." },
   { href: "/platform/inspections#tyres", label: "Tyre lifecycle", text: "Tyre life and cost per km or per engine hour for mixers and pumps." },
-  { href: "/platform/inventory", label: "Inventory and reporting", text: "Spare parts by store, purchase approval and cost per machine and per m3." },
+  { href: "/platform/inventory", label: "Inventory and reporting", text: "Spare parts by store, and cost per machine and per m3." },
   { href: "/industries", label: "Industries", text: "How the same platform is configured for ready-mix and other operations.", cta: "See industries" },
 ] as const;
 
@@ -46,11 +46,11 @@ const START = [
   { need: false, label: "Service intervals", text: "Your current PM schedule by hours or kilometres. We can start from manufacturer intervals if none is written down." },
   { need: false, label: "Daily production volumes", text: "Approved cubic metres per plant per day, needed for cost per m3." },
   { need: false, label: "Expense lines", text: "Parts, oil and tyre issues from your ERP, classified so cost per machine is complete." },
-  { need: false, label: "Telematics or meter photos", text: "Engine hours from telematics, or drivers log the meter with a photo each day." },
+  { need: false, label: "Meter photos or a telematics export", text: "Drivers log the meter with a photo each day, or we load a file exported from your telematics system." },
 ] as const;
 
 const FAQ: Faq = [
-  ["Can it handle mixers, pumps and batching plant together?", "Yes. Each machine type gets its own checklist, service plan and meter, hours for plant and pumps or kilometres for trucks, in the same register."],
+  ["Can it handle mixers, pumps and batching plant together?", "Yes. Each machine type gets its own checklist and meter, hours for plant and pumps or kilometres for trucks, in the same register. Service plans are set up on request."],
   ["How is cost per m3 calculated?", "Maintenance, tyre and service-contract cost for the period, divided by the approved cubic metres your plants delivered in that period. It is reported by region and month."],
   ["Does it replace our ERP?", "No. Tyre Pulse imports job cards and expense lines from your ERP exports and adds the field, workshop and cost views the ERP does not give you."],
 ] as const;

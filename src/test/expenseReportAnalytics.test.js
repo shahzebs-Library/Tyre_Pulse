@@ -47,11 +47,16 @@ describe('expenseReportAnalytics - site register', () => {
 describe('expenseReportAnalytics - CPK by type', () => {
   it('keeps CPK null without a denominator and finds the worst measurable type', () => {
     const src = [
-      { vehicle_type: 'MIXER', country: 'KSA', currency: 'SAR', unit: 'km', cpk_total: 0.5, distance_or_hours: 100 },
+      // ENG-1 (2026-11-12): a km type is measured by its tyre spend ratio
+      // (cpk_tyre). cpk_total on a km row was spares and oil over tyre km; this
+      // test used to rank on it. The 9.9 below must be ignored and withheld.
+      { vehicle_type: 'MIXER', country: 'KSA', currency: 'SAR', unit: 'km', cpk_tyre: 0.5, cpk_total: 9.9, distance_or_hours: 100 },
       { vehicle_type: 'PUMP', country: 'KSA', unit: 'engine_hours', cpk_total: null },
-      { vehicle_type: 'LOADER', country: 'UAE', currency: 'AED', unit: 'km', cpk_total: 0.9 },
+      { vehicle_type: 'LOADER', country: 'UAE', currency: 'AED', unit: 'km', cpk_tyre: 0.9, cpk_total: 1.1 },
     ]
     const rows = cpkTypeRows(src)
+    expect(rows[0].cpk_total).toBeNull()
+    expect(rows[0].rate).toBe(0.5)
     expect(rows[1].cpk_total).toBeNull()
     expect(rows[1].currency).toBe('KSA')
     const s = cpkTypeSummary(src)
@@ -84,6 +89,8 @@ describe('expenseReportAnalytics - shared helpers', () => {
       { site: 'A', issue_date: '2025-01-10', qty: 5 },
     ], '2026-01-01', '2026-12-31')
     expect(agg.total).toBe(2)
-    expect(agg.cpkSite[0].value).toBeCloseTo(0.2)
+    // A qty 2 row is two tyres that each ran 1,000 km: 200 over 2,000 tyre km.
+    // The old 0.2 multiplied the cost by qty and left the km alone (audit C18).
+    expect(agg.cpkSite[0].value).toBeCloseTo(0.1)
   })
 })

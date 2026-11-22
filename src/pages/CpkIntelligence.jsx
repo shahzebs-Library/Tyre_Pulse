@@ -12,6 +12,12 @@
  * value, why-it-changed) are lazy tabs - only the open one fetches, so nothing
  * loads everything at once.
  *
+ * METRIC NAMES (ENG-1) come from src/lib/cpkMetrics.js. The headline is the
+ * Tyre CPK (lifetime) from get_tyre_lifetime_cpk. The get_fleet_cpk km figure
+ * is the "tyre spend ratio" (period spend over lifetime tyre km) and is named
+ * so; a total cost over tyre km is never shown. Cost per vehicle km lives on
+ * Expenses and CPK.
+ *
  * All money is per country in its own currency (never blended); every CPK is
  * null -> "N/A" when its km/hours denominator is 0 (honest, never a fabricated 0).
  * Data: get_fleet_cpk / get_cpk_drivers / get_brand_size_cpk. Maths live in the
@@ -46,6 +52,11 @@ import { exportToExcel, exportToPdf } from '../lib/exportUtils'
 import CpkDataTable from '../components/cpk/CpkDataTable'
 import { toUserMessage } from '../lib/safeError'
 import { currencyForCountryCode } from '../lib/expenseReportAnalytics'
+import { getTyreLifetimeCpk } from '../lib/api/tyreLifetimeCpk'
+import {
+  CPK_METRIC, metricDef, metricShort, TOTAL_PER_TYRE_KM_WITHHELD, TYRE_SPEND_RATIO_BASIS,
+} from '../lib/cpkMetrics'
+import { initialTabFromUrl } from '../lib/urlTab'
 import './CpkIntelligence.css'
 
 const CpkScenarioStudioPanel = lazy(() => import('../components/cpk/CpkScenarioStudioPanel'))
@@ -55,13 +66,16 @@ const CpkUnitAuditPanel = lazy(() => import('../components/cpk/CpkUnitAuditPanel
 const CpkKmIntelligencePanel = lazy(() => import('../components/cpk/CpkKmIntelligencePanel'))
 const CpkReportPanel = lazy(() => import('../components/cpk/CpkReportPanel'))
 const LifetimeCpkPanel = lazy(() => import('../components/cpk/LifetimeCpkPanel'))
+// The former Tyre Failure and CPK board (/tyre-failure-cpk) lives here as a tab.
+const TyreFailureCpkBoard = lazy(() => import('./TyreFailureCpkBoard'))
 
 const MOBILITIES = ['movable', 'non_movable']
 
 const TABS = [
-  { key: 'fleet', label: 'Fleet CPK', icon: Gauge },
+  { key: 'fleet', label: 'Overview', icon: Gauge },
   { key: 'vehicles', label: 'Per vehicle', icon: Table2 },
   { key: 'lifetime', label: 'Tyre lifetime', icon: Layers },
+  { key: 'failures', label: 'Failures & tyre life', icon: AlertTriangle },
   { key: 'km_source', label: 'KM source', icon: Milestone },
   { key: 'units', label: 'Units & why different', icon: Layers },
   { key: 'km_intel', label: 'KM intelligence', icon: Gauge },
@@ -73,6 +87,14 @@ const TABS = [
 
 function num(v) { return Number.isFinite(Number(v)) ? Number(v) : 0 }
 
+/** Column name of a get_fleet_cpk rate, from the one glossary (cpkMetrics). */
+function rateName(mobility, kind) {
+  if (mobility === 'non_movable') {
+    return metricDef(kind === 'total' ? CPK_METRIC.OPERATING_COST_PER_ENGINE_HOUR : CPK_METRIC.TYRE_COST_PER_ENGINE_HOUR).short
+  }
+  return metricDef(CPK_METRIC.TYRE_SPEND_RATIO).short
+}
+
 export default function CpkIntelligence() {
   const loadId = useRef(0)
   const { activeCountry } = useSettings()
@@ -80,7 +102,7 @@ export default function CpkIntelligence() {
   const initialCountry = activeCountry && activeCountry !== 'All' ? activeCountry : COUNTRIES[0]
   const [country, setCountry] = useState(initialCountry)
   const [periodKey, setPeriodKey] = useState(DEFAULT_PERIOD)
-  const [tab, setTab] = useState('fleet')
+  const [tab, setTab] = useState(() => initialTabFromUrl(TABS.map((t) => t.key), 'fleet'))
   // Registered site (vehicle_fleet.site). '' = all sites. Options come from the
   // site register for the chosen country; a failed read says so and offers Retry.
   const [site, setSite] = useState('')
@@ -184,6 +206,23 @@ export default function CpkIntelligence() {
     return () => { cancelled = true }
   }, [country])
 
+  // HEADLINE: Tyre CPK (lifetime) of the tyres retired in the window. One price
+  // per physical tyre over its own validated km (get_tyre_lifetime_cpk). A failed
+  // read leaves the tile at N/A; it never blocks the page.
+  const [lifetime, setLifetime] = useState({ loading: true, block: null })
+  useEffect(() => {
+    let cancelled = false
+    setLifetime({ loading: true, block: null })
+    getTyreLifetimeCpk({ country, from: bounds.from, to: bounds.to, site: siteArg })
+      .then((res) => {
+        if (cancelled) return
+        const row = res?.ok ? (res.countries || []).find((c) => c.country === country) || null : null
+        setLifetime({ loading: false, block: row?.final || null })
+      })
+      .catch(() => { if (!cancelled) setLifetime({ loading: false, block: null }) })
+    return () => { cancelled = true }
+  }, [country, bounds.from, bounds.to, siteArg])
+
   // Advanced tabs fetch only when opened.
   const [drivers, setDrivers] = useState({ ok: false, windows: null, segments: [] })
   const [brandRows, setBrandRows] = useState([])
@@ -232,12 +271,15 @@ export default function CpkIntelligence() {
     }))
     if (!rows.length) return
     const unitLbl = MOBILITY_META[mobility].sublabel
+    // The km side has no total rate (ENG-1): its sheet carries the tyre spend
+    // ratio only, under its real name.
+    const hasTotal = mobility === 'non_movable'
     exportToExcel(
       rows,
-      ['asset_no', 'vehicle_type', 'distance', 'tyre_cost', 'total_cost', 'cpk_tyre', 'cpk_total'],
-      ['Asset', 'Type', mobility === 'movable' ? 'Km' : 'Hours', `Tyre Cost (${currency})`, `Total Cost (${currency})`, `CPK Tyre`, `CPK Total`],
+      ['asset_no', 'vehicle_type', 'distance', 'tyre_cost', 'total_cost', 'cpk_tyre', ...(hasTotal ? ['cpk_total'] : [])],
+      ['Asset', 'Type', mobility === 'movable' ? 'Tyre km (lifetime, tyres taken off)' : 'Engine hours', `Tyre Cost (${currency})`, `Total Cost (${currency})`, rateName(mobility, 'tyre'), ...(hasTotal ? [rateName(mobility, 'total')] : [])],
       `TyrePulse_CPK_${country}_${mobility}`,
-      `CPK ${MOBILITY_META[mobility].label} (${unitLbl})`,
+      `${MOBILITY_META[mobility].label} (${unitLbl})`,
     )
   }
 
@@ -255,13 +297,13 @@ export default function CpkIntelligence() {
       rows,
       [
         { key: 'vehicle_type', header: 'Asset Type' },
-        { key: 'distance', header: mobility === 'movable' ? 'Km' : 'Hours' },
+        { key: 'distance', header: mobility === 'movable' ? 'Tyre km' : 'Engine hours' },
         { key: 'tyre_cost', header: `Tyre Cost (${currency})` },
         { key: 'total_cost', header: `Total Cost (${currency})` },
-        { key: 'cpk_tyre', header: 'CPK Tyre' },
-        { key: 'cpk_total', header: 'CPK Total' },
+        { key: 'cpk_tyre', header: rateName(mobility, 'tyre') },
+        ...(mobility === 'non_movable' ? [{ key: 'cpk_total', header: rateName(mobility, 'total') }] : []),
       ],
-      `${scopeLabel} ${MOBILITY_META[mobility].label} CPK by type (${MOBILITY_META[mobility].sublabel})`,
+      `${scopeLabel} ${MOBILITY_META[mobility].label} by type (${MOBILITY_META[mobility].sublabel})`,
       `TyrePulse_CPK_${country}_${mobility}`,
       'landscape',
     )
@@ -270,12 +312,13 @@ export default function CpkIntelligence() {
   const vehicleColumns = (mobility) => ([
     { key: 'asset_no', header: 'Asset', align: 'left', kind: 'text' },
     { key: 'vehicle_type', header: 'Type', align: 'left', kind: 'text' },
-    { key: 'distance_or_hours', header: mobility === 'movable' ? 'Km' : 'Hours', align: 'right', kind: 'int' },
+    { key: 'distance_or_hours', header: mobility === 'movable' ? 'Tyre km' : 'Engine hours', align: 'right', kind: 'int' },
     { key: 'tyre_cost', header: `Tyre (${currency})`, align: 'right', kind: 'money' },
     { key: 'maintenance_cost', header: `Maint (${currency})`, align: 'right', kind: 'money' },
     { key: 'total_cost', header: `Total (${currency})`, align: 'right', kind: 'money' },
-    { key: 'cpk_tyre', header: 'CPK tyre', align: 'right', kind: 'cpk' },
-    { key: 'cpk_total', header: 'CPK total', align: 'right', kind: 'cpk' },
+    { key: 'cpk_tyre', header: rateName(mobility, 'tyre'), align: 'right', kind: 'cpk' },
+    // No total rate on the km side: maintenance cannot be divided by tyre km.
+    ...(mobility === 'non_movable' ? [{ key: 'cpk_total', header: rateName(mobility, 'total'), align: 'right', kind: 'cpk' }] : []),
   ])
 
   const kpis = useMemo(() => overviewKpis(fleetRow, prevFleetRow), [fleetRow, prevFleetRow])
@@ -299,7 +342,7 @@ export default function CpkIntelligence() {
     exportToExcel(
       shownTypeRows.map((r) => ({
         vehicle_type: r.vehicle_type,
-        basis: r.mobility === 'movable' ? 'Per km' : 'Per hour',
+        basis: r.mobility === 'movable' ? 'Per tyre km' : 'Per engine hour',
         units: r.units ?? 'N/A',
         distance: Math.round(r.distance),
         tyre_cost: Math.round(r.tyre_cost),
@@ -310,9 +353,9 @@ export default function CpkIntelligence() {
         coverage: r.coverage == null ? 'N/A' : `${Math.round(r.coverage)}%`,
       })),
       ['vehicle_type', 'basis', 'units', 'distance', 'tyre_cost', 'maintenance_cost', 'total_cost', 'cpk_tyre', 'cpk_total', 'coverage'],
-      ['Asset type', 'Basis', 'Units', 'Km or hours', `Tyre cost (${currency})`, `Maintenance cost (${currency})`, `Total cost (${currency})`, 'Tyre CPK or CPH', 'Total CPK or CPH', 'Coverage'],
+      ['Asset type', 'Basis', 'Units', 'Tyre km or engine hours', `Tyre cost (${currency})`, `Maintenance cost (${currency})`, `Total cost (${currency})`, 'Tyre spend ratio (per tyre km) or tyre cost per engine hour', 'Operating cost per engine hour (hour assets only)', 'Coverage'],
       `TyrePulse_CPK_${country}_asset_types`,
-      `CPK by asset type, ${scopeLabel}, ${bounds.from} to ${bounds.to}`,
+      `Cost by asset type, ${scopeLabel}, ${bounds.from} to ${bounds.to}`,
     )
   }
 
@@ -332,12 +375,12 @@ export default function CpkIntelligence() {
         <span title={`${r.measured} of ${r.units} assets have a ${r.mobility === 'movable' ? 'distance' : 'engine-hour'} reading`}>{fmtInt(r.units)}</span>
       )),
     },
-    { key: 'distance', header: 'Km or hours', numeric: true, cell: (r) => (r.distance > 0 ? `${fmtInt(Math.round(r.distance))} ${r.mobility === 'movable' ? 'km' : 'hr'}` : <span className="cc-na" title="No meter reading in this period">N/A</span>) },
+    { key: 'distance', header: 'Tyre km or hours', numeric: true, cell: (r) => (r.distance > 0 ? `${fmtInt(Math.round(r.distance))} ${r.mobility === 'movable' ? 'km' : 'hr'}` : <span className="cc-na" title="No meter reading in this period">N/A</span>) },
     { key: 'tyre_cost', header: 'Tyre cost', numeric: true, cell: (r) => `${currency} ${fmtCompact(r.tyre_cost)}` },
     { key: 'maintenance_cost', header: 'Maint. cost', numeric: true, sortValue: (r) => r.maintenance_cost ?? -1, cell: (r) => (r.maintenance_cost == null ? <span className="cc-na">N/A</span> : `${currency} ${fmtCompact(r.maintenance_cost)}`) },
     { key: 'total_cost', header: 'Total cost', numeric: true, cell: (r) => `${currency} ${fmtCompact(r.total_cost)}` },
-    { key: 'cpk_tyre', header: 'Tyre CPK / CPH', numeric: true, sortValue: (r) => r.cpk_tyre ?? -1, cell: (r) => (r.cpk_tyre == null ? <span className="cc-na" title="No measured km or hours">N/A</span> : <b className="cpk-rate">{fmtRate(r.cpk_tyre)}{r.mobility === 'movable' ? '' : '/hr'}</b>) },
-    { key: 'cpk_total', header: 'Total CPK / CPH', numeric: true, sortValue: (r) => r.cpk_total ?? -1, cell: (r) => (r.cpk_total == null ? <span className="cc-na" title="No measured km or hours">N/A</span> : `${fmtRate(r.cpk_total)}${r.mobility === 'movable' ? '' : '/hr'}`) },
+    { key: 'cpk_tyre', header: 'Tyre spend ratio / tyre cost per hour', numeric: true, sortValue: (r) => r.cpk_tyre ?? -1, cell: (r) => (r.cpk_tyre == null ? <span className="cc-na" title="No measured km or hours">N/A</span> : <b className="cpk-rate">{fmtRate(r.cpk_tyre)}{r.mobility === 'movable' ? '' : '/hr'}</b>) },
+    { key: 'cpk_total', header: 'Operating cost per hour', numeric: true, sortValue: (r) => r.cpk_total ?? -1, cell: (r) => (r.cpk_total == null ? <span className="cc-na" title={r.mobility === 'movable' ? TOTAL_PER_TYRE_KM_WITHHELD : 'No measured engine hours'}>N/A</span> : `${fmtRate(r.cpk_total)}/hr`) },
     { key: 'coverage', header: 'Coverage', numeric: true, sortValue: (r) => r.coverage ?? -1, cell: (r) => <MeterCell value={r.coverage} suffix="%" /> },
   ]
 
@@ -349,7 +392,7 @@ export default function CpkIntelligence() {
         <div className="cpk-head-copy">
           <nav className="cpk-crumb" aria-label="Breadcrumb">Tyre Management <ChevronRight size={13} aria-hidden="true" /> <span>Performance</span></nav>
           <h1>CPK Intelligence</h1>
-          <p>Cost per km for movable assets and cost per hour for non-movable assets, by country and period.</p>
+          <p>Tyre CPK over each tyre&apos;s own lifetime km, the period tyre spend ratio, and cost per engine hour for plant, by country and period.</p>
         </div>
         <div className="cpk-head-actions">
           <span className="cpk-range" title={periodLabel(bounds)}><CalendarDays size={15} aria-hidden="true" /> {bounds.from} to {bounds.to}</span>
@@ -416,22 +459,24 @@ export default function CpkIntelligence() {
       {tab === 'fleet' && (
         <div className="cpk-overview">
           <div className="cc-kpis cpk-kpis">
-            <Kpi icon={Gauge} tone="t-red" loading={kpiLoading}
-              display={fmtRate(kpis.cpkTyre.value)} label={`Fleet CPK, tyre (${currency} per km)`}
-              trend={kpis.cpkTyre.trend} goodWhenUp={false} title={trendTitle} />
+            <Kpi icon={Gauge} tone="t-red" loading={lifetime.loading}
+              display={lifetime.block?.cpkPurchase == null ? 'N/A' : Number(lifetime.block.cpkPurchase).toFixed(4)}
+              label={metricShort(CPK_METRIC.TYRE_CPK_LIFETIME, currency)}
+              title={`${metricDef(CPK_METRIC.TYRE_CPK_LIFETIME).definition} ${lifetime.block ? `${fmtInt(lifetime.block.measurable)} of ${fmtInt(lifetime.block.tyres)} tyres retired in this period have both a price and validated km.` : 'No tyre retired in this period has both a price and validated km.'}`} />
             <Kpi icon={Coins} tone="t-amber" loading={kpiLoading}
-              display={fmtRate(kpis.cpkTotal.value)} label={`Fleet CPK, total (${currency} per km)`}
-              trend={kpis.cpkTotal.trend} goodWhenUp={false} title={trendTitle} />
+              display={fmtRate(kpis.cpkTyre.value)} label={metricShort(CPK_METRIC.TYRE_SPEND_RATIO, currency)}
+              trend={kpis.cpkTyre.trend} goodWhenUp={false} title={`${TYRE_SPEND_RATIO_BASIS} ${trendTitle}`} />
             <Kpi icon={Milestone} tone="t-blue" loading={kpiLoading}
-              display={fmtCompact(kpis.distance.value)} label="Total km, matched distance"
+              display={fmtCompact(kpis.distance.value)} label="Lifetime tyre km of tyres taken off"
               trend={kpis.distance.trend} title={trendTitle} />
             <Kpi icon={ShieldCheck} tone="t-green" loading={kpiLoading}
               display={fmtPct(kpis.coverage.value)} label="Meter coverage of movable cost"
               trend={kpis.coverage.trend} title={`${trendTitle}. Change is in percentage points.`} />
             <Kpi icon={Clock} tone="t-purple" loading={kpiLoading}
-              display={fmtRate(kpis.cph.value)} label={`Non-movable CPH (${currency} per hour)`}
+              display={fmtRate(kpis.cph.value)} label={metricShort(CPK_METRIC.OPERATING_COST_PER_ENGINE_HOUR, currency)}
               trend={kpis.cph.trend} goodWhenUp={false} title={trendTitle} />
           </div>
+          <p className="cpk-note"><Info size={14} aria-hidden="true" /> {TYRE_SPEND_RATIO_BASIS} Tyre CPK (lifetime) divides each retired tyre&apos;s own price by its own km. Cost per vehicle km, with maintenance, is on Expenses and CPK.</p>
           {noFleet && (
             <div className="cc-card cpk-alert">
               <Info size={16} aria-hidden="true" />
@@ -440,12 +485,12 @@ export default function CpkIntelligence() {
           )}
 
           <div className="cpk-cards">
-            <Card title="Movable assets: cost per km" sub={`Total cost per km by asset type, ${currency}`}
+            <Card title="Movable assets: tyre spend ratio" sub={`Period tyre spend over lifetime tyre km, by asset type, ${currency}`}
               action={<ViewAll label="Per vehicle" onClick={() => setTab('vehicles')} />}>
-              <CardState state={fleetState} empty={!movableBars.bars.length ? 'No movable asset type has a measured distance in this period.' : null}>
+              <CardState state={fleetState} empty={!movableBars.bars.length ? 'No movable asset type has tyre km in this period.' : null}>
                 <div className="cpk-cols" role="list">
                   {movableBars.bars.map((b) => (
-                    <div key={b.key} className="cpk-col" role="listitem" title={`${b.label}: ${currency} ${fmtRate(b.value)} per km, ${fmtInt(Math.round(b.row.distance))} km`}>
+                    <div key={b.key} className="cpk-col" role="listitem" title={`${b.label}: ${currency} ${fmtRate(b.value)} per tyre km, ${fmtInt(Math.round(b.row.distance))} tyre km`}>
                       <span className="cpk-col-val">{fmtRate(b.value)}</span>
                       <span className="cpk-col-track"><span style={{ height: `${Math.max(4, b.share * 100)}%` }} /></span>
                       <span className="cpk-col-label">{b.label}</span>
@@ -461,7 +506,7 @@ export default function CpkIntelligence() {
               )}
             </Card>
 
-            <Card title="Non-movable: cost per hour" sub={`Total cost per engine hour, ${currency}`}
+            <Card title="Non-movable: operating cost per engine hour" sub={`Tyres, spares and oil per engine hour, ${currency}`}
               action={<ViewAll label="Units" onClick={() => setTab('units')} />}>
               <CardState state={fleetState} empty={!hourBars.bars.length ? 'No non-movable asset type has measured engine hours in this period.' : null}>
                 <div className="cpk-rows" role="list">
@@ -479,7 +524,7 @@ export default function CpkIntelligence() {
               )}
             </Card>
 
-            <Card title="Why CPK changed" sub={why.ok && why.windows?.previous ? `Against ${why.windows.previous.from} to ${why.windows.previous.to}` : 'Against the previous period of the same length'}
+            <Card title="Why the tyre spend ratio changed" sub={why.ok && why.windows?.previous ? `Against ${why.windows.previous.from} to ${why.windows.previous.to}` : 'Against the previous period of the same length'}
               action={<ViewAll label="Breakdown" onClick={() => setTab('drivers')} />}>
               <CardState state={{ ...ovDrivers, retry: loadOverviewDrivers }} empty={!why.ok || !why.steps.length ? 'No two comparable periods of tyre cost and distance yet, so there is no change to explain.' : null}>
                 <ul className="cpk-why">
@@ -496,7 +541,7 @@ export default function CpkIntelligence() {
                 {why.ok && (
                   <p className={`cpk-foot ${why.comparable ? '' : 'warn'}`}>
                     {why.comparable
-                      ? `Tyre CPK moved ${fmtSignedPct(why.totalPct)} overall. Red raised it, green lowered it.`
+                      ? `The tyre spend ratio moved ${fmtSignedPct(why.totalPct)} overall. Red raised it, green lowered it.`
                       : 'Coverage limited: the previous period measured too few assets, so treat these as indicative.'}
                   </p>
                 )}
@@ -537,9 +582,9 @@ export default function CpkIntelligence() {
               </div>
             )}>
             <ul className="cpk-lineage-list">
-              <li><b>Distance</b> is the sum of each tyre&apos;s total km from the uploaded tyre change data, matched to the month of the change.</li>
+              <li><b>Tyre km</b> is the sum of each tyre&apos;s whole measured life (single km rule), counted in the period the tyre was taken off. It is tyre km, not vehicle km.</li>
               <li><b>Hours</b> are engine-hour spans from the meter log per asset.</li>
-              <li><b>Cost</b> is tyre and maintenance spend per country in its own currency, never combined across countries.</li>
+              <li><b>Cost</b> is tyre and maintenance spend per country in its own currency, never combined across countries. Maintenance is never divided by tyre km.</li>
               {!loading && !error && lineageFacts(kpis).map((f) => <li key={f}>{f}</li>)}
             </ul>
             <p className="cpk-foot">A rate with no measured km or hours shows N/A rather than zero. Trace any figure on the KM source and Units tabs.</p>
@@ -568,7 +613,7 @@ export default function CpkIntelligence() {
                   rows={rows}
                   loading={loading}
                   searchKeys={['asset_no', 'vehicle_type']}
-                  initialSort={{ key: 'cpk_total', dir: 'desc' }}
+                  initialSort={{ key: mobility === 'non_movable' ? 'cpk_total' : 'cpk_tyre', dir: 'desc' }}
                   pageSize={25}
                   emptyText={`No ${meta.label.toLowerCase()} vehicles with cost or meter data for ${scopeLabel} in this period.`}
                 />
@@ -593,6 +638,12 @@ export default function CpkIntelligence() {
       {tab === 'lifetime' && (
         <Suspense fallback={<Loading />}>
           <LifetimeCpkPanel country={country} from={bounds.from} to={bounds.to} site={siteArg} />
+        </Suspense>
+      )}
+
+      {tab === 'failures' && (
+        <Suspense fallback={<Loading />}>
+          <TyreFailureCpkBoard embedded />
         </Suspense>
       )}
 

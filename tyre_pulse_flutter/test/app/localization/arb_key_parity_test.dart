@@ -634,14 +634,36 @@ void main() {
     // code field label, the verify button, the incomplete-code message, the
     // refused-code message and the could-not-check message
     // (mfaTitle ... mfaVerifyUnavailable). Sign out reuses actionSignOut.
-    // 2458 + 1 = 2459. The update-required screen on an iPhone with no store
+    // 2458 + 56 = 2514. Three surfaces that were still hard-coded English
+    // and showed raw exception text: the My work assignment lane's own
+    // sentences and action buttons (13: wfOfflineNote, wfPendingSync,
+    // wfSignInRequired, wfUpdated, wfSavedOffline, wfUpdateUnavailable,
+    // wfNotAccepted{action}, wfDismiss, wfActionAccept ... wfActionComplete),
+    // the assigned follow-up dialog opened from a notification (33:
+    // teamActionTitle ... teamActionUploadFailed, incl. the seven status
+    // labels and the validation / upload / failure sentences) and the team
+    // message dialog (10: teamMessageTitle ... teamMessageSend). Close,
+    // Cancel, Try again, "Details (required)" and "Evidence uploaded." reuse
+    // actionClose, wfDialogCancel, actionRetry, wfBlockNoteLabel and
+    // wfEvidenceUploaded.
+    // 2514 + 1 = 2515. Inventory counts and transfers: one packed catalog
+    // (inventoryCopyCatalog) for the blind count, My counts and transfer
+    // screens, read through InventoryCopy like stockCountCopyCatalog.
+    // 2515 + 8 + 1 = 2524. Cloudflare Turnstile CAPTCHA on sign-in and
+    // self-registration (+8): the check's accessibility label, its loading /
+    // prompt / solved / expired / load-failed / timed-out status lines and
+    // the localized refusal sentence (captchaSemanticLabel ...
+    // captchaRefused). Try again reuses actionRetry. loginCompanyCodeHelp
+    // (+1): the access-help dialog says how a member of another company
+    // signs in ("company code/username").
+    // 2524 + 1 = 2525. The update-required screen on an iPhone with no store
     // button (no App Store id configured): the sentence that tells the user
     // to update from the App Store (updateRequiredMessageAppStore). The
     // screen never points an iPhone at Google Play.
-    test('en, ar and ur each carry exactly 2459 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2459);
-      expect(_translatableKeys(ar).length, 2459);
-      expect(_translatableKeys(ur).length, 2459);
+    test('en, ar and ur each carry exactly 2525 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2525);
+      expect(_translatableKeys(ar).length, 2525);
+      expect(_translatableKeys(ur).length, 2525);
     });
   });
 

@@ -51,6 +51,7 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:tyre_pulse/app/config/app_config.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/telemetry/sentry_scrubber.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_reporter.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_sync_failure.dart';
 import 'package:tyre_pulse/core/telemetry/telemetry_user.dart';
@@ -161,6 +162,23 @@ final class TelemetryService implements TelemetryReporter {
       await SentryFlutter.init((SentryFlutterOptions options) {
         options.dsn = config.sentryDsn;
         options.environment = config.environment;
+        // Privacy settings are stated explicitly rather than trusted to SDK
+        // defaults, so a future SDK upgrade cannot silently switch one on.
+        // No user identity beyond the opaque id, no screenshots or view
+        // hierarchy (evidence photos are on screen), no session replay, and
+        // no console breadcrumbs (they can hold anything ever printed).
+        options.sendDefaultPii = false;
+        options.attachScreenshot = false;
+        // Experimental in sentry_flutter 9, but setting it off is the point:
+        // if the SDK ever flips the default, the hierarchy still stays off.
+        // ignore: experimental_member_use
+        options.attachViewHierarchy = false;
+        options.enablePrintBreadcrumbs = false;
+        options.replay.sessionSampleRate = 0;
+        options.replay.onErrorSampleRate = 0;
+        // Last-line text redaction for everything the SDK itself generates.
+        options.beforeSend = scrubEvent;
+        options.beforeBreadcrumb = scrubBreadcrumb;
       });
       _active = true;
     } on Object {

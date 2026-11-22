@@ -43,6 +43,22 @@ final class SupabaseCommandPusher extends SupabaseGateway
     String? expectedPriorStatus,
   }) {
     return guard(() async {
+      if (spec.operation == CommandOperation.rpc) {
+        final String? fn = spec.rpc;
+        if (fn == null) {
+          throw StateError(
+            'An RPC command needs CommandSpec.rpc (table: ${spec.table}).',
+          );
+        }
+        // The answer is handed back as a one-row list; SyncEngine reads it.
+        final Object? answer = await _client.rpc<Object?>(
+          fn,
+          params: <String, Object?>{'p_payload': payload},
+        );
+        return <Map<String, Object?>>[
+          if (answer is Map) Map<String, Object?>.from(answer),
+        ];
+      }
       if (spec.operation == CommandOperation.insert) {
         // A plain insert, never `.upsert()`. See `sync_engine.dart`'s
         // library comment for why: several of the idempotent tables use a

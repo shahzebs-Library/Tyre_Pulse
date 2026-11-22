@@ -2857,7 +2857,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص';
+      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص~myCounts=عمليات الجرد الخاصة بي~transfers=التحويلات';
 
   @override
   String get calendarCopyCatalog =>
@@ -4548,6 +4548,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get loginCreateAccount => 'إنشاء حساب';
+
+  @override
+  String get loginCompanyCodeHelp =>
+      'انضممت إلى شركة أخرى عبر دعوة؟ سجّل الدخول برمز الشركة ثم شرطة مائلة ثم اسم المستخدم، مثل ACME/ali.';
 
   @override
   String get accAssessmentLoadFailed => 'تعذر تحميل التقييم';
@@ -8502,4 +8506,221 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get mfaVerifyUnavailable =>
       'تعذّر التحقق من الرمز الآن. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get wfOfflineNote =>
+      'غير متصل: تُعرض المهام المحفوظة. تُحفظ تحديثاتك وتُرسل عند عودة الاتصال.';
+
+  @override
+  String get wfPendingSync => 'بانتظار المزامنة: سيُرسل عند اتصالك بالإنترنت.';
+
+  @override
+  String get wfSignInRequired => 'سجّل الدخول لتحديث المهام.';
+
+  @override
+  String get wfUpdated => 'تم التحديث.';
+
+  @override
+  String get wfSavedOffline =>
+      'حُفظ على هذا الجهاز. سيُرسل عند اتصالك بالإنترنت.';
+
+  @override
+  String get wfUpdateUnavailable => 'هذا التحديث غير متاح لهذه المهمة حاليًا.';
+
+  @override
+  String wfNotAccepted(String action) {
+    return 'لم يُقبل: $action';
+  }
+
+  @override
+  String get wfDismiss => 'تجاهل';
+
+  @override
+  String get wfActionAccept => 'قبول';
+
+  @override
+  String get wfActionStart => 'بدء';
+
+  @override
+  String get wfActionBlock => 'إيقاف';
+
+  @override
+  String get wfActionResume => 'استئناف';
+
+  @override
+  String get wfActionComplete => 'إكمال';
+
+  @override
+  String get teamActionTitle => 'متابعة مُسندة إليك';
+
+  @override
+  String get teamActionFallbackTitle => 'إجراء';
+
+  @override
+  String teamActionStatusDue(String status, String due) {
+    return 'الحالة: $status · الاستحقاق: $due';
+  }
+
+  @override
+  String get teamActionDueNotSet => 'غير محدد';
+
+  @override
+  String get teamActionBlockReason => 'سبب التعطّل';
+
+  @override
+  String get teamActionCompletionDetails => 'تفاصيل الإنجاز';
+
+  @override
+  String teamActionEvidenceCount(int count) {
+    return 'الأدلة ($count)';
+  }
+
+  @override
+  String get teamActionEvidenceFallback => 'دليل';
+
+  @override
+  String teamActionResolution(String text) {
+    return 'ما تم إنجازه: $text';
+  }
+
+  @override
+  String get teamActionUploading => 'جارٍ الرفع...';
+
+  @override
+  String get teamActionSelectPhoto => 'إضافة صورة';
+
+  @override
+  String get teamActionAttachFile => 'إرفاق PDF أو ملف';
+
+  @override
+  String get teamActionStartWork => 'بدء العمل';
+
+  @override
+  String get teamActionBlocked => 'متعطّل';
+
+  @override
+  String get teamActionStatusOpen => 'مفتوح';
+
+  @override
+  String get teamActionStatusAcknowledged => 'مقبول';
+
+  @override
+  String get teamActionStatusInProgress => 'قيد التنفيذ';
+
+  @override
+  String get teamActionStatusEscalated => 'مُصعَّد';
+
+  @override
+  String get teamActionStatusPendingApproval => 'بانتظار الاعتماد';
+
+  @override
+  String get teamActionStatusResolved => 'مكتمل';
+
+  @override
+  String get teamActionStatusDismissed => 'مُستبعد';
+
+  @override
+  String get teamActionSignIn => 'سجّل الدخول لعرض هذه المهمة.';
+
+  @override
+  String get teamActionNotYours => 'هذا الإجراء غير مُسند إلى حسابك.';
+
+  @override
+  String get teamActionBlockTooShort =>
+      'اكتب خمسة أحرف على الأقل توضّح سبب التعطّل.';
+
+  @override
+  String get teamActionResolutionTooShort =>
+      'صف العمل المنجز بعشرة أحرف على الأقل.';
+
+  @override
+  String get teamActionPhotoTooLarge =>
+      'يجب أن تكون الصورة أقل من 10 ميغابايت.';
+
+  @override
+  String get teamActionFileType =>
+      'يمكن إرفاق ملفات PDF أو JPG أو PNG أو WEBP فقط.';
+
+  @override
+  String get teamActionFileSize => 'يجب ألا يتجاوز الملف 10 ميغابايت.';
+
+  @override
+  String get teamActionPhotoUploaded => 'تم رفع الصورة.';
+
+  @override
+  String get teamActionOpenFailed => 'تعذّر فتح المرفق. حاول مرة أخرى.';
+
+  @override
+  String get teamActionLoadFailed =>
+      'تعذّر تحميل هذه المهمة. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get teamActionSaveFailed =>
+      'لم يُحفظ التغيير. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get teamActionUploadFailed =>
+      'تعذّر رفع الملف. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get teamMessageTitle => 'رسالة الفريق';
+
+  @override
+  String get teamMessageSignIn => 'سجّل الدخول لعرض هذه الرسالة.';
+
+  @override
+  String get teamMessageUnavailable => 'هذه الرسالة غير متاحة لهذا الحساب.';
+
+  @override
+  String get teamMessageLoadFailed => 'تعذّر تحميل هذه الرسالة. حاول مرة أخرى.';
+
+  @override
+  String get teamMessageActionFailed =>
+      'لم تتم العملية. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String get teamMessageAcknowledged => 'تم الإقرار بالاستلام';
+
+  @override
+  String get teamMessageAckRequired => 'الإقرار بالاستلام مطلوب';
+
+  @override
+  String get teamMessageAcknowledge => 'إقرار بالاستلام';
+
+  @override
+  String get teamMessageReplyLabel => 'الرد على الفريق';
+
+  @override
+  String get teamMessageSend => 'إرسال الرد';
+
+  @override
+  String get inventoryCopyCatalog =>
+      'myAuditsTitle=عمليات الجرد الخاصة بي~audit=جرد المخزون~noAudits=لا توجد عمليات جرد مسندة~noAuditsBody=لا توجد عملية جرد مسندة إليك حاليا.~draftsUnreadable=تعذرت قراءة عمليات الجرد المحفوظة على هذا الهاتف الآن. لم يتغير شيء. حاول مرة أخرى.~unsyncedLines=%n سطر جرد محفوظة على هذا الهاتف ولم ترسل بعد. اضغط للفتح.~pendingN=%n غير مرسلة~overdue=متأخر~due=الاستحقاق~notCounting=هذه العملية غير مفتوحة للجرد.~notProvisionedTitle=عمليات جرد المخزون غير مهيأة بعد~notProvisionedBody=لم يفعل الخادم جرد المخزون بعد. يجب على المسؤول إكمال إعداد المخزون.~loadFailed=تعذر التحميل.~countTitle=جرد أعمى~resumed=تم الاستئناف: %n سطر من جلستك السابقة.~noLocations=لا توجد مواقع في هذه العملية.~progress=المواقع المجرودة: %a من %b~linesDone=%n سطر مجرود~unexpectedN=%n غير متوقع~scanLocation=امسح ملصق الموقع أولا~scanItem=امسح صنفا أو رقما تسلسليا أو باركود~scanCamera=المسح بالكاميرا~locations=المواقع~atLocation=الجرد في~scanningSerialsOf=مسح الأرقام التسلسلية لـ~stopSerials=إيقاف~serialTracked=متتبع بالرقم التسلسلي~linesN=%n سطر~myLines=جردي هنا~noLinesHere=لم يجرد شيء في هذا الموقع بعد.~confirmedZero=صفر (مؤكد)~notCountedYet=لم يجرد بعد~unexpected=صنف غير متوقع~unexpectedHint=ليس في قائمة هذا الموقع. ستتم مراجعته.~photosN=%n صور~submitN=إرسال %n سطر مجرود~submitDone=تم إرسال %n سطر.~submitNothing=أكمل سطرا قبل الإرسال.~submitOffline=لا يوجد اتصال. جردك محفوظ على هذا الهاتف؛ أرسله مرة أخرى عند توفر الإشارة.~submitQueued=لا يوجد اتصال. سترسل %n من البنود المعدودة تلقائيا عند عودة الاتصال.~submitPartial=لم تقبل بعض السطور أو تعذر رفع صورها. راجع السطور المعلمة.~submitFailed=تعذر إرسال الجرد. لا يزال محفوظا على هذا الهاتف.~draftSaveFailed=تعذر على الهاتف حفظ الجرد الآن. لا تغلق التطبيق؛ حاول مرة أخرى.~serialCounted=تم جرد الرقم التسلسلي.~scan_locationSelected=تم اختيار الموقع.~scan_serialItemSelected=الآن امسح الرقم التسلسلي لكل وحدة.~scan_locationOutOfScope=هذا الموقع ليس ضمن هذه العملية.~scan_duplicateSerial=هذا الرقم التسلسلي مجرود بالفعل في هذه العملية.~scan_needsLocation=امسح ملصق الموقع قبل جرد الأصناف.~countedQty=الكمية المجرودة~confirmZero=لم يوجد شيء هنا~confirmZeroHint=ضع علامة فقط بعد التحقق: الخانة الفارغة ليست جردا بصفر.~serialOne=وحدة واحدة برقم تسلسلي.~condition=الحالة~condition_good=جيد~condition_damaged=تالف~condition_repairable=قابل للإصلاح~condition_quarantine=حجر~condition_scrap=خردة~remarks=ملاحظات (اختياري)~photo=صورة~addPhoto=إضافة صورة~photoFailed=تعذر التقاط الصورة.~removeLine=إزالة~saveLine=حفظ~enterQty=أدخل الكمية المجرودة أو ضع علامة لم يوجد شيء هنا.~invalidQty=لا يمكن أن تكون الكميات سالبة.~confirmZeroFirst=للصفر، ضع علامة لم يوجد شيء هنا.~state_draft=على الهاتف~state_submitted=مرسل~state_rejected=غير مقبول~status_draft=مسودة~status_scheduled=مجدول~status_assigned=مسند~status_in_progress=قيد التنفيذ~status_counting_completed=اكتمل الجرد~status_reconciliation=مطابقة~status_recount=إعادة جرد~status_investigation=تحقيق~status_approval=بانتظار الموافقة~status_adjustment_posted=تم ترحيل التسوية~status_closed=مغلق~status_cancelled=ملغى~status_rejected=مرفوض~status_unknown=الحالة غير مسجلة~type_full=جرد كامل~type_partial=جرد جزئي~type_cycle=جرد دوري~type_category=جرد فئة~type_high_value=جرد عالي القيمة~type_surprise=جرد مفاجئ~type_bin=جرد رف~type_tyre_serial=جرد أرقام الإطارات~type_vehicle_tyre=جرد إطارات المركبات~transfersTitle=تحويلات المخزون~transfer=تحويل~noTransfers=لا توجد تحويلات~noTransfersBody=لا توجد تحويلات مخزون مرئية لك.~tstatus_dispatched=مرسل~tstatus_in_transit=في الطريق~tstatus_partially_received=مستلم جزئيا~tstatus_completed=مكتمل~tstatus_cancelled=ملغى~tstatus_unknown=الحالة غير مسجلة~dispatchTitle=إرسال مخزون~scanFrom=امسح ملصق موقع المصدر~scanTo=امسح ملصق موقع الوجهة~from=من~to=إلى~items=الأصناف~noItemsScanned=لم يتم مسح أي صنف بعد.~needFrom=امسح الموقع الذي يخرج منه المخزون.~needTo=امسح الموقع الذي يذهب إليه المخزون.~sameLocation=يجب أن يكون المصدر والوجهة موقعين مختلفين.~needLines=أضف سطرا واحدا على الأقل.~dispatchSend=إرسال~dispatchDone=تم إرسال التحويل.~transferOffline=لا يوجد اتصال. لم يرسل شيء؛ حاول مرة أخرى عند توفر الإشارة.~transferFailed=تعذر حفظ التحويل.~receiveTitle=استلام تحويل~noLines=لا يحتوي هذا التحويل على سطور.~outstanding=متبقي للوصول~outstandingUnknown=الكمية المرسلة غير مسجلة~receiveSend=تأكيد الاستلام~receiveDone=تم تسجيل الاستلام.~manualSendNote=تبقى أعدادك على هذا الهاتف حتى يؤكدها الخادم. عند انقطاع الاتصال ترسل البنود المكتملة (مع صورها) تلقائيا عند عودة الاتصال. اضغط إرسال لإرسالها الآن.~finishCounting=إنهاء الجرد~finishNote=عند جرد كل المواقع وإرسالها، أنهِ الجرد حتى تتم مطابقته. لا يمكنك إضافة أعداد بعد ذلك.~finishUnsent=لا يزال %n من البنود على هذا الهاتف. أرسلها قبل إنهاء الجرد.~finishNotOpen=الجرد غير مفتوح في هذا التدقيق، لذا لا يمكن إنهاؤه.~finishOffline=لا يوجد اتصال. إنهاء الجرد يحتاج إلى إشارة؛ لم يتغير شيء.~finishConfirmTitle=إنهاء الجرد؟~finishConfirmBody=سينتقل التدقيق إلى المطابقة ولن يمكن إضافة أعداد أخرى. تأكد من جرد كل المواقع.~finishCancel=متابعة الجرد~finishDone=تم إنهاء الجرد. التدقيق جاهز للمطابقة.~finishFailed=تعذر إنهاء الجرد. حاول مرة أخرى.~pi_title=الجرد الفعلي~pi_entry=الجرد الفعلي~pi_pendingN=%n بانتظار الإرسال~pi_startLead=سجّل ما هو موجود على الرفوف. لا شيء هنا يغيّر المخزون الرسمي؛ يعتمد المدير الرصيد الافتتاحي لاحقاً.~pi_store=المستودع~pi_start=بدء الجرد الفعلي~pi_pickStore=اختر المستودع أولاً.~pi_scanHint=امسح ملصق الرف أو الباركود أو الرقم أو رقم OEM أو البديل~pi_scanned=الممسوح~pi_change=تغيير~pi_variantUnknown=المادة (النوع غير معروف)~pi_describe=لم يُعثر عليه؟ صف الصنف~pi_ref_description=الوصف~pi_ref_manufacturer=المصنّع~pi_ref_oem=رقم قطعة OEM~pi_ref_aftermarket=رقم القطعة البديلة~pi_ref_company_sku=رقم الشركة~pi_unidentifiedHint=لا يلزم سعر أو أمر شراء. الأصناف غير المعرّفة تحصل على مرجع مؤقت ولا تُصرف حتى تُراجع.~pi_qty=الكمية~pi_uom=الوحدة~pi_condition=الحالة~pi_ownership=الملكية~pi_locationHint=الرف أو الخانة~pi_remarks=ملاحظات~pi_photoRole=الصورة تُظهر~pi_takePhoto=التقاط صورة~pi_photosN=%n صور~pi_saveNext=حفظ والتالي~pi_leave=العودة إلى الجلسات~pi_ledgerRule=تبقى الأصناف المحفوظة على هذا الهاتف حتى تُرسل. لا يتغير المخزون الرسمي إلا بعد اعتماد الرصيد الافتتاحي من شخص آخر.~pi_noMatch=لا توجد مادة معتمدة مطابقة. صف الصنف واحفظه.~pi_searchOffline=غير متصل: صف الصنف وسيُرسل لاحقاً.~pi_qtyInvalid=أدخل كمية صفراً أو أكثر.~pi_savedLocal=تم الحفظ. جاهز للصنف التالي.~pi_saveFailed=تعذّر على الهاتف حفظ الصنف. لم يُفقد شيء؛ حاول مرة أخرى.~pi_cls_genuine=أصلي~pi_cls_oes=مورّد أصلي OES~pi_cls_aftermarket=بديل~pi_cls_unknown=غير موثّق~pi_cond_new=جديد~pi_cond_used=مستعمل~pi_cond_refurbished=مجدد~pi_cond_repairable=قابل للإصلاح~pi_cond_damaged=تالف~pi_cond_scrap=خردة~pi_cond_unknown=غير معروف~pi_own_owned=ملك الشركة~pi_own_consignment=أمانة~pi_own_supplier=ملك المورد~pi_own_customer=ملك العميل~pi_own_unknown=غير معروف~pi_role_item=الصنف~pi_role_label=الملصق~pi_role_location=الموقع~pi_role_packaging=التغليف~pi_role_damage=التلف~pi_role_other=أخرى~pi_attention=صنف يحتاج انتباهاً~pi_dismiss=تجاهل~pi_err_photo_missing=حُذف ملف صورة من الهاتف قبل إرساله. الصنف نفسه محفوظ؛ اختر تجاهل لقبول الصورة المفقودة.~pi_err_photo_read_failed=تعذّرت قراءة صورة الآن. تبقى على الهاتف وستُرسل لاحقاً.~pi_noStores=لم يُعدّ أي مستودع لك بعد. اطلب من المسؤول إضافة المستودع من الويب.~pi_scanStoreLabel=أو امسح ملصق المستودع أو الرف~pi_bin=الرف~pi_clearBin=إلغاء الرف~pi_binUnknown=لم يُعثر على هذا الملصق. اختر المستودع من القائمة.~pi_binOtherStore=هذا الرف يتبع مستودعاً آخر.~pi_binOffline=بدون اتصال: تم حفظ الرف وسيُتحقق منه عند الإرسال.';
+
+  @override
+  String get captchaSemanticLabel => 'التحقق الأمني';
+
+  @override
+  String get captchaLoading => 'جارٍ تحميل التحقق الأمني...';
+
+  @override
+  String get captchaPrompt => 'أكمل التحقق الأمني للمتابعة.';
+
+  @override
+  String get captchaSolved => 'اكتمل التحقق الأمني.';
+
+  @override
+  String get captchaExpired => 'انتهت صلاحية التحقق الأمني. حاول مرة أخرى.';
+
+  @override
+  String get captchaLoadFailed =>
+      'تعذر تحميل التحقق الأمني. تحقق من اتصالك وحاول مرة أخرى.';
+
+  @override
+  String get captchaTimedOut =>
+      'يستغرق التحقق الأمني وقتًا طويلًا. تحقق من اتصالك وحاول مرة أخرى.';
+
+  @override
+  String get captchaRefused =>
+      'لم يتم قبول التحقق الأمني. أكمله مرة أخرى ثم أعد المحاولة.';
 }

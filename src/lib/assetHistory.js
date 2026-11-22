@@ -47,10 +47,34 @@ import {
   workOrderMaintenanceAmount,
 } from './governedCost'
 import { jobCardDurations, jobCardStage } from './jobCard'
+import { acknowledgedText } from './closureWorkflow'
 
 /* ------------------------------------------------------------------ *
  * Identity - (country, asset_no), never asset_no alone                 *
  * ------------------------------------------------------------------ */
+
+/**
+ * Which company's machine a per-asset page is about. An asset code is unique
+ * per (company, country), not globally, and a super admin's read spans every
+ * company, so the register can hold the same code for two companies. Order:
+ * the caller's own company when it holds the code (in the viewed country);
+ * else the single company that does; else the caller's company (which then
+ * shows its own, possibly empty, history rather than another company's).
+ *
+ * @param {Array<object>} fleetRows  vehicle_fleet rows carrying organisation_id
+ * @param {string} country           the viewed country ('All' or blank = any)
+ * @param {string|null} callerOrg    app_current_org()
+ * @returns {string|null}
+ */
+export function assetCompany(fleetRows, country, callerOrg) {
+  const want = canonCountry(country).toUpperCase()
+  const here = (Array.isArray(fleetRows) ? fleetRows : []).filter((r) =>
+    !want || want === 'ALL' || canonCountry(r?.country).toUpperCase() === want)
+  const orgs = [...new Set(here.map((r) => r?.organisation_id).filter(Boolean))]
+  if (callerOrg && orgs.includes(callerOrg)) return callerOrg
+  if (orgs.length === 1) return orgs[0]
+  return callerOrg || null
+}
 
 /**
  * Canonical asset code: UPPER with ALL whitespace stripped.
@@ -583,7 +607,11 @@ function joinDistinct(list) {
 export function jobCardWorkAndQc(row, lineItemsByWo) {
   const cd = row?.custom_data && typeof row.custom_data === 'object' ? row.custom_data : null
   const no = text(row?.work_order_no)
-  const lines = (no && lineItemsByWo?.get(no.toUpperCase())) || []
+  // Keyed by company + number when the card carries its company (job card
+  // numbers are per company); lines that carry no company sit under the bare number.
+  const org = row?.organisation_id ? String(row.organisation_id) : ''
+  const lines = (no && ((org && lineItemsByWo?.get(`${org}::${no.toUpperCase()}`))
+    || lineItemsByWo?.get(no.toUpperCase()))) || []
   const embedded = Array.isArray(cd?.line_items) ? cd.line_items : []
   const workDone = customField(cd, 'Job Done Description', 'Work Done', 'Job Done')
     || joinDistinct(lines.map((l) => l?.action))
@@ -595,8 +623,9 @@ export function jobCardWorkAndQc(row, lineItemsByWo) {
 function jobCardEvents(rows, country, lineItems) {
   const byWo = new Map()
   for (const l of Array.isArray(lineItems) ? lineItems : []) {
-    const k = text(l?.work_order_no)?.toUpperCase()
-    if (!k) continue
+    const n = text(l?.work_order_no)?.toUpperCase()
+    if (!n) continue
+    const k = l?.organisation_id ? `${l.organisation_id}::${n}` : n
     if (!byWo.has(k)) byWo.set(k, [])
     byWo.get(k).push(l)
   }
@@ -756,7 +785,7 @@ function checklistEvents(rows) {
       at: r?.submitted_at || r?.created_at || null,
       title: text(r?.template_name) || text(r?.title) || 'Checklist sheet',
       detail: [
-        text(r?.approval_status),
+        acknowledgedText(r) || text(r?.approval_status),
         score != null ? `Score ${score}%` : null,
       ].filter(Boolean).join(' - ') || null,
       severity: r?.score_passed === false ? 'high' : 'info',
@@ -1303,11 +1332,20 @@ export function documentChain(workOrders, partsLines, lineItems) {
   const items = Array.isArray(lineItems) ? lineItems : []
 
   const key = (v) => canonAssetNo(v) // same normalisation: upper, no whitespace
+  // A job card number is unique per COMPANY (TEN-1b), not globally. A super
+  // admin's reads span companies, so two cards can share a number; each
+  // expense line / line item attaches only to the card of its own company.
+  const orgOf = (r) => (r?.organisation_id ? String(r.organisation_id) : '')
+  const cardKey = (org, no) => `${org}::${no}`
+  const byNumber = new Map() // number -> [company keys], to resolve rows with no company
   const byCard = new Map()
   for (const c of cards) {
     const no = key(c?.work_order_no)
     if (!no) continue
-    byCard.set(no, {
+    const ck = cardKey(orgOf(c), no)
+    if (!byNumber.has(no)) byNumber.set(no, [])
+    if (!byCard.has(ck)) byNumber.get(no).push(ck)
+    byCard.set(ck, {
       card: c,
       workOrderNo: text(c?.work_order_no),
       rfrNo: text(c?.rfr_no),
@@ -1321,10 +1359,20 @@ export function documentChain(workOrders, partsLines, lineItems) {
     })
   }
 
+  // The card a line belongs to: same company and number; a line that carries
+  // no company only attaches when exactly one card has that number.
+  const cardFor = (row) => {
+    const no = key(row?.work_order_no)
+    if (!no) return null
+    const org = orgOf(row)
+    if (org) return byCard.get(cardKey(org, no)) || null
+    const keys = byNumber.get(no) || []
+    return keys.length === 1 ? byCard.get(keys[0]) : null
+  }
+
   const orphanLines = []
   for (const l of lines) {
-    const no = key(l?.work_order_no)
-    const entry = no ? byCard.get(no) : null
+    const entry = cardFor(l)
     if (!entry) { orphanLines.push(l); continue }
     entry.lines.push(l)
     const issueNumber = text(l?.issue_number) || null
@@ -1346,8 +1394,7 @@ export function documentChain(workOrders, partsLines, lineItems) {
 
   const orphanItems = []
   for (const it of items) {
-    const no = key(it?.work_order_no)
-    const entry = no ? byCard.get(no) : null
+    const entry = cardFor(it)
     if (!entry) { orphanItems.push(it); continue }
     entry.items.push(it)
   }
@@ -1361,10 +1408,17 @@ export function documentChain(workOrders, partsLines, lineItems) {
   return { byCard, orphanLines, orphanItems }
 }
 
-/** The chain entry for one job card number, or null. */
-export function chainForCard(chain, workOrderNo) {
+/**
+ * The chain entry for one job card number, or null. Pass the card's company
+ * when known; without it, a number held by more than one company resolves to
+ * nothing rather than to an arbitrary company's card.
+ */
+export function chainForCard(chain, workOrderNo, org) {
   if (!chain || !chain.byCard) return null
-  return chain.byCard.get(canonAssetNo(workOrderNo)) || null
+  const no = canonAssetNo(workOrderNo)
+  if (org) return chain.byCard.get(`${org}::${no}`) || null
+  const hits = [...chain.byCard.entries()].filter(([k]) => k.endsWith(`::${no}`) && k.split('::').length === 2)
+  return hits.length === 1 ? hits[0][1] : null
 }
 
 /* ------------------------------------------------------------------ *

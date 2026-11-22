@@ -92,6 +92,53 @@ export function lineKind(description) {
   return 'other'
 }
 
+/**
+ * ENG-5 (audit case C24c). The expense grid has three buckets (tyre, spare,
+ * oil), so a tyre REPAIR, a RETREAD, a FITTING charge and a WARRANTY line all
+ * sit in the tyre bucket and were being read as tyre PURCHASE spend. The bucket
+ * and its total stay exactly as they are (rule T9); this names what each tyre
+ * bucket line is, so purchase spend can be reported on its own.
+ *   purchase  a tyre bought
+ *   repair    repair, puncture, patch, vulcanising, retread, remould
+ *   service   fitting, mounting, balancing, alignment (no tyre size on the line)
+ *   warranty  warranty or free of charge replacement
+ *   accessory tube, flap or valve filed in the tyre bucket
+ *   mixed     a tyre and a tube or flap on one line (must be split by a person)
+ *   other     in the tyre bucket with no tyre wording or size
+ * Same rule as lineKind (SQL mirror: tyre_cost_line_kind). No second classifier.
+ */
+export const TYRE_SPEND_KINDS = Object.freeze(['purchase', 'repair', 'service', 'warranty', 'accessory', 'mixed', 'other'])
+
+const SPEND_KIND_OF_LINE_KIND = Object.freeze({
+  tyre: 'purchase', repair: 'repair', service: 'service', warranty: 'warranty',
+  tube: 'accessory', flap: 'accessory', valve: 'accessory', mixed: 'mixed', other: 'other',
+})
+
+/** What a line in the tyre bucket is. See TYRE_SPEND_KINDS. */
+export function tyreSpendKind(description) {
+  return SPEND_KIND_OF_LINE_KIND[lineKind(description)] || 'other'
+}
+
+/**
+ * Split the tyre bucket into purchase and everything else. Each line is
+ * { description, amount } where amount is its tyre bucket amount. Returns the
+ * amount and line count per kind plus the unchanged bucket total, so
+ * `purchase.amount + nonPurchaseAmount === total` always.
+ */
+export function splitTyreSpend(lines = []) {
+  const out = Object.fromEntries(TYRE_SPEND_KINDS.map((k) => [k, { amount: 0, lines: 0 }]))
+  let total = 0
+  for (const l of Array.isArray(lines) ? lines : []) {
+    const amt = Number(l?.amount)
+    if (!Number.isFinite(amt) || amt === 0) continue
+    const k = tyreSpendKind(l?.description)
+    out[k].amount += amt
+    out[k].lines += 1
+    total += amt
+  }
+  return { ...out, total, nonPurchaseAmount: total - out.purchase.amount }
+}
+
 /** Financial bucket for a line kind. */
 export function costBucket(kind) {
   if (kind === 'tyre') return 'tyre'

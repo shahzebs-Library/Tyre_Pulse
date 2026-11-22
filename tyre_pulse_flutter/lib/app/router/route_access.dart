@@ -228,6 +228,9 @@ abstract final class TpRouteGuards {
     TpRouteId.tasks: ModuleGuarded(RouteModule.tasks),
     TpRouteId.rca: ModuleGuarded(RouteModule.rca),
     TpRouteId.stockCount: ModuleGuarded(RouteModule.stock),
+    TpRouteId.inventoryAudits: ModuleGuarded(RouteModule.stock),
+    TpRouteId.inventoryCount: ModuleGuarded(RouteModule.stock),
+    TpRouteId.inventoryTransfers: ModuleGuarded(RouteModule.stock),
 
     // Management.
     TpRouteId.overview: ModuleGuarded(RouteModule.overview),

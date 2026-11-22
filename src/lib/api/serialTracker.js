@@ -1,5 +1,6 @@
 ﻿import { supabase, applyCountry, fetchAllPages, unwrap, toServiceError } from './_client'
 import { escapeLike, sanitizeSearchTerm } from '../searchFilter'
+import { canonicalCode, parsePosition } from '../tyrePositions'
 export async function findSerialRecords(serial, { country, columns = '*' } = {}) {
   const key = String(serial || '').trim()
   if (!key) return []
@@ -18,14 +19,49 @@ export async function findSerialRecords(serial, { country, columns = '*' } = {})
  */
 const REGISTER_COLS = 'id, serial_no, brand, size, description, asset_no, vehicle_type, site, position, tyre_position, status, issue_date, fitment_date, removal_date, country'
 
-function applyRegisterFilters(q, { search, brand, size, status, site } = {}) {
+function applyRegisterFilters(q, { search, brand, size, status, site, position } = {}) {
   const s = sanitizeSearchTerm(search)
   if (s) q = q.or(`serial_no.ilike.%${s}%,asset_no.ilike.%${s}%`)
   if (brand) q = q.eq('brand', brand)
   if (size) q = q.eq('size', size)
   if (status) q = q.eq('status', status)
   if (site) q = q.eq('site', site)
+  if (position) {
+    // Old rows store the code padded (fixed-width), so match the code alone or
+    // followed by padding, in either position column. Codes are letters, digits
+    // and a dash only, so nothing needs escaping.
+    const c = String(position).replace(/[^A-Za-z0-9-]/g, '')
+    if (c) q = q.or(`tyre_position.ilike.${c},tyre_position.ilike.${c} %,position.ilike.${c},position.ilike.${c} %`)
+  }
   return q
+}
+
+/**
+ * Fill each row's fleet_site from the vehicle register when the tyre record has
+ * no site of its own (3,827 of 11,274 records). One narrow read per page, best
+ * effort: if it fails the rows simply show N/A with the reason.
+ */
+async function attachFleetSites(rows, country) {
+  const need = [...new Set(rows.filter((r) => !String(r.site || '').trim() && String(r.asset_no || '').trim()).map((r) => String(r.asset_no).trim()))]
+  if (!need.length) return rows
+  const res = await fetchAllPages((from, to) => applyCountry(
+    supabase.from('vehicle_fleet').select('id,asset_no,site,country').in('asset_no', need).order('id', { ascending: true }), country,
+  ).range(from, to), { max: 5000 })
+  const data = res.data
+  if (res.error || !data) return rows
+  const exact = new Map(); const byAsset = new Map()
+  for (const f of data) {
+    const site = String(f.site || '').trim(); if (!site) continue
+    const a = String(f.asset_no || '').trim()
+    exact.set(`${f.country || ''}|${a}`, site)
+    byAsset.set(a, byAsset.has(a) && byAsset.get(a) !== site ? null : site) // null = ambiguous across countries
+  }
+  return rows.map((r) => {
+    if (String(r.site || '').trim()) return r
+    const a = String(r.asset_no || '').trim()
+    const fleet_site = exact.get(`${r.country || ''}|${a}`) ?? byAsset.get(a) ?? null
+    return fleet_site ? { ...r, fleet_site } : r
+  })
 }
 
 /**
@@ -40,7 +76,7 @@ export async function listSerialRegister({ page = 0, pageSize = 10, country, ...
   q = applyRegisterFilters(q, filters)
   const { data, error, count } = await applyCountry(q, country)
   if (error) throw toServiceError(error, 'Could not load the serial register.')
-  return { rows: data || [], total: count ?? 0 }
+  return { rows: await attachFleetSites(data || [], country), total: count ?? 0 }
 }
 
 async function headCount(build, country) {
@@ -76,6 +112,21 @@ export async function listSizeOptions(country) {
   const set = new Set()
   for (const r of res.data || []) { const v = String(r.size || '').trim(); if (v) set.add(r.size) }
   return [...set].sort((a, b) => String(a).localeCompare(String(b)))
+}
+
+/** Distinct wheel positions (canonical codes) for the position filter, paged past the 1000-row cap. */
+export async function listPositionOptions(country) {
+  const res = await fetchAllPages((from, to) => applyCountry(
+    supabase.from('tyre_records').select('id,tyre_position').not('tyre_position', 'is', null).order('id', { ascending: true }),
+    country,
+  ).range(from, to), { max: 20000 })
+  if (res.error) throw toServiceError(res.error, 'Could not load wheel positions.')
+  const set = new Set()
+  for (const r of res.data || []) {
+    const raw = String(r.tyre_position || '').trim()
+    if (raw && parsePosition(raw)) set.add(canonicalCode(raw))
+  }
+  return [...set].sort((a, b) => a.localeCompare(b))
 }
 
 /* ── Tyre catalogue lookup (for the tread picture and the spec block) ───────

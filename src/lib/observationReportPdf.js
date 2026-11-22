@@ -62,7 +62,14 @@ async function vehicleDiagramData(svgEl) {
   } catch { return null }
 }
 
-export async function downloadObservationReport(inspection, findings = [], { svgEl = null, branding = null, company = '' } = {}) {
+export const observationReportFileName = (inspection) => 'Tyre Observation ' + filePart(inspection?.asset_no) + ' '
+  + filePart(String(inspection?.inspection_date || inspection?.completed_date || inspection?.created_at || '').slice(0, 10)) + ' ' + filePart(inspection?.id) + '.pdf'
+
+/**
+ * @param {boolean} [options.save=true] false returns the document without saving it (the PDF cache stores the bytes)
+ * @param {string[]} [options.warnings] filled with evidence that could not be embedded; nothing is drawn differently
+ */
+export async function downloadObservationReport(inspection, findings = [], { svgEl = null, branding = null, company = '', erpLinks = {}, erpUnreadable = false, save = true, warnings = null } = {}) {
   if (!inspection?.id) throw new Error('A saved inspection is required.')
   const allowed = applyExportPolicy(findings, 'Observation PDF ' + observationReportId(inspection))
   if (allowed.length !== findings.length) throw new Error('Export limit would omit inspection findings.')
@@ -173,6 +180,18 @@ export async function downloadObservationReport(inspection, findings = [], { svg
     }
     detail('Remarks', f.remarks || 'No remarks')
     detail('Action', f.actionRecord ? f.actionRecord.id + ' (' + f.actionRecord.status + ')' : 'No action linked')
+    if (f.actionRecord) {
+      if (erpUnreadable && Array.isArray(warnings) && !warnings.includes('erp_unreadable')) warnings.push('erp_unreadable')
+      const erp = erpLinks[f.actionRecord.id]
+      detail('ERP Job Card', erpUnreadable ? 'Evidence lookup unavailable at export time'
+        : erp?.source_job_card || 'Not confirmed')
+      if (erp) {
+        detail('ERP Reviewed', erp.reviewed_at || 'Not recorded')
+        detail('Reviewer', erp.reviewed_by || 'Not recorded')
+        detail('Evidence Snapshot', erp.work_order_snapshot?.status || 'No ERP work status recorded')
+        detail('Review Decision', erp.decision_note || 'No decision note recorded')
+      }
+    }
     y += 6
   }
   // As in the inspection PDF, photographs are grouped AFTER detailed readings.
@@ -196,6 +215,7 @@ export async function downloadObservationReport(inspection, findings = [], { svg
       } else {
         ensure(12)
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...P.ghost)
+        if (f.photo && Array.isArray(warnings)) warnings.push('photo_unavailable')
         doc.text(f.photo ? 'Stored photo unavailable for PDF export.' : 'No photo recorded for this tyre.', mx + 3, y + 4)
         y += 12
       }
@@ -210,5 +230,6 @@ export async function downloadObservationReport(inspection, findings = [], { svg
     doc.text('Observation ' + ref.slice(0, 24) + ' | Template v1.0 | ' + generated, mx, ph - 7)
     doc.text('Page ' + i + ' of ' + totalPages, pw - mx, ph - 7, { align: 'right' })
   }
-  doc.save('Tyre Observation ' + filePart(inspection.asset_no) + ' ' + filePart(day) + ' ' + filePart(inspection.id) + '.pdf')
+  if (save !== false) doc.save(observationReportFileName(inspection))
+  return doc
 }

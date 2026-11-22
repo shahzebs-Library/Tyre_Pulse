@@ -25,7 +25,8 @@ import {
   GitBranch, Star, Loader2, Flag, Pencil, Trash2, ArrowRight, Info,
 } from 'lucide-react'
 import * as recallsApi from '../lib/api/recalls'
-import { useSettings } from '../contexts/SettingsContext'
+import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
+import { recallCountryChoices, resolveRecallCountry, normaliseRecallCountry, recallHasNoWritableCountry } from '../lib/recallCountry'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { resolvePdfBrand, pdfHeader, pdfFooter, pdfEmptyState, pdfTableTheme, reportFileName } from '../lib/exportUtils'
@@ -166,7 +167,12 @@ const EMPTY_FORM = {
 export default function RecallTracker() {
   const navigate = useNavigate()
   const { profile, isSuperAdmin } = useAuth()
-  const { appSettings } = useSettings()
+  const { appSettings, activeCountry, allowedContext } = useSettings()
+  const countryChoices = useMemo(() => recallCountryChoices(allowedContext, COUNTRIES, profile), [allowedContext, profile])
+  // A non-super account with no country can only write country-less rows; say so instead of a 403.
+  const noWritableCountry = recallHasNoWritableCountry(profile)
+  // The country a new recall starts with: the active country, or the only one the user has. Empty on the All view.
+  const defaultCountry = resolveRecallCountry({ activeCountry, choices: countryChoices }).country ?? ''
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
   const isAdmin = profile?.role === 'Admin' || isSuperAdmin === true
@@ -204,7 +210,8 @@ export default function RecallTracker() {
     setRecallsLoading(true)
     try {
       setRecallsError('')
-      const data = await recallsApi.listRecalls()
+      // The register follows the working-context country (null-safe, like every other register).
+      const data = await recallsApi.listRecalls({ country: activeCountry })
       setRecalls(data ?? [])
     } catch (e) {
       setRecallsError(toUserMessage(e, 'Could not load recall records. Please retry.'))
@@ -212,13 +219,13 @@ export default function RecallTracker() {
     } finally {
       setRecallsLoading(false)
     }
-  }, [])
+  }, [activeCountry])
 
   const loadTyres = useCallback(async () => {
     setLoading(true)
     setTyresError('')
     try {
-      const res = await recallsApi.listRecallTyres()
+      const res = await recallsApi.listRecallTyres({ country: activeCountry })
       if (res?.error) throw res.error
       setTyres(res?.data ?? [])
       setTyresTruncated(Boolean(res?.truncated))
@@ -230,7 +237,7 @@ export default function RecallTracker() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeCountry])
 
   useEffect(() => { loadRecalls() }, [loadRecalls])
   useEffect(() => { loadTyres() }, [loadTyres])
@@ -391,7 +398,7 @@ export default function RecallTracker() {
 
   // ── Form helpers ──────────────────────────────────────────────────────────
   function openAdd() {
-    setForm(EMPTY_FORM)
+    setForm({ ...EMPTY_FORM, country: defaultCountry })
     setSizeInput('')
     setFormError('')
     setEditRecall(null)
@@ -399,7 +406,7 @@ export default function RecallTracker() {
   }
 
   function openEdit(r) {
-    setForm({ ...EMPTY_FORM, ...r, affected_sizes: r.affected_sizes ?? [], affected_serial_prefix: r.affected_serial_prefix ?? '', description: r.description ?? '', action_required: r.action_required ?? '' })
+    setForm({ ...EMPTY_FORM, ...r, country: normaliseRecallCountry(r.country) ?? defaultCountry, affected_sizes: r.affected_sizes ?? [], affected_serial_prefix: r.affected_serial_prefix ?? '', description: r.description ?? '', action_required: r.action_required ?? '' })
     setSizeInput('')
     setFormError('')
     setEditRecall(r.id)
@@ -427,6 +434,12 @@ export default function RecallTracker() {
     if (!form.issue_date) { setFormError('Issue date required'); return }
     if (form.affected_sizes.length === 0) { setFormError('At least one affected size required'); return }
 
+    if (noWritableCountry) { setFormError('Your account has no country assigned. Ask an administrator to set your country before filing a recall.'); return }
+    // recalls.country holds ONE country. Never the profile's country list.
+    const { country: recallCountry, needsChoice, outOfScope } = resolveRecallCountry({ formCountry: form.country, choices: countryChoices })
+    if (outOfScope) { setFormError(`This recall is filed under ${outOfScope}, which you cannot save under. Choose one of your own countries to move it, or ask an administrator.`); return }
+    if (needsChoice) { setFormError('Choose the country this recall applies to'); return }
+
     setSaving(true)
     setFormError('')
     try {
@@ -441,7 +454,7 @@ export default function RecallTracker() {
         action_required: form.action_required || null,
         source: form.source || 'Manufacturer',
         status: form.status || 'Active',
-        country: form.country || profile?.country || null,
+        country: recallCountry,
         closed_at: form.status === 'Closed' ? new Date().toISOString() : null,
       }
       if (editRecall) {
@@ -454,6 +467,8 @@ export default function RecallTracker() {
     } catch (e) {
       // 23505 = unique_violation on (recall_number, country)
       if (e?.code === '23505') { setFormError('Recall number already exists'); setSaving(false); return }
+      // 42501 = refused by the country write rule: name the field instead of a bare permission error.
+      if (e?.code === '42501') { setFormError(`You cannot save a recall for ${recallCountry}. Choose one of your own countries.`); setSaving(false); return }
       setFormError(toUserMessage(e, 'Could not save the recall. Please retry.'))
     } finally {
       setSaving(false)
@@ -824,6 +839,7 @@ export default function RecallTracker() {
             onClick={() => {
               setForm({
                 ...EMPTY_FORM,
+                country: defaultCountry,
                 brand: b.brand,
                 affected_serial_prefix: b.prefix,
                 severity: b.rate >= 60 ? 'Critical' : 'High',
@@ -843,7 +859,7 @@ export default function RecallTracker() {
         )
       },
     },
-  ], [isAdmin])
+  ], [isAdmin, defaultCountry])
 
   // ── Render ────────────────────────────────────────────────────────────────
   const activeRecalls = useMemo(() => recalls.filter(r => r.status === 'Active'), [recalls])
@@ -1329,6 +1345,17 @@ export default function RecallTracker() {
                   onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))}
                   className={inputCls}
                 />
+              </div>
+              <div>
+                <label htmlFor="rc-country" className="block text-xs text-[var(--text-muted)] mb-1">Country *</label>
+                <select id="rc-country" value={form.country ?? ''} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} className={inputCls}>
+                  <option value="">Choose a country</option>
+                  {/* A recall filed under a country this user cannot save under still shows it, instead of a blank select. */}
+                  {form.country && !countryChoices.some(c => c.toLowerCase() === String(form.country).toLowerCase()) && (
+                    <option value={form.country} disabled>{form.country} (not one of your countries)</option>
+                  )}
+                  {countryChoices.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
               <div>
                 <label htmlFor="rc-sev" className="block text-xs text-[var(--text-muted)] mb-1">Severity</label>

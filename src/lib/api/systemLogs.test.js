@@ -7,6 +7,8 @@ const h = vi.hoisted(() => {
     tableResult: { data: [], error: null, count: 0 },
     resultByTable: {},
     rpc: { data: null, error: null },
+    rpcByName: {},
+    rpcCalls: [],
     user: { data: { user: { id: 'u-1' } }, error: null },
     calls: [],
     lastRpc: null,
@@ -32,7 +34,11 @@ const h = vi.hoisted(() => {
     return builder
   }
   function from(table) { return makeBuilder(table) }
-  function rpc(name, args) { state.lastRpc = { name, args }; return Promise.resolve(state.rpc) }
+  function rpc(name, args) {
+    state.lastRpc = { name, args }
+    state.rpcCalls.push({ name, args })
+    return Promise.resolve(state.rpcByName[name] || state.rpc)
+  }
   const auth = { getUser() { return Promise.resolve(state.user) } }
   return { state, supabase: { from, rpc, auth } }
 })
@@ -45,6 +51,8 @@ beforeEach(() => {
   h.state.tableResult = { data: [], error: null, count: 0 }
   h.state.resultByTable = {}
   h.state.rpc = { data: null, error: null }
+  h.state.rpcByName = {}
+  h.state.rpcCalls = []
   h.state.user = { data: { user: { id: 'u-1' } }, error: null }
   h.state.calls = []
   h.state.lastRpc = null
@@ -53,70 +61,95 @@ beforeEach(() => {
 
 const opCalls = (op) => h.state.calls.filter((c) => c[0] === op)
 
+const MISSING_RPC = { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }
+
 describe('systemLogs.listSystemLogs', () => {
-  it('applies severity / module / resolved / since eq+gte filters', async () => {
-    const rows = [{ id: 'l1', severity: 'error', module_id: 'accidents', resolved: false }]
-    h.state.tableResult = { data: rows, error: null }
+  it('reads logs with their Error Center status through the status RPC', async () => {
+    const rows = [{ id: 'l1', severity: 'error', group_status: 'resolved', is_open: false }]
+    h.state.rpcByName.list_system_logs_with_status = { data: rows, error: null }
     const out = await svc.listSystemLogs({
-      severity: 'error', module: 'accidents', resolved: false, since: '2026-07-01T00:00:00Z', limit: 50,
+      severity: 'error', module: 'accidents', status: 'closed', since: '2026-07-01T00:00:00Z', limit: 50,
     })
     expect(out).toEqual(rows)
-    const eqs = opCalls('eq').map((c) => [c[2], c[3]])
-    expect(eqs).toContainEqual(['severity', 'error'])
-    expect(eqs).toContainEqual(['module_id', 'accidents'])
-    expect(eqs).toContainEqual(['resolved', false])
-    const gtes = opCalls('gte').map((c) => [c[2], c[3]])
-    expect(gtes).toContainEqual(['created_at', '2026-07-01T00:00:00Z'])
-    expect(opCalls('limit')[0][2]).toBe(50)
+    expect(h.state.lastRpc).toEqual({
+      name: 'list_system_logs_with_status',
+      args: { p_severity: 'error', p_module: 'accidents', p_status: 'closed', p_since: '2026-07-01T00:00:00Z', p_limit: 50 },
+    })
+    // never filters on the immutable system_logs.resolved column
+    expect(opCalls('eq').map((c) => c[2])).not.toContain('resolved')
   })
 
-  it('does not add a resolved filter when the flag is omitted', async () => {
-    await svc.listSystemLogs({ severity: 'critical' })
-    const eqCols = opCalls('eq').map((c) => c[2])
-    expect(eqCols).toContain('severity')
-    expect(eqCols).not.toContain('resolved')
+  it('maps the legacy resolved flag onto open / closed', async () => {
+    h.state.rpcByName.list_system_logs_with_status = { data: [], error: null }
+    await svc.listSystemLogs({ resolved: false })
+    expect(h.state.lastRpc.args.p_status).toBe('open')
+    await svc.listSystemLogs({ resolved: true })
+    expect(h.state.lastRpc.args.p_status).toBe('closed')
+    await svc.listSystemLogs({})
+    expect(h.state.lastRpc.args.p_status).toBeNull()
+  })
+
+  it('falls back to the table, all open, when the status RPC is not deployed', async () => {
+    h.state.rpcByName.list_system_logs_with_status = MISSING_RPC
+    h.state.tableResult = { data: [{ id: 'l1', severity: 'error', resolved: false }], error: null }
+    const out = await svc.listSystemLogs({ severity: 'error' })
+    expect(out).toEqual([{ id: 'l1', severity: 'error', resolved: false, group_status: null, is_open: true }])
+    expect(opCalls('eq').map((c) => c[2])).not.toContain('resolved')
+    expect(await svc.listSystemLogs({ status: 'closed' })).toEqual([])
   })
 
   it('degrades to [] on a missing relation', async () => {
-    h.state.tableResult = { data: null, error: { message: 'relation "system_logs" does not exist', code: '42P01' } }
+    h.state.rpcByName.list_system_logs_with_status = { data: null, error: { message: 'relation "system_logs" does not exist', code: '42P01' } }
     expect(await svc.listSystemLogs()).toEqual([])
   })
 })
 
 describe('systemLogs.resolveSystemLog', () => {
-  it('stamps resolved/resolved_at/resolved_by and returns the row', async () => {
-    const row = { id: 'l9', resolved: true }
-    h.state.tableResult = { data: row, error: null }
-    const out = await svc.resolveSystemLog('l9')
-    expect(out).toEqual(row)
-    const update = opCalls('update')[0][2]
-    expect(update.resolved).toBe(true)
-    expect(update.resolved_by).toBe('u-1')
-    expect(typeof update.resolved_at).toBe('string')
-    expect(opCalls('eq')).toContainEqual(['eq', 'system_logs', 'id', 'l9'])
+  it('resolves the group behind the log with a reason and never updates system_logs', async () => {
+    h.state.rpcByName.resolve_system_log_groups = { data: { ok: true, resolved: 1 }, error: null }
+    const out = await svc.resolveSystemLog('l9', '  Fixed in release 2026-11-16  ')
+    expect(out).toEqual({ ok: true, resolved: 1 })
+    expect(h.state.lastRpc).toEqual({
+      name: 'resolve_system_log_groups',
+      args: { p_log_ids: ['l9'], p_module: null, p_severity: null, p_reason: 'Fixed in release 2026-11-16' },
+    })
+    expect(opCalls('update')).toHaveLength(0)
   })
 
-  it('falls back to null resolved_by when no auth user', async () => {
-    h.state.user = { data: { user: null }, error: null }
-    h.state.tableResult = { data: { id: 'l9' }, error: null }
-    await svc.resolveSystemLog('l9')
-    expect(opCalls('update')[0][2].resolved_by).toBeNull()
+  it('refuses without a reason, before calling the server', async () => {
+    await expect(svc.resolveSystemLog('l9', '')).rejects.toThrow(/reason/i)
+    await expect(svc.resolveSystemLog('l9', 'ok')).rejects.toThrow(/reason/i)
+    expect(h.state.rpcCalls).toHaveLength(0)
+  })
+
+  it('surfaces a permission refusal instead of pretending it worked', async () => {
+    h.state.rpcByName.resolve_system_log_groups = { data: null, error: { code: '42501', message: 'Only a super admin can resolve errors' } }
+    await expect(svc.resolveSystemLog('l9', 'valid reason')).rejects.toThrow()
   })
 })
 
 describe('systemLogs.resolveAllSystemLogs', () => {
-  it('calls resolve_system_logs with p_module/p_severity and returns the count', async () => {
-    h.state.rpc = { data: 4, error: null }
-    const count = await svc.resolveAllSystemLogs({ module: 'ai', severity: 'error' })
-    expect(h.state.lastRpc.name).toBe('resolve_system_logs')
-    expect(h.state.lastRpc.args).toEqual({ p_module: 'ai', p_severity: 'error' })
+  it('resolves matching open groups with a reason and returns the count', async () => {
+    h.state.rpcByName.resolve_system_log_groups = { data: { ok: true, resolved: 4 }, error: null }
+    const count = await svc.resolveAllSystemLogs({ module: 'ai', severity: 'error', reason: 'Known outage, closed' })
+    expect(h.state.lastRpc).toEqual({
+      name: 'resolve_system_log_groups',
+      args: { p_log_ids: null, p_module: 'ai', p_severity: 'error', p_reason: 'Known outage, closed' },
+    })
     expect(count).toBe(4)
   })
 
-  it('passes nulls when unscoped', async () => {
-    h.state.rpc = { data: 0, error: null }
-    await svc.resolveAllSystemLogs()
-    expect(h.state.lastRpc.args).toEqual({ p_module: null, p_severity: null })
+  it('requires a reason', async () => {
+    await expect(svc.resolveAllSystemLogs()).rejects.toThrow(/reason/i)
+    expect(h.state.rpcCalls).toHaveLength(0)
+  })
+
+  it('falls back to the old RPC when the new one is not deployed', async () => {
+    h.state.rpcByName.resolve_system_log_groups = MISSING_RPC
+    h.state.rpcByName.resolve_system_logs = { data: 2, error: null }
+    const count = await svc.resolveAllSystemLogs({ reason: 'cleanup after release' })
+    expect(h.state.lastRpc).toEqual({ name: 'resolve_system_logs', args: { p_module: null, p_severity: null } })
+    expect(count).toBe(2)
   })
 })
 
@@ -207,6 +240,21 @@ describe('systemLogs.getHealthMetrics', () => {
     expect(m.ai.total).toBe(9)
     expect(m.reports.total).toBe(5)
     expect(m.logsByDay).toEqual([{ day: '2026-07-16', count: 2 }])
+  })
+
+  it('counts open problems by Error Center status, not by the immutable log flag', async () => {
+    h.state.rpcByName.system_log_open_counts = { data: { critical: 1, error: 4, warning: 2 }, error: null }
+    const m = await svc.getHealthMetrics()
+    expect(m.errors).toEqual({ unresolvedCritical: 1, unresolvedError: 4, total: 7 })
+    const resolvedFilters = opCalls('eq').filter((c) => c[1] === 'system_logs' && c[2] === 'resolved')
+    expect(resolvedFilters).toHaveLength(0)
+  })
+
+  it('a fully triaged log reads zero open, never the raw row count', async () => {
+    h.state.rpcByName.system_log_open_counts = { data: {}, error: null }
+    h.state.resultByTable = { system_logs: { data: [], error: null, count: 105 } }
+    const m = await svc.getHealthMetrics()
+    expect(m.errors).toEqual({ unresolvedCritical: 0, unresolvedError: 0, total: 0 })
   })
 
   it('survives a missing table: shape with nulls/0s', async () => {

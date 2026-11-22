@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import {
-  DEFAULT_DOWNTIME_RATE, SHIFT_HOURS, TARGET_AVAILABILITY, RISK_LEVELS, PERIOD_PRESETS, CAUSES,
+  SHIFT_HOURS, TARGET_AVAILABILITY, RISK_LEVELS, PERIOD_PRESETS, CAUSES,
   presetStart, actualHoursByAsset, filterEvents, filterWorkOrders, downtimeKpis, availabilityTrend,
   siteBreakdown, causeBreakdown, monthlyCost, vehicleRows, heatmap, recommendations,
   eventExportRows, EVENT_EXPORT_KEYS, EVENT_EXPORT_HEADERS,
@@ -129,12 +129,15 @@ export default function DowntimeTracker() {
   const { t } = useLanguage()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
 
-  // Cost/hour assumption - overridable via the `downtime_rate` setting key.
+  // Hourly downtime rate from the `downtime_rate` setting key, in the page
+  // currency. There is NO default (ENG-7): a flat 850 with no currency used to
+  // be applied to SAR, AED and EGP alike. With no rate set, cost reads N/A.
   const downtimeRate = useMemo(() => {
     const v = Number(appSettings?.downtime_rate)
-    return Number.isFinite(v) && v > 0 ? v : DEFAULT_DOWNTIME_RATE
+    return Number.isFinite(v) && v > 0 ? v : null
   }, [appSettings])
-  const rateIsCustom = downtimeRate !== DEFAULT_DOWNTIME_RATE
+  const rateIsCustom = downtimeRate != null
+  const rateText = rateIsCustom ? `${activeCurrency || ''} ${downtimeRate.toLocaleString()}`.trim() : 'N/A'
 
   const [tyreRecords, setTyreRecords] = useState([])
   const [tyreTruncated, setTyreTruncated] = useState(false)
@@ -184,7 +187,7 @@ export default function DowntimeTracker() {
       const { data: tyreData, error: tyreErr, truncated: tyreTrunc } = await fetchAllPages((from, to) => {
         let q = supabase
           .from('tyre_records')
-          .select('id,asset_no,serial_number:serial_no,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,position,reason_for_removal')
+          .select('id,asset_no,serial_number:serial_no,risk_level,issue_date,km_at_fitment,km_at_removal,cost_per_tyre,site,country,brand,position,removal_reason')
           .order('issue_date', { ascending: false })
         if (activeCountry !== 'All') q = q.eq('country', activeCountry)
         return q.range(from, to)
@@ -245,7 +248,8 @@ export default function DowntimeTracker() {
     [tyreRecords, cutoff, siteFilter, countryFilter, riskFilter, causeFilter, assetSearch],
   )
   const filteredWO = useMemo(() => filterWorkOrders(workOrders, { cutoff, site: siteFilter }), [workOrders, cutoff, siteFilter])
-  const actualByAsset = useMemo(() => actualHoursByAsset(filteredWO), [filteredWO])
+  // Only job cards with two plausible timestamps measure downtime (ENG-7).
+  const actualByAsset = useMemo(() => actualHoursByAsset(filteredWO, { now }), [filteredWO, now])
   const usingActual = actualByAsset.size > 0
   const sites = useMemo(() => [...new Set(tyreRecords.map((r) => r.site).filter(Boolean))].sort(), [tyreRecords])
   const countries = useMemo(() => [...new Set(tyreRecords.map((r) => r.country).filter(Boolean))].sort(), [tyreRecords])
@@ -370,7 +374,7 @@ export default function DowntimeTracker() {
     { id: 'site', header: t('downtime.table.columns.site'), accessorFn: (v) => v.site, size: 120 },
     { id: 'events', header: t('downtime.table.columns.events'), accessorFn: (v) => v.eventCount, size: 90, meta: { align: 'right' }, cell: ({ row }) => <span className={`font-bold tabular-nums ${row.original.eventCount >= 5 ? 'text-red-400' : row.original.eventCount >= 3 ? 'text-orange-400' : 'text-[var(--text-secondary)]'}`}>{row.original.eventCount}</span> },
     { id: 'hours', header: t('downtime.table.columns.totalHours'), accessorFn: (v) => v.totalHours, size: 110, meta: { align: 'right', exportValue: (v) => +v.totalHours.toFixed(1) }, cell: ({ row }) => <span className="tabular-nums">{row.original.totalHours.toFixed(1)} h</span> },
-    { id: 'cost', header: t('downtime.table.columns.totalCost'), accessorFn: (v) => v.totalCost, size: 120, meta: { align: 'right', exportValue: (v) => Math.round(v.totalCost) }, cell: ({ row }) => <span className="tabular-nums">{fmtCurrency(row.original.totalCost, sym)}</span> },
+    { id: 'cost', header: t('downtime.table.columns.totalCost'), accessorFn: (v) => v.totalCost, size: 120, meta: { align: 'right', exportValue: (v) => (v.totalCost == null ? 'N/A' : Math.round(v.totalCost)) }, cell: ({ row }) => <span className="tabular-nums">{fmtCurrency(row.original.totalCost, sym)}</span> },
     { id: 'between', header: t('downtime.table.columns.avgBetweenEvents'), accessorFn: (v) => (v.avgBetween == null ? -1 : v.avgBetween), size: 140, meta: { align: 'right', exportValue: (v) => (v.avgBetween == null ? 'N/A' : Math.round(v.avgBetween)) }, cell: ({ row }) => (row.original.avgBetween == null ? 'N/A' : `${row.original.avgBetween.toFixed(0)} days`) },
     {
       id: 'risk', header: t('downtime.table.columns.riskScore'), accessorFn: (v) => v.riskScore, size: 110, meta: { align: 'right' },
@@ -391,7 +395,7 @@ export default function DowntimeTracker() {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const brand = await resolvePdfBrand(branding)
       const periodText = period === 'All' ? 'All time' : period
-      pdfHeader(doc, 'Fleet Downtime and Availability Report', `Period: ${periodText}. ${usingActual ? 'Actual and estimated' : 'Estimated'} data`, company, brand)
+      pdfHeader(doc, 'Fleet Downtime and Availability Report', `Period: ${periodText}. ${usingActual ? 'Measured and assumed figures, shown separately' : 'Assumed figures only, nothing measured'}`, company, brand)
 
       if (vehicles.length === 0) {
         pdfEmptyState(doc, 'No vehicle downtime data for the selected period')
@@ -409,10 +413,12 @@ export default function DowntimeTracker() {
       doc.setTextColor(40, 40, 40)
       doc.setFontSize(9)
       const kpiText = [
-        `Fleet Availability: ${kpis.availability != null ? kpis.availability.toFixed(2) + '%' : 'N/A'}`,
-        `Downtime Events: ${kpis.totalEvents.toLocaleString()} (${kpis.uniqueVehicles} vehicles)`,
-        `Downtime Hours: ${kpis.totalHours.toFixed(1)} h`,
-        `Downtime Cost: ${sym} ${Math.round(kpis.totalCost).toLocaleString()}`,
+        `Fleet Availability (measured): ${kpis.availability != null ? kpis.availability.toFixed(2) + '%' : 'N/A'}`,
+        `Tyre Events: ${kpis.totalEvents.toLocaleString()} (${kpis.uniqueVehicles} vehicles)`,
+        `Downtime Hours (measured): ${kpis.totalHours != null ? kpis.totalHours.toFixed(1) + ' h' : 'N/A'}`,
+        `Downtime Cost (measured hours): ${kpis.totalCost != null ? `${sym} ${Math.round(kpis.totalCost).toLocaleString()}` : 'N/A'}`,
+        `Assumed model: ${kpis.modelledHours.toFixed(1)} h, availability ${kpis.availabilityAssumed != null ? kpis.availabilityAssumed.toFixed(2) + '%' : 'N/A'}`,
+        `Events measured: ${kpis.actualEvents} of ${kpis.totalEvents}`,
         `Mean time between events: ${kpis.mtbeHours != null ? Math.round(kpis.mtbeHours) + ' h' : 'N/A'}`,
         `Unplanned share: ${kpis.unplannedPct != null ? kpis.unplannedPct + '%' : 'N/A'}`,
       ]
@@ -420,17 +426,17 @@ export default function DowntimeTracker() {
       doc.setTextColor(90, 90, 90)
       doc.setFontSize(7.5)
       doc.text(
-        `Basis: downtime hours are ${usingActual ? 'actual (work order open to complete) where available, otherwise ' : ''}estimated per severity (Critical 4h, High 3h, Medium and Low 2h). Cost at ${sym} ${downtimeRate}/hr${rateIsCustom ? ' (configured)' : ' (default assumption)'}.`,
+        `Basis: measured hours come only from job cards with a valid opened and completed time (under 720 hours, dated from 2000, not in the future), averaged per asset. Every other tyre event carries an ASSUMED figure (Critical 4h, High 3h, otherwise 2h), reported separately. ${rateIsCustom ? `Cost at ${rateText} per hour (configured).` : 'No hourly downtime rate is configured, so cost is not shown.'} The table hours are the assumed model unless the basis column says Measured.`,
         14, 37 + Math.ceil(kpiText.length / 3) * 7 + 2, { maxWidth: 269 },
       )
 
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
-        startY: 60,
-        head: [['Asset', 'Site', 'Events', 'Total Hours', 'Total Cost', 'Avg Between Events', 'Risk Score', 'Basis']],
+        startY: 68,
+        head: [['Asset', 'Site', 'Events', 'Hours (see basis)', 'Cost', 'Avg Between Events', 'Risk Score', 'Hours basis']],
         body: vehicles.map((v) => [
           v.asset, v.site, v.eventCount, v.totalHours.toFixed(1),
-          `${sym} ${Math.round(v.totalCost).toLocaleString()}`,
+          v.totalCost == null ? 'N/A' : `${sym} ${Math.round(v.totalCost).toLocaleString()}`,
           v.avgBetween != null ? `${v.avgBetween.toFixed(0)} days` : 'N/A',
           v.riskScore, v.basis,
         ]),
@@ -496,7 +502,18 @@ export default function DowntimeTracker() {
     )
   }
 
-  const hoursSub = `${(kpis.totalHours / SHIFT_HOURS).toFixed(1)} shift-days, ${kpis.actualPct == null ? 'no events' : `${kpis.actualPct}% measured from work orders`}`
+  // Measured and assumed are stated separately; the headline is measured only.
+  const hoursSub = kpis.totalEvents === 0
+    ? 'No events'
+    : `${kpis.actualEvents} of ${kpis.totalEvents} events measured from job cards. Assumed model: ${fmtHours(kpis.modelledHours)} (${(kpis.modelledHours / SHIFT_HOURS).toFixed(1)} shift days)`
+  const availabilitySub = kpis.availability != null
+    ? (kpis.availability >= TARGET_AVAILABILITY
+      ? t('downtime.kpi.availabilityAbove', { pct: TARGET_AVAILABILITY })
+      : t('downtime.kpi.availabilityBelow', { pct: TARGET_AVAILABILITY }))
+    : `Not measured. Assumed model: ${kpis.availabilityAssumed != null ? `${kpis.availabilityAssumed.toFixed(2)}%` : 'N/A'}`
+  const costSub = !rateIsCustom
+    ? 'No hourly downtime rate is set. Add the downtime_rate setting to see cost.'
+    : `Measured hours at ${rateText} per hour. Assumed model: ${fmtCurrency(kpis.modelledCost, sym)}`
 
   return (
     <div className="space-y-6 pb-10">
@@ -603,7 +620,7 @@ export default function DowntimeTracker() {
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
           <span className="text-yellow-600 font-semibold">{t('downtime.banner.title')}</span>{' '}
           {t(usingActual ? 'downtime.banner.bodyActual' : 'downtime.banner.bodyEstimated', {
-            rate: `${sym} ${downtimeRate.toLocaleString()}`,
+            rate: rateText,
             basis: rateIsCustom ? t('downtime.banner.basisConfigured') : t('downtime.banner.basisDefault'),
             shiftHours: SHIFT_HOURS,
           })}
@@ -615,11 +632,7 @@ export default function DowntimeTracker() {
         <StatCard
           label={t('downtime.kpi.availability')}
           value={kpis.availability != null ? `${kpis.availability.toFixed(2)}%` : 'N/A'}
-          sub={kpis.availability == null
-            ? 'Not measured'
-            : kpis.availability >= TARGET_AVAILABILITY
-              ? t('downtime.kpi.availabilityAbove', { pct: TARGET_AVAILABILITY })
-              : t('downtime.kpi.availabilityBelow', { pct: TARGET_AVAILABILITY })}
+          sub={availabilitySub}
           icon={Activity}
           color={kpis.availability == null ? 'blue' : kpis.availability >= TARGET_AVAILABILITY ? 'green' : 'red'}
         />
@@ -628,10 +641,7 @@ export default function DowntimeTracker() {
         <StatCard
           label={t('downtime.kpi.cost')}
           value={fmtCurrency(kpis.totalCost, sym)}
-          sub={t('downtime.kpi.costSub', {
-            rate: `${sym} ${downtimeRate.toLocaleString()}`,
-            basis: rateIsCustom ? t('downtime.kpi.costBasisConfigured') : t('downtime.kpi.costBasisAssumed'),
-          })}
+          sub={costSub}
           icon={DollarSign}
           color="red"
         />
@@ -678,7 +688,7 @@ export default function DowntimeTracker() {
           {costRows.some((r) => r.planned || r.unplanned) ? (
             <div className="h-64"><Bar data={monthlyCostData} options={costBarOpts} /></div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-[var(--text-muted)] text-sm">{t('downtime.charts.noData')}</div>
+            <div className="h-64 flex items-center justify-center text-center text-[var(--text-muted)] text-sm px-4">{rateIsCustom ? t('downtime.charts.noData') : 'No hourly downtime rate is set, so no cost is shown. Add the downtime_rate setting to see it.'}</div>
           )}
           <p className="mt-2 text-[11px] text-[var(--text-muted)]">{t('downtime.charts.budgetThreshold', { value: fmtCurrency(BUDGET_THRESHOLD, sym) })}</p>
         </ChartCard>

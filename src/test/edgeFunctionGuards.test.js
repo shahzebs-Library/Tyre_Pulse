@@ -89,7 +89,8 @@ describe('send-scheduled-reports: null org, cooldown, approval (API-2, API-3)', 
   it('never builds a digest without an organisation', () => {
     expect(src).not.toMatch(/if \(orgId\) q = q\.eq\('organisation_id', orgId\)/)
     expect((src.match(/requireOrg\(/g) || []).length).toBeGreaterThanOrEqual(5)
-    expect(src).toMatch(/requireOrg\(s\.org_id\)/)
+    // The cron delivery loop moved to delivery.ts (inventory release); the guard runs there.
+    expect(read('send-scheduled-reports', 'delivery.ts')).toMatch(/requireOrg\(s\.org_id\)/)
     expect(src).toMatch(/if \(!s\.org_id\) return jsonResponse\(req, \{ error: NO_ORG_MESSAGE \}, 422\)/)
   })
   it('send now refuses a NULL approval', () => {

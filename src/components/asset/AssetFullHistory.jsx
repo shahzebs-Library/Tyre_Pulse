@@ -512,7 +512,7 @@ function TimelineRow({ event, chain, currency }) {
   const [open, setOpen] = useState(false)
   const meta = historySource(event.source)
   const expandable = event.source === 'job_card' && Boolean(chain)
-  const entry = expandable ? chainForCard(chain, event.ref) : null
+  const entry = expandable ? chainForCard(chain, event.ref, event.row?.organisation_id) : null
 
   return (
     <div className="border-b border-[var(--input-border)] last:border-0 py-2.5">
@@ -689,7 +689,7 @@ const HISTORY_VIEWS = [
   { key: 'gaps', label: 'What we do not have' },
 ]
 
-export function AssetFullHistory({ assetNo, country }) {
+export function AssetFullHistory({ assetNo, country, org }) {
   const { activeCurrency } = useSettings()
   const [loading, setLoading]  = useState(true)
   const [error, setError]      = useState(null)
@@ -714,7 +714,7 @@ export function AssetFullHistory({ assetNo, country }) {
       setLoading(true)
       setError(null)
       try {
-        const res = await loadAssetHistory(assetNo, { country })
+        const res = await loadAssetHistory(assetNo, { country, org })
         if (cancelled) return
         setNow(Date.now())
         setPayload(res)
@@ -726,7 +726,7 @@ export function AssetFullHistory({ assetNo, country }) {
     }
     run()
     return () => { cancelled = true }
-  }, [assetNo, country, reloadKey])
+  }, [assetNo, country, org, reloadKey])
 
   const timeline = useMemo(
     () => (payload ? buildTimeline(payload.sources, { now, country }) : null),

@@ -2863,7 +2863,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی';
+      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی~myCounts=میری گنتیاں~transfers=منتقلیاں';
 
   @override
   String get calendarCopyCatalog =>
@@ -4559,6 +4559,10 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get loginCreateAccount => 'اکاؤنٹ بنائیں';
+
+  @override
+  String get loginCompanyCodeHelp =>
+      'کیا آپ دعوت کے ذریعے کسی دوسری کمپنی میں شامل ہوئے ہیں؟ کمپنی کوڈ، پھر سلیش اور پھر اپنا یوزر نیم لکھ کر سائن اِن کریں، مثلاً ACME/ali۔';
 
   @override
   String get accAssessmentLoadFailed => 'جائزہ لوڈ نہیں ہو سکا';
@@ -8506,4 +8510,225 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get mfaVerifyUnavailable =>
       'کوڈ ابھی چیک نہیں ہو سکا۔ کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get wfOfflineNote =>
+      'آف لائن: محفوظ کام دکھائے جا رہے ہیں۔ آپ کی تبدیلیاں محفوظ رہیں گی اور کنکشن بحال ہونے پر بھیج دی جائیں گی۔';
+
+  @override
+  String get wfPendingSync =>
+      'مطابقت باقی ہے: آن لائن ہونے پر بھیج دیا جائے گا۔';
+
+  @override
+  String get wfSignInRequired => 'کام اپ ڈیٹ کرنے کے لیے سائن اِن کریں۔';
+
+  @override
+  String get wfUpdated => 'اپ ڈیٹ ہو گیا۔';
+
+  @override
+  String get wfSavedOffline =>
+      'اس آلے پر محفوظ ہو گیا۔ آن لائن ہونے پر بھیج دیا جائے گا۔';
+
+  @override
+  String get wfUpdateUnavailable =>
+      'یہ تبدیلی اس کام کے لیے فی الحال دستیاب نہیں۔';
+
+  @override
+  String wfNotAccepted(String action) {
+    return 'قبول نہیں ہوا: $action';
+  }
+
+  @override
+  String get wfDismiss => 'ہٹائیں';
+
+  @override
+  String get wfActionAccept => 'قبول کریں';
+
+  @override
+  String get wfActionStart => 'شروع کریں';
+
+  @override
+  String get wfActionBlock => 'روکیں';
+
+  @override
+  String get wfActionResume => 'دوبارہ شروع کریں';
+
+  @override
+  String get wfActionComplete => 'مکمل کریں';
+
+  @override
+  String get teamActionTitle => 'آپ کو سونپا گیا فالو اَپ';
+
+  @override
+  String get teamActionFallbackTitle => 'کارروائی';
+
+  @override
+  String teamActionStatusDue(String status, String due) {
+    return 'حالت: $status · آخری تاریخ: $due';
+  }
+
+  @override
+  String get teamActionDueNotSet => 'مقرر نہیں';
+
+  @override
+  String get teamActionBlockReason => 'رکاوٹ کی وجہ';
+
+  @override
+  String get teamActionCompletionDetails => 'تکمیل کی تفصیل';
+
+  @override
+  String teamActionEvidenceCount(int count) {
+    return 'ثبوت ($count)';
+  }
+
+  @override
+  String get teamActionEvidenceFallback => 'ثبوت';
+
+  @override
+  String teamActionResolution(String text) {
+    return 'حل: $text';
+  }
+
+  @override
+  String get teamActionUploading => 'اپ لوڈ ہو رہا ہے...';
+
+  @override
+  String get teamActionSelectPhoto => 'تصویر شامل کریں';
+
+  @override
+  String get teamActionAttachFile => 'PDF یا فائل منسلک کریں';
+
+  @override
+  String get teamActionStartWork => 'کام شروع کریں';
+
+  @override
+  String get teamActionBlocked => 'رکا ہوا';
+
+  @override
+  String get teamActionStatusOpen => 'کھلا';
+
+  @override
+  String get teamActionStatusAcknowledged => 'قبول شدہ';
+
+  @override
+  String get teamActionStatusInProgress => 'جاری';
+
+  @override
+  String get teamActionStatusEscalated => 'اوپر بھیجا گیا';
+
+  @override
+  String get teamActionStatusPendingApproval => 'منظوری کا منتظر';
+
+  @override
+  String get teamActionStatusResolved => 'مکمل';
+
+  @override
+  String get teamActionStatusDismissed => 'خارج کیا گیا';
+
+  @override
+  String get teamActionSignIn => 'یہ کام دیکھنے کے لیے سائن اِن کریں۔';
+
+  @override
+  String get teamActionNotYours =>
+      'یہ کارروائی آپ کے اکاؤنٹ کو نہیں سونپی گئی۔';
+
+  @override
+  String get teamActionBlockTooShort =>
+      'رکاوٹ کی وضاحت میں کم از کم پانچ حروف لکھیں۔';
+
+  @override
+  String get teamActionResolutionTooShort =>
+      'مکمل کیے گئے کام کی وضاحت کم از کم دس حروف میں کریں۔';
+
+  @override
+  String get teamActionPhotoTooLarge => 'تصویر 10 MB سے چھوٹی ہونی چاہیے۔';
+
+  @override
+  String get teamActionFileType =>
+      'صرف PDF، JPG، PNG یا WEBP فائلیں منسلک کی جا سکتی ہیں۔';
+
+  @override
+  String get teamActionFileSize => 'فائل 10 MB یا اس سے چھوٹی ہونی چاہیے۔';
+
+  @override
+  String get teamActionPhotoUploaded => 'تصویر اپ لوڈ ہو گئی۔';
+
+  @override
+  String get teamActionOpenFailed => 'منسلکہ نہیں کھل سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamActionLoadFailed =>
+      'یہ کام لوڈ نہیں ہو سکا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamActionSaveFailed =>
+      'تبدیلی محفوظ نہیں ہوئی۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamActionUploadFailed =>
+      'فائل اپ لوڈ نہیں ہو سکی۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamMessageTitle => 'ٹیم کا پیغام';
+
+  @override
+  String get teamMessageSignIn => 'یہ پیغام دیکھنے کے لیے سائن اِن کریں۔';
+
+  @override
+  String get teamMessageUnavailable => 'یہ پیغام اس اکاؤنٹ کے لیے دستیاب نہیں۔';
+
+  @override
+  String get teamMessageLoadFailed =>
+      'یہ پیغام لوڈ نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamMessageActionFailed =>
+      'یہ عمل مکمل نہیں ہوا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get teamMessageAcknowledged => 'وصولی کی تصدیق ہو گئی';
+
+  @override
+  String get teamMessageAckRequired => 'وصولی کی تصدیق درکار ہے';
+
+  @override
+  String get teamMessageAcknowledge => 'تصدیق کریں';
+
+  @override
+  String get teamMessageReplyLabel => 'ٹیم کو جواب';
+
+  @override
+  String get teamMessageSend => 'جواب بھیجیں';
+
+  @override
+  String get inventoryCopyCatalog =>
+      'myAuditsTitle=میری گنتیاں~audit=انوینٹری آڈٹ~noAudits=کوئی گنتی تفویض نہیں~noAuditsBody=اس وقت آپ کو کوئی انوینٹری گنتی تفویض نہیں ہے۔~draftsUnreadable=اس فون پر محفوظ گنتیاں ابھی پڑھی نہیں جا سکیں۔ کچھ تبدیل نہیں ہوا۔ دوبارہ کوشش کریں۔~unsyncedLines=%n گنی گئی لائنیں اس فون پر محفوظ ہیں اور ابھی بھیجی نہیں گئیں۔ کھولنے کے لیے دبائیں۔~pendingN=%n نہیں بھیجی گئیں~overdue=تاخیر شدہ~due=آخری تاریخ~notCounting=یہ آڈٹ گنتی کے لیے کھلا نہیں ہے۔~notProvisionedTitle=انوینٹری گنتی ابھی ترتیب نہیں دی گئی~notProvisionedBody=سرور پر ابھی انوینٹری گنتی فعال نہیں ہے۔ آپ کے منتظم کو انوینٹری سیٹ اپ مکمل کرنا ہوگا۔~loadFailed=یہ لوڈ نہیں ہو سکا۔~countTitle=بلائنڈ گنتی~resumed=دوبارہ شروع: آپ کے پچھلے سیشن کی %n لائنیں۔~noLocations=اس آڈٹ میں کوئی مقام نہیں ہے۔~progress=گنے گئے مقامات: %b میں سے %a~linesDone=%n لائنیں گنی گئیں~unexpectedN=%n غیر متوقع~scanLocation=پہلے مقام کا لیبل اسکین کریں~scanItem=آئٹم، سیریل یا بارکوڈ اسکین کریں~scanCamera=کیمرے سے اسکین کریں~locations=مقامات~atLocation=گنتی کا مقام~scanningSerialsOf=سیریل اسکین ہو رہے ہیں~stopSerials=روکیں~serialTracked=سیریل سے ٹریک~linesN=%n لائنیں~myLines=یہاں میری گنتیاں~noLinesHere=اس مقام پر ابھی کچھ نہیں گنا گیا۔~confirmedZero=صفر (تصدیق شدہ)~notCountedYet=ابھی نہیں گنا~unexpected=غیر متوقع آئٹم~unexpectedHint=اس مقام کی فہرست میں نہیں۔ اس کا جائزہ لیا جائے گا۔~photosN=%n تصاویر~submitN=%n گنی گئی لائنیں بھیجیں~submitDone=%n لائنیں بھیج دی گئیں۔~submitNothing=بھیجنے سے پہلے ایک لائن مکمل کریں۔~submitOffline=کنکشن نہیں۔ آپ کی گنتیاں اس فون پر محفوظ ہیں؛ سگنل آنے پر دوبارہ بھیجیں۔~submitQueued=کنکشن نہیں ہے۔ %n گنی ہوئی لائنیں کنکشن واپس آنے پر خود بخود بھیجی جائیں گی۔~submitPartial=کچھ لائنیں قبول نہیں ہوئیں یا ان کی تصاویر اپ لوڈ نہیں ہو سکیں۔ نشان زدہ لائنیں دیکھیں۔~submitFailed=گنتیاں بھیجی نہیں جا سکیں۔ یہ اب بھی اس فون پر محفوظ ہیں۔~draftSaveFailed=یہ فون ابھی گنتی محفوظ نہیں کر سکا۔ ایپ بند نہ کریں؛ دوبارہ کوشش کریں۔~serialCounted=سیریل گن لیا گیا۔~scan_locationSelected=مقام منتخب ہو گیا۔~scan_serialItemSelected=اب ہر یونٹ کا سیریل اسکین کریں۔~scan_locationOutOfScope=یہ مقام اس آڈٹ کا حصہ نہیں ہے۔~scan_duplicateSerial=یہ سیریل اس آڈٹ میں پہلے ہی گنا جا چکا ہے۔~scan_needsLocation=آئٹم گننے سے پہلے مقام کا لیبل اسکین کریں۔~countedQty=گنی گئی مقدار~confirmZero=یہاں کچھ نہیں ملا~confirmZeroHint=دیکھنے کے بعد ہی نشان لگائیں: خالی خانہ صفر کی گنتی نہیں ہے۔~serialOne=ایک سیریل والا یونٹ۔~condition=حالت~condition_good=اچھی~condition_damaged=خراب~condition_repairable=مرمت کے قابل~condition_quarantine=قرنطینہ~condition_scrap=اسکریپ~remarks=ریمارکس (اختیاری)~photo=تصویر~addPhoto=تصویر شامل کریں~photoFailed=تصویر نہیں لی جا سکی۔~removeLine=ہٹائیں~saveLine=محفوظ کریں~enterQty=گنی گئی مقدار درج کریں، یا یہاں کچھ نہیں ملا پر نشان لگائیں۔~invalidQty=مقدار منفی نہیں ہو سکتی۔~confirmZeroFirst=صفر کے لیے یہاں کچھ نہیں ملا پر نشان لگائیں۔~state_draft=فون پر~state_submitted=بھیج دیا~state_rejected=قبول نہیں~status_draft=مسودہ~status_scheduled=شیڈول~status_assigned=تفویض شدہ~status_in_progress=جاری~status_counting_completed=گنتی مکمل~status_reconciliation=مطابقت~status_recount=دوبارہ گنتی~status_investigation=تحقیقات~status_approval=منظوری کا انتظار~status_adjustment_posted=ایڈجسٹمنٹ درج~status_closed=بند~status_cancelled=منسوخ~status_rejected=مسترد~status_unknown=حالت درج نہیں~type_full=مکمل گنتی~type_partial=جزوی گنتی~type_cycle=سائیکل گنتی~type_category=زمرہ گنتی~type_high_value=زیادہ قیمت گنتی~type_surprise=اچانک گنتی~type_bin=بن گنتی~type_tyre_serial=ٹائر سیریل گنتی~type_vehicle_tyre=گاڑی ٹائر گنتی~transfersTitle=اسٹاک منتقلیاں~transfer=منتقلی~noTransfers=کوئی منتقلی نہیں~noTransfersBody=آپ کو کوئی اسٹاک منتقلی نظر نہیں آ رہی۔~tstatus_dispatched=روانہ~tstatus_in_transit=راستے میں~tstatus_partially_received=جزوی وصول~tstatus_completed=مکمل~tstatus_cancelled=منسوخ~tstatus_unknown=حالت درج نہیں~dispatchTitle=اسٹاک روانہ کریں~scanFrom=روانگی کے مقام کا لیبل اسکین کریں~scanTo=منزل کے مقام کا لیبل اسکین کریں~from=سے~to=تک~items=اشیاء~noItemsScanned=ابھی کوئی آئٹم اسکین نہیں ہوا۔~needFrom=وہ مقام اسکین کریں جہاں سے اسٹاک نکلتا ہے۔~needTo=وہ مقام اسکین کریں جہاں اسٹاک جاتا ہے۔~sameLocation=روانگی اور منزل الگ مقام ہونے چاہئیں۔~needLines=کم از کم ایک لائن شامل کریں۔~dispatchSend=روانہ کریں~dispatchDone=منتقلی روانہ ہو گئی۔~transferOffline=کنکشن نہیں۔ کچھ نہیں بھیجا گیا؛ سگنل آنے پر دوبارہ کوشش کریں۔~transferFailed=منتقلی محفوظ نہیں ہو سکی۔~receiveTitle=منتقلی وصول کریں~noLines=اس منتقلی میں کوئی لائن نہیں۔~outstanding=ابھی آنا باقی~outstandingUnknown=بھیجی گئی مقدار درج نہیں~receiveSend=وصولی کی تصدیق کریں~receiveDone=وصولی درج ہو گئی۔~manualSendNote=آپ کی گنتی اس فون پر رہتی ہے جب تک سرور تصدیق نہ کرے۔ سگنل نہ ہونے پر مکمل لائنیں (اپنی تصاویر سمیت) کنکشن واپس آنے پر خود بخود بھیجی جاتی ہیں۔ ابھی بھیجنے کے لیے بھیجیں دبائیں۔~finishCounting=گنتی مکمل کریں~finishNote=جب ہر مقام گن کر بھیج دیا جائے تو گنتی مکمل کریں تاکہ آڈٹ کا ملان ہو سکے۔ اس کے بعد گنتی شامل نہیں کی جا سکتی۔~finishUnsent=%n لائنیں ابھی اس فون پر ہیں۔ گنتی مکمل کرنے سے پہلے انہیں بھیجیں۔~finishNotOpen=اس آڈٹ پر گنتی کھلی نہیں ہے، اس لیے اسے مکمل نہیں کیا جا سکتا۔~finishOffline=کنکشن نہیں۔ گنتی مکمل کرنے کے لیے سگنل درکار ہے؛ کچھ تبدیل نہیں ہوا۔~finishConfirmTitle=گنتی مکمل کریں؟~finishConfirmBody=آڈٹ ملان کے مرحلے میں چلا جائے گا اور مزید گنتی شامل نہیں ہو سکے گی۔ یقینی بنائیں کہ ہر مقام گنا جا چکا ہے۔~finishCancel=گنتی جاری رکھیں~finishDone=گنتی مکمل ہو گئی۔ آڈٹ ملان کے لیے تیار ہے۔~finishFailed=گنتی مکمل نہیں ہو سکی۔ دوبارہ کوشش کریں۔~pi_title=فزیکل انوینٹری~pi_entry=فزیکل انوینٹری~pi_pendingN=%n بھیجنے کے منتظر~pi_startLead=شیلف پر موجود اشیاء درج کریں۔ یہاں کچھ بھی سرکاری اسٹاک نہیں بدلتا؛ مینیجر بعد میں ابتدائی بیلنس منظور کرتا ہے۔~pi_store=اسٹور~pi_start=فزیکل انوینٹری شروع کریں~pi_pickStore=پہلے اسٹور منتخب کریں۔~pi_scanHint=بن لیبل، بارکوڈ، SKU، OEM یا متبادل نمبر اسکین کریں یا لکھیں~pi_scanned=اسکین شدہ~pi_change=تبدیل کریں~pi_variantUnknown=مواد (قسم معلوم نہیں)~pi_describe=نہیں ملا؟ چیز کی تفصیل لکھیں~pi_ref_description=تفصیل~pi_ref_manufacturer=صانع~pi_ref_oem=OEM پارٹ نمبر~pi_ref_aftermarket=متبادل پارٹ نمبر~pi_ref_company_sku=کمپنی SKU~pi_unidentifiedHint=قیمت یا پرچیز آرڈر ضروری نہیں۔ نامعلوم اشیاء کو عارضی حوالہ ملتا ہے اور جائزے تک جاری نہیں ہو سکتیں۔~pi_qty=مقدار~pi_uom=یونٹ~pi_condition=حالت~pi_ownership=ملکیت~pi_locationHint=ریک، شیلف یا بن~pi_remarks=تبصرے~pi_photoRole=تصویر میں~pi_takePhoto=تصویر لیں~pi_photosN=%n تصاویر~pi_saveNext=محفوظ کریں اور اگلا~pi_leave=سیشنز پر واپس~pi_ledgerRule=محفوظ اشیاء بھیجے جانے تک اسی فون پر رہتی ہیں۔ سرکاری اسٹاک صرف تب بدلتا ہے جب کوئی دوسرا شخص ابتدائی بیلنس منظور کرے۔~pi_noMatch=کوئی منظور شدہ مواد نہیں ملا۔ چیز کی تفصیل لکھ کر محفوظ کریں۔~pi_searchOffline=آف لائن: چیز کی تفصیل لکھیں؛ بعد میں بھیجی جائے گی۔~pi_qtyInvalid=صفر یا اس سے زیادہ مقدار درج کریں۔~pi_savedLocal=محفوظ ہو گیا۔ اگلی چیز کے لیے تیار۔~pi_saveFailed=فون چیز محفوظ نہیں کر سکا۔ کچھ ضائع نہیں ہوا؛ دوبارہ کوشش کریں۔~pi_cls_genuine=اصلی~pi_cls_oes=OES~pi_cls_aftermarket=متبادل~pi_cls_unknown=غیر تصدیق شدہ~pi_cond_new=نیا~pi_cond_used=استعمال شدہ~pi_cond_refurbished=مرمت شدہ~pi_cond_repairable=قابل مرمت~pi_cond_damaged=خراب~pi_cond_scrap=کباڑ~pi_cond_unknown=نامعلوم~pi_own_owned=کمپنی کی ملکیت~pi_own_consignment=امانت~pi_own_supplier=سپلائر کی ملکیت~pi_own_customer=گاہک کی ملکیت~pi_own_unknown=نامعلوم~pi_role_item=چیز~pi_role_label=لیبل~pi_role_location=مقام~pi_role_packaging=پیکنگ~pi_role_damage=نقصان~pi_role_other=دیگر~pi_attention=چیز پر توجہ درکار~pi_dismiss=نظر انداز کریں~pi_err_photo_missing=ایک تصویر کی فائل بھیجنے سے پہلے فون سے ہٹ گئی۔ چیز خود محفوظ ہے؛ گمشدہ تصویر قبول کرنے کے لیے نظر انداز کریں۔~pi_err_photo_read_failed=ایک تصویر ابھی پڑھی نہیں جا سکی۔ یہ فون پر رہے گی اور بعد میں بھیجی جائے گی۔~pi_noStores=آپ کے لیے ابھی کوئی اسٹور سیٹ نہیں۔ ایڈمنسٹریٹر سے ویب پر اسٹور شامل کرنے کو کہیں۔~pi_scanStoreLabel=یا اسٹور یا بن کا لیبل اسکین کریں~pi_bin=بن~pi_clearBin=بن ہٹائیں~pi_binUnknown=یہ لیبل نہیں ملا۔ فہرست سے اسٹور منتخب کریں۔~pi_binOtherStore=یہ بن کسی دوسرے اسٹور کا ہے۔~pi_binOffline=آف لائن: بن محفوظ ہے۔ آئٹم بھیجتے وقت اس کی جانچ ہوگی۔';
+
+  @override
+  String get captchaSemanticLabel => 'سیکیورٹی چیک';
+
+  @override
+  String get captchaLoading => 'سیکیورٹی چیک لوڈ ہو رہا ہے...';
+
+  @override
+  String get captchaPrompt => 'جاری رکھنے کے لیے سیکیورٹی چیک مکمل کریں۔';
+
+  @override
+  String get captchaSolved => 'سیکیورٹی چیک مکمل ہو گیا۔';
+
+  @override
+  String get captchaExpired =>
+      'سیکیورٹی چیک کی میعاد ختم ہو گئی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get captchaLoadFailed =>
+      'سیکیورٹی چیک لوڈ نہیں ہو سکا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get captchaTimedOut =>
+      'سیکیورٹی چیک میں بہت زیادہ وقت لگ رہا ہے۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get captchaRefused =>
+      'سیکیورٹی چیک قبول نہیں ہوا۔ اسے دوبارہ مکمل کریں اور پھر کوشش کریں۔';
 }

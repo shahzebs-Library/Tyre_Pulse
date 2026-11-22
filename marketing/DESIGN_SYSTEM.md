@@ -82,13 +82,14 @@ A card with a link is clickable as a whole (the link's `::after` covers the card
 
 ### Status badge (`components/ui/StatusBadge.tsx`)
 
-`<StatusBadge status="available | on-request | planned" />`, plus `<StatusLegend />` under any list that uses it.
+`<StatusBadge status="available | on-request | in-review | planned" />`, plus `<StatusLegend />` under any list that uses it.
 
 | Status | Meaning | Look |
 | --- | --- | --- |
 | Available | In the product today | Green tint, solid dot |
 | On request | Set up per customer: integrations, single sign-on, support terms, TPMS feed, RFID | Yellow tint, solid dot |
-| Planned | Not released (iOS app) | White, dashed border, hollow dot |
+| In review | Submitted to a store, waiting for review (iPhone app) | Pale blue |
+| Planned | Not released | White, dashed border, hollow dot |
 
 When unsure, use On request. A Planned item never sits beside a download or sign-up link.
 
@@ -119,7 +120,7 @@ Minimum height 48px (52px for hero, page top and CTA band). Press feedback 120ms
 - `CtaBand` : the yellow closing band.
 - `ProofStrip` : the four measured figures from `lib/proof.ts`.
 - Header : `<header>`, dropdown menus from `lib/nav.ts`, a scrollable mobile sheet that locks the page behind it and keeps Tab inside.
-- Footer : menu groups from `lib/nav.ts`, Google Play badge, the iOS "Planned" line from `lib/site.ts`.
+- Footer : menu groups from `lib/nav.ts`, Google Play badge, the iPhone "In review" line from `lib/site.ts`.
 
 ### Forms
 

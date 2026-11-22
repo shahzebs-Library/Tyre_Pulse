@@ -16,6 +16,7 @@
  * `new Date(string)` (the timezone trap). With no range active every row passes;
  * with a range active a row with no usable date is excluded, never a crash.
  */
+import { rowRate } from './cpkMetrics'
 
 export const SECTION_KEYS = Object.freeze([
   'kpis', 'trends', 'yearlyTrend', 'charts', 'costSplit', 'fleetCpk', 'builder', 'recommendations',
@@ -74,7 +75,11 @@ export function cpkTypeRows(types = []) {
     // missing reading turns into a measured zero.
     const blank = (v) => v == null || v === ''
     const d = blank(r?.distance_or_hours) ? NaN : Number(r.distance_or_hours)
-    const cpk = blank(r?.cpk_total) ? null : Number(r.cpk_total)
+    // ENG-1: the one rate a row may be ranked by (cpkMetrics.rowRate): operating
+    // cost per engine hour for plant, the tyre spend ratio for km assets. A
+    // total over tyre km is not a measurement and is never read here.
+    const rate = rowRate(r)
+    const cpk = rate == null ? null : Number(rate)
     return {
       id: `${r?.country || ''}-${r?.vehicle_type || ''}-${r?.unit || ''}-${i}`,
       vehicle_type: r?.vehicle_type || 'Unspecified',

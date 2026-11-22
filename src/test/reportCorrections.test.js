@@ -10,8 +10,14 @@ import { inflateSync } from 'node:zlib'
 // stream before reading the text operators out of it.
 const pageText = (raw) => {
   const parts = [raw]
-  for (const m of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
-    try { parts.push(inflateSync(Buffer.from(m[1], 'binary')).toString('latin1')) } catch { /* not a deflated stream */ }
+  // The compressed bytes can themselves end in 0x0D; an optional `\r` before
+  // `\nendstream` would swallow it and break the inflate (which then silently
+  // dropped a whole page's text, depending on the content and date). Try the
+  // stream with that byte first, then without it.
+  for (const m of raw.matchAll(/stream\r?\n([\s\S]*?)(\r?)\nendstream/g)) {
+    for (const body of [m[1] + m[2], m[1]]) {
+      try { parts.push(inflateSync(Buffer.from(body, 'binary')).toString('latin1')); break } catch { /* try the next form */ }
+    }
   }
   return parts.join('\n')
 }

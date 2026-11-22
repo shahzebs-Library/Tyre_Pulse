@@ -15,6 +15,7 @@
  */
 import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { pinCompany } from './companyScope'
 
 export const COLS =
   'id,organisation_id,country,asset_no,make,model,captured_at,' +
@@ -76,7 +77,7 @@ export async function listAssetUtilization({ country } = {}) {
  * The utilization snapshot for a single asset (Asset Detail panel). Country
  * optional; returns the most recent capture or null.
  */
-export async function getAssetUtilization(assetNo, { country } = {}) {
+export async function getAssetUtilization(assetNo, { country, orgId } = {}) {
   if (!assetNo) return null
   try {
     let q = supabase
@@ -84,6 +85,7 @@ export async function getAssetUtilization(assetNo, { country } = {}) {
       .select(COLS)
       .eq('asset_no', String(assetNo).trim().toUpperCase())
     if (country && country !== 'All') q = q.eq('country', country)
+    q = pinCompany(q, orgId)
     const data = unwrap(await q.order('captured_at', { ascending: false, nullsFirst: false }).limit(1))
     return data?.[0] || null
   } catch (err) {

@@ -1,0 +1,170 @@
+# By-number join audit (job card numbers are per company)
+
+Date: 2026-11-15. Status: audit complete, fixes are DRAFTS (nothing applied to production).
+Round 2 (same day): super-admin cross-company client readers fixed, complaints staging blank-date draft added.
+
+## Why this exists
+
+TEN-1b (`supabase/pending_migrations/20261113100500_ten1b_work_orders_per_org_key.sql`,
+now applied) made `work_orders` unique per `(organisation_id, work_order_no)`. A job card
+number is no longer a global identity. Anything that joins or looks up a job card by number
+only (`parts_consumption.work_order_no`, `work_order_line_items.work_order_no`,
+`tyre_records.job_card`, staging pipes, client merges) must also match the company, or, once a
+second company imports an overlapping number, one company's cost, asset, site or tyre data
+attaches to the other company's job card.
+
+Today one company holds data, so no figure is wrong yet. This audit finds every place that
+would go wrong and drafts the fix.
+
+## Method
+
+- Production read only (`SELECT` on `pg_proc` / `pg_views` through the Supabase MCP).
+  70 `public` functions and 10 views mention `work_order_no` or `job_card`; every one was read.
+  Other schemas and materialised views: none.
+- The local mirror (`tp_mirror2`, PostgreSQL 16, synthetic companies Alpha / Beta / Gamma) was
+  confirmed byte-identical to production for all 70 functions (md5 of `pg_get_functiondef`),
+  for `v_tyre_fitment_evidence` and for `_resolve_import_org`, so the local test exercises the
+  exact production text.
+- Client: `src/` and `tyre_pulse_flutter/lib` searched for `.eq/.in/.ilike/.or` on
+  `work_order_no` / `job_card`, and for in-memory maps keyed by number.
+
+## Database: affected (9 objects, fixed in the draft)
+
+| # | Object | Kind | What was wrong | Effect with a second company |
+|---|---|---|---|---|
+| 1 | `classify_parts_consumption` | trigger | Tyre-job-card signal looked for a tyre with the number in the same **country**, any company | An expense line could be bucketed as tyre spend because another company fitted a tyre on that number |
+| 2 | `get_site_operating_cost` | RPC (definer) | `parts_consumption -> work_orders` joined on number only; `vehicle_fleet` joined on asset code only | A's expense line duplicated or attributed to B's asset and site; A's site totals inflated |
+| 3 | `get_asset_disposal_register` | RPC (definer) | Spend per asset summed `parts_consumption` lines of any company whose number matched A's job card | B's cost appears in A's disposal register |
+| 4 | `process_stg_complaints` | staging trigger | Duplicate check matched the number in any company (same country) | B's complaints import silently skipped because A has the number |
+| 5 | `process_stg_monthly_tyres` | staging trigger | Existing-row lookup (serial + country + date + job card + position) had no company | B's monthly tyre file **patched A's tyre record** |
+| 6 | `convert_repair_request_to_job_card` | RPC (definer) | "Is this number taken" looked across companies | Refused with "belongs to another organisation", now wrong (numbers are per company) |
+| 7 | `owner_data_audit` | RPC (super admin) | Orphan line-item check matched a job card in any company | Orphan count understated |
+| 8 | `tyre_cost_audit_classify` | SQL (invoker) | Tyre <-> own job card lines and the same-month price index ignored company | Safe for ordinary users (RLS); for a super admin or a service caller companies mixed, and `tyre_cost_audit_scan` persisted the mix |
+| 9 | `v_tyre_fitment_evidence` | view (invoker) | `job_card_found` true when any company had the number | Evidence class too generous for a super admin |
+
+Notes:
+- #2 also carried an asset-code-only join to `vehicle_fleet`; same leak class, fixed in the same
+  function.
+- #4 now dedupes by company across all of that company's countries (the key is per company, so
+  a same-company card in another country would otherwise hit the unique key and abort the
+  batch), and names the company explicitly on insert, resolved the same way as
+  `process_stg_wo_lines` (`app_current_org()` then `_resolve_import_org()`).
+- #5 now looks up only within the importing company (row org, then session org, then
+  `_resolve_import_org()`); an org-less session in multi-company mode now refuses (PT409)
+  instead of patching any company's row.
+
+## Database: checked and already company-scoped (no change)
+
+`backfill_tyre_prices_from_grid`, `tyre_price_backfill`, `work_order_cost_reconcile`,
+`process_stg_wo_lines`, `process_stg_job_cards` (conflict target already
+`(organisation_id, work_order_no)`), `get_asset_disposal_fleet_baseline`,
+`get_asset_disposal_reliability`, `list_scrapped_tyres`, `observation_erp_evaluate`,
+`import_existing_keys` (scoped by `$1 = org`; the work-order key ignores country, correct),
+`promote_erp_tyre_expense`, `extract_tyre_freetext_candidates` (self-join within staging).
+
+Mention the number but join nothing by it: `get_maintenance_snapshot`,
+`get_parts_expense_snapshot`, `get_report_snapshot`, `get_report_tyre_maintenance`,
+`get_workshop_snapshot`, `get_daily_job_cards`, `get_work_orders_page`,
+`get_work_order_insights`, `get_sany_delay_candidates`, `get_material_issue_summary`,
+`recon_jobcard_mismatches`, `expense_*` guards, `replace_open_work_orders`,
+`_tyre_exception_rows`, `get_cpk_km_source*`, `stock_entry_resolve` and the remaining
+pdf-cache / notification helpers. Views `v_jobcard_date_mismatch` (row-local),
+`v_work_order_cost_totals` (joins by id), `v_tyre_cost_status` (serial, not number).
+
+## Client: affected (fixed in this branch)
+
+| File | Problem | Fix |
+|---|---|---|
+| `src/lib/api/erpIntake.js` `insertWorkOrders` | Merge read existing job cards by number across all companies visible to the caller. For a super admin that meant an import could **update another company's job card**. | Existence set and overlap fetch are filtered to the caller's company (`app_current_org` RPC). Unreadable company keeps the previous RLS-only behaviour. Test: `src/test/erpIntakeOrgScope.test.js`. |
+| `src/lib/api/observationErpEvidence.js` | Evidence reads (tyres, job cards, expense lines, fleet) by asset + number with no company. A super admin reviewing an inspection could be offered another company's job card. | Every read pinned to the inspection's own company (row value, else read once by id; a failed read is an error, never a wider search). Tests added to `src/test/observationErpEvidence.api.test.js`. |
+
+## Client: super-admin cross-company readers (fixed in this branch, round 2)
+
+Ordinary users are limited to their own company by the restrictive `organisation_id`
+policies, so these only mattered for a super admin, whose reads span companies. Each is now
+pinned to one company: the row's own company when the caller already holds the row, else the
+caller's company (`app_current_org()`, shared helper `src/lib/api/companyScope.js`). A number
+or code held only by ONE company still resolves to that company's row; one held by two OTHER
+companies is never picked between (null / "ambiguous"), never an arbitrary row.
+
+| File | Problem | Fix | Test |
+|---|---|---|---|
+| `src/pages/WorkshopJobDetail.jsx` (+ new `src/lib/api/workOrderLookup.js`) | Opening a job by NUMBER took `limit(1)`, any company. Asset job history read by asset code only. | Number lookup prefers the caller's company, else the single holder, else says the number is used by more than one company. History read pinned to the job's own company. | `src/test/workOrderLookupOrgScope.test.js` |
+| `src/lib/api/assetHistory.js` + `src/lib/assetHistory.js documentChain` | Every per-asset source read by asset code; the chain grouped expense lines and line items under job cards by number. | The machine's company is resolved first (`assetCompany`: caller's company when it holds the code, else the single holder); every source, the tyre marks and the register rows are pinned to it. `documentChain` / `chainForCard` / `jobCardWorkAndQc` key on company + number. | `src/test/assetHistoryOrgScope.test.js` |
+| `src/lib/api/erpIntake.js` asset + serial merges | `insertVehicleFleet` and `insertTyreRecords` merged on asset / serial across companies; the preview count did too, and counted job cards per country while the merge is per company. | Existence sets and overlap reads filtered to the caller's company; work-order preview per company, every country. | `src/test/erpIntakeOrgScope.test.js` |
+| `src/lib/api/assets.js getAssetMatches` / `getAssetByNo` | Auto-fill picked the first row of any company for a shared code. | Caller's company wins (`firstForCallerCompany`). | `src/test/companyLookupsOrgScope.test.js` |
+| `src/lib/api/tyreExchange.js getScrapMark`, `findTyreBySerial` | Marks are keyed per company: two rows made `maybeSingle()` fail and read as "not scrapped"; the scrap confirmation could show another company's tyre. | Read the caller's company only (the scrap RPC acts on that company). | same file |
+| `src/lib/api/inspections.js` + `fitmentValidation.js findVehicleByAsset`, `vehicle360.js vehicleOrgId` | First fleet row of any company. | Caller's company wins. | same file |
+| Flutter `vehicle_fleet_repository.dart fetchByAssetNo`, `asset_insights_repository.dart`, `asset_360_repository.dart` | Detail lookup `limit(1)` of any company; financials, timeline, meters, PM plans and tyre actions read by asset code only. | Fleet rows now carry `organisation_id`; lookup prefers the caller's company (`firstRowForCompany`); `AssetScope` carries the fleet row's company and every per-asset read pins it. Reserved wiring files untouched. | `test/features/assets/data/vehicle_fleet_repository_test.dart`, `asset_financial_report_screen_test.dart` |
+
+Still open (lower risk, recorded honestly):
+
+- `src/lib/api/vehicle360.js getVehicle` reads the `vehicles` view, which has no
+  `organisation_id` column, so it cannot be company-pinned without a view change.
+- List-style reads by asset code (fleet master search, gate pass, wash, PM, engine hours,
+  utilization, insurance, `ragService`, `TyreScanCamera`) and Flutter `global_search_repository.dart`
+  return lists the user picks from; a super admin sees both companies' rows side by side. They
+  are not number joins and were left as they are.
+
+## Drafts
+
+- `supabase/pending_migrations/20261117110000_by_number_org_joins.sql` - re-creates the 9
+  objects from their live definitions (anchored replace, each anchor must occur exactly once
+  or the migration aborts; marker `/* by-number-org */` makes a re-run a no-op; original
+  definitions saved to `_bak.by_number_org_joins_defs`). Contains no destructive keyword, so
+  the MCP apply path will not stop on its confirm prompt.
+- `supabase/pending_migrations/20261117110000_by_number_org_joins_ROLLBACK.sql` - re-executes
+  the saved definitions.
+- `supabase/pending_migrations/20261117111000_drop_tyre_status_marks_bridge.sql` - removes the
+  temporary unique index `tyre_status_marks_serial_mark_type_bridge (serial, mark_type)`.
+  Owner approval only, after confirming the production web build carries #541. Production
+  check 2026-11-15: no database function upserts on `(serial, mark_type)` alone
+  (`scrap_tyre_by_serial` uses the company key); the company key
+  `(organisation_id, serial, mark_type)` exists.
+
+## Local test (copy of `tp_mirror2`, 2026-11-15)
+
+1. Draft applied cleanly; re-run skipped all 9 objects (idempotent).
+2. Parity with no overlapping numbers: outputs byte-identical before and after for
+   `get_site_operating_cost`, `get_asset_disposal_register`, `tyre_cost_audit_classify`
+   (company user and super admin), `v_tyre_fitment_evidence` (company user and super admin),
+   `owner_data_audit`.
+3. Overlap scenario (company B given one of company A's job card numbers, a B expense line on
+   it, a B complaints row and a B monthly tyre row matching an A tyre):
+
+   | Check | Before | After |
+   |---|---|---|
+   | A's site operating cost unchanged | false (leak) | true |
+   | A's disposal register unchanged | false (leak) | true |
+   | B's complaint row created (not skipped) | false | true |
+   | A's tyre record untouched by B's import | false (patched) | true |
+
+4. Rollback restored all 9 definitions byte-identical to the original (md5), then the draft
+   re-applied cleanly.
+5. Bridge draft: index removed; the documented rollback re-created it.
+
+Found while testing: `process_stg_complaints` aborted the whole batch when a row had no
+readable Vehicle In Date (`work_orders.opened_at` is NOT NULL). Fixed in a separate draft,
+below.
+
+## Complaints staging: a blank Vehicle In Date no longer aborts the batch
+
+- `supabase/pending_migrations/20261117112000_complaints_missing_in_date_reject.sql` (+
+  `_ROLLBACK.sql`). Apply AFTER the by-number draft (it patches that version and aborts if its
+  marker is missing); roll back BEFORE the by-number rollback. Anchored replace, aborts unless
+  each anchor occurs once, old text saved to `_bak.complaints_in_date_defs`, re-run is a no-op,
+  no destructive keyword.
+- A row whose Vehicle In Date is blank or unreadable is skipped (no date invented) and
+  recorded in `expense_import_rejects` (the ERP intake reject log the ERP Sync load history
+  already reads) with `complaint_missing_vehicle_in_date` or
+  `complaint_unreadable_vehicle_in_date`, the job card number, the importing company and a
+  sentence naming the asset and the value. Every other row lands. A re-upload of a card that
+  already exists is still skipped silently (duplicate check runs first).
+- JS twin (`src/lib/erpIntake.js mapComplaints`, the in-app ERP intake): the same row is
+  skipped with the same reason codes and listed on the intake screen ("Every row accounted
+  for"); it used to land with today's date. The ERP Sync history labels the two codes in plain
+  words (`rejectSummary`).
+- Test: `supabase/tests/staging_complaints_in_date.sh` on a private copy of `tp_mirror2`:
+  before the fix the 3-row batch aborts (23502); after it, 7 of 7 assertions pass; re-run
+  no-op; rollback restores the by-number text byte-identical; re-apply identical. JS:
+  `src/test/erpImportZeroRows.test.js`.

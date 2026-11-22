@@ -11,7 +11,8 @@
  * RPC is Admin/super gated in the database - this layer never re-implements the
  * gate, it only relocates the call and normalises error surfacing.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, ServiceError } from './_client'
+import { validReason, MIN_REASON_LENGTH } from '../errorStatus'
 import { fetchAllPages } from '../fetchAll'
 import { errorFingerprint, webAppVersion, describeClient } from '../problemReport'
 
@@ -38,81 +39,129 @@ export function isMissingRelation(err) {
   )
 }
 
+/** True when the server does not have the status RPCs yet (migration not applied). */
+function isMissingRpc(err) {
+  const code = err?.code || err?.cause?.code
+  return code === 'PGRST202' || code === '42883'
+}
+
 /**
- * List system log rows, newest first. All filters are optional and applied only
- * when provided. Returns [] when the table is not provisioned or on a read error
- * so the health surface degrades gracefully.
+ * List system log rows, newest first, each with its Error Center status:
+ *   group_key, group_status (for_review | reviewed | fixed_in_code | resolved | ignored | routine),
+ *   is_open.
+ * Status comes from the Error Center triage table, NOT from system_logs.resolved, because log rows
+ * are immutable and their own resolved flag never changes. Before the status RPC exists on the
+ * server, rows are read directly and treated as open, which is what the database really says.
  *
  * @param {object}  [opts]
  * @param {string}  [opts.severity]  eq filter on severity
  * @param {string}  [opts.module]    eq filter on module_id
- * @param {boolean} [opts.resolved]  eq filter on resolved (bool)
+ * @param {'open'|'closed'} [opts.status]  Error Center status filter
+ * @param {boolean} [opts.resolved]  legacy alias: true = closed, false = open
  * @param {string}  [opts.since]     ISO timestamp; created_at gte filter
  * @param {number}  [opts.limit=500] max rows
  * @returns {Promise<Array<object>>}
  */
-export async function listSystemLogs({ severity, module, resolved, since, limit = 500 } = {}) {
+export async function listSystemLogs({ severity, module, status, resolved, since, limit = 500 } = {}) {
+  const wanted = status || (resolved === true ? 'closed' : resolved === false ? 'open' : null)
+  try {
+    return unwrap(await supabase.rpc('list_system_logs_with_status', {
+      p_severity: severity || null,
+      p_module: module || null,
+      p_status: wanted,
+      p_since: since || null,
+      p_limit: limit,
+    })) || []
+  } catch (err) {
+    if (!isMissingRpc(err)) {
+      if (isMissingRelation(err)) return []
+      throw err
+    }
+  }
+  // Fallback: status RPC not deployed yet. Every log is open in the database's own terms.
+  if (wanted === 'closed') return []
   try {
     let q = supabase.from('system_logs').select(SYSTEM_LOG_COLS)
       .order('created_at', { ascending: false })
       .limit(limit)
     if (severity) q = q.eq('severity', severity)
     if (module) q = q.eq('module_id', module)
-    if (typeof resolved === 'boolean') q = q.eq('resolved', resolved)
     if (since) q = q.gte('created_at', since)
-    return unwrap(await q) || []
+    const rows = unwrap(await q) || []
+    return rows.map((r) => ({ ...r, group_status: null, is_open: true }))
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err
   }
 }
 
-/**
- * Mark a single log row resolved. Stamps resolved=true, resolved_at=now, and
- * resolved_by = the current user id (best-effort; null when unavailable). Returns
- * the updated row.
- *
- * @param {string|number} id  the log row id
- * @returns {Promise<object|null>}
- */
-export async function resolveSystemLog(id) {
-  let resolvedBy = null
-  try {
-    const { data } = await supabase.auth.getUser()
-    resolvedBy = data?.user?.id || null
-  } catch {
-    resolvedBy = null
+function requireReason(reason) {
+  if (!validReason(reason)) {
+    throw new ServiceError(`Enter a reason (at least ${MIN_REASON_LENGTH} characters) to resolve.`, '22023')
   }
-  return unwrap(
-    await supabase.from('system_logs')
-      .update({
-        resolved: true,
-        resolved_by: resolvedBy,
-        resolved_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-      .select(SYSTEM_LOG_COLS)
-      .single(),
-  )
+  return String(reason).trim()
 }
 
 /**
- * Bulk-resolve log rows via the Admin/super gated `resolve_system_logs` RPC
- * (which stamps resolved_by = auth.uid() server-side). Optionally scope to a
- * single module and/or severity. Returns the integer count of rows resolved.
+ * Resolve the error GROUP a log belongs to, with a reason. The log row itself is never changed
+ * (it is an immutable audit record); the status, actor, time and reason are written to the Error
+ * Center triage table and its history. Super admin only (enforced by the database).
+ *
+ * @param {string} id      the log row id
+ * @param {string} reason  why it is resolved (required)
+ * @returns {Promise<{ok: boolean, resolved: number}>}
+ */
+export async function resolveSystemLog(id, reason) {
+  const why = requireReason(reason)
+  return unwrap(await supabase.rpc('resolve_system_log_groups', {
+    p_log_ids: [id],
+    p_module: null,
+    p_severity: null,
+    p_reason: why,
+  }))
+}
+
+/**
+ * Resolve every open error group behind the matching logs, with a reason. Returns how many groups
+ * were resolved. Falls back to the old RPC (same effect after the migration) when the new one is
+ * not deployed.
  *
  * @param {object} [opts]
  * @param {string} [opts.module]    module_id filter (null = all)
  * @param {string} [opts.severity]  severity filter (null = all)
+ * @param {string} opts.reason      why (required)
  * @returns {Promise<number>}
  */
-export async function resolveAllSystemLogs({ module, severity } = {}) {
-  return unwrap(
-    await supabase.rpc('resolve_system_logs', {
+export async function resolveAllSystemLogs({ module, severity, reason } = {}) {
+  const why = requireReason(reason)
+  try {
+    const out = unwrap(await supabase.rpc('resolve_system_log_groups', {
+      p_log_ids: null,
       p_module: module || null,
       p_severity: severity || null,
-    }),
-  )
+      p_reason: why,
+    }))
+    return Number(out?.resolved) || 0
+  } catch (err) {
+    if (!isMissingRpc(err)) throw err
+  }
+  return unwrap(await supabase.rpc('resolve_system_logs', {
+    p_module: module || null,
+    p_severity: severity || null,
+  }))
+}
+
+/**
+ * Open error-log counts by severity, using the Error Center status. Null when not available
+ * (the caller then falls back to the raw count, which treats every log as open).
+ */
+export async function openLogCounts(since = null) {
+  try {
+    const out = unwrap(await supabase.rpc('system_log_open_counts', { p_since: since }))
+    return out && typeof out === 'object' ? out : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -262,7 +311,7 @@ export async function getHealthMetrics() {
 
   const [
     trLatest, inspLatest, accLatest, woLatest,
-    unresolvedCritical, unresolvedError, errorsTotal,
+    openCounts, legacyCritical, legacyError, errorsTotal,
     aiTotal, aiErrors,
     reportsTotal, reportsFailed,
     logsByDay,
@@ -272,16 +321,15 @@ export async function getHealthMetrics() {
     latestCreatedAt('inspections'),
     latestCreatedAt('accidents'),
     latestCreatedAt('work_orders'),
-    // errors (system_logs, unresolved)
+    // errors: open by Error Center status (log rows are immutable; their own resolved flag never changes)
+    openLogCounts(),
+    // Fallback when the status RPC is not deployed: every log row is open in the database's terms.
     headCount(() => supabase.from('system_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('resolved', false).eq('severity', 'critical')),
+      .select('id', { count: 'exact', head: true }).eq('severity', 'critical')),
     headCount(() => supabase.from('system_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('resolved', false).eq('severity', 'error')),
+      .select('id', { count: 'exact', head: true }).eq('severity', 'error')),
     headCount(() => supabase.from('system_logs')
-      .select('id', { count: 'exact', head: true })
-      .eq('resolved', false)),
+      .select('id', { count: 'exact', head: true })),
     // ai (last 24h)
     headCount(() => supabase.from('ai_token_logs')
       .select('id', { count: 'exact', head: true })
@@ -307,11 +355,13 @@ export async function getHealthMetrics() {
       accidents: accLatest,
       work_orders: woLatest,
     },
-    errors: {
-      unresolvedCritical,
-      unresolvedError,
-      total: errorsTotal,
-    },
+    errors: openCounts
+      ? {
+          unresolvedCritical: Number(openCounts.critical) || 0,
+          unresolvedError: Number(openCounts.error) || 0,
+          total: Object.values(openCounts).reduce((n, v) => n + (Number(v) || 0), 0),
+        }
+      : { unresolvedCritical: legacyCritical, unresolvedError: legacyError, total: errorsTotal },
     ai: { total: aiTotal, errors: aiErrors },
     reports: { total: reportsTotal, failed: reportsFailed },
     logsByDay,

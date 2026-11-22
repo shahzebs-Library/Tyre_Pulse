@@ -142,7 +142,7 @@ Future<PagedRows<T>> fetchAllPages<T>(
 const String vehicleFleetColumns = 'id, asset_no, fleet_number, make, '
     'model, vehicle_type, site, status, operator_name, tyre_size, '
     'current_km, country, department, region, registration_no, year, '
-    'serial_no, engine_no, capacity, ops_status, axle_count';
+    'serial_no, engine_no, capacity, ops_status, axle_count, organisation_id';
 
 /// The narrow surface [VehicleFleetRepository] needs from the remote fleet
 /// register. See the library comment for why this exists as an interface
@@ -163,10 +163,42 @@ abstract interface class VehicleFleetSource {
   /// One row matching [assetNo] exactly, scoped the same way. Null is a
   /// legitimate outcome ("this asset does not exist in this scope"), never
   /// an error.
+  ///
+  /// [organisationId] is the caller's company. An asset code is unique per
+  /// company, and a super admin's read spans companies: when the code matches
+  /// machines in more than one company, the caller's company's row is the
+  /// answer, and two OTHER companies' rows are never picked between (null).
   Future<Map<String, dynamic>?> fetchByAssetNo({
     required String assetNo,
     required String? country,
+    String? organisationId,
   });
+}
+
+/// The row a lookup by asset code returns when [rows] may span companies.
+/// One company (the ordinary user's case): the first row, as before. Several:
+/// the row of [organisationId], else null. Mirrors the web
+/// `firstForCallerCompany` in `src/lib/api/companyScope.js`.
+Map<String, dynamic>? firstRowForCompany(
+  List<Map<String, dynamic>> rows,
+  String? organisationId,
+) {
+  final Set<Object?> orgs = <Object?>{
+    for (final Map<String, dynamic> r in rows)
+      if (r['organisation_id'] != null) r['organisation_id'],
+  };
+  if (orgs.length <= 1) {
+    return rows.isEmpty ? null : rows.first;
+  }
+  if (organisationId == null) {
+    return null;
+  }
+  for (final Map<String, dynamic> r in rows) {
+    if (r['organisation_id'] == organisationId) {
+      return r;
+    }
+  }
+  return null;
 }
 
 /// The real implementation, over a live [SupabaseClient].
@@ -227,6 +259,7 @@ final class SupabaseVehicleFleetSource
   Future<Map<String, dynamic>?> fetchByAssetNo({
     required String assetNo,
     required String? country,
+    String? organisationId,
   }) {
     return guard(() async {
       final query = _client
@@ -234,14 +267,16 @@ final class SupabaseVehicleFleetSource
           .select(vehicleFleetColumns)
           .eq('asset_no', assetNo);
 
+      // Up to one row per company (and per null-country row): the company is
+      // chosen client-side by [firstRowForCompany].
       final List<Map<String, dynamic>> rows = country == null
-          ? await query.limit(1)
-          : await query.or('country.eq.$country,country.is.null').limit(1);
+          ? await query.order('id').limit(20)
+          : await query
+              .or('country.eq.$country,country.is.null')
+              .order('id')
+              .limit(20);
 
-      if (rows.isEmpty) {
-        return null;
-      }
-      return rows.first;
+      return firstRowForCompany(rows, organisationId);
     });
   }
 }
@@ -574,6 +609,7 @@ final class VehicleFleetRepository {
       final Map<String, dynamic>? row = await _source.fetchByAssetNo(
         assetNo: trimmed,
         country: country,
+        organisationId: scope?.workspaceId,
       );
       if (row == null) {
         return const VehicleDetailNotFound();

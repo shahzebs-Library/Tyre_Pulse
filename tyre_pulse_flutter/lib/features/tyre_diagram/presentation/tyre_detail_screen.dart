@@ -168,7 +168,13 @@ class TyreDetailScreen extends StatelessWidget {
                 crossAxisCount: columns,
                 crossAxisSpacing: TpSpace.sm,
                 mainAxisSpacing: TpSpace.sm,
-                mainAxisExtent: 136,
+                // Grows with the text size: the cards hold up to two label
+                // lines, the value and a two-line caption.
+                mainAxisExtent: tpTextScaledExtent(
+                  context,
+                  base: 136,
+                  textHeight: 96,
+                ),
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: <Widget>[

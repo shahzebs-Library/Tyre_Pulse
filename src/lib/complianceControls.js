@@ -474,5 +474,30 @@ export function evidencePackRows(results = [], generatedAt = new Date().toISOStr
   }))
 }
 
-export const EVIDENCE_COLUMNS = ['control_id', 'domain', 'soc2', 'iso', 'title', 'status', 'detail', 'evidence', 'evaluated_at']
+/*
+ * PDF layout for the evidence pack (A4 landscape, 297 mm wide). The table margins match the title
+ * margin (14 mm) so the table never runs past the page edge or the footer, and the column widths
+ * add up to exactly the printable width. The Control column is wide enough that no control id
+ * (e.g. MON-BREAKGLASS, BAK-RESTORE-TEST) is split mid-word.
+ */
+export const PDF_MARGIN_MM = 14
+export const PDF_PRINTABLE_MM = 297 - PDF_MARGIN_MM * 2
+export const PDF_CONTROL_WIDTHS = [30, 24, 20, 24, 38, 24, 63, 46]
+export const PDF_ATTESTATION_WIDTHS = [30, 109, 50, 27, 27, 26]
+
+/**
+ * Evidence cell for the PDF only: one source per line, and long hex ids (snapshot / scan uuids)
+ * shortened to their first 8 characters so they do not wrap mid-id. The Excel export keeps the
+ * full ids.
+ */
+export function pdfEvidenceCell(evidence) {
+  if (!evidence || evidence === 'N/A') return 'N/A'
+  return String(evidence)
+    .split(/;\s*/)
+    .map((part) => part.replace(/\b([0-9a-f]{8})(?:-?[0-9a-f]{4}){3}-?[0-9a-f]{12}\b/gi, '$1'))
+    .filter((part) => part.trim())
+    .join('\n')
+}
+
+export const EVIDENCE_COLUMNS =['control_id', 'domain', 'soc2', 'iso', 'title', 'status', 'detail', 'evidence', 'evaluated_at']
 export const EVIDENCE_HEADERS = ['Control', 'Domain', 'SOC 2', 'ISO 27001', 'Title', 'Status', 'Detail', 'Evidence', 'Evaluated at']

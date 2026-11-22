@@ -8,14 +8,16 @@ describe('fleetCpkView - formatting', () => {
   it('renders N/A for a null CPK (no denominator), never a fake 0', () => {
     expect(fmtCpkValue(null, 'SAR', 'km')).toBe('N/A')
     expect(fmtCpkValue(undefined, 'SAR', 'engine_hours')).toBe('N/A')
-    expect(fmtCpkValue(1.23456, 'SAR', 'km')).toBe('SAR 1.2346/km')
+    // ENG-1 (2026-11-12): the km side of get_fleet_cpk divides by TYRE km, so the
+    // suffix says so. "/km" let a reader take it for a cost per vehicle km.
+    expect(fmtCpkValue(1.23456, 'SAR', 'km')).toBe('SAR 1.2346 per tyre km')
     expect(fmtCpkValue(2.5, 'AED', 'engine_hours')).toBe('AED 2.5000/hour')
   })
 
   it('unit suffix follows km vs plant', () => {
-    expect(unitSuffix('km')).toBe('/km')
+    expect(unitSuffix('km')).toBe(' per tyre km')
     expect(unitSuffix('engine_hours')).toBe('/hour')
-    expect(unitSuffix('anything')).toBe('/km')
+    expect(unitSuffix('anything')).toBe(' per tyre km')
   })
 
   it('distance renders with unit label; 0 -> N/A', () => {
@@ -33,10 +35,13 @@ describe('fleetCpkView - formatting', () => {
 
 describe('fleetCpkView - sorting and filtering', () => {
   it('sorts by-type worst CPK first, nulls last', () => {
+    // ENG-1: this test used to rank km rows by cpk_total, which was tyres plus
+    // spares plus oil over TYRE km and is not a measurement. A km row is now
+    // ranked by its tyre spend ratio (cpk_tyre); an hour row keeps cpk_total.
     const rows = [
-      { vehicle_type: 'A', cpk_total: 0.5, total_cost: 10 },
-      { vehicle_type: 'B', cpk_total: null, total_cost: 999 },
-      { vehicle_type: 'C', cpk_total: 2.0, total_cost: 5 },
+      { vehicle_type: 'A', unit: 'km', cpk_tyre: 0.5, cpk_total: 9, total_cost: 10 },
+      { vehicle_type: 'B', unit: 'km', cpk_tyre: null, cpk_total: 99, total_cost: 999 },
+      { vehicle_type: 'C', unit: 'engine_hours', cpk_tyre: 0.1, cpk_total: 2.0, total_cost: 5 },
     ]
     const out = sortByTypeWorstFirst(rows)
     expect(out.map(r => r.vehicle_type)).toEqual(['C', 'A', 'B'])
@@ -68,7 +73,10 @@ describe('fleetCpkView - fleet tiles', () => {
     expect(tiles).toHaveLength(1)
     expect(tiles[0].unit).toBe('km')
     expect(tiles[0].currency).toBe('SAR')
-    expect(tiles[0].cpkTotal).toBe(0.5)
+    // ENG-1: the km total (0.5 here) is withheld; the tile leads with the tyre spend ratio.
+    expect(tiles[0].cpkTotal).toBeNull()
+    expect(tiles[0].rate).toBe(0.2)
+    expect(tiles[0].cpkTyre).toBe(0.2)
     expect(tiles[0].coveragePct).toBe(80)
   })
 
@@ -89,7 +97,9 @@ describe('fleetCpkView - export rows', () => {
       { country: 'KSA', vehicle_type: 'Mixer', unit: 'km', distance_or_hours: 1000.6, tyre_cost: 500, total_cost: 900, cpk_tyre: 0.5, cpk_total: 0.9 },
       { country: 'KSA', vehicle_type: 'Generator', unit: 'engine_hours', distance_or_hours: 0, tyre_cost: 100, total_cost: 100, cpk_tyre: null, cpk_total: null },
     ])
-    expect(rows[0].cpk_total).toBe('0.9000')
+    // ENG-1: a km row exports N/A for the total; the tyre spend ratio is exported.
+    expect(rows[0].cpk_total).toBe('N/A')
+    expect(rows[0].cpk_tyre).toBe('0.5000')
     expect(rows[0].unit).toBe('km')
     const gen = rows.find(r => r.vehicle_type === 'Generator')
     expect(gen.cpk_total).toBe('N/A')

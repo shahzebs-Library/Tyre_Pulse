@@ -227,7 +227,9 @@ describe('buildCostCpkExport', () => {
   })
 
   it('writes "Not comparable" instead of a misleading cpk change', () => {
-    const row = buildCostCpkExport(SNAP).rows.find((r) => r.name.startsWith('Cost per km'))
+    // ENG-1: the row is named from the metric glossary now ("Operating cost per
+    // vehicle km (parts and materials)"), not the ambiguous "Cost per km".
+    const row = buildCostCpkExport(SNAP).rows.find((r) => r.name.startsWith('Operating cost per vehicle km'))
     expect(row.change_vs_previous).toBe('Not comparable')
   })
 

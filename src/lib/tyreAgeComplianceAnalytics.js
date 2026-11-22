@@ -1,5 +1,6 @@
 /**
- * tyreAgeComplianceAnalytics - page-level analytics for Tyre Age Compliance.
+ * tyreAgeComplianceAnalytics - page-level analytics for the Tyre time in service
+ * page (route and module key keep the older tyre-age-compliance name).
  *
  * The banding, birth-date resolution and fleet KPIs live in the engine
  * `./tyreAgeCompliance` (assessFleet / assessTyre). This module only adds what
@@ -86,8 +87,32 @@ export function actionList(rows = [], limit = 10) {
   return sortByAge((rows || []).filter((r) => NON_COMPLIANT_BANDS.includes(r.ageBand))).slice(0, limit)
 }
 
+/**
+ * What the figures in a scope actually measure. A tyre dated from a DOT code or
+ * a manufacture date gives true tyre age; one dated from its issue or fitment
+ * date gives only TIME IN SERVICE (the rubber can be older than the day it was
+ * fitted). The page uses this to say plainly which one it is showing, and to
+ * state "manufacture date not recorded" instead of implying age compliance.
+ */
+export function measurementBasis(rows = []) {
+  let manufacture = 0; let inService = 0; let undated = 0
+  for (const r of rows || []) {
+    if (r.dateSource === 'dot' || r.dateSource === 'manufacture') manufacture += 1
+    else if (r.dateSource === 'issue' || r.dateSource === 'fitment') inService += 1
+    else undated += 1
+  }
+  const total = manufacture + inService + undated
+  const note = total === 0 ? ''
+    : manufacture === 0
+      ? 'Manufacture date not recorded. Every figure is time in service, counted from the fitment date, not tyre age.'
+      : `Manufacture date recorded on ${manufacture} of ${total} tyres. The rest are time in service, counted from the fitment date.`
+  return { total, manufacture, inService, undated, manufactureRecorded: manufacture > 0, note }
+}
+
 export const EXPORT_COLS = ['serial', 'asset_no', 'brand', 'size', 'position', 'site', 'ageYears', 'band', 'birthDate', 'dateSource']
-export const EXPORT_HEADERS = ['Serial', 'Asset', 'Brand', 'Size', 'Position', 'Site', 'Age (yrs)', 'Status', 'Birth date', 'Date source']
+export const EXPORT_HEADERS = ['Serial', 'Asset', 'Brand', 'Size', 'Position', 'Site', 'Years in service', 'Status', 'In service since', 'Counted from']
+export const REPORT_TITLE = 'Tyre Time in Service'
+export const REPORT_BASIS_NOTE = 'Time in service is counted from the fitment date. Manufacture date is not recorded, so this is not tyre age.'
 
 export function ageExportRows(rows = []) {
   return (rows || []).map((r) => ({

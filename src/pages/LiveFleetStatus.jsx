@@ -46,7 +46,7 @@ ChartJS.register(
 const ROW_CAP = 50000
 
 // Vector glyph for a vehicle (no emoji as structural icons).
-function vehicleEmoji() {
+function vehicleIcon() {
   return <Truck size={14} aria-hidden="true" className="text-[var(--text-muted)]" />
 }
 
@@ -305,7 +305,7 @@ function VehicleCard({ vehicle, onClick, isSelected }) {
       <div className="flex items-start justify-between mb-2.5">
         <div className="min-w-0 flex-1 mr-2">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-lg leading-none flex-shrink-0">{vehicleEmoji(vehicle_type)}</span>
+            <span className="text-lg leading-none flex-shrink-0">{vehicleIcon()}</span>
             <div className="min-w-0">
               <p className="text-[var(--text-primary)] font-bold text-sm leading-tight truncate" title={asset_no}>{asset_no}</p>
               {fleet_number && (
@@ -522,7 +522,7 @@ export default function LiveFleetStatus() {
       id: 'asset_no', header: t('livefleet.list.columns.assetNo'), accessorFn: (v) => v.asset_no, size: 150, sortingFn: nullLastSort,
       cell: ({ row }) => (
         <span className="flex items-center gap-1.5">
-          {vehicleEmoji(row.original.vehicle_type)}
+          {vehicleIcon()}
           <span className="text-[var(--text-primary)] font-semibold">{row.original.asset_no}</span>
         </span>
       ),
@@ -1060,7 +1060,7 @@ export default function LiveFleetStatus() {
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-sm">{vehicleEmoji(v.vehicle_type)}</span>
+                                  <span className="text-sm">{vehicleIcon()}</span>
                                   <span className="text-[var(--text-primary)] text-xs font-semibold">{v.asset_no}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
@@ -1164,7 +1164,7 @@ export default function LiveFleetStatus() {
         size="lg"
         title={drawerVehicle ? (
           <span className="flex items-center gap-2">
-            <span className="text-2xl" aria-hidden="true">{vehicleEmoji(drawerVehicle.vehicle_type)}</span>
+            <span className="text-2xl" aria-hidden="true">{vehicleIcon()}</span>
             {drawerVehicle.asset_no}
             {drawerVehicle.fleet_number && (
               <span className="text-[var(--text-muted)] font-mono text-sm">#{drawerVehicle.fleet_number}</span>

@@ -58,7 +58,7 @@ const loadExportUtils = () => import('../lib/exportUtils')
 
 // Categorical order for removal reasons, validated for colour-vision safety
 // on both themes; "Other" is always the neutral grey.
-const REASON_COLORS = ['#3b82f6', '#d97706', '#a855f7', '#0d9488', '#e11d48', '#8a94a3']
+const REASON_COLORS = ['#3b82f6', '#d97706', '#0891b2', '#0d9488', '#e11d48', '#8a94a3']
 
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
 const pct = (v) => (v == null || !Number.isFinite(Number(v)) ? 'N/A' : `${Number(v)}%`)

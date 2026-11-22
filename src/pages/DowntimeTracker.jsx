@@ -292,7 +292,7 @@ export default function DowntimeTracker() {
       {
         label: t('downtime.charts.targetSeries', { pct: TARGET_AVAILABILITY }),
         data: trend.months.map(() => TARGET_AVAILABILITY),
-        borderColor: '#6366f1',
+        borderColor: '#475569',
         borderDash: [6, 3],
         pointRadius: 0,
         borderWidth: 1.5,
@@ -646,7 +646,7 @@ export default function DowntimeTracker() {
           color="red"
         />
         <StatCard label="Mean time between events" value={kpis.mtbeHours != null ? `${Math.round(kpis.mtbeHours)} h` : 'N/A'} sub={t('downtime.kpi.mttrSub')} icon={BarChart2} color="blue" />
-        <StatCard label="Unplanned share" value={kpis.unplannedPct != null ? `${kpis.unplannedPct}%` : 'N/A'} sub={`${kpis.unplannedEvents} critical or high events`} icon={Gauge} color="purple" />
+        <StatCard label="Unplanned share" value={kpis.unplannedPct != null ? `${kpis.unplannedPct}%` : 'N/A'} sub={`${kpis.unplannedEvents} critical or high events`} icon={Gauge} color="blue" />
       </div>
 
       {filtered.length === 0 && (

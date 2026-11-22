@@ -246,7 +246,7 @@ export default function ShiftScheduling() {
     { label: 'On shift today', value: kv(kpi.today), icon: Clock, tone: 'text-sky-400' },
     { label: 'Upcoming', value: kv(kpi.upcoming), icon: CalendarDays, tone: 'text-[var(--brand-bright)]', sub: 'Scheduled after today' },
     { label: 'Attendance', value: failed || kpi.attendanceRate == null ? null : `${kpi.attendanceRate}%`, icon: CheckCircle2, tone: 'text-green-400', sub: failed || kpi.absenceRate == null ? 'No shifts closed out yet' : `${kpi.byStatus.absent} absent, ${kpi.absenceRate}%` },
-    { label: 'Rostered hours', value: failed || kpi.rosteredHours == null ? null : kpi.rosteredHours.toLocaleString(), icon: Hourglass, tone: 'text-violet-400', sub: failed ? null : `${kpi.timedShifts} shifts with start and end` },
+    { label: 'Rostered hours', value: failed || kpi.rosteredHours == null ? null : kpi.rosteredHours.toLocaleString(), icon: Hourglass, tone: 'text-slate-400', sub: failed ? null : `${kpi.timedShifts} shifts with start and end` },
     { label: 'Past, not closed out', value: kv(kpi.openPast), icon: History, tone: kpi.openPast ? 'text-amber-400' : 'text-green-400', sub: 'Past date, still marked scheduled' },
   ]
 

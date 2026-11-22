@@ -211,8 +211,8 @@ export const KPI_FN_LABELS = Object.freeze({
 
 /** Fixed, theme-independent categorical palette (legible on dark and white). */
 export const CHART_PALETTE = Object.freeze([
-  '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7',
-  '#ec4899', '#14b8a6', '#eab308', '#3b82f6', '#f97316', '#84cc16',
+  '#2a78d6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#475569',
+  '#0f766e', '#14b8a6', '#eab308', '#3b82f6', '#f97316', '#84cc16',
 ])
 
 // ── Value helpers ─────────────────────────────────────────────────────────────
@@ -568,7 +568,7 @@ export function buildReportChartData(aggregated, chart) {
     dataset = {
       label: metricCol.label,
       data: values,
-      backgroundColor: 'rgba(99,102,241,0.20)',
+      backgroundColor: 'rgba(42,120,214,0.20)',
       borderColor: CHART_PALETTE[0],
       borderWidth: 2,
       fill: true,

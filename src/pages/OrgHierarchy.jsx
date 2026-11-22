@@ -55,8 +55,8 @@ const EMPTY_FORM = {
 }
 
 const TYPE_META = {
-  company:    { label: 'Company',    cls: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' },
-  country:    { label: 'Country',    cls: 'bg-violet-500/15 text-violet-300 border-violet-500/30' },
+  company:    { label: 'Company',    cls: 'bg-blue-500/15 text-blue-300 border-blue-500/30' },
+  country:    { label: 'Country',    cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30' },
   region:     { label: 'Region',     cls: 'bg-sky-500/15 text-sky-300 border-sky-500/30' },
   branch:     { label: 'Branch',     cls: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' },
   project:    { label: 'Project',    cls: 'bg-teal-500/15 text-teal-300 border-teal-500/30' },
@@ -100,7 +100,7 @@ function TreeNode({ node, depth, onEdit, onSelect, selectedId, countsByUnitMap, 
   return (
     <li role="treeitem" aria-expanded={hasKids ? open : undefined} aria-selected={isSelected}>
       <div
-        className={`flex items-center gap-2 pr-2 rounded-lg ${isSelected ? 'bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/30' : 'hover:bg-[var(--input-bg)]/50'}`}
+        className={`flex items-center gap-2 pr-2 rounded-lg ${isSelected ? 'bg-green-500/10 ring-1 ring-inset ring-green-500/30' : 'hover:bg-[var(--input-bg)]/50'}`}
         style={{ paddingLeft: `${Math.min(depth, 8) * 20 + 4}px` }}
       >
         {hasKids ? (
@@ -294,7 +294,7 @@ export default function OrgHierarchy() {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setSelectedUnitId(String(r.id)) }}
-            className={`inline-flex items-center gap-1.5 text-xs rounded-lg px-2 min-h-[36px] border focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-bright)] ${sel ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300' : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'}`}
+            className={`inline-flex items-center gap-1.5 text-xs rounded-lg px-2 min-h-[36px] border focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand-bright)] ${sel ? 'border-green-500/40 bg-green-500/10 text-green-300' : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'}`}
             aria-label={`Manage members of ${r.name}`}
           >
             <Users size={12} aria-hidden="true" />
@@ -839,7 +839,7 @@ export default function OrgHierarchy() {
               <textarea id="oh-f-notes" className="input w-full min-h-[70px] resize-y" placeholder="e.g. covers all eastern-province depots" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
             </div>
             <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-              <input type="checkbox" className="accent-indigo-500" checked={form.active} onChange={(e) => set('active', e.target.checked)} />
+              <input type="checkbox" className="accent-green-500" checked={form.active} onChange={(e) => set('active', e.target.checked)} />
               Active unit
             </label>
 

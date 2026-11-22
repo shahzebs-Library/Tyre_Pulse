@@ -27,8 +27,6 @@ export const ACCENT_PRESETS = [
   { id: 'teal',    label: 'Teal',        value: '#0d9488' },
   { id: 'cyan',    label: 'Cyan',        value: '#0891b2' },
   { id: 'blue',    label: 'Ocean',       value: '#2563eb' },
-  { id: 'indigo',  label: 'Indigo',      value: '#4f46e5' },
-  { id: 'violet',  label: 'Violet',      value: '#7c3aed' },
   { id: 'rose',    label: 'Rose',        value: '#e11d48' },
   { id: 'amber',   label: 'Amber',       value: '#d97706' },
   { id: 'slate',   label: 'Graphite',    value: '#475569' },

@@ -49,7 +49,7 @@ const STATUS_TONE = {
   late: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   absent: 'bg-red-500/15 text-red-400 border-red-500/30',
   scheduled: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
-  leave: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  leave: 'bg-teal-500/15 text-teal-400 border-teal-500/30',
   cancelled: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 

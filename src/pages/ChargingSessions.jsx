@@ -161,7 +161,7 @@ export default function ChargingSessions() {
       sub: summary.mixedCurrency ? `Mixed currencies (${summary.currencies.join(', ')})` : `${summary.costedSessions} costed` },
     { label: 'Avg cost / kWh', value: summary.avgCostPerKwh == null ? 'N/A' : fmtMoney(summary.avgCostPerKwh, currencyLabel), icon: TrendingUp, tone: 'text-green-400',
       sub: summary.mixedCurrency ? 'Pick one asset or station' : undefined },
-    { label: 'Avg SoC gain', value: summary.avgSocGainPct == null ? 'N/A' : `${Math.round(summary.avgSocGainPct)}%`, icon: Gauge, tone: 'text-violet-400' },
+    { label: 'Avg SoC gain', value: summary.avgSocGainPct == null ? 'N/A' : `${Math.round(summary.avgSocGainPct)}%`, icon: Gauge, tone: 'text-slate-400' },
     { label: 'Failed or interrupted', value: summary.issueRatePct == null ? 'N/A' : `${Math.round(summary.issueRatePct)}%`, icon: AlertTriangle,
       tone: summary.issueRatePct > 0 ? 'text-red-400' : 'text-[var(--text-primary)]',
       sub: `${summary.statusCounts.failed + summary.statusCounts.interrupted} of ${summary.totalSessions}` },

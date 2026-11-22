@@ -55,7 +55,7 @@ const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:rin
 
 const STATUS_BADGE = {
   scheduled: 'text-sky-500 border-sky-500/40',
-  in_progress: 'text-indigo-400 border-indigo-500/40',
+  in_progress: 'text-blue-400 border-blue-500/40',
   completed: 'text-green-500 border-green-500/40',
   delayed: 'text-amber-500 border-amber-500/40',
   cancelled: 'text-[var(--text-muted)] border-[var(--input-border)]',

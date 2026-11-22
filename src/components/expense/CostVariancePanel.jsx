@@ -61,7 +61,7 @@ const DRIVER_LABEL = {
 const DRIVER_TONE = {
   price: 'bg-amber-500/15 text-amber-400',
   volume: 'bg-sky-500/15 text-sky-400',
-  new: 'bg-violet-500/15 text-violet-400',
+  new: 'bg-blue-500/15 text-blue-400',
   stopped: 'bg-slate-500/20 text-[var(--text-secondary)]',
   mixed: 'bg-teal-500/15 text-teal-400',
   flat: 'bg-slate-500/20 text-[var(--text-dim)]',

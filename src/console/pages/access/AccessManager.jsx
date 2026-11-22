@@ -68,7 +68,7 @@ const SCOPES = [
 const DEFAULT_SCOPE = 'web'
 
 const ROLE_TINT = {
-  Admin: 'text-purple-300', Manager: 'text-blue-300', Director: 'text-indigo-300',
+  Admin: 'text-teal-300', Manager: 'text-blue-300', Director: 'text-slate-300',
   Reporter: 'text-cyan-300', Inspector: 'text-green-300', 'Tyre Man': 'text-amber-300',
   Driver: 'text-[var(--text-secondary)]',
 }

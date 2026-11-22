@@ -38,7 +38,7 @@ const EMPTY_FORM = {
 }
 
 const TIER_META = {
-  enterprise: { label: 'Enterprise', cls: 'bg-violet-500/15 text-violet-300 border-violet-500/30', Icon: Crown },
+  enterprise: { label: 'Enterprise', cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30', Icon: Crown },
   premium: { label: 'Premium', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30', Icon: Star },
   standard: { label: 'Standard', cls: 'bg-slate-500/15 text-slate-300 border-slate-500/30', Icon: Layers },
 }
@@ -125,7 +125,7 @@ export default function CustomerPortal() {
   const kpis = [
     { label: 'Customer accounts', value: n(kpi.total), icon: Building2, tone: 'text-[var(--text-primary)]', onClick: () => setStatusFilter('') },
     { label: 'Active', value: n(kpi.active), icon: UserCheck, tone: 'text-green-400', onClick: () => setStatusFilter('active'), active: statusFilter === 'active' },
-    { label: 'Portal adoption', value: ready && kpi.adoptionPct != null ? `${kpi.adoptionPct}%` : 'N/A', icon: ShieldCheck, tone: 'text-violet-400', sub: ready ? `${kpi.portalEnabled} of ${kpi.total} enabled` : null, onClick: () => setPortalFilter('on'), active: portalFilter === 'on' },
+    { label: 'Portal adoption', value: ready && kpi.adoptionPct != null ? `${kpi.adoptionPct}%` : 'N/A', icon: ShieldCheck, tone: 'text-slate-400', sub: ready ? `${kpi.portalEnabled} of ${kpi.total} enabled` : null, onClick: () => setPortalFilter('on'), active: portalFilter === 'on' },
     { label: 'Onboarding', value: n(kpi.onboarding), icon: Users, tone: 'text-sky-400', onClick: () => setStatusFilter('onboarding'), active: statusFilter === 'onboarding' },
     { label: 'Open requests', value: n(kpi.openRequests), icon: Clock, tone: 'text-amber-400', sub: ready ? `${kpi.backlogged} account${kpi.backlogged === 1 ? '' : 's'} over ${BACKLOG_THRESHOLD}` : null },
     { label: 'Linked assets', value: n(kpi.linkedAssets), icon: Boxes, tone: 'text-teal-400' },
@@ -381,7 +381,7 @@ export default function CustomerPortal() {
                     </span>
                   </div>
                   <div className="h-2 rounded-full bg-[var(--input-bg)] overflow-hidden">
-                    <div className="h-full rounded-full bg-violet-500/70" style={{ width: `${t.pct}%` }} />
+                    <div className="h-full rounded-full bg-slate-500/70" style={{ width: `${t.pct}%` }} />
                   </div>
                 </div>
               ))}

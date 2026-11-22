@@ -500,7 +500,7 @@ export default function TelematicsDevices() {
         <Kpi label="Active" value={loaded ? activeShareLabel(kpis) : kpiNa} sub={loaded ? `${kpis.active} of ${kpis.total}` : null} icon={Radio} tone="text-emerald-500" />
         <Kpi label="Online now" value={v(conn.online)} sub={loaded ? (conn.onlinePct == null ? 'no heartbeats' : `${conn.onlinePct}% of expected`) : null} icon={Wifi} tone="text-sky-500" />
         <Kpi label="Offline / stale" value={v(kpis.offlineStale)} sub={loaded ? `${conn.never} never reported` : null} icon={WifiOff} tone="text-amber-500" />
-        <Kpi label="Fleet coverage" value={loaded ? coveragePctLabel : kpiNa} sub={loaded ? (coverage.totalAssets == null ? `${coverage.assetsCovered} assets covered` : `${coverage.assetsCovered} of ${coverage.totalAssets} assets`) : null} icon={Percent} tone="text-indigo-500" />
+        <Kpi label="Fleet coverage" value={loaded ? coveragePctLabel : kpiNa} sub={loaded ? (coverage.totalAssets == null ? `${coverage.assetsCovered} assets covered` : `${coverage.assetsCovered} of ${coverage.totalAssets} assets`) : null} icon={Percent} tone="text-blue-500" />
         <Kpi label="Unassigned" value={v(kpis.unassigned)} sub={loaded ? 'no asset mapping' : null} icon={CircleSlash} tone="text-rose-500" />
       </div>
 

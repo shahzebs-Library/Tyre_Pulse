@@ -39,7 +39,7 @@ import {
 } from '../lib/accountRecovery'
 
 const ROLE_BADGE = {
-  Admin:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
+  Admin:   'bg-teal-900/50 text-teal-300 border border-teal-700/50',
   Manager: 'bg-blue-900/50 text-blue-300 border border-blue-700/50',
   Viewer:  'bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border-bright)]',
 }

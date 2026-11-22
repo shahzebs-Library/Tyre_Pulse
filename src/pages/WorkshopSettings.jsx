@@ -309,7 +309,7 @@ export default function WorkshopSettings() {
           {/* Default shift */}
           <div className="card space-y-4">
             <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-              <Clock size={16} className="text-violet-400" />
+              <Clock size={16} className="text-blue-400" />
               <span className="text-sm font-semibold text-[var(--text-primary)]">Default shift</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

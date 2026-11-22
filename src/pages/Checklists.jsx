@@ -601,7 +601,7 @@ export default function Checklists() {
                     </span>
                   )}
                   {tpl.require_approval && (
-                    <span className="badge text-xs bg-purple-900/40 text-purple-300 border border-purple-700/50 inline-flex items-center gap-1">
+                    <span className="badge text-xs bg-blue-900/40 text-blue-300 border border-blue-700/50 inline-flex items-center gap-1">
                       <ShieldCheck size={11} /> Approval
                     </span>
                   )}

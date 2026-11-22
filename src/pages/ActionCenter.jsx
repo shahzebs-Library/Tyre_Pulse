@@ -57,8 +57,8 @@ const SEVERITY_BAR = {
 }
 const STATUS_BADGE = {
   open: 'bg-sky-500/15 text-sky-300 border-sky-500/40',
-  acknowledged: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40',
-  in_progress: 'bg-violet-500/15 text-violet-300 border-violet-500/40',
+  acknowledged: 'bg-blue-500/15 text-blue-300 border-blue-500/40',
+  in_progress: 'bg-teal-500/15 text-teal-300 border-teal-500/40',
   resolved: 'bg-green-500/15 text-green-300 border-green-500/40',
   dismissed: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }

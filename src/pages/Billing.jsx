@@ -285,7 +285,7 @@ export default function Billing() {
       )}
 
       {sub?.status === 'trialing' && trialDaysLeft !== null && (
-        <div className="rounded-xl px-5 py-4 bg-gradient-to-r from-blue-950/60 to-indigo-950/40 border border-blue-800/40 flex items-center gap-3">
+        <div className="rounded-xl px-5 py-4 bg-gradient-to-r from-blue-950/60 to-blue-950/40 border border-blue-800/40 flex items-center gap-3">
           <Clock size={18} className="text-blue-300 shrink-0" />
           <p className="text-sm text-blue-200 flex-1">
             <strong>{trialDaysLeft} day{trialDaysLeft === 1 ? '' : 's'}</strong> left in your trial.

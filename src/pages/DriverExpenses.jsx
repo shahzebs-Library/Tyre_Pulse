@@ -347,7 +347,7 @@ export default function DriverExpenses() {
   const kpis = [
     { label: 'Total claims', value: unknown ? 'N/A' : vk.total, sub: `${vk.drivers} drivers`, icon: Receipt, tone: 'text-[var(--text-primary)]' },
     { label: 'Total spend', value: unknown ? 'N/A' : fmtMoney(vk.totalValue), sub: `${vk.thisPeriodCount} in ${vk.periodDays}d`, icon: DollarSign, tone: 'text-[var(--brand-bright)]' },
-    { label: 'Avg claim', value: unknown ? 'N/A' : (vk.avgClaim == null ? 'N/A' : fmtMoney(vk.avgClaim)), sub: 'per claim', icon: CircleDollarSign, tone: 'text-indigo-400' },
+    { label: 'Avg claim', value: unknown ? 'N/A' : (vk.avgClaim == null ? 'N/A' : fmtMoney(vk.avgClaim)), sub: 'per claim', icon: CircleDollarSign, tone: 'text-blue-400' },
     { label: 'Approval rate', value: unknown ? 'N/A' : (vk.approvalRate == null ? 'N/A' : `${vk.approvalRate}%`), sub: `${vk.decidedCount} decided`, icon: Percent, tone: 'text-emerald-400' },
     { label: 'Pending', value: unknown ? 'N/A' : vk.pendingCount, sub: fmtMoney(vk.pendingValue), icon: Clock, tone: 'text-amber-400' },
     { label: 'Outstanding', value: unknown ? 'N/A' : fmtMoney(vk.reimbursementOutstanding), sub: 'approved, unpaid', icon: Wallet, tone: 'text-sky-400' },

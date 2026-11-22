@@ -53,7 +53,7 @@ const PRIORITY_BADGE = {
   urgent: 'bg-red-500/15 text-red-300 border-red-500/40',
 }
 const STATUS_BADGE = {
-  new: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/40',
+  new: 'bg-blue-500/15 text-blue-300 border-blue-500/40',
   triaged: 'bg-sky-500/15 text-sky-300 border-sky-500/40',
   in_progress: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
   resolved: 'bg-green-500/15 text-green-300 border-green-500/40',

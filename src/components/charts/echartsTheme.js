@@ -66,8 +66,8 @@ export function getEchartsTheme(isDark) {
     // chosen to read on both light and dark canvases).
     series: [
       accent || '#16a34a',
-      '#2563eb', '#d97706', '#7c3aed', '#0d9488',
-      '#e11d48', '#4f46e5', '#ca8a04', '#0891b2', '#db2777',
+      '#2563eb', '#d97706', '#475569', '#0d9488',
+      '#e11d48', '#1d4ed8', '#ca8a04', '#0891b2', '#64748b',
     ],
     // Sequential ramp for the cost heatmap (low → high spend).
     heatRamp: isDark

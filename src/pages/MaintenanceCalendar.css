@@ -1,8 +1,8 @@
 /* Maintenance Calendar page. Built on --cc-* tokens so light and dark share one sheet.
-   Indigo (PM plans) is not a kit token, so it is defined here per theme. */
-.mc-page { --mc-indigo: #818cf8; --mc-indigo-tint: rgba(129, 140, 248, 0.16); --mc-today: var(--cc-green); }
-html.light .mc-page, html.light .mc-modal { --mc-indigo: #4f46e5; --mc-indigo-tint: #eef0fe; }
-.mc-modal { --mc-indigo: #818cf8; --mc-indigo-tint: rgba(129, 140, 248, 0.16); gap: 14px; }
+   Teal (PM plans) is not a kit token, so it is defined here per theme. */
+.mc-page { --mc-indigo: #2dd4bf; --mc-indigo-tint: rgba(45, 212, 191, 0.16); --mc-today: var(--cc-green); }
+html.light .mc-page, html.light .mc-modal { --mc-indigo: #0f766e; --mc-indigo-tint: #e6f4f1; }
+.mc-modal { --mc-indigo: #2dd4bf; --mc-indigo-tint: rgba(45, 212, 191, 0.16); gap: 14px; }
 
 /* Event tones */
 .tone-blue   { --mc-c: var(--cc-blue);   --mc-t: var(--cc-blue-tint); }

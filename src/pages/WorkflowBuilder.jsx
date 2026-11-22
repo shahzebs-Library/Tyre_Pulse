@@ -76,7 +76,7 @@ const REQUIREMENTS = [
 ]
 
 // Stable palette for role badges, hashed off the role name.
-const ROLE_HUES = ['#f97316', '#3b82f6', '#a855f7', '#22c55e', '#eab308', '#ec4899', '#14b8a6', '#ef4444']
+const ROLE_HUES = ['#f97316', '#3b82f6', '#475569', '#22c55e', '#eab308', '#0891b2', '#14b8a6', '#ef4444']
 function roleHue(role) {
   let h = 0
   for (let i = 0; i < (role || '').length; i++) h = (h * 31 + role.charCodeAt(i)) >>> 0
@@ -253,7 +253,7 @@ function StepEditor({
           )
         })}
         {step.condition?.field ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-purple-500/15 text-purple-300 font-mono">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-blue-500/15 text-blue-300 font-mono">
             <SlidersHorizontal className="w-3 h-3" />
             {step.condition.field} {step.condition.op} {step.condition.value || '?'}
           </span>
@@ -422,7 +422,7 @@ function PreviewChain({ steps }) {
                     return <Icon key={r.key} className="w-3 h-3 text-[var(--text-muted)]" title={r.label} />
                   })}
                   {s.condition?.field ? (
-                    <span className="text-[10px] text-purple-300 font-mono">if {s.condition.field} {s.condition.op} {s.condition.value || '?'}</span>
+                    <span className="text-[10px] text-blue-300 font-mono">if {s.condition.field} {s.condition.op} {s.condition.value || '?'}</span>
                   ) : null}
                 </div>
               </div>

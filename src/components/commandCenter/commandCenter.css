@@ -20,8 +20,8 @@
   --cc-orange: #f97316;
   --cc-blue: #3b82f6;
   --cc-blue-tint: rgba(59, 130, 246, 0.16);
-  --cc-purple: #a855f7;
-  --cc-purple-tint: rgba(168, 85, 247, 0.16);
+  --cc-purple: #14b8a6;
+  --cc-purple-tint: rgba(20, 184, 166, 0.16);
   --cc-track: rgba(255, 255, 255, 0.08);
   --cc-land: rgba(34, 197, 94, 0.16);
   --cc-land-stroke: rgba(34, 197, 94, 0.28);
@@ -52,8 +52,8 @@ html.light .cc {
   --cc-orange: #ea580c;
   --cc-blue: #2563eb;
   --cc-blue-tint: #e8f0fe;
-  --cc-purple: #9333ea;
-  --cc-purple-tint: #f4ecfe;
+  --cc-purple: #0f766e;
+  --cc-purple-tint: #e6f4f2;
   --cc-track: #eef1f4;
   --cc-land: #cdeed8;
   --cc-land-stroke: #b3e3c3;

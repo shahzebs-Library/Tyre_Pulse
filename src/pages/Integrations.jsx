@@ -581,7 +581,7 @@ function WebhookCard({ hook, onEdit, onDelete, onToggle }) {
         <div className="flex flex-wrap gap-1.5 mt-2.5">
           {hook.event_types?.length
             ? hook.event_types.map((ev) => (
-              <span key={ev} className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-500 text-[10px] font-mono">{ev}</span>
+              <span key={ev} className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500 text-[10px] font-mono">{ev}</span>
             ))
             : <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500 text-[10px] font-semibold">all events</span>}
         </div>
@@ -794,7 +794,7 @@ function DeliveriesTab({ search }) {
       meta: { exportValue: (d) => formatDateTime(d.created_at) },
       cell: ({ row }) => <span className="whitespace-nowrap text-[var(--text-secondary)]">{formatDateTime(row.original.created_at)}</span> },
     { id: 'event', header: 'Event Type', accessorFn: (d) => d.event_type || '', size: 200,
-      cell: ({ row }) => <code className="text-purple-500 text-[11px] font-mono">{row.original.event_type}</code> },
+      cell: ({ row }) => <code className="text-blue-500 text-[11px] font-mono">{row.original.event_type}</code> },
     { id: 'webhook', header: 'Webhook', accessorFn: (d) => subName(d.subscription_id), size: 160 },
     { id: 'status', header: 'Status', accessorFn: (d) => DELIVERY_STATUS_LABEL[d.status] || 'Pending', size: 120,
       cell: ({ row }) => {

@@ -101,7 +101,7 @@ export default function TeamAnalyticsPanel ({ employeeById }) {
       datasets: [
         { label: t('workforce.analytics.dsVerified'), data: top.map(r => r.verified || 0), backgroundColor: '#16a34a', stack: 'w' },
         { label: t('workforce.analytics.dsSubmitted'), data: top.map(r => r.submitted || 0), backgroundColor: '#38bdf8', stack: 'w' },
-        { label: t('workforce.analytics.dsInProgress'), data: top.map(r => r.active || 0), backgroundColor: '#6366f1', stack: 'w' },
+        { label: t('workforce.analytics.dsInProgress'), data: top.map(r => r.active || 0), backgroundColor: '#2a78d6', stack: 'w' },
         { label: t('workforce.analytics.dsNotStarted'), data: top.map(r => r.awaiting_start || 0), backgroundColor: '#94a3b8', stack: 'w' },
         { label: t('workforce.analytics.dsBlocked'), data: top.map(r => r.blocked || 0), backgroundColor: '#f5a524', stack: 'w' },
         { label: t('workforce.analytics.dsCancelled'), data: top.map(r => r.cancelled || 0), backgroundColor: '#64748b', stack: 'w' },

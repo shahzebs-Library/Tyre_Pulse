@@ -465,12 +465,12 @@ function roleBadgeClass(role) {
   switch (role) {
     case 'Admin':     return 'bg-red-900/40 text-red-300 border border-red-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
     case 'Manager':   return 'bg-orange-900/40 text-orange-300 border border-orange-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
-    case 'Inspector': return 'bg-purple-900/40 text-purple-300 border border-purple-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Inspector': return 'bg-slate-900/40 text-slate-300 border border-slate-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
     case 'Director':  return 'bg-blue-900/40 text-blue-300 border border-blue-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
     case 'Tyre Man':  return 'bg-teal-900/40 text-teal-300 border border-teal-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
     case 'Integration Admin': return 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
     case 'Data Engineer':     return 'bg-cyan-900/40 text-cyan-300 border border-cyan-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
-    case 'Automation':        return 'bg-indigo-900/40 text-indigo-300 border border-indigo-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
+    case 'Automation':        return 'bg-blue-900/40 text-blue-300 border border-blue-700/30 text-[10px] px-2 py-0.5 rounded-full font-semibold'
     default:          return 'bg-gray-800/60 text-gray-400 text-[10px] px-2 py-0.5 rounded-full font-semibold'
   }
 }

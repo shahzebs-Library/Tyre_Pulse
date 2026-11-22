@@ -89,7 +89,7 @@ const COMPLIANCE_META = {
   none: { label: 'Not recorded', tone: 'muted' },
 }
 
-const SEGMENT_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#a855f7', '#ef4444', '#14b8a6']
+const SEGMENT_COLORS = ['#22c55e', '#3b82f6', '#f59e0b', '#475569', '#ef4444', '#14b8a6']
 const OTHER_COLOR = '#94a3b8'
 
 const categoryOf = (a) => KIND_LABEL[vehicleKind(a)] || 'Other'

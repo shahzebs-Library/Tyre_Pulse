@@ -138,7 +138,7 @@ export default function GoodsReceipt() {
     { label: 'Partial / pending', value: kpi.outstanding, icon: Truck, tone: 'text-amber-400' },
     { label: 'Shortfall units', value: kpi.shortfallUnits.toLocaleString(), sub: `${kpi.shortLines} short line${kpi.shortLines === 1 ? '' : 's'}`, icon: AlertTriangle, tone: kpi.shortfallUnits > 0 ? 'text-red-400' : 'text-[var(--text-muted)]' },
     { label: 'Fill rate', value: fmtPct(kpi.fillRatePct), sub: 'received vs ordered', icon: Percent, tone: 'text-sky-400' },
-    { label: 'Suppliers', value: kpi.suppliers, sub: kpi.qualityIssuePct == null ? 'no condition recorded' : `${fmtPct(kpi.qualityIssuePct)} damaged or rejected`, icon: Users, tone: 'text-violet-400' },
+    { label: 'Suppliers', value: kpi.suppliers, sub: kpi.qualityIssuePct == null ? 'no condition recorded' : `${fmtPct(kpi.qualityIssuePct)} damaged or rejected`, icon: Users, tone: 'text-blue-400' },
   ]
 
   const exportName = reportFileName('Goods Receipts')

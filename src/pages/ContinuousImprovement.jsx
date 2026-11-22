@@ -52,7 +52,7 @@ const CATEGORY_META = {
   cost:        { label: 'Cost Reduction',      icon: DollarSign,  color: '#10b981', bg: 'from-green-900/20'  },
   reliability: { label: 'Reliability',          icon: ShieldCheck, color: '#3b82f6', bg: 'from-blue-900/20'   },
   process:     { label: 'Process',              icon: RefreshCw,   color: '#f59e0b', bg: 'from-yellow-900/20' },
-  inspection:  { label: 'Inspection',           icon: Search,      color: '#8b5cf6', bg: 'from-purple-900/20' },
+  inspection:  { label: 'Inspection',           icon: Search,      color: '#0f766e', bg: 'from-teal-900/20' },
   maintenance: { label: 'Maintenance',          icon: Wrench,      color: '#ef4444', bg: 'from-red-900/20'    },
   procurement: { label: 'Procurement',          icon: Package,     color: '#06b6d4', bg: 'from-cyan-900/20'   },
 }
@@ -627,7 +627,7 @@ export default function ContinuousImprovement() {
             {[
               { label: 'Cost Improvement',    pts: improvementScore.costPts,  max: 25, color: '#10b981' },
               { label: 'Reliability',          pts: improvementScore.relPts,   max: 25, color: '#3b82f6' },
-              { label: 'Insp. Compliance',     pts: improvementScore.inspPts,  max: 25, color: '#8b5cf6' },
+              { label: 'Insp. Compliance',     pts: improvementScore.inspPts,  max: 25, color: '#0f766e' },
               { label: 'Action Close Rate',    pts: improvementScore.closePts, max: 25, color: '#f59e0b' },
             ].map(item => (
               <div key={item.label} className="bg-[var(--input-bg)]/60 rounded-lg p-3">
@@ -857,7 +857,7 @@ export default function ContinuousImprovement() {
       {/* ── Section 6: KPI vs Target Scorecard ── */}
       <div>
         <h2 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
-          <Target size={14} className="text-purple-400" />
+          <Target size={14} className="text-teal-400" />
           KPI vs Target Scorecard
           {kpiScorecard.length === 0 && (
             <span className="ml-2 text-xs text-[var(--text-dim)] font-normal">- configure targets in KPI Scorecard settings</span>

@@ -59,9 +59,9 @@ const TABS = [
 const COST_BREAKDOWN_TABS = ['seasonal', 'geo', 'country', 'brand']
 
 const PALETTE = [
-  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
-  '#ec4899','#06b6d4','#84cc16','#f97316','#a855f7',
-  '#14b8a6','#eab308','#6366f1','#f43f5e','#0ea5e9',
+  '#3b82f6','#10b981','#f59e0b','#ef4444','#475569',
+  '#0f766e','#06b6d4','#84cc16','#f97316','#64748b',
+  '#14b8a6','#eab308','#1d4ed8','#f43f5e','#0ea5e9',
 ]
 
 const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -673,12 +673,12 @@ function TrendTab({ data, currency }) {
       {
         label: t('advancedanalytics.trend.replacements'),
         data: [...countVals, ...pad],
-        backgroundColor: 'rgba(139,92,246,0.7)', borderColor: '#8b5cf6', borderWidth: 1, borderRadius: 3,
+        backgroundColor: 'rgba(42,120,214,0.7)', borderColor: '#2a78d6', borderWidth: 1, borderRadius: 3,
       },
       {
         label: t('advancedanalytics.trend.forecast'),
         data: [...lead, ...countForecast.forecast],
-        backgroundColor: 'rgba(139,92,246,0.3)', borderColor: '#8b5cf6',
+        backgroundColor: 'rgba(42,120,214,0.3)', borderColor: '#2a78d6',
         borderDash: [6, 4], borderWidth: 1.5, borderRadius: 3,
       },
     ],
@@ -1109,7 +1109,7 @@ function VehicleTab({ data, currency, exportBase }) {
         .filter(v => v.totalCost > 0 && v.avgCpk != null)
         .slice(0, 100)
         .map(v => ({ x: v.avgCpk, y: v.totalCost, r: Math.min(Math.max(3, v.count), 18) })),
-      backgroundColor: 'rgba(139,92,246,0.55)', borderColor: '#8b5cf6', borderWidth: 1,
+      backgroundColor: 'rgba(42,120,214,0.55)', borderColor: '#2a78d6', borderWidth: 1,
     }],
   }
 
@@ -1340,7 +1340,7 @@ function FailureTab({ data, exportBase }) {
       data: kmCounts.map(b => b.count),
       backgroundColor: [
         'rgba(239,68,68,0.75)', 'rgba(245,158,11,0.75)', 'rgba(59,130,246,0.7)',
-        'rgba(16,185,129,0.7)', 'rgba(139,92,246,0.7)',
+        'rgba(16,185,129,0.7)', 'rgba(42,120,214,0.7)',
       ],
       borderWidth: 0, borderRadius: 4,
     }],

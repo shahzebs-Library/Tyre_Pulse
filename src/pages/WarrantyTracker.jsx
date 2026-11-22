@@ -94,7 +94,7 @@ const PALETTE = [
 ]
 
 const FAILURE_PALETTE = [
-  '#f97316', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1',
+  '#f97316', '#ef4444', '#475569', '#0f766e', '#14b8a6', '#1d4ed8',
 ]
 
 
@@ -894,7 +894,7 @@ export default function WarrantyTracker() {
         <KpiCard icon={Clock} label="Open Claims" value={kpis.open} color="text-yellow-400" warn={kpis.open > 10 || overdueCount > 0} />
         <KpiCard icon={DollarSign} label="Total Credits" value={fmt(kpis.totalCredits)} color="text-emerald-400" sub="received" />
         <KpiCard icon={Percent} label="Approval Rate" value={pct(kpis.approvalRate)} color="text-green-400" />
-        <KpiCard icon={CreditCard} label="Avg Credit/Claim" value={fmt(kpis.avgCredit)} color="text-purple-400" />
+        <KpiCard icon={CreditCard} label="Avg Credit/Claim" value={fmt(kpis.avgCredit)} color="text-blue-400" />
       </div>
       {overdueCount > 0 && (
         <p className="text-xs text-amber-400" role="status">
@@ -1137,7 +1137,7 @@ export default function WarrantyTracker() {
           </div>
           <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">
             <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-4 flex items-center gap-2">
-              <Activity size={16} className="text-purple-400" /> Average km at Failure by Type
+              <Activity size={16} className="text-blue-400" /> Average km at Failure by Type
             </h3>
             <div className="space-y-3">
               {failureCounts.filter(f => f.count > 0).map((f, i) => {

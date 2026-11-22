@@ -22,7 +22,7 @@ const INTEGRATION_TARGETS = [
   { id: 'sap',      name: 'SAP S/4HANA',            api: 'OData v4',            color: '#0078d4', logo: 'SAP' },
   { id: 'oracle',   name: 'Oracle Fusion ERP',      api: 'REST v11.13',        color: '#f80000', logo: 'ORC' },
   { id: 'dynamics', name: 'Microsoft Dynamics 365', api: 'OData v4 (Dynamics)', color: '#00a4ef', logo: 'D365' },
-  { id: 'custom',   name: 'Custom REST / CSV feed', api: 'REST or scheduled file', color: '#8b5cf6', logo: 'API' },
+  { id: 'custom',   name: 'Custom REST / CSV feed', api: 'REST or scheduled file', color: '#475569', logo: 'API' },
 ]
 
 const SETUP_STEPS = [

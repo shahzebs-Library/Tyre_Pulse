@@ -19,7 +19,7 @@ const STATUS_STYLES = {
   attached:    { bg: 'rgba(22,163,74,0.12)',   border: 'rgba(22,163,74,0.35)',   text: '#16a34a', label: 'Attached' },
   removed:     { bg: 'rgba(156,163,175,0.12)', border: 'rgba(156,163,175,0.35)',  text: '#9ca3af', label: 'Removed' },
   lost:        { bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.35)',  text: '#f87171', label: 'Lost' },
-  damaged:     { bg: 'rgba(168,85,247,0.12)',  border: 'rgba(168,85,247,0.35)',  text: '#a78bfa', label: 'Damaged' },
+  damaged:     { bg: 'rgba(235,104,52,0.12)',  border: 'rgba(235,104,52,0.35)',  text: '#fb923c', label: 'Damaged' },
 }
 
 const TAG_TYPE_ICONS = {

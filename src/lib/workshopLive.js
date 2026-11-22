@@ -58,7 +58,7 @@ export const STATUS_META = Object.freeze({
 /** Tailwind-ish tone -> hex, used by both the app badges and ECharts. */
 export const TONE_COLOR = Object.freeze({
   green: '#22c55e', blue: '#3b82f6', amber: '#f59e0b',
-  purple: '#a855f7', red: '#ef4444', grey: '#6b7280',
+  purple: '#0f766e', red: '#ef4444', grey: '#6b7280',
 })
 
 export function statusColor(status) {

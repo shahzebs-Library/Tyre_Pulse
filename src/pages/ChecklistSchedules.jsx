@@ -40,7 +40,7 @@ const FALLBACK_ROLES = ASSIGNABLE_BUILTIN_ROLES
 const CADENCE_BADGE = {
   daily: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
   weekly: 'bg-green-900/40 text-green-300 border border-green-700/50',
-  monthly: 'bg-purple-900/40 text-purple-300 border border-purple-700/50',
+  monthly: 'bg-slate-900/40 text-slate-300 border border-slate-700/50',
   once: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
 }
 function cadenceBadge(c) {

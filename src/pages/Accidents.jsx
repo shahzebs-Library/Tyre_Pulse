@@ -1016,7 +1016,7 @@ export default function Accidents() {
   const claimStatusChart = useMemo(() => {
     const order = ['filed', 'approved', 'settled', 'rejected', 'none']
     const labels = { none: 'No Claim', filed: 'Filed', approved: 'Approved', rejected: 'Rejected', settled: 'Settled' }
-    const colors = { none: '#6b7280', filed: '#3b82f6', approved: '#16a34a', rejected: '#dc2626', settled: '#9333ea' }
+    const colors = { none: '#6b7280', filed: '#3b82f6', approved: '#16a34a', rejected: '#dc2626', settled: '#475569' }
     return {
       labels: order.map(k => labels[k]),
       datasets: [{
@@ -2965,7 +2965,7 @@ export default function Accidents() {
                 <p className="text-[11px] text-[var(--text-muted)] mt-1">Net After Recovery</p>
               </div>
               <div className="text-center">
-                <p className="text-lg font-bold text-purple-400">{fmtCurrency(claimAnalytics.totalParts)}</p>
+                <p className="text-lg font-bold text-blue-400">{fmtCurrency(claimAnalytics.totalParts)}</p>
                 <p className="text-[11px] text-[var(--text-muted)] mt-1">Parts Cost</p>
               </div>
               <div className="text-center">
@@ -3060,7 +3060,7 @@ export default function Accidents() {
 
               {/* Repeat-offender drivers */}
               <div>
-                <p className="text-xs font-semibold text-[var(--text-dim)] flex items-center gap-1.5 mb-2"><Users size={13} className="text-purple-400" /> Repeat-Offender Drivers (2+ incidents)</p>
+                <p className="text-xs font-semibold text-[var(--text-dim)] flex items-center gap-1.5 mb-2"><Users size={13} className="text-blue-400" /> Repeat-Offender Drivers (2+ incidents)</p>
                 {opsIntel.repeatDrivers.length === 0 ? (
                   <p className="text-xs text-[var(--text-muted)] py-3">No driver linked to multiple incidents (or driver data not captured).</p>
                 ) : (
@@ -3069,7 +3069,7 @@ export default function Accidents() {
                       <div key={d.driver} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--input-bg)] border border-[var(--input-border)] px-3 py-2">
                         <p className="text-sm font-medium text-[var(--text-primary)] truncate">{d.driver}</p>
                         <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-purple-400">{d.count}<span className="text-[10px] font-normal text-[var(--text-muted)]"> incidents</span></p>
+                          <p className="text-sm font-bold text-blue-400">{d.count}<span className="text-[10px] font-normal text-[var(--text-muted)]"> incidents</span></p>
                           <p className="text-[11px] text-[var(--text-dim)]">{fmtCurrency(d.cost)}</p>
                         </div>
                       </div>
@@ -3154,7 +3154,7 @@ export default function Accidents() {
                           : status === 'Insurance Claim' ? '#dc2626'
                           : status === 'Reported' ? '#ca8a04'
                           : status === 'Under Investigation' ? '#2563eb'
-                          : '#9333ea',
+                          : '#475569',
                       }}
                     />
                   </div>

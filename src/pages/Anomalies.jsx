@@ -536,7 +536,7 @@ function WorkshopVisitsView({ summary, rows, columns, activeCurrency, searching 
         />
         <SeverityCard
           label="Visits This Month" value={summary.thisMonth} icon={CalendarClock}
-          valueClass="text-indigo-400" ringClass="ring-indigo-500/20"
+          valueClass="text-blue-400" ringClass="ring-blue-500/20"
           hint="Shop trips in the last 30 days"
         />
         <SeverityCard

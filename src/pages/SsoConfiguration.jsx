@@ -45,9 +45,9 @@ const EMPTY_FORM = {
 }
 
 const PROTOCOL_BADGE = {
-  saml: 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30',
+  saml: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
   oidc: 'bg-sky-500/15 text-sky-500 border-sky-500/30',
-  oauth2: 'bg-violet-500/15 text-violet-500 border-violet-500/30',
+  oauth2: 'bg-teal-500/15 text-teal-500 border-teal-500/30',
   unknown: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 const STATUS_BADGE = {
@@ -215,7 +215,7 @@ export default function SsoConfiguration() {
         return (
           <div className="min-w-0">
             <div className="font-medium text-[var(--text-primary)] flex items-center gap-1.5">
-              {r.enforce_sso && <Lock size={12} className="text-indigo-500" aria-hidden="true" />}
+              {r.enforce_sso && <Lock size={12} className="text-blue-500" aria-hidden="true" />}
               <span className="truncate">{r.connection_name || 'N/A'}</span>
             </div>
             {r.idp_entity_id && <div className="text-[11px] text-[var(--text-muted)] truncate max-w-[240px]" title={r.idp_entity_id}>{r.idp_entity_id}</div>}
@@ -244,7 +244,7 @@ export default function SsoConfiguration() {
       id: 'enforcement', header: 'Enforcement', accessorFn: (r) => `${r.enforce_sso ? 'Enforced' : 'Optional'} ${r.jit_provisioning ? 'JIT' : 'Manual'}`, size: 150,
       cell: ({ row }) => (
         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-          <span className={`inline-flex items-center gap-1 ${row.original.enforce_sso ? 'text-indigo-500' : 'text-[var(--text-muted)]'}`}>
+          <span className={`inline-flex items-center gap-1 ${row.original.enforce_sso ? 'text-blue-500' : 'text-[var(--text-muted)]'}`}>
             <Lock size={11} aria-hidden="true" /> {row.original.enforce_sso ? 'Enforced' : 'Optional'}
           </span>
           <span className={`inline-flex items-center gap-1 ${row.original.jit_provisioning ? 'text-sky-500' : 'text-[var(--text-muted)]'}`}>
@@ -329,10 +329,10 @@ export default function SsoConfiguration() {
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi label="Connections" value={kpi ? kpi.totalConnections : kpiNa} icon={Network} tone="text-[var(--text-primary)]" />
         <Kpi label="Active" value={kpi ? kpi.activeCount : kpiNa} icon={ShieldCheck} tone="text-green-500" />
-        <Kpi label="SSO enforced" value={kpi ? kpi.enforcedCount : kpiNa} sub={kpi?.enforcementRate == null ? null : `${kpi.enforcementRate}% of connections`} icon={Lock} tone="text-indigo-500" />
+        <Kpi label="SSO enforced" value={kpi ? kpi.enforcedCount : kpiNa} sub={kpi?.enforcementRate == null ? null : `${kpi.enforcementRate}% of connections`} icon={Lock} tone="text-blue-500" />
         <Kpi label="Certs expiring" value={kpi ? kpi.expiringCertCount : kpiNa} sub={kpi ? `${kpi.noCertCount} with no expiry recorded` : null} icon={ShieldAlert} tone={kpi && kpi.expiringCertCount > 0 ? 'text-amber-500' : 'text-[var(--text-primary)]'} />
         <Kpi label="JIT provisioning" value={kpi ? kpi.jitEnabledCount : kpiNa} icon={Users} tone="text-sky-500" />
-        <Kpi label="Domains covered" value={kpi ? kpi.domainsCovered : kpiNa} icon={Globe} tone="text-violet-500" />
+        <Kpi label="Domains covered" value={kpi ? kpi.domainsCovered : kpiNa} icon={Globe} tone="text-teal-500" />
       </div>
 
       {/* Certificate attention strip */}
@@ -509,8 +509,8 @@ export default function SsoConfiguration() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="flex items-center gap-2.5 min-h-[44px] rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 cursor-pointer">
-              <input type="checkbox" checked={form.enforce_sso} onChange={(e) => set('enforce_sso', e.target.checked)} className="accent-indigo-500 w-4 h-4" />
-              <span className="text-sm text-[var(--text-primary)] flex items-center gap-1.5"><Lock size={14} className="text-indigo-500" aria-hidden="true" /> Enforce SSO</span>
+              <input type="checkbox" checked={form.enforce_sso} onChange={(e) => set('enforce_sso', e.target.checked)} className="accent-green-600 w-4 h-4" />
+              <span className="text-sm text-[var(--text-primary)] flex items-center gap-1.5"><Lock size={14} className="text-blue-500" aria-hidden="true" /> Enforce SSO</span>
             </label>
             <label className="flex items-center gap-2.5 min-h-[44px] rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 py-2.5 cursor-pointer">
               <input type="checkbox" checked={form.jit_provisioning} onChange={(e) => set('jit_provisioning', e.target.checked)} className="accent-sky-500 w-4 h-4" />

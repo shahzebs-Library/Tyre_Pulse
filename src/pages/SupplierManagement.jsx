@@ -66,9 +66,9 @@ function numToRating(num) {
 // Whitelisted writable columns
 const CONTRACT_COLS = ['supplier_name', 'contract_start', 'contract_end', 'payment_terms', 'price_per_unit', 'min_order', 'notes', 'country', 'created_by']
 const PALETTE = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
-  '#06b6d4', '#a855f7',
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#475569',
+  '#0f766e', '#14b8a6', '#f97316', '#1d4ed8', '#84cc16',
+  '#06b6d4', '#64748b',
 ]
 const RATING_CONFIG = {
   Preferred:     { color: 'text-emerald-400', bg: 'bg-emerald-900/40', border: 'border-emerald-700', icon: Star },
@@ -911,7 +911,7 @@ export default function SupplierManagement() {
         <KpiCard icon={Target} label={t('suppliers.kpi.cpkRange')}
           value={kpiSummary.cpkMin != null ? `${fmtCpk(kpiSummary.cpkMin, activeCurrency).split(' ')[1]}` : t('suppliers.recommendations.na')}
           sub={kpiSummary.cpkMax != null ? t('suppliers.kpi.toValue', { value: fmtCpk(kpiSummary.cpkMax, activeCurrency) }) : 'N/A'}
-          color="text-purple-400" />
+          color="text-blue-400" />
         <KpiCard icon={Award} label={t('suppliers.kpi.bestCpk')} value={kpiSummary.best?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : 'N/A'} color="text-emerald-400" />
         <KpiCard icon={AlertTriangle} label={t('suppliers.kpi.worstCpk')} value={kpiSummary.worst?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : 'N/A'} color="text-red-400" />
         <KpiCard icon={DollarSign} label="Total spend" value={fmtCurrency(kpiSummary.totalSpend, activeCurrency)}

@@ -370,8 +370,8 @@ export default function FuelDelivery() {
     { label: 'Total spend', value: na(money.totalCost != null ? formatCurrencyCompact(money.totalCost, activeCurrency) : 'N/A'), icon: DollarSign, tone: 'text-amber-500', sub: money.mixedCurrency ? 'Several countries: pick one to total spend' : money.uncostedCount ? `${money.uncostedCount} delivery(s) without a cost` : null },
     { label: 'Avg price / L', value: na(money.blendedPrice != null ? `${activeCurrency} ${money.blendedPrice.toFixed(3)}` : 'N/A'), icon: Fuel, tone: 'text-green-500', sub: money.mixedCurrency ? 'Not comparable across countries' : a.priceStats.min != null ? `range ${a.priceStats.min} to ${a.priceStats.max}` : null },
     { label: 'Price trend', value: na(!money.mixedCurrency && trend.current != null ? `${activeCurrency} ${trend.current.toFixed(3)}` : 'N/A'), icon: TrendIcon, tone: trendTone, sub: money.mixedCurrency ? 'Pick one country' : trendSub },
-    { label: 'Suppliers', value: na(a.supplierCount.toLocaleString()), icon: Truck, tone: 'text-indigo-500', sub: a.topSupplier ? `top: ${a.topSupplier.key}` : null },
-    { label: 'Sites', value: na(a.siteCount.toLocaleString()), icon: Building2, tone: 'text-purple-500', sub: a.topSite ? `top: ${a.topSite.key}` : null },
+    { label: 'Suppliers', value: na(a.supplierCount.toLocaleString()), icon: Truck, tone: 'text-blue-500', sub: a.topSupplier ? `top: ${a.topSupplier.key}` : null },
+    { label: 'Sites', value: na(a.siteCount.toLocaleString()), icon: Building2, tone: 'text-blue-500', sub: a.topSite ? `top: ${a.topSite.key}` : null },
     { label: 'Anomalies', value: na(a.anomalyCount.toLocaleString()), icon: ShieldAlert, tone: a.anomalyCount ? 'text-red-500' : 'text-green-500', sub: a.priceCoveragePct != null ? `${a.priceCoveragePct}% priced` : null },
   ]
 

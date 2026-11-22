@@ -64,7 +64,7 @@ html.light .tv-page { background: #f6f7f9; }
 .tv-kpi-icon.t-green { background: #16a34a; }
 .tv-kpi-icon.t-red { background: #ef4444; }
 .tv-kpi-icon.t-blue { background: #0ea5e9; }
-.tv-kpi-icon.t-purple { background: #8b5cf6; }
+.tv-kpi-icon.t-purple { background: #0f766e; }
 .tv-kpi-icon.t-amber { background: #f59e0b; }
 .tv-kpi-body { display: flex; flex-direction: column; min-width: 0; }
 .tv-kpi-label { font-size: 13px; font-weight: 600; color: var(--cc-ink-2); }
@@ -142,7 +142,7 @@ html.light .tv-map-full { background: #fff; }
 .tv-ops-icon { width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .tv-ops-icon.t-green { background: rgba(34,197,94,0.15); color: #16a34a; }
 .tv-ops-icon.t-blue { background: rgba(59,130,246,0.15); color: #2563eb; }
-.tv-ops-icon.t-purple { background: rgba(139,92,246,0.15); color: #7c3aed; }
+.tv-ops-icon.t-purple { background: rgba(15,118,110,0.15); color: #0f766e; }
 .tv-ops-icon.t-red { background: rgba(239,68,68,0.15); color: #dc2626; }
 .tv-minibars { flex: none; }
 .tv-minibars.t-green rect { fill: #22c55e; }

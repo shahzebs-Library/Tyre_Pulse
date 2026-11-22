@@ -75,7 +75,7 @@ const ACTION_BADGE = {
   BULK_DELETE: 'bg-red-900/40 text-red-400',
   BULK_UPDATE: 'bg-orange-900/40 text-orange-400',
   BULK_CREATE: 'bg-orange-900/40 text-orange-400',
-  EXPORT:      'bg-purple-900/40 text-purple-400',
+  EXPORT:      'bg-blue-900/40 text-blue-400',
   UPLOAD:      'bg-yellow-900/40 text-yellow-400',
 }
 
@@ -543,7 +543,7 @@ export default function SecurityCenter() {
                 <>
                   <Tile icon={Activity} label="Sensitive actions" value={na ?? breakdown.total} sub={eventsCapped ? `latest ${LOGIN_HISTORY_LIMIT}` : `last ${SECURITY_EVENT_WINDOW_DAYS} days`} />
                   <Tile icon={Trash2} label="Deletes" value={na ?? breakdown.deletes} sub="single and bulk" tone="text-red-400" />
-                  <Tile icon={Download} label="Exports" value={na ?? breakdown.exports} tone="text-purple-400" />
+                  <Tile icon={Download} label="Exports" value={na ?? breakdown.exports} tone="text-blue-400" />
                   <Tile icon={Database} label="Bulk operations" value={na ?? breakdown.bulk} tone="text-orange-400" />
                   <Tile icon={Users} label="Most active" value={na ?? (breakdown.topActor ? breakdown.topActor.name : 'N/A')} sub={breakdown.topActor && !na ? `${breakdown.topActor.count} actions` : null} />
                 </>

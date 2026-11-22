@@ -303,7 +303,7 @@ export default function RuleBuilder() {
                       type="button"
                       onClick={() => toggleEvent(ev)}
                       className={`px-2 py-1 rounded-md text-[11px] font-mono border transition-all ${
-                        on ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-[var(--surface-1)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-gray-300'
+                        on ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' : 'bg-[var(--surface-1)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-gray-300'
                       }`}
                     >
                       {ev}

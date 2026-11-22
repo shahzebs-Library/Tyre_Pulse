@@ -65,7 +65,7 @@ const CHART_COMPONENT = {
 // conservative fallbacks (identity styler, single default palette) that keep the
 // preview alive if the engine export lands a moment after this component.
 const PALETTES = AccidentReportLib.PALETTES || {
-  default: ['#f97316', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#f59e0b'],
+  default: ['#f97316', '#3b82f6', '#10b981', '#ef4444', '#475569', '#f59e0b'],
 }
 const styleChartData = typeof AccidentReportLib.styleChartData === 'function'
   ? AccidentReportLib.styleChartData

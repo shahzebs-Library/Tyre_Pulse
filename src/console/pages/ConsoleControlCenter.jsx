@@ -604,7 +604,7 @@ function pctTone(v) {
 }
 const METER_BAR = { good: 'bg-emerald-500', warning: 'bg-amber-500', danger: 'bg-red-500', muted: 'bg-gray-700' }
 const METER_TEXT = { good: 'text-emerald-300', warning: 'text-amber-300', danger: 'text-red-300', muted: 'text-gray-500' }
-const BAR_HUE = ['bg-orange-400', 'bg-blue-400', 'bg-emerald-400', 'bg-purple-400', 'bg-amber-400', 'bg-gray-500']
+const BAR_HUE = ['bg-orange-400', 'bg-blue-400', 'bg-emerald-400', 'bg-teal-400', 'bg-amber-400', 'bg-gray-500']
 
 /**
  * A small labelled trust meter for a 0-100 provenance figure (idempotency,

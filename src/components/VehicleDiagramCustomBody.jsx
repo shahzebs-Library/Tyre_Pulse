@@ -57,7 +57,7 @@ const PAINT = {
   pickup: { light: '#93c5fd', mid: '#2563eb', dark: '#1e3a8a', line: '#172554' },
   trailer: { light: '#d4d4d8', mid: '#71717a', dark: '#3f3f46', line: '#18181b' },
   loader: { light: '#fcd34d', mid: '#f59e0b', dark: '#b45309', line: '#78350f' },
-  van: { light: '#a5b4fc', mid: '#6366f1', dark: '#3730a3', line: '#1e1b4b' },
+  van: { light: '#cbd5e1', mid: '#64748b', dark: '#334155', line: '#0f172a' },
 }
 
 function paint(body) {
@@ -666,33 +666,33 @@ function VanHull({ cab, hull, uid }) {
     <g>
       <defs>
         <radialGradient id={`${uid}-vanBody`} cx="48%" cy="28%" r="70%">
-          <stop offset="0%" stopColor="#a5b4fc" />
-          <stop offset="50%" stopColor="#6366f1" />
-          <stop offset="100%" stopColor="#3730a3" />
+          <stop offset="0%" stopColor="#cbd5e1" />
+          <stop offset="50%" stopColor="#64748b" />
+          <stop offset="100%" stopColor="#334155" />
         </radialGradient>
       </defs>
       {/* Panel body */}
       <rect x={x} y={y} width={w} height={h} rx="14"
-        fill={`url(#${uid}-vanBody)`} stroke="#1e1b4b" strokeWidth="1" />
+        fill={`url(#${uid}-vanBody)`} stroke="#0f172a" strokeWidth="1" />
       {/* Windshield + sweep */}
       <path d={`M ${x + 6},${y + 5} L ${x + w - 6},${y + 5} L ${x + w - 10},${y + 17} L ${x + 10},${y + 17} Z`}
         fill={`url(#${uid}-glass)`} />
       <path d={`M ${x + 9},${y + 6} L ${x + w * 0.55},${y + 6} L ${x + w * 0.48},${y + 13} L ${x + 11},${y + 13} Z`}
         fill={`url(#${uid}-glassR)`} opacity="0.6" />
       {/* Roof rails + recessed cargo panel */}
-      <line x1={x + 9} y1={seamY + 4} x2={x + 9} y2={y + h - 12} stroke="#312e81" strokeWidth="1.4" opacity="0.9" />
-      <line x1={x + w - 9} y1={seamY + 4} x2={x + w - 9} y2={y + h - 12} stroke="#312e81" strokeWidth="1.4" opacity="0.9" />
+      <line x1={x + 9} y1={seamY + 4} x2={x + 9} y2={y + h - 12} stroke="#1e293b" strokeWidth="1.4" opacity="0.9" />
+      <line x1={x + w - 9} y1={seamY + 4} x2={x + w - 9} y2={y + h - 12} stroke="#1e293b" strokeWidth="1.4" opacity="0.9" />
       <rect x={x + 13} y={seamY + 7} width={w - 26} height={Math.max(8, h - (seamY - y) - 22)} rx="4"
-        fill="#3730a3" opacity="0.8" />
+        fill="#334155" opacity="0.8" />
       <rect x={x + 16} y={seamY + 9} width={(w - 32) * 0.4} height={Math.max(5, h - (seamY - y) - 26)} rx="3"
-        fill="#a5b4fc" opacity="0.14" />
+        fill="#cbd5e1" opacity="0.14" />
       {/* B-pillar seam + sliding-door track and handle (kerbside) */}
-      <line x1={x + 4} y1={seamY} x2={x + w - 4} y2={seamY} stroke="#1e1b4b" strokeWidth="1" opacity="0.9" />
+      <line x1={x + 4} y1={seamY} x2={x + w - 4} y2={seamY} stroke="#0f172a" strokeWidth="1" opacity="0.9" />
       <line x1={x + w - 3.5} y1={seamY + 3} x2={x + w - 3.5} y2={seamY + Math.min(30, h * 0.3)}
-        stroke="#1e1b4b" strokeWidth="1.4" />
+        stroke="#0f172a" strokeWidth="1.4" />
       <rect x={x + w - 7.5} y={seamY + 5} width="5" height="2.4" rx="1.2" fill={`url(#${uid}-chrome)`} />
       {/* Rear barn doors + brake lights */}
-      <line x1={x + w / 2} y1={y + h - 10} x2={x + w / 2} y2={y + h - 1} stroke="#1e1b4b" strokeWidth="1" />
+      <line x1={x + w / 2} y1={y + h - 10} x2={x + w / 2} y2={y + h - 1} stroke="#0f172a" strokeWidth="1" />
       <rect x={x + 4} y={y + h - 4} width="11" height="3.5" rx="1.5" fill={`url(#${uid}-brake)`} />
       <rect x={x + w - 15} y={y + h - 4} width="11" height="3.5" rx="1.5" fill={`url(#${uid}-brake)`} />
     </g>

@@ -66,7 +66,7 @@ const TABS = ['Scrapped Register', 'Overview', 'By Brand', 'By Site', 'Disposal 
 const NA = 'N/A'
 
 // Removal-reason donut: mid-tone hues that read on both the light and dark card.
-const REASON_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#a855f7', '#f97316']
+const REASON_COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#475569', '#f97316']
 const EMPTY_DISP = { disposal_vendor: '', collection_due: '', recovery_value: '', status: 'Pending' }
 
 const DISPOSAL_STATUSES = {
@@ -985,7 +985,7 @@ export default function TyreScrapManagement() {
             title="Tyres rated Critical or categorised Scrap in the period"
           />
           <TyreKpiTile
-            icon={DollarSign} tone="t-purple" label="Scrap cost" loading={kpiLoading}
+            icon={DollarSign} tone="t-blue" label="Scrap cost" loading={kpiLoading}
             display={money.ok ? fmtCurrency(kpis.totalCost, money.currency) : NA}
             sub={money.ok
               ? (kpis.scrapCount ? `Priced on ${fmt(kpis.costedCount)} of ${fmt(kpis.scrapCount)} scrap events` : 'No scrap in the period')
@@ -1422,7 +1422,7 @@ export default function TyreScrapManagement() {
               </Panel>
 
               {heatMap.brands.length > 0 && heatMap.sites.length > 0 && (
-                <Panel icon={Layers} iconCls="text-purple-400" title="Brand by site scrap heat map" note="Count of tyres flagged as scrap, top 6 brands and sites">
+                <Panel icon={Layers} iconCls="text-blue-400" title="Brand by site scrap heat map" note="Count of tyres flagged as scrap, top 6 brands and sites">
                   <EnterpriseTable
                     columns={heatColumns}
                     data={heatMap.rows}

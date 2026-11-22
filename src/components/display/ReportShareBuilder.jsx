@@ -548,7 +548,7 @@ function ReportShareBuilderInner({ share, onClose, onSaved }) {
                         gridColumn: `span ${Math.min(block.w, cols)}`,
                         gridRow: `span ${Math.min(block.h, rows)}`,
                         minHeight: 0, minWidth: 0,
-                        outline: selected ? '2px solid #6366f1' : 'none',
+                        outline: selected ? '2px solid #16a34a' : 'none',
                         borderRadius: 14, cursor: 'pointer',
                       }}>
                       <ShareBlockView block={block} snapshot={snapshot || {}} />

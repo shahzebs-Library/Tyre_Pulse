@@ -333,7 +333,7 @@ export default function ApprovalDelegations() {
         <Kpi label="Active now" value={kpi ? kpi.activeCount : kpiNa} icon={ShieldCheck} tone="text-green-500" />
         <Kpi label="Upcoming" value={kpi ? kpi.upcomingCount : kpiNa} icon={CalendarClock} tone="text-sky-500" />
         <Kpi label={`Ending in ${kpi?.soonDays ?? 7} days`} value={kpi ? kpi.endingSoon : kpiNa} icon={Hourglass} tone={kpi && kpi.endingSoon > 0 ? 'text-orange-500' : 'text-[var(--text-primary)]'} />
-        <Kpi label="Open-ended (active)" value={kpi ? kpi.openEnded : kpiNa} sub="no end date set" icon={InfinityIcon} tone="text-violet-500" />
+        <Kpi label="Open-ended (active)" value={kpi ? kpi.openEnded : kpiNa} sub="no end date set" icon={InfinityIcon} tone="text-slate-500" />
         <Kpi label="Expired" value={kpi ? kpi.expiredCount : kpiNa} icon={Clock} tone="text-amber-500" />
       </div>
 

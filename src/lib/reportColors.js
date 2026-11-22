@@ -11,32 +11,35 @@
 
 // ── Named theme presets (each 12 vivid, well-separated, print-safe hues) ──────
 export const PRESETS = {
+  // Default. Validated with the dataviz palette checker (colour-blind safe on
+  // adjacent series, light and dark). Blue, orange, teal and amber lead, so the
+  // usual 2 to 4 series never fall back on purple or pink.
+  professional: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#475569', '#008300', '#6250d6', '#e34948', '#0891b2', '#b45309', '#64748b', '#0f766e'],
   vivid:    ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6', '#14b8a6', '#f97316', '#ec4899', '#84cc16', '#06b6d4', '#a855f7'],
   ocean:    ['#0ea5e9', '#0891b2', '#14b8a6', '#3b82f6', '#6366f1', '#22d3ee', '#2dd4bf', '#0284c7', '#38bdf8', '#818cf8', '#06b6d4', '#0d9488'],
   sunset:   ['#f97316', '#ef4444', '#f59e0b', '#ec4899', '#e11d48', '#fb923c', '#f43f5e', '#d946ef', '#fbbf24', '#fca5a5', '#c026d3', '#ea580c'],
   forest:   ['#10b981', '#84cc16', '#14b8a6', '#65a30d', '#059669', '#22c55e', '#4d7c0f', '#0d9488', '#a3e635', '#16a34a', '#047857', '#3f6212'],
-  berry:    ['#8b5cf6', '#ec4899', '#a855f7', '#d946ef', '#c026d3', '#6366f1', '#f472b6', '#7c3aed', '#e879f9', '#9333ea', '#db2777', '#4f46e5'],
   slate:    ['#475569', '#6366f1', '#0ea5e9', '#64748b', '#334155', '#818cf8', '#38bdf8', '#94a3b8', '#4f46e5', '#0284c7', '#1e293b', '#7dd3fc'],
   contrast: ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#7c3aed', '#0891b2', '#db2777', '#65a30d', '#ea580c', '#4338ca', '#0d9488', '#be123c'],
   warm:     ['#f59e0b', '#ef4444', '#f97316', '#eab308', '#dc2626', '#fb923c', '#facc15', '#b91c1c', '#fbbf24', '#c2410c', '#a16207', '#f43f5e'],
 }
 export const PRESET_KEYS = Object.keys(PRESETS)
 export const PRESET_LABELS = {
-  vivid: 'Vivid', ocean: 'Ocean', sunset: 'Sunset', forest: 'Forest',
-  berry: 'Berry', slate: 'Corporate Slate', contrast: 'High Contrast', warm: 'Warm',
+  professional: 'Professional', vivid: 'Vivid', ocean: 'Ocean', sunset: 'Sunset', forest: 'Forest',
+  slate: 'Corporate Slate', contrast: 'High Contrast', warm: 'Warm',
 }
 
-// The default vivid palette (kept as a stable reference export).
-export const CATEGORICAL = PRESETS.vivid
-export const DEFAULT_PRESET = 'vivid'
+// The default palette (kept as a stable reference export).
+export const CATEGORICAL = PRESETS.professional
+export const DEFAULT_PRESET = 'professional'
 const LS_KEY = 'report.palette.v1'
 
 // Semantic accents for KPI tiles / status (green good, amber watch, red risk).
 export const ACCENTS = {
-  primary: '#6366f1', good: '#10b981', watch: '#f59e0b', risk: '#ef4444', info: '#0ea5e9', neutral: '#64748b',
+  primary: '#2a78d6', good: '#10b981', watch: '#f59e0b', risk: '#ef4444', info: '#0ea5e9', neutral: '#64748b',
 }
-// Ordered trend-line colours (vivid default; the active palette is used at runtime).
-export const TREND_LINES = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6']
+// Ordered trend-line colours (professional default; the active palette is used at runtime).
+export const TREND_LINES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#475569', '#e34948']
 
 // ── Active palette (runtime-configurable) ────────────────────────────────────
 let _active = [...PRESETS[DEFAULT_PRESET]]

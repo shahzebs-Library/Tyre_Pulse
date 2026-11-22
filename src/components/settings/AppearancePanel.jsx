@@ -112,7 +112,7 @@ export default function AppearancePanel() {
             onClick={() => setCustomOpen((v) => !v)}
             title={t('appearance.custom')}
             className="w-8 h-8 rounded-full grid place-items-center border border-dashed border-[var(--input-border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            style={{ background: 'conic-gradient(from 0deg, #ef4444, #f59e0b, #22c55e, #06b6d4, #6366f1, #ec4899, #ef4444)' }}
+            style={{ background: 'conic-gradient(from 0deg, #ef4444, #f59e0b, #22c55e, #06b6d4, #2a78d6, #475569, #ef4444)' }}
           >
             <Sparkles size={14} className="text-white drop-shadow" />
           </button>

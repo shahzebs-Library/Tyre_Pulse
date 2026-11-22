@@ -159,9 +159,9 @@ export function BrandTagInput({ values = [], onChange, placeholder, suggestions 
       onClick={() => ref.current?.focus()}
     >
       {values.map(v => (
-        <span key={v} className="flex items-center gap-1 bg-purple-900/40 text-purple-300 text-xs px-2 py-0.5 rounded-full border border-purple-700">
+        <span key={v} className="flex items-center gap-1 bg-blue-900/40 text-blue-300 text-xs px-2 py-0.5 rounded-full border border-blue-700">
           {v}
-          <button type="button" onClick={() => remove(v)} className="text-purple-400 hover:text-red-400 transition-colors">
+          <button type="button" onClick={() => remove(v)} className="text-blue-400 hover:text-red-400 transition-colors">
             <X size={10} />
           </button>
         </span>
@@ -370,7 +370,7 @@ export function EconBadges({ e }) {
   if (e.bestValue)   pills.push({ key: 'bv', label: 'Best Value',   icon: Award,        cls: 'text-green-300 bg-green-900/30 border-green-800' })
   if (e.bestDeal)    pills.push({ key: 'bd', label: 'Best Deal',    icon: DollarSign,   cls: 'text-blue-300 bg-blue-900/30 border-blue-800' })
   if (e.lowestCpk)   pills.push({ key: 'lc', label: 'Lowest CPK',   icon: TrendingDown, cls: 'text-emerald-300 bg-emerald-900/30 border-emerald-800' })
-  if (e.longestLife) pills.push({ key: 'll', label: 'Longest Life', icon: Gauge,        cls: 'text-purple-300 bg-purple-900/30 border-purple-800' })
+  if (e.longestLife) pills.push({ key: 'll', label: 'Longest Life', icon: Gauge,        cls: 'text-teal-300 bg-teal-900/30 border-teal-800' })
   if (pills.length === 0) return <span className="text-[var(--text-dim)] text-xs">-</span>
   return (
     <div className="flex flex-wrap gap-1">
@@ -402,7 +402,7 @@ export function BrandGuidancePanel({ brands = [] }) {
           <div key={b} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[var(--text-primary)] font-medium text-sm flex items-center gap-1.5">
-                <Package size={12} className="text-purple-400" /> {b}
+                <Package size={12} className="text-blue-400" /> {b}
               </span>
               <span className="text-[10px] uppercase tracking-wide text-[var(--text-muted)] bg-[var(--input-bg)] px-2 py-0.5 rounded-full">
                 {m.tier || 'unknown'}

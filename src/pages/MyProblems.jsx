@@ -40,9 +40,9 @@ const fmtDate = (d) => {
 
 const STATUS_TONE = {
   new: 'border-sky-500/40 text-sky-400',
-  triaged: 'border-indigo-500/40 text-indigo-400',
+  triaged: 'border-blue-500/40 text-blue-400',
   in_progress: 'border-amber-500/40 text-amber-400',
-  waiting_user: 'border-purple-500/40 text-purple-400',
+  waiting_user: 'border-slate-500/40 text-slate-400',
   fixed: 'border-emerald-500/40 text-emerald-400',
   closed: 'border-[var(--border-subtle)] text-[var(--text-muted)]',
   wont_fix: 'border-[var(--border-subtle)] text-[var(--text-muted)]',

@@ -59,7 +59,7 @@ const BADGE_STYLES = {
   rotation:    'bg-blue-900/40 text-blue-300 border border-blue-700/50',
   repair:      'bg-red-900/40 text-red-300 border border-red-700/50',
   inflation:   'bg-green-900/40 text-green-300 border border-green-700/50',
-  inspection:  'bg-violet-900/40 text-violet-300 border border-violet-700/50',
+  inspection:  'bg-teal-900/40 text-teal-300 border border-teal-700/50',
   replacement: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
   other:       'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]',
 }
@@ -452,11 +452,11 @@ export default function TyreServiceEvents() {
       sub: 'recent activity' },
     { label: 'Top event type', value: k.topType ? k.topType.label : 'N/A', icon: Gauge, tone: 'text-green-400',
       sub: k.topType ? `${k.topType.count} logged` : 'no events yet' },
-    { label: 'Assets serviced', value: k.distinctAssets, icon: Building2, tone: 'text-indigo-400',
+    { label: 'Assets serviced', value: k.distinctAssets, icon: Building2, tone: 'text-blue-400',
       sub: `${k.distinctTyres} distinct tyres` },
     { label: 'Removals documented', value: k.removalEvents ? `${k.removalDocumentedPct}%` : 'N/A', icon: ClipboardCheck, tone: 'text-amber-400',
       sub: k.removalEvents ? `${k.removalBlank} of ${k.removalEvents} missing reason` : 'no removals' },
-    { label: 'Mean interval', value: k.meanDaysBetween == null ? 'N/A' : `${k.meanDaysBetween}d`, icon: Timer, tone: 'text-violet-400',
+    { label: 'Mean interval', value: k.meanDaysBetween == null ? 'N/A' : `${k.meanDaysBetween}d`, icon: Timer, tone: 'text-teal-400',
       sub: k.meanDaysBetween == null ? 'need 2+ events / tyre' : 'between events per tyre' },
   ]
 

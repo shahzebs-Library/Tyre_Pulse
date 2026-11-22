@@ -135,7 +135,7 @@ function AgentOrgUsage({ days, country }) {
         <div className="space-y-3">
           {d.byAgent.length === 0 ? <p className="text-sm text-[var(--text-muted)]">No agent activity recorded in this window.</p> :
             d.byAgent.slice(0, 12).map((a) => (
-              <Bar key={a.agent} label={a.agent} value={a.cost} max={maxAgent} color="#a855f7"
+              <Bar key={a.agent} label={a.agent} value={a.cost} max={maxAgent} color="#0f766e"
                 right={`${a.calls} calls | ${fmtTokens(a.tokens)} | ${fmtUSD(a.cost)}`} />
             ))}
         </div>
@@ -221,7 +221,7 @@ export function AiOperationsTab({ country }) {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Kpi label="Total spend" value={fmtUSD(s.totalCost)} sub={`${s.totalCalls.toLocaleString()} successful calls`} Icon={Coins} tone="text-green-400" />
             <Kpi label="Total tokens" value={fmtTokens(s.totalTokens)} sub={`${fmtTokens(s.promptTokens)} in / ${fmtTokens(s.completionTokens)} out`} Icon={Zap} tone="text-blue-400" />
-            <Kpi label="Avg cost / call" value={fmtUSD(s.avgCostPerCall)} sub="successful calls" Icon={TrendingUp} tone="text-purple-400" />
+            <Kpi label="Avg cost / call" value={fmtUSD(s.avgCostPerCall)} sub="successful calls" Icon={TrendingUp} tone="text-blue-400" />
             <Kpi label="Failed requests" value={s.failedCalls.toLocaleString()}
               sub={`${(s.failureRate * 100).toFixed(1)}% failure rate`} Icon={XCircle}
               tone={s.failedCalls > 0 ? 'text-red-400' : 'text-[var(--text-primary)]'} />

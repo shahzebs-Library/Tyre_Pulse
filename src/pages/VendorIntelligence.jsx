@@ -1457,10 +1457,10 @@ export default function VendorIntelligence() {
             </div>
 
             {/* Total Fleet Investment */}
-            <div className="bg-purple-950/20 border border-purple-800/30 rounded-xl p-4">
+            <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <Wrench size={14} className="text-purple-400" />
-                <span className="text-xs font-semibold text-purple-300">{t('vendorintel.execSummary.totalFleetInvestment')}</span>
+                <Wrench size={14} className="text-blue-400" />
+                <span className="text-xs font-semibold text-blue-300">{t('vendorintel.execSummary.totalFleetInvestment')}</span>
               </div>
               <p className="text-lg font-black text-[var(--text-primary)]">{fleetTyreCost != null ? fmtCurrency(fleetTyreCost, activeCurrency) : 'N/A'}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -1470,7 +1470,7 @@ export default function VendorIntelligence() {
                     ? 'The expense grid could not be read.'
                     : 'From the classified expense grid, last 12 months, all sites.'}
               </p>
-              <p className="text-[11px] text-purple-400/70 mt-1">
+              <p className="text-[11px] text-blue-400/70 mt-1">
                 {enrichedVendors.length > 0 ? t('vendorintel.execSummary.brandsTracked', { count: enrichedVendors.length }) : t('vendorintel.execSummary.noBrandData')}
               </p>
             </div>

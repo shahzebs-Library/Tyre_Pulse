@@ -73,8 +73,8 @@ function ModulePicker({ selected, onToggle, search, groups = CUSTOM_ROLE_GROUPS 
               {mods.map((m) => {
                 const on = selected.includes(m.key)
                 return (
-                  <label key={m.key} className={`flex items-center gap-2 px-2.5 py-2 min-h-[40px] rounded-lg border cursor-pointer text-sm ${on ? 'border-indigo-500/40 bg-indigo-500/10 text-[var(--text-primary)]' : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'}`}>
-                    <input type="checkbox" className="accent-indigo-500 w-4 h-4" checked={on} onChange={() => onToggle([m.key], !on)} />
+                  <label key={m.key} className={`flex items-center gap-2 px-2.5 py-2 min-h-[40px] rounded-lg border cursor-pointer text-sm ${on ? 'border-green-500/40 bg-green-500/10 text-[var(--text-primary)]' : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'}`}>
+                    <input type="checkbox" className="accent-green-500 w-4 h-4" checked={on} onChange={() => onToggle([m.key], !on)} />
                     <span className="truncate">{m.label}</span>
                   </label>
                 )
@@ -336,7 +336,7 @@ export default function CustomRolesManager() {
         const r = row.original
         return (
           <span className="inline-flex items-center gap-1.5 font-medium text-[var(--text-primary)] flex-wrap">
-            <KeyRound size={13} className="text-indigo-300" aria-hidden="true" /> {r.name}
+            <KeyRound size={13} className="text-blue-300" aria-hidden="true" /> {r.name}
             {!r._active && <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border border-[var(--input-border)] text-[var(--text-muted)]">Inactive</span>}
           </span>
         )
@@ -472,7 +472,7 @@ export default function CustomRolesManager() {
               <>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
-                  <Icon size={15} className="text-indigo-300" aria-hidden="true" />
+                  <Icon size={15} className="text-blue-300" aria-hidden="true" />
                 </div>
                 <p className="text-2xl font-bold mt-1 tabular-nums text-[var(--text-primary)]">{k.value}</p>
                 {k.sub && <p className="text-[11px] text-[var(--text-muted)] mt-1">{k.sub}</p>}

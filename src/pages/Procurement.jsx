@@ -55,7 +55,7 @@ const KPI_TEXT_COLOR = {
   yellow: 'text-yellow-400',
   red:    'text-red-400',
   teal:   'text-teal-400',
-  purple: 'text-purple-400',
+  purple: 'text-blue-400',
 }
 const kpiText = (c) => KPI_TEXT_COLOR[c] || 'text-[var(--text-primary)]'
 const BUDGET_KEY = 'tp_procurement_budget'
@@ -68,7 +68,7 @@ const STATUS_CONFIG = {
   'Partial Delivery': { color: 'text-orange-400', bg: 'bg-orange-900/30',   border: 'border-orange-700' },
   'Delivered':        { color: 'text-teal-400',   bg: 'bg-teal-900/30',     border: 'border-teal-700' },
   'Cancelled':        { color: 'text-red-400',    bg: 'bg-red-900/20',      border: 'border-red-700' },
-  'Closed':           { color: 'text-purple-400', bg: 'bg-purple-900/20',   border: 'border-purple-700' },
+  'Closed':           { color: 'text-slate-400', bg: 'bg-slate-900/20',   border: 'border-slate-700' },
 }
 
 const PRIORITY_CONFIG = {
@@ -260,7 +260,7 @@ export default function Procurement() {
     const colorMap = {
       Draft: '#6b7280', Submitted: '#3b82f6', Approved: '#10b981',
       Ordered: '#f59e0b', 'Partial Delivery': '#f97316',
-      Delivered: '#14b8a6', Cancelled: '#ef4444', Closed: '#a855f7',
+      Delivered: '#14b8a6', Cancelled: '#ef4444', Closed: '#64748b',
     }
     const entries = Object.entries(statusCounts(statusChartBase)).filter(([, v]) => v > 0)
     return {

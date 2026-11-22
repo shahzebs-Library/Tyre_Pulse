@@ -630,14 +630,14 @@ export default function Dashboard() {
     const m = {}; tyres.forEach(t => { if (t.brand) m[t.brand] = (m[t.brand] ?? 0) + 1 })
     const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 7)
     if (!top.length) return null
-    return { labels: top.map(([b]) => b), datasets: [{ data: top.map(([, c]) => c), backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'], borderWidth: 0, hoverOffset: 6 }] }
+    return { labels: top.map(([b]) => b), datasets: [{ data: top.map(([, c]) => c), backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444','#475569','#06b6d4','#f97316'], borderWidth: 0, hoverOffset: 6 }] }
   }, [tyres])
 
   const categoryData = useMemo(() => {
     const m = {}; tyres.forEach(t => { if (t.category) m[t.category] = (m[t.category] ?? 0) + 1 })
     const top = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8)
     if (!top.length) return null
-    return { labels: top.map(([c]) => c), datasets: [{ data: top.map(([, n]) => n), backgroundColor: ['#ef4444','#f97316','#f59e0b','#84cc16','#06b6d4','#8b5cf6','#ec4899','#3b82f6'], borderWidth: 0, hoverOffset: 6 }] }
+    return { labels: top.map(([c]) => c), datasets: [{ data: top.map(([, n]) => n), backgroundColor: ['#ef4444','#f97316','#f59e0b','#84cc16','#06b6d4','#475569','#0f766e','#3b82f6'], borderWidth: 0, hoverOffset: 6 }] }
   }, [tyres])
 
   const riskDistData = useMemo(() => {
@@ -1194,7 +1194,7 @@ export default function Dashboard() {
               { key: 'openJobs',  label: tf('dashboard.workshop.openJobs', 'Open job cards'),value: ws.kpis.openJobs,          color: '#3b82f6' },
               { key: 'overdue',   label: tf('dashboard.workshop.overdue', 'Overdue'),        value: ws.kpis.overdueJobs,       color: ws.kpis.overdueJobs > 0 ? '#ef4444' : '#22c55e' },
               { key: 'vor',       label: tf('dashboard.workshop.vor', 'Vehicles off road'),  value: ws.kpis.vehiclesOffRoad,   color: ws.kpis.vehiclesOffRoad > 0 ? '#ef4444' : '#22c55e' },
-              { key: 'util',      label: tf('dashboard.workshop.utilization', 'Utilization'),value: ws.kpis.utilization == null ? tf('dashboard.workshop.na', 'N/A') : `${ws.kpis.utilization}%`, color: '#a855f7' },
+              { key: 'util',      label: tf('dashboard.workshop.utilization', 'Utilization'),value: ws.kpis.utilization == null ? tf('dashboard.workshop.na', 'N/A') : `${ws.kpis.utilization}%`, color: '#2a78d6' },
               { key: 'done',      label: tf('dashboard.workshop.completed', 'Completed today'), value: ws.kpis.jobsCompletedToday, color: '#22c55e' },
             ].map(cell => (
               <Link key={cell.key} to="/workshop-live" className="rounded-xl px-3 py-2.5 transition-colors"
@@ -1378,7 +1378,7 @@ export default function Dashboard() {
         <ActionTile to="/alerts"    icon={Bell}          label={t('dashboard.quickActions.viewAlerts')}      color="#f59e0b" bg="rgba(245,158,11,0.11)" border="rgba(245,158,11,0.32)" />
         <ActionTile to="/data-intake" icon={Upload}      label={t('dashboard.quickActions.uploadData')}      color="#3b82f6" bg="rgba(59,130,246,0.11)"  border="rgba(59,130,246,0.32)" />
         <ActionTile to="/inspections" icon={ClipboardCheck} label={t('dashboard.quickActions.inspections')}   color="#22c55e" bg="rgba(22,163,74,0.11)"  border="rgba(22,163,74,0.32)" />
-        <ActionTile to="/ai-command-center" icon={Cpu}   label={t('dashboard.quickActions.aiCommand')}       color="#8b5cf6" bg="rgba(139,92,246,0.11)" border="rgba(139,92,246,0.32)" />
+        <ActionTile to="/ai-command-center" icon={Cpu}   label={t('dashboard.quickActions.aiCommand')}       color="#475569" bg="rgba(71,85,105,0.11)" border="rgba(71,85,105,0.32)" />
       </div>
 
       {/* ── INTEL ROW - Avg Life + Seasonal ──────────────────────────────── */}

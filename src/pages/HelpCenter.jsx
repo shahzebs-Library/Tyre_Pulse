@@ -43,7 +43,7 @@ const CATEGORY_META = {
   bug: { label: 'Bug / Error', icon: Bug, tint: 'text-red-400' },
   question: { label: 'Question', icon: HelpCircle, tint: 'text-sky-400' },
   feature: { label: 'Feature request', icon: Lightbulb, tint: 'text-amber-400' },
-  data: { label: 'Data / Import', icon: Database, tint: 'text-violet-400' },
+  data: { label: 'Data / Import', icon: Database, tint: 'text-blue-400' },
   account: { label: 'Account / Access', icon: UserCog, tint: 'text-emerald-400' },
   other: { label: 'Other', icon: ShieldQuestion, tint: 'text-[var(--text-muted)]' },
 }

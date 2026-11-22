@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/tp_button.dart';
+import 'package:tyre_pulse/core/design_system/tp_text_scale.dart';
 
 class TpBrandLockup extends StatelessWidget {
   const TpBrandLockup({this.compact = false, super.key});
@@ -73,22 +74,33 @@ class TpSyncLabel extends StatelessWidget {
     );
     return Semantics(
       label: label,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(
-            isPending ? Icons.cloud_upload_outlined : Icons.cloud_done_outlined,
-            size: TpSizing.iconLg,
-            color: tone.base,
-          ),
-          const SizedBox(width: TpSpace.xs),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: tone.base,
-                ),
-          ),
-        ],
+      // Measured so the label can wrap where the row has a width to fit
+      // (a page) and stays capped where it does not (AppBar actions).
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints c) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              isPending
+                  ? Icons.cloud_upload_outlined
+                  : Icons.cloud_done_outlined,
+              size: TpSizing.iconLg,
+              color: tone.base,
+            ),
+            const SizedBox(width: TpSpace.xs),
+            tpRowLabel(
+              bounded: c.maxWidth.isFinite,
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: tone.base,
+                    ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

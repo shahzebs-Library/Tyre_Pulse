@@ -38,3 +38,23 @@ double tpTextScaledExtent(
   required double textHeight,
 }) =>
     base + (tpTextScaleFactor(context) - 1) * textHeight;
+
+/// The label of an icon-and-label `Row(mainAxisSize: min)`.
+///
+/// [bounded] is whether that row has a finite width to fit into; read it with
+/// a `LayoutBuilder` around the row. When it does (a page, a card) the label
+/// shrinks and wraps, so a long Arabic label or a large text size never
+/// pushes the icon off screen. When it does not (AppBar actions lay their
+/// children out with unlimited width) a `Flexible` would throw, so the label
+/// is capped at [unboundedMaxWidth] instead.
+Widget tpRowLabel({
+  required bool bounded,
+  required Widget child,
+  double unboundedMaxWidth = 200,
+}) {
+  if (bounded) return Flexible(child: child);
+  return ConstrainedBox(
+    constraints: BoxConstraints(maxWidth: unboundedMaxWidth),
+    child: child,
+  );
+}

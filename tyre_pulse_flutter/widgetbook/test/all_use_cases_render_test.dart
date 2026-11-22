@@ -76,13 +76,4 @@ void main() {
 /// `docs/flutter-redesign/02_design_system_inventory.md`. Phase 2 does not
 /// change app code, so the cases are skipped with the reason, not hidden.
 /// Remove an entry when the component is fixed; the case then has to pass.
-const Map<String, String> _knownDefects = <String, String>{
-  'Cards and tiles/TpAssetCard/All statuses [light ar 2x]':
-      'TpAssetCard: status chip is not Flexible, row overflows ~14 dp',
-  'Sync and connectivity/TpSyncIndicator/Every queue state [dark ar 1x]':
-      'TpSyncIndicator: label Text has no Flexible/ellipsis',
-  'Sync and connectivity/TpSyncIndicator/Every queue state [light ar 2x]':
-      'TpSyncIndicator: label Text has no Flexible/ellipsis',
-  'Sync and connectivity/TpSyncLabel/Synced and pending [light ar 2x]':
-      'TpSyncLabel (tp_mobile_chrome.dart:76): Row has no Flexible label',
-};
+const Map<String, String> _knownDefects = <String, String>{};

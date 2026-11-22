@@ -62,3 +62,27 @@ Widget syncLabel(BuildContext context) {
     ],
   );
 }
+
+/// Where the app actually places these: in the app bar's actions, which lay
+/// their children out with unlimited width (My work, Vehicles, Report issue,
+/// Inspection history). The render test fails if either throws here.
+@widgetbook.UseCase(name: 'In the app bar', type: TpSyncIndicator, path: CataloguePath.sync)
+Widget syncInAppBar(BuildContext context) {
+  final String label = labelKnob(context, 'Synced 2 min ago');
+  return Scaffold(
+    appBar: TpAppBar(
+      title: 'My work',
+      showBack: false,
+      actions: <Widget>[
+        const Center(
+          child: TpSyncIndicator(
+            summary: TpSyncSummary(connectivity: TpConnectivity.offline, pendingCount: 4),
+          ),
+        ),
+        Center(child: TpSyncLabel(label: label, isPending: true)),
+        const SizedBox(width: 8),
+      ],
+    ),
+    body: const SizedBox.shrink(),
+  );
+}

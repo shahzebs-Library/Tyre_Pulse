@@ -419,6 +419,10 @@ final directories = <_widgetbook.WidgetbookNode>[
             name: 'Every queue state',
             builder: _widgetbook_workspace_components_sync.syncIndicators,
           ),
+          _widgetbook.WidgetbookUseCase(
+            name: 'In the app bar',
+            builder: _widgetbook_workspace_components_sync.syncInAppBar,
+          ),
         ],
       ),
       _widgetbook.WidgetbookComponent(
@@ -471,6 +475,15 @@ final directories = <_widgetbook.WidgetbookNode>[
             name: 'Wheel loader - all good',
             builder:
                 _widgetbook_workspace_components_tyre_diagram_board.loaderGood,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'TyreDiagramStatRow',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Tyre diagram row (four across)',
+            builder: _widgetbook_workspace_components_cards.tyreStatRow,
           ),
         ],
       ),

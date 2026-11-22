@@ -438,7 +438,7 @@ export default function Settings() {
   async function saveAppSettings(e) {
     e.preventDefault()
     if (appLoadFailed) return
-    if (!appSettings.company_name.trim() || !['SAR', 'AED', 'EGP', 'USD'].includes(appSettings.currency) || appSettings.cost_per_tyre === '' || !Number.isFinite(Number(appSettings.cost_per_tyre)) || Number(appSettings.cost_per_tyre) < 0) {
+    if (!String(appSettings.company_name ?? "").trim() || !['SAR', 'AED', 'EGP', 'USD'].includes(appSettings.currency) || appSettings.cost_per_tyre === '' || !Number.isFinite(Number(appSettings.cost_per_tyre)) || Number(appSettings.cost_per_tyre) < 0) {
       setAppMsg('Enter a company name, currency and valid tyre cost before saving.')
       return
     }

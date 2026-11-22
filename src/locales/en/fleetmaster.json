@@ -129,7 +129,8 @@
     "saving": "Saving...",
     "cancel": "Cancel",
     "required": "Asset No is required",
-    "planLimit": "Your plan's vehicle limit has been reached. Upgrade in Billing & Subscription to add more vehicles."
+    "planLimit": "Your plan's vehicle limit has been reached. Upgrade in Billing & Subscription to add more vehicles.",
+    "fillIn": "Fill in: {fields}"
   },
   "delete": {
     "title": "Delete Vehicle",
@@ -139,7 +140,17 @@
     "deleting": "Deleting...",
     "cancel": "Cancel",
     "errNoPermission": "The vehicle could not be deleted - you may not have permission, or it was already removed.",
-    "errFailed": "Delete failed. Please try again."
+    "errFailed": "Delete failed. Please try again.",
+    "checking": "Checking this vehicle's history...",
+    "hasHistory": "{assetNo} has history: {history}. Deleting it would leave those records pointing to a vehicle that no longer exists. Mark it Inactive instead: it leaves the active fleet and its history is kept.",
+    "unknownHistory": "The vehicle's history could not be checked, so it cannot be deleted permanently right now. Mark it Inactive instead, or try again later.",
+    "noHistory": "No inspections, tyre records, work orders or accidents are linked to this vehicle.",
+    "markInactive": "Mark Inactive (recommended)",
+    "alreadyInactive": "Already Inactive",
+    "alreadyInactiveTitle": "This vehicle is already Inactive",
+    "saving": "Saving...",
+    "markedInactive": "{assetNo} marked Inactive. Its history is kept.",
+    "errMarkInactive": "Could not mark the vehicle Inactive."
   },
   "bulkDelete": {
     "title": "Delete Vehicles",
@@ -149,6 +160,30 @@
     "deleting": "Deleting...",
     "cancel": "Cancel",
     "errNoPermission": "No rows were deleted — you may not have permission (Admin only) or they were already removed.",
-    "errFailed": "Bulk delete failed. Please try again."
+    "errFailed": "Bulk delete failed. Please try again.",
+    "checking": "Checking the history of {count} selected vehicle(s)...",
+    "groupClean": "{count} have no linked records and can be deleted permanently.",
+    "groupHistory": "{count} have inspections, tyre records, work orders or accidents. They cannot be deleted; mark them Inactive to keep their history.",
+    "groupUnknown": "{count} could not be checked, so they cannot be deleted permanently right now. Mark them Inactive or try again later.",
+    "deleteClean": "Delete {count} with no history",
+    "markInactive": "Mark {count} Inactive",
+    "saving": "Saving...",
+    "markedInactive": "{count} vehicle(s) marked Inactive. Their history is kept.",
+    "deletedClean": "{count} vehicle(s) with no history deleted.",
+    "errMarkInactive": "Could not mark the vehicles Inactive."
+  },
+  "history": {
+    "inspections_one": "{count} inspection",
+    "inspections_many": "{count} inspections",
+    "tyre_records_one": "{count} tyre record",
+    "tyre_records_many": "{count} tyre records",
+    "work_orders_one": "{count} work order",
+    "work_orders_many": "{count} work orders",
+    "accidents_one": "{count} accident",
+    "accidents_many": "{count} accidents"
+  },
+  "insights": {
+    "utilFleetWide": "average utilisation, fleet-wide",
+    "utilFleetWideSub": "All {count} vehicles with telematics. Search, site and type filters do not apply"
   }
 }

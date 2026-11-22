@@ -190,7 +190,8 @@ export default function Analytics({ embedded = false }) {
           <p className="text-xs text-gray-500 mt-1">{t('analytics.kpi.totalTyres')}</p>
         </Card>
         <Card className="text-center">
-          <p className="text-2xl font-bold text-blue-400">
+          {/* One line per country when several are in scope, so the size steps down instead of overflowing the card. */}
+          <p className="font-bold text-blue-400 min-w-0 [overflow-wrap:anywhere] text-[clamp(1rem,1.5vw,1.5rem)] leading-snug">
             {costLoading ? pulse('w-20') : costError ? 'N/A' : <CostValue split={costSplit} mode="tyres" />}
           </p>
           <p className="text-xs text-gray-500 mt-1">{fromGrid ? 'Tyre cost, expense grid' : 'Tyre cost, tyre records (no expense grid data for this window)'}</p>

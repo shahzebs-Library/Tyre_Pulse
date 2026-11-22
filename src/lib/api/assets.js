@@ -13,6 +13,9 @@ import { firstForCallerCompany } from './companyScope'
 export {
   listFleetTypes, bulkUpdateFleetRecords, BULK_EDITABLE, getLastServiceByAsset,
   countPmDueSoon, getUtilisationSummary,
+  REQUIRED_FLEET_FIELDS, missingRequiredFields, missingFieldsMessage,
+  HISTORY_TABLES, summarizeLinkedRecords, countLinkedRecords,
+  linkedCountsForVehicles, groupBulkDelete, countLinkedRecordsBulk,
 } from './fleetMasterData'
 
 // ops_status is the OPERATIONAL state from the owner's monthly asset sheet

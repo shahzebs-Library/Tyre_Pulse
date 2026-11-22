@@ -860,20 +860,24 @@ export default function SupplierManagement() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-busy="true">
+      <PageHeader title={t('suppliers.title')} subtitle={t('suppliers.subtitle')} icon={Building2} />
       <SkeletonCards count={4} />
       <SkeletonTable rows={8} cols={6} />
     </div>
   )
 
   if (error) return (
-    <div className="flex items-center justify-center h-64">
+    <div className="space-y-4">
+    <PageHeader title={t('suppliers.title')} subtitle={t('suppliers.subtitle')} icon={Building2} />
+    <div className="flex items-center justify-center h-64" role="alert">
       <div className="text-center">
         <AlertTriangle size={32} className="text-red-400 mx-auto mb-2" />
         <p className="text-red-400 font-medium">{t('suppliers.errors.loadFailed')}</p>
         <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
         <button onClick={fetchData} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
       </div>
+    </div>
     </div>
   )
 

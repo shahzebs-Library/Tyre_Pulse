@@ -753,6 +753,27 @@ export default function Inspections() {
     if (optimistic) setApproveTarget(prev => (prev ? { ...prev, ...optimistic } : prev))
   }, [approveTarget?.id])
 
+  // Typing an asset number fills site and vehicle type from the fleet register,
+  // like the accident form. Debounced; only EMPTY fields are filled (see
+  // assetAutofillPatch). Country-scoped: the same code in another country is a
+  // different machine. A miss or a failed read changes nothing.
+  const formAssetNo = form && !form.id ? String(form.asset_no || '').trim() : ''
+  useEffect(() => {
+    if (!formAssetNo) return undefined
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      let fleet = null
+      try { fleet = await inspectionsApi.findVehicleByAsset(formAssetNo, activeCountry) } catch { fleet = null }
+      if (cancelled || !fleet) return
+      setForm((f) => {
+        if (!f || f.id || String(f.asset_no || '').trim().toUpperCase() !== String(fleet.asset_no || '').trim().toUpperCase()) return f
+        const patch = inspectionsApi.assetAutofillPatch(f, fleet)
+        return Object.keys(patch).length ? { ...f, ...patch } : f
+      })
+    }, 350)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [formAssetNo, activeCountry])
+
   async function save() {
     if (saving) return
     const toNum = (v) => (v === '' || v == null ? null : Number(v))
@@ -791,6 +812,16 @@ export default function Inspections() {
     ]
     const base = {}
     for (const k of WRITABLE_COLS) if (form[k] !== undefined) base[k] = form[k]
+    // approval_status DEFAULTS to 'done' in the database, so it is always decided here.
+    const approval = inspectionsApi.approvalStatusForSave(form)
+    if (approval !== undefined) base.approval_status = approval
+    else delete base.approval_status
+    // A new record carries a country (fleet register, else the country in view):
+    // the register reads one country, so a country-less row never appeared in it.
+    if (!form.id) {
+      const country = form.country || (activeCountry && activeCountry !== 'All' ? activeCountry : null)
+      if (country) base.country = country
+    }
     if ('odometer_km' in base) base.odometer_km = toNum(base.odometer_km)
     if ('hour_meter' in base) base.hour_meter = toNum(base.hour_meter)
     const payload = {
@@ -803,12 +834,14 @@ export default function Inspections() {
     }
 
     try {
+      const isNew = !form.id
       if (form.id) {
         await inspectionsApi.patchInspection(form.id, payload)
       } else {
         await inspectionsApi.insertInspection(payload)
       }
       setForm(null)
+      setActionNotice({ tone: 'ok', text: `${isNew ? 'Inspection added' : 'Inspection updated'}${form.asset_no ? ` for ${form.asset_no}` : ''}.` })
       await load()
     } catch (error) {
       setSaveError(toUserMessage(error, 'Could not save the inspection. Please check the required fields and try again.'))
@@ -820,9 +853,12 @@ export default function Inspections() {
   // any error and reload, so a role the database refuses saw nothing happen.
   async function markDone(id) {
     try {
+      const row = inspectionRows.find((r) => r.id === id)
+      const approval = inspectionsApi.approvalStatusForSave({ ...(row || { id }), status: 'Done' })
       await inspectionsApi.patchInspection(id, {
         status: 'Done',
         completed_date: new Date().toISOString().split('T')[0],
+        ...(row && approval !== undefined ? { approval_status: approval } : {}),
       })
     } catch (e) {
       setActionNotice({ tone: 'error', text: toUserMessage(e, 'The inspection could not be marked done.') })

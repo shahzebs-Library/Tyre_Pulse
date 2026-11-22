@@ -72,3 +72,30 @@ was checked against the live database.
 - **Arabic right-to-left pass.**
 - **Role tests with a non-admin account:** no test account was available.
 - **The Console** (`/console`), which needs its own sign-in.
+
+## Full page sweep (all 210 pages, desktop, scrolled top to bottom)
+
+Every route was opened in Chrome and scrolled to the bottom. Each page was checked for: error screen,
+spinner that never ends, raw text or i18n keys on screen, sideways scroll, overlapping or clipped text,
+missing page heading, failed requests and load time. Overlap flags were then re-checked with a stricter
+test that ignores text a table has scrolled out of view; 12 of 14 were false alarms of that kind.
+
+| # | Severity | Where | Issue | Status |
+|---|---|---|---|---|
+| 16 | HIGH | Technician Scorecard | Never finished loading (still spinning after 40 s). It read all 97,479 job cards; only 9,370 name a technician, and the other 88,109 were ranked as if "Unassigned" were a person. | **Fixed.** Reads only job cards with a technician; the page states how many have none. |
+| 17 | HIGH | Cost Center, Cost per unit | "m³ produced" was summed in the browser from at most 20,000 of ~300,000 production rows, so cost per m³ was wrong for any wide window, and the 20 page reads took ~20 s. | **Fixed.** Summed on the server (`get_production_monthly`, row security still applies). |
+| 18 | HIGH | Fuel Theft | At laptop width the investigation panel and risk legend wrapped one letter per line and overlapped. | **Fixed.** Panels size to the space available, not the screen width. Checked in the live page. |
+| 19 | MEDIUM | Live Fleet | Long vehicle codes ran under the health score, the card footer was cramped, and the grid left half the width empty. | **Fixed.** |
+| 20 | MEDIUM | Rotation Schedule | The page scrolled sideways (2,610 px wide): a hidden file input was stretched to the full screen width. | **Fixed.** |
+| 21 | MEDIUM | Advanced Analytics | The Refresh button spun forever on the Overview tab and did nothing there; the tyre-cost tile cut numbers off ("EGP 4,378,0..."). | **Fixed.** Refresh reloads the overview; the tile sizes its text to fit. |
+| 22 | MEDIUM | Anomalies | Took 17 s: scanned all history (40,000 job cards, hitting its own cap). | **Fixed.** Opens on this year; "All dates" is one click. |
+| 23 | MEDIUM | Inspections | An inspection's odometer and hour meter never reached the vehicle. | **Fixed in the database, not yet applied:** `supabase/migrations/20261122210000_inspection_meter_to_logs.sql`. Tested on live data in a rolled-back transaction (vehicle km 404,050 to 404,100 to 404,200, one log row each). Needs the owner's approval to apply. |
+| 24 | LOW | Downtime Tracker | The period filter showed the raw key `downtime.periods.This month`. | **Fixed** (English and Arabic). |
+| 25 | LOW | Suppliers | No page heading while loading or on error. | **Fixed.** |
+| 26 | MEDIUM | Data Reconciliation, Expense Trends, Work Orders, Expenses | Server answers time out (8 s limit) under load: `get_tyre_evidence_audit`, `get_asset_ownership`, `get_data_trust_overview`, `get_site_operating_cost_multi`, `get_cost_cpk_overview`. | Open. Needs database tuning per function. |
+| 27 | INFO | 30+ pages | Currency shows as `"SAR"` with quotes. | Fixed by item 2; shows correctly once deployed. |
+| 28 | INFO | System Health | Calls to edge functions `account-recovery`, `billing-checkout`, `send-email` fail from the browser health check. | Open. Check whether these are deployed. |
+
+Pages confirmed slow but working (8 to 14 s): Expenses, Executive, Benchmark, Site Comparison,
+Fleet Intelligence, Ops Intelligence, Tenant Health, Maintenance Calendar, Inspection Intelligence.
+The main cause is item 3 (database in Tokyo).

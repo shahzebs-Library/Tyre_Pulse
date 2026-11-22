@@ -6,6 +6,7 @@ import { useFilterState } from '../hooks/useFilterState'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { toUserMessage } from '../lib/safeError'
 import { assets } from '../lib/api'
+import { missingRequiredFields, summarizeLinkedRecords, groupBulkDelete } from '../lib/api/fleetMasterData'
 import { useAuth } from '../contexts/AuthContext'
 import { useWriteAccess } from '../hooks/useWriteAccess'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
@@ -278,6 +279,23 @@ function FleetRegister() {
   const { profile, isSuperAdmin } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
   const { t } = useLanguage()
+  // t() hands back the key itself when a string is missing; show the English
+  // fallback instead so a missing locale entry never reaches the screen.
+  const tx = useCallback((key, fallback, vars) => {
+    const r = t(key, vars)
+    if (!r || r === key) {
+      if (!vars) return fallback
+      return fallback.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? String(vars[k]) : m))
+    }
+    return r
+  }, [t])
+  // "3 inspections, 12 tyre records", one translated phrase per table.
+  const historyText = useCallback((counts = []) => counts.map(({ table, count }) => {
+    const form = count === 1 ? 'one' : 'many'
+    const noun = { inspections: ['inspection', 'inspections'], tyre_records: ['tyre record', 'tyre records'],
+      work_orders: ['work order', 'work orders'], accidents: ['accident', 'accidents'] }[table] || [table, table]
+    return tx(`fleetmaster.history.${table}_${form}`, `{count} ${form === 'one' ? noun[0] : noun[1]}`, { count: count.toLocaleString() })
+  }).join(', '), [tx])
 
   // ── data ─────────────────────────────────────────────────────────────────────
   const [records, setRecords]   = useState([])
@@ -343,6 +361,18 @@ function FleetRegister() {
   // True only while the country is genuinely unchosen (the All-countries case),
   // which is when the field needs the hint rather than a quiet default.
   const countryUnset = !String(form.country || '').trim()
+  // Required fields still blank, named, so a disabled Save says why.
+  const missingRequired = missingRequiredFields(form, {
+    asset_no: t('fleetmaster.form.assetNo'),
+    country: t('fleetmaster.form.country'),
+  })
+  const missingLine = missingRequired.length
+    ? tx('fleetmaster.form.fillIn', 'Fill in: {fields}', { fields: missingRequired.join(', ') })
+    : ''
+  // Linked history for the vehicle in the delete dialog:
+  // { state: 'loading' | 'ready' | 'error', summary }
+  const [deleteHistory, setDeleteHistory] = useState({ state: 'idle', summary: null })
+  const deleteHistoryReq = useRef(0)
 
   // ── permissions ──────────────────────────────────────────────────────────────
   const role = String(profile?.role || '').toLowerCase()
@@ -363,6 +393,9 @@ function FleetRegister() {
   const selectedIds = useMemo(() => Object.keys(selected), [selected])
   const selectedRows = useMemo(() => Object.values(selected), [selected])
   const [bulkDeleteOpen, setBulkDeleteOpen]   = useState(false)
+  // History check for the bulk delete: { state: 'loading' | 'ready', groups }
+  const [bulkHistory, setBulkHistory]         = useState({ state: 'idle', groups: null })
+  const bulkHistoryReq = useRef(0)
   const [bulkError, setBulkError]             = useState('')
   const [bulkBusy, setBulkBusy]               = useState(false)
   const [bulkDialog, setBulkDialog]           = useState(null) // 'status' | 'policy' | null
@@ -610,20 +643,58 @@ function FleetRegister() {
   }
 
   // ── delete ────────────────────────────────────────────────────────────────────
-  function confirmDelete(r) {
+  async function confirmDelete(r) {
     setDeleteTarget(r)
+    setDeleteError('')
     setShowDeleteConfirm(true)
+    const req = ++deleteHistoryReq.current
+    setDeleteHistory({ state: 'loading', summary: null })
+    try {
+      const counts = await assets.countLinkedRecords({ assetNo: r.asset_no, country: r.country })
+      if (req !== deleteHistoryReq.current) return
+      setDeleteHistory({ state: 'ready', summary: summarizeLinkedRecords(counts) })
+    } catch {
+      if (req !== deleteHistoryReq.current) return
+      setDeleteHistory({ state: 'ready', summary: summarizeLinkedRecords({}) })
+    }
   }
 
-  async function deleteRecord() {
+  function closeDelete() {
+    deleteHistoryReq.current++
+    setShowDeleteConfirm(false)
+    setDeleteTarget(null)
+    setDeleteError('')
+    setDeleteHistory({ state: 'idle', summary: null })
+  }
+
+  // Keeps the vehicle and its history; it just leaves the active fleet.
+  async function markInactive() {
     if (!deleteTarget) return
     setSaving(true)
     setDeleteError('')
     try {
+      await assets.saveFleetRecord({ status: 'Inactive', updated_at: new Date().toISOString() }, deleteTarget.id)
+      closeDelete()
+      setNotice(tx('fleetmaster.delete.markedInactive', '{assetNo} marked Inactive. Its history is kept.', { assetNo: deleteTarget.asset_no }))
+      loadRecords()
+    } catch (e) {
+      setDeleteError(toUserMessage(e, tx('fleetmaster.delete.errMarkInactive', 'Could not mark the vehicle Inactive.')))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteRecord() {
+    if (!deleteTarget) return
+    // Permanent delete only for a vehicle checked and found to have no history.
+    if (deleteHistory.state !== 'ready' || deleteHistory.summary?.state !== 'none') return
+    setSaving(true)
+    setDeleteError('')
+    try {
       await assets.deleteFleetRecord(deleteTarget.id)
-      setShowDeleteConfirm(false)
-      setDeleteTarget(null)
-      setSelected((prev) => { const n = { ...prev }; delete n[deleteTarget.id]; return n })
+      const id = deleteTarget.id
+      closeDelete()
+      setSelected((prev) => { const n = { ...prev }; delete n[id]; return n })
       loadRecords()
       loadSites()
     } catch (e) {
@@ -633,18 +704,62 @@ function FleetRegister() {
     }
   }
 
+  async function openBulkDelete() {
+    setBulkError('')
+    setBulkDeleteOpen(true)
+    const rows = selectedRows
+    const req = ++bulkHistoryReq.current
+    setBulkHistory({ state: 'loading', groups: null })
+    let counts = {}
+    try { counts = await assets.countLinkedRecordsBulk(rows) } catch { counts = {} }
+    if (req !== bulkHistoryReq.current) return
+    setBulkHistory({ state: 'ready', groups: groupBulkDelete(rows, counts) })
+  }
+
+  function closeBulkDelete() {
+    bulkHistoryReq.current++
+    setBulkDeleteOpen(false)
+    setBulkError('')
+    setBulkHistory({ state: 'idle', groups: null })
+  }
+
+  // Permanently deletes ONLY the selected vehicles checked and found to have no history.
   async function confirmBulkDelete() {
-    if (selectedIds.length === 0) return
+    const clean = bulkHistory.state === 'ready' ? bulkHistory.groups.clean : []
+    if (clean.length === 0) return
     setBulkBusy(true)
     setBulkError('')
     try {
-      await assets.deleteFleetRecords(selectedIds)
-      setBulkDeleteOpen(false)
-      setSelected({})
+      const ids = clean.map(r => r.id)
+      await assets.deleteFleetRecords(ids)
+      closeBulkDelete()
+      setSelected((prev) => { const n = { ...prev }; for (const id of ids) delete n[id]; return n })
+      setNotice(tx('fleetmaster.bulkDelete.deletedClean', '{count} vehicle(s) with no history deleted.', { count: fmtInt(ids.length) }))
       loadRecords()
       loadSites()
     } catch (e) {
       setBulkError(toUserMessage(e, t('fleetmaster.bulkDelete.errFailed')))
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  // Marks the selected vehicles that have (or may have) history Inactive.
+  async function bulkMarkInactive() {
+    if (bulkHistory.state !== 'ready') return
+    const keep = [...bulkHistory.groups.history, ...bulkHistory.groups.unknown]
+    if (keep.length === 0) return
+    setBulkBusy(true)
+    setBulkError('')
+    try {
+      const ids = keep.map(r => r.id)
+      const updated = await assets.bulkUpdateFleetRecords(ids, { status: 'Inactive' })
+      closeBulkDelete()
+      setSelected((prev) => { const n = { ...prev }; for (const id of ids) delete n[id]; return n })
+      setNotice(tx('fleetmaster.bulkDelete.markedInactive', '{count} vehicle(s) marked Inactive. Their history is kept.', { count: fmtInt(updated) }))
+      loadRecords()
+    } catch (e) {
+      setBulkError(toUserMessage(e, tx('fleetmaster.bulkDelete.errMarkInactive', 'Could not mark the vehicles Inactive.')))
     } finally {
       setBulkBusy(false)
     }
@@ -1040,7 +1155,7 @@ function FleetRegister() {
               {(close) => (
                 <>
                   <MenuItem icon={Download} onClick={() => { exportRows(selectedRows, '_Selected'); close() }}>Export selected</MenuItem>
-                  {isAdmin && <MenuItem icon={Trash2} danger onClick={() => { setBulkError(''); setBulkDeleteOpen(true); close() }}>Delete selected</MenuItem>}
+                  {isAdmin && <MenuItem icon={Trash2} danger onClick={() => { openBulkDelete(); close() }}>Delete selected</MenuItem>}
                   <MenuItem icon={X} onClick={() => { setSelected({}); close() }}>Clear selection</MenuItem>
                 </>
               )}
@@ -1163,10 +1278,10 @@ function FleetRegister() {
                   : pmDue.state === 'loading' ? 'Checking service plans...' : 'Service plans could not be read'} />
               <Insight icon={Gauge} tone="t-purple" to="/fleet-utilization"
                 num={util.state === 'ready' && util.data?.avg != null ? fmtPct(util.data.avg) : null}
-                text="average utilisation"
+                text={tx('fleetmaster.insights.utilFleetWide', 'average utilisation, fleet-wide')}
                 fallback="Fleet utilisation: N/A"
                 sub={util.state === 'ready' && util.data?.avg != null
-                  ? `Across ${fmtInt(util.data.assets)} vehicles with telematics`
+                  ? tx('fleetmaster.insights.utilFleetWideSub', 'All {count} vehicles with telematics. Search, site and type filters do not apply', { count: fmtInt(util.data.assets) })
                   : util.state === 'loading' ? 'Checking telematics...' : 'No telematics utilisation on record'} />
             </div>
           </Card>
@@ -1195,36 +1310,36 @@ function FleetRegister() {
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">{t('fleetmaster.form.sectionIdentity')}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">{t('fleetmaster.form.assetNo')} <span className="text-red-400">*</span></label>
-                  <input className="input" value={form.asset_no} onChange={F('asset_no')} required placeholder={t('fleetmaster.form.placeholders.assetNo')} />
+                  <label className="label" htmlFor="fm-f-assetNo">{t('fleetmaster.form.assetNo')} <span className="text-red-400">*</span></label>
+                  <input id="fm-f-assetNo" className="input" value={form.asset_no} onChange={F('asset_no')} required placeholder={t('fleetmaster.form.placeholders.assetNo')} />
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.fleetNumber')}</label>
-                  <input className="input" value={form.fleet_number} onChange={F('fleet_number')} placeholder={t('fleetmaster.form.placeholders.fleetNumber')} />
+                  <label className="label" htmlFor="fm-f-fleetNumber">{t('fleetmaster.form.fleetNumber')}</label>
+                  <input id="fm-f-fleetNumber" className="input" value={form.fleet_number} onChange={F('fleet_number')} placeholder={t('fleetmaster.form.placeholders.fleetNumber')} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
-                  <label className="label">{t('fleetmaster.form.make')}</label>
-                  <input className="input" value={form.make} onChange={F('make')} placeholder={t('fleetmaster.form.placeholders.make')} />
+                  <label className="label" htmlFor="fm-f-make">{t('fleetmaster.form.make')}</label>
+                  <input id="fm-f-make" className="input" value={form.make} onChange={F('make')} placeholder={t('fleetmaster.form.placeholders.make')} />
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.model')}</label>
-                  <input className="input" value={form.model} onChange={F('model')} placeholder={t('fleetmaster.form.placeholders.model')} />
+                  <label className="label" htmlFor="fm-f-model">{t('fleetmaster.form.model')}</label>
+                  <input id="fm-f-model" className="input" value={form.model} onChange={F('model')} placeholder={t('fleetmaster.form.placeholders.model')} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                 <div>
-                  <label className="label">{t('fleetmaster.form.vehicleType')}</label>
-                  <input className="input" value={form.vehicle_type} onChange={F('vehicle_type')} placeholder={t('fleetmaster.form.placeholders.vehicleType')} />
+                  <label className="label" htmlFor="fm-f-vehicleType">{t('fleetmaster.form.vehicleType')}</label>
+                  <input id="fm-f-vehicleType" className="input" value={form.vehicle_type} onChange={F('vehicle_type')} placeholder={t('fleetmaster.form.placeholders.vehicleType')} />
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.year')}</label>
-                  <input type="number" className="input" value={form.year} onChange={F('year')} placeholder={t('fleetmaster.form.placeholders.year')} min={1990} max={2100} />
+                  <label className="label" htmlFor="fm-f-year">{t('fleetmaster.form.year')}</label>
+                  <input id="fm-f-year" type="number" className="input" value={form.year} onChange={F('year')} placeholder={t('fleetmaster.form.placeholders.year')} min={1990} max={2100} />
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.status')}</label>
-                  <select className="input" value={form.status} onChange={F('status')}>
+                  <label className="label" htmlFor="fm-f-status">{t('fleetmaster.form.status')}</label>
+                  <select id="fm-f-status" className="input" value={form.status} onChange={F('status')}>
                     {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
@@ -1236,23 +1351,23 @@ function FleetRegister() {
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">{t('fleetmaster.form.sectionAssignment')}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">{t('fleetmaster.form.department')}</label>
-                  <input className="input" value={form.department} onChange={F('department')} placeholder={t('fleetmaster.form.placeholders.department')} />
+                  <label className="label" htmlFor="fm-f-department">{t('fleetmaster.form.department')}</label>
+                  <input id="fm-f-department" className="input" value={form.department} onChange={F('department')} placeholder={t('fleetmaster.form.placeholders.department')} />
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.operatorName')}</label>
-                  <input className="input" value={form.operator_name} onChange={F('operator_name')} placeholder={t('fleetmaster.form.placeholders.operatorName')} />
+                  <label className="label" htmlFor="fm-f-operatorName">{t('fleetmaster.form.operatorName')}</label>
+                  <input id="fm-f-operatorName" className="input" value={form.operator_name} onChange={F('operator_name')} placeholder={t('fleetmaster.form.placeholders.operatorName')} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 mt-3">
                 <div>
-                  <label className="label">{t('fleetmaster.form.site')}</label>
-                  <input className="input" list="fleet-site-list" value={form.site} onChange={F('site')} placeholder={t('fleetmaster.form.placeholders.site')} />
+                  <label className="label" htmlFor="fm-f-site">{t('fleetmaster.form.site')}</label>
+                  <input id="fm-f-site" className="input" list="fleet-site-list" value={form.site} onChange={F('site')} placeholder={t('fleetmaster.form.placeholders.site')} />
                   <datalist id="fleet-site-list">{sites.map(s => <option key={s} value={s} />)}</datalist>
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.country')}</label>
-                  <select className="input" value={form.country} onChange={F('country')}>
+                  <label className="label" htmlFor="fm-f-country">{t('fleetmaster.form.country')} <span className="text-red-400">*</span></label>
+                  <select id="fm-f-country" className="input" value={form.country} onChange={F('country')}>
                     <option value="">{COUNTRY_PLACEHOLDER}</option>
                     {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -1268,35 +1383,35 @@ function FleetRegister() {
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">{t('fleetmaster.form.sectionPolicy')}</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="label">{t('fleetmaster.form.expectedKmPerTyre')}</label>
-                  <input type="number" className="input" value={form.expected_km_per_tyre} onChange={F('expected_km_per_tyre')} placeholder={t('fleetmaster.form.placeholders.expectedKm')} min={0} />
+                  <label className="label" htmlFor="fm-f-expectedKmPerTyre">{t('fleetmaster.form.expectedKmPerTyre')}</label>
+                  <input id="fm-f-expectedKmPerTyre" type="number" className="input" value={form.expected_km_per_tyre} onChange={F('expected_km_per_tyre')} placeholder={t('fleetmaster.form.placeholders.expectedKm')} min={0} />
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.minDaysBetweenChanges')}</label>
-                  <input type="number" className="input" value={form.min_days_between_changes} onChange={F('min_days_between_changes')} placeholder={t('fleetmaster.form.placeholders.minDays')} min={0} />
+                  <label className="label" htmlFor="fm-f-minDaysBetweenChanges">{t('fleetmaster.form.minDaysBetweenChanges')}</label>
+                  <input id="fm-f-minDaysBetweenChanges" type="number" className="input" value={form.min_days_between_changes} onChange={F('min_days_between_changes')} placeholder={t('fleetmaster.form.placeholders.minDays')} min={0} />
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.maxTyresPerDay')}</label>
-                  <input type="number" className="input" value={form.max_tyres_per_day} onChange={F('max_tyres_per_day')} placeholder={t('fleetmaster.form.placeholders.maxTyres')} min={1} />
+                  <label className="label" htmlFor="fm-f-maxTyresPerDay">{t('fleetmaster.form.maxTyresPerDay')}</label>
+                  <input id="fm-f-maxTyresPerDay" type="number" className="input" value={form.max_tyres_per_day} onChange={F('max_tyres_per_day')} placeholder={t('fleetmaster.form.placeholders.maxTyres')} min={1} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
                 <div>
-                  <label className="label">{t('fleetmaster.form.tyreSize')}</label>
-                  <input className="input" value={form.tyre_size} onChange={F('tyre_size')} placeholder={t('fleetmaster.form.placeholders.tyreSize')} />
+                  <label className="label" htmlFor="fm-f-tyreSize">{t('fleetmaster.form.tyreSize')}</label>
+                  <input id="fm-f-tyreSize" className="input" value={form.tyre_size} onChange={F('tyre_size')} placeholder={t('fleetmaster.form.placeholders.tyreSize')} />
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.preferredBrand')}</label>
-                  <input className="input" value={form.tyre_brand_preferred} onChange={F('tyre_brand_preferred')} placeholder={t('fleetmaster.form.placeholders.brand')} />
+                  <label className="label" htmlFor="fm-f-preferredBrand">{t('fleetmaster.form.preferredBrand')}</label>
+                  <input id="fm-f-preferredBrand" className="input" value={form.tyre_brand_preferred} onChange={F('tyre_brand_preferred')} placeholder={t('fleetmaster.form.placeholders.brand')} />
                 </div>
                 <div>
-                  <label className="label">{t('fleetmaster.form.monthlyBudget', { currency: activeCurrency })}</label>
-                  <input type="number" className="input" value={form.monthly_tyre_budget} onChange={F('monthly_tyre_budget')} placeholder={t('fleetmaster.form.placeholders.budget')} min={0} />
+                  <label className="label" htmlFor="fm-f-monthlyBudget">{t('fleetmaster.form.monthlyBudget', { currency: activeCurrency })}</label>
+                  <input id="fm-f-monthlyBudget" type="number" className="input" value={form.monthly_tyre_budget} onChange={F('monthly_tyre_budget')} placeholder={t('fleetmaster.form.placeholders.budget')} min={0} />
                 </div>
               </div>
               <div className="mt-3">
-                <label className="label">{t('fleetmaster.form.notes')}</label>
-                <textarea className="input" rows={2} value={form.notes} onChange={F('notes')} placeholder={t('fleetmaster.form.placeholders.notes')} />
+                <label className="label" htmlFor="fm-f-notes">{t('fleetmaster.form.notes')}</label>
+                <textarea id="fm-f-notes" className="input" rows={2} value={form.notes} onChange={F('notes')} placeholder={t('fleetmaster.form.placeholders.notes')} />
               </div>
             </div>
 
@@ -1309,8 +1424,11 @@ function FleetRegister() {
                 {t('fleetmaster.form.planLimit')}
               </div>
             )}
+            {missingLine && (
+              <p className="text-xs text-amber-300" role="status" aria-live="polite" id="fm-f-missing">{missingLine}</p>
+            )}
             <div className="flex gap-3 pt-2">
-              <button type="submit" disabled={saving || countryUnset || (atLimit && !editRecord.id)} className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              <button type="submit" aria-describedby={missingLine ? 'fm-f-missing' : undefined} disabled={saving || missingRequired.length > 0 || (atLimit && !editRecord.id)} className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                 <Save size={15} /> {saving ? t('fleetmaster.form.saving') : t('fleetmaster.form.save')}
               </button>
               <button type="button" onClick={() => setEditRecord(null)} className="btn-secondary">{t('fleetmaster.form.cancel')}</button>
@@ -1360,48 +1478,98 @@ function FleetRegister() {
       )}
 
       {/* ── Delete Confirmation ───────────────────────────────────────────── */}
-      {showDeleteConfirm && deleteTarget && (
-        <Modal title={t('fleetmaster.delete.title')} onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} busy={saving}>
-          <div className="flex gap-3 mb-4">
-            <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[var(--text-primary)] font-medium">{t('fleetmaster.delete.question', { assetNo: deleteTarget.asset_no })}</p>
-              <p className="text-gray-400 text-sm mt-1">{t('fleetmaster.delete.warning')}</p>
+      {showDeleteConfirm && deleteTarget && (() => {
+        const hist = deleteHistory.summary
+        const checking = deleteHistory.state !== 'ready'
+        const hasHistory = hist?.state === 'history'
+        const unknown = hist?.state === 'unknown'
+        const canHardDelete = !checking && hist?.state === 'none'
+        const alreadyInactive = String(deleteTarget.status || '') === 'Inactive'
+        return (
+          <Modal title={t('fleetmaster.delete.title')} onClose={closeDelete} busy={saving}>
+            <div className="flex gap-3 mb-4">
+              <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[var(--text-primary)] font-medium">{t('fleetmaster.delete.question', { assetNo: deleteTarget.asset_no })}</p>
+                {checking && <p className="text-gray-400 text-sm mt-1" role="status">{tx('fleetmaster.delete.checking', "Checking this vehicle's history...")}</p>}
+                {hasHistory && (
+                  <p className="text-amber-300 text-sm mt-1" role="status">
+                    {tx('fleetmaster.delete.hasHistory', '{assetNo} has history: {history}. Deleting it would leave those records pointing to a vehicle that no longer exists. Mark it Inactive instead: it leaves the active fleet and its history is kept.', { assetNo: deleteTarget.asset_no, history: historyText(hist.counts) })}
+                  </p>
+                )}
+                {unknown && (
+                  <p className="text-amber-300 text-sm mt-1" role="status">
+                    {tx('fleetmaster.delete.unknownHistory', "The vehicle's history could not be checked, so it cannot be deleted permanently right now. Mark it Inactive instead, or try again later.")}
+                  </p>
+                )}
+                {canHardDelete && <p className="text-gray-400 text-sm mt-1">{tx('fleetmaster.delete.noHistory', 'No inspections, tyre records, work orders or accidents are linked to this vehicle.')} {t('fleetmaster.delete.warning')}</p>}
+              </div>
             </div>
-          </div>
-          {deleteError && (
-            <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
-          )}
-          <div className="flex gap-3">
-            <button onClick={deleteRecord} disabled={saving} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-              <Trash2 size={15} /> {saving ? t('fleetmaster.delete.deleting') : t('fleetmaster.delete.confirm')}
-            </button>
-            <button onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null); setDeleteError('') }} disabled={saving} className="btn-secondary disabled:opacity-50">{t('fleetmaster.delete.cancel')}</button>
-          </div>
-        </Modal>
-      )}
+            {deleteError && (
+              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{deleteError}</p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              {(hasHistory || unknown) && (
+                <button onClick={markInactive} disabled={saving || !canEdit || alreadyInactive}
+                  title={!canEdit ? access.reason('edit') : alreadyInactive ? tx('fleetmaster.delete.alreadyInactiveTitle', 'This vehicle is already Inactive') : undefined}
+                  className="btn-primary flex items-center gap-2 disabled:opacity-50">
+                  <CircleSlash size={15} /> {saving ? tx('fleetmaster.delete.saving', 'Saving...') : alreadyInactive ? tx('fleetmaster.delete.alreadyInactive', 'Already Inactive') : tx('fleetmaster.delete.markInactive', 'Mark Inactive (recommended)')}
+                </button>
+              )}
+              {canHardDelete && (
+                <button onClick={deleteRecord} disabled={saving} className="btn-danger flex items-center gap-2 disabled:opacity-50">
+                  <Trash2 size={15} /> {saving ? t('fleetmaster.delete.deleting') : t('fleetmaster.delete.confirm')}
+                </button>
+              )}
+              <button onClick={closeDelete} disabled={saving} className="btn-secondary disabled:opacity-50">{t('fleetmaster.delete.cancel')}</button>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {/* ── Bulk Delete Confirmation (Admin only) ─────────────────────────── */}
-      {bulkDeleteOpen && (
-        <Modal title={t('fleetmaster.bulkDelete.title')} onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }} busy={bulkBusy}>
-          <div className="flex gap-3 mb-4">
-            <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[var(--text-primary)] font-medium">{t('fleetmaster.bulkDelete.question', { count: selectedIds.length })}</p>
-              <p className="text-gray-400 text-sm mt-1">{t('fleetmaster.bulkDelete.warning')}</p>
+      {bulkDeleteOpen && (() => {
+        const checking = bulkHistory.state !== 'ready'
+        const g = bulkHistory.groups || { clean: [], history: [], unknown: [] }
+        const keepCount = g.history.length + g.unknown.length
+        return (
+          <Modal title={t('fleetmaster.bulkDelete.title')} onClose={() => { if (!bulkBusy) closeBulkDelete() }} busy={bulkBusy}>
+            <div className="flex gap-3 mb-4">
+              <AlertTriangle size={20} className="text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-[var(--text-primary)] font-medium">{t('fleetmaster.bulkDelete.question', { count: selectedIds.length })}</p>
+                {checking ? (
+                  <p className="text-gray-400 text-sm" role="status">{tx('fleetmaster.bulkDelete.checking', 'Checking the history of {count} selected vehicle(s)...', { count: fmtInt(selectedIds.length) })}</p>
+                ) : (
+                  <div role="status" className="text-sm space-y-1">
+                    {g.clean.length > 0 && <p className="text-gray-400">{tx('fleetmaster.bulkDelete.groupClean', '{count} have no linked records and can be deleted permanently.', { count: fmtInt(g.clean.length) })} {t('fleetmaster.bulkDelete.warning')}</p>}
+                    {g.history.length > 0 && <p className="text-amber-300">{tx('fleetmaster.bulkDelete.groupHistory', '{count} have inspections, tyre records, work orders or accidents. They cannot be deleted; mark them Inactive to keep their history.', { count: fmtInt(g.history.length) })}</p>}
+                    {g.unknown.length > 0 && <p className="text-amber-300">{tx('fleetmaster.bulkDelete.groupUnknown', '{count} could not be checked, so they cannot be deleted permanently right now. Mark them Inactive or try again later.', { count: fmtInt(g.unknown.length) })}</p>}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          {bulkError && (
-            <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{bulkError}</p>
-          )}
-          <div className="flex gap-3">
-            <button onClick={confirmBulkDelete} disabled={bulkBusy} className="btn-danger flex items-center gap-2 disabled:opacity-50">
-              <Trash2 size={15} /> {bulkBusy ? t('fleetmaster.bulkDelete.deleting') : t('fleetmaster.bulkDelete.confirm', { count: selectedIds.length })}
-            </button>
-            <button onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">{t('fleetmaster.bulkDelete.cancel')}</button>
-          </div>
-        </Modal>
-      )}
+            {bulkError && (
+              <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5 mb-4">{bulkError}</p>
+            )}
+            <div className="flex flex-wrap gap-3">
+              {!checking && keepCount > 0 && (
+                <button onClick={bulkMarkInactive} disabled={bulkBusy || !canEdit}
+                  title={!canEdit ? access.reason('edit') : undefined}
+                  className="btn-primary flex items-center gap-2 disabled:opacity-50">
+                  <CircleSlash size={15} /> {bulkBusy ? tx('fleetmaster.bulkDelete.saving', 'Saving...') : tx('fleetmaster.bulkDelete.markInactive', 'Mark {count} Inactive', { count: fmtInt(keepCount) })}
+                </button>
+              )}
+              {!checking && g.clean.length > 0 && (
+                <button onClick={confirmBulkDelete} disabled={bulkBusy} className="btn-danger flex items-center gap-2 disabled:opacity-50">
+                  <Trash2 size={15} /> {bulkBusy ? t('fleetmaster.bulkDelete.deleting') : tx('fleetmaster.bulkDelete.deleteClean', 'Delete {count} with no history', { count: fmtInt(g.clean.length) })}
+                </button>
+              )}
+              <button onClick={closeBulkDelete} disabled={bulkBusy} className="btn-secondary">{t('fleetmaster.bulkDelete.cancel')}</button>
+            </div>
+          </Modal>
+        )
+      })()}
     </div>
   )
 }

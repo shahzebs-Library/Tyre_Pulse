@@ -250,7 +250,9 @@ export default function AdvancedAnalytics() {
   useEffect(() => { if (activeTab !== 'overview') setAnalysisOpened(true) }, [activeTab])
 
   useEffect(() => {
-    if (!analysisOpened) return
+    // Overview reads its own data; nothing here is loading until an analysis
+    // tab is opened. Leaving the flag on kept Refresh spinning forever.
+    if (!analysisOpened) { setLoading(false); return }
     async function load() {
       const stale = latestLoad.begin()
       setLoading(true)
@@ -536,7 +538,7 @@ export default function AdvancedAnalytics() {
       <div className="p-6">
         {isOverview ? (
           <Suspense fallback={<LoadingOverlay />}>
-            <AnalyticsOverview embedded />
+            <AnalyticsOverview key={reloadKey} embedded />
           </Suspense>
         ) : loading ? (
           <LoadingOverlay />

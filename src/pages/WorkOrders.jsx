@@ -231,6 +231,13 @@ export default function WorkOrders() {
     const id = setInterval(() => setNowTick(Date.now()), 60000)
     return () => clearInterval(id)
   }, [])
+  // Re-read the clock whenever the drawer shows a new row. A status move stamps
+  // started_at/completed_at with the CURRENT time, which is after a tick that can
+  // be up to 60s old, so the flow measured a negative gap and reported "Workshop
+  // In was never recorded" directly under a stepper showing that very time.
+  useEffect(() => {
+    if (viewOrder) setNowTick(Date.now())
+  }, [viewOrder])
   const [partRow, setPartRow]       = useState({ part_name: '', quantity: 1, unit_cost: '' })
 
   // ── Load ──────────────────────────────────────────────────────────────────

@@ -590,6 +590,16 @@ const CHART_OPTS_DOUGHNUT = {
 
 
 
+// Names an incident for a confirmation prompt: reference number, asset and
+// date, so the person deleting can see WHICH incident goes. Falls back honestly.
+export function describeIncident(row) {
+  if (!row) return 'this incident'
+  const parts = [row.reference_no, row.asset_no, row.incident_date ? String(row.incident_date).slice(0, 10) : null]
+    .map(v => (v == null ? '' : String(v).trim()))
+    .filter(Boolean)
+  return parts.length ? parts.join(' | ') : 'this incident'
+}
+
 export default function Accidents() {
   const reportMeta = useReportMeta('Accident & Claims Tracker')
   const { profile } = useAuth()
@@ -696,11 +706,15 @@ export default function Accidents() {
   const loadRecords = useCallback(async () => {
     const token = ++loadReqRef.current   // guard against out-of-order responses on rapid country switches
     setLoading(true)
+    // A thrown read (network drop, aborted page) used to leave `loading` stuck on
+    // true: the register stayed a skeleton and the header kept the old count. Every
+    // exit now clears loading for the CURRENT request.
+    try {
     // Paginate past the 1000-row cap so the list AND its exports are complete.
     // The service bounds the read at 100,000 rows; surface that cap honestly.
     const { data, error: err, truncated: tr } = await accidentsApi.listAllAccidentsForPage({ country: activeCountry })
     if (token !== loadReqRef.current) return
-    if (err) { setError(toUserMessage(err, 'Could not load incidents.')); setLoading(false); return }
+    if (err) { setError(toUserMessage(err, 'Could not load incidents.')); return }
     setError('')
     setTruncated(!!tr)
     let rows = data ?? []
@@ -728,7 +742,11 @@ export default function Accidents() {
     // badges) agrees. Save/edit paths convert back via toDb*/canon* helpers.
     if (token !== loadReqRef.current) return
     setRecords(rows.map(r => ({ ...r, status: canonStatus(r.status), severity: canonSeverity(r.severity), accident_type: canonAccidentType(r.accident_type) })))
-    setLoading(false)
+    } catch (e) {
+      if (token === loadReqRef.current) setError(toUserMessage(e, 'Could not load incidents.'))
+    } finally {
+      if (token === loadReqRef.current) setLoading(false)
+    }
   }, [activeCountry])
 
   useEffect(() => { loadRecords() }, [loadRecords])
@@ -1868,7 +1886,10 @@ export default function Accidents() {
       plate_number:          form.plate_number || null,
       vehicle_type:          form.vehicle_type || null,
       site:                  form.site || 'Unassigned',   // site is NOT NULL (DB default 'Unassigned') — never send null
-      country:               form.country || null,
+      // A blank country used to save NULL, and the register reads its scope with a
+      // strict country match, so the new incident vanished from the list it was
+      // just added to (DB 45, register 44). Fall back to the country in view.
+      country:               form.country || (activeCountry && activeCountry !== 'All' ? activeCountry : null),
       location:              form.location || null,
       driver_name:           form.driver_name || null,
       description:           form.description || null,
@@ -1968,8 +1989,10 @@ export default function Accidents() {
       : await accidentsApi.createAccidentForPage(payload)
     if (err) { setFormError(toUserMessage(err, 'Could not save the incident.')); setSaving(false); return }
     setShowForm(false)
-    loadRecords()
     setSaving(false)
+    // Await the re-read so the register, header count and KPI tiles reflect the
+    // saved incident (they all derive from `records`).
+    await loadRecords()
   }
 
   // Opens the confirmation dialog; the delete itself runs in confirmDeleteOne.
@@ -2345,7 +2368,7 @@ export default function Accidents() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <PageHeader
           title="Accidents & Incidents"
-          subtitle={`${records.length} total incidents`}
+          subtitle={loading && records.length === 0 ? 'Loading incidents...' : `${records.length} total incidents`}
           icon={AlertOctagon}
         />
         <div className="flex gap-2 flex-wrap">
@@ -2575,37 +2598,37 @@ export default function Accidents() {
 
                 {showFilters && (
                   <div className="flex flex-wrap gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-3">
-                    <select className="input text-sm w-36" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+                    <select aria-label="Filter by site" className="input text-sm w-36" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
                       <option value="">All Sites</option>
                       {sites.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <select className="input text-sm w-36" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
+                    <select aria-label="Filter by severity" className="input text-sm w-36" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
                       <option value="">All Severities</option>
                       {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <select className="input text-sm w-44" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                    <select aria-label="Filter by status" className="input text-sm w-44" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                       <option value="">All Statuses</option>
                       {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     {stageOptions.length > 0 && (
-                      <select className="input text-sm w-44" value={filterStage} onChange={e => setFilterStage(e.target.value)} title="Case stage / current status">
+                      <select aria-label="Filter by case stage" className="input text-sm w-44" value={filterStage} onChange={e => setFilterStage(e.target.value)} title="Case stage / current status">
                         <option value="">All Stages</option>
                         {stageOptions.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     )}
-                    <select className="input text-sm w-36" value={filterRepairType} onChange={e => setFilterRepairType(e.target.value)} title="Repair route">
+                    <select aria-label="Filter by repair type" className="input text-sm w-36" value={filterRepairType} onChange={e => setFilterRepairType(e.target.value)} title="Repair route">
                       <option value="">All Repairs</option>
                       {REPAIR_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <select className="input text-sm w-40" value={filterFault} onChange={e => setFilterFault(e.target.value)} title="Fault status">
+                    <select aria-label="Filter by fault status" className="input text-sm w-40" value={filterFault} onChange={e => setFilterFault(e.target.value)} title="Fault status">
                       <option value="">All Fault</option>
                       {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <select className="input text-sm w-48" value={filterWfStage} onChange={e => setFilterWfStage(e.target.value)} title="Unified workflow stage">
+                    <select aria-label="Filter by workflow stage" className="input text-sm w-48" value={filterWfStage} onChange={e => setFilterWfStage(e.target.value)} title="Unified workflow stage">
                       <option value="">All Workflow Stages</option>
                       {WORKFLOW_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                     </select>
-                    <select className="input text-sm w-40" value={filterAge} onChange={e => setFilterAge(e.target.value)} title="How long open cases have been running (days since incident)">
+                    <select aria-label="Filter by case age" className="input text-sm w-40" value={filterAge} onChange={e => setFilterAge(e.target.value)} title="How long open cases have been running (days since incident)">
                       <option value="">Any Days Open</option>
                       <option value="0-15">Open &le; {CASE_AGE_GREEN_DAYS}d</option>
                       <option value="16-30">Open {CASE_AGE_GREEN_DAYS + 1}&ndash;{CASE_AGE_AMBER_DAYS}d</option>
@@ -3374,8 +3397,8 @@ export default function Accidents() {
                   />
                 </div>
                 <div>
-                  <label className="label">Accident Type</label>
-                  <select className="input" value={form.accident_type} onChange={e => setForm(f => ({ ...f, accident_type: e.target.value }))}>
+                  <label className="label" htmlFor="acc-field-accident-type">Accident Type</label>
+                  <select id="acc-field-accident-type" className="input" value={form.accident_type} onChange={e => setForm(f => ({ ...f, accident_type: e.target.value }))}>
                     <option value="">N/A</option>
                     {ACCIDENT_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -3396,29 +3419,29 @@ export default function Accidents() {
               <FormSection title="Classification">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="label">Incident Severity</label>
-                    <select className="input" value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-severity">Incident Severity</label>
+                    <select id="acc-field-severity" className="input" value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}>
                       {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <p className="text-[11px] text-[var(--text-muted)] mt-1">Overall incident</p>
                   </div>
                   <div>
-                    <label className="label">Status</label>
-                    <select className="input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-status">Status</label>
+                    <select id="acc-field-status" className="input" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
                       {editableAccidentStatuses(form.status).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="label">Damage Severity</label>
-                    <select className="input" value={form.damage_class} onChange={e => setForm(f => ({ ...f, damage_class: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-damage-class">Damage Severity</label>
+                    <select id="acc-field-damage-class" className="input" value={form.damage_class} onChange={e => setForm(f => ({ ...f, damage_class: e.target.value }))}>
                       <option value="">N/A</option>
                       {DAMAGE_CLASS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <p className="text-[11px] text-[var(--text-muted)] mt-1">How bad it is</p>
                   </div>
                   <div>
-                    <label className="label">Damage Detail</label>
-                    <select className="input" value={form.damage_condition} onChange={e => setForm(f => ({ ...f, damage_condition: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-damage-condition">Damage Detail</label>
+                    <select id="acc-field-damage-condition" className="input" value={form.damage_condition} onChange={e => setForm(f => ({ ...f, damage_condition: e.target.value }))}>
                       <option value="">Not set</option>
                       {withValueOption(DAMAGE_CONDITION_OPTS, form.damage_condition).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -3486,32 +3509,32 @@ export default function Accidents() {
               <FormSection title="Liability & Case (GCC)">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="label">Fault Status</label>
-                    <select className="input" value={form.fault_status} onChange={e => setForm(f => ({ ...f, fault_status: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-fault-status">Fault Status</label>
+                    <select id="acc-field-fault-status" className="input" value={form.fault_status} onChange={e => setForm(f => ({ ...f, fault_status: e.target.value }))}>
                       <option value="">N/A</option>
                       {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <p className="text-[11px] text-[var(--text-muted)] mt-1">Our internal assessment</p>
                   </div>
                   <div>
-                    <label className="label">GCC Liability</label>
-                    <select className="input" value={form.gcc_liability_ratio} onChange={e => setForm(f => ({ ...f, gcc_liability_ratio: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-gcc-liability-ratio">GCC Liability</label>
+                    <select id="acc-field-gcc-liability-ratio" className="input" value={form.gcc_liability_ratio} onChange={e => setForm(f => ({ ...f, gcc_liability_ratio: e.target.value }))}>
                       <option value="">N/A</option>
                       {LIABILITY_RATIO_OPTS.map(n => <option key={n} value={n}>{n}%</option>)}
                     </select>
                     <p className="text-[11px] text-[var(--text-muted)] mt-1">Share of liability (%)</p>
                   </div>
                   <div>
-                    <label className="label">Najm</label>
-                    <select className="input" value={form.najm_status} onChange={e => setForm(f => ({ ...f, najm_status: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-najm-status">Najm</label>
+                    <select id="acc-field-najm-status" className="input" value={form.najm_status} onChange={e => setForm(f => ({ ...f, najm_status: e.target.value }))}>
                       <option value="">N/A</option>
                       {NAJM_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   {najmHasReport(form.najm_status) && (
                     <div>
-                      <label className="label">Najm Fault</label>
-                      <select className="input" value={form.najm_fault} onChange={e => setForm(f => ({ ...f, najm_fault: e.target.value }))}>
+                      <label className="label" htmlFor="acc-field-najm-fault">Najm Fault</label>
+                      <select id="acc-field-najm-fault" className="input" value={form.najm_fault} onChange={e => setForm(f => ({ ...f, najm_fault: e.target.value }))}>
                         <option value="">N/A</option>
                         {NAJM_FAULT_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
@@ -3519,8 +3542,8 @@ export default function Accidents() {
                     </div>
                   )}
                   <div>
-                    <label className="label">Taqdeer</label>
-                    <select className="input" value={form.taqdeer_status} onChange={e => setForm(f => ({ ...f, taqdeer_status: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-taqdeer-status">Taqdeer</label>
+                    <select id="acc-field-taqdeer-status" className="input" value={form.taqdeer_status} onChange={e => setForm(f => ({ ...f, taqdeer_status: e.target.value }))}>
                       <option value="">N/A</option>
                       {TAQDEER_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -3534,8 +3557,8 @@ export default function Accidents() {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
                   <div>
-                    <label className="label">Liable Party</label>
-                    <select className="input" value={form.liable_party} onChange={e => setForm(f => ({ ...f, liable_party: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-liable-party">Liable Party</label>
+                    <select id="acc-field-liable-party" className="input" value={form.liable_party} onChange={e => setForm(f => ({ ...f, liable_party: e.target.value }))}>
                       <option value="">N/A</option>
                       {withValueOption(LIABLE_PARTY_OPTS, form.liable_party).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -3544,8 +3567,8 @@ export default function Accidents() {
                       Liable Party (same question, "who is at fault"). Liable Party
                       is the controlled dropdown and now feeds both columns. */}
                   <div>
-                    <label className="label">Who Pays</label>
-                    <select className="input" value={form.payer} onChange={e => setForm(f => ({ ...f, payer: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-payer">Who Pays</label>
+                    <select id="acc-field-payer" className="input" value={form.payer} onChange={e => setForm(f => ({ ...f, payer: e.target.value }))}>
                       <option value="">N/A</option>
                       {withValueOption(PAYER_OPTS, form.payer).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -3562,15 +3585,15 @@ export default function Accidents() {
                       now writes both legacy columns. The operational stage the
                       teams work through is the separate "Workflow Stage" below. */}
                   <div>
-                    <label className="label">Case Stage</label>
-                    <select className="input" value={form.current_status} onChange={e => setForm(f => ({ ...f, current_status: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-current-status">Case Stage</label>
+                    <select id="acc-field-current-status" className="input" value={form.current_status} onChange={e => setForm(f => ({ ...f, current_status: e.target.value }))}>
                       <option value="">N/A</option>
                       {withValueOption(WORKFLOW_STAGE_OPTS, form.current_status).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="label">Next Step</label>
-                    <select className="input" value={form.next_step} onChange={e => setForm(f => ({ ...f, next_step: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-next-step">Next Step</label>
+                    <select id="acc-field-next-step" className="input" value={form.next_step} onChange={e => setForm(f => ({ ...f, next_step: e.target.value }))}>
                       <option value="">N/A</option>
                       {withValueOption(WORKFLOW_STAGE_OPTS, form.next_step).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -3597,8 +3620,8 @@ export default function Accidents() {
               <FormSection title="Workflow & Investigation">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="label">Workflow Stage</label>
-                    <select className="input" value={form.workflow_stage} onChange={e => setForm(f => ({ ...f, workflow_stage: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-workflow-stage">Workflow Stage</label>
+                    <select id="acc-field-workflow-stage" className="input" value={form.workflow_stage} onChange={e => setForm(f => ({ ...f, workflow_stage: e.target.value }))}>
                       {editableWorkflowStages(form.workflow_stage).map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                     </select>
                   </div>
@@ -3694,8 +3717,8 @@ export default function Accidents() {
                     <input className="input" value={form.insurance_claim_no} onChange={e => setForm(f => ({ ...f, insurance_claim_no: e.target.value }))} />
                   </div>
                   <div>
-                    <label className="label">Claim Status</label>
-                    <select className="input" value={form.claim_status} onChange={e => setForm(f => ({ ...f, claim_status: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-claim-status">Claim Status</label>
+                    <select id="acc-field-claim-status" className="input" value={form.claim_status} onChange={e => setForm(f => ({ ...f, claim_status: e.target.value }))}>
                       <option value="">N/A</option>
                       {CLAIM_STATUS_OPTS.map(s => <option key={s} value={s}>{CLAIM_STATUS_LABELS[s]}</option>)}
                     </select>
@@ -3729,8 +3752,8 @@ export default function Accidents() {
               <FormSection title="Cost Recovery">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="label">Recovery Source</label>
-                    <select className="input" value={form.recovery_source} onChange={e => setForm(f => ({ ...f, recovery_source: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-recovery-source">Recovery Source</label>
+                    <select id="acc-field-recovery-source" className="input" value={form.recovery_source} onChange={e => setForm(f => ({ ...f, recovery_source: e.target.value }))}>
                       <option value="">N/A</option>
                       {/* 'none' is dropped from the list: its label "None" duplicated
                           the "N/A" placeholder above (two ways to say nothing). */}
@@ -3759,14 +3782,14 @@ export default function Accidents() {
               <FormSection title="Repair & Release">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="label">Repair Type</label>
-                    <select className="input" value={form.repair_type} onChange={e => setForm(f => ({ ...f, repair_type: e.target.value }))}>
+                    <label className="label" htmlFor="acc-field-repair-type">Repair Type</label>
+                    <select id="acc-field-repair-type" className="input" value={form.repair_type} onChange={e => setForm(f => ({ ...f, repair_type: e.target.value }))}>
                       <option value="">N/A</option>
                       {withValueOption(REPAIR_TYPE_OPTS, form.repair_type).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="label">Workshop</label>
+                    <label className="label" htmlFor="acc-field-workshop-name">Workshop</label>
                     {/* A LIST, not free text. The same internal workshop is
                         recorded four ways in the live data ("GCC Workshop",
                         "GCC workshop", "GCC  Workshop", "GCC "), which makes four
@@ -3774,7 +3797,7 @@ export default function Accidents() {
                         repair type, so picking Internal offers internal workshops.
                         "Other" stays available - forcing a wrong pick is worse
                         than one honest free-text entry. */}
-                    <select
+                    <select id="acc-field-workshop-name"
                       className="input"
                       value={workshopIsOther ? '__other' : canonWorkshop(form.workshop_name)}
                       onChange={e => {
@@ -4036,7 +4059,9 @@ export default function Accidents() {
           </>
         )}
       >
-        <p className="text-[var(--text-muted)] text-sm">Delete this incident record?</p>
+        <p className="text-[var(--text-muted)] text-sm">
+          Delete incident <span className="font-semibold text-[var(--text-primary)]">{describeIncident(records.find(r => r.id === pendingDeleteId))}</span>? This permanently removes the record and its claim data, and withdraws any approval still waiting on it.
+        </p>
         {deleteOneError && (
           <p role="alert" className="mt-3 text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{deleteOneError}</p>
         )}

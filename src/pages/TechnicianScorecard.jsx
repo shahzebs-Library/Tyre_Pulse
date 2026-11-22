@@ -34,7 +34,7 @@ import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact, formatDate } from '../lib/formatters'
 import {
-  listWorkOrdersForScorecard, listSkills, listCerts,
+  listWorkOrdersForScorecard, countUnassignedWorkOrders, listSkills, listCerts,
   upsertSkill, deleteSkill, createCert, deleteCert,
 } from '../lib/api/technicianScorecard'
 import { listProfiles } from '../lib/api/users'
@@ -189,6 +189,7 @@ export default function TechnicianScorecard() {
   const [certSearch, setCertSearch] = useState('')
   const [certStatus, setCertStatus] = useState('all')
 
+  const [unassigned, setUnassigned] = useState(null)
   const [skillModal, setSkillModal] = useState(null)
   const [certModal, setCertModal] = useState(null)
 
@@ -196,12 +197,14 @@ export default function TechnicianScorecard() {
 
   const load = useCallback(async () => {
     setRefreshing(true); setActionError('')
-    const [ord, prof, sk, ct] = await Promise.allSettled([
+    const [ord, prof, sk, ct, un] = await Promise.allSettled([
       listWorkOrdersForScorecard({ country: activeCountry }),
       listProfiles(),
       listSkills({ country: activeCountry }),
       listCerts({ country: activeCountry }),
+      countUnassignedWorkOrders({ country: activeCountry }),
     ])
+    setUnassigned(un.status === 'fulfilled' ? un.value : null)
     const val = (r) => (r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : [])
     setOrders(val(ord)); setProfiles(val(prof)); setSkills(val(sk)); setCerts(val(ct))
     setErrors({
@@ -417,6 +420,11 @@ export default function TechnicianScorecard() {
               { label: 'Avg cost per job', value: lbKpis.avgCostPerJob == null ? 'N/A' : formatCurrencyCompact(lbKpis.avgCostPerJob, activeCurrency), icon: Coins, sub: `${lbKpis.needsImprovement} need improvement` },
             ].map((k) => <Kpi key={k.label} {...k} value={loading || errors.orders ? 'N/A' : k.value} sub={loading || errors.orders ? null : k.sub} />)}
           </div>
+          {!loading && !errors.orders && unassigned > 0 && (
+            <p className="text-xs text-[var(--text-muted)]" role="note">
+              {unassigned.toLocaleString()} job cards in this scope have no technician recorded, so they are not scored.
+            </p>
+          )}
 
           <Card>
             <CardHeader title={`Composite ranking (top ${topRanked.length || 0})`} icon={Gauge} />

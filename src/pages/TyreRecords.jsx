@@ -20,7 +20,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { tyreRecordFormSchema, RISK_LEVELS } from '../lib/validation/schemas'
+import { RISK_LEVELS } from '../lib/validation/schemas'
 import { FormField, FormSelect, FormDate, FormActions } from '../components/forms'
 import * as tyreRecordsApi from '../lib/api/tyreRecords'
 import { scrapTyreBySerial, getScrapPermissions } from '../lib/api/tyreExchange'
@@ -85,7 +85,7 @@ const EMPTY_FORM = (defaultCost = 1200, country = '') => ({
   sr: '', issue_date: '', description: '', brand: '', serial_no: '',
   qty: 1, job_card: '', mis_number: '', asset_no: '', site: '', country,
   remarks: '', cost_per_tyre: defaultCost, risk_level: '', category: '',
-  km_at_fitment: '', km_at_removal: '',
+  km_at_fitment: '', km_at_removal: '', size: '', position: '',
 })
 
 const EMPTY_BULK = { site: '', brand: '', cost_per_tyre: '', risk_level: '', category: '' }
@@ -160,7 +160,7 @@ export default function TyreRecords() {
     watch,
     formState: { errors: formErrors },
   } = useForm({
-    resolver: zodResolver(tyreRecordFormSchema),
+    resolver: zodResolver(tyreRecordsApi.tyreRecordEditSchema),
     defaultValues: EMPTY_FORM(),
   })
 
@@ -251,11 +251,17 @@ export default function TyreRecords() {
   const insp = useCard(async () => latestInspectionByAsset(await tyreRecordsApi.listInspectionsForAssets(pageAssets, activeCountry)), [assetKey, activeCountry])
 
   // Size and position options are read on demand, when "More filters" opens.
+  const wantSizePos = showMore || editRecord !== null
   const sizePos = useCard(async () => {
-    if (!showMore) return null
+    // Also loaded while the Add / Edit form is open, to suggest real sizes/positions.
+    if (!wantSizePos) return null
     const res = await tyreRecordsApi.listSizePositionOptions(activeCountry)
     return { sizes: distinctOptions(res.rows, 'size'), positions: distinctOptions(res.rows, 'position'), truncated: res.truncated }
-  }, [showMore, activeCountry])
+  }, [wantSizePos, activeCountry])
+  // Common GCC position codes first, then any other code already in the register.
+  const positionSuggestions = useMemo(() => Array.from(new Set([
+    ...tyreRecordsApi.POSITION_SUGGESTIONS, ...(sizePos.data?.positions || []),
+  ])), [sizePos.data])
 
   // Keep a tyre in the detail panel: the first row until the user picks one.
   useEffect(() => {
@@ -286,15 +292,7 @@ export default function TyreRecords() {
   }
 
   function openEdit(r) {
-    reset({
-      sr: r.sr ?? '', issue_date: r.issue_date ?? '', description: r.description ?? '',
-      brand: r.brand ?? '', serial_no: r.serial_no ?? '', qty: r.qty ?? 1,
-      job_card: r.job_card ?? '', mis_number: r.mis_number ?? '', asset_no: r.asset_no ?? '',
-      site: r.site ?? '', country: r.country ?? 'KSA', remarks: r.remarks ?? '',
-      cost_per_tyre: r.cost_per_tyre ?? '',
-      risk_level: r.risk_level ?? '', category: r.category ?? '',
-      km_at_fitment: r.km_at_fitment ?? '', km_at_removal: r.km_at_removal ?? '',
-    })
+    reset(tyreRecordsApi.recordToFormValues(r))
     setEditRecord(r)
     setFormError('')
   }
@@ -308,20 +306,7 @@ export default function TyreRecords() {
     }
     setSaving(true)
     setFormError('')
-    const payload = {
-      ...form,
-      // Empty date field must be null, not '' - Postgres rejects '' for type date
-      // (22007), which broke editing/saving any record with no issue date.
-      issue_date: form.issue_date || null,
-      qty: +form.qty || 1,
-      // Store the actual entered cost, or null when left blank - never a default.
-      cost_per_tyre: form.cost_per_tyre !== '' && form.cost_per_tyre != null ? +form.cost_per_tyre : null,
-      km_at_fitment: form.km_at_fitment !== '' ? +form.km_at_fitment : null,
-      km_at_removal: form.km_at_removal !== '' ? +form.km_at_removal : null,
-      country: form.country,
-      region: profile?.region ?? 'KSA',
-      uploaded_by: profile?.id,
-    }
+    const payload = tyreRecordsApi.buildRecordPayload(form, { profile })
     const { error } = editRecord?.id
       ? await tyreRecordsApi.updateRecord(editRecord.id, payload)
       : await tyreRecordsApi.insertRecord(payload)
@@ -826,6 +811,14 @@ export default function TyreRecords() {
               <FormField label={t('records.form.assetNo')} required error={formErrors.asset_no} {...register('asset_no')} />
               <FormField label={t('records.form.serialNo')} error={formErrors.serial_no} {...register('serial_no')} />
               <FormField label={t('records.form.qty')} type="number" min={1} error={formErrors.qty} {...register('qty')} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Tyre size" list="size-list" placeholder="e.g. 315/80R22.5" error={formErrors.size} {...register('size')}>
+                <datalist id="size-list">{(sizePos.data?.sizes || []).map(s => <option key={s} value={s} />)}</datalist>
+              </FormField>
+              <FormField label="Wheel position" list="position-list" placeholder="e.g. LHF1, RHF1, LHR1-O" error={formErrors.position} {...register('position')}>
+                <datalist id="position-list">{positionSuggestions.map(p => <option key={p} value={p} />)}</datalist>
+              </FormField>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <FormField label={t('records.form.misNumber')} error={formErrors.mis_number} {...register('mis_number')} />

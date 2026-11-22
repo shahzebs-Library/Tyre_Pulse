@@ -23,11 +23,29 @@ export function decodeConfigValue(value) {
 // Keys that are always text, even when the value looks like a number.
 const TEXT_KEYS = new Set(['company_name', 'currency'])
 
+/**
+ * Text settings: remove storage quoting only while the next layer is still
+ * text. A name that is itself valid JSON ("1.00", "null", "true") stays the
+ * name the person typed instead of becoming a number or null.
+ */
+export function decodeTextValue(value) {
+  if (value == null) return ''
+  let out = typeof value === 'string' ? value : String(value)
+  for (let i = 0; i < 4; i += 1) {
+    const t = out.trim()
+    if (!t.startsWith('"')) return out
+    let next
+    try { next = JSON.parse(t) } catch { return out }
+    if (typeof next !== 'string') return out
+    out = next
+  }
+  return out
+}
+
 export function decodeConfigRows(rows) {
   const map = {}
   for (const { key, value } of rows ?? []) {
-    const v = decodeConfigValue(value)
-    map[key] = TEXT_KEYS.has(key) && v != null ? String(v) : v
+    map[key] = TEXT_KEYS.has(key) ? decodeTextValue(value) : decodeConfigValue(value)
   }
   return map
 }

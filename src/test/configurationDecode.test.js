@@ -29,4 +29,18 @@ describe('decodeConfigRows text keys', () => {
   it('keeps a numeric-looking company name as text', () => {
     expect(decodeConfigRows([{ key: 'company_name', value: '"123"' }])).toEqual({ company_name: '123' })
   })
+
+  it('keeps text settings that are valid JSON as the text typed', () => {
+    const map = decodeConfigRows([
+      { key: 'company_name', value: '"1.00"' },
+      { key: 'currency', value: 'null' },
+    ])
+    expect(map.company_name).toBe('1.00')
+    expect(map.currency).toBe('null')
+  })
+
+  it('still removes nested quoting from text settings', () => {
+    expect(decodeConfigRows([{ key: 'currency', value: '"\\"SAR\\""' }]).currency).toBe('SAR')
+    expect(decodeConfigRows([{ key: 'company_name', value: null }]).company_name).toBe('')
+  })
 })

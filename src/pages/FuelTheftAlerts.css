@@ -22,11 +22,12 @@
 .fta-scope { margin: -4px 0 0; font-size: 11.5px; color: var(--cc-ink-3); }
 
 .fta-top { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
-.fta-four { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+.fta-four { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; align-items: stretch; }
 .fta-two, .fta-analysis-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.fta-analysis-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-@media (max-width: 1280px) { .fta-top { grid-template-columns: minmax(0, 1fr); } .fta-four, .fta-analysis-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 700px) { .fta-four, .fta-two, .fta-analysis-kpis { grid-template-columns: minmax(0, 1fr); } }
+.fta-analysis-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
+/* The app frame (sidebar + module rail) takes ~420px, so these switch on the space left, not the viewport. */
+@media (max-width: 1500px) { .fta-top { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .fta-two { grid-template-columns: minmax(0, 1fr); } }
 .fta-page .cc-card-head { flex-wrap: wrap; gap: 8px; }
 
 .fta-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -91,14 +92,13 @@
 .fta-inv-title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .fta-inv-title small { font-size: 12px; font-weight: 500; color: var(--cc-ink-3); }
 .fta-inv-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.fta-inv-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; }
-@media (max-width: 1200px) { .fta-inv-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 860px) { .fta-inv-grid { grid-template-columns: minmax(0, 1fr); } }
+.fta-inv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 16px; }
 .fta-inv-asset { display: flex; flex-direction: column; gap: 6px; }
 .fta-inv-asset > b { font-size: 16px; color: var(--cc-ink); }
 .fta-inv-asset dl, .fta-inv-facts { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; font-size: 12.5px; }
 .fta-inv-asset dt, .fta-inv-facts dt { color: var(--cc-ink-3); }
-.fta-inv-asset dd, .fta-inv-facts dd { margin: 0; color: var(--cc-ink); min-width: 0; overflow-wrap: anywhere; }
+.fta-inv-asset dd, .fta-inv-facts dd { margin: 0; color: var(--cc-ink); min-width: 0; overflow-wrap: break-word; }
+.fta-inv-asset dt, .fta-inv-facts dt { white-space: nowrap; }
 .fta-sub { margin: 0 0 8px; font-size: 12.5px; font-weight: 700; color: var(--cc-ink); }
 .fta-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; border-inline-start: 2px solid var(--cc-track); }
 .fta-tl li { position: relative; padding-inline-start: 14px; font-size: 12px; color: var(--cc-ink-2); }
@@ -157,6 +157,8 @@
 .cc .fta-feed .cc-et th, .cc .fta-feed .cc-et td { padding-inline: 7px; font-size: 12px; }
 .cc .fta-feed .cc-et th:first-child, .cc .fta-feed .cc-et td:first-child { padding-left: 14px; }
 .fta-four .cc-donut-wrap { flex-wrap: nowrap; gap: 12px; }
-.fta-four .cc-donut { width: 124px; height: 124px; flex: none; }
+.fta-four .cc-donut { width: 108px; height: 108px; flex: none; }
+.fta-four .cc-legend-table { min-width: 0; }
+.fta-four .cc-lt-label { white-space: nowrap; }
 .fta-four .cc-legend-table { flex: 1 1 auto; }
-@media (max-width: 500px) { .fta-four .cc-donut-wrap { flex-wrap: wrap; } }
+@media (max-width: 1500px) { .fta-four .cc-donut-wrap { flex-wrap: wrap; justify-content: center; } }

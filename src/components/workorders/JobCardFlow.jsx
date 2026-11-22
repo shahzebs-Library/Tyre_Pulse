@@ -53,6 +53,27 @@ export function fmtHours(h) {
   return remH ? `${days}d ${remH}h` : `${days}d`
 }
 
+/**
+ * Why a gap tile cannot show a duration. The tile and the stepper above it both
+ * read the same timestamp, so when the START of the gap IS recorded the tile
+ * must not claim it "was never recorded" (that contradiction is what a live test
+ * saw right after a card moved to In Progress: the start had been stamped a few
+ * seconds after the drawer's clock, so the duration came out negative and fell
+ * through to the missing-start wording).
+ *
+ * Exported for the test.
+ */
+export function gapMissingReason(row, startField, endLabel, fallback, now) {
+  const start = readField(row, startField)
+  if (start === null) return fallback
+  const startMs = new Date(start).getTime()
+  const nowMs = now instanceof Date ? now.getTime() : Number(now)
+  if (Number.isFinite(startMs) && Number.isFinite(nowMs) && startMs > nowMs) {
+    return 'Just started. The duration appears within a minute.'
+  }
+  return `${endLabel} was never recorded and the card is closed.`
+}
+
 /** One gap tile. `gap` is null OR { hours, running, reversed }. */
 function GapTile({ label, meaning, gap, missingReason, emphasis }) {
   // Reversed: the two timestamps contradict each other. Report the fault, never
@@ -160,26 +181,26 @@ export default function JobCardFlow({ row, now = Date.now(), compact = false }) 
           <GapTile
             label="Total downtime" meaning="Production Out to Production In"
             gap={durations.totalDown} emphasis
-            missingReason="Production Out was never recorded." />
+            missingReason={gapMissingReason(row, 'production_out_at', 'Production In', 'Production Out was never recorded.', now)} />
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           <GapTile
             label="Waiting for workshop" meaning="Scheduling gap: down, not started"
             gap={durations.awaitingWorkshop}
-            missingReason="Production Out was never recorded." />
+            missingReason={gapMissingReason(row, 'production_out_at', 'Workshop In', 'Production Out was never recorded.', now)} />
           <GapTile
             label="In workshop" meaning="The workshop own repair time"
             gap={durations.inWorkshop}
-            missingReason="Workshop In was never recorded." />
+            missingReason={gapMissingReason(row, 'started_at', 'Workshop Out', 'Workshop In was never recorded.', now)} />
           <GapTile
             label="Waiting for release" meaning="Repaired, not handed back"
             gap={durations.awaitingRelease}
-            missingReason="Workshop Out was never recorded." />
+            missingReason={gapMissingReason(row, 'completed_at', 'Production In', 'Workshop Out was never recorded.', now)} />
           <GapTile
             label="Total downtime" meaning="Production Out to Production In"
             gap={durations.totalDown} emphasis
-            missingReason="Production Out was never recorded." />
+            missingReason={gapMissingReason(row, 'production_out_at', 'Production In', 'Production Out was never recorded.', now)} />
         </div>
       )}
 

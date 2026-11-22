@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:tyre_pulse/core/design_system/tp_asset_icons.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_classes.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_multiview_catalog.dart';
@@ -552,4 +553,72 @@ bool _brandIsMissing(String? make) {
       normalised == 'n a' ||
       normalised == 'na' ||
       normalised == 'unknown';
+}
+
+/// The domain icon for a vehicle's visual kind, or null when only a generic
+/// Material icon applies (generators, chillers, plant, unknown road vehicles).
+TpAssetIconKind? vehicleAssetIconKindFor({
+  String? assetNo,
+  String? vehicleType,
+  String? make,
+  String? model,
+}) {
+  switch (_vehicleVisualKindFor(
+    assetNo: assetNo,
+    vehicleType: vehicleType,
+    make: make,
+    model: model,
+  )) {
+    case _VehicleVisualKind.mixer:
+      return TpAssetIconKind.mixer;
+    case _VehicleVisualKind.concretePump:
+    case _VehicleVisualKind.linePump:
+      return TpAssetIconKind.pump;
+    case _VehicleVisualKind.wheelLoader:
+    case _VehicleVisualKind.skidLoader:
+      return TpAssetIconKind.loader;
+    case _VehicleVisualKind.pickup:
+      return TpAssetIconKind.pickup;
+    case _VehicleVisualKind.bus:
+      return TpAssetIconKind.bus;
+    case _VehicleVisualKind.trailer:
+    case _VehicleVisualKind.towablePump:
+      return TpAssetIconKind.trailer;
+    case _VehicleVisualKind.generator:
+    case _VehicleVisualKind.chiller:
+    case _VehicleVisualKind.batchingPlant:
+    case _VehicleVisualKind.placingBoom:
+    case _VehicleVisualKind.stationaryPump:
+    case _VehicleVisualKind.genericRoadVehicle:
+    case _VehicleVisualKind.tyrelessEquipment:
+    case _VehicleVisualKind.unknown:
+      return null;
+  }
+}
+
+/// The right icon widget for a vehicle: the domain icon where one exists,
+/// otherwise the Material fallback. Use this instead of
+/// `Icon(vehicleFallbackIcon(asset))` wherever the icon stands for the
+/// vehicle's class.
+Widget vehicleFallbackGlyph(
+  VehicleAsset asset, {
+  double? size,
+  Color? color,
+  Key? key,
+}) {
+  final TpAssetIconKind? kind = vehicleAssetIconKindFor(
+    assetNo: asset.assetNo,
+    vehicleType: asset.vehicleType,
+    make: asset.make,
+    model: asset.model,
+  );
+  if (kind != null) {
+    return TpAssetIcon(
+      kind,
+      key: key,
+      size: size ?? TpIconSize.lg,
+      color: color,
+    );
+  }
+  return Icon(vehicleFallbackIcon(asset), key: key, size: size, color: color);
 }

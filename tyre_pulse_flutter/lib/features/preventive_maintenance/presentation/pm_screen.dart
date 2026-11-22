@@ -1645,7 +1645,7 @@ class _QueueThumbnail extends StatelessWidget {
       alignment: Alignment.center,
       padding: const EdgeInsets.all(4),
       child: photo == null
-          ? Icon(vehicleFallbackIcon(asset), size: 32, color: palette.primary)
+          ? vehicleFallbackGlyph(asset, size: 32, color: palette.primary)
           : Image.asset(
               photo!,
               width: double.infinity,

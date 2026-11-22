@@ -12,6 +12,8 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 
 import 'package:widgetbook/widgetbook.dart' as _widgetbook;
+import 'package:widgetbook_workspace/components/asset_icons.dart'
+    as _widgetbook_workspace_components_asset_icons;
 import 'package:widgetbook_workspace/components/buttons.dart'
     as _widgetbook_workspace_components_buttons;
 import 'package:widgetbook_workspace/components/capture.dart'
@@ -174,6 +176,15 @@ final directories = <_widgetbook.WidgetbookNode>[
             name: 'Spacing, radius and sizing',
             builder:
                 _widgetbook_workspace_components_foundations.spacingAndRadius,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'TpAssetIcon',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Domain icon set',
+            builder: _widgetbook_workspace_components_asset_icons.assetIconSet,
           ),
         ],
       ),

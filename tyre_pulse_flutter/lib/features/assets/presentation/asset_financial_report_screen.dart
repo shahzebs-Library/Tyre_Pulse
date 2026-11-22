@@ -667,8 +667,8 @@ class _AssetHeader extends StatelessWidget {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: photo == null
-                    ? Icon(
-                        vehicleFallbackIcon(asset),
+                    ? vehicleFallbackGlyph(
+                        asset,
                         color: palette.primary,
                         size: 36,
                       )

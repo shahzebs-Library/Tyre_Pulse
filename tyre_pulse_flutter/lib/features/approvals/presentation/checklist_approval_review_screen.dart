@@ -784,7 +784,7 @@ class _ApprovalVehicleImage extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: photo == null
-          ? Icon(vehicleFallbackIcon(asset), color: palette.textMuted, size: 44)
+          ? vehicleFallbackGlyph(asset, color: palette.textMuted, size: 44)
           : Image.asset(
               photo!,
               fit: BoxFit.contain,

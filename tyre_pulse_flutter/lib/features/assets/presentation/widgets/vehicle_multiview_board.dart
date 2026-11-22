@@ -137,18 +137,7 @@ class VehicleMultiViewBoard extends StatelessWidget {
                     filterQuality: FilterQuality.high,
                     semanticLabel: '$title. $hint',
                     errorBuilder: (_, __, ___) => Center(
-                      child: Icon(
-                        asset == null
-                            ? vehicleFallbackIconFor(
-                                assetNo: assetNo,
-                                vehicleType: vehicleType,
-                                make: make,
-                                model: model,
-                              )
-                            : vehicleFallbackIcon(asset),
-                        size: 72,
-                        color: palette.textMuted,
-                      ),
+                      child: _fallbackGlyph(palette),
                     ),
                   ),
                 ),
@@ -157,6 +146,32 @@ class VehicleMultiViewBoard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _fallbackGlyph(TpPalette palette) {
+    final VehicleAsset? asset = _asset;
+    if (asset != null) {
+      return vehicleFallbackGlyph(asset, size: 72, color: palette.textMuted);
+    }
+    final TpAssetIconKind? kind = vehicleAssetIconKindFor(
+      assetNo: assetNo,
+      vehicleType: vehicleType,
+      make: make,
+      model: model,
+    );
+    if (kind != null) {
+      return TpAssetIcon(kind, size: 72, color: palette.textMuted);
+    }
+    return Icon(
+      vehicleFallbackIconFor(
+        assetNo: assetNo,
+        vehicleType: vehicleType,
+        make: make,
+        model: model,
+      ),
+      size: 72,
+      color: palette.textMuted,
     );
   }
 

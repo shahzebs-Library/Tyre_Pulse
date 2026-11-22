@@ -110,6 +110,19 @@ class TpAppShell extends ConsumerWidget {
   }
 }
 
+/// Selected tabs draw the filled glyph; the others draw the outline one, so
+/// the selected state never relies on colour alone. Glyphs Material has no
+/// outline for keep their single form.
+IconData _outlineFor(IconData filled) {
+  if (filled == Icons.home) return Icons.home_outlined;
+  if (filled == Icons.assignment) return Icons.assignment_outlined;
+  if (filled == Icons.report_problem) return Icons.report_problem_outlined;
+  if (filled == Icons.speed) return Icons.speed_outlined;
+  if (filled == Icons.local_car_wash) return Icons.local_car_wash_outlined;
+  if (filled == Icons.person) return Icons.person_outline;
+  return filled;
+}
+
 class _TabBar extends StatelessWidget {
   const _TabBar({required this.layout, required this.navigationShell});
 
@@ -217,7 +230,11 @@ class _TabDestination extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Icon(destination.icon, color: color, size: 26),
+              Icon(
+                isSelected ? destination.icon : _outlineFor(destination.icon),
+                color: color,
+                size: 26,
+              ),
               const SizedBox(height: 3),
               Text(
                 label,

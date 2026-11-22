@@ -653,15 +653,15 @@ class _VehicleCard extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(TpRadius.md),
                   ),
                   child: art == null
-                      ? Icon(
-                          vehicleFallbackIcon(vehicle),
+                      ? vehicleFallbackGlyph(
+                          vehicle,
                           color: palette.textMuted,
                         )
                       : Image.asset(
                           art,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => Icon(
-                            vehicleFallbackIcon(vehicle),
+                          errorBuilder: (_, __, ___) => vehicleFallbackGlyph(
+                            vehicle,
                             color: palette.textMuted,
                           ),
                         ),

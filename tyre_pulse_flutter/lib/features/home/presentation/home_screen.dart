@@ -2292,6 +2292,8 @@ class _DashboardQuickActions extends StatelessWidget {
                   key: HomeScreenKeys.action(action.id),
                   label: action.label,
                   icon: action.icon,
+                  assetIcon:
+                      action.id == 'asset' ? TpAssetIconKind.mixer : null,
                   tone: action.tone,
                   onTap: action.onTap,
                 ),
@@ -2309,11 +2311,15 @@ class _DashboardActionCard extends StatelessWidget {
     required this.icon,
     required this.tone,
     required this.onTap,
+    this.assetIcon,
     super.key,
   });
 
   final String label;
   final IconData icon;
+
+  /// Domain icon drawn instead of [icon] when set.
+  final TpAssetIconKind? assetIcon;
   final TpStatusColors tone;
   final VoidCallback onTap;
 
@@ -2354,7 +2360,9 @@ class _DashboardActionCard extends StatelessWidget {
                       width: 1.5,
                     ),
                   ),
-                  child: Icon(icon, color: tone.base, size: 21),
+                  child: assetIcon != null
+                      ? TpAssetIcon(assetIcon!, color: tone.base, size: 22)
+                      : Icon(icon, color: tone.base, size: 21),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -2730,11 +2738,7 @@ class _RecentAssetCard extends StatelessWidget {
                     child: ColoredBox(
                       color: palette.surfaceAlt,
                       child: photo == null
-                          ? Icon(
-                              Icons.local_shipping_outlined,
-                              size: 40,
-                              color: palette.primary,
-                            )
+                          ? _recentAssetGlyph(asset, palette)
                           : Padding(
                               padding: const EdgeInsets.all(6),
                               child: Image.asset(
@@ -2746,11 +2750,7 @@ class _RecentAssetCard extends StatelessWidget {
                                   Object __,
                                   StackTrace? ___,
                                 ) =>
-                                    Icon(
-                                  Icons.local_shipping_outlined,
-                                  size: 40,
-                                  color: palette.primary,
-                                ),
+                                    _recentAssetGlyph(asset, palette),
                               ),
                             ),
                     ),
@@ -3060,4 +3060,16 @@ class _SummaryTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Class icon for a recent asset whose photo is missing or failed to load.
+Widget _recentAssetGlyph(HomeRecentAsset asset, TpPalette palette) {
+  final TpAssetIconKind? kind = vehicleAssetIconKindFor(
+    assetNo: asset.assetNo,
+    vehicleType: asset.vehicleType,
+  );
+  if (kind != null) {
+    return TpAssetIcon(kind, size: TpIconSize.xl + 8, color: palette.primary);
+  }
+  return Icon(Icons.local_shipping_outlined, size: 40, color: palette.primary);
 }

@@ -1007,13 +1007,17 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
                   child: photo == null
                       ? ColoredBox(
                           color: palette.surfaceSunken,
-                          child: Icon(
-                            asset == null
-                                ? Icons.local_shipping_outlined
-                                : vehicleFallbackIcon(asset),
-                            size: 48,
-                            color: palette.textMuted,
-                          ),
+                          child: asset == null
+                              ? Icon(
+                                  Icons.local_shipping_outlined,
+                                  size: 48,
+                                  color: palette.textMuted,
+                                )
+                              : vehicleFallbackGlyph(
+                                  asset,
+                                  size: 48,
+                                  color: palette.textMuted,
+                                ),
                         )
                       : Image.asset(
                           photo,

@@ -363,6 +363,7 @@ class _HeaderStep extends ConsumerWidget {
                           key: NewInspectionScreenKeys.vehicleSection,
                           title: l10n.vehiclesTitle,
                           icon: Icons.directions_car_outlined,
+                          assetIcon: TpAssetIconKind.mixer,
                           iconKey: NewInspectionScreenKeys.vehicleSectionIcon,
                           status: TpStatus.info,
                           child: _VehiclePicker(
@@ -475,6 +476,7 @@ class _SetupSection extends StatelessWidget {
     required this.status,
     required this.child,
     this.iconKey,
+    this.assetIcon,
     super.key,
   });
 
@@ -483,6 +485,9 @@ class _SetupSection extends StatelessWidget {
   final TpStatus status;
   final Widget child;
   final Key? iconKey;
+
+  /// Domain icon drawn instead of [icon] when set.
+  final TpAssetIconKind? assetIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -504,12 +509,19 @@ class _SetupSection extends StatelessWidget {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(TpSpace.sm),
-                    child: Icon(
-                      icon,
-                      key: iconKey,
-                      size: TpSizing.iconMd,
-                      color: tone.onSoft,
-                    ),
+                    child: assetIcon != null
+                        ? TpAssetIcon(
+                            assetIcon!,
+                            key: iconKey,
+                            size: TpSizing.iconMd,
+                            color: tone.onSoft,
+                          )
+                        : Icon(
+                            icon,
+                            key: iconKey,
+                            size: TpSizing.iconMd,
+                            color: tone.onSoft,
+                          ),
                   ),
                 ),
                 const SizedBox(width: TpSpace.md),
@@ -561,7 +573,7 @@ class _ResumeDraftRow extends StatelessWidget {
       padding: const EdgeInsets.all(TpSpace.md),
       child: Row(
         children: <Widget>[
-          Icon(_vehicleClassIcon(resolvedClass), color: palette.primary),
+          _vehicleClassGlyph(resolvedClass, color: palette.primary),
           const SizedBox(width: TpSpace.md),
           Expanded(
             child: Column(
@@ -667,13 +679,17 @@ class _SelectedVehicle extends ConsumerWidget {
         border: Border.all(color: palette.border),
       ),
       child: photo == null
-          ? Icon(
-              asset == null
-                  ? _vehicleClassIcon(resolvedClass)
-                  : vehicleFallbackIcon(asset),
-              size: 72,
-              color: palette.primary,
-            )
+          ? (asset == null
+              ? _vehicleClassGlyph(
+                  resolvedClass,
+                  size: 72,
+                  color: palette.primary,
+                )
+              : vehicleFallbackGlyph(
+                  asset,
+                  size: 72,
+                  color: palette.primary,
+                ))
           : Padding(
               padding: const EdgeInsets.all(TpSpace.sm),
               child: Image.asset(
@@ -694,7 +710,7 @@ class _SelectedVehicle extends ConsumerWidget {
         Row(
           children: <Widget>[
             _ClassBadge(
-              icon: _vehicleClassIcon(resolvedClass),
+              resolvedClass: resolvedClass,
               iconKey: NewInspectionScreenKeys.vehicleSectionIcon,
               code: classCode,
             ),
@@ -834,9 +850,13 @@ class _SelectedVehicle extends ConsumerWidget {
 /// the resolved vehicle class icon. A code with no recognisable prefix shows
 /// the icon alone - a class is never invented for it.
 class _ClassBadge extends StatelessWidget {
-  const _ClassBadge({required this.icon, required this.code, this.iconKey});
+  const _ClassBadge({
+    required this.resolvedClass,
+    required this.code,
+    this.iconKey,
+  });
 
-  final IconData icon;
+  final String resolvedClass;
   final String? code;
   final Key? iconKey;
 
@@ -855,8 +875,8 @@ class _ClassBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(
-            icon,
+          _vehicleClassGlyph(
+            resolvedClass,
             key: iconKey,
             size: TpSizing.iconSm,
             color: palette.primary,
@@ -1277,9 +1297,7 @@ class _ClassFilterRow extends StatelessWidget {
             _ClassFilterChip(
               key: NewInspectionScreenKeys.pickerClassChip(chip.assetClass),
               label: '${chip.assetClass} (${chip.count})',
-              icon: _vehicleClassIcon(
-                resolveVehicleType('', '${chip.assetClass}000'),
-              ),
+              resolvedClass: resolveVehicleType('', '${chip.assetClass}000'),
               isSelected: selected == chip.assetClass,
               onTap: () => onSelect(
                 selected == chip.assetClass ? null : chip.assetClass,
@@ -1295,14 +1313,18 @@ class _ClassFilterRow extends StatelessWidget {
 class _ClassFilterChip extends StatelessWidget {
   const _ClassFilterChip({
     required this.label,
-    required this.icon,
     required this.isSelected,
     required this.onTap,
+    this.icon,
+    this.resolvedClass,
     super.key,
   });
 
   final String label;
-  final IconData icon;
+  final IconData? icon;
+
+  /// When set, the class's domain icon is drawn instead of [icon].
+  final String? resolvedClass;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -1311,11 +1333,17 @@ class _ClassFilterChip extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     return ChoiceChip(
       avatar: ExcludeSemantics(
-        child: Icon(
-          icon,
-          size: 16,
-          color: isSelected ? palette.onPrimary : palette.primary,
-        ),
+        child: resolvedClass == null
+            ? Icon(
+                icon,
+                size: TpIconSize.sm,
+                color: isSelected ? palette.onPrimary : palette.primary,
+              )
+            : _vehicleClassGlyph(
+                resolvedClass!,
+                size: TpIconSize.sm,
+                color: isSelected ? palette.onPrimary : palette.primary,
+              ),
       ),
       label: Text(label),
       selected: isSelected,
@@ -1404,8 +1432,8 @@ class _VehicleChip extends StatelessWidget {
                       borderRadius: BorderRadius.circular(TpRadius.md),
                     ),
                     child: photo == null
-                        ? Icon(
-                            vehicleFallbackIcon(asset),
+                        ? vehicleFallbackGlyph(
+                            asset,
                             color: palette.primary,
                             size: 32,
                           )
@@ -1429,7 +1457,7 @@ class _VehicleChip extends StatelessWidget {
                           fit: BoxFit.scaleDown,
                           alignment: AlignmentDirectional.centerStart,
                           child: _ClassBadge(
-                            icon: _vehicleClassIcon(resolvedClass),
+                            resolvedClass: resolvedClass,
                             code: assetClassOf(asset.assetNo),
                           ),
                         ),
@@ -3308,20 +3336,35 @@ String _workflowLabel(
 /// diagram resolver. A transit mixer must never be shown with a bus icon, and
 /// a bus/pickup/loader/pump must keep the same class from selection through
 /// tyre entry and approval.
-IconData _vehicleClassIcon(String resolvedClass) {
-  return switch (resolvedClass) {
-    'Pickup' => Icons.directions_car_outlined,
-    'Bus' || 'Tata' || 'Ashok Leyland' => Icons.directions_bus_outlined,
-    'Wheel loader' || 'Skid loader' => Icons.precision_manufacturing_outlined,
-    'Concrete pump' || 'Line pump' => Icons.construction_outlined,
-    'Trailer' => Icons.rv_hookup_outlined,
-    'Tri-mixer' ||
-    'Canter' ||
-    'Truck 6x4' ||
-    'Tanker' =>
-      Icons.local_shipping_outlined,
-    _ => Icons.local_shipping_outlined,
+Widget _vehicleClassGlyph(
+  String resolvedClass, {
+  double? size,
+  Color? color,
+  Key? key,
+}) {
+  final TpAssetIconKind? kind = switch (resolvedClass) {
+    'Pickup' => TpAssetIconKind.pickup,
+    'Bus' || 'Tata' || 'Ashok Leyland' => TpAssetIconKind.bus,
+    'Wheel loader' || 'Skid loader' => TpAssetIconKind.loader,
+    'Concrete pump' || 'Line pump' => TpAssetIconKind.pump,
+    'Trailer' => TpAssetIconKind.trailer,
+    'Tri-mixer' => TpAssetIconKind.mixer,
+    _ => null,
   };
+  if (kind != null) {
+    return TpAssetIcon(
+      kind,
+      key: key,
+      size: size ?? TpIconSize.lg,
+      color: color,
+    );
+  }
+  return Icon(
+    Icons.local_shipping_outlined,
+    key: key,
+    size: size,
+    color: color,
+  );
 }
 
 class _InspectionTyresActionBar extends StatelessWidget {

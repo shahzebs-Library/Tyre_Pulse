@@ -57,8 +57,8 @@ class SelectedVehicleCard extends StatelessWidget {
               border: Border.all(color: palette.border),
             ),
             child: photo == null
-                ? Icon(
-                    vehicleFallbackIcon(asset),
+                ? vehicleFallbackGlyph(
+                    asset,
                     size: 38,
                     color: palette.primary,
                   )

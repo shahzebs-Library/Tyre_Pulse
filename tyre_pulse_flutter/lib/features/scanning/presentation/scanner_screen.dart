@@ -23,6 +23,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/qr_login/domain/qr_login.dart';
 import 'package:tyre_pulse/features/qr_login/presentation/qr_login_screen.dart';
 import 'package:tyre_pulse/features/scanning/domain/scan_lookup.dart';
@@ -496,7 +497,7 @@ class _MatchCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(_iconFor(result), size: TpSizing.iconLg),
+              _glyphFor(result),
               const SizedBox(width: TpSpace.md),
               Expanded(
                 child: Column(
@@ -531,6 +532,21 @@ class _MatchCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _glyphFor(ScanLookupResult result) {
+    if (result case AssetScanMatch(asset: final AssetLookupRecord asset)) {
+      final TpAssetIconKind? kind = vehicleAssetIconKindFor(
+        assetNo: asset.assetNo,
+        vehicleType: asset.vehicleType,
+        make: asset.make,
+        model: asset.model,
+      );
+      if (kind != null) {
+        return TpAssetIcon(kind, size: TpSizing.iconLg);
+      }
+    }
+    return Icon(_iconFor(result), size: TpSizing.iconLg);
   }
 
   IconData _iconFor(ScanLookupResult result) => switch (result) {

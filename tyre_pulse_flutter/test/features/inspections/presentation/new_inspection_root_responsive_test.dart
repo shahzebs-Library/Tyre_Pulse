@@ -617,10 +617,10 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Wheel loader'), findsOneWidget);
-      final Icon classIcon = tester.widget<Icon>(
+      final TpAssetIcon classIcon = tester.widget<TpAssetIcon>(
         find.byKey(NewInspectionScreenKeys.vehicleSectionIcon),
       );
-      expect(classIcon.icon, Icons.precision_manufacturing_outlined);
+      expect(classIcon.kind, TpAssetIconKind.loader);
       expect(tester.takeException(), isNull);
     },
   );

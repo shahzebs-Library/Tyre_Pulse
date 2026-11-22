@@ -1031,8 +1031,8 @@ class _HeroPhoto extends StatelessWidget {
                 color: palette.primarySoft,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                vehicleFallbackIcon(asset),
+              child: vehicleFallbackGlyph(
+                asset,
                 size: height * 0.36,
                 color: palette.primary,
               ),

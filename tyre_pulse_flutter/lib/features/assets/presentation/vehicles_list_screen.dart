@@ -1256,8 +1256,8 @@ class _FleetAssetCard extends StatelessWidget {
                     clipBehavior: Clip.antiAlias,
                     alignment: Alignment.center,
                     child: photo == null
-                        ? Icon(
-                            vehicleFallbackIcon(asset),
+                        ? vehicleFallbackGlyph(
+                            asset,
                             size: 54,
                             color: palette.primary,
                           )

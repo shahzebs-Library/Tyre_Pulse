@@ -400,15 +400,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // rather than three stacked strips.
             DecoratedBox(
               decoration: BoxDecoration(
+                // Fresh mint: the band fades from a soft mint into the page,
+                // so the top of Home has no hard edge. Dark keeps a neutral
+                // surface fade; its soft primary is the night-shift yellow.
                 gradient: LinearGradient(
-                  begin: AlignmentDirectional.topStart,
-                  end: AlignmentDirectional.bottomEnd,
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                   colors: <Color>[
-                    palette.surface,
-                    palette.surfaceAlt,
+                    if (palette.brightness == Brightness.light)
+                      palette.primarySoft
+                    else
+                      palette.surface,
+                    palette.background,
                   ],
                 ),
-                border: Border(bottom: BorderSide(color: palette.border)),
               ),
               child: _Band(
                 color: Colors.transparent,

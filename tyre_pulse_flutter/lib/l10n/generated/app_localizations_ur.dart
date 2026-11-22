@@ -8736,4 +8736,7 @@ class AppLocalizationsUr extends AppLocalizations {
   String vehicle360TyreMapFrom(String date) {
     return '$date کے معائنے سے';
   }
+
+  @override
+  String get vehicle360TyreMapLoadFailed => 'ٹائر ریڈنگز لوڈ نہیں ہو سکیں';
 }

@@ -8719,4 +8719,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String vehicle360TyreMapFrom(String date) {
     return 'From the inspection on $date';
   }
+
+  @override
+  String get vehicle360TyreMapLoadFailed => 'Tyre readings could not be loaded';
 }

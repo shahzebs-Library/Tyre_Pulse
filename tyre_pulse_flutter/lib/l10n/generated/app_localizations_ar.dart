@@ -8728,4 +8728,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String vehicle360TyreMapFrom(String date) {
     return 'من الفحص بتاريخ $date';
   }
+
+  @override
+  String get vehicle360TyreMapLoadFailed => 'تعذّر تحميل قراءات الإطارات';
 }

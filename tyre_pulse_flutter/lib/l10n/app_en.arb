@@ -8934,5 +8934,9 @@
         "type": "String"
       }
     }
+  },
+  "vehicle360TyreMapLoadFailed": "Tyre readings could not be loaded",
+  "@vehicle360TyreMapLoadFailed": {
+    "description": "Shown under the Vehicle 360 tyre map when the latest inspection could not be read"
   }
 }

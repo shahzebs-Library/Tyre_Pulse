@@ -15256,6 +15256,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'From the inspection on {date}'**
   String vehicle360TyreMapFrom(String date);
+
+  /// Shown under the Vehicle 360 tyre map when the latest inspection could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre readings could not be loaded'**
+  String get vehicle360TyreMapLoadFailed;
 }
 
 class _AppLocalizationsDelegate

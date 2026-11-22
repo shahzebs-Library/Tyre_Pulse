@@ -210,6 +210,8 @@ abstract final class VehicleDetailScreenKeys {
   static const Key costsTab = Key('vehicle_detail.tab.costs');
   static const Key documentsTab = Key('vehicle_detail.tab.documents');
   static const Key tyreMap = Key('vehicle_detail.tyre_map');
+  static const Key tyreMapLoadFailed =
+      Key('vehicle_detail.tyre_map.load_failed');
   static const Key tyreMapNotRecorded =
       Key('vehicle_detail.tyre_map.not_recorded');
   static const Key details = Key('vehicle_detail.details');
@@ -1294,15 +1296,13 @@ class _AssetTyreMap extends ConsumerWidget {
     // filled with the readings of this asset's latest inspection. With no
     // inspection on record every wheel stays "not recorded" and the chip
     // below says so, instead of painting unmeasured wheels as a result.
-    final InspectionRecord? latest = (assetNo == null || assetNo.isEmpty)
+    final AssetScope? scope = (assetNo == null || assetNo.isEmpty)
         ? null
-        : ref
-            .watch(
-              assetLatestInspectionProvider(
-                assetScopeFor(asset, ref.watch(activeCountryProvider)),
-              ),
-            )
-            .value;
+        : assetScopeFor(asset, ref.watch(activeCountryProvider));
+    final AsyncValue<InspectionRecord?>? read =
+        scope == null ? null : ref.watch(assetLatestInspectionProvider(scope));
+    final InspectionRecord? latest = read?.value;
+    final bool readFailed = read != null && read.hasError;
     final Map<String, Map<String, Object?>> tyreData =
         latest?.tyreConditions ?? const <String, Map<String, Object?>>{};
     final double width =
@@ -1338,19 +1338,36 @@ class _AssetTyreMap extends ConsumerWidget {
         if (positions.isNotEmpty) ...<Widget>[
           const SizedBox(height: TpSpace.sm),
           Center(
-            child: latest == null || tyreData.isEmpty
-                ? TpStatusChip(
-                    key: VehicleDetailScreenKeys.tyreMapNotRecorded,
-                    status: TpStatus.unknown,
-                    label: l10n.tyreDiagramListNotRecorded,
-                    isCompact: true,
+            child: readFailed
+                ? Column(
+                    key: VehicleDetailScreenKeys.tyreMapLoadFailed,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      TpStatusChip(
+                        status: TpStatus.warning,
+                        label: l10n.vehicle360TyreMapLoadFailed,
+                        isCompact: true,
+                      ),
+                      TextButton(
+                        onPressed: () => ref
+                            .invalidate(assetLatestInspectionProvider(scope!)),
+                        child: Text(l10n.actionRetry),
+                      ),
+                    ],
                   )
-                : Text(
-                    l10n.vehicle360TyreMapFrom(latest.inspectionDate),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: TpPalette.of(context).textMuted,
-                        ),
-                  ),
+                : latest == null || tyreData.isEmpty
+                    ? TpStatusChip(
+                        key: VehicleDetailScreenKeys.tyreMapNotRecorded,
+                        status: TpStatus.unknown,
+                        label: l10n.tyreDiagramListNotRecorded,
+                        isCompact: true,
+                      )
+                    : Text(
+                        l10n.vehicle360TyreMapFrom(latest.inspectionDate),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: TpPalette.of(context).textMuted,
+                            ),
+                      ),
           ),
         ],
       ],

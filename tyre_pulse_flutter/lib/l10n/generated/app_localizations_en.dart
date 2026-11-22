@@ -8714,4 +8714,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get captchaRefused =>
       'The security check was not accepted. Complete it again and retry.';
+
+  @override
+  String vehicle360TyreMapFrom(String date) {
+    return 'From the inspection on $date';
+  }
 }

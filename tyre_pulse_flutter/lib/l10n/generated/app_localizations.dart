@@ -15250,6 +15250,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The security check was not accepted. Complete it again and retry.'**
   String get captchaRefused;
+
+  /// Caption under the Vehicle 360 tyre map naming the inspection its readings come from
+  ///
+  /// In en, this message translates to:
+  /// **'From the inspection on {date}'**
+  String vehicle360TyreMapFrom(String date);
 }
 
 class _AppLocalizationsDelegate

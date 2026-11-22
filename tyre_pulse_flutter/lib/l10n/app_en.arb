@@ -8925,5 +8925,14 @@
   "captchaRefused": "The security check was not accepted. Complete it again and retry.",
   "@captchaRefused": {
     "description": "Supabase Auth refused the attempt because of the CAPTCHA (captcha_failed). Never counted as a wrong password."
+  },
+  "vehicle360TyreMapFrom": "From the inspection on {date}",
+  "@vehicle360TyreMapFrom": {
+    "description": "Caption under the Vehicle 360 tyre map naming the inspection its readings come from",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
   }
 }

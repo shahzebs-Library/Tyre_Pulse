@@ -3526,5 +3526,16 @@
   "captchaExpired": "سیکیورٹی چیک کی میعاد ختم ہو گئی۔ دوبارہ کوشش کریں۔",
   "captchaLoadFailed": "سیکیورٹی چیک لوڈ نہیں ہو سکا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
   "captchaTimedOut": "سیکیورٹی چیک میں بہت زیادہ وقت لگ رہا ہے۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
-  "captchaRefused": "سیکیورٹی چیک قبول نہیں ہوا۔ اسے دوبارہ مکمل کریں اور پھر کوشش کریں۔"
+  "captchaRefused": "سیکیورٹی چیک قبول نہیں ہوا۔ اسے دوبارہ مکمل کریں اور پھر کوشش کریں۔",
+  "approvalsBulkSelect": "منتخب کریں",
+  "approvalsBulkSelectAll": "سب منتخب کریں",
+  "approvalsBulkApproveSelected": "{count} منتخب منظور کریں",
+  "approvalsBulkNoSignatureTitle": "پہلے اپنا دستخط محفوظ کریں",
+  "approvalsBulkNoSignatureMessage": "ایک ساتھ کئی منظور کرنے پر ہر ایک پر آپ کا محفوظ دستخط لگتا ہے۔ پروفائل میں اپنا دستخط بنا کر محفوظ کریں، پھر دوبارہ کوشش کریں۔",
+  "approvalsBulkSignatureUnavailable": "آپ کا محفوظ دستخط چیک نہیں ہو سکا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔",
+  "approvalsBulkConfirmTitle": "{count} معائنے منظور کریں؟",
+  "approvalsBulkConfirmMessage": "ہر ایک پر آپ کا محفوظ دستخط لگے گا۔ جن معائنوں میں ٹائر کی ریڈنگ نامکمل ہے وہ چھوڑ دیے جائیں گے اور زیرِ التوا رہیں گے۔",
+  "approvalsBulkResultTitle": "اجتماعی منظوری مکمل",
+  "approvalsBulkResultMessage": "منظور: {approved}\nٹائر ریڈنگ نامکمل، چھوڑے گئے: {skipped}\nکسی اور نے پہلے فیصلہ کیا: {decided}\nناکام: {failed}",
+  "approvalsBulkProgress": "{total} میں سے {done} منظور ہو رہے ہیں"
 }

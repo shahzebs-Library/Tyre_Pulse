@@ -8723,4 +8723,45 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get captchaRefused =>
       'لم يتم قبول التحقق الأمني. أكمله مرة أخرى ثم أعد المحاولة.';
+
+  @override
+  String get approvalsBulkSelect => 'تحديد';
+
+  @override
+  String get approvalsBulkSelectAll => 'تحديد الكل';
+
+  @override
+  String approvalsBulkApproveSelected(int count) {
+    return 'اعتماد $count محددة';
+  }
+
+  @override
+  String get approvalsBulkNoSignatureTitle => 'احفظ توقيعك أولاً';
+
+  @override
+  String get approvalsBulkNoSignatureMessage => 'اعتماد عدة فحوصات معاً يوقّع كل واحد بتوقيعك المحفوظ. ارسم توقيعك واحفظه في الملف الشخصي ثم حاول مرة أخرى.';
+
+  @override
+  String get approvalsBulkSignatureUnavailable => 'تعذّر التحقق من توقيعك المحفوظ. تحقق من الاتصال وحاول مرة أخرى.';
+
+  @override
+  String approvalsBulkConfirmTitle(int count) {
+    return 'اعتماد $count فحوصات؟';
+  }
+
+  @override
+  String get approvalsBulkConfirmMessage => 'يُوقّع كل فحص بتوقيعك المحفوظ. الفحوصات التي تنقصها قراءات الإطارات تُتخطّى وتبقى قيد الانتظار.';
+
+  @override
+  String get approvalsBulkResultTitle => 'انتهى الاعتماد الجماعي';
+
+  @override
+  String approvalsBulkResultMessage(int approved, int skipped, int decided, int failed) {
+    return 'تم الاعتماد: $approved\nتم التخطي لنقص قراءات الإطارات: $skipped\nقرّر فيها شخص آخر: $decided\nفشل: $failed';
+  }
+
+  @override
+  String approvalsBulkProgress(int done, int total) {
+    return 'جارٍ اعتماد $done من $total';
+  }
 }

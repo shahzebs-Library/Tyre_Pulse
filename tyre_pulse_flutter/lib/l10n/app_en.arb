@@ -8925,5 +8925,56 @@
   "captchaRefused": "The security check was not accepted. Complete it again and retry.",
   "@captchaRefused": {
     "description": "Supabase Auth refused the attempt because of the CAPTCHA (captcha_failed). Never counted as a wrong password."
+  },
+  "approvalsBulkSelect": "Select",
+  "approvalsBulkSelectAll": "Select all",
+  "approvalsBulkApproveSelected": "Approve {count} selected",
+  "@approvalsBulkApproveSelected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "approvalsBulkNoSignatureTitle": "Save your signature first",
+  "approvalsBulkNoSignatureMessage": "Approving several at once signs each one with your saved signature. Draw and save your signature in Profile, then try again.",
+  "approvalsBulkSignatureUnavailable": "Your saved signature could not be checked. Check your connection and try again.",
+  "approvalsBulkConfirmTitle": "Approve {count} inspections?",
+  "@approvalsBulkConfirmTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "approvalsBulkConfirmMessage": "Each one is signed with your saved signature. Inspections with missing tyre readings are skipped and stay pending.",
+  "approvalsBulkResultTitle": "Bulk approval finished",
+  "approvalsBulkResultMessage": "Approved: {approved}\nSkipped, tyre readings incomplete: {skipped}\nAlready decided by someone else: {decided}\nFailed: {failed}",
+  "@approvalsBulkResultMessage": {
+    "placeholders": {
+      "approved": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      },
+      "decided": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "approvalsBulkProgress": "Approving {done} of {total}",
+  "@approvalsBulkProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
   }
 }

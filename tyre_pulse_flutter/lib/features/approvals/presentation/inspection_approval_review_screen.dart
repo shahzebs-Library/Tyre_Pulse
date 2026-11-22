@@ -60,6 +60,8 @@ import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_sign
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
+import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
+import 'package:tyre_pulse/features/profile/profile_providers.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
@@ -76,6 +78,8 @@ enum _DecisionBusy { approving, rejecting }
 /// Stable finders for approval truth/progress and the guarded decision bar.
 @visibleForTesting
 abstract final class InspectionApprovalReviewKeys {
+  static const Key savedSignatureNote =
+      Key('inspectionApproval.savedSignature');
   static const Key evidenceProgress =
       Key('inspection-approval-evidence-progress');
   static const Key approvalBlockedReason =
@@ -102,6 +106,11 @@ class _InspectionApprovalReviewScreenState
   InspectionApprovalItem? _item;
 
   InspectionApprovalSignatureCapture? _approverSignature;
+
+  /// True while [_approverSignature] is the person's SAVED signature (V601)
+  /// rather than one drawn on this screen. Pre-filling is not signing: the
+  /// approve press is still required.
+  bool _signatureFromSaved = false;
   final TextEditingController _noteController = TextEditingController();
   String? _approverName;
   _DecisionBusy? _busy;
@@ -111,6 +120,25 @@ class _InspectionApprovalReviewScreenState
     super.initState();
     unawaited(_load());
     unawaited(_loadApproverName());
+    unawaited(_loadSavedSignature());
+  }
+
+  /// Best-effort: a signature that cannot be read leaves a blank pad the
+  /// approver can still sign on (the repository never throws on a read).
+  Future<void> _loadSavedSignature() async {
+    SavedSignature? saved;
+    try {
+      saved = await ref.read(mySavedSignatureProvider.future);
+    } on Object {
+      saved = null;
+    }
+    if (!mounted || saved == null || _approverSignature != null) return;
+    setState(() {
+      _approverSignature = InspectionApprovalSignatureCapture(
+        dataUrl: saved!.value,
+      );
+      _signatureFromSaved = true;
+    });
   }
 
   @override
@@ -144,11 +172,14 @@ class _InspectionApprovalReviewScreenState
     _loadError = null;
     _loading = true;
     _approverSignature = null;
+    _signatureFromSaved = false;
     _busy = null;
     _noteController.clear();
     // Never setState during the parent's build; build runs next anyway.
     Future<void>.microtask(() {
-      if (mounted) unawaited(_load());
+      if (!mounted) return;
+      unawaited(_load());
+      unawaited(_loadSavedSignature());
     });
   }
 
@@ -347,10 +378,14 @@ class _InspectionApprovalReviewScreenState
       item: item,
       approverName: _approverName,
       approverSignature: _approverSignature,
+      signatureFromSaved: _signatureFromSaved,
       noteController: _noteController,
       busy: _busy,
       onSignatureChanged: (InspectionApprovalSignatureCapture? capture) {
-        setState(() => _approverSignature = capture);
+        setState(() {
+          _approverSignature = capture;
+          _signatureFromSaved = false;
+        });
       },
     );
   }
@@ -449,6 +484,7 @@ class _ReviewBody extends StatelessWidget {
     required this.item,
     required this.approverName,
     required this.approverSignature,
+    required this.signatureFromSaved,
     required this.noteController,
     required this.busy,
     required this.onSignatureChanged,
@@ -457,6 +493,7 @@ class _ReviewBody extends StatelessWidget {
   final InspectionApprovalItem item;
   final String? approverName;
   final InspectionApprovalSignatureCapture? approverSignature;
+  final bool signatureFromSaved;
   final TextEditingController noteController;
   final _DecisionBusy? busy;
   final ValueChanged<InspectionApprovalSignatureCapture?> onSignatureChanged;
@@ -594,6 +631,7 @@ class _ReviewBody extends StatelessWidget {
           _DecisionForm(
             approverName: approverName,
             approverSignature: approverSignature,
+            signatureFromSaved: signatureFromSaved,
             noteController: noteController,
             busy: busy,
             onSignatureChanged: onSignatureChanged,
@@ -1594,6 +1632,7 @@ class _DecisionForm extends StatelessWidget {
   const _DecisionForm({
     required this.approverName,
     required this.approverSignature,
+    required this.signatureFromSaved,
     required this.noteController,
     required this.busy,
     required this.onSignatureChanged,
@@ -1601,6 +1640,7 @@ class _DecisionForm extends StatelessWidget {
 
   final String? approverName;
   final InspectionApprovalSignatureCapture? approverSignature;
+  final bool signatureFromSaved;
   final TextEditingController noteController;
   final _DecisionBusy? busy;
   final ValueChanged<InspectionApprovalSignatureCapture?> onSignatureChanged;
@@ -1631,9 +1671,36 @@ class _DecisionForm extends StatelessWidget {
                 ),
                 const SizedBox(height: TpSpace.sm),
                 InspectionApprovalSignaturePad(
+                  value: approverSignature?.dataUrl,
                   onChanged: onSignatureChanged,
                   height: 170,
                 ),
+                if (signatureFromSaved && approverSignature != null)
+                  Padding(
+                    key: InspectionApprovalReviewKeys.savedSignatureNote,
+                    padding: const EdgeInsets.only(top: TpSpace.xs),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: TpSizing.iconSm,
+                          color: TpPalette.of(context).info.base,
+                        ),
+                        const SizedBox(width: TpSpace.xs),
+                        Expanded(
+                          child: Text(
+                            l10n.clMockSavedSignatureApplied,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: TpPalette.of(context).textMuted,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (approverName != null && approverName!.trim().isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: TpSpace.sm),

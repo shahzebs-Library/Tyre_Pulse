@@ -661,9 +661,9 @@ void main() {
     // to update from the App Store (updateRequiredMessageAppStore). The
     // screen never points an iPhone at Google Play.
     test('en, ar and ur each carry exactly 2525 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2525);
-      expect(_translatableKeys(ar).length, 2525);
-      expect(_translatableKeys(ur).length, 2525);
+      expect(_translatableKeys(en).length, 2536);
+      expect(_translatableKeys(ar).length, 2536);
+      expect(_translatableKeys(ur).length, 2536);
     });
   });
 

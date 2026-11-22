@@ -8714,4 +8714,45 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get captchaRefused =>
       'The security check was not accepted. Complete it again and retry.';
+
+  @override
+  String get approvalsBulkSelect => 'Select';
+
+  @override
+  String get approvalsBulkSelectAll => 'Select all';
+
+  @override
+  String approvalsBulkApproveSelected(int count) {
+    return 'Approve $count selected';
+  }
+
+  @override
+  String get approvalsBulkNoSignatureTitle => 'Save your signature first';
+
+  @override
+  String get approvalsBulkNoSignatureMessage => 'Approving several at once signs each one with your saved signature. Draw and save your signature in Profile, then try again.';
+
+  @override
+  String get approvalsBulkSignatureUnavailable => 'Your saved signature could not be checked. Check your connection and try again.';
+
+  @override
+  String approvalsBulkConfirmTitle(int count) {
+    return 'Approve $count inspections?';
+  }
+
+  @override
+  String get approvalsBulkConfirmMessage => 'Each one is signed with your saved signature. Inspections with missing tyre readings are skipped and stay pending.';
+
+  @override
+  String get approvalsBulkResultTitle => 'Bulk approval finished';
+
+  @override
+  String approvalsBulkResultMessage(int approved, int skipped, int decided, int failed) {
+    return 'Approved: $approved\nSkipped, tyre readings incomplete: $skipped\nAlready decided by someone else: $decided\nFailed: $failed';
+  }
+
+  @override
+  String approvalsBulkProgress(int done, int total) {
+    return 'Approving $done of $total';
+  }
 }

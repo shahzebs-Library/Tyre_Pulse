@@ -15250,6 +15250,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The security check was not accepted. Complete it again and retry.'**
   String get captchaRefused;
+
+  /// No description provided for @approvalsBulkSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select'**
+  String get approvalsBulkSelect;
+
+  /// No description provided for @approvalsBulkSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get approvalsBulkSelectAll;
+
+  /// No description provided for @approvalsBulkApproveSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve {count} selected'**
+  String approvalsBulkApproveSelected(int count);
+
+  /// No description provided for @approvalsBulkNoSignatureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save your signature first'**
+  String get approvalsBulkNoSignatureTitle;
+
+  /// No description provided for @approvalsBulkNoSignatureMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Approving several at once signs each one with your saved signature. Draw and save your signature in Profile, then try again.'**
+  String get approvalsBulkNoSignatureMessage;
+
+  /// No description provided for @approvalsBulkSignatureUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Your saved signature could not be checked. Check your connection and try again.'**
+  String get approvalsBulkSignatureUnavailable;
+
+  /// No description provided for @approvalsBulkConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Approve {count} inspections?'**
+  String approvalsBulkConfirmTitle(int count);
+
+  /// No description provided for @approvalsBulkConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Each one is signed with your saved signature. Inspections with missing tyre readings are skipped and stay pending.'**
+  String get approvalsBulkConfirmMessage;
+
+  /// No description provided for @approvalsBulkResultTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bulk approval finished'**
+  String get approvalsBulkResultTitle;
+
+  /// No description provided for @approvalsBulkResultMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved: {approved}\nSkipped, tyre readings incomplete: {skipped}\nAlready decided by someone else: {decided}\nFailed: {failed}'**
+  String approvalsBulkResultMessage(int approved, int skipped, int decided, int failed);
+
+  /// No description provided for @approvalsBulkProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Approving {done} of {total}'**
+  String approvalsBulkProgress(int done, int total);
 }
 
 class _AppLocalizationsDelegate

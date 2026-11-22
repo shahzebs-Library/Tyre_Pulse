@@ -3526,5 +3526,16 @@
   "captchaExpired": "انتهت صلاحية التحقق الأمني. حاول مرة أخرى.",
   "captchaLoadFailed": "تعذر تحميل التحقق الأمني. تحقق من اتصالك وحاول مرة أخرى.",
   "captchaTimedOut": "يستغرق التحقق الأمني وقتًا طويلًا. تحقق من اتصالك وحاول مرة أخرى.",
-  "captchaRefused": "لم يتم قبول التحقق الأمني. أكمله مرة أخرى ثم أعد المحاولة."
+  "captchaRefused": "لم يتم قبول التحقق الأمني. أكمله مرة أخرى ثم أعد المحاولة.",
+  "approvalsBulkSelect": "تحديد",
+  "approvalsBulkSelectAll": "تحديد الكل",
+  "approvalsBulkApproveSelected": "اعتماد {count} محددة",
+  "approvalsBulkNoSignatureTitle": "احفظ توقيعك أولاً",
+  "approvalsBulkNoSignatureMessage": "اعتماد عدة فحوصات معاً يوقّع كل واحد بتوقيعك المحفوظ. ارسم توقيعك واحفظه في الملف الشخصي ثم حاول مرة أخرى.",
+  "approvalsBulkSignatureUnavailable": "تعذّر التحقق من توقيعك المحفوظ. تحقق من الاتصال وحاول مرة أخرى.",
+  "approvalsBulkConfirmTitle": "اعتماد {count} فحوصات؟",
+  "approvalsBulkConfirmMessage": "يُوقّع كل فحص بتوقيعك المحفوظ. الفحوصات التي تنقصها قراءات الإطارات تُتخطّى وتبقى قيد الانتظار.",
+  "approvalsBulkResultTitle": "انتهى الاعتماد الجماعي",
+  "approvalsBulkResultMessage": "تم الاعتماد: {approved}\nتم التخطي لنقص قراءات الإطارات: {skipped}\nقرّر فيها شخص آخر: {decided}\nفشل: {failed}",
+  "approvalsBulkProgress": "جارٍ اعتماد {done} من {total}"
 }

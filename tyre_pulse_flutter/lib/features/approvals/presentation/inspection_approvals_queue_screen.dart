@@ -36,9 +36,12 @@ import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/domain/approval_date_grouping.dart';
+import 'package:tyre_pulse/features/approvals/domain/bulk_inspection_approval.dart';
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/queue_list_kit.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/refresh_when_shown.dart';
+import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
+import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
 /// Stable finders for the responsive approvals queue presentation.
 @visibleForTesting
@@ -46,7 +49,12 @@ abstract final class InspectionApprovalsQueueKeys {
   static const Key summary = Key('inspection.approvals.summary');
   static const Key list = Key('inspection.approvals.list');
 
+  static const Key selectToggle = Key('inspection.approvals.select');
+  static const Key selectAll = Key('inspection.approvals.selectAll');
+  static const Key bulkApprove = Key('inspection.approvals.bulkApprove');
+
   static Key row(String id) => Key('inspection.approvals.row.$id');
+  static Key check(String id) => Key('inspection.approvals.check.$id');
   static Key heading(String id) => Key('inspection.approvals.heading.$id');
 }
 
@@ -92,6 +100,13 @@ class _InspectionApprovalsQueueScreenState
   /// that started before a refresh (or before a tab change) can never paint
   /// its older rows over the fresher ones.
   int _loadGeneration = 0;
+
+  /// Multi-select for bulk approve (Pending tab only). Each selected row is
+  /// signed with the approver's saved signature - see
+  /// `bulk_inspection_approval.dart`.
+  bool _selecting = false;
+  final Set<String> _selected = <String>{};
+  (int, int)? _bulkProgress;
 
   @override
   void initState() {
@@ -156,6 +171,8 @@ class _InspectionApprovalsQueueScreenState
     if (tab == _tab) return;
     setState(() {
       _tab = tab;
+      _selecting = false;
+      _selected.clear();
       // The previous tab's rows are a different status; never show them
       // under this tab's heading while its own read is in flight.
       _items = const <InspectionApprovalItem>[];
@@ -186,9 +203,179 @@ class _InspectionApprovalsQueueScreenState
       appBar: TpAppBar(
         title: l10n.inspectionApprovalsTitle,
         backFallback: fallback,
+        actions: <Widget>[
+          if (_tab == InspectionApprovalTab.pending &&
+              _items.isNotEmpty &&
+              _bulkProgress == null)
+            TextButton(
+              key: InspectionApprovalsQueueKeys.selectToggle,
+              onPressed: () => setState(() {
+                _selecting = !_selecting;
+                _selected.clear();
+              }),
+              child: Text(
+                _selecting ? l10n.actionCancel : l10n.approvalsBulkSelect,
+              ),
+            ),
+        ],
       ),
       body: _body(l10n),
+      bottomNavigationBar: _selecting ? _bulkBar(l10n) : null,
     );
+  }
+
+  Widget _bulkBar(AppLocalizations l10n) {
+    final (int, int)? progress = _bulkProgress;
+    final bool allSelected = _items.isNotEmpty &&
+        _items.every((InspectionApprovalItem i) => _selected.contains(i.id));
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.all(TpSpace.md),
+        child: progress != null
+            ? Text(
+                l10n.approvalsBulkProgress(progress.$1, progress.$2),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleSmall,
+              )
+            : Row(
+                children: <Widget>[
+                  TextButton(
+                    key: InspectionApprovalsQueueKeys.selectAll,
+                    onPressed: () => setState(() {
+                      if (allSelected) {
+                        _selected.clear();
+                      } else {
+                        _selected.addAll(
+                          _items.map((InspectionApprovalItem i) => i.id),
+                        );
+                      }
+                    }),
+                    child: Text(
+                      allSelected
+                          ? l10n.actionCancel
+                          : l10n.approvalsBulkSelectAll,
+                    ),
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: TpButton.primary(
+                      key: InspectionApprovalsQueueKeys.bulkApprove,
+                      label:
+                          l10n.approvalsBulkApproveSelected(_selected.length),
+                      icon: Icons.done_all,
+                      onPressed: _selected.isEmpty
+                          ? null
+                          : () => unawaited(_bulkApprove()),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Future<void> _showMessage(String title, String message) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.actionClose),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _bulkApprove() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final List<String> ids = _items
+        .map((InspectionApprovalItem i) => i.id)
+        .where(_selected.contains)
+        .toList(growable: false);
+    if (ids.isEmpty) return;
+
+    // Fresh read: a signature saved or removed in Profile a moment ago must
+    // be what signs these, never a cached copy.
+    ref.invalidate(mySavedSignatureLookupProvider);
+    final SavedSignatureLookup lookup;
+    try {
+      lookup = await ref.read(mySavedSignatureLookupProvider.future);
+    } on Object {
+      if (!mounted) return;
+      await _showMessage(
+        l10n.approvalsBulkNoSignatureTitle,
+        l10n.approvalsBulkSignatureUnavailable,
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (lookup.status == SavedSignatureStatus.unavailable) {
+      await _showMessage(
+        l10n.approvalsBulkNoSignatureTitle,
+        l10n.approvalsBulkSignatureUnavailable,
+      );
+      return;
+    }
+    final SavedSignature? signature = lookup.signature;
+    if (signature == null) {
+      await _showMessage(
+        l10n.approvalsBulkNoSignatureTitle,
+        l10n.approvalsBulkNoSignatureMessage,
+      );
+      return;
+    }
+
+    final bool go = await TpDialog.confirm(
+      context: context,
+      title: l10n.approvalsBulkConfirmTitle(ids.length),
+      message: l10n.approvalsBulkConfirmMessage,
+      confirmLabel: l10n.approvalsBulkApproveSelected(ids.length),
+    );
+    if (!go || !mounted) return;
+
+    final repository = ref.read(inspectionApprovalRepositoryProvider);
+    final String userId = ref.read(workspaceContextProvider)?.userId ?? '';
+    String? name;
+    if (userId.isNotEmpty) {
+      try {
+        name = await repository.currentUserDisplayName(userId);
+      } on Object {
+        name = null;
+      }
+    }
+    if (!mounted) return;
+    setState(() => _bulkProgress = (0, ids.length));
+    final BulkInspectionApprovalOutcome outcome = await bulkApproveInspections(
+      repository: repository,
+      inspectionIds: ids,
+      signature: signature.value,
+      approverName: name,
+      onProgress: (int done, int total) {
+        if (mounted) setState(() => _bulkProgress = (done, total));
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _bulkProgress = null;
+      _selecting = false;
+      _selected.clear();
+    });
+    await _showMessage(
+      l10n.approvalsBulkResultTitle,
+      l10n.approvalsBulkResultMessage(
+        outcome.approved.length,
+        outcome.skippedIncomplete.length,
+        outcome.alreadyDecided.length,
+        outcome.failed.length,
+      ),
+    );
+    if (mounted) unawaited(_load());
   }
 
   /// Centres [child] and caps it at the phone-first reading width so a
@@ -302,19 +489,41 @@ class _InspectionApprovalsQueueScreenState
           final bool lastInGroup =
               index == rows.length || rows[index] is String;
           final bool firstInGroup = index < 2 || rows[index - 2] is String;
+          final bool checked = _selected.contains(item.id);
+          final Widget queueRow = _QueueRow(
+            item: item,
+            tab: _tab,
+            locale: locale,
+            showDivider: !lastInGroup,
+            isFirst: firstInGroup,
+            fallbackTitle: l10n.inspectionApprovalFallbackTitle,
+            inspectorFallback: l10n.inspectionInspectorUnknown,
+            pendingLabel: l10n.inspectionApprovalsPendingBadge,
+            approvedLabel: l10n.inspectionApprovalsApprovedTab,
+            returnedLabel: l10n.inspectionApprovalsReturnedTab,
+            onTap: _selecting
+                ? () => setState(() {
+                      if (!_selected.remove(item.id)) _selected.add(item.id);
+                    })
+                : () => unawaited(_open(item)),
+          );
+          if (!_selecting) return _capped(queueRow);
           return _capped(
-            _QueueRow(
-              item: item,
-              tab: _tab,
-              locale: locale,
-              showDivider: !lastInGroup,
-              isFirst: firstInGroup,
-              fallbackTitle: l10n.inspectionApprovalFallbackTitle,
-              inspectorFallback: l10n.inspectionInspectorUnknown,
-              pendingLabel: l10n.inspectionApprovalsPendingBadge,
-              approvedLabel: l10n.inspectionApprovalsApprovedTab,
-              returnedLabel: l10n.inspectionApprovalsReturnedTab,
-              onTap: () => unawaited(_open(item)),
+            Row(
+              children: <Widget>[
+                Checkbox(
+                  key: InspectionApprovalsQueueKeys.check(item.id),
+                  value: checked,
+                  onChanged: _bulkProgress != null
+                      ? null
+                      : (_) => setState(() {
+                            if (!_selected.remove(item.id)) {
+                              _selected.add(item.id);
+                            }
+                          }),
+                ),
+                Expanded(child: queueRow),
+              ],
             ),
           );
         },

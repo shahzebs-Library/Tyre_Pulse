@@ -21,6 +21,7 @@ import './inventory.css'
 const SECTION_COMPONENTS = {
   overview: lazy(() => import('./OverviewSection')),
   locations: lazy(() => import('./LocationsSection')),
+  physical: lazy(() => import('./PhysicalInventorySection')),
   movements: lazy(() => import('./MovementsSection')),
   audits: lazy(() => import('./AuditsSection')),
   discrepancies: lazy(() => import('./DiscrepanciesSection')),
@@ -31,6 +32,8 @@ const SECTION_COMPONENTS = {
   tyres: lazy(() => import('./TyreInventorySection')),
   identification: lazy(() => import('./IdentificationSection')),
   valuation: lazy(() => import('./ValuationPanels')),
+  kpis: lazy(() => import('./KpiCatalogueSection')),
+  classification: lazy(() => import('./ClassificationSection')),
   planning: lazy(() => import('./InsightSections').then((m) => ({ default: m.PlanningSection }))),
   reports: lazy(() => import('./ReportsSection')),
 }

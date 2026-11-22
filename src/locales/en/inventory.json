@@ -9,7 +9,7 @@
     "overview": "Overview", "register": "Stock register", "locations": "Locations", "movements": "Movements",
     "audits": "Physical audits", "discrepancies": "Discrepancies", "controls": "Controls", "procurement": "Procurement",
     "receiving": "Receiving & issue", "supplier": "Supplier stock", "tyres": "Tyre inventory", "identification": "Identification",
-    "valuation": "Valuation", "planning": "Planning & simulation", "reports": "Reports"
+    "valuation": "Valuation", "planning": "Planning & simulation", "kpis": "Inventory KPIs", "classification": "Stock classification", "reports": "Reports", "physical": "Physical inventory"
   },
   "scope": {
     "country": "Country", "allCountries": "All countries", "countryHint": "Change the country from the working context at the top of the app.",
@@ -64,13 +64,14 @@
     "addTitle": "Add location", "editTitle": "Edit location", "edit": "Edit {code}", "printOne": "Print label for {code}",
     "labels": "Print labels ({n})", "code": "Code", "name": "Name", "type": "Type", "parent": "Inside", "noParent": "Top level (no parent)",
     "active": "Active", "inactive": "Inactive", "empty": "No locations yet. Add a warehouse, then its zones and bins.",
-    "readOnly": "You can view locations. Adding or changing them needs the transfer permission.",
+    "readOnly": "You can view locations. Adding or changing them needs an Admin, Manager or Director.",
     "labelSheet": "Location labels", "labelSheetSub": "Each label carries TP:LOC and the location id. Scan it on the phone to open that bin.",
     "qrAlt": "QR label for location {code}",
+    "store": "Store", "noStores": "No active store is registered for this country. Stores are managed in Site Management, not here.", "labelSize": "Label size", "labelCount": "{n} labels, {perPage} per A4 page", "sizes": {"sm": "Small ({mm} mm)", "md": "Medium ({mm} mm)", "lg": "Large ({mm} mm)"}, "bulk": {"open": "Bulk setup", "title": "Bulk rack, shelf and bin setup", "sub": "Describe the layout once. You see every code before anything is saved.", "topOfStore": "Top of the store", "prefix": "Code prefix", "racks": "Racks (for example A-C or 1-4)", "shelves": "Shelves per rack", "bins": "Bins per shelf", "start": "First number", "pad": "Number digits", "sep": "Code style", "names": "Names (rack, shelf, bin)", "summary": "This creates {racks} racks, {shelves} shelves and {bins} bins. {existing} codes already exist and will be reused.", "example": "Codes", "preview": "Preview", "checking": "Checking...", "back": "Back", "create": "Create {n} locations", "previewNote": "{created} new locations will be created at {site}. {existing} already exist and are kept as they are. Nothing is saved until you press Create.", "more": "{n} more rows are not shown here but are included.", "done": "Saved: {created} created, {existing} already existed.", "printNew": "Print labels ({n})", "status": {"new": "New", "existing": "Already exists"}, "errors": {"site": "Choose the store.", "parent": "The chosen parent is not in this list any more.", "parentSite": "The parent belongs to another store.", "range": "Check the range: the end must come after the start (at most 100).", "rackCode": "Rack codes use letters, numbers, dot or underscore.", "nothing": "Enter racks, shelves or bins to create.", "prefix": "Enter a code prefix or rack codes so every code is unique at the store.", "codeFormat": "A generated code is too long or uses a character that is not allowed.", "duplicate": "Two generated codes are the same. Change the prefix or style.", "tooMany": "At most {max} locations can be created at once."}},
     "errors": {
       "code": "Enter a code.", "codeFormat": "Use letters, numbers, dot, dash or underscore (up to 40).",
       "codeTaken": "This code is already used at this site.", "name": "Enter a name.", "type": "Choose a type.",
-      "site": "Enter the site.", "selfParent": "A location cannot be inside itself."
+      "site": "Choose the store.", "selfParent": "A location cannot be inside itself."
     }
   },
   "locationTypes": {
@@ -231,7 +232,7 @@
     "types": { "all": "All", "consignment": "Consignment", "vmi": "Vendor managed", "framework": "Framework" }
   },
   "register": { "onHand": "On hand" },
-  "tyres": { "sync": "Refresh custody from tyre records", "syncHint": "Re-reads tyre records and scrap marks. Tyre records are never changed.", "synced": "Custody refreshed: {items} tyres, {conflicts} new conflicts.", "decision": "Decision", "decisionNote": "Evidence-based reason", "decisionRule": "This records your decision on the conflict only. Tyre records and scrap marks are not changed from here.", "investigationRule": "A scrapped but active tyre is investigated, not decided here: a Tyre or PMV engineer is assigned, records findings and proposes a correction, an independent PMV Manager approves it, and the case is closed as a decision. The tyre team then applies the correction in tyre records.", "decide": "Record decision", "decisions": {"resolved": "Resolved", "dismissed": "Dismissed"},
+  "tyres": { "inv": {"step": "Investigation step", "investigator": "Investigator", "assignedAt": "Assigned", "assignedSomeone": "Assigned person", "proposed": "Proposed correction", "approval": "Approval", "findings": "Investigation log", "choose": "Choose a Tyre or PMV engineer", "note": "Note", "noCandidates": "No approved user holds a Tyre or PMV Engineering role. Give one person that role in Console, Users first.", "assign": "Assign investigator", "findingLabel": "What was checked and found", "record": "Record finding", "needFinding": "Record at least one finding before proposing a correction.", "correction": "Proposed correction", "detail": "Correction for the tyre team", "reason": "Reason (optional)", "proposeRule": "Proposing sends an approval request to an independent PMV Manager. You cannot approve your own proposal. Tyre records are not changed from here.", "propose": "Propose correction", "waiting": "Waiting for an independent PMV Manager to approve or reject the proposal.", "openApprovals": "Open approvals", "close": "Close case as decided", "steps": {"open": "Open", "investigating": "Investigating", "proposed": "Proposed", "approved": "Approved", "rejected": "Rejected", "closed": "Closed"}, "actions": {"clear_scrap_mark": "Clear the scrap mark", "close_active_fitment": "Close the active fitment", "correct_serial": "Correct the serial", "no_change": "No change", "other": "Other"}, "kinds": {"assigned": "Assigned", "finding": "Finding"}}, "sync": "Refresh custody from tyre records", "syncHint": "Re-reads tyre records and scrap marks. Tyre records are never changed.", "synced": "Custody refreshed: {items} tyres, {conflicts} new conflicts.", "decision": "Decision", "decisionNote": "Evidence-based reason", "decisionRule": "This records your decision on the conflict only. Tyre records and scrap marks are not changed from here.", "investigationRule": "A scrapped but active tyre is investigated, not decided here: a Tyre or PMV engineer is assigned, records findings and proposes a correction, an independent PMV Manager approves it, and the case is closed as a decision. The tyre team then applies the correction in tyre records.", "decide": "Record decision", "decisions": {"resolved": "Resolved", "dismissed": "Dismissed"},
     "rule": "Each tyre has exactly one custody state, derived from tyre records without changing them. Time in stock is not running life, so no km or life is shown here.",
     "conflictsTitle": "Custody conflicts", "conflictsSub": "Tyres whose records disagree, for example scrapped yet still fitted",
     "conflictsEmpty": "No open custody conflicts.", "conflictNoun": "conflicts", "conflict": "Conflict", "detected": "Detected",
@@ -288,7 +289,7 @@
     "lines": "Lines", "value": "Value"
   },
   "planning": {
-    "noReorderPoint": "Lines with no reorder point", "zeroStock": "Lines at zero",
+    "sim": {"invalid": "Fix these inputs before the scenario can run: {fields}. Years must be a whole number of 1 or more.", "failed": "The scenario could not be calculated with these inputs. Check the values and try again.", "title": "Investment and stocking-strategy scenario", "sub": "Compare buying in bulk, holding stock, supplier-managed stock, consignment or a framework price, over the same demand", "label": "Scenario (modelled, not an actual saving). Every value you type is an assumption.", "baseline": "Baseline strategy", "alternative": "Alternative strategy", "missing": "Enter the required inputs to model both strategies: {fields}.", "incomplete": "Both strategies need the same currency and their required inputs.", "totalCost": "Modelled total cost: {s}", "costDifference": "Modelled cost difference (baseline minus alternative)", "workingCapital": "Working capital released (average)", "exitExposure": "Change in contract exit exposure", "risk": "Service-level risk: {s}", "cover": "cover {days} days", "notSaving": "A positive difference means the alternative costs less in the model under these inputs. Working capital released is cash not tied up in owned stock; neither figure is an actual saving.", "assumptions": "Assumptions used: {fields}", "strategies": {"bulk_purchase": "Bulk purchase", "company_warehouse": "Company warehouse", "supplier_managed": "Supplier managed (VMI)", "consignment": "Consignment", "framework": "Framework price agreement"}, "riskLevels": {"low": "Low", "medium": "Medium", "high": "High", "unknown": "Unknown"}, "fields": {"currency": "Currency", "annualDemandQty": "Annual demand (units)", "unitPrice": "Unit price", "years": "Horizon (years)", "holdingCostRate": "Holding cost per year", "obsolescenceRate": "Obsolescence per year", "priceEscalationRate": "Price escalation per year", "leadTimeDays": "Lead time (days)", "safetyStockQty": "Safety stock (units)", "bulkQty": "Bulk quantity", "bulkDiscountRate": "Bulk discount", "orderQty": "Order quantity", "servicePremiumRate": "Service premium", "minCommitmentValue": "Minimum commitment value", "commitmentYears": "Commitment (years)", "exitFee": "Exit fee", "onSiteBufferQty": "On-site buffer (units)", "consignmentPremiumRate": "Consignment premium", "buybackRate": "Buy-back rate", "onSiteQty": "On-site quantity", "frameworkDiscountRate": "Framework discount"}}, "noReorderPoint": "Lines with no reorder point", "zeroStock": "Lines at zero",
     "replenishmentSub": "Suggested order quantities from actual usage",
     "signalsTitle": "At or below reorder point", "signalsSub": "Available stock (on hand minus reserved) against the reorder point set for the line",
     "noSignals": "No line is at or below its reorder point.", "available": "Available", "reorderPoint": "Reorder point", "gap": "Short by",
@@ -463,5 +464,630 @@
     "conditions": { "good": "Good", "damaged": "Damaged", "quarantine": "Quarantine" },
     "confirmReceipt": "Confirm receipt",
     "transferStatus": { "dispatched": "Dispatched", "in_transit": "In transit", "partially_received": "Partly received", "completed": "Completed", "cancelled": "Cancelled" }
+  },
+
+  "kpis": {
+    "title": "Inventory KPIs",
+    "lead": "The inventory KPI catalogue for the selected country and site. Stock value and discrepancies are on the Overview. Every figure states its period; a figure that cannot be measured says why.",
+    "window": "Period",
+    "lastDays": "Last {n} days",
+    "exportExcel": "Export Excel",
+    "exportPdf": "Export PDF",
+    "loading": "Loading KPIs",
+    "someFailed": "{n} data source(s) could not be loaded; the KPIs that depend on them say so.",
+    "valueHiddenNote": "Money figures are hidden: you need the view value permission for stock.",
+    "hidden": "Needs view value permission",
+    "noFigure": "No figure",
+    "definition": "Definition",
+    "unitLabel": "Unit",
+    "groups": {
+      "availability": "Availability",
+      "accuracy": "Count accuracy",
+      "value": "Value and movement",
+      "supplier": "Suppliers and procurement"
+    },
+    "groupSub": {
+      "availability": "Can stores meet demand right now.",
+      "accuracy": "From the latest physical count that reached reconciliation.",
+      "value": "Owned stock only. Balance-sheet value, never part of CPK or cost per m3.",
+      "supplier": "Orders placed in the selected period."
+    },
+    "period": {
+      "asAt": "As at {date}",
+      "window": "{from} to {to}",
+      "year": "Last 12 months to {date}",
+      "count": "Count {ref}",
+      "noCount": "Latest count (none yet)"
+    },
+    "unit": {
+      "pct": "Percent",
+      "qtyCurrency": "Quantity and value per currency",
+      "currency": "Value per currency",
+      "lines": "Lines and quantity",
+      "times": "Times per year",
+      "days": "Days",
+      "currencyQty": "Value per currency and quantity",
+      "timesPct": "Times",
+      "pctBook": "Percent and book value per currency",
+      "count": "Count"
+    },
+    "state": {
+      "loadFailed": "Could not load the data for this KPI.",
+      "notSetUp": "The data for this KPI is not set up yet."
+    },
+    "col": {
+      "group": "Group",
+      "kpi": "KPI",
+      "value": "Value",
+      "period": "Period",
+      "note": "Note",
+      "definition": "Definition"
+    },
+    "items": {
+      "inv_critical_availability": {
+        "label": "Critical item availability",
+        "def": "Vital items whose available quantity (on hand minus reserved) is at or above safety stock, or above zero when no safety stock is set, out of all vital items held at this scope."
+      },
+      "inv_stockout_frequency": {
+        "label": "Stock-out frequency",
+        "def": "Requests that could not be met from stock (recorded shortages and backorders) out of all requests with a known outcome (issues posted plus shortages) in the period."
+      },
+      "inv_reserved_not_issued": {
+        "label": "Reserved but not issued",
+        "def": "Quantity still reserved and not issued on active reservations older than 14 days, with its value per currency."
+      },
+      "inv_accuracy_exact_line": {
+        "label": "Inventory accuracy (exact line)",
+        "def": "Counted lines whose count matches the expected quantity within tolerance, out of all counted lines in the latest count. Serial-tracked lines have zero tolerance."
+      },
+      "inv_accuracy_quantity": {
+        "label": "Inventory accuracy (quantity)",
+        "def": "One minus the total absolute variance divided by the total expected quantity in the latest count."
+      },
+      "inv_accuracy_serial": {
+        "label": "Serial accuracy",
+        "def": "Serials found where expected, out of all serials expected or found in the latest count. Missing and unexpected serials both count against it."
+      },
+      "inv_gross_shortage": {
+        "label": "Gross shortage",
+        "def": "Total quantity counted below expected in the latest count, and its value per currency at the snapshot cost. Shown separately from excess."
+      },
+      "inv_gross_excess": {
+        "label": "Gross excess",
+        "def": "Total quantity counted above expected in the latest count, and its value per currency at the snapshot cost. Shown separately from shortage."
+      },
+      "inv_count_completion": {
+        "label": "Count completion",
+        "def": "Lines counted or confirmed zero, out of all lines in the scope of the latest count."
+      },
+      "inv_unvalued_stock": {
+        "label": "Unvalued stock",
+        "def": "Owned stock lines (and their quantity) with no known cost. Zero is a real answer."
+      },
+      "inv_adjustment_value": {
+        "label": "Adjustment value",
+        "def": "Net value of approved count adjustments in the period per currency, with the gross gain and gross loss beside it."
+      },
+      "inv_turnover": {
+        "label": "Inventory turnover",
+        "def": "Valued issues in the last 12 months divided by the average month-end stock value, per currency. Month-end values are rebuilt from the stock ledger."
+      },
+      "inv_dio": {
+        "label": "Days inventory outstanding",
+        "def": "Days in the period divided by turnover, per currency."
+      },
+      "inv_dead_stock": {
+        "label": "Dead stock",
+        "def": "Value of owned stock with no issue in 365 days and no open reservation. Lines with too little history are counted as unknown, not dead."
+      },
+      "inv_slow_stock": {
+        "label": "Slow-moving stock",
+        "def": "Value of owned stock whose last issue was 180 to 364 days ago."
+      },
+      "inv_excess_stock": {
+        "label": "Excess stock",
+        "def": "Value of the owned quantity above the item maximum. Lines without a maximum are counted as unknown."
+      },
+      "inv_obsolescence_exposure": {
+        "label": "Obsolescence exposure",
+        "def": "Value of owned stock whose item is marked obsolete in the item master."
+      },
+      "inv_supplier_otif": {
+        "label": "Supplier delivery performance (OTIF)",
+        "def": "Purchase order lines received on or before the expected delivery date and in full, out of all lines that were due, for orders placed in the period."
+      },
+      "inv_lead_time_variance": {
+        "label": "Lead-time variance",
+        "def": "Average of actual lead days (order date to first receipt) minus the agreed lead time from the active supplier agreement, for orders placed in the period."
+      },
+      "inv_outstanding_po_qty": {
+        "label": "Outstanding PO quantity",
+        "def": "Quantity ordered and not yet received on open purchase order lines placed in the period, with its value per currency at the order price."
+      },
+      "inv_consignment_utilisation": {
+        "label": "Consignment utilisation",
+        "def": "Consigned quantity issued in the period divided by the consigned quantity held now, per active consignment agreement."
+      },
+      "inv_emergency_purchase_rate": {
+        "label": "Emergency purchase rate",
+        "def": "Purchase orders with an emergency or urgent priority out of all orders placed in the period (cancelled excluded), with the emergency value share per currency."
+      },
+      "inv_purchase_avoidance": {
+        "label": "Purchase avoidance",
+        "def": "Requests met from stock or reusable stock instead of buying, out of all resolved requests. The value is the book value of stock used, not a saving."
+      }
+    },
+    "reason": {
+      "not_measurable": "Cannot be measured from the data in scope.",
+      "mixed_currency": "More than one currency in scope: see each currency below; currencies are never added together.",
+      "no_valued_data": "No stock with a known cost in scope.",
+      "value_incomplete": "Some lines have no known cost, so the total cannot be stated.",
+      "now_required": "Cannot be measured without the current date.",
+      "mixed_units": "Lines use different units of measure, so quantities cannot be added.",
+      "fewer_than_3_complete_snapshots": "Needs 3 complete month-end values; the stock ledger does not cover enough months yet.",
+      "average_stock_value_zero": "Average stock value is zero, so turnover cannot be calculated.",
+      "issue_value_incomplete": "Some issues have no known cost.",
+      "issue_coverage_below_80pct": "Less than 80% of issued quantity has a known cost.",
+      "turnover_zero": "Turnover is zero, so days outstanding cannot be calculated.",
+      "no_data": "No issues or stock values in scope.",
+      "expected_total_zero": "The latest count expected no stock, so quantity accuracy cannot be calculated.",
+      "no_adjustments": "No approved adjustments in the period.",
+      "no_consigned_stock_held": "No consigned stock is held under the active agreements.",
+      "no_counted_lines": "The latest count has no counted lines yet.",
+      "no_lines_due": "No purchase order lines were due yet (none received and none past the expected delivery date).",
+      "no_lines_in_scope": "The latest count has no lines in scope.",
+      "no_owned_stock": "No owned stock in scope.",
+      "no_purchase_orders": "No purchase orders in the period.",
+      "no_received_line_with_agreed_lead_time": "No received line has an agreed lead time (set it on the supplier agreement).",
+      "no_requests_with_known_outcome": "No requests with a known outcome in the period.",
+      "no_resolved_requests": "No resolved requests in the period.",
+      "no_vital_items": "No item in scope is marked vital in the item master (criticality not recorded).",
+      "nothing_expected_or_found": "The latest count had no serial-tracked lines."
+    },
+    "empty": {
+      "noStock": "No stock balances recorded yet for {scope}.",
+      "noRequests": "No stock issues or recorded shortages yet for {scope} in this period.",
+      "noReservations": "No active stock reservations for {scope}.",
+      "noCount": "No physical count has reached reconciliation yet for {scope}.",
+      "noSerialCount": "The latest count for {scope} had no serial-tracked lines.",
+      "noAdjustments": "No approved count adjustments recorded yet for {scope} in this period.",
+      "noMovements": "No stock movements recorded yet for {scope} in the last 12 months.",
+      "noOrders": "No purchase orders recorded yet for {scope} in this period.",
+      "noPoLines": "Purchase orders for {scope} in this period have no lines recorded.",
+      "noConsignment": "No active consignment agreement for {scope}.",
+      "fulfilmentNotRecorded": "Not recorded yet: requests do not record whether they were met from stock or by buying, so this cannot be measured for {scope}."
+    }
+  },
+  "classify": {
+    "title": "Stock classification",
+    "axesLabel": "Classification",
+    "summaryLabel": "Items per class",
+    "axis": {
+      "abc": "ABC (value)",
+      "fsn": "FSN (movement)",
+      "ved": "VED (criticality)"
+    },
+    "method": {
+      "abc": "Items ranked by valued issue value in the last 12 months, inside one currency. A: up to {a}% of cumulative value, B: up to {b}%, C: the rest. An item with unknown value is unclassified, never C.",
+      "fsn": "Months with at least one issue in the last {window}. F: {fast} or more months, S: 1 or more, N: none across the full window. Items or ledgers younger than the window are unclassified.",
+      "ved": "From the criticality recorded in the item master: V vital, E essential, D desirable. Not recorded is unassessed, never D. A vital item that does not move is a critical insurance spare, not dead stock."
+    },
+    "class": {
+      "abc": {
+        "A": "A",
+        "B": "B",
+        "C": "C",
+        "unclassified": "Unclassified"
+      },
+      "fsn": {
+        "F": "F (fast)",
+        "S": "S (slow)",
+        "N": "N (non-moving)",
+        "unclassified": "Unclassified"
+      },
+      "ved": {
+        "V": "V (vital)",
+        "E": "E (essential)",
+        "D": "D (desirable)",
+        "unassessed": "Unassessed"
+      }
+    },
+    "col": {
+      "name": "Name",
+      "category": "Category",
+      "consumption": "Consumption value (12 months)",
+      "share": "Share",
+      "cumulative": "Cumulative share",
+      "issues": "Issues",
+      "activeMonths": "Active months",
+      "criticality": "Criticality",
+      "onHand": "On hand",
+      "disposition": "Disposition",
+      "reason": "Why"
+    },
+    "export": {
+      "item_code": "Item",
+      "item_name": "Name",
+      "category": "Category",
+      "class": "Class",
+      "consumption": "Consumption value",
+      "currency": "Currency",
+      "share": "Share",
+      "activeMonths": "Active months",
+      "criticality": "Criticality",
+      "onHand": "On hand",
+      "disposition": "Disposition",
+      "reason": "Why"
+    },
+    "tableTitle": "Items by {axis}",
+    "tableSub": "{n} of {total} items",
+    "search": "Search item code, name or category",
+    "classFilter": "Class",
+    "allClasses": "All classes",
+    "empty": "No stocked items or stock issues recorded yet for {scope}.",
+    "noMatch": "No items match the filters.",
+    "notRecorded": "Not recorded",
+    "valueHidden": "Consumption values are hidden: you need the view value permission for stock.",
+    "reason": {
+      "consumption_value_unknown": "Consumption value unknown (an issue has no cost or issues are in more than one currency).",
+      "currency_unknown": "Currency unknown.",
+      "no_consumption_in_period": "No issues in the last 12 months.",
+      "now_required": "Cannot be classified without the current date.",
+      "item_younger_than_window": "Item is newer than the 12-month window.",
+      "ledger_shorter_than_window": "The stock ledger is shorter than 12 months, so non-moving cannot be proven yet.",
+      "criticality_not_recorded": "Criticality not recorded in the item master.",
+      "criticality_not_recognised": "Criticality value not recognised.",
+      "history_unavailable": "The stock ledger could not be read, so value and movement cannot be classified.",
+      "item_master_unavailable": "The item master could not be read, so criticality is unknown."
+    },
+    "disposition": {
+      "critical_insurance_spare": "Critical insurance spare (keep)",
+      "critical_slow_mover": "Critical slow mover",
+      "dead_stock_candidate": "Dead stock candidate (review)",
+      "slow_mover": "Slow mover",
+      "active": "Active",
+      "insufficient_history": "Insufficient history"
+    }
+  },
+  "pi": {
+    "title": "Physical inventory",
+    "lead": "Register what is physically on the shelves. A capture is evidence and never changes official stock: identified items go to an opening-balance batch that another person approves.",
+    "tabs": {
+      "capture": "Start physical inventory",
+      "review": "Identification review",
+      "materials": "Company materials",
+      "corrections": "Corrections",
+      "search": "Material search",
+      "dashboard": "Dashboard"
+    },
+    "start": {
+      "title": "Start physical inventory",
+      "sub": "Pick the store and, if you know it, the warehouse, rack, shelf or bin.",
+      "pickCountry": "Choose a single country in the working context first.",
+      "store": "Store",
+      "chooseStore": "Choose a store",
+      "location": "Location in the store",
+      "wholeStore": "Whole store (no bin)",
+      "noLocations": "This store has no locations yet. Ask an inventory manager to create its warehouse, racks and bins under Locations. You can still record captures with a location note.",
+      "button": "Start", "stores": "Stores", "otherSite": "Other site"
+    },
+    "sessions": {
+      "title": "Physical inventory sessions",
+      "sub": "Open sessions can be resumed on any device.",
+      "empty": "No sessions yet.",
+      "resume": "Resume",
+      "close": "Close session",
+      "closed": "Session closed.",
+      "prepare": "Prepare opening balance",
+      "prepared": "Opening-balance batch prepared with {n} lines; {skipped} captures left out (not identified or no ERP SKU).",
+      "batchReady": "Opening batch prepared",
+      "ledgerRule": "Official stock only changes when the opening-balance batch is approved by someone other than its preparer (Controls > Opening balances). Missing prices stay unvalued for Finance.", "openBatch": "Open in Opening balances"
+    },
+    "capture": {
+      "frozenNote": "This item was not confirmed by the server. Saving again sends exactly the same item (no duplicate). Changes you make now are not included; discard it only if you are sure it was not saved.",
+      "discardFrozen": "Discard and start a new item",
+      "retryPhotos": "Retry photos",
+      "photosKept": "{n} photos did not upload and are kept here.",
+      "title": "Capture",
+      "sub": "Scan or type a barcode, company SKU, OEM or aftermarket number, or search by manufacturer or description. Save and go to the next item.",
+      "codePlaceholder": "Scan or type a code, part number or description",
+      "codeType": "Code type",
+      "codeTypeAuto": "Code type: automatic",
+      "find": "Find",
+      "noMatch": "No approved material matches. Describe the item below and save it; it gets a temporary reference for review.",
+      "pickWithoutVariant": "This material (variant not known)",
+      "picked": "Selected material",
+      "clearPick": "Change",
+      "describe": "Not found? Describe the item",
+      "unidentifiedHint": "Price, purchase order and full identification are not needed to save. Unidentified items cannot be issued until they are identified and approved.",
+      "locationHint": "Location note (rack, shelf, bin)",
+      "photos": "Photos (item, label, location)",
+      "photoRole": "Photo shows",
+      "photoCount": "{n} photos attached",
+      "saveNext": "Save and next",
+      "saved": "Saved.",
+      "savedUnknown": "Saved with temporary reference {ref}.",
+      "next": "Ready for the next item.",
+      "photosFailed": "{n} photos could not be uploaded. Attach them again from Identification review.",
+      "sessionLocation": "Session location",
+      "listTitle": "Captures in this session",
+      "empty": "Nothing captured yet.",
+      "err": {
+        "quantity": "Enter a quantity of zero or more.",
+        "session": "Start or resume a session first."
+      }, "scan": "Scan", "scanCamera": "Scan with camera", "scanHint": "Hold the barcode or QR label inside the frame.", "cameraDenied": "Camera permission was refused. Allow camera access in the browser, or type or use a scanner.", "cameraFailed": "The camera could not be opened. Type the code or use a scanner.", "locationScanned": "Location {code} selected from its label.", "qtyLess": "Decrease quantity", "qtyMore": "Increase quantity", "takePhoto": "Take or add photo", "clearPhotos": "Remove photos"
+    },
+    "common": {
+      "when": "When",
+      "material": "Material",
+      "location": "Location",
+      "qty": "Quantity",
+      "uom": "Unit",
+      "condition": "Condition",
+      "ownership": "Ownership",
+      "status": "Status",
+      "photos": "Photos",
+      "captures": "captures",
+      "notes": "Notes",
+      "note": "Note",
+      "remarks": "Remarks",
+      "ref": "Reference",
+      "by": "Captured by",
+      "noCompanySku": "no company SKU"
+    },
+    "status": {
+      "identified": "Identified",
+      "pending_review": "Waiting for review",
+      "mapped": "Identified by review",
+      "rejected": "Rejected",
+      "all": "All",
+      "proposed": "Proposed",
+      "active": "Approved",
+      "obsolete": "Replaced",
+      "retired": "Retired"
+    },
+    "sessionStatus": {
+      "open": "Open",
+      "closed": "Closed",
+      "cancelled": "Cancelled"
+    },
+    "cond": {
+      "new": "New",
+      "used": "Used",
+      "refurbished": "Refurbished",
+      "repairable": "Repairable",
+      "damaged": "Damaged",
+      "scrap": "Scrap",
+      "unknown": "Unknown"
+    },
+    "own": {
+      "owned": "Company owned",
+      "consignment": "Consignment",
+      "supplier": "Supplier owned",
+      "customer": "Customer owned",
+      "unknown": "Unknown"
+    },
+    "cls": {
+      "genuine": "Genuine",
+      "oes": "OES",
+      "aftermarket": "Aftermarket",
+      "unknown": "Not verified",
+      "not_identified": "Not identified yet"
+    },
+    "codeType": {
+      "barcode": "Barcode",
+      "company_sku": "Company SKU",
+      "erp_sku": "ERP SKU",
+      "oem": "OEM part number",
+      "aftermarket": "Aftermarket part number",
+      "manufacturer": "Manufacturer",
+      "description": "Description",
+      "label": "Location label"
+    },
+    "photoRole": {
+      "item": "Item",
+      "label": "Label",
+      "location": "Location",
+      "packaging": "Packaging",
+      "damage": "Damage",
+      "other": "Other"
+    },
+    "purpose": {
+      "identification": "Identification photo",
+      "count_proof": "Count proof"
+    },
+    "ref": {
+      "description": "Description",
+      "manufacturer": "Manufacturer",
+      "brand": "Brand",
+      "oem": "OEM part number",
+      "aftermarket": "Aftermarket part number",
+      "company_sku": "Company SKU",
+      "erp_sku": "ERP SKU",
+      "scanned_code": "Scanned code",
+      "barcode": "Barcode",
+      "part_number": "Part number"
+    },
+    "field": {
+      "description": "Description",
+      "company_sku": "Company SKU",
+      "category": "Category",
+      "base_uom": "Unit of measure",
+      "manufacturer": "Manufacturer",
+      "brand": "Brand",
+      "variant_manufacturer": "Variant manufacturer",
+      "part_number": "Part number",
+      "part_classification": "Genuine, OES or aftermarket",
+      "country_of_manufacture": "Country of manufacture",
+      "evidence": "Evidence (one per line: invoice, catalogue page, manufacturer letter)"
+    },
+    "review": {
+      "title": "Identification review",
+      "sub": "Unidentified and proposed items. The person who counted an item cannot identify it.",
+      "searchPlaceholder": "Temporary reference, code or description",
+      "empty": "Nothing waiting for review.",
+      "dupCol": "Possible duplicates",
+      "capture": "Capture",
+      "entered": "Entered at the shelf",
+      "noPhotos": "No photos.",
+      "photoUnavailable": "This photo is not available.",
+      "duplicates": "{n} possible duplicates in the company",
+      "decision": "Decision",
+      "notDuplicate": "Why this is not a duplicate",
+      "done": "Saved.",
+      "mode": {
+        "map_existing": "Same as an approved material",
+        "create_new": "New material",
+        "reject": "Not a stock item"
+      },
+      "do": {
+        "map_existing": "Identify",
+        "create_new": "Create and identify",
+        "reject": "Reject"
+      }
+    },
+    "materials": {
+      "title": "Materials waiting for approval",
+      "sub": "A proposal from any store is checked against every record of the company. After approval it can be selected at every authorised location.",
+      "empty": "Nothing waiting.",
+      "variantsTitle": "Variants waiting for approval",
+      "evidenceN": "{n} evidence entries",
+      "addVariantTitle": "Add a variant",
+      "addVariantSub": "A manufacturer's version of an approved material. Stock and cost stay separate per variant.",
+      "proposeVariant": "Propose variant",
+      "variantProposed": "Variant proposed for approval.",
+      "linkTitle": "Link an ERP SKU",
+      "linkSub": "Map a country ERP item to the material or variant. Country ERP numbers are kept as they are.",
+      "erpSku": "ERP SKU (search)",
+      "link": "Link",
+      "linked": "ERP SKU linked."
+    },
+    "corr": {
+      "title": "Master-data corrections",
+      "sub": "Every change is a request with evidence, approved by a different person. Historical and financial records are never changed.",
+      "empty": "No correction requests.",
+      "noun": "requests",
+      "topic": "Topic",
+      "actionCol": "Change",
+      "reason": "Reason",
+      "field": "Field",
+      "before": "Current",
+      "after": "Proposed",
+      "history": "History",
+      "cancel": "Cancel my request",
+      "ownNote": "You raised this request, so someone else must decide it.",
+      "newTitle": "Propose a correction",
+      "newSub": "Find the material, then describe the change and give evidence.",
+      "refType": "Reference type",
+      "newValue": "New value",
+      "keep": "Material to keep",
+      "submit": "Submit for approval",
+      "submitted": "Correction submitted for approval.",
+      "action": {
+        "field_update": "Change a field",
+        "add_reference": "Add a reference",
+        "retire_reference": "Retire a reference",
+        "duplicate": "Mark as duplicate"
+      },
+      "status": {
+        "submitted": "Waiting",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "cancelled": "Cancelled",
+        "all": "All"
+      },
+      "event": {
+        "submitted": "Submitted",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "cancelled": "Cancelled",
+        "applied": "Applied"
+      }
+    },
+    "topic": {
+      "company_sku": "Company SKU",
+      "oem": "OEM number",
+      "aftermarket": "Aftermarket number",
+      "description": "Description",
+      "brand": "Brand",
+      "manufacturer": "Manufacturer",
+      "classification": "Genuine or aftermarket",
+      "uom": "Unit of measure",
+      "category": "Category",
+      "specs": "Specification",
+      "country_of_manufacture": "Country of manufacture",
+      "part_number": "Part number",
+      "duplicate": "Duplicate",
+      "reference": "Reference"
+    },
+    "search": {
+      "title": "Material search",
+      "sub": "One search across company SKUs, ERP SKUs, OEM and aftermarket numbers, barcodes, descriptions, manufacturers and validated compatibility.",
+      "placeholder": "Part number, SKU, barcode, manufacturer or description",
+      "noStock": "No stock you can see.",
+      "avail": "{a} available, {r} reserved, {it} in transit, {d} damaged, {q} quarantined",
+      "matchedOn": "matched on",
+      "erp": "ERP SKUs",
+      "refs": "References",
+      "historical": "historical",
+      "unassigned": "Stock not assigned to a variant",
+      "requestFrom": "Request transfer from {site} ({n} available)",
+      "transferTitle": "Request a stock transfer",
+      "sendRequest": "Send request",
+      "transferSent": "Transfer requested. The sending store decides it.",
+      "pickStore": "Choose your store in the site filter to request a transfer instead of buying again."
+    },
+    "dash": {
+      "ambiguous_erp_sku": "ERP SKU to choose",
+      "ownership_needs_decision": "Ownership to decide",
+      "captures": "Items collected",
+      "identified": "Identified",
+      "pending_review": "Waiting for review",
+      "missing_company_sku": "Missing company SKU",
+      "missing_erp_sku": "Missing ERP SKU",
+      "missing_oem": "Missing OEM number",
+      "missing_aftermarket": "Aftermarket without part number",
+      "duplicate_candidates": "Possible duplicates",
+      "pending_corrections": "Pending corrections",
+      "pending_materials": "Materials to approve",
+      "classification": "Genuine and aftermarket",
+      "condition": "Condition",
+      "approval": "Opening-balance approval",
+      "valuation": "Valuation completeness",
+      "byEmployee": "Progress by employee (identified / collected)",
+      "byLocation": "Progress by location",
+      "progressTitle": "Identification progress",
+      "progress": "{pct}% of collected items are identified.",
+      "noCaptures": "No items collected yet.",
+      "pendingN": "{n} waiting",
+      "section": "Section",
+      "name": "Name",
+      "value": "Value",
+      "extra": "Detail"
+    },
+    "batch": {
+      "not_prepared": "Not prepared",
+      "draft": "Draft",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled"
+    },
+    "val": {
+      "promoted": "In an opening batch",
+      "unvalued": "Unvalued (no price)",
+      "not_promoted": "Identified, not yet prepared"
+    },
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject"
+    },
+    "rules": {
+      "genuine": "Genuine and OES need evidence such as an invoice, catalogue or manufacturer confirmation. An OEM number printed on packaging is not proof.",
+      "reviewer": "Identification keeps the original quantity, location, photos and the counter's name.",
+      "corrections": "Corrections only change identification data. Stock, ledger, ERP records and costs are never edited from here."
+    },
+    "transfers": {"title": "Transfer requests", "sub": "Requests from other stores for stock you hold. The sending store approves or rejects; the requester can cancel.", "empty": "No transfer requests.", "done": "Saved.", "prev": "Previous", "next": "Next", "rule": "Approving a request does not move stock. Dispatch it through Stock flows > Transfer.", "status": {"requested": "Requested", "approved": "Approved", "rejected": "Rejected", "cancelled": "Cancelled", "dispatched": "Dispatched", "all": "All"}}
+  
   }
 }

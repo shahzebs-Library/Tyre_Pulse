@@ -54,3 +54,56 @@ export function conflictEvidence(conflict) {
 
 export const CONFLICT_STATUSES = ['open', 'investigating', 'resolved', 'dismissed']
 export const isOpenConflict = (c) => !c?.status || c.status === 'open' || c.status === 'investigating'
+
+// ---------------------------------------------------------------------------
+// Scrapped-but-active investigation (20261120114000). The server decides every
+// step; this only works out which step to OFFER so nobody is shown a button the
+// server will refuse. Mirrors inv_tyre_conflict_assign / _investigate /
+// _propose / _close and inv_tyre_investigator_roles().
+// ---------------------------------------------------------------------------
+
+/** MIRROR of public.inv_tyre_investigator_roles() - change both together. */
+export const TYRE_INVESTIGATOR_ROLES = ['Tire Planning Engineer', 'Tyre Engineer', 'Tyre/PMV Engineer', 'PMV Engineer']
+
+export const INVESTIGATION_STEPS = ['open', 'investigating', 'proposed', 'approved', 'rejected', 'closed']
+
+/** app_is_elevated() (Admin / Manager / Director) or the PMV Manager role. */
+export function canManageInvestigation({ role, isSuperAdmin } = {}) {
+  if (isSuperAdmin) return true
+  const r = String(role || '').trim().toLowerCase()
+  // get_my_role() = 'PMV Manager' is compared exactly on the server.
+  return r === 'admin' || r === 'manager' || r === 'director' || role === 'PMV Manager'
+}
+
+/**
+ * caseRow: one v_inv_tyre_conflict_cases row. Returns the actions to offer.
+ * - assign: manager, case open / investigating / rejected
+ * - investigate + propose: the assigned investigator only, investigating / rejected
+ *   (propose also needs at least one recorded finding)
+ * - close: manager, only once the correction is approved
+ */
+export function investigationActions(caseRow, who = {}) {
+  const none = { assign: false, investigate: false, propose: false, close: false, waitingApproval: false }
+  if (!caseRow || caseRow.status !== 'open') return none
+  const step = caseRow.investigation_status || 'open'
+  if (step === 'closed') return none
+  const manager = canManageInvestigation(who)
+  const mine = caseRow.i_am_investigator === true
+  const working = step === 'investigating' || step === 'rejected'
+  // inv_tyre_conflict_propose needs a note of kind 'finding' (the assign note does not count).
+  const notes = Array.isArray(caseRow.investigation_notes)
+    ? caseRow.investigation_notes.filter((n) => n && n.kind === 'finding').length : 0
+  return {
+    assign: manager && (step === 'open' || working),
+    investigate: mine && working,
+    propose: mine && working && notes > 0,
+    close: manager && step === 'approved',
+    waitingApproval: step === 'proposed',
+  }
+}
+
+/** The people who may be named investigator (same company comes from RLS). */
+export function investigatorCandidates(people = []) {
+  const allowed = new Set(TYRE_INVESTIGATOR_ROLES)
+  return people.filter((p) => allowed.has(p?.role))
+}

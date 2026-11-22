@@ -35,6 +35,12 @@ on:
 permissions:
   contents: read
 
+# One release at a time: the preflight picks "highest uploaded build + 1", so two
+# overlapping runs would choose the same number. Queue, never cancel, a second run.
+concurrency:
+  group: flutter-release-ios
+  cancel-in-progress: false
+
 defaults:
   run:
     working-directory: tyre_pulse_flutter
@@ -45,7 +51,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check the Apple secrets exist
         env:
@@ -62,6 +68,28 @@ jobs:
         run: |
           grep -q "PRODUCT_BUNDLE_IDENTIFIER = com.shahzebrahman.tyrepulseinspector;" ios/Runner.xcodeproj/project.pbxproj \
             || { echo "::error::ios bundle id is not com.shahzebrahman.tyrepulseinspector (the App Store Connect record)."; exit 1; }
+
+      - name: Write the App Store Connect API key
+        env:
+          KEYID: ${{ secrets.APPSTORE_KEY_ID }}
+          P8: ${{ secrets.APPSTORE_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s\n' "$P8" > "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8"
+          grep -q "BEGIN PRIVATE KEY" "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8" || { echo "::error::APPSTORE_KEY_P8 does not look like a .p8 key. Paste the whole file text including the BEGIN and END lines."; exit 1; }
+
+      - name: Preflight - check the API key and pick the next build number
+        id: asc
+        env:
+          ASC_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          BUNDLE_ID: com.shahzebrahman.tyrepulseinspector
+          MIN_BUILD: ${{ github.run_number }}
+        run: |
+          # The runner's Homebrew Python is externally managed (PEP 668): use a private venv.
+          python3 -m venv "$RUNNER_TEMP/ascvenv"
+          "$RUNNER_TEMP/ascvenv/bin/pip" install --quiet --disable-pip-version-check "pyjwt[crypto]==2.9.0"
+          ASC_KEY_PATH="$RUNNER_TEMP/keys/AuthKey_${ASC_KEY_ID}.p8" "$RUNNER_TEMP/ascvenv/bin/python" ios/ci/asc_preflight.py
 
       - uses: subosito/flutter-action@v2
         with:
@@ -93,19 +121,11 @@ jobs:
             exit 1
           fi
 
-      - name: Write the App Store Connect API key
-        env:
-          KEYID: ${{ secrets.APPSTORE_KEY_ID }}
-          P8: ${{ secrets.APPSTORE_KEY_P8 }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/keys"
-          printf '%s\n' "$P8" > "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8"
-          grep -q "BEGIN PRIVATE KEY" "$RUNNER_TEMP/keys/AuthKey_${KEYID}.p8" || { echo "::error::APPSTORE_KEY_P8 does not look like a .p8 key. Paste the whole file text including the BEGIN and END lines."; exit 1; }
-
       - name: Build the iOS app (no signing yet)
         # Same Supabase and Sentry settings the Android release uses.
-        # Build number = the workflow run number, so each upload is higher
-        # than the last (Apple rejects a repeated build number).
+        # Build number = one above the highest build Apple already holds for this
+        # bundle id (preflight step), so a build already installed on testers'
+        # phones never blocks the upload as a repeated or lower number.
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://jhssdmeruxtrlqnwfksc.supabase.co' }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY_PROD || 'sb_publishable_UDEH7EeHA9S5-NNu4T-9Ug_R60IinrW' }}
@@ -119,7 +139,7 @@ jobs:
           fi
           flutter build ios --release --no-codesign \
             --build-name "$VERSION_NAME" \
-            --build-number "${{ github.run_number }}" \
+            --build-number "${{ steps.asc.outputs.build_number }}" \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=APP_ENV=production \

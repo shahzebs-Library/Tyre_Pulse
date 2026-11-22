@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/config/app_config.dart';
+import 'package:tyre_pulse/app/inventory/physical_outbox_sync_binding.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/push/push_binding.dart';
 import 'package:tyre_pulse/app/router/app_router.dart';
@@ -433,7 +434,9 @@ class TyrePulseApp extends ConsumerWidget {
         child: TelemetryUserBinding(
           child: PushBinding(
             child: WorkforceSyncBinding(
-              child: child ?? const SizedBox.shrink(),
+              child: PhysicalOutboxSyncBinding(
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
         ),

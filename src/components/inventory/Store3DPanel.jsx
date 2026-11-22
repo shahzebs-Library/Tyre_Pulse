@@ -33,6 +33,19 @@ function useReducedMotion() {
   return r
 }
 
+/** 'light' when the app runs the light theme (html.light), kept in sync live. */
+function useAppTheme() {
+  const read = () => (typeof document !== 'undefined' && document.documentElement.classList.contains('light') ? 'light' : 'dark')
+  const [theme, setTheme] = useState(read)
+  useEffect(() => {
+    if (typeof MutationObserver === 'undefined') return undefined
+    const obs = new MutationObserver(() => setTheme(read()))
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => obs.disconnect()
+  }, [])
+  return theme
+}
+
 function webglAvailable() {
   try {
     const c = document.createElement('canvas')
@@ -43,6 +56,7 @@ function webglAvailable() {
 export default function Store3DPanel({ scope, initialSite = '' }) {
   const { t } = useLanguage()
   const reducedMotion = useReducedMotion()
+  const theme = useAppTheme()
   const [stores, setStores] = useState([])
   const [site, setSite] = useState(() => initialSite || (scope?.site && scope.site !== 'all' ? scope.site : ''))
   const [state, setState] = useState({ loading: false, error: '', data: null, at: null })
@@ -133,7 +147,7 @@ export default function Store3DPanel({ scope, initialSite = '' }) {
             {gl ? (
               <Suspense fallback={<div className="cc-skel" style={{ height: '100%' }} aria-busy="true" />}>
                 <Store3DCanvas layout={layout} selectedId={picked?.id || null} pulses={pulses} reducedMotion={reducedMotion}
-                  onPick={setPicked} label={t('inventory.store3d.canvasLabel', { site })} />
+                  onPick={setPicked} label={t('inventory.store3d.canvasLabel', { site })} theme={theme} />
               </Suspense>
             ) : <Note tone="warn">{t('inventory.store3d.noWebgl')}</Note>}
           </div>

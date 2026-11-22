@@ -14,6 +14,12 @@ import { OrbitControls, Html, Edges } from '@react-three/drei'
 export const BIN_COLORS = { empty: '#71717a', stock: '#22c55e', low: '#f59e0b', counted: '#38bdf8' }
 const PULSE_MS = 4000
 
+/** Scene colours per app theme. Bin colours stay the same in both. */
+export const SCENE = {
+  dark: { bg: '#0b0b0c', grid1: '#27272a', grid2: '#1c1c1f', floor: '#18181b', door: '#FFC629', doorEdge: '#FFC629', rack: '#71717a', ambient: 0.6 },
+  light: { bg: '#eef0f3', grid1: '#c4c9d1', grid2: '#dde1e7', floor: '#e5e7eb', door: '#FFC629', doorEdge: '#a16207', rack: '#6b7280', ambient: 0.85 },
+}
+
 function Bin({ bin, rack, selected, pulseAt, reducedMotion, onPick }) {
   const ref = useRef()
   useFrame(() => {
@@ -35,13 +41,13 @@ function Bin({ bin, rack, selected, pulseAt, reducedMotion, onPick }) {
   )
 }
 
-function Rack({ rack, selectedId, pulses, reducedMotion, onPick }) {
+function Rack({ rack, selectedId, pulses, reducedMotion, onPick, scene }) {
   return (
     <group position={[rack.x, rack.height / 2 + 0.02, rack.z]} rotation={[0, rack.rotation || 0, 0]}>
       <mesh>
         <boxGeometry args={[rack.length, rack.height, rack.depth]} />
         <meshStandardMaterial color="#9ca3af" transparent opacity={0.06} depthWrite={false} />
-        <Edges color="#71717a" />
+        <Edges color={scene.rack} />
       </mesh>
       {rack.bins.map((b) => (
         <Bin key={b.id} bin={b} rack={rack} selected={b.id === selectedId} pulseAt={pulses.get(b.id)} reducedMotion={reducedMotion} onPick={onPick} />
@@ -50,7 +56,7 @@ function Rack({ rack, selectedId, pulses, reducedMotion, onPick }) {
   )
 }
 
-function Zone({ zone, selectedId, pulses, reducedMotion, onPick }) {
+function Zone({ zone, selectedId, pulses, reducedMotion, onPick, scene }) {
   const shell = zone.kind === 'container' ? '#b45309' : '#64748b'
   return (
     <group position={[zone.x, 0, zone.z]}>
@@ -61,18 +67,18 @@ function Zone({ zone, selectedId, pulses, reducedMotion, onPick }) {
       </mesh>
       <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[zone.length, zone.width]} />
-        <meshStandardMaterial color="#18181b" />
+        <meshStandardMaterial color={scene.floor} />
       </mesh>
       {zone.kind === 'container' && (
         // Door frame at the +x end (the aisle runs between the two wall racks).
         <mesh position={[zone.length / 2, zone.height / 2, 0]}>
           <boxGeometry args={[0.04, zone.height * 0.95, zone.width * 0.95]} />
-          <meshStandardMaterial color="#FFC629" transparent opacity={0.25} />
-          <Edges color="#FFC629" />
+          <meshStandardMaterial color={scene.door} transparent opacity={0.25} />
+          <Edges color={scene.doorEdge} />
         </mesh>
       )}
       {zone.racks.map((r) => (
-        <Rack key={r.id} rack={r} selectedId={selectedId} pulses={pulses} reducedMotion={reducedMotion} onPick={onPick} />
+        <Rack key={r.id} rack={r} selectedId={selectedId} pulses={pulses} reducedMotion={reducedMotion} onPick={onPick} scene={scene} />
       ))}
       <Html position={[-zone.length / 2, zone.height + 0.35, 0]} center={false} distanceFactor={14} zIndexRange={[10, 0]}>
         <div dir="auto" className="inv-3d-tag">{zone.code}{zone.name ? ` · ${zone.name}` : ''}</div>
@@ -81,17 +87,18 @@ function Zone({ zone, selectedId, pulses, reducedMotion, onPick }) {
   )
 }
 
-export default function Store3DCanvas({ layout, selectedId, pulses, reducedMotion, onPick, label }) {
+export default function Store3DCanvas({ layout, selectedId, pulses, reducedMotion, onPick, label, theme = 'dark' }) {
+  const scene = SCENE[theme] || SCENE.dark
   const dist = useMemo(() => Math.max(8, layout.span * 0.75 + 5), [layout.span])
   return (
     <Canvas camera={{ position: [dist * 0.35, dist * 0.6, dist * 0.8], fov: 45 }} dpr={[1, 2]} aria-label={label}
       onPointerMissed={() => onPick(null)} frameloop={reducedMotion ? 'demand' : 'always'}>
-      <color attach="background" args={['#0b0b0c']} />
-      <ambientLight intensity={0.6} />
+      <color attach="background" args={[scene.bg]} />
+      <ambientLight intensity={scene.ambient} />
       <directionalLight position={[10, 18, 8]} intensity={0.9} />
-      <gridHelper args={[Math.max(40, layout.span * 2 + 20), 40, '#27272a', '#1c1c1f']} />
+      <gridHelper key={theme} args={[Math.max(40, layout.span * 2 + 20), 40, scene.grid1, scene.grid2]} />
       {layout.zones.map((z) => (
-        <Zone key={z.id} zone={z} selectedId={selectedId} pulses={pulses} reducedMotion={reducedMotion} onPick={onPick} />
+        <Zone key={z.id} zone={z} selectedId={selectedId} pulses={pulses} reducedMotion={reducedMotion} onPick={onPick} scene={scene} />
       ))}
       <OrbitControls makeDefault enableDamping={!reducedMotion} maxPolarAngle={Math.PI / 2.05} />
     </Canvas>

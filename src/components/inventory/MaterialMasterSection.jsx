@@ -56,8 +56,8 @@ function Chips({ r, t }) {
   const c = classifyMaterial(r)
   return (
     <span className="inv-mm-chips">
-      {c.genuine && <span className="inv-chip inv-chip-accent">{t('inventory.mm.filter.genuine')}</span>}
-      {c.aftermarket && <span className="inv-chip inv-chip-accent">{t('inventory.mm.filter.aftermarket')}</span>}
+      {c.genuine && <span className="inv-chip inv-chip-accent inv-chip-oem">{t('inventory.mm.filter.genuine')}</span>}
+      {c.aftermarket && <span className="inv-chip inv-chip-accent inv-chip-am">{t('inventory.mm.filter.aftermarket')}</span>}
       {!r.browse && c.unverified && <span className="inv-chip">{t('inventory.mm.filter.unverified')}</span>}
       {r.category && <span className="inv-chip">{r.category}</span>}
     </span>

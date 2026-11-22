@@ -202,3 +202,88 @@ button.inv-kpi-tile:hover { border-color: var(--inv-accent); }
 .inv-3d-detail { font-size: 12.5px; }
 .inv-3d-detail .inv-pi-list li { font-size: 12.5px; }
 .inv-pmv .cc-btn { color: var(--inv-accent-text); border-color: var(--inv-accent); }
+
+/* ── Light version ("Central Material Master" mockup) ──────────────────────
+   Every rule below is under html.light, so the dark output is unchanged.
+   White / very light grey content, the left menu stays near-black, yellow is
+   only ever a FILL behind dark ink (never yellow text on white). Text
+   contrast (WCAG AA 4.5:1): #161616 on #ffc629 13.9:1, #5c4000 on #fff3c4
+   9.6:1, #166534 on #e8f7ee 6.9:1, #92400e on #fef3c7 6.4:1, #1e40af on
+   #e6efff 7.9:1, #475467 on #f7f7f8 7.1:1, #d4d4d8 on #111111 13.5:1. */
+html.light .inv-pmv {
+  --inv-accent-text: #8a5a00;
+  --inv-accent-tint: #fff3c4;
+  --cc-card: #ffffff; --cc-card-flat: #ffffff; --cc-border: #e5e7eb; --cc-inner: #ffffff; --cc-inner-border: #e5e7eb;
+  --cc-ink: #111827; --cc-ink-2: #475467; --cc-ink-3: #5b6474;
+  --cc-shadow: none;
+  background: #f7f7f8;
+  border-radius: 14px;
+}
+html.light .inv-pmv .cc-card, html.light .inv-pmv .inv-kpi-tile, html.light .inv-pmv .inv-mm-card,
+html.light .inv-pmv .inv-mm-head, html.light .inv-pmv .inv-bar { box-shadow: none; border-color: #e5e7eb; background: #ffffff; }
+html.light .inv-pmv .inv-mm-input, html.light .inv-pmv .inv-bar-search { background: #ffffff; border-color: #d0d5dd; }
+html.light .inv-pmv .cc-select, html.light .inv-pmv .inv-input { background-color: #ffffff; border-color: #d0d5dd; color: #111827; }
+
+/* Brand: dark ink with a yellow mark behind TYRE PULSE (fill, not text). */
+html.light .inv-pmv .inv-brand { color: #111827; }
+html.light .inv-pmv .inv-brand-mark { color: #161616; background: #ffc629; border-radius: 6px; padding: 2px 6px; margin-inline-end: 6px; }
+html.light .inv-pmv .inv-brand-dot { display: none; }
+html.light .inv-pmv .inv-bell { background: #ffffff; border-color: #d0d5dd; color: #344054; }
+html.light .inv-pmv .inv-bell:hover { color: #111827; border-color: #ffc629; }
+html.light .inv-pmv .inv-user { background: #ffffff; border-color: #d0d5dd; }
+
+/* Top tabs: dark ink with a yellow underline; the active icon goes dark. */
+html.light .inv-pmv .inv-toptab[aria-selected="true"] svg { color: #111827; }
+html.light .inv-pmv .inv-toptab[aria-selected="true"] { border-bottom-color: #ffc629; }
+
+/* Left menu stays dark; the active item is a yellow pill with dark ink. */
+html.light .inv-pmv .inv-side { background: #111111; border-color: #111111; }
+html.light .inv-pmv .inv-side-head { color: #a1a1aa; }
+html.light .inv-pmv .inv-side .inv-side-link { color: #d4d4d8; }
+html.light .inv-pmv .inv-side .inv-side-link:hover { background: #1f1f1f; color: #ffffff; }
+html.light .inv-pmv .inv-side .inv-side-link[aria-current="page"] { background: #ffc629; color: #161616; border-inline-start-color: #ffc629; }
+@media (max-width: 960px) { html.light .inv-pmv .inv-side .inv-side-link[aria-current="page"] { border-bottom-color: #ffc629; } }
+
+/* KPI tiles: yellow-tinted icon tile with a dark icon; the ring bar stays yellow. */
+html.light .inv-pmv .inv-kpi-tile-icon { background: #fff3c4; color: #161616; }
+html.light .inv-pmv .inv-ring-track { stroke: #eaecf0; }
+
+/* Buttons. */
+html.light .inv-pmv .inv-btn-outline { background: #ffffff; border-color: #d0d5dd; color: #111827; }
+html.light .inv-pmv .inv-btn-review { background: #ffffff; border: 1.5px solid #e0a800; color: #111827; }
+html.light .inv-pmv .inv-btn-review:hover { background: #fff3c4; }
+html.light .inv-pmv .cc-btn { color: #111827; border-color: #e0a800; background: #ffffff; }
+html.light .inv-pmv .cc-btn-ghost { color: #111827; }
+html.light .inv-pmv .inv-filter-chip { background: #ffffff; border-color: #d0d5dd; color: #344054; }
+html.light .inv-pmv .inv-filter-chip[aria-pressed="true"] { background: #ffc629; border-color: #ffc629; color: #161616; }
+
+/* Chips: Company SKU yellow-tinted highlight, Genuine OEM yellow tint, Aftermarket light blue. */
+html.light .inv-pmv .inv-mm-sku { color: #5c4000; }
+html.light .inv-pmv .inv-mm-sku.inv-mono { align-self: flex-start; background: #fff3c4; border: 1px solid #f5d36b; border-radius: 6px; padding: 1px 6px; }
+html.light .inv-pmv .inv-chip { border-color: #d0d5dd; color: #344054; background: #ffffff; }
+html.light .inv-pmv .inv-chip-accent { background: #fff3c4; border-color: #f5d36b; color: #5c4000; }
+html.light .inv-pmv .inv-chip-am { background: #e6efff; border-color: #b9cffb; color: #1e40af; }
+
+/* Status pills in AA colours on their tints (the kit's light green / amber are below 4.5:1). */
+html.light .inv-pmv .cc-pill.good, html.light .inv-panel .cc-pill.good { color: #166534; background: #e8f7ee; }
+html.light .inv-pmv .cc-pill.warn, html.light .inv-panel .cc-pill.warn { color: #92400e; background: #fef3c7; }
+html.light .inv-pmv .cc-pill.info { color: #1e40af; background: #e6efff; }
+html.light .inv-pmv .inv-verified { color: #166534; }
+
+/* Tables: light header, pale yellow totals row. */
+html.light .inv-pmv .cc-et thead th { background: #f9fafb; color: #475467; }
+html.light .inv-pmv .cc-et tfoot th { background: #fff8db; color: #111827; border-top-color: #f5d36b; }
+
+/* Corrections rows. */
+html.light .inv-pmv .inv-corr-icon { background: #fef3c7; color: #92400e; }
+
+/* Templates (bulk setup dialog), the dialog primary button and the 3D panel. */
+html.light .inv-panel .inv-tpl, html.light .inv-pmv .inv-tpl { background: #ffffff; border-color: #d0d5dd; color: #111827; }
+html.light .inv-panel .inv-tpl[aria-pressed="true"], html.light .inv-pmv .inv-tpl[aria-pressed="true"] { background: #fff3c4; border-color: #e0a800; }
+html.light .inv-panel .inv-tpl small { color: #475467; }
+html.light .inv-panel .cc-btn-primary { background: #ffc629; border-color: #ffc629; color: #161616; }
+html.light .inv-panel .cc-btn-primary:hover { background: #f5b700; }
+html.light .inv-pmv .inv-3d-stage { background: #eef0f3; border-color: #d0d5dd; }
+html.light .inv-pmv .inv-3d-tag { background: rgba(255, 255, 255, 0.94); color: #111827; border: 1px solid #f5d36b; }
+html.light .inv-pmv :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select) { border-color: #d0d5dd; }
+html.light .inv-pmv .inv-bar-search input, html.light .inv-pmv .inv-mm-input input { border: 0; }

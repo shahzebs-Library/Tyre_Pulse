@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as settingsApi from '../lib/api/settings'
+import { decodeConfigRows } from '../lib/configurationStore'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
@@ -318,12 +319,7 @@ export default function Settings() {
     try {
       const { data, error } = await settingsApi.listSettings()
       if (error) throw error
-      const map = {}
-      for (const { key, value } of data ?? []) {
-        if (typeof value === 'string') {
-          try { map[key] = JSON.parse(value) } catch { map[key] = value }
-        } else map[key] = value
-      }
+      const map = decodeConfigRows(data)
       setAppSettings({ cost_per_tyre: '', company_name: '', currency: '', ...map })
       setAppLoadFailed(false)
       setAppMsg(data?.length ? '' : 'Organisation settings have not been configured. Enter verified values before saving.')
@@ -451,8 +447,8 @@ export default function Settings() {
     try {
       const result = await settingsApi.saveAppSettings([
         { key: 'cost_per_tyre', value: String(appSettings.cost_per_tyre) },
-        { key: 'company_name', value: JSON.stringify(appSettings.company_name) },
-        { key: 'currency', value: JSON.stringify(appSettings.currency) },
+        { key: 'company_name', value: String(appSettings.company_name).trim() },
+        { key: 'currency', value: String(appSettings.currency) },
       ])
       if (result.error) throw result.error
       await refreshSettings()

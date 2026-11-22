@@ -85,12 +85,13 @@ const chartBase = (legend) => ({
   },
 })
 
+// A <label> wrapper ties the visible caption to its control for screen readers.
 function Field({ label, children }) {
   return (
-    <div className="flex flex-col gap-1">
+    <label className="flex flex-col gap-1">
       <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{label}</span>
       {children}
-    </div>
+    </label>
   )
 }
 function Sel({ value, onChange, options }) {
@@ -510,6 +511,7 @@ function PresentationStudioInner({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">Saved reports</span>
           <select
+            aria-label="Saved reports"
             value=""
             onChange={(e) => { loadReport(e.target.value); e.target.value = '' }}
             className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2.5 py-1.5 text-sm text-[var(--text-primary)]"
@@ -571,7 +573,7 @@ function PresentationStudioInner({
               className="inline-flex items-center gap-2 text-sm text-[var(--text-dim)] select-none"
               title="A trend line needs an ordered axis such as months. This view is ranked by value, so a line across it would only show the ranking."
             >
-              <input type="checkbox" disabled checked={false} readOnly className="accent-[var(--accent)] opacity-40" /> Trend line (needs a time axis)
+              <input type="checkbox" disabled checked={false} readOnly aria-label="Trend line (needs a time axis)" className="accent-[var(--accent)] opacity-40" /> Trend line (needs a time axis)
             </span>
           )}
           {isSplit && (st.type === 'bar' || st.type === 'hbar') && (

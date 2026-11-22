@@ -4,6 +4,34 @@ export function listConfiguration(client, namespace) {
   return client.rpc('get_organisation_configuration', { p_namespace: namespace, p_key: null })
 }
 
+// Settings values are stored as text. Older saves wrapped plain strings in JSON
+// quotes, sometimes twice ("\"SAR\""), so the UI showed "SAR" with the quotes.
+// Peel every JSON layer until the value is no longer an encoded string.
+export function decodeConfigValue(value) {
+  let out = value
+  for (let i = 0; i < 4 && typeof out === 'string'; i += 1) {
+    const t = out.trim()
+    if (!t) return t
+    let next
+    try { next = JSON.parse(t) } catch { return out }
+    if (next === out) return out
+    out = next
+  }
+  return out
+}
+
+// Keys that are always text, even when the value looks like a number.
+const TEXT_KEYS = new Set(['company_name', 'currency'])
+
+export function decodeConfigRows(rows) {
+  const map = {}
+  for (const { key, value } of rows ?? []) {
+    const v = decodeConfigValue(value)
+    map[key] = TEXT_KEYS.has(key) && v != null ? String(v) : v
+  }
+  return map
+}
+
 export async function getConfiguration(client, namespace, key) {
   const result = await client.rpc('get_organisation_configuration', { p_namespace: namespace, p_key: key })
   return { ...result, data: result.error ? null : (result.data?.[0] ?? null) }

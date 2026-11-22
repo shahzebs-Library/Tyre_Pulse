@@ -277,7 +277,7 @@ export default function BoardOverview() {
         // The window stays unbounded deliberately; narrowing it would change
         // what the executive KPIs mean, which is the owner's call, not a
         // performance fix.
-        listWorkOrdersForPage({ countries, lean: true }).catch(() => null),
+        listWorkOrdersForPage({ countries, lean: true, openOnly: true }).catch(() => null),
         listStockRecords({ countries }).catch(() => null),
       ])
       if (stale()) return
@@ -318,7 +318,7 @@ export default function BoardOverview() {
     return {
       rows: { tyres, inspections, accidents, workOrders },
       kpis: (() => {
-        const kp = buildBoardKpis({ tyres, inspections, actions: raw.actions, fleetSize: raw.fleetSize, accidents, workOrders, stock: raw.stock, now })
+        const kp = buildBoardKpis({ tyres, inspections, actions: raw.actions, fleetSize: raw.fleetSize, accidents, workOrders, stock: raw.stock, now, workOrdersKnown: !raw.workOrdersFailed })
         // An unread source is unknown, not zero.
         if (raw.workOrdersFailed) { kp.workOrdersOpen = null; kp.workOrdersOverdue = null }
         if (raw.stockFailed) { kp.stockItems = null; kp.lowStock = null }
@@ -360,6 +360,7 @@ export default function BoardOverview() {
         fleetSize: 0,
         accidents: accBy[i].rows,
         workOrders: woBy[i].rows,
+        workOrdersKnown: !raw.workOrdersFailed,
         stock: [],
         now,
       }),

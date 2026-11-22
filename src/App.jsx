@@ -13,7 +13,8 @@ import ProtectedRoute, { RoleRoute, ModuleRoute, RouteLoading, ModuleStatusGate 
 import { useWorkOrderAccess } from './hooks/useWorkOrderAccess'
 import { TECHNICIAN_ROLES } from './lib/workOrderAccess'
 import { useAuth } from './contexts/AuthContext'
-import Layout from './components/Layout'
+// The app frame loads after sign-in, not on the sign-in page (outer Suspense covers it).
+const Layout = lazy(() => import('./components/Layout'))
 import { isSystemConfigLoaded, shouldUseNewShell, NEW_SHELL_KEY } from './lib/api/systemConfig'
 // The pre-rewrite shell, kept as an instant rollback behind the `new_shell`
 // flag. LAZY on purpose: it is dead weight on the ~99% of loads that never
@@ -29,7 +30,7 @@ import { useFeatureGate } from './hooks/useFeatureFlags'
 // Console (completely isolated auth context)
 import { ConsoleAuthProvider, useConsoleAuth } from './console/ConsoleAuthContext'
 import { IS_CONSOLE_SURFACE } from './lib/supabase'
-import ConsoleLayout from './console/components/ConsoleLayout'
+const ConsoleLayout = lazy(() => import('./console/components/ConsoleLayout'))
 import ConsoleAuthBridge from './console/ConsoleAuthBridge'
 // The single "Executive" menu entry lands on Executive Report for those the
 // executive_report module admits, otherwise on Executive Analytics. Access is
@@ -987,7 +988,9 @@ export default function App() {
           <ConsoleSurfaceGate>
             <ConsoleAuthProvider>
               <ConsoleGuard>
-                <ConsoleLayout />
+                <Suspense fallback={<LoadingSpinner />}>
+                  <ConsoleLayout />
+                </Suspense>
               </ConsoleGuard>
             </ConsoleAuthProvider>
           </ConsoleSurfaceGate>

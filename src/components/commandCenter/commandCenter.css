@@ -109,9 +109,11 @@ html.light .cc-hero-img::after { background: linear-gradient(90deg, var(--cc-her
 button.cc-kpi { text-align: start; font: inherit; color: inherit; }
 .cc-kpi-icon { width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center; }
 .cc-kpi-body { min-width: 0; flex: 1; }
+/* Keep the trend label clear of the figure: the body reserves its corner. */
+.cc-kpi:has(.cc-kpi-trend) .cc-kpi-body { padding-top: 12px; }
 .cc-kpi-val { font-size: 24px; font-weight: 700; line-height: 1; color: var(--cc-ink); }
 .cc-kpi-label { font-size: 12px; color: var(--cc-ink-2); margin-top: 5px; line-height: 1.25; }
-.cc-kpi-trend { position: absolute; right: 12px; top: 14px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.cc-kpi-trend { position: absolute; inset-inline-end: 10px; top: 8px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
 
 /* Main grid */
 .cc-grid {

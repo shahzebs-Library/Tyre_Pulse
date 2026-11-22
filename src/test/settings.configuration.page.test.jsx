@@ -93,8 +93,9 @@ describe('Settings configuration persistence', () => {
       p_namespace: 'settings',
       p_values: [
         { key: 'cost_per_tyre', value: '1500' },
-        { key: 'company_name', value: '"Verified Fleet"' },
-        { key: 'currency', value: '"AED"' },
+        // Saved as plain text: JSON-quoting here is what put "SAR" on screen.
+        { key: 'company_name', value: 'Verified Fleet' },
+        { key: 'currency', value: 'AED' },
       ],
     }]])
     expect(h.refresh).toHaveBeenCalledTimes(1)

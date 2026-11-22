@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, useLayoutEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { listConfiguration, setConfigurationScope } from '../lib/configurationStore'
+import { listConfiguration, setConfigurationScope, decodeConfigRows } from '../lib/configurationStore'
 import { useAuth } from './AuthContext'
 import { setReportPalette } from '../lib/reportColors'
 import { loadSystemConfig, configBool } from '../lib/api/systemConfig'
@@ -283,10 +283,7 @@ export function SettingsProvider({ children }) {
       setConfiguration({ identity: configurationIdentity, values: EMPTY_SETTINGS, status: 'error' })
       throw error
     }
-    const map = {}
-    ;(data ?? []).forEach(({ key, value }) => {
-      try { map[key] = JSON.parse(value) } catch { map[key] = value }
-    })
+    const map = decodeConfigRows(data)
     setConfiguration({ identity: configurationIdentity, values: { ...EMPTY_SETTINGS, ...map }, status: data?.length ? 'ready' : 'unconfigured' })
   }, [configurationIdentity])
 

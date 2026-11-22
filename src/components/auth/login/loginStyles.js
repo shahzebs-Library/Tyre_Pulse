@@ -105,6 +105,7 @@ html.light .tpl-shell {
 .tpl-card > *:nth-child(n+4) { animation-delay: 180ms; }
 .tpl-card-top { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-bottom: 6px; }
 .tpl-theme { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border-radius: 999px; color: var(--tpl-dim); }
+.tpl-theme > button { width: 44px; height: 44px; border-radius: 999px; }
 .tpl-welcome { margin: 0; font-family: 'Archivo', 'Inter', system-ui, sans-serif; font-size: 30px; font-weight: 800; letter-spacing: -0.03em; color: var(--tpl-text); }
 .tpl-welcome-sub { margin: 8px 0 28px; font-size: 14px; line-height: 1.55; color: var(--tpl-dim); }
 

@@ -113,7 +113,10 @@ function updatedRow(result) {
  * raw Supabase `{ data, error }` so it drops straight into `fetchAllPages`.
  * @param {{country?:string, from:number, to:number, openedFrom?:string, openedTo?:string}} opts
  */
-export function listWorkOrdersPage({ country, countries, from, to, openedFrom, openedTo, lean = false } = {}) {
+// Raw status spellings that always mean closed (mirror of workOrderStatus.js).
+const CLOSED_STATUS_TOKENS = ['closed', 'completed', 'complete', 'done', 'finished', 'cancelled', 'canceled', 'void', 'voided']
+
+export function listWorkOrdersPage({ country, countries, from, to, openedFrom, openedTo, lean = false, openOnly = false } = {}) {
   const list = countryList(countries)
   // `id` tiebreak on EVERY path (single country, scope and All): `opened_at` is
   // not unique and fetchAllPages reads pages CONCURRENTLY, so without a total
@@ -143,6 +146,14 @@ export function listWorkOrdersPage({ country, countries, from, to, openedFrom, o
   // Bound the window SERVER-side. The page filtered by date client-side, which
   // meant every visit still fetched all 88,773 rows to then show one month of
   // them. The (organisation_id, country, opened_at) index answers this directly.
+  // openOnly: skip rows whose stored status is plainly closed (Closed /
+  // Completed / Cancelled and their spellings). Over 99.9% of job cards are
+  // closed, so a caller that only counts open ones reads ~50 rows instead of
+  // ~97,000. Callers still re-check every row with isClosedWoStatus, so a
+  // spelling this list misses is merely downloaded, never miscounted.
+  if (openOnly) {
+    q = q.or(`status.is.null,and(${CLOSED_STATUS_TOKENS.map((t) => `status.not.ilike.${t}`).join(',')})`)
+  }
   if (openedFrom) q = q.gte('opened_at', openedFrom)
   if (openedTo) q = q.lte('opened_at', `${openedTo}T23:59:59.999Z`)
   return q
@@ -164,9 +175,9 @@ export function listWorkOrdersPage({ country, countries, from, to, openedFrom, o
  * @param {{country?:string, max?:number, openedFrom?:string, openedTo?:string}} [opts]
  * @returns {Promise<any[]>}
  */
-export async function listWorkOrdersForPage({ country, countries, max = 200000, openedFrom, openedTo, lean = false } = {}) {
+export async function listWorkOrdersForPage({ country, countries, max = 200000, openedFrom, openedTo, lean = false, openOnly = false } = {}) {
   const { data, error } = await fetchAllPages(
-    (from, to) => listWorkOrdersPage({ country, countries, from, to, openedFrom, openedTo, lean }),
+    (from, to) => listWorkOrdersPage({ country, countries, from, to, openedFrom, openedTo, lean, openOnly }),
     { max },
   )
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)

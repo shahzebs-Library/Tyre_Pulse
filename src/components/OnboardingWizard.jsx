@@ -213,6 +213,14 @@ export default function OnboardingWizard() {
     if (navigateTo) navigate(navigateTo)
   }, [user, navigate])
 
+  // Escape dismisses the tour like its close button (WCAG 2.1.2: no keyboard trap).
+  useEffect(() => {
+    if (!open) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); finish() } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, finish])
+
   const next = () => setStep(s => Math.min(s + 1, steps.length - 1))
   const back = () => setStep(s => Math.max(s - 1, 0))
 

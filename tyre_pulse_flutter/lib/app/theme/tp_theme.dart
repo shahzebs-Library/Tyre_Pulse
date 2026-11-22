@@ -110,6 +110,15 @@ abstract final class TpTheme {
       visualDensity: VisualDensity.standard,
       // Spec section 55: avoid unnecessary animation on low-memory phones.
       splashFactory: NoSplash.splashFactory,
+      // The one sub theme set here: without it Material draws the text cursor
+      // and selection handles in colorScheme.primary (the green button
+      // colour). TextSelectionThemeData has been stable for years, unlike the
+      // renamed component themes the header warns about.
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: palette.focus,
+        selectionColor: palette.focus.withValues(alpha: 0.25),
+        selectionHandleColor: palette.focus,
+      ),
       extensions: <ThemeExtension<dynamic>>[
         TpPaletteTheme(palette),
       ],

@@ -112,7 +112,9 @@ class TpPalette {
     border: Color(0xFFC0CBDD),
     borderStrong: Color(0xFFAAB8CF),
     controlBorder: Color(0xFF75849F),
-    focus: Color(0xFF07883F),
+    // Navy ink, not the green action colour: a field the person is typing in
+    // must not look like a button or an "ok" status (owner, 2026-11-22).
+    focus: Color(0xFF00145A),
     overlay: Color(0x80080E18),
     ok: TpStatusColors(
       base: Color(0xFF15803D),
@@ -178,7 +180,8 @@ class TpPalette {
     border: Color(0xFFD1D9E8),
     borderStrong: Color(0xFFB8C4D7),
     controlBorder: Color(0xFF75849F),
-    focus: Color(0xFF007333),
+    // Same rule as [light]: focus is the login ink, never the green button.
+    focus: Color(0xFF041742),
     overlay: Color(0x80080E18),
     ok: TpStatusColors(
       base: Color(0xFF15803D),

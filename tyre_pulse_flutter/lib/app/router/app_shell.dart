@@ -26,6 +26,8 @@ import 'package:tyre_pulse/app/router/shell_tabs.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/tp_text_scale.dart';
+import 'package:tyre_pulse/features/inspections/presentation/controllers/inspection_wizard_controller.dart';
+import 'package:tyre_pulse/features/inspections/presentation/state/inspection_wizard_state.dart';
 
 class TpAppShell extends ConsumerWidget {
   const TpAppShell({required this.navigationShell, super.key});
@@ -76,13 +78,22 @@ class TpAppShell extends ConsumerWidget {
 
     final TpPalette palette = TpPalette.of(context);
     final String activePath = GoRouterState.of(context).uri.path;
-    // Only the multi-step inspection flow owns its navigation: it carries a
-    // persistent Back/Next action row, and a second bar would duplicate
-    // controls and take the working height the capture steps need. Home no
-    // longer draws a bar of its own - the approved Home mock (07) uses this
-    // shared shell bar - so it is deliberately NOT excluded here.
+    // Only the inspection steps with their own Back/Next action row (tyre
+    // capture and review) hide this bar: a second bar there would duplicate
+    // controls and take the working height capture needs. Choosing the
+    // vehicle and the submitted screen have no action row, so the menu stays
+    // and the inspector can leave the flow without hunting for Back.
+    final bool onNewInspection = activePath == TpRoutePaths.newInspection;
+    final InspectionWizardStep? inspectionStep = onNewInspection
+        ? ref.watch(
+            inspectionWizardControllerProvider.select(
+              (InspectionWizardState s) => s.step,
+            ),
+          )
+        : null;
     final bool hasScreenOwnedNavigation =
-        activePath == TpRoutePaths.newInspection;
+        inspectionStep == InspectionWizardStep.tyres ||
+            inspectionStep == InspectionWizardStep.review;
 
     return Scaffold(
       backgroundColor: palette.background,

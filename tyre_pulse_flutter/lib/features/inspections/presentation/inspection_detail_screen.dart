@@ -456,6 +456,10 @@ class _DetailBody extends StatelessWidget {
             ),
           ),
           width: MediaQuery.sizeOf(context).width - (TpSpace.lg * 2),
+          // Same composition as the capture screen: vehicle artwork with
+          // the recorded tyres on both sides.
+          compact: true,
+          captureMode: true,
         ),
         ..._observations(context, l10n, palette),
         const SizedBox(height: TpSpace.lg),

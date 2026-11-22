@@ -8716,6 +8716,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'The security check was not accepted. Complete it again and retry.';
 
   @override
+  String vehicle360TyreMapFrom(String date) {
+    return 'From the inspection on $date';
+  }
+
+  @override
+  String get vehicle360TyreMapLoadFailed => 'Tyre readings could not be loaded';
+
+  @override
+  String get inspectionMeterLooksLikeDate =>
+      'This is a date, not a reading. Leave it blank if the machine has no meter.';
+
+  @override
   String get approvalsBulkSelect => 'Select';
 
   @override

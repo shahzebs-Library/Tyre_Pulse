@@ -45,10 +45,12 @@ import 'package:tyre_pulse/features/assets/domain/asset_financials.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_timeline.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/asset_insights_providers.dart';
+import 'package:tyre_pulse/features/assets/presentation/asset_latest_inspection_provider.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_360_panels.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_record.dart';
 
 const String _assetNo = 'TM514';
 
@@ -275,6 +277,41 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(TpStateKeys.error), findsOneWidget);
+  });
+
+  testWidgets(
+      'a failed read of the latest inspection says so and offers a retry '
+      'instead of painting every wheel as not recorded', (
+    WidgetTester tester,
+  ) async {
+    const VehicleAsset asset = VehicleAsset(
+      id: 'v1',
+      assetNo: _assetNo,
+      vehicleType: 'TR-MIXER',
+      site: 'NHC',
+      status: 'Active',
+      country: 'KSA',
+    );
+    await _pump(tester, <Override>[
+      _resolved(const VehicleDetailLoaded(asset)),
+      _canStartInspection(true),
+      assetLatestInspectionProvider.overrideWith(
+        (ref, AssetScope scope) => Future<InspectionRecord?>.error(
+          Exception('offline'),
+        ),
+      ),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(VehicleDetailScreenKeys.tyreMap), findsOneWidget);
+    expect(
+      find.byKey(VehicleDetailScreenKeys.tyreMapLoadFailed),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(VehicleDetailScreenKeys.tyreMapNotRecorded),
+      findsNothing,
+    );
   });
 
   testWidgets(

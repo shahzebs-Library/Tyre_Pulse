@@ -15251,6 +15251,24 @@ abstract class AppLocalizations {
   /// **'The security check was not accepted. Complete it again and retry.'**
   String get captchaRefused;
 
+  /// Caption under the Vehicle 360 tyre map naming the inspection its readings come from
+  ///
+  /// In en, this message translates to:
+  /// **'From the inspection on {date}'**
+  String vehicle360TyreMapFrom(String date);
+
+  /// Shown under the Vehicle 360 tyre map when the latest inspection could not be read
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre readings could not be loaded'**
+  String get vehicle360TyreMapLoadFailed;
+
+  /// Error under the odometer or hour meter field when the inspector typed a date such as 20261122 instead of a reading
+  ///
+  /// In en, this message translates to:
+  /// **'This is a date, not a reading. Leave it blank if the machine has no meter.'**
+  String get inspectionMeterLooksLikeDate;
+
   /// No description provided for @approvalsBulkSelect.
   ///
   /// In en, this message translates to:

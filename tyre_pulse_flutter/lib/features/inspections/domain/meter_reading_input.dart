@@ -15,7 +15,11 @@ import 'package:flutter/foundation.dart';
 
 @immutable
 class MeterReadingInput {
-  const MeterReadingInput._({required this.value, required this.isInvalid});
+  const MeterReadingInput._({
+    required this.value,
+    required this.isInvalid,
+    this.looksLikeDate = false,
+  });
 
   /// Parses [raw]. Blank -> [empty]. Thousands separators (`,`, the Arabic
   /// thousands separator U+066C), spaces and non-breaking spaces are
@@ -31,7 +35,30 @@ class MeterReadingInput {
     if (parsed == null || !parsed.isFinite || parsed < 0) {
       return const MeterReadingInput._(value: null, isInvalid: true);
     }
+    // A date typed into a meter box (20261122 for 2026-11-22) was being
+    // saved as twenty million km on machines that run on hours. No machine
+    // reaches that reading, so a whole number that reads as a calendar
+    // date is refused with its own message instead of being stored.
+    if (isDateShaped(parsed)) {
+      return const MeterReadingInput._(
+        value: null,
+        isInvalid: true,
+        looksLikeDate: true,
+      );
+    }
     return MeterReadingInput._(value: parsed, isInvalid: false);
+  }
+
+  /// True for a whole number from 20000101 to 20991231 that is a real
+  /// calendar date in YYYYMMDD form.
+  static bool isDateShaped(double v) {
+    if (v != v.roundToDouble() || v < 20000101 || v > 20991231) return false;
+    final int n = v.toInt();
+    final int y = n ~/ 10000;
+    final int m = (n ~/ 100) % 100;
+    final int d = n % 100;
+    if (m < 1 || m > 12 || d < 1) return false;
+    return d <= DateTime(y, m + 1, 0).day;
   }
 
   /// Nothing typed. Not a reading, and not an error: both meters are
@@ -45,6 +72,9 @@ class MeterReadingInput {
 
   /// True only when something was typed and it could not be read.
   final bool isInvalid;
+
+  /// True when what was typed is a date (YYYYMMDD), not a reading.
+  final bool looksLikeDate;
 
   /// A whole-number view for the on-device draft, whose odometer column is
   /// an integer. Only a whole value is returned; a fractional reading is

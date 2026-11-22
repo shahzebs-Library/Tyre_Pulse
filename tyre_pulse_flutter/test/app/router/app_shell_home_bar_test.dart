@@ -17,6 +17,8 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/router/screen_registry.dart';
 import 'package:tyre_pulse/app/router/session.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/features/inspections/presentation/controllers/inspection_wizard_controller.dart';
+import 'package:tyre_pulse/features/inspections/presentation/state/inspection_wizard_state.dart';
 
 final class _AllowAllResolver implements ModuleAccessResolver {
   const _AllowAllResolver();
@@ -101,7 +103,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the New Inspection flow still owns its screen height', (
+  testWidgets(
+      'New Inspection keeps the menu while choosing the vehicle and hides it '
+      'only while capturing tyres', (
     WidgetTester tester,
   ) async {
     final (GoRouter router, ProviderContainer container) =
@@ -115,6 +119,17 @@ void main() {
       find.byKey(const ValueKey<String>(TpRouteId.newInspection)),
       findsOneWidget,
     );
+    // Step 1 has no Back/Next row of its own, so the menu stays.
+    expect(find.text('Profile'), findsOneWidget);
+
+    // Tyre capture carries its own action row; the menu steps aside.
+    final InspectionWizardController controller =
+        container.read(inspectionWizardControllerProvider.notifier);
+    // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
+    controller.state = controller.state.copyWith(
+      step: InspectionWizardStep.tyres,
+    );
+    await tester.pump();
     expect(find.text('Profile'), findsNothing);
     expect(find.text('Accidents'), findsNothing);
     expect(tester.takeException(), isNull);

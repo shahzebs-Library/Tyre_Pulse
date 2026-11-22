@@ -147,8 +147,14 @@ catalog when matched; otherwise the counter's claim, sent as `refs.classificatio
 reviewer and never as the variant classification); a big -/+ quantity stepper (hold for 10); a
 condition chip grid; ownership; three photo slots Item / Part number / Location (plus Damage when
 the condition is damaged, repairable or scrap), each saved with its own photo role; remarks
-(250 characters). At least one photo is required before Save & count next item. The accent is the
-theme primary (safety yellow on the dark theme, fleet green on light).
+(250 characters). At least one photo is required before Save & count next item. The accent is
+safety yellow on BOTH themes: the screen wraps itself in a local theme
+(`lib/features/inventory/presentation/inventory_theme.dart`); on light that is white / light grey
+surfaces, dark ink and light grey borders, with yellow used only as a fill behind dark ink (Save
+button, selected condition chip, stepper, badge) or as the location bar outline over a pale yellow
+fill. Material's own `colorScheme.primary` is dark ink there, so no stock widget draws yellow text
+on white. The rest of the app's light theme is unchanged (fleet green). Screenshots:
+`docs/inventory/screenshots/flutter/`.
 
 ## 7. What the owner must do next
 

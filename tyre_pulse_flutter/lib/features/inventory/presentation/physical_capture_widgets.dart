@@ -17,6 +17,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/features/inventory/domain/physical_capture.dart';
 import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
+import 'package:tyre_pulse/features/inventory/presentation/inventory_theme.dart';
 import 'package:tyre_pulse/features/inventory/presentation/inventory_widgets.dart';
 
 /// Online / offline / "n waiting to send". Pending work always wins: a phone
@@ -114,7 +115,7 @@ class PiLocationBar extends StatelessWidget {
       button: true,
       label: semanticLabel,
       child: Material(
-        color: p.surface,
+        color: p.brightness == Brightness.dark ? p.surface : p.primarySoft,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(TpRadius.md),
           side: BorderSide(color: p.primary, width: TpBorderWidth.strong),
@@ -131,7 +132,10 @@ class PiLocationBar extends StatelessWidget {
               ),
               child: Row(
                 children: <Widget>[
-                  Icon(Icons.location_on_outlined, color: p.primary),
+                  Icon(
+                    Icons.location_on_outlined,
+                    color: inventoryAccentInk(p),
+                  ),
                   const SizedBox(width: TpSpace.sm),
                   Expanded(
                     child: Text.rich(
@@ -534,7 +538,7 @@ class PiPhotoSlot extends StatelessWidget {
                       ? Center(
                           child: Icon(
                             Icons.add_a_photo_outlined,
-                            color: p.primary,
+                            color: inventoryAccentInk(p),
                             size: 28,
                           ),
                         )

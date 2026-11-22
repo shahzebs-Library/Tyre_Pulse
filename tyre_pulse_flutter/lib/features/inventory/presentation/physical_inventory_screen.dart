@@ -24,6 +24,7 @@ import 'package:tyre_pulse/features/inventory/domain/physical_capture.dart';
 import 'package:tyre_pulse/features/inventory/inventory_providers.dart';
 import 'package:tyre_pulse/features/inventory/physical_inventory_providers.dart';
 import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
+import 'package:tyre_pulse/features/inventory/presentation/inventory_theme.dart';
 import 'package:tyre_pulse/features/inventory/presentation/inventory_widgets.dart';
 import 'package:tyre_pulse/features/inventory/presentation/physical_capture_widgets.dart';
 
@@ -467,7 +468,7 @@ class _PhysicalInventoryScreenState
   /// text, or clear the bin back to the whole store.
   Future<void> _openLocationSheet(InventoryCopy copy) =>
       TpBottomSheet.show<void>(
-        context: context,
+        context: _themedContext ?? context,
         title: copy('pi_location'),
         builder: (BuildContext sheet) => Padding(
           padding: const EdgeInsets.all(TpSpace.lg),
@@ -492,11 +493,15 @@ class _PhysicalInventoryScreenState
               ),
               if (_bin != null) ...<Widget>[
                 const SizedBox(height: TpSpace.md),
-                TpButton.secondary(
+                // Material button, not TpButton.secondary: that one inks its
+                // label with the accent, which is yellow here.
+                OutlinedButton.icon(
                   key: const Key('pi.clearBin'),
-                  label: copy('pi_clearBin'),
-                  icon: Icons.close,
-                  isFullWidth: true,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(inventoryTouchTarget),
+                  ),
+                  label: Text(copy('pi_clearBin')),
+                  icon: const Icon(Icons.close),
                   onPressed: () {
                     setState(() => _bin = null);
                     Navigator.of(sheet).pop();
@@ -508,8 +513,22 @@ class _PhysicalInventoryScreenState
         ),
       );
 
+  /// The context under the scoped inventory theme, so a bottom sheet opened
+  /// from this screen captures the same yellow accent.
+  BuildContext? _themedContext;
+
   @override
   Widget build(BuildContext context) {
+    // Owner mockup: the same safety-yellow accent in light and dark, scoped
+    // to this screen only (the rest of the light app stays fleet green).
+    return Theme(
+      data: inventoryThemeFor(Theme.of(context).brightness),
+      child: Builder(builder: _buildScreen),
+    );
+  }
+
+  Widget _buildScreen(BuildContext context) {
+    _themedContext = context;
     final InventoryCopy copy = InventoryCopy.of(context);
     final PhysicalSession? s = _session;
     final AsyncValue<List<PhysicalSession>> open =
@@ -872,13 +891,16 @@ class _PhysicalInventoryScreenState
               ],
             ),
             const SizedBox(height: TpSpace.md),
-            TpButton.text(
-              label: copy('pi_leave'),
-              isFullWidth: true,
+            TextButton(
+              key: const Key('pi.leave'),
+              style: TextButton.styleFrom(
+                minimumSize: const Size.fromHeight(TpSizing.minTouchTarget),
+              ),
               onPressed: () => setState(() {
                 _session = null;
                 _bin = null;
               }),
+              child: Text(copy('pi_leave')),
             ),
             const SizedBox(height: TpSpace.sm),
             Text(copy('pi_ledgerRule')),

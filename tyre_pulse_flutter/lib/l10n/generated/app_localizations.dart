@@ -352,6 +352,12 @@ abstract class AppLocalizations {
   /// **'This version of Tyre Pulse is too old to keep using. Install the update to carry on.'**
   String get updateRequiredMessage;
 
+  /// Update-required screen on an iPhone when no store button can be shown: tells the user to update from the App Store.
+  ///
+  /// In en, this message translates to:
+  /// **'This version of Tyre Pulse is too old to keep using. Update Tyre Pulse from the App Store to carry on.'**
+  String get updateRequiredMessageAppStore;
+
   /// No description provided for @profileUnavailableTitle.
   ///
   /// In en, this message translates to:
@@ -4993,7 +4999,7 @@ abstract class AppLocalizations {
   /// Complete copy catalogue for the security and help controls on the latest login composition.
   ///
   /// In en, this message translates to:
-  /// **'secure=Secure company workspace · %country%~forgot=Forgot password?~access=Need access? Contact your administrator~or=or~biometric=Use device biometrics~authorized=Authorized PMV personnel only~audited=Activity is audited~version=Version %version%~biometricReason=Confirm your identity to sign in to Tyre Pulse~biometricUnavailable=Device biometrics are unavailable or not enrolled.~biometricLocked=Device biometrics are temporarily locked. Use your password.~biometricFailed=Device verification could not be completed.~credentialsRequired=Enter your email or employee ID and password before using device biometrics.~helpTitle=Sign-in help~forgotHelp=Password resets are managed by your Tyre Pulse administrator. Contact your administrator to restore access.~accessHelp=Your Tyre Pulse administrator manages mobile access and account approval.'**
+  /// **'secure=Secure company workspace · %country%~forgot=Forgot password?~access=Need access? Contact your administrator~or=or~biometric=Use device biometrics~authorized=Sign in with the account your company gave you~audited=Activity is audited~version=Version %version%~biometricReason=Confirm your identity to sign in to Tyre Pulse~biometricUnavailable=Device biometrics are unavailable or not enrolled.~biometricLocked=Device biometrics are temporarily locked. Use your password.~biometricFailed=Device verification could not be completed.~credentialsRequired=Enter your email or employee ID and password before using device biometrics.~helpTitle=Sign-in help~forgotHelp=Password resets are managed by your Tyre Pulse administrator. Contact your administrator to restore access.~accessHelp=Your Tyre Pulse administrator manages mobile access and account approval.'**
   String get loginSecurityCopyCatalog;
 
   /// No description provided for @profileNavTitle.

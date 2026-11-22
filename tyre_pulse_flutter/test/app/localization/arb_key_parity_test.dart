@@ -656,10 +656,14 @@ void main() {
     // captchaRefused). Try again reuses actionRetry. loginCompanyCodeHelp
     // (+1): the access-help dialog says how a member of another company
     // signs in ("company code/username").
-    test('en, ar and ur each carry exactly 2524 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2524);
-      expect(_translatableKeys(ar).length, 2524);
-      expect(_translatableKeys(ur).length, 2524);
+    // 2524 + 1 = 2525. The update-required screen on an iPhone with no store
+    // button (no App Store id configured): the sentence that tells the user
+    // to update from the App Store (updateRequiredMessageAppStore). The
+    // screen never points an iPhone at Google Play.
+    test('en, ar and ur each carry exactly 2525 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2525);
+      expect(_translatableKeys(ar).length, 2525);
+      expect(_translatableKeys(ur).length, 2525);
     });
   });
 

@@ -89,10 +89,6 @@
   <!-- AL badge on hood - circular logo -->
   <circle cx="100" cy="44" r="12" fill="url(#alBadge)" />
   <circle cx="100" cy="44" r="12" fill="none" stroke="#fca5a5" stroke-width="0.8" />
-  <text x="100" y="41" text-anchor="middle" font-size="6" font-weight="900"
-    fill="#ffffff" letter-spacing="0.5px">AL</text>
-  <text x="100" y="51" text-anchor="middle" font-size="2.8" fill="#fca5a5"
-    letter-spacing="0.2px" font-weight="600">ASHOK LEYLAND</text>
 
   <!-- Windshield -->
   <path d="M 61,67 L 139,67 L 135,85 L 65,85 Z" fill="url(#glassGrad)" />
@@ -110,7 +106,7 @@
   <!-- Red AL brand stripe on cab bottom -->
   <rect x="57" y="120" width="86" height="9" fill="url(#alStripe)" />
   <text x="100" y="126.5" text-anchor="middle" font-size="4" font-weight="800"
-    fill="#ffffff" letter-spacing="0.4px">ASHOK LEYLAND &#183; ECOMET</text>
+    fill="#ffffff" letter-spacing="0.4px">HEAVY TRUCK</text>
 
   <!-- Chassis -->
   <rect x="67" y="129" width="11" height="158" fill="#334155" />
@@ -130,8 +126,6 @@
   <line x1="59" y1="256" x2="141" y2="256" stroke="#94a3b8" stroke-width="0.8" opacity="0.5" />
   <circle cx="100" cy="200" r="14" fill="url(#alBadge)" opacity="0.9" />
   <circle cx="100" cy="200" r="14" fill="none" stroke="#fca5a5" stroke-width="0.8" />
-  <text x="100" y="197" text-anchor="middle" font-size="7" font-weight="900" fill="#ffffff">AL</text>
-  <text x="100" y="207" text-anchor="middle" font-size="3" fill="#fca5a5" letter-spacing="0.2px">ASHOK LEYLAND</text>
 
   <!-- Rear bumper -->
   <rect x="58" y="281" width="84" height="11" rx="3" fill="url(#alStripe)" />

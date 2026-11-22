@@ -133,6 +133,10 @@ jobs:
           # DSN. Empty = telemetry off (AppConfig.hasTelemetry), with a warning.
           SENTRY_DSN: ${{ secrets.FLUTTER_SENTRY_DSN || secrets.SENTRY_DSN_FLUTTER || '' }}
           VERSION_NAME: ${{ inputs.version_name }}
+          # Numeric App Store id of this app (repository VARIABLE, not a
+          # secret). Empty = the update-required screen shows no store button
+          # on iOS and tells the user to update from the App Store.
+          APP_STORE_ID: ${{ vars.APP_STORE_ID || '' }}
         run: |
           if [ -z "$SENTRY_DSN" ]; then
             echo "::warning::FLUTTER_SENTRY_DSN secret is not set - this release is built with crash reporting DISABLED."
@@ -144,7 +148,8 @@ jobs:
             --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             --dart-define=APP_ENV=production \
             --dart-define=APP_VERSION="$VERSION_NAME" \
-            --dart-define=SENTRY_DSN="$SENTRY_DSN"
+            --dart-define=SENTRY_DSN="$SENTRY_DSN" \
+            --dart-define=APP_STORE_ID="$APP_STORE_ID"
 
       - name: Archive (unsigned; signing happens at export)
         run: |

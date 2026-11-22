@@ -41,6 +41,7 @@ import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_
 import 'package:tyre_pulse/features/inspections/presentation/widgets/tyre_position_editor_sheet.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_display.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
@@ -451,8 +452,10 @@ class _InspectionHeaderHero extends StatelessWidget {
           const SizedBox(width: TpSpace.md),
           Expanded(
             child: Text(
-              l10n.inspectionNavTitle,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              // The app bar already says "New inspection"; the hero names the
+              // step instead of repeating the page title.
+              l10n.inspectionStepOfTotal(1, 3),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
             ),
@@ -651,7 +654,7 @@ class _SelectedVehicle extends ConsumerWidget {
 
     final Widget image = Container(
       key: NewInspectionScreenKeys.selectedVehicleImage,
-      height: 188,
+      height: 160,
       alignment: Alignment.center,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -1154,7 +1157,7 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
           onChanged: (_) => setState(() {}),
         ),
         if (chips.isNotEmpty) ...<Widget>[
-          const SizedBox(height: TpSpace.md),
+          const SizedBox(height: TpSpace.lg),
           _ClassFilterRow(
             key: NewInspectionScreenKeys.pickerClassFilters,
             chips: chips,
@@ -1574,6 +1577,7 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
       backFallback: TpBackFallbacks.forRoute(const NewInspectionRoute()),
       appBar: TpAppBar(
         title: l10n.tyreMockInspectionTitle,
+        subtitleMaxLines: 2,
         subtitle: <String>[
           if (state.selectedAssetNo.trim().isNotEmpty)
             state.selectedAssetNo.trim(),
@@ -1854,6 +1858,11 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
                   TyrePositionReading.seed(position);
           return TyrePositionEditorSheet(
             reading: reading,
+            positionLabel: tyrePositionDisplayCode(
+              liveState.effectiveLayoutType,
+              position,
+              assetNo: liveState.selectedAssetNo,
+            ),
             installedTyre: liveState.installedTyres[position],
             isCapturingPhoto: liveState.isCapturingPhoto,
             onChanged: (updated) => sheetRef
@@ -3395,6 +3404,24 @@ class _GpsChip extends StatelessWidget {
         ),
     };
     final TpStatusColors colors = palette.forStatus(status);
+    if (state.gpsStatus == InspectionGpsStatus.unavailable) {
+      // A crossed-out pin on its own says nothing: name the action so the
+      // inspector knows the location was not captured and can retry it.
+      return Tooltip(
+        message: '$label. ${l10n.inspectionGpsRetry}',
+        child: TextButton.icon(
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
+            minimumSize: const Size(40, 40),
+            foregroundColor: colors.base,
+          ),
+          onPressed: controller.retryGps,
+          icon: Icon(icon, size: TpSizing.iconMd),
+          label: Text(l10n.inspectionGpsRetry),
+        ),
+      );
+    }
     return Tooltip(
       message: state.gpsStatus == InspectionGpsStatus.unavailable
           ? '$label. ${l10n.inspectionGpsRetry}'

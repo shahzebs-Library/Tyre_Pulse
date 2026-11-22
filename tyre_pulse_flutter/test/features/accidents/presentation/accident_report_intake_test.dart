@@ -307,13 +307,13 @@ void main() {
         .tap(find.byKey(const ValueKey<String>('accident.report.continue')));
     await tester.pumpAndSettle();
     expect(find.text('Step 2 of 7: Incident details'), findsOneWidget);
-    // The fleet home site is never filled in for the reporter any more.
+    // The incident site starts from the asset's own site and stays editable.
     final Finder site = find.descendant(
       of: find.widgetWithText(TpInput, 'Incident site'),
       matching: find.byType(TextField),
     );
     await tester.ensureVisible(site);
-    expect(tester.widget<TextField>(site).controller?.text, isEmpty);
+    expect(tester.widget<TextField>(site).controller?.text, 'Diriyah');
     await tester.enterText(site, 'Diriyah');
     await tester.pumpAndSettle();
     await tester.ensureVisible(

@@ -490,12 +490,16 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                     padding: const EdgeInsets.symmetric(
                       horizontal: TpSpace.md,
                     ),
-                    child: Text(
-                      l10n.meterLogRecentKmValue('').trim().toUpperCase(),
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: palette.textSecondary,
-                            fontWeight: FontWeight.w800,
-                          ),
+                    child: Center(
+                      widthFactor: 1,
+                      child: Text(
+                        l10n.meterLogRecentKmValue('').trim().toUpperCase(),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: palette.textSecondary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                      ),
                     ),
                   ),
                 ),

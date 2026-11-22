@@ -21,6 +21,9 @@ class AppLocalizationsUr extends AppLocalizations {
   String get actionClose => 'بند کریں';
 
   @override
+  String get inspectionTyreEditorSave => 'محفوظ کریں';
+
+  @override
   String get actionCancel => 'منسوخ کریں';
 
   @override
@@ -1300,6 +1303,38 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get inspectionApprovalsEmptyMessage =>
       'تمام معائنوں کا جائزہ لیا جا چکا ہے۔ دوبارہ چیک کرنے کے لیے نیچے کھینچیں۔';
+
+  @override
+  String get inspectionApprovalsEmptyApprovedTitle =>
+      'ابھی تک کوئی معائنہ منظور نہیں ہوا';
+
+  @override
+  String get inspectionApprovalsEmptyApprovedMessage =>
+      'آپ جو معائنے منظور کریں گے وہ یہاں نظر آئیں گے۔ دوبارہ دیکھنے کے لیے نیچے کھینچیں۔';
+
+  @override
+  String get inspectionApprovalsEmptyReturnedTitle =>
+      'ابھی تک کوئی معائنہ واپس نہیں کیا گیا';
+
+  @override
+  String get inspectionApprovalsEmptyReturnedMessage =>
+      'آپ جو معائنے فیلڈ کو واپس بھیجیں گے وہ یہاں نظر آئیں گے۔ دوبارہ دیکھنے کے لیے نیچے کھینچیں۔';
+
+  @override
+  String get inspectionApprovalConfirmApproveTitle =>
+      'کیا یہ معائنہ منظور کریں؟';
+
+  @override
+  String get inspectionApprovalConfirmApproveMessage =>
+      'اس سے معائنے پر آپ کی منظوری اور دستخط درج ہو جائیں گے اور وہ مقفل ہو جائے گا۔ اسے واپس نہیں کیا جا سکتا۔';
+
+  @override
+  String get inspectionApprovalConfirmReturnTitle =>
+      'کیا یہ معائنہ واپس بھیجیں؟';
+
+  @override
+  String get inspectionApprovalConfirmReturnMessage =>
+      'یہ معائنہ آپ کی وجہ کے ساتھ فیلڈ کو واپس بھیج دے گا۔';
 
   @override
   String get inspectionApprovalsLoadErrorMessage =>

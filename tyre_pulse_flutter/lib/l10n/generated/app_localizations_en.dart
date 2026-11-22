@@ -21,6 +21,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get actionClose => 'Close';
 
   @override
+  String get inspectionTyreEditorSave => 'Save';
+
+  @override
   String get actionCancel => 'Cancel';
 
   @override
@@ -1297,6 +1300,35 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get inspectionApprovalsEmptyMessage =>
       'Every inspection has been reviewed. Pull down to check again.';
+
+  @override
+  String get inspectionApprovalsEmptyApprovedTitle => 'Nothing approved yet';
+
+  @override
+  String get inspectionApprovalsEmptyApprovedMessage =>
+      'Inspections you approve will appear here. Pull down to check again.';
+
+  @override
+  String get inspectionApprovalsEmptyReturnedTitle => 'Nothing returned yet';
+
+  @override
+  String get inspectionApprovalsEmptyReturnedMessage =>
+      'Inspections you return to the field will appear here. Pull down to check again.';
+
+  @override
+  String get inspectionApprovalConfirmApproveTitle =>
+      'Approve this inspection?';
+
+  @override
+  String get inspectionApprovalConfirmApproveMessage =>
+      'This records your approval and signature on the inspection and locks it. It cannot be undone.';
+
+  @override
+  String get inspectionApprovalConfirmReturnTitle => 'Return this inspection?';
+
+  @override
+  String get inspectionApprovalConfirmReturnMessage =>
+      'This sends the inspection back to the field with your reason.';
 
   @override
   String get inspectionApprovalsLoadErrorMessage =>

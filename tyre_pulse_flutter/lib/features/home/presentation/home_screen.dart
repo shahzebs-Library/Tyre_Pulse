@@ -405,7 +405,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   end: AlignmentDirectional.bottomEnd,
                   colors: <Color>[
                     palette.surface,
-                    Color.lerp(palette.surface, palette.primarySoft, 0.75)!,
+                    palette.surfaceAlt,
                   ],
                 ),
                 border: Border(bottom: BorderSide(color: palette.border)),
@@ -464,7 +464,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             _Band(
               color: palette.background,
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 28),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
@@ -1321,8 +1321,8 @@ class _HeaderIconButton extends StatelessWidget {
                   Icon(icon, size: 24, color: palette.text),
                   if (badge != null)
                     PositionedDirectional(
-                      top: 6,
-                      end: 6,
+                      top: -6,
+                      end: -6,
                       child: Container(
                         constraints: const BoxConstraints(minWidth: 18),
                         height: 18,
@@ -2635,14 +2635,28 @@ class _RecentAssetsStrip extends StatelessWidget {
       child: switch (recent) {
         AsyncData<List<HomeRecentAsset>>(:final value) => SizedBox(
             height: 150,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              clipBehavior: Clip.none,
-              itemCount: value.length,
-              separatorBuilder: (BuildContext _, int __) =>
-                  const SizedBox(width: 10),
-              itemBuilder: (BuildContext context, int index) =>
-                  _RecentAssetCard(asset: value[index], onOpen: onOpen),
+            // Up to three cards share the row equally so a short list never
+            // leaves half the row empty; longer lists keep the fixed width
+            // and scroll sideways.
+            child: LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints box) {
+                final double fill = value.isEmpty || value.length > 3
+                    ? 118
+                    : (box.maxWidth - 10 * (value.length - 1)) / value.length;
+                return ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  itemCount: value.length,
+                  separatorBuilder: (BuildContext _, int __) =>
+                      const SizedBox(width: 10),
+                  itemBuilder: (BuildContext context, int index) =>
+                      _RecentAssetCard(
+                    asset: value[index],
+                    onOpen: onOpen,
+                    width: fill < 118 ? 118 : fill,
+                  ),
+                );
+              },
             ),
           ),
         AsyncError<List<HomeRecentAsset>>() => statusLine(
@@ -2660,9 +2674,14 @@ class _RecentAssetsStrip extends StatelessWidget {
 }
 
 class _RecentAssetCard extends StatelessWidget {
-  const _RecentAssetCard({required this.asset, required this.onOpen});
+  const _RecentAssetCard({
+    required this.asset,
+    required this.onOpen,
+    this.width = 118,
+  });
 
   final HomeRecentAsset asset;
+  final double width;
   final void Function(String assetNo)? onOpen;
 
   @override
@@ -2688,7 +2707,7 @@ class _RecentAssetCard extends StatelessWidget {
 
     return SizedBox(
       key: HomeScreenKeys.recentAsset(asset.assetNo),
-      width: 118,
+      width: width,
       child: Semantics(
         button: tap != null,
         label: '${asset.assetNo}, $label',

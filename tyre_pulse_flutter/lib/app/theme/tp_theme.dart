@@ -57,6 +57,16 @@ abstract final class TpTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: palette.background,
       dividerColor: palette.border,
+      // A flat surface bar. Without this Material 3 tints a scrolled-under
+      // app bar with the primary colour, which read as muddy olive in dark
+      // and grey-green in light the moment a list scrolled.
+      appBarTheme: AppBarTheme(
+        backgroundColor: palette.surface,
+        foregroundColor: palette.text,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
+      ),
       textTheme: TpTypography.textThemeFor(palette),
       // Standard rather than compact. Density is achieved through the spacing
       // scale; shrinking Material's own hit boxes would take touch targets

@@ -535,17 +535,25 @@ class _InspectionApprovalsQueueScreenState
     InspectionApprovalTab tab,
     AppLocalizations l10n,
   ) =>
-      tab == InspectionApprovalTab.pending
-          ? l10n.inspectionApprovalsEmptyTitle
-          : l10n.globalSearchEmptyTitle;
+      switch (tab) {
+        InspectionApprovalTab.pending => l10n.inspectionApprovalsEmptyTitle,
+        InspectionApprovalTab.approved =>
+          l10n.inspectionApprovalsEmptyApprovedTitle,
+        InspectionApprovalTab.returned =>
+          l10n.inspectionApprovalsEmptyReturnedTitle,
+      };
 
   static String _emptyMessageFor(
     InspectionApprovalTab tab,
     AppLocalizations l10n,
   ) =>
-      tab == InspectionApprovalTab.pending
-          ? l10n.inspectionApprovalsEmptyMessage
-          : l10n.vehiclesEmptySearchMessage;
+      switch (tab) {
+        InspectionApprovalTab.pending => l10n.inspectionApprovalsEmptyMessage,
+        InspectionApprovalTab.approved =>
+          l10n.inspectionApprovalsEmptyApprovedMessage,
+        InspectionApprovalTab.returned =>
+          l10n.inspectionApprovalsEmptyReturnedMessage,
+      };
 }
 
 class _QueueSummary extends StatelessWidget {

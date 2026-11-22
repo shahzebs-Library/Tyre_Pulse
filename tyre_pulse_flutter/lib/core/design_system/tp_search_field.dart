@@ -84,6 +84,13 @@ class _TpSearchFieldState extends State<TpSearchField> {
       style: Theme.of(context).textTheme.bodyLarge,
       decoration: InputDecoration(
         hintText: widget.hint ?? l10n.searchHint,
+        // One line, a step smaller than the typed text: a long hint such as
+        // "Search asset, reference, site or location" must fit a 360 dp
+        // phone instead of ending in an ellipsis.
+        hintMaxLines: 1,
+        hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: palette.textMuted,
+            ),
         filled: true,
         fillColor: palette.surface,
         prefixIcon: const Icon(Icons.search, size: TpSizing.iconMd),

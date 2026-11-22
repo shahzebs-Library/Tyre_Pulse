@@ -30,6 +30,8 @@ abstract final class TpBottomSheet {
 
     return showModalBottomSheet<T>(
       context: context,
+      // Above the shell's tab bar, so a sheet is never cut off by it.
+      useRootNavigator: true,
       isDismissible: isDismissible,
       enableDrag: isDismissible,
       isScrollControlled: isScrollControlled,

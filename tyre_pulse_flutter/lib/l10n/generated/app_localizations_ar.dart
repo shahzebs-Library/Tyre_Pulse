@@ -21,6 +21,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get actionClose => 'إغلاق';
 
   @override
+  String get inspectionTyreEditorSave => 'حفظ';
+
+  @override
   String get actionCancel => 'إلغاء';
 
   @override
@@ -1314,6 +1317,36 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get inspectionApprovalsEmptyMessage =>
       'تمت مراجعة جميع الفحوصات. اسحب للأسفل للتحقق مرة أخرى.';
+
+  @override
+  String get inspectionApprovalsEmptyApprovedTitle =>
+      'لا توجد فحوصات معتمدة بعد';
+
+  @override
+  String get inspectionApprovalsEmptyApprovedMessage =>
+      'ستظهر هنا الفحوصات التي تعتمدها. اسحب للأسفل للتحقق مرة أخرى.';
+
+  @override
+  String get inspectionApprovalsEmptyReturnedTitle =>
+      'لا توجد فحوصات معادة بعد';
+
+  @override
+  String get inspectionApprovalsEmptyReturnedMessage =>
+      'ستظهر هنا الفحوصات التي تعيدها إلى الميدان. اسحب للأسفل للتحقق مرة أخرى.';
+
+  @override
+  String get inspectionApprovalConfirmApproveTitle => 'اعتماد هذا الفحص؟';
+
+  @override
+  String get inspectionApprovalConfirmApproveMessage =>
+      'سيتم تسجيل اعتمادك وتوقيعك على الفحص وقفله. لا يمكن التراجع عن ذلك.';
+
+  @override
+  String get inspectionApprovalConfirmReturnTitle => 'إعادة هذا الفحص؟';
+
+  @override
+  String get inspectionApprovalConfirmReturnMessage =>
+      'سيتم إرسال الفحص إلى الميدان مع سببك.';
 
   @override
   String get inspectionApprovalsLoadErrorMessage =>

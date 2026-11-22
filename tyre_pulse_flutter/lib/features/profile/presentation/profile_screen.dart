@@ -274,6 +274,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _chooseLanguage(Locale active) async {
     final Locale? chosen = await showModalBottomSheet<Locale>(
       context: context,
+      useRootNavigator: true,
       useSafeArea: true,
       builder: (BuildContext sheetContext) => SafeArea(
         child: Column(
@@ -304,6 +305,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final ThemeMode? chosen = await showModalBottomSheet<ThemeMode>(
       context: context,
+      useRootNavigator: true,
       useSafeArea: true,
       builder: (BuildContext sheetContext) => SafeArea(
         child: Column(
@@ -339,6 +341,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _chooseChecklistLanguage(String active) async {
     final String? chosen = await showModalBottomSheet<String>(
       context: context,
+      useRootNavigator: true,
       useSafeArea: true,
       builder: (BuildContext sheetContext) => SafeArea(
         child: Column(
@@ -368,6 +371,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _openSavedSignature() async {
     await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       useSafeArea: true,
       isScrollControlled: true,
       builder: (BuildContext sheetContext) => const _SavedSignatureSheet(),
@@ -394,8 +398,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             icon: Badge(
               key: ProfileScreenKeys.notificationsBadge,
               isLabelVisible: unreadCount > 0,
-              backgroundColor: palette.warning.base,
-              textColor: palette.warning.onBase,
+              backgroundColor: palette.critical.base,
+              textColor: palette.critical.onBase,
               label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
               child: const Icon(Icons.notifications_none_rounded),
             ),
@@ -581,8 +585,8 @@ class _IdentityHeader extends StatelessWidget {
               // separated by a background-coloured gap so the ring reads as
               // a ring on either theme.
               Container(
-                width: 100,
-                height: 100,
+                width: 84,
+                height: 84,
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
@@ -612,7 +616,7 @@ class _IdentityHeader extends StatelessWidget {
                     alignment: Alignment.center,
                     child: Text(
                       _profileInitials(name),
-                      style: text.headlineMedium?.copyWith(
+                      style: text.headlineSmall?.copyWith(
                         color: palette.primaryDark,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.5,
@@ -638,7 +642,7 @@ class _IdentityHeader extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(width: TpSpace.lg),
+          const SizedBox(width: TpSpace.xl),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,23 +735,35 @@ class _IdentityLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextStyle? base = Theme.of(context).textTheme.bodyMedium;
+    // The label and value flow together: when the value does not fit beside
+    // the label it moves to its own line instead of being squeezed.
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Icon(icon, size: 16, color: palette.primary),
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, size: 16, color: palette.primary),
+        ),
         const SizedBox(width: 6),
-        if (label != null) ...<Widget>[
-          Text(label!, style: base?.copyWith(color: palette.textSecondary)),
-          const SizedBox(width: TpSpace.sm),
-        ],
-        Flexible(
-          child: Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: base?.copyWith(
-              color: palette.text,
-              fontWeight: FontWeight.w600,
-            ),
+        Expanded(
+          child: Wrap(
+            spacing: TpSpace.sm,
+            children: <Widget>[
+              if (label != null)
+                Text(
+                  label!,
+                  style: base?.copyWith(color: palette.textSecondary),
+                ),
+              Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: base?.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -1687,6 +1703,7 @@ class _SettingsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
+    final bool alert = identical(tone, palette.critical);
 
     final Widget content = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 56),
@@ -1702,11 +1719,17 @@ class _SettingsRow extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: tone.soft,
+                  color: alert ? tone.soft : palette.primarySoft,
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
-                child: Icon(icon, size: 20, color: tone.base),
+                // One tint for every setting row (the theme's accent family);
+                // only a critical state keeps its own colour.
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: alert ? tone.base : palette.primary,
+                ),
               ),
               const SizedBox(width: TpSpace.md),
               // The label takes whatever the value does not need, so a short
@@ -1725,7 +1748,7 @@ class _SettingsRow extends StatelessWidget {
                 const SizedBox(width: TpSpace.md),
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxWidth: constraints.maxWidth * 0.45,
+                    maxWidth: constraints.maxWidth * 0.6,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,

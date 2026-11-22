@@ -91,9 +91,12 @@ class TpAppShell extends ConsumerWidget {
             ),
           )
         : null;
+    // The accident report has its own Back / Continue row on every step, so
+    // the tab bar would stack a second bar under it.
     final bool hasScreenOwnedNavigation =
         inspectionStep == InspectionWizardStep.tyres ||
-            inspectionStep == InspectionWizardStep.review;
+            inspectionStep == InspectionWizardStep.review ||
+            activePath == TpRoutePaths.accidentReport;
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -135,7 +138,7 @@ class _TabBar extends StatelessWidget {
         child: SizedBox(
           // The tab label grows with the person's text size; a fixed 72 left
           // it 4 px short on every screen at text scale 2.0.
-          height: tpTextScaledExtent(context, base: 72, textHeight: 16),
+          height: tpTextScaledExtent(context, base: 64, textHeight: 16),
           child: Row(
             children: <Widget>[
               for (int index = 0; index < layout.visible.length; index++)

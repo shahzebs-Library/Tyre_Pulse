@@ -270,6 +270,22 @@ class _InspectionApprovalReviewScreenState
       return;
     }
 
+    // One tap must never commit a signed decision: ask once, after the
+    // validation above so the question is only asked when it can succeed.
+    final bool confirmed = await _confirmDecision(
+      context,
+      title: approved
+          ? l10n.inspectionApprovalConfirmApproveTitle
+          : l10n.inspectionApprovalConfirmReturnTitle,
+      message: approved
+          ? l10n.inspectionApprovalConfirmApproveMessage
+          : l10n.inspectionApprovalConfirmReturnMessage,
+      confirmLabel: approved
+          ? l10n.inspectionApprovalApproveButton
+          : l10n.inspectionApprovalReturnButton,
+    );
+    if (!confirmed || !mounted) return;
+
     final _DecisionBusy nextBusy =
         approved ? _DecisionBusy.approving : _DecisionBusy.rejecting;
     setState(() => _busy = nextBusy);
@@ -405,6 +421,52 @@ class _InspectionApprovalReviewScreenState
 /// pure info message today, and adding one is outside this feature's
 /// scope; the styling constants are matched here rather than duplicated
 /// under a fresh, drifting set of values.
+Future<bool> _confirmDecision(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String confirmLabel,
+}) async {
+  final AppLocalizations l10n = AppLocalizations.of(context);
+  final TpPalette palette = TpPalette.of(context);
+  final bool? result = await showDialog<bool>(
+    context: context,
+    barrierColor: palette.overlay,
+    builder: (BuildContext dialogContext) {
+      return AlertDialog(
+        backgroundColor: palette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(TpRadius.lg),
+        ),
+        title: Text(title, style: Theme.of(dialogContext).textTheme.titleLarge),
+        content: Text(
+          message,
+          style: Theme.of(dialogContext).textTheme.bodyMedium,
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(
+          TpSpace.lg,
+          0,
+          TpSpace.lg,
+          TpSpace.lg,
+        ),
+        actions: <Widget>[
+          TpButton.secondary(
+            key: const ValueKey<String>('inspection.approval.confirm.cancel'),
+            label: l10n.actionCancel,
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+          ),
+          TpButton.primary(
+            key: const ValueKey<String>('inspection.approval.confirm.ok'),
+            label: confirmLabel,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+          ),
+        ],
+      );
+    },
+  );
+  return result ?? false;
+}
+
 Future<void> _showInfoDialog(
   BuildContext context, {
   required String title,

@@ -277,7 +277,7 @@ class _AccidentDashboardScreenState
           const SizedBox(height: TpSpace.md),
           Wrap(
             spacing: TpSpace.sm,
-            runSpacing: TpSpace.sm,
+            runSpacing: TpSpace.md,
             children: <Widget>[
               QueueFilterChip(
                 key: AccidentDashboardScreenKeys.allCases,

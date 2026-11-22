@@ -920,7 +920,9 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(ProfileScreenKeys.status),
-        matching: find.byIcon(Icons.notifications_none_rounded),
+        matching: find.byWidgetPredicate(
+          (Widget w) => w is TpAssetIcon && w.kind == TpAssetIconKind.bell,
+        ),
       ),
       findsNothing,
     );
@@ -936,7 +938,9 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(ProfileScreenKeys.status),
-        matching: find.byIcon(Icons.notifications_none_rounded),
+        matching: find.byWidgetPredicate(
+          (Widget w) => w is TpAssetIcon && w.kind == TpAssetIconKind.bell,
+        ),
       ),
       findsOneWidget,
     );

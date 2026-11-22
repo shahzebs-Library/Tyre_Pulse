@@ -833,7 +833,7 @@ class _Pill extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: 18, color: palette.text),
+          TpIcon(icon, size: 18, color: palette.text),
           const SizedBox(width: TpSpace.sm),
           Expanded(
             child: Text(
@@ -845,7 +845,7 @@ class _Pill extends StatelessWidget {
                   ),
             ),
           ),
-          if (trailing != null) Icon(trailing, color: palette.text),
+          if (trailing != null) TpIcon(trailing, color: palette.text),
         ],
       ),
     );

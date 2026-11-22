@@ -1119,7 +1119,7 @@ class _CaptureOrientationPill extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             ExcludeSemantics(
-              child: Icon(icon, size: 14, color: palette.primary),
+              child: TpIcon(icon, size: 14, color: palette.primary),
             ),
             const SizedBox(width: TpSpace.xs),
             Text(
@@ -1651,7 +1651,7 @@ class _EmptyDiagramState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: TpSizing.iconState, color: palette.textMuted),
+          TpIcon(icon, size: TpSizing.iconState, color: palette.textMuted),
           const SizedBox(height: TpSpace.md),
           Text(
             title,

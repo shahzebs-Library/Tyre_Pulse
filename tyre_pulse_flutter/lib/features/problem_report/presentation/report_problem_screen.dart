@@ -421,7 +421,7 @@ class _FailureBanner extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(icon, color: palette.critical.onSoft),
+            TpIcon(icon, color: palette.critical.onSoft),
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(

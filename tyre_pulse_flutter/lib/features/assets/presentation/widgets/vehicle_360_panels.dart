@@ -307,7 +307,7 @@ class _TimelineRow extends StatelessWidget {
                           shape: BoxShape.circle,
                           border: Border.all(color: colors.base, width: 1.5),
                         ),
-                        child: Icon(icon, size: 18, color: colors.base),
+                        child: TpIcon(icon, size: 18, color: colors.base),
                       ),
                       if (!isLast)
                         Expanded(
@@ -573,7 +573,7 @@ class _Menu<T> extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            Icon(icon, size: 18, color: palette.text),
+            TpIcon(icon, size: 18, color: palette.text),
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(

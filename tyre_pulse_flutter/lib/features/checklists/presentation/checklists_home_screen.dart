@@ -868,7 +868,7 @@ class _ChecklistHubHeader extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Icon(Icons.sync_rounded, color: palette.ok.base, size: 22),
+                  TpIcon(Icons.sync_rounded, color: palette.ok.base, size: 22),
                   const SizedBox(width: TpSpace.xs),
                   Text(
                     syncedLabel,
@@ -918,7 +918,7 @@ class _ChecklistAssetSearch extends StatelessWidget {
             : IconButton(
                 tooltip: AppLocalizations.of(context).scannerTitle,
                 onPressed: onScan,
-                icon: Icon(
+                icon: TpIcon(
                   Icons.qr_code_scanner_rounded,
                   color: palette.primary,
                   size: 26,
@@ -1110,7 +1110,7 @@ class _AssetFact extends StatelessWidget {
     final Color ink = TpPalette.of(context).textSecondary;
     return Row(
       children: <Widget>[
-        Icon(icon, size: TpSizing.iconMd, color: ink),
+        TpIcon(icon, size: TpSizing.iconMd, color: ink),
         const SizedBox(width: TpSpace.xs),
         Expanded(
           child: Text(
@@ -1452,7 +1452,7 @@ class _RowIcon extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
-      child: Icon(icon, color: _checklistNavy(palette), size: 24),
+      child: TpIcon(icon, color: _checklistNavy(palette), size: 24),
     );
   }
 }
@@ -1827,7 +1827,7 @@ class _ChecklistHubLink extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(icon, color: _checklistNavy(palette), size: 27),
+              child: TpIcon(icon, color: _checklistNavy(palette), size: 27),
             ),
             const SizedBox(width: TpSpace.md),
             Expanded(
@@ -2060,7 +2060,7 @@ class _ChecklistRowLayout extends StatelessWidget {
                   color: iconColors.base.withValues(alpha: 0.18),
                 ),
               ),
-              child: Icon(icon, color: iconColors.base, size: 28),
+              child: TpIcon(icon, color: iconColors.base, size: 28),
             ),
             const SizedBox(width: TpSpace.md),
             Expanded(

@@ -469,7 +469,7 @@ class _OwnershipItem extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(
+          TpIcon(
             icon,
             size: TpSizing.iconMd,
             color: TpPalette.of(context).primary,
@@ -521,7 +521,7 @@ class _WorkspaceCard extends StatelessWidget {
           key: PageStorageKey<String>('accident.workspace.section.$title'),
           shape: const Border(),
           collapsedShape: const Border(),
-          leading: Icon(icon, color: TpPalette.of(context).primary),
+          leading: TpIcon(icon, color: TpPalette.of(context).primary),
           title: Text(title, style: Theme.of(context).textTheme.titleSmall),
           childrenPadding:
               const EdgeInsets.fromLTRB(TpSpace.md, 0, TpSpace.md, TpSpace.md),
@@ -538,7 +538,7 @@ class _WorkspaceCard extends StatelessWidget {
             padding: const EdgeInsets.all(TpSpace.md),
             child: Row(
               children: <Widget>[
-                Icon(
+                TpIcon(
                   icon,
                   size: TpSizing.iconMd,
                   color: TpPalette.of(context).primary,

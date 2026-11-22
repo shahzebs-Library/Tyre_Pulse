@@ -26,6 +26,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
 
 /// The one shadow tint this kit uses: a faint navy lift on the light
 /// theme, a plain dark drop on the dark theme (a light-ink shadow would
@@ -295,7 +296,7 @@ class QueueListRow extends StatelessWidget {
               shape: BoxShape.circle,
               border: Border.all(color: tone.base.withValues(alpha: 0.18)),
             ),
-            child: Icon(icon, color: tone.base, size: 22),
+            child: TpIcon(icon, color: tone.base, size: 22),
           ),
           const SizedBox(width: TpSpace.md),
           Expanded(

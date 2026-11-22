@@ -6,7 +6,7 @@ import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
 import 'package:widgetbook_workspace/components/catalogue_support.dart';
 
 @widgetbook.UseCase(
-  name: 'Domain icon set',
+  name: 'Signature icon set',
   type: TpAssetIcon,
   path: CataloguePath.foundations,
 )
@@ -20,7 +20,7 @@ Widget assetIconSet(BuildContext context) {
     divisions: 4,
   );
   return CatalogueFrame(
-    title: 'Domain icons, 16 to 32 pt',
+    title: 'Signature icons: 15 stroked glyphs, 16 to 32 pt',
     children: <Widget>[
       Wrap(
         spacing: 20,
@@ -33,6 +33,35 @@ Widget assetIconSet(BuildContext context) {
                 TpAssetIcon(kind, size: size, color: palette.primary),
                 const SizedBox(height: 6),
                 Text(kind.name, style: Theme.of(context).textTheme.labelSmall),
+              ],
+            ),
+        ],
+      ),
+    ],
+  );
+}
+
+@widgetbook.UseCase(
+  name: 'Gem tiles',
+  type: TpGem,
+  path: CataloguePath.foundations,
+)
+Widget gemTiles(BuildContext context) {
+  final bool large = context.knobs.boolean(label: 'Large (64)');
+  return CatalogueFrame(
+    title: 'Gem tiles: glyph and meaning colour per feature',
+    children: <Widget>[
+      Wrap(
+        spacing: 20,
+        runSpacing: 20,
+        children: <Widget>[
+          for (final TpGemSpec spec in TpGemSpec.values)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TpGem.spec(spec, size: large ? TpGemSize.lg : TpGemSize.md),
+                const SizedBox(height: 6),
+                Text(spec.name, style: Theme.of(context).textTheme.labelSmall),
               ],
             ),
         ],

@@ -10,6 +10,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_damage_map.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
@@ -305,7 +306,7 @@ class _FallbackArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Icon(
+        child: TpIcon(
           icon,
           key: const Key('accident.damage.vehicle-fallback'),
           size: 72,

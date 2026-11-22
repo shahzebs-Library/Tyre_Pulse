@@ -145,7 +145,7 @@ class AccidentWorkstreamHeader extends ConsumerWidget {
                   isCompact: true,
                 )
               else
-                Icon(
+                TpIcon(
                   Icons.fact_check_outlined,
                   size: TpSizing.iconMd,
                   color: palette.primary,

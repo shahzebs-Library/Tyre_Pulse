@@ -1155,7 +1155,7 @@ class _FleetFilterMenu extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            Icon(icon, size: 18, color: palette.text),
+            TpIcon(icon, size: 18, color: palette.text),
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(
@@ -1471,7 +1471,7 @@ class _SignalLine extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Icon(icon, size: 16, color: tone.base),
+        TpIcon(icon, size: 16, color: tone.base),
         const SizedBox(width: 4),
         Flexible(
           child: Text(

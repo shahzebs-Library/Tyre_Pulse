@@ -772,7 +772,7 @@ class _AccidentResponsibilityMockWorkspaceState
   Widget _personLine(String value, Key key, TpPalette palette) => Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(
+          TpIcon(
             Icons.person_outline,
             size: TpSizing.iconMd,
             color: palette.primary,
@@ -908,7 +908,7 @@ class _AccidentResponsibilityMockWorkspaceState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         if (icon != null) ...<Widget>[
-          Icon(
+          TpIcon(
             icon,
             size: TpSizing.iconMd,
             color: TpPalette.of(context).textSecondary,
@@ -1040,7 +1040,7 @@ class _AccidentResponsibilityMockWorkspaceState
       padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: TpSizing.iconMd, color: palette.primary),
+          TpIcon(icon, size: TpSizing.iconMd, color: palette.primary),
           const SizedBox(width: TpSpace.sm),
           Expanded(
             flex: 4,
@@ -1079,7 +1079,7 @@ class _AccidentResponsibilityMockWorkspaceState
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Icon(icon, size: TpSizing.iconSm, color: color),
+        TpIcon(icon, size: TpSizing.iconSm, color: color),
         const SizedBox(width: TpSpace.xs),
         Flexible(
           child: Text(

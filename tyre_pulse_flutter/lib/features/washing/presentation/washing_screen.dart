@@ -408,7 +408,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   key: WashingScreenKeys.scanAsset,
                   tooltip: l10n.scannerTitle,
                   onPressed: _scanAsset,
-                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  icon: const TpIcon(Icons.qr_code_scanner_rounded),
                 ),
               ),
             )

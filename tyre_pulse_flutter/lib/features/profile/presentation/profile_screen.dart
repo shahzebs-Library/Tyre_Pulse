@@ -401,7 +401,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               backgroundColor: palette.critical.base,
               textColor: palette.critical.onBase,
               label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
-              child: const Icon(Icons.notifications_none_rounded),
+              child: const TpIcon(Icons.notifications_none_rounded),
             ),
             tooltip: NotificationsCopy.of(context)('title'),
             onPressed: () => context.push(const NotificationsRoute().location),
@@ -742,7 +742,7 @@ class _IdentityLine extends StatelessWidget {
       children: <Widget>[
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: Icon(icon, size: 16, color: palette.primary),
+          child: TpIcon(icon, size: 16, color: palette.primary),
         ),
         const SizedBox(width: 6),
         Expanded(
@@ -812,7 +812,7 @@ class _IdentityBadge extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: TpSizing.iconSm, color: foreground),
+            TpIcon(icon, size: TpSizing.iconSm, color: foreground),
             const SizedBox(width: TpSpace.xs),
             Flexible(
               child: Text(
@@ -1026,7 +1026,7 @@ class _ProfileStatusItem extends StatelessWidget {
                     borderRadius: BorderRadius.circular(TpRadius.md),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, size: 20, color: tone.base),
+                  child: TpIcon(icon, size: 20, color: tone.base),
                 ),
                 const SizedBox(height: TpSpace.xs),
                 Text(
@@ -1072,7 +1072,7 @@ class _ProfileStatusItem extends StatelessWidget {
               borderRadius: BorderRadius.circular(TpRadius.md),
             ),
             alignment: Alignment.center,
-            child: Icon(icon, size: TpSizing.iconMd, color: tone.base),
+            child: TpIcon(icon, size: TpSizing.iconMd, color: tone.base),
           ),
           const SizedBox(width: TpSpace.sm),
           Expanded(
@@ -1734,7 +1734,7 @@ class _SettingsRow extends StatelessWidget {
                 alignment: Alignment.center,
                 // One tint for every setting row (the theme's accent family);
                 // only a critical state keeps its own colour.
-                child: Icon(
+                child: TpIcon(
                   icon,
                   size: 20,
                   color: alert ? tone.base : palette.primary,

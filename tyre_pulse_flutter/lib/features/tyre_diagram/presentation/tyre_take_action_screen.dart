@@ -258,7 +258,7 @@ class _ActionTile extends StatelessWidget {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(TpSpace.sm),
-                child: Icon(
+                child: TpIcon(
                   icon,
                   size: TpSizing.iconMd,
                   color: isEnabled ? palette.primaryDark : palette.textMuted,

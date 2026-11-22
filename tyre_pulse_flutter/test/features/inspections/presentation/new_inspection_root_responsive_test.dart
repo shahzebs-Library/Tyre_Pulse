@@ -617,10 +617,12 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Wheel loader'), findsOneWidget);
-      final TpAssetIcon classIcon = tester.widget<TpAssetIcon>(
+      // The signature family has no loader glyph, so a loader keeps its
+      // Material outlined icon.
+      final Icon classIcon = tester.widget<Icon>(
         find.byKey(NewInspectionScreenKeys.vehicleSectionIcon),
       );
-      expect(classIcon.kind, TpAssetIconKind.loader);
+      expect(classIcon.icon, Icons.precision_manufacturing_outlined);
       expect(tester.takeException(), isNull);
     },
   );

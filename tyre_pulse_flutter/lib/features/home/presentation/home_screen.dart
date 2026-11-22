@@ -738,7 +738,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return _WorkRowData(
       id: 'critical',
       tone: palette.critical,
-      icon: Icons.warning_amber_rounded,
+      icon: Icons.tire_repair_outlined,
       tag: l10n.statusCritical,
       title: l10n.homeTyreIssueNeedsAttention,
       detail: _joinParts(<String?>[alert.position, alert.assetNo, alert.site]),
@@ -791,6 +791,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _SummaryTileData tile<T>({
       required String id,
       required IconData icon,
+      required TpGemSpec gem,
       required TpStatusColors tone,
       required String label,
       required AsyncValue<T> state,
@@ -801,6 +802,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           AsyncData<T>(value: final T v) => _SummaryTileData(
               id: id,
               icon: icon,
+              gem: gem,
               tone: tone,
               label: label,
               value: value(v),
@@ -809,6 +811,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           AsyncError<T>() => _SummaryTileData(
               id: id,
               icon: icon,
+              gem: gem,
+              gemTone: TpGemTone.slate,
               tone: palette.unknown,
               label: label,
               value: '-',
@@ -818,6 +822,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           _ => _SummaryTileData(
               id: id,
               icon: icon,
+              gem: gem,
+              gemTone: TpGemTone.slate,
               tone: palette.unknown,
               label: label,
               value: '-',
@@ -835,6 +841,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         tile<MyWorkSnapshot>(
           id: 'inspections',
           icon: Icons.assignment_outlined,
+          gem: TpGemSpec.inspectionsDue,
           tone: palette.info,
           label: l10n.homeInspectionsDue,
           state: snapshot != null &&
@@ -863,6 +870,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       tile<int>(
         id: 'sync',
         icon: Icons.sync_rounded,
+        gem: TpGemSpec.pendingSync,
         tone:
             (pendingSync.asData?.value ?? 0) > 0 ? palette.warning : palette.ok,
         label: l10n.homeSyncStatLabel,
@@ -874,6 +882,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         tile<List<TyreAlert>>(
           id: 'tyres',
           icon: Icons.tire_repair_outlined,
+          gem: TpGemSpec.tyresNeedAttention,
           tone: palette.critical,
           label: l10n.homeTyresNeedAttention,
           state: alerts,
@@ -886,6 +895,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         tile<HomePendingApprovals>(
           id: 'approvals',
           icon: Icons.how_to_reg_outlined,
+          gem: TpGemSpec.approvals,
           tone: palette.warning,
           label: l10n.homeApprovalsAwaitingYou,
           state: approvals,
@@ -965,7 +975,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               for (final HomeSectionSpec section in sections)
                 for (final HomeTileSpec tile in section.tiles)
                   ListTile(
-                    leading: Icon(_tileMeta(l10n, tile.id).icon),
+                    leading: TpIcon(_tileMeta(l10n, tile.id).icon),
                     title: Text(_tileMeta(l10n, tile.id).label),
                     trailing: const Icon(
                       // Mirrors itself under RTL (matchTextDirection).
@@ -1210,7 +1220,10 @@ class _HomeHeader extends StatelessWidget {
                   border: Border.all(color: palette.surface, width: 2),
                 ),
                 child: initials == null
-                    ? Icon(Icons.person_outline_rounded, color: palette.primary)
+                    ? TpIcon(
+                        Icons.person_outline_rounded,
+                        color: palette.primary,
+                      )
                     : Text(
                         initials,
                         style: text.titleMedium?.copyWith(
@@ -1318,7 +1331,7 @@ class _HeaderIconButton extends StatelessWidget {
                 clipBehavior: Clip.none,
                 alignment: Alignment.center,
                 children: <Widget>[
-                  Icon(icon, size: 24, color: palette.text),
+                  TpIcon(icon, size: 24, color: palette.text),
                   if (badge != null)
                     PositionedDirectional(
                       top: -6,
@@ -1470,7 +1483,7 @@ class _HomeSyncStatus extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(icon, size: 16, color: tone.base),
+              TpIcon(icon, size: 16, color: tone.base),
               const SizedBox(width: 5),
               Flexible(
                 child: Text(
@@ -1911,7 +1924,7 @@ class _WorkTimelineRow extends StatelessWidget {
                                 width: 1.5,
                               ),
                             ),
-                            child: Icon(
+                            child: TpIcon(
                               data.icon,
                               color: data.tone.base,
                               size: 23,
@@ -2119,7 +2132,7 @@ class _AccidentCommandShortcut extends StatelessWidget {
                               width: 1.5,
                             ),
                           ),
-                          child: Icon(
+                          child: TpIcon(
                             Icons.car_crash_outlined,
                             color: tone.base,
                             size: 22,
@@ -2214,7 +2227,6 @@ class _DashboardQuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
     // Each action carries the tone of what it leads to: capture work is
     // blue, fleet records green, a reported fault amber, an accident red,
     // and the catalogue neutral - so the grid scans by colour, not only by
@@ -2222,55 +2234,48 @@ class _DashboardQuickActions extends StatelessWidget {
     final actions = <({
       String id,
       String label,
-      IconData icon,
-      TpStatusColors tone,
+      TpGemSpec gem,
       VoidCallback onTap,
     })>[
       if (canScan)
         (
           id: 'scanner',
           label: l10n.scannerTitle,
-          icon: Icons.qr_code_scanner_rounded,
-          tone: palette.info,
+          gem: TpGemSpec.scan,
           onTap: onScanner,
         ),
       if (canWash)
         (
           id: 'washing',
           label: l10n.tabWashing,
-          icon: Icons.local_car_wash_rounded,
-          tone: palette.info,
+          gem: TpGemSpec.washing,
           onTap: onWashing,
         ),
       if (canSeeVehicles)
         (
           id: 'asset',
           label: l10n.homeAssetAction,
-          icon: Icons.local_shipping_outlined,
-          tone: palette.ok,
+          gem: TpGemSpec.asset,
           onTap: onAsset,
         ),
       if (canReportIssue)
         (
           id: 'reportIssue',
           label: l10n.homeReportIssueAction,
-          icon: Icons.report_gmailerrorred_rounded,
-          tone: palette.warning,
+          gem: TpGemSpec.reportIssue,
           onTap: onReportIssue,
         ),
       if (canReportAccident)
         (
           id: 'accident',
           label: l10n.homeReportAccidentAction,
-          icon: Icons.car_crash_outlined,
-          tone: palette.critical,
+          gem: TpGemSpec.reportAccident,
           onTap: onAccident,
         ),
       (
         id: 'more',
         label: l10n.homeMoreAction,
-        icon: Icons.apps_rounded,
-        tone: palette.neutral,
+        gem: TpGemSpec.more,
         onTap: onMore,
       ),
     ];
@@ -2291,10 +2296,7 @@ class _DashboardQuickActions extends StatelessWidget {
                 child: _DashboardActionCard(
                   key: HomeScreenKeys.action(action.id),
                   label: action.label,
-                  icon: action.icon,
-                  assetIcon:
-                      action.id == 'asset' ? TpAssetIconKind.mixer : null,
-                  tone: action.tone,
+                  gem: action.gem,
                   onTap: action.onTap,
                 ),
               ),
@@ -2308,19 +2310,15 @@ class _DashboardQuickActions extends StatelessWidget {
 class _DashboardActionCard extends StatelessWidget {
   const _DashboardActionCard({
     required this.label,
-    required this.icon,
-    required this.tone,
+    required this.gem,
     required this.onTap,
-    this.assetIcon,
     super.key,
   });
 
   final String label;
-  final IconData icon;
 
-  /// Domain icon drawn instead of [icon] when set.
-  final TpAssetIconKind? assetIcon;
-  final TpStatusColors tone;
+  /// The gem tile's glyph and meaning colour (see [TpGemSpec]).
+  final TpGemSpec gem;
   final VoidCallback onTap;
 
   @override
@@ -2340,8 +2338,8 @@ class _DashboardActionCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: tone.soft,
-          highlightColor: tone.soft.withValues(alpha: 0.5),
+          splashColor: gem.tone.start.withValues(alpha: 0.14),
+          highlightColor: gem.tone.start.withValues(alpha: 0.08),
           child: Container(
             constraints: const BoxConstraints(minHeight: 112),
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
@@ -2349,21 +2347,7 @@ class _DashboardActionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: tone.soft,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: tone.base.withValues(alpha: 0.22),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: assetIcon != null
-                      ? TpAssetIcon(assetIcon!, color: tone.base, size: 22)
-                      : Icon(icon, color: tone.base, size: 21),
-                ),
+                TpGem.spec(gem, size: TpGemSize.md),
                 const SizedBox(height: 12),
                 Text(
                   label,
@@ -2613,7 +2597,7 @@ class _RecentAssetsStrip extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
               children: <Widget>[
-                Icon(icon, color: palette.textMuted, size: 20),
+                TpIcon(icon, color: palette.textMuted, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -2919,15 +2903,24 @@ class _SummaryTileData {
   const _SummaryTileData({
     required this.id,
     required this.icon,
+    required this.gem,
     required this.tone,
     required this.label,
     required this.value,
+    this.gemTone,
     this.note,
     this.onTap,
   });
 
   final String id;
   final IconData icon;
+
+  /// The gem tile's glyph and meaning colour.
+  final TpGemSpec gem;
+
+  /// Overrides the gem colour (slate while the value is loading or unreadable,
+  /// so a tile never shows a meaning colour for a number it does not have).
+  final TpGemTone? gemTone;
   final TpStatusColors tone;
   final String label;
   final String value;
@@ -3003,15 +2996,10 @@ class _SummaryTile extends StatelessWidget {
                 children: <Widget>[
                   Row(
                     children: <Widget>[
-                      Container(
-                        width: 36,
-                        height: 36,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: tile.tone.soft,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(tile.icon, size: 20, color: tile.tone.base),
+                      TpGem.spec(
+                        tile.gem,
+                        tone: tile.gemTone,
+                        size: TpGemSize.md,
                       ),
                       const Spacer(),
                       if (tile.onTap != null)

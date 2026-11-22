@@ -722,7 +722,7 @@ class _AccidentFleetValidationMockWorkspaceState
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(
+            TpIcon(
               fact.icon,
               size: TpSizing.iconMd,
               color: TpPalette.of(context).primary,
@@ -1063,7 +1063,7 @@ class _AccidentFleetValidationMockWorkspaceState
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(
+            TpIcon(
               icon,
               size: TpSizing.iconMd,
               color: TpPalette.of(context).primary,
@@ -1111,7 +1111,7 @@ class _AccidentFleetValidationMockWorkspaceState
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(icon, color: colors.onSoft),
+            TpIcon(icon, color: colors.onSoft),
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(

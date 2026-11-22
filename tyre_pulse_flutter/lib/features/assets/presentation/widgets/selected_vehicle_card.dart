@@ -162,7 +162,7 @@ class SelectedVehicleCard extends StatelessWidget {
           IconButton(
             tooltip: changeLabel,
             onPressed: onChange,
-            icon: const Icon(Icons.qr_code_scanner_rounded),
+            icon: const TpIcon(Icons.qr_code_scanner_rounded),
             color: palette.primary,
           ),
         ],

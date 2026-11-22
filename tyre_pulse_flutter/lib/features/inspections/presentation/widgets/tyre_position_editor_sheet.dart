@@ -165,7 +165,7 @@ class _TyrePositionEditorSheetState
                         ),
                         child: SizedBox.square(
                           dimension: 48,
-                          child: Icon(
+                          child: TpIcon(
                             Icons.tire_repair_outlined,
                             color: palette.onPrimary,
                           ),
@@ -580,7 +580,7 @@ class _ConditionChip extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
                   if (icon != null) ...<Widget>[
-                    Icon(
+                    TpIcon(
                       icon,
                       size: TpSizing.iconSm,
                       color: isSelected ? colors.onBase : colors.onSoft,

@@ -224,7 +224,7 @@ class _AccidentDashboardScreenState
                       color: alert.base.withValues(alpha: 0.25),
                     ),
                   ),
-                  child: Icon(
+                  child: TpIcon(
                     Icons.car_crash_outlined,
                     color: alert.base,
                     size: 22,

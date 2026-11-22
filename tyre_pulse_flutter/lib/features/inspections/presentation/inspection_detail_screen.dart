@@ -677,7 +677,7 @@ class _InfoRow extends StatelessWidget {
       padding: const EdgeInsets.only(top: 2),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: TpSizing.iconSm),
+          TpIcon(icon, size: TpSizing.iconSm),
           const SizedBox(width: TpSpace.xs),
           Text(text, style: Theme.of(context).textTheme.bodySmall),
         ],

@@ -443,7 +443,7 @@ class _InspectionHeaderHero extends StatelessWidget {
             ),
             child: Padding(
               padding: const EdgeInsets.all(TpSpace.md),
-              child: Icon(
+              child: TpIcon(
                 Icons.assignment_outlined,
                 color: palette.onPrimary,
                 size: TpSizing.iconLg,
@@ -516,7 +516,7 @@ class _SetupSection extends StatelessWidget {
                             size: TpSizing.iconMd,
                             color: tone.onSoft,
                           )
-                        : Icon(
+                        : TpIcon(
                             icon,
                             key: iconKey,
                             size: TpSizing.iconMd,
@@ -909,7 +909,7 @@ class _IconLine extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     return Row(
       children: <Widget>[
-        Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+        TpIcon(icon, size: TpSizing.iconSm, color: palette.textMuted),
         const SizedBox(width: TpSpace.xs),
         Flexible(
           child: Text(
@@ -1334,7 +1334,7 @@ class _ClassFilterChip extends StatelessWidget {
     return ChoiceChip(
       avatar: ExcludeSemantics(
         child: resolvedClass == null
-            ? Icon(
+            ? TpIcon(
                 icon,
                 size: TpIconSize.sm,
                 color: isSelected ? palette.onPrimary : palette.primary,
@@ -2176,7 +2176,7 @@ class _ConditionLegendItem extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, color: color, size: 20),
+          TpIcon(icon, color: color, size: 20),
           const SizedBox(width: 5),
           Text(
             label,
@@ -2485,6 +2485,7 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                               ),
                         valueColor: valueColor,
                         icon: Icons.speed_rounded,
+                        glyph: TpAssetIconKind.gauge,
                         status: status,
                       ),
                     ),
@@ -2685,7 +2686,7 @@ class _InspectionModuleSwitch extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
-                      Icon(
+                      TpIcon(
                         Icons.tire_repair_rounded,
                         size: TpSizing.iconSm,
                         color: palette.primary,
@@ -2912,6 +2913,7 @@ class _PanelValueTile extends StatelessWidget {
     required this.valueColor,
     required this.icon,
     required this.status,
+    this.glyph,
   });
 
   final String label;
@@ -2919,6 +2921,9 @@ class _PanelValueTile extends StatelessWidget {
   final Color? valueColor;
   final IconData icon;
   final TpStatus status;
+
+  /// Signature glyph drawn instead of [icon] when set (pressure -> gauge).
+  final TpAssetIconKind? glyph;
 
   @override
   Widget build(BuildContext context) {
@@ -2949,11 +2954,17 @@ class _PanelValueTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 ExcludeSemantics(
-                  child: Icon(
-                    icon,
-                    size: 14,
-                    color: flagged ? colors.base : palette.textMuted,
-                  ),
+                  child: glyph == null
+                      ? TpIcon(
+                          icon,
+                          size: 14,
+                          color: flagged ? colors.base : palette.textMuted,
+                        )
+                      : TpAssetIcon(
+                          glyph!,
+                          size: 14,
+                          color: flagged ? colors.base : palette.textMuted,
+                        ),
                 ),
                 const SizedBox(width: 3),
                 Flexible(
@@ -3040,7 +3051,11 @@ class _PanelActionTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: TpSpace.xs),
-                Icon(icon, size: TpSizing.iconSm, color: palette.textSecondary),
+                TpIcon(
+                  icon,
+                  size: TpSizing.iconSm,
+                  color: palette.textSecondary,
+                ),
               ],
             ),
           ),
@@ -3136,7 +3151,7 @@ class _PanelNavButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final bool enabled = onTap != null && code != null;
-    final Widget chevron = Icon(
+    final Widget chevron = TpIcon(
       icon,
       size: TpSizing.iconMd,
       color: enabled ? palette.textSecondary : palette.textMuted,
@@ -3343,12 +3358,8 @@ Widget _vehicleClassGlyph(
   Key? key,
 }) {
   final TpAssetIconKind? kind = switch (resolvedClass) {
-    'Pickup' => TpAssetIconKind.pickup,
-    'Bus' || 'Tata' || 'Ashok Leyland' => TpAssetIconKind.bus,
-    'Wheel loader' || 'Skid loader' => TpAssetIconKind.loader,
-    'Concrete pump' || 'Line pump' => TpAssetIconKind.pump,
-    'Trailer' => TpAssetIconKind.trailer,
     'Tri-mixer' => TpAssetIconKind.mixer,
+    'Concrete pump' || 'Line pump' => TpAssetIconKind.pump,
     _ => null,
   };
   if (kind != null) {
@@ -3360,11 +3371,22 @@ Widget _vehicleClassGlyph(
     );
   }
   return Icon(
-    Icons.local_shipping_outlined,
+    _vehicleClassIcon(resolvedClass),
     key: key,
     size: size,
     color: color,
   );
+}
+
+/// Material fallback for the classes the signature family has no glyph for.
+IconData _vehicleClassIcon(String resolvedClass) {
+  return switch (resolvedClass) {
+    'Pickup' => Icons.directions_car_outlined,
+    'Bus' || 'Tata' || 'Ashok Leyland' => Icons.directions_bus_outlined,
+    'Wheel loader' || 'Skid loader' => Icons.precision_manufacturing_outlined,
+    'Trailer' => Icons.rv_hookup_outlined,
+    _ => Icons.local_shipping_outlined,
+  };
 }
 
 class _InspectionTyresActionBar extends StatelessWidget {
@@ -3460,7 +3482,7 @@ class _GpsChip extends StatelessWidget {
             foregroundColor: colors.base,
           ),
           onPressed: controller.retryGps,
-          icon: Icon(icon, size: TpSizing.iconMd),
+          icon: TpIcon(icon, size: TpSizing.iconMd),
           label: Text(l10n.inspectionGpsRetry),
         ),
       );
@@ -3476,7 +3498,7 @@ class _GpsChip extends StatelessWidget {
         onPressed: state.gpsStatus == InspectionGpsStatus.unavailable
             ? controller.retryGps
             : null,
-        icon: Icon(icon, color: colors.base, size: TpSizing.iconMd),
+        icon: TpIcon(icon, color: colors.base, size: TpSizing.iconMd),
       ),
     );
   }

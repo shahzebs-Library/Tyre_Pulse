@@ -359,7 +359,7 @@ class _NotificationCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(TpRadius.sm),
               ),
               alignment: Alignment.center,
-              child: Icon(
+              child: TpIcon(
                 row.icon,
                 size: 21,
                 color: isRead ? palette.textMuted : palette.primary,

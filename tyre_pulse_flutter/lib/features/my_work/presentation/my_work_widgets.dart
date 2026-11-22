@@ -375,7 +375,7 @@ class _StatCell extends StatelessWidget {
               width: stacked ? 32 : 40,
               height: stacked ? 32 : 40,
               decoration: BoxDecoration(color: c.soft, shape: BoxShape.circle),
-              child: Icon(
+              child: TpIcon(
                 stat.icon,
                 color: c.base,
                 size: stacked ? TpSizing.iconSm : TpSizing.iconMd,
@@ -960,7 +960,7 @@ class _QueueTile extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: TpSizing.minTouchTarget),
         child: Row(
           children: <Widget>[
-            Icon(icon, color: palette.primaryDark),
+            TpIcon(icon, color: palette.primaryDark),
             const SizedBox(width: TpSpace.xs),
             Expanded(
               child: Text(

@@ -427,7 +427,7 @@ class _AccidentCaseScreenState extends ConsumerState<AccidentCaseScreen>
             subtitle: workstream == null
                 ? Text(copy('notRecorded'))
                 : Text(humaniseAccidentToken(workstream.status)),
-            trailing: Icon(workspace.icon),
+            trailing: TpIcon(workspace.icon),
             onTap: () => Navigator.of(sheetContext).pop(index),
           );
         },

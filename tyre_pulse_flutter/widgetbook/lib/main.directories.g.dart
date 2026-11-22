@@ -183,8 +183,17 @@ final directories = <_widgetbook.WidgetbookNode>[
         name: 'TpAssetIcon',
         useCases: [
           _widgetbook.WidgetbookUseCase(
-            name: 'Domain icon set',
+            name: 'Signature icon set',
             builder: _widgetbook_workspace_components_asset_icons.assetIconSet,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'TpGem',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Gem tiles',
+            builder: _widgetbook_workspace_components_asset_icons.gemTiles,
           ),
         ],
       ),

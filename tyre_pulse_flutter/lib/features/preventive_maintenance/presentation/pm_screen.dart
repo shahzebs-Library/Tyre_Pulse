@@ -67,7 +67,7 @@ class _PreventiveMaintenanceScreenState
               key: const Key('pm.notificationsBadge'),
               isLabelVisible: unread > 0,
               label: Text(unread > 99 ? '99+' : '$unread'),
-              child: const Icon(Icons.notifications_none_rounded),
+              child: const TpIcon(Icons.notifications_none_rounded),
             ),
           ),
           const SizedBox(width: TpSpace.sm),
@@ -560,7 +560,7 @@ class _PmMetric extends StatelessWidget {
             child: SizedBox(
               width: 52,
               height: 52,
-              child: Icon(icon, color: colors.base, size: 28),
+              child: TpIcon(icon, color: colors.base, size: 28),
             ),
           ),
           const SizedBox(height: TpSpace.xs),
@@ -639,7 +639,7 @@ class _PmInitialsAvatar extends StatelessWidget {
         borderRadius: BorderRadius.circular(TpRadius.md),
       ),
       child: initials == null
-          ? Icon(Icons.person_outline_rounded, color: palette.onPrimary)
+          ? TpIcon(Icons.person_outline_rounded, color: palette.onPrimary)
           : Text(
               initials,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -852,7 +852,7 @@ class _QuickAccessTile extends StatelessWidget {
                             ],
                     ),
                     alignment: Alignment.center,
-                    child: Icon(
+                    child: TpIcon(
                       icon,
                       color: onTap == null ? palette.textMuted : tone.onBase,
                       size: 24,
@@ -938,7 +938,7 @@ class _TyresRow extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: Icon(
+                    child: TpIcon(
                       Icons.tire_repair_rounded,
                       color: enabled ? palette.onPrimary : palette.textMuted,
                     ),
@@ -1085,7 +1085,7 @@ class _PmPlanRow extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: TpSpace.xs),
-                          Icon(dueIcon, size: 16, color: tone.base),
+                          TpIcon(dueIcon, size: 16, color: tone.base),
                           const SizedBox(width: 3),
                           Flexible(
                             child: Text(

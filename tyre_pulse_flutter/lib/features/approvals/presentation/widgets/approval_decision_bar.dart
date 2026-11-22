@@ -82,7 +82,7 @@ class ApprovalDecisionBar extends StatelessWidget {
                         color: critical,
                       ),
                     )
-                  : Icon(returnIcon),
+                  : TpIcon(returnIcon),
               label: Text(
                 returnLabel,
                 textAlign: TextAlign.center,

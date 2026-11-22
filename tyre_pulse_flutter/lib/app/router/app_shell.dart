@@ -25,6 +25,7 @@ import 'package:tyre_pulse/app/router/shell_gates.dart';
 import 'package:tyre_pulse/app/router/shell_tabs.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/tp_asset_icons.dart';
 import 'package:tyre_pulse/core/design_system/tp_text_scale.dart';
 import 'package:tyre_pulse/features/inspections/presentation/controllers/inspection_wizard_controller.dart';
 import 'package:tyre_pulse/features/inspections/presentation/state/inspection_wizard_state.dart';
@@ -114,13 +115,15 @@ class TpAppShell extends ConsumerWidget {
 /// the selected state never relies on colour alone. Glyphs Material has no
 /// outline for keep their single form.
 IconData _outlineFor(IconData filled) {
-  if (filled == Icons.home) return Icons.home_outlined;
-  if (filled == Icons.assignment) return Icons.assignment_outlined;
-  if (filled == Icons.report_problem) return Icons.report_problem_outlined;
   if (filled == Icons.speed) return Icons.speed_outlined;
-  if (filled == Icons.local_car_wash) return Icons.local_car_wash_outlined;
-  if (filled == Icons.person) return Icons.person_outline;
   return filled;
+}
+
+/// The signature glyph for a tab, or null when the tab keeps a Material icon
+/// (odometer and history have no glyph in the owner's family).
+TpAssetIconKind? _tabGlyph(IconData icon) {
+  if (icon == Icons.report_problem) return TpAssetIconKind.accident;
+  return tpGlyphForMaterial(icon);
 }
 
 class _TabBar extends StatelessWidget {
@@ -230,11 +233,29 @@ class _TabDestination extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Icon(
-                isSelected ? destination.icon : _outlineFor(destination.icon),
-                color: color,
-                size: 26,
-              ),
+              if (_tabGlyph(destination.icon) case final TpAssetIconKind kind)
+                // Selected: the glyph on a filled pill, so the state never
+                // relies on colour alone. Unselected: the plain stroked glyph.
+                Container(
+                  width: 48,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isSelected ? palette.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: TpAssetIcon(
+                    kind,
+                    size: 22,
+                    color: isSelected ? palette.onPrimary : color,
+                  ),
+                )
+              else
+                Icon(
+                  isSelected ? destination.icon : _outlineFor(destination.icon),
+                  color: color,
+                  size: 26,
+                ),
               const SizedBox(height: 3),
               Text(
                 label,

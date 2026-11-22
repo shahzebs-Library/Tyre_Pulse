@@ -1702,7 +1702,7 @@ class _PickerField extends StatelessWidget {
                 ),
                 child: Row(
                   children: <Widget>[
-                    Icon(icon, size: TpSizing.iconMd),
+                    TpIcon(icon, size: TpSizing.iconMd),
                     const SizedBox(width: TpSpace.sm),
                     Expanded(
                       child: Text(

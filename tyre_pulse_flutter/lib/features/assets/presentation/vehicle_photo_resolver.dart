@@ -555,8 +555,10 @@ bool _brandIsMissing(String? make) {
       normalised == 'unknown';
 }
 
-/// The domain icon for a vehicle's visual kind, or null when only a generic
-/// Material icon applies (generators, chillers, plant, unknown road vehicles).
+/// The signature glyph for a vehicle's visual kind, or null when only a
+/// Material icon applies. The owner's icon family has glyphs for mixers and
+/// pumps only; loaders, trailers, buses, pickups, generators, chillers, plant
+/// and unknown road vehicles keep their Material outlined icon.
 TpAssetIconKind? vehicleAssetIconKindFor({
   String? assetNo,
   String? vehicleType,
@@ -574,29 +576,12 @@ TpAssetIconKind? vehicleAssetIconKindFor({
     case _VehicleVisualKind.concretePump:
     case _VehicleVisualKind.linePump:
       return TpAssetIconKind.pump;
-    case _VehicleVisualKind.wheelLoader:
-    case _VehicleVisualKind.skidLoader:
-      return TpAssetIconKind.loader;
-    case _VehicleVisualKind.pickup:
-      return TpAssetIconKind.pickup;
-    case _VehicleVisualKind.bus:
-      return TpAssetIconKind.bus;
-    case _VehicleVisualKind.trailer:
-    case _VehicleVisualKind.towablePump:
-      return TpAssetIconKind.trailer;
-    case _VehicleVisualKind.generator:
-    case _VehicleVisualKind.chiller:
-    case _VehicleVisualKind.batchingPlant:
-    case _VehicleVisualKind.placingBoom:
-    case _VehicleVisualKind.stationaryPump:
-    case _VehicleVisualKind.genericRoadVehicle:
-    case _VehicleVisualKind.tyrelessEquipment:
-    case _VehicleVisualKind.unknown:
+    default:
       return null;
   }
 }
 
-/// The right icon widget for a vehicle: the domain icon where one exists,
+/// The right icon widget for a vehicle: the signature glyph where one exists,
 /// otherwise the Material fallback. Use this instead of
 /// `Icon(vehicleFallbackIcon(asset))` wherever the icon stands for the
 /// vehicle's class.

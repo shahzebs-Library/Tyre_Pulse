@@ -409,7 +409,7 @@ class _MeterLogScreenState extends ConsumerState<MeterLogScreen> {
                   key: MeterLogScreenKeys.scanAsset,
                   tooltip: l10n.scannerTitle,
                   onPressed: _scanAsset,
-                  icon: const Icon(Icons.qr_code_scanner_rounded),
+                  icon: const TpIcon(Icons.qr_code_scanner_rounded),
                 ),
               ),
             )

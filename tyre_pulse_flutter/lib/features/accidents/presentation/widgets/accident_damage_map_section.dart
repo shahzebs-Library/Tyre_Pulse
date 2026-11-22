@@ -904,7 +904,7 @@ class _SummaryMeta extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+        TpIcon(icon, size: TpSizing.iconSm, color: palette.textMuted),
         const SizedBox(width: TpSpace.xs),
         Text(
           label,

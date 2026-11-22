@@ -358,7 +358,7 @@ class _CameraUnavailableNotice extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
-          Icon(
+          TpIcon(
             Icons.qr_code_scanner,
             size: TpSizing.iconState,
             color: palette.unknown.base,
@@ -545,6 +545,9 @@ class _MatchCard extends StatelessWidget {
       if (kind != null) {
         return TpAssetIcon(kind, size: TpSizing.iconLg);
       }
+    }
+    if (result is TyreScanMatch) {
+      return const TpAssetIcon(TpAssetIconKind.tyre, size: TpSizing.iconLg);
     }
     return Icon(_iconFor(result), size: TpSizing.iconLg);
   }

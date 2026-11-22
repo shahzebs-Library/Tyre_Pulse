@@ -146,7 +146,7 @@ class _TyreRecordsListBody extends ConsumerWidget {
           ),
           IconButton(
             key: TyreRecordsListKeys.scanAction,
-            icon: const Icon(Icons.qr_code_scanner_rounded),
+            icon: const TpIcon(Icons.qr_code_scanner_rounded),
             tooltip: l10n.tyreMockScanSerial,
             onPressed: () => context.push(const SerialSearchRoute().location),
           ),
@@ -674,7 +674,7 @@ class _TyreAvatar extends StatelessWidget {
             border: Border.all(color: palette.border),
           ),
           alignment: Alignment.center,
-          child: Icon(
+          child: TpIcon(
             Icons.tire_repair_outlined,
             size: 36,
             color: palette.text,
@@ -693,7 +693,7 @@ class _TyreAvatar extends StatelessWidget {
                 border: Border.all(color: palette.surface, width: 2),
               ),
               alignment: Alignment.center,
-              child: Icon(
+              child: TpIcon(
                 badge,
                 size: 14,
                 color: palette.forStatus(tone).onBase,
@@ -1158,7 +1158,7 @@ class _MetaItem extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+        TpIcon(icon, size: TpSizing.iconSm, color: palette.textMuted),
         const SizedBox(width: TpSpace.xs),
         if (isIdentifier)
           TpIdentifierText(

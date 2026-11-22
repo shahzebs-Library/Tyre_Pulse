@@ -810,7 +810,7 @@ class _HeroMeters extends StatelessWidget {
     Widget meter(IconData icon, String value) => Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: TpSizing.iconSm, color: palette.textSecondary),
+            TpIcon(icon, size: TpSizing.iconSm, color: palette.textSecondary),
             const SizedBox(width: TpSpace.xs),
             Flexible(
               child: Text(
@@ -957,7 +957,7 @@ class _AlertCell extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                Icon(icon, size: TpSizing.iconSm, color: colors.base),
+                TpIcon(icon, size: TpSizing.iconSm, color: colors.base),
                 const SizedBox(width: TpSpace.xs),
                 Flexible(
                   child: Text(

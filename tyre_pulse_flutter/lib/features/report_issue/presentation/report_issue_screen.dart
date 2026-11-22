@@ -599,7 +599,7 @@ class _IssueCategoryGrid extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: <Widget>[
-                          Icon(icon, color: palette.primary, size: 25),
+                          TpIcon(icon, color: palette.primary, size: 25),
                           const SizedBox(height: 5),
                           Flexible(
                             child: Text(

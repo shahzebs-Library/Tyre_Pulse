@@ -1031,7 +1031,7 @@ class _SummaryCard extends StatelessWidget {
                 ),
                 child: SizedBox.square(
                   dimension: 48,
-                  child: Icon(
+                  child: TpIcon(
                     Icons.fact_check_outlined,
                     color: palette.onPrimary,
                   ),
@@ -1110,7 +1110,7 @@ class _SummaryRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+          TpIcon(icon, size: TpSizing.iconSm, color: palette.textMuted),
           const SizedBox(width: TpSpace.sm),
           Expanded(
             child: Text(text, style: Theme.of(context).textTheme.bodySmall),

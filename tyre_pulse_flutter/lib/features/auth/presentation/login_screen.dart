@@ -1408,7 +1408,9 @@ class _ExactTextFieldState extends State<_ExactTextField> {
                 widget.prefixAsset,
                 width: 22,
                 height: 22,
-                color: focused ? palette.focus : null,
+                // Never tinted: these PNGs have an opaque background, so a
+                // colour filter paints the whole square (owner saw a green
+                // block). The border and divider carry the focus state.
                 excludeFromSemantics: true,
               ),
             ),

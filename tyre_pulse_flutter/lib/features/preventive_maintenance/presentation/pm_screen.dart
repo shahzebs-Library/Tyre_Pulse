@@ -204,15 +204,6 @@ class _PreventiveMaintenanceScreenState
             DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(TpRadius.md),
-                boxShadow: palette.brightness == Brightness.light
-                    ? <BoxShadow>[
-                        BoxShadow(
-                          color: palette.primary.withValues(alpha: 0.26),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ]
-                    : null,
               ),
               child: SizedBox(
                 height: 58,
@@ -840,16 +831,6 @@ class _QuickAccessTile extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: onTap == null ? palette.surfaceSunken : tone.base,
                       borderRadius: BorderRadius.circular(TpRadius.md),
-                      boxShadow: onTap == null ||
-                              palette.brightness != Brightness.light
-                          ? null
-                          : <BoxShadow>[
-                              BoxShadow(
-                                color: tone.base.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
                     ),
                     alignment: Alignment.center,
                     child: TpIcon(
@@ -1633,11 +1614,7 @@ class _QueueThumbnail extends StatelessWidget {
       width: 84,
       height: 76,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[palette.surfaceAlt, palette.surfaceSunken],
-        ),
+        color: palette.surfaceAlt,
         borderRadius: BorderRadius.circular(TpRadius.md),
         border: Border.all(color: palette.border),
       ),

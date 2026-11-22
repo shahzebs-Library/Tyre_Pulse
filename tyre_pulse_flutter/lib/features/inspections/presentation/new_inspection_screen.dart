@@ -427,19 +427,8 @@ class _InspectionHeaderHero extends StatelessWidget {
         children: <Widget>[
           DecoratedBox(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[palette.primary, palette.primaryDark],
-              ),
+              color: palette.primary,
               borderRadius: BorderRadius.circular(TpRadius.md),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: palette.primary.withValues(alpha: 0.30),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
             child: Padding(
               padding: const EdgeInsets.all(TpSpace.md),
@@ -1422,11 +1411,7 @@ class _VehicleChip extends StatelessWidget {
                     alignment: Alignment.center,
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: <Color>[palette.surface, palette.surfaceAlt],
-                      ),
+                      color: palette.surface,
                       border: Border.all(color: palette.border),
                       borderRadius: BorderRadius.circular(TpRadius.md),
                     ),
@@ -3679,9 +3664,9 @@ class _SubmittedStep extends ConsumerWidget {
   }
 }
 
-/// A soft, theme-aware lift under a bordered surface. Additive only: the
-/// hairline border stays the primary edge (shadow disappears in direct
-/// sun, spec section 53), the shadow just gives depth indoors.
+/// Wraps a bordered surface. The decorative shadow was removed: the
+/// hairline border is the edge (a shadow disappears in direct sun, spec
+/// section 53). Kept so call sites stay unchanged.
 class _Raised extends StatelessWidget {
   const _Raised({
     required this.child,
@@ -3698,26 +3683,7 @@ class _Raised extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final Color base = tint ?? palette.overlay;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: base.withValues(alpha: 0.10 * strength),
-            blurRadius: 18 * strength,
-            offset: Offset(0, 6 * strength),
-          ),
-          BoxShadow(
-            color: base.withValues(alpha: 0.06 * strength),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: child,
-    );
+    return child;
   }
 }
 

@@ -671,6 +671,8 @@ function MainApp() {
                     <Routes>
                       <Route path="/"            element={<Safe><HomeRoute /></Safe>} />
                       <Route path="/tyres"       element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreRecords /></ModuleRoute></Safe>} />
+                      {/* Old address still linked from bookmarks and earlier releases. */}
+                      <Route path="/tyre-records" element={<LegacyRedirect to="/tyres" />} />
                       {/* ── Analytics ── */}
                       {/* Merged pages: the old routes below redirect to the page that absorbed them
                           (/analytics, /comparison, /safety-compliance, /tyre-failure-cpk, /workshop,

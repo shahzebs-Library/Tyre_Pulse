@@ -576,7 +576,7 @@ export default function RetreadManagement() {
       <header className="rtm-head">
         <div className="rtm-head-copy">
           <nav className="rtm-crumbs" aria-label="Breadcrumb">
-            <Link to="/tyre-records">Tyre management</Link>
+            <Link to="/tyres">Tyre management</Link>
             <ChevronRight size={13} aria-hidden="true" />
             <span aria-current="page">Retread management</span>
           </nav>

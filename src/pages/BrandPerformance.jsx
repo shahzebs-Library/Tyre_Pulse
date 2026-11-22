@@ -326,7 +326,7 @@ export default function BrandPerformance() {
     <header className="bp-head">
       <div className="bp-head-copy">
         <nav className="bp-crumb" aria-label="Breadcrumb">
-          <Link to="/tyre-records">Tyre management</Link>
+          <Link to="/tyres">Tyre management</Link>
           <ChevronRight size={13} aria-hidden="true" />
           <span aria-current="page">Brand performance</span>
         </nav>

@@ -332,7 +332,7 @@ export default function TyreFailureCpkBoard({ embedded = false }) {
           {!embedded && (
             <>
               <nav className="tf-crumb" aria-label="Breadcrumb">
-                <Link to="/tyre-records">Tyre management</Link>
+                <Link to="/tyres">Tyre management</Link>
                 <ChevronRight size={13} aria-hidden="true" />
                 <span aria-current="page">Failure and CPK</span>
               </nav>

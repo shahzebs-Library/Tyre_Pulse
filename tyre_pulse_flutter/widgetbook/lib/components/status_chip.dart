@@ -6,7 +6,10 @@ import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
 
 @widgetbook.UseCase(name: 'All states', type: TpStatusChip)
 Widget statusChips(BuildContext context) {
-  final bool compact = context.knobs.boolean(label: 'Compact', initialValue: false);
+  final bool compact = context.knobs.boolean(
+    label: 'Compact',
+    initialValue: false,
+  );
   return Padding(
     padding: const EdgeInsets.all(16),
     child: Wrap(

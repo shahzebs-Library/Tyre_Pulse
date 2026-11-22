@@ -12,11 +12,12 @@ export function SelectedPartsTable({ items, onQty, onRemove, stock = {} }) {
     <div className="max-h-[65vh] overflow-auto rounded-lg border border-[var(--input-border)]">
       <table className="w-full min-w-[900px] text-start text-xs">
         <thead className="sticky top-0 bg-[var(--panel-2)] text-[var(--text-muted)]"><tr>
-          {['partDesc', 'model', 'figure', 'fitment', 'stock', 'source', 'qty', 'remove'].map((k) => <th key={k} scope="col" className="px-3 py-2 text-start">{t(`oemcatalog.selected.col.${k}`)}</th>)}
+          {['partDesc', 'assetLocation', 'model', 'figure', 'fitment', 'stock', 'source', 'qty', 'remove'].map((k) => <th key={k} scope="col" className="px-3 py-2 text-start">{t(`oemcatalog.selected.col.${k}`)}</th>)}
         </tr></thead>
         <tbody>{items.map((item) => (
           <tr key={item.key} className="border-t border-[var(--input-border)] align-top">
             <td className="px-3 py-3"><div className={`font-mono font-semibold ${ACCENT}`} dir="ltr">{item.row.part_no}</div><div className="mt-1 max-w-[280px] whitespace-normal text-[var(--text-primary)]">{item.row.description}</div>{item.row.remark && <div className="mt-1 text-[var(--text-muted)]">{item.row.remark}</div>}</td>
+            <td className="px-3 py-3 text-[var(--text-primary)]"><div className="font-mono font-semibold" dir="ltr">{item.assetNo || <span className="oem-empty-val">{t('oemcatalog.parts.noAsset')}</span>}</div><div className="mt-1 text-[var(--text-muted)]">{item.site || <span className="oem-empty-val">{t('oemcatalog.parts.noLocation')}</span>}</div></td>
             <td className="px-3 py-3 text-[var(--text-primary)]">{item.manual.manufacturer} · {item.manual.model}{item.manual.generation ? ` · ${item.manual.generation}` : ''}<div className="mt-1 text-[10px] text-[var(--text-muted)]">{item.manual.model_code || t('oemcatalog.selected.noCode')}</div></td>
             <td className="px-3 py-3 text-[var(--text-primary)]">{item.figureLabel}<div className="mt-1 text-[10px] text-[var(--text-muted)]">{t('oemcatalog.selected.figureLine', { page: item.figurePage || t('oemcatalog.selected.notLinked'), index: item.row.index_no || item.row.parent_index || '-' })}</div></td>
             <td className="px-3 py-3"><span className={`oem-chip oem-chip-${item.fitment === 'confirmed' ? 'ok' : 'warn'}`}>{t(`oemcatalog.compat.${item.fitment || 'unverified'}`)}</span></td>

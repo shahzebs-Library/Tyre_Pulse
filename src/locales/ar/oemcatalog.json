@@ -58,7 +58,15 @@
     "prevPage": "صفحة القطع السابقة",
     "nextPage": "صفحة القطع التالية",
     "openPdf": "فتح ملف PDF الأصلي",
-    "source": "المصدر: كتالوج قطع {brand} · الصفحة المطبوعة {page}"
+    "source": "المصدر: كتالوج قطع {brand} · الصفحة المطبوعة {page}",
+    "selectPart": "اختر القطعة {part} (الرقم {index})",
+    "noAsset": "لا يوجد أصل",
+    "noLocation": "لا يوجد موقع",
+    "assetLine": "الأصل {asset}",
+    "locationLine": "الموقع {location}",
+    "pickedOne": "القطعة المختارة",
+    "pickedGroup": "الرقم {index}: {count} قطع",
+    "pickHint": "اختر صفاً لتحديد قطعة واحدة من هذه القطع."
   },
   "col": {
     "index": "البيان",
@@ -80,7 +88,8 @@
       "qty": "الكمية المطلوبة",
       "remove": "إزالة",
       "fitment": "المطابقة",
-      "stock": "المخزون"
+      "stock": "المخزون",
+      "assetLocation": "الأصل والموقع"
     },
     "noCode": "الجيل أو الرمز غير مسجل",
     "figureLine": "صفحة الرسم {page} · البيان {index}",

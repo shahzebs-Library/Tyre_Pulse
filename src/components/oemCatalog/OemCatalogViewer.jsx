@@ -22,6 +22,10 @@ export default function OemCatalogViewer({
   const [pageNo, setPageNo] = useState(0)
   const [navQuery, setNavQuery] = useState('')
   const [detail, setDetail] = useState(null)
+  // One specific part chosen from the table. A callout groups every row that
+  // shares its number (often several variants); choosing a row picks exactly
+  // that part instead of the whole group.
+  const [pickedRowId, setPickedRowId] = useState(null)
   const rowRefs = useRef(new Map())
   const navRef = useRef(null)
   const [navTop, setNavTop] = useState(0)
@@ -60,7 +64,7 @@ export default function OemCatalogViewer({
   const goto = (d) => { const g = flat[activeAt + d]; if (g) onOpenGroup(g) }
 
   const rows = useMemo(() => activeGroup?.rows || [], [activeGroup])
-  useEffect(() => { setPageNo(0) }, [activeGroup])
+  useEffect(() => { setPageNo(0); setPickedRowId(null) }, [activeGroup])
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   // Selecting a row on another table page (via a callout) jumps to that page.
   useEffect(() => {
@@ -69,12 +73,25 @@ export default function OemCatalogViewer({
     if (at >= 0) setPageNo(Math.floor(at / PAGE_SIZE))
   }, [selectedIndex, rows])
   const visible = rows.slice(pageNo * PAGE_SIZE, (pageNo + 1) * PAGE_SIZE)
+  const indexOf = (r) => normalizeIndex(r.index_no || r.parent_index)
+  // A picked row only counts while its callout is still the selected one.
+  const pickedRow = rows.find((r) => r.id === pickedRowId && indexOf(r) === selectedIndex) || null
   useEffect(() => {
-    const first = rows.find((r) => normalizeIndex(r.index_no || r.parent_index) === selectedIndex)
-    if (first) rowRefs.current.get(first.id)?.scrollIntoView?.({ block: 'nearest' })
-  }, [selectedIndex, rows, pageNo])
+    const target = pickedRow || rows.find((r) => indexOf(r) === selectedIndex)
+    if (target) rowRefs.current.get(target.id)?.scrollIntoView?.({ block: 'nearest' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndex, rows, pageNo, pickedRow])
 
-  const selectedRows = rows.filter((r) => selectedIndex && normalizeIndex(r.index_no || r.parent_index) === selectedIndex)
+  const groupRows = rows.filter((r) => selectedIndex && indexOf(r) === selectedIndex)
+  const selectedRows = pickedRow ? [pickedRow] : groupRows
+  const pickRow = (row) => { setPickedRowId(row.id); onSelectIndex(indexOf(row)) }
+  // Asset and location come from the vehicle chosen on the page (vehicle_fleet.asset_no or
+  // fleet_number, and vehicle_fleet.site). An OEM book row carries neither, so nothing is
+  // shown that the record does not hold.
+  const assetCode = asset?.asset_no || asset?.fleet_number || ''
+  const assetSite = asset?.site || ''
+  const assetLabel = assetCode || t('oemcatalog.parts.noAsset')
+  const siteLabel = assetSite || t('oemcatalog.parts.noLocation')
   const activeMeta = activeGroup ? meta(activeGroup) : null
   const area = activeMeta?.area || 'other'
   const printed = activeGroup?.printedPages[0] || ''
@@ -141,7 +158,7 @@ export default function OemCatalogViewer({
                   pageNo={activeGroup.page}
                   rows={rows}
                   selectedIndex={selectedIndex}
-                  onSelectIndex={(v) => onSelectIndex(normalizeIndex(v))}
+                  onSelectIndex={(v) => { setPickedRowId(null); onSelectIndex(normalizeIndex(v)) }}
                   figureLabel={activeGroup.label}
                   geometry={activeMeta?.geometry}
                   position={`${printed || activeGroup.page} · ${activeAt + 1}/${flat.length}`}
@@ -161,6 +178,23 @@ export default function OemCatalogViewer({
                   <span className="oem-count">{t('oemcatalog.parts.count', { count: rows.length })}</span>
                 </header>
                 <FigureSummary group={activeGroup} geometry={activeMeta?.geometry} />
+                {selectedRows.length > 0 && (
+                  <div className="oem-picked" role="status" aria-live="polite" data-testid="oem-picked">
+                    <strong>{pickedRow ? t('oemcatalog.parts.pickedOne') : t('oemcatalog.parts.pickedGroup', { index: selectedIndex, count: groupRows.length })}</strong>
+                    <ul>
+                      {selectedRows.map((r) => (
+                        <li key={r.id}>
+                          <span className="oem-pn" dir="ltr">{r.part_no}</span> {r.description}
+                          <small>
+                            {t('oemcatalog.parts.assetLine', { asset: assetLabel })} · {t('oemcatalog.parts.locationLine', { location: siteLabel })}
+                            {selectedKeys.has(`${manual.id}:${r.id}`) ? ` · ${t('oemcatalog.parts.added')}` : ''}
+                          </small>
+                        </li>
+                      ))}
+                    </ul>
+                    {!pickedRow && groupRows.length > 1 && <small>{t('oemcatalog.parts.pickHint')}</small>}
+                  </div>
+                )}
                 <div className="oem-scroll oem-table-wrap" tabIndex={0} aria-label={t('oemcatalog.parts.title')}>
                   <table className="oem-table">
                     <thead><tr>
@@ -172,14 +206,16 @@ export default function OemCatalogViewer({
                     </tr></thead>
                     <tbody>
                       {visible.map((row) => {
-                        const idx = normalizeIndex(row.index_no || row.parent_index)
-                        const sel = Boolean(idx) && selectedIndex === idx
+                        const idx = indexOf(row)
+                        const inGroup = Boolean(idx) && selectedIndex === idx
+                        const picked = pickedRow?.id === row.id
+                        const sel = picked || (inGroup && !pickedRow)
                         const added = selectedKeys.has(`${manual.id}:${row.id}`)
                         return (
-                          <tr key={row.id} ref={(el) => { if (el) rowRefs.current.set(row.id, el); else rowRefs.current.delete(row.id) }} data-selected={sel ? 'true' : undefined} onClick={() => onSelectIndex(idx)}>
-                            <td className="oem-idx"><button type="button" onClick={() => onSelectIndex(idx)} aria-pressed={sel} aria-label={t('oemcatalog.parts.selectIndex', { index: idx || '-' })}>{row.index_no || (row.parent_index ? `${row.parent_index}*` : '-')}</button></td>
+                          <tr key={row.id} ref={(el) => { if (el) rowRefs.current.set(row.id, el); else rowRefs.current.delete(row.id) }} data-selected={sel ? 'true' : undefined} data-picked={picked ? 'true' : undefined} onClick={() => pickRow(row)}>
+                            <td className="oem-idx"><button type="button" onClick={(e) => { e.stopPropagation(); pickRow(row) }} aria-pressed={picked} aria-label={t('oemcatalog.parts.selectPart', { index: idx || '-', part: row.part_no || '-' })}>{row.index_no || (row.parent_index ? `${row.parent_index}*` : '-')}</button></td>
                             <td className="oem-pn" dir="ltr">{row.part_no}</td>
-                            <td>{row.description}{row.remark && <small>{row.remark}</small>}</td>
+                            <td>{row.description}{row.remark && <small>{row.remark}</small>}<small className="oem-where">{assetLabel} · {siteLabel}</small></td>
                             <td className="oem-num">{row.quantity ?? '-'}</td>
                             <td className="oem-add"><button type="button" onClick={(e) => { e.stopPropagation(); setDetail(row) }} aria-label={t('oemcatalog.detail.title')} title={t('oemcatalog.detail.title')}><Info size={15} aria-hidden="true" /></button><button type="button" disabled={added} onClick={(e) => { e.stopPropagation(); onAddRows([row]) }} aria-label={t('oemcatalog.parts.addOne', { part: row.part_no })} title={added ? t('oemcatalog.parts.added') : t('oemcatalog.parts.add')}>{added ? <CheckCircle2 size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}</button></td>
                           </tr>

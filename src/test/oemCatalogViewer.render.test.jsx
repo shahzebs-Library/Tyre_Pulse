@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import en from '../locales/en/oemcatalog.json'
@@ -9,7 +10,7 @@ vi.mock('../contexts/LanguageContext', () => {
 })
 
 import OemCatalogViewer from '../components/oemCatalog/OemCatalogViewer'
-import { ImportReviewPanel, SearchResultsTable } from '../components/oemCatalog/OemTables'
+import { ImportReviewPanel, SearchResultsTable, SelectedPartsTable } from '../components/oemCatalog/OemTables'
 
 const row = (i, idx, pn) => ({ id: `r${i}`, index_no: idx, part_no: pn, description: `Part ${i}`, quantity: 1, source_pdf_page: 30, printed_page: '2-14', illustration_pdf_page: 4 })
 const group = { page: 4, label: 'Water Supply System', printedPages: ['2-14'], sourcePages: [30], rows: [row(1, '1', '60012345'), row(2, '2', '60012346')] }
@@ -21,7 +22,12 @@ function setup(over = {}) {
     groups: [group], activeGroup: group, onOpenGroup: vi.fn(), pdfDoc: null, selectedIndex: '2', onSelectIndex: vi.fn(),
     selectedKeys: new Set(), onAddRows: vi.fn(), onRequestSelected: vi.fn(), onOpenSource: vi.fn(), loading: false, error: '', ...over,
   }
-  render(<OemCatalogViewer {...props} />)
+  // The page owns the selected index; keep it in state so a click behaves as on the real page.
+  function Harness() {
+    const [selectedIndex, setSelectedIndex] = useState(props.selectedIndex)
+    return <OemCatalogViewer {...props} selectedIndex={selectedIndex} onSelectIndex={(v) => { props.onSelectIndex(v); setSelectedIndex(v) }} />
+  }
+  render(<Harness />)
   return props
 }
 
@@ -38,7 +44,39 @@ describe('OemCatalogViewer', () => {
     fireEvent.click(screen.getByText('60012345'))
     expect(p.onSelectIndex).toHaveBeenCalledWith('1')
     fireEvent.click(screen.getByText('Add selected part to work order'))
-    expect(p.onRequestSelected.mock.calls[0][0].map((r) => r.part_no)).toEqual(['60012346'])
+    // The clicked row is the part that gets added, not whatever index was selected before.
+    expect(p.onRequestSelected.mock.calls[0][0].map((r) => r.part_no)).toEqual(['60012345'])
+  })
+  it('makes every one of ten parts under one callout individually selectable, with asset and location', () => {
+    const ten = Array.from({ length: 10 }, (_, i) => ({ ...row(i + 1, '5', `PN-${i + 1}`), remark: `Variant ${i + 1}` }))
+    const g = { ...group, rows: ten }
+    const p = setup({ groups: [g], activeGroup: g, selectedIndex: '5', asset: { asset_no: 'TM514', site: 'NHC', chassis_no: 'HNGJ1' } })
+    const picked = () => screen.getByTestId('oem-picked')
+    // Callout selected: the whole group of 10 is listed, each with the vehicle's asset and location.
+    expect(picked().textContent).toContain('Index 5: 10 parts')
+    expect(picked().querySelectorAll('li')).toHaveLength(10)
+    expect(document.querySelectorAll('.oem-where')).toHaveLength(10)
+    document.querySelectorAll('.oem-where').forEach((el) => expect(el.textContent).toBe('TM514 · NHC'))
+    const buttons = screen.getAllByRole('button', { name: /^Select part PN-/ })
+    expect(buttons).toHaveLength(10)
+    buttons.forEach((btn, i) => {
+      fireEvent.click(btn)
+      expect(p.onSelectIndex).toHaveBeenLastCalledWith('5')
+      expect(btn.getAttribute('aria-pressed')).toBe('true')
+      expect(picked().textContent).toContain('Selected part')
+      expect(picked().textContent).toContain(`PN-${i + 1}`)
+      expect(picked().textContent).toContain('Asset TM514')
+      expect(picked().textContent).toContain('Location NHC')
+      expect(picked().querySelectorAll('li')).toHaveLength(1)
+      fireEvent.click(screen.getByText('Add selected part to work order'))
+      expect(p.onRequestSelected.mock.calls.at(-1)[0].map((r) => r.id)).toEqual([`r${i + 1}`])
+    })
+    expect(p.onRequestSelected).toHaveBeenCalledTimes(10)
+  })
+  it('says No asset / No location when the vehicle record holds neither', () => {
+    setup({ asset: { chassis_no: 'HNGJ1' }, selectedIndex: '2' })
+    expect(screen.getByTestId('oem-picked').textContent).toContain('Asset No asset')
+    expect(screen.getByTestId('oem-picked').textContent).toContain('Location No location')
   })
   it('uses saved figures (oem_figures) over the import snapshot', () => {
     // Snapshot says upper; the saved figure (admin corrected) says chassis and wins.
@@ -65,6 +103,17 @@ describe('OemTables', () => {
     expect(screen.getByText('Review queue')).toBeTruthy()
     expect(screen.getByText(/Part number too short/)).toBeTruthy()
     expect(screen.getByText(/1 callout numbers/)).toBeTruthy()
+  })
+  it('selected parts list shows each part\'s asset code and location', () => {
+    const items = [
+      { key: 'm:r1', row: row(1, '5', 'PN-1'), manual, figureLabel: 'Water', assetNo: 'TM514', site: 'NHC', requestedQty: 1 },
+      { key: 'm:r2', row: row(2, '5', 'PN-2'), manual, figureLabel: 'Water', assetNo: null, site: null, requestedQty: 1 },
+    ]
+    render(<SelectedPartsTable items={items} onQty={vi.fn()} onRemove={vi.fn()} />)
+    expect(screen.getByText('TM514')).toBeTruthy()
+    expect(screen.getByText('NHC')).toBeTruthy()
+    expect(screen.getByText('No asset')).toBeTruthy()
+    expect(screen.getByText('No location')).toBeTruthy()
   })
   it('search results table wires view and add actions', () => {
     const onView = vi.fn(); const onAdd = vi.fn()

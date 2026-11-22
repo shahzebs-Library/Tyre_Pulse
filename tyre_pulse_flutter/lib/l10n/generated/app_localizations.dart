@@ -15262,6 +15262,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tyre readings could not be loaded'**
   String get vehicle360TyreMapLoadFailed;
+
+  /// Error under the odometer or hour meter field when the inspector typed a date such as 20261122 instead of a reading
+  ///
+  /// In en, this message translates to:
+  /// **'This is a date, not a reading. Leave it blank if the machine has no meter.'**
+  String get inspectionMeterLooksLikeDate;
 }
 
 class _AppLocalizationsDelegate

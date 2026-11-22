@@ -8938,5 +8938,9 @@
   "vehicle360TyreMapLoadFailed": "Tyre readings could not be loaded",
   "@vehicle360TyreMapLoadFailed": {
     "description": "Shown under the Vehicle 360 tyre map when the latest inspection could not be read"
+  },
+  "inspectionMeterLooksLikeDate": "This is a date, not a reading. Leave it blank if the machine has no meter.",
+  "@inspectionMeterLooksLikeDate": {
+    "description": "Error under the odometer or hour meter field when the inspector typed a date such as 20261122 instead of a reading"
   }
 }

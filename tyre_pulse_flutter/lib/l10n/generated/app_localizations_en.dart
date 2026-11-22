@@ -8722,4 +8722,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vehicle360TyreMapLoadFailed => 'Tyre readings could not be loaded';
+
+  @override
+  String get inspectionMeterLooksLikeDate =>
+      'This is a date, not a reading. Leave it blank if the machine has no meter.';
 }

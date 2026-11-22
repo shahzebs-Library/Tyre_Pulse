@@ -8739,4 +8739,8 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get vehicle360TyreMapLoadFailed => 'ٹائر ریڈنگز لوڈ نہیں ہو سکیں';
+
+  @override
+  String get inspectionMeterLooksLikeDate =>
+      'یہ تاریخ ہے، ریڈنگ نہیں۔ اگر مشین پر میٹر نہیں ہے تو خالی چھوڑ دیں۔';
 }

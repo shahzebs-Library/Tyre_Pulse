@@ -8731,4 +8731,8 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get vehicle360TyreMapLoadFailed => 'تعذّر تحميل قراءات الإطارات';
+
+  @override
+  String get inspectionMeterLooksLikeDate =>
+      'هذا تاريخ وليس قراءة. اتركه فارغاً إذا لم يكن للآلة عداد.';
 }

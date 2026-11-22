@@ -22,7 +22,7 @@ jobs:
     name: Build signed release APK (internal, no Play upload)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build
         id: build
@@ -44,7 +44,7 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk "build/tyre-pulse-internal-$(echo "$VERSION" | tr '+' '-').apk"
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tyre-pulse-internal-apk
           path: tyre_pulse_flutter/build/tyre-pulse-internal-*.apk

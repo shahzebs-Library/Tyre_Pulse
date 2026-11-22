@@ -33,6 +33,7 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    - widgetbook/**
 
 linter:
   rules:

@@ -54,7 +54,7 @@ beforeEach(() => {
 
 async function openAssignments() {
   render(<LanguageProvider><MemoryRouter><WorkforceDailyWork /></MemoryRouter></LanguageProvider>)
-  fireEvent.click(await screen.findByRole('button', { name: 'Team Assignments' }))
+  fireEvent.click(await screen.findByRole('button', { name: /^(Team Board|My Work)$/ }))
 }
 
 describe('WorkforceDailyWork states', () => {

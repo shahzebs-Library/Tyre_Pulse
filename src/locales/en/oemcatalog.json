@@ -58,7 +58,17 @@
     "prevPage": "Previous page of parts",
     "nextPage": "Next page of parts",
     "openPdf": "Open original PDF",
-    "source": "Source: {brand} Parts Book · printed page {page}"
+    "source": "Source: {brand} Parts Book · printed page {page}",
+    "selectPart": "Select part {part} (index {index})",
+    "noAsset": "No asset",
+    "noLocation": "No location",
+    "assetLine": "Asset {asset}",
+    "locationLine": "Location {location}",
+    "pickedOne": "Selected part",
+    "pickedGroup": "Index {index}: {count} parts",
+    "pickHint": "Choose a row to select one of these parts.",
+    "openSub": "Open its own drawing",
+    "notOnDrawing": "Number not printed on this drawing: select it from the list"
   },
   "col": {
     "index": "Index",
@@ -80,7 +90,8 @@
       "qty": "Request qty",
       "remove": "Remove",
       "fitment": "Fitment",
-      "stock": "Stock"
+      "stock": "Stock",
+      "assetLocation": "Asset and location"
     },
     "noCode": "Generation or code not recorded",
     "figureLine": "Figure page {page} · index {index}",

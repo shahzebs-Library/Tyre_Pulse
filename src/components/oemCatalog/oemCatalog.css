@@ -81,6 +81,12 @@
 .oem-table tbody tr { cursor: pointer; }
 .oem-table tbody tr:hover { background: var(--panel-2); }
 .oem-table tbody tr[data-selected='true'] { background: var(--oem-select-tint); box-shadow: inset 3px 0 0 var(--oem-select); }
+.oem-table tbody tr[data-picked='true'] { box-shadow: inset 5px 0 0 var(--oem-select); font-weight: 600; }
+.oem-table td small.oem-where { color: var(--text-secondary); }
+.oem-picked { margin: 8px 12px; padding: 8px 10px; border: 1px solid var(--oem-select); border-radius: 8px; background: var(--oem-select-tint); font-size: 12px; color: var(--text-primary); }
+.oem-picked ul { list-style: none; margin: 4px 0 0; padding: 0; max-height: 140px; overflow: auto; }
+.oem-picked li { padding: 2px 0; }
+.oem-picked small { display: block; font-size: 11px; color: var(--text-secondary); }
 .oem-num { text-align: end; font-variant-numeric: tabular-nums; }
 .oem-pn { font-family: ui-monospace, monospace; font-weight: 700; white-space: nowrap; unicode-bidi: plaintext; }
 .oem-idx button, .oem-add button { min-width: 36px; min-height: 36px; border: 0; background: transparent; color: inherit; font-weight: 800; cursor: pointer; border-radius: 6px; }
@@ -168,3 +174,7 @@ html.light .oem-note-error { color: #b42318; }
 
 .oem-add { white-space: nowrap; width: 80px; }
 .oem-add button { display: inline-grid; place-items: center; }
+.oem-table td small.oem-offdrawing { color: var(--text-muted); font-style: italic; }
+.oem-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 2px 0; min-height: 24px; background: none; border: 0; color: var(--brand, #15803d); font-size: 12px; font-weight: 600; cursor: pointer; }
+.oem-link:hover { text-decoration: underline; }
+.oem-link:focus-visible { outline: 2px solid var(--brand, #15803d); outline-offset: 2px; border-radius: 4px; }

@@ -15309,7 +15309,8 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Approved: {approved}\nSkipped, tyre readings incomplete: {skipped}\nAlready decided by someone else: {decided}\nFailed: {failed}'**
-  String approvalsBulkResultMessage(int approved, int skipped, int decided, int failed);
+  String approvalsBulkResultMessage(
+      int approved, int skipped, int decided, int failed);
 
   /// No description provided for @approvalsBulkProgress.
   ///

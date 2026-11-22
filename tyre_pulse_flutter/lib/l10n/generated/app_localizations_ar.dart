@@ -8739,10 +8739,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get approvalsBulkNoSignatureTitle => 'احفظ توقيعك أولاً';
 
   @override
-  String get approvalsBulkNoSignatureMessage => 'اعتماد عدة فحوصات معاً يوقّع كل واحد بتوقيعك المحفوظ. ارسم توقيعك واحفظه في الملف الشخصي ثم حاول مرة أخرى.';
+  String get approvalsBulkNoSignatureMessage =>
+      'اعتماد عدة فحوصات معاً يوقّع كل واحد بتوقيعك المحفوظ. ارسم توقيعك واحفظه في الملف الشخصي ثم حاول مرة أخرى.';
 
   @override
-  String get approvalsBulkSignatureUnavailable => 'تعذّر التحقق من توقيعك المحفوظ. تحقق من الاتصال وحاول مرة أخرى.';
+  String get approvalsBulkSignatureUnavailable =>
+      'تعذّر التحقق من توقيعك المحفوظ. تحقق من الاتصال وحاول مرة أخرى.';
 
   @override
   String approvalsBulkConfirmTitle(int count) {
@@ -8750,13 +8752,15 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get approvalsBulkConfirmMessage => 'يُوقّع كل فحص بتوقيعك المحفوظ. الفحوصات التي تنقصها قراءات الإطارات تُتخطّى وتبقى قيد الانتظار.';
+  String get approvalsBulkConfirmMessage =>
+      'يُوقّع كل فحص بتوقيعك المحفوظ. الفحوصات التي تنقصها قراءات الإطارات تُتخطّى وتبقى قيد الانتظار.';
 
   @override
   String get approvalsBulkResultTitle => 'انتهى الاعتماد الجماعي';
 
   @override
-  String approvalsBulkResultMessage(int approved, int skipped, int decided, int failed) {
+  String approvalsBulkResultMessage(
+      int approved, int skipped, int decided, int failed) {
     return 'تم الاعتماد: $approved\nتم التخطي لنقص قراءات الإطارات: $skipped\nقرّر فيها شخص آخر: $decided\nفشل: $failed';
   }
 

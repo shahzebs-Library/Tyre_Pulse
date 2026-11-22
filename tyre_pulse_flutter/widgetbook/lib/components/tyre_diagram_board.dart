@@ -4,6 +4,7 @@ import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_board
 import 'package:widgetbook/widgetbook.dart';
 import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
 import 'package:widgetbook_workspace/app_assets.dart';
+import 'package:widgetbook_workspace/components/catalogue_support.dart';
 
 /// Sample readings only for the catalogue: nothing here reaches the app.
 Map<String, Map<String, Object?>> _readings(
@@ -48,21 +49,21 @@ Widget _board(
   );
 }
 
-@widgetbook.UseCase(name: 'Mixer - no readings', type: TyreDiagramBoard)
+@widgetbook.UseCase(name: 'Mixer - no readings', type: TyreDiagramBoard, path: CataloguePath.tyres)
 Widget mixerEmpty(BuildContext context) => _board(
   context,
   vehicleType: 'TR-MIXER',
   data: (_) => const <String, Map<String, Object?>>{},
 );
 
-@widgetbook.UseCase(name: 'Mixer - all good', type: TyreDiagramBoard)
+@widgetbook.UseCase(name: 'Mixer - all good', type: TyreDiagramBoard, path: CataloguePath.tyres)
 Widget mixerGood(BuildContext context) => _board(
   context,
   vehicleType: 'TR-MIXER',
   data: (List<String> p) => _readings(p, (_) => 'Good'),
 );
 
-@widgetbook.UseCase(name: 'Mixer - mixed faults', type: TyreDiagramBoard)
+@widgetbook.UseCase(name: 'Mixer - mixed faults', type: TyreDiagramBoard, path: CataloguePath.tyres)
 Widget mixerMixed(BuildContext context) => _board(
   context,
   vehicleType: 'TR-MIXER',
@@ -72,14 +73,14 @@ Widget mixerMixed(BuildContext context) => _board(
   ),
 );
 
-@widgetbook.UseCase(name: 'Wheel loader - all good', type: TyreDiagramBoard)
+@widgetbook.UseCase(name: 'Wheel loader - all good', type: TyreDiagramBoard, path: CataloguePath.tyres)
 Widget loaderGood(BuildContext context) => _board(
   context,
   vehicleType: 'WHEEL_LOADER',
   data: (List<String> p) => _readings(p, (_) => 'Good'),
 );
 
-@widgetbook.UseCase(name: 'Pump - half recorded', type: TyreDiagramBoard)
+@widgetbook.UseCase(name: 'Pump - half recorded', type: TyreDiagramBoard, path: CataloguePath.tyres)
 Widget pumpHalf(BuildContext context) => _board(
   context,
   vehicleType: 'PUMPS',

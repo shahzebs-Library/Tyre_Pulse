@@ -1078,6 +1078,9 @@ class _TyreConditionsSection extends StatelessWidget {
           // underlying engine was shared.
           width: MediaQuery.sizeOf(context).width - (TpSpace.lg * 2),
           compact: true,
+          // The same focused composition the capture screen uses, so the
+          // approver sees the vehicle exactly as the inspector recorded it.
+          captureMode: true,
         ),
       ],
     );

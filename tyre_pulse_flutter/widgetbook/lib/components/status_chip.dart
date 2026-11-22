@@ -3,8 +3,13 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:widgetbook/widgetbook.dart';
 import 'package:widgetbook_annotation/widgetbook_annotation.dart' as widgetbook;
+import 'package:widgetbook_workspace/components/catalogue_support.dart';
 
-@widgetbook.UseCase(name: 'All states', type: TpStatusChip)
+@widgetbook.UseCase(
+  name: 'All states',
+  type: TpStatusChip,
+  path: CataloguePath.status,
+)
 Widget statusChips(BuildContext context) {
   final bool compact = context.knobs.boolean(
     label: 'Compact',

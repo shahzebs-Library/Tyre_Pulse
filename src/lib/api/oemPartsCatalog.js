@@ -3,7 +3,7 @@ import { requireCatalogAdmin } from './oemCatalogAdmin'
 
 const MANUAL_COLUMNS = 'id,country,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,source_file_name,source_sha256,storage_path,page_count,item_count,extraction_status,import_summary,created_at'
 const ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type,source_line,manual:oem_parts_manuals!inner(id,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,country,storage_path,page_count)'
-const BROWSE_ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type'
+const BROWSE_ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type,attributes'
 
 function raise(error, fallback) {
   if (!error) return
@@ -169,6 +169,7 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
       row_type: row.row_type || 'catalog_item',
       source_line: row.source_line || null,
       figure_id: row.figure_id || null,
+      attributes: { ...(row.attributes || {}), ...(row.subassembly_pdf_page ? { subassembly_pdf_page: row.subassembly_pdf_page } : {}) },
     }))
     const { error } = await supabase.from('oem_parts_entries')
       .upsert(batch, { onConflict: 'manual_id,source_pdf_page,row_order', ignoreDuplicates: true })

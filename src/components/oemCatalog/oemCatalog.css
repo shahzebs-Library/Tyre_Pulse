@@ -174,3 +174,7 @@ html.light .oem-note-error { color: #b42318; }
 
 .oem-add { white-space: nowrap; width: 80px; }
 .oem-add button { display: inline-grid; place-items: center; }
+.oem-table td small.oem-offdrawing { color: var(--text-muted); font-style: italic; }
+.oem-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; padding: 2px 0; min-height: 24px; background: none; border: 0; color: var(--brand, #15803d); font-size: 12px; font-weight: 600; cursor: pointer; }
+.oem-link:hover { text-decoration: underline; }
+.oem-link:focus-visible { outline: 2px solid var(--brand, #15803d); outline-offset: 2px; border-radius: 4px; }

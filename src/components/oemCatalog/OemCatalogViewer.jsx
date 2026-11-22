@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BookOpen, CheckCircle2, Info, ChevronLeft, ChevronRight, ExternalLink, Loader2, PackagePlus, Plus, AlertTriangle } from 'lucide-react'
+import { BookOpen, CheckCircle2, Info, ChevronLeft, ChevronRight, ExternalLink, Layers, Loader2, PackagePlus, Plus, AlertTriangle } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import OemFigure, { normalizeIndex } from './OemFigure'
 import { CoveragePanel, FigureSummary, PartDrawer } from './OemInsightPanels'
@@ -26,6 +26,8 @@ export default function OemCatalogViewer({
   // shares its number (often several variants); choosing a row picks exactly
   // that part instead of the whole group.
   const [pickedRowId, setPickedRowId] = useState(null)
+  // Callout numbers actually placed on the drawing; null until the figure has rendered.
+  const [marked, setMarked] = useState(null)
   const rowRefs = useRef(new Map())
   const navRef = useRef(null)
   const [navTop, setNavTop] = useState(0)
@@ -64,7 +66,7 @@ export default function OemCatalogViewer({
   const goto = (d) => { const g = flat[activeAt + d]; if (g) onOpenGroup(g) }
 
   const rows = useMemo(() => activeGroup?.rows || [], [activeGroup])
-  useEffect(() => { setPageNo(0); setPickedRowId(null) }, [activeGroup])
+  useEffect(() => { setPageNo(0); setPickedRowId(null); setMarked(null) }, [activeGroup])
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   // Selecting a row on another table page (via a callout) jumps to that page.
   useEffect(() => {
@@ -85,6 +87,12 @@ export default function OemCatalogViewer({
   const groupRows = rows.filter((r) => selectedIndex && indexOf(r) === selectedIndex)
   const selectedRows = pickedRow ? [pickedRow] : groupRows
   const pickRow = (row) => { setPickedRowId(row.id); onSelectIndex(indexOf(row)) }
+  // A main part often has its own exploded drawing ("see page"). Open that assembly in place.
+  const subGroupOf = (row) => {
+    const page = row?.attributes?.subassembly_pdf_page
+    return page ? groups.find((g) => g !== activeGroup && String(g.page) === String(page)) || null : null
+  }
+  const openSub = (row) => { const g = subGroupOf(row); if (g) onOpenGroup(g) }
   // Asset and location come from the vehicle chosen on the page (vehicle_fleet.asset_no or
   // fleet_number, and vehicle_fleet.site). An OEM book row carries neither, so nothing is
   // shown that the record does not hold.
@@ -161,6 +169,7 @@ export default function OemCatalogViewer({
                   onSelectIndex={(v) => { setPickedRowId(null); onSelectIndex(normalizeIndex(v)) }}
                   figureLabel={activeGroup.label}
                   geometry={activeMeta?.geometry}
+                  onMarkersChange={setMarked}
                   position={`${printed || activeGroup.page} · ${activeAt + 1}/${flat.length}`}
                   onPrev={activeAt > 0 ? () => goto(-1) : undefined}
                   onNext={activeAt >= 0 && activeAt < flat.length - 1 ? () => goto(1) : undefined}
@@ -189,6 +198,7 @@ export default function OemCatalogViewer({
                             {t('oemcatalog.parts.assetLine', { asset: assetLabel })} · {t('oemcatalog.parts.locationLine', { location: siteLabel })}
                             {selectedKeys.has(`${manual.id}:${r.id}`) ? ` · ${t('oemcatalog.parts.added')}` : ''}
                           </small>
+                          {subGroupOf(r) && <button type="button" className="oem-link" onClick={() => openSub(r)}><Layers size={13} aria-hidden="true" />{t('oemcatalog.parts.openSub')}</button>}
                         </li>
                       ))}
                     </ul>
@@ -215,7 +225,7 @@ export default function OemCatalogViewer({
                           <tr key={row.id} ref={(el) => { if (el) rowRefs.current.set(row.id, el); else rowRefs.current.delete(row.id) }} data-selected={sel ? 'true' : undefined} data-picked={picked ? 'true' : undefined} onClick={() => pickRow(row)}>
                             <td className="oem-idx"><button type="button" onClick={(e) => { e.stopPropagation(); pickRow(row) }} aria-pressed={picked} aria-label={t('oemcatalog.parts.selectPart', { index: idx || '-', part: row.part_no || '-' })}>{row.index_no || (row.parent_index ? `${row.parent_index}*` : '-')}</button></td>
                             <td className="oem-pn" dir="ltr">{row.part_no}</td>
-                            <td>{row.description}{row.remark && <small>{row.remark}</small>}<small className="oem-where">{assetLabel} · {siteLabel}</small></td>
+                            <td>{row.description}{row.remark && <small>{row.remark}</small>}<small className="oem-where">{assetLabel} · {siteLabel}</small>{marked && idx && !marked.has(idx) && <small className="oem-offdrawing">{t('oemcatalog.parts.notOnDrawing')}</small>}{subGroupOf(row) && <button type="button" className="oem-link" onClick={(e) => { e.stopPropagation(); openSub(row) }}><Layers size={13} aria-hidden="true" />{t('oemcatalog.parts.openSub')}</button>}</td>
                             <td className="oem-num">{row.quantity ?? '-'}</td>
                             <td className="oem-add"><button type="button" onClick={(e) => { e.stopPropagation(); setDetail(row) }} aria-label={t('oemcatalog.detail.title')} title={t('oemcatalog.detail.title')}><Info size={15} aria-hidden="true" /></button><button type="button" disabled={added} onClick={(e) => { e.stopPropagation(); onAddRows([row]) }} aria-label={t('oemcatalog.parts.addOne', { part: row.part_no })} title={added ? t('oemcatalog.parts.added') : t('oemcatalog.parts.add')}>{added ? <CheckCircle2 size={15} aria-hidden="true" /> : <Plus size={15} aria-hidden="true" />}</button></td>
                           </tr>

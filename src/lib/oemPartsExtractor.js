@@ -114,6 +114,28 @@ export function extractOemPartsPage(items, pdfPage) {
 }
 
 /** Iterate every PDF page; records pages with no selectable parts table for review. */
+/**
+ * Links each parts row to the drawing its callout is printed on: the assembly drawing that precedes
+ * its parts table (printed page n-1). A "see page" is the drill-down to the part's OWN sub-assembly
+ * drawing and is kept separately as subassembly_pdf_page. Mutates and returns rows.
+ */
+export function linkIllustrationPages(rows, printedPageMap) {
+  for (const row of rows) {
+    const pageParts = String(row.printed_page || '').match(/^(\d+)-(\d+)$/)
+    const assemblyFigure = pageParts && Number(pageParts[2]) > 1
+      ? `${pageParts[1]}-${Number(pageParts[2]) - 1}`
+      : ''
+    // A row's callout is printed on the assembly drawing that precedes its parts table. A "see page"
+    // is the drill-down to the part's OWN sub-assembly drawing; filing the row there split the
+    // assembly in two and left most of its callouts unclickable.
+    const homeFigure = assemblyFigure && printedPageMap.get(assemblyFigure)
+    const subassembly = row.see_page && printedPageMap.get(row.see_page)
+    row.illustration_pdf_page = homeFigure || subassembly || null
+    if (subassembly && subassembly !== row.illustration_pdf_page) row.subassembly_pdf_page = subassembly
+  }
+  return rows
+}
+
 export async function extractOemPartsDocument(pdfDoc, onProgress = () => {}, { ops } = {}) {
   const rows = []
   const parsedPages = []
@@ -137,15 +159,7 @@ export async function extractOemPartsDocument(pdfDoc, onProgress = () => {}, { o
     }
     onProgress({ pageNumber, pageCount: pdfDoc.numPages, rowCount: rows.length })
   }
-  for (const row of rows) {
-    const pageParts = String(row.printed_page || '').match(/^(\d+)-(\d+)$/)
-    const assemblyFigure = pageParts && Number(pageParts[2]) > 1
-      ? `${pageParts[1]}-${Number(pageParts[2]) - 1}`
-      : ''
-    row.illustration_pdf_page = (row.see_page && printedPageMap.get(row.see_page))
-      || (assemblyFigure && printedPageMap.get(assemblyFigure))
-      || null
-  }
+  linkIllustrationPages(rows, printedPageMap)
   // Callout numbers printed on each linked illustration page (text layer only).
   // Image-only figures give none; the pipeline then skips orphan-callout checks.
   const calloutsByPage = {}

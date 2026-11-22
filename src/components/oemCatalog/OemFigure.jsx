@@ -16,7 +16,7 @@ const ZOOM_STEPS = [0.6, 0.8, 1, 1.25, 1.6, 2, 2.6, 3.2]
  * zoom, fullscreen, figure paging and an overview thumbnail with a green box
  * showing the part of the drawing currently in view.
  */
-export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelectIndex, figureLabel, position, onPrev, onNext, calloutNote, geometry }) {
+export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelectIndex, figureLabel, position, onPrev, onNext, calloutNote, geometry, onMarkersChange }) {
   const { t } = useLanguage()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -72,26 +72,31 @@ export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelec
         canvas.style.height = `${outH}px`
         setSize({ width: outW, height: outH })
         const markers = []
+        const covered = new Set()
         if (geometry?.callouts?.length) {
           for (const c of geometry.callouts) {
             const [x, y] = viewport.convertToViewportPoint(c.x, c.y)
-            markers.push({ id: `${c.index}-${Math.round(x)}-${Math.round(y)}`, index: c.index, x, y, estimated: c.status !== 'verified' })
-          }
-        } else {
-          const text = await page.getTextContent()
-          const usable = new Set(rows.map((row) => normalizeIndex(row.index_no || row.parent_index)).filter(Boolean))
-          const seen = new Set()
-          for (const item of text.items || []) {
-            const index = normalizeIndex(item.str)
-            if (!index || !usable.has(index)) continue
-            const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5])
-            const id = `${index}-${Math.round(x)}-${Math.round(y)}`
-            if (seen.has(id)) continue
-            seen.add(id)
-            markers.push({ id, index, x, y, estimated: true })
+            const index = normalizeIndex(c.index)
+            covered.add(index)
+            markers.push({ id: `${index}-${Math.round(x)}-${Math.round(y)}`, index, x, y, estimated: c.status !== 'verified' })
           }
         }
-        if (!cancelled) setCallouts(markers)
+        // Every number printed on the drawing that has a part in this table is clickable, even
+        // when the saved geometry did not place it. Numbers the geometry already placed are kept
+        // as placed so a verified position is never doubled by a text guess.
+        const text = await page.getTextContent()
+        const usable = new Set(rows.map((row) => normalizeIndex(row.index_no || row.parent_index)).filter(Boolean))
+        const seen = new Set()
+        for (const item of text.items || []) {
+          const index = normalizeIndex(item.str)
+          if (!index || !usable.has(index) || covered.has(index)) continue
+          const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5])
+          const id = `${index}-${Math.round(x)}-${Math.round(y)}`
+          if (seen.has(id)) continue
+          seen.add(id)
+          markers.push({ id, index, x, y, estimated: true })
+        }
+        if (!cancelled) { setCallouts(markers); onMarkersChange?.(new Set(markers.map((m) => m.index))) }
         task = page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport, transform: ratio === 1 ? null : [ratio, 0, 0, ratio, 0, 0] })
         await task.promise
         const thumb = thumbRef.current
@@ -107,7 +112,7 @@ export default function OemFigure({ pdfDoc, pageNo, rows, selectedIndex, onSelec
     }
     draw()
     return () => { cancelled = true; task?.cancel() }
-  }, [pdfDoc, pageNo, rows, zoomValue, t, geometry])
+  }, [pdfDoc, pageNo, rows, zoomValue, t, geometry, onMarkersChange])
 
   const updateView = useCallback(() => {
     const el = hostRef.current

@@ -139,6 +139,7 @@ export async function publishApproved(manualId) {
       index_no: r.index_no || null, parent_index: r.parent_index || null, part_no: r.part_no, description: r.description, remark: r.remark || null, quantity: r.quantity ?? null,
       see_page: r.see_page || null, illustration_pdf_page: r.illustration_pdf_page || null, row_type: r.row_type || 'catalog_item', source_line: r.source_line || null,
       figure_id: r.figure_id || null,
+      attributes: { ...(r.attributes || {}), ...(r.subassembly_pdf_page ? { subassembly_pdf_page: r.subassembly_pdf_page } : {}) },
     }))
     const { error: insErr } = await supabase.from('oem_parts_entries').upsert(rows, { onConflict: 'manual_id,source_pdf_page,row_order', ignoreDuplicates: true })
     if (insErr) fail(insErr, 'Could not publish approved parts.')

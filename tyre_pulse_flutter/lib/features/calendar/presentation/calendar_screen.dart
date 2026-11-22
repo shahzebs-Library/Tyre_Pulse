@@ -137,7 +137,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           const SizedBox(height: TpSpace.md),
           Row(
             children: <Widget>[
-              Icon(Icons.person_outline_rounded, color: palette.ok.base),
+              TpIcon(Icons.person_outline_rounded, color: palette.ok.base),
               const SizedBox(width: TpSpace.xs),
               Expanded(
                 child: Text(
@@ -399,7 +399,7 @@ class _TimelineRow extends StatelessWidget {
                   height: TpSpace.lg,
                   color: isFirst ? Colors.transparent : palette.border,
                 ),
-                Icon(node, color: c.base, size: TpSizing.iconLg),
+                TpIcon(node, color: c.base, size: TpSizing.iconLg),
                 Expanded(
                   child: Container(
                     width: 2,

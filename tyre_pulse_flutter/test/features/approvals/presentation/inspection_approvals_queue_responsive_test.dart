@@ -82,9 +82,10 @@ void main() {
     final Finder row = find.byKey(
       InspectionApprovalsQueueKeys.row(_pendingItem.id),
     );
+    // No per-row status chip: the selected tab states it.
     expect(
       find.descendant(of: row, matching: find.text('PENDING')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.descendant(

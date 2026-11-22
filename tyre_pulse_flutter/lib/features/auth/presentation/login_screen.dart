@@ -1762,7 +1762,7 @@ class _LoginBanner extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(icon, size: TpSizing.iconSm, color: colors.onSoft),
+            TpIcon(icon, size: TpSizing.iconSm, color: colors.onSoft),
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(

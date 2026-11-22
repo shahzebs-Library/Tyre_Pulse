@@ -93,7 +93,7 @@ class AccidentSection extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Icon(icon, size: 20),
+                TpIcon(icon, size: 20),
                 const SizedBox(width: TpSpace.sm),
                 Expanded(
                   child: Column(

@@ -376,9 +376,14 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
     _suppressDraftChanges = true;
     _selectedVehicle = selected;
     _asset.text = selected.assetNo ?? selected.fleetNumber ?? '';
-    // The incident site is the reporter's own statement (mock M1 leaves the
-    // picker empty after an asset loads). The fleet home site is offered in
-    // the picker, never written into the report on its own.
+    // The incident site starts from the asset's own site so the reporter does
+    // not retype it, and stays freely editable: a reporter's own entry (or a
+    // different site picked later) is never overwritten by choosing an asset.
+    final String previousSite = previous?.site?.trim() ?? '';
+    final String currentSite = _incidentSite.text.trim();
+    if (currentSite.isEmpty || currentSite == previousSite) {
+      _incidentSite.text = selected.site?.trim() ?? '';
+    }
     final String previousDriver = previous?.operatorName?.trim() ?? '';
     if (_driverName.text.trim().isEmpty ||
         _driverName.text.trim() == previousDriver) {
@@ -747,8 +752,10 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
         ),
         title: const TpBrandLockup(),
         actions: <Widget>[
+          // 172 dp (was 136) so "Draft saved on device · 5:52 PM" wraps to two
+          // whole lines instead of ending in "5:52 ...".
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 136),
+            constraints: const BoxConstraints(maxWidth: 172),
             child: Center(child: _draftStatus()),
           ),
           if (_currentStep.index > 0)
@@ -962,6 +969,20 @@ class _AccidentReportScreenState extends ConsumerState<AccidentReportScreen> {
               controller: _assetSearch,
               decoration: InputDecoration(
                 hintText: copy('assetSearch'),
+                hintMaxLines: 1,
+                filled: true,
+                fillColor: TpPalette.of(context).surface,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: TpSpace.lg,
+                  vertical: TpSpace.md,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(TpRadius.md),
+                  borderSide: BorderSide(
+                    color: TpPalette.of(context).controlBorder,
+                    width: TpBorderWidth.hairline,
+                  ),
+                ),
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _assetQuery.isEmpty
                     ? null
@@ -1681,7 +1702,7 @@ class _PickerField extends StatelessWidget {
                 ),
                 child: Row(
                   children: <Widget>[
-                    Icon(icon, size: TpSizing.iconMd),
+                    TpIcon(icon, size: TpSizing.iconMd),
                     const SizedBox(width: TpSpace.sm),
                     Expanded(
                       child: Text(

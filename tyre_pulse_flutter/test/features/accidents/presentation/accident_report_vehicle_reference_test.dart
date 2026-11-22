@@ -236,7 +236,7 @@ void main() {
   });
 
   testWidgets(
-      'the incident site is chosen by the reporter and survives an asset change',
+      'the incident site starts from the asset site, stays editable and survives an asset change',
       (WidgetTester tester) async {
     await _pumpReport(tester);
     await _selectPump(tester);
@@ -246,14 +246,14 @@ void main() {
     expect(find.text(_siteHelp), findsOneWidget);
     expect(find.text(_lockNote), findsOneWidget);
 
-    // Mock M1: the fleet home site is never written in for the reporter.
+    // The incident site starts from the asset's own site and stays editable.
     final Finder siteRow = find.byKey(AccidentReportIntakeKeys.incidentSite);
     await tester.ensureVisible(siteRow);
     await tester.pumpAndSettle();
     expect(
       find.descendant(
         of: siteRow,
-        matching: find.text('Select incident site / location'),
+        matching: find.text('Diriyah'),
       ),
       findsOneWidget,
     );

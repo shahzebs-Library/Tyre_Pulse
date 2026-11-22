@@ -33,6 +33,7 @@ import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/tp_asset_icons.dart';
 import 'package:tyre_pulse/core/design_system/tp_button.dart';
 import 'package:tyre_pulse/core/design_system/tp_report_problem_scope.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -113,7 +114,7 @@ class TpStateView extends StatelessWidget {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(TpSpace.lg),
-                  child: Icon(
+                  child: TpIcon(
                     icon,
                     size: TpSizing.iconState,
                     color: colors.onSoft,

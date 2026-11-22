@@ -430,7 +430,7 @@ class _WorkshopStatusDetailScreenState
       padding: const EdgeInsets.all(TpSpace.md),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.person_outline),
+          const TpIcon(Icons.person_outline),
           const SizedBox(width: TpSpace.sm),
           Expanded(
             child: Column(

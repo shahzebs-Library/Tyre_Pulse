@@ -67,6 +67,7 @@ void main() {
             reading: const TyrePositionReading(
               position: 'R1Li',
               condition: TyreReadingCondition.puncture,
+              checked: true,
             ),
             onChanged: (TyrePositionReading reading) {},
             onCapturePhoto: (PhotoCaptureSource source) {},

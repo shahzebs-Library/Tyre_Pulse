@@ -784,7 +784,7 @@ class _ApprovalVehicleImage extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: photo == null
-          ? Icon(vehicleFallbackIcon(asset), color: palette.textMuted, size: 44)
+          ? vehicleFallbackGlyph(asset, color: palette.textMuted, size: 44)
           : Image.asset(
               photo!,
               fit: BoxFit.contain,
@@ -951,7 +951,7 @@ class _ApprovalStatusPanel extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(
+              TpIcon(
                 Icons.person_outline_rounded,
                 size: TpSizing.iconSm,
                 color: palette.textMuted,
@@ -1163,7 +1163,7 @@ class _TallyLine extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
           children: <Widget>[
-            Icon(icon, size: 18, color: color),
+            TpIcon(icon, size: 18, color: color),
             const SizedBox(width: TpSpace.sm),
             Text(
               '$count',
@@ -1203,7 +1203,7 @@ class _OutcomeStat extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Icon(icon, size: TpSizing.iconLg, color: palette.primary),
+        TpIcon(icon, size: TpSizing.iconLg, color: palette.primary),
         const SizedBox(height: TpSpace.xs),
         Text(
           label,
@@ -1615,7 +1615,7 @@ class _EvidenceItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
         child: Row(
           children: <Widget>[
-            Icon(icon, color: TpPalette.of(context).textSecondary),
+            TpIcon(icon, color: TpPalette.of(context).textSecondary),
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Column(
@@ -1668,7 +1668,7 @@ class _SummaryRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+          TpIcon(icon, size: TpSizing.iconSm, color: palette.textMuted),
           const SizedBox(width: TpSpace.sm),
           Expanded(
             child: Text(text, style: Theme.of(context).textTheme.bodySmall),

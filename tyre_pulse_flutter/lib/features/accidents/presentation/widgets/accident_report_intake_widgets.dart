@@ -1656,7 +1656,7 @@ class AccidentReviewRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             if (icon != null) ...<Widget>[
-              Icon(icon, size: TpSizing.iconSm),
+              TpIcon(icon, size: TpSizing.iconSm),
               const SizedBox(width: TpSpace.sm),
             ],
             Expanded(

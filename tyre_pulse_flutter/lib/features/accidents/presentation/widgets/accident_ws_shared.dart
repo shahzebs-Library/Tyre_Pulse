@@ -189,7 +189,7 @@ class AccidentWsFact extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           if (icon != null) ...<Widget>[
-            Icon(icon, size: TpSizing.iconSm, color: palette.textSecondary),
+            TpIcon(icon, size: TpSizing.iconSm, color: palette.textSecondary),
             const SizedBox(width: TpSpace.sm),
           ],
           Expanded(
@@ -576,7 +576,7 @@ class AccidentWsYesNo extends StatelessWidget {
             : Icons.check_circle_rounded;
     return Row(
       children: <Widget>[
-        Icon(icon, color: colors.base, size: TpSizing.iconLg),
+        TpIcon(icon, color: colors.base, size: TpSizing.iconLg),
         const SizedBox(width: TpSpace.sm),
         Expanded(child: Text(label)),
         if (onChanged == null)

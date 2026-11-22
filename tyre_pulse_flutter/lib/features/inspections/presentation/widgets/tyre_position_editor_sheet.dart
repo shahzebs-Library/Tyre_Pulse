@@ -35,9 +35,15 @@ class TyrePositionEditorSheet extends ConsumerStatefulWidget {
     required this.onChanged,
     required this.onCapturePhoto,
     this.installedTyre,
+    this.positionLabel,
     this.isCapturingPhoto = false,
     super.key,
   });
+
+  /// The code the diagram prints on this wheel (for example `LHF1`). The
+  /// reading carries the internal slot id (`F1L`), which a fitter has never
+  /// seen on the vehicle map, so the header shows this when it is known.
+  final String? positionLabel;
 
   final TyrePositionReading reading;
   final ValueChanged<TyrePositionReading> onChanged;
@@ -159,7 +165,7 @@ class _TyrePositionEditorSheetState
                         ),
                         child: SizedBox.square(
                           dimension: 48,
-                          child: Icon(
+                          child: TpIcon(
                             Icons.tire_repair_outlined,
                             color: palette.onPrimary,
                           ),
@@ -180,7 +186,7 @@ class _TyrePositionEditorSheetState
                                   ),
                             ),
                             TpIdentifierText(
-                              r.position,
+                              widget.positionLabel ?? r.position,
                               style: Theme.of(context)
                                   .textTheme
                                   .headlineSmall
@@ -189,16 +195,25 @@ class _TyrePositionEditorSheetState
                           ],
                         ),
                       ),
-                      TpStatusChip(
-                        status: tyreConditionStatus(
-                          normaliseCondition(r.condition),
+                      // A wheel nobody has marked yet is not "Good": the
+                      // default selection below is only a starting point.
+                      if (r.checked)
+                        TpStatusChip(
+                          status: tyreConditionStatus(
+                            normaliseCondition(r.condition),
+                          ),
+                          label: tyreConditionLabel(
+                            l10n,
+                            normaliseCondition(r.condition),
+                          ),
+                          isCompact: true,
+                        )
+                      else
+                        TpStatusChip(
+                          status: TpStatus.unknown,
+                          label: l10n.tyreDetailFieldNotRecorded,
+                          isCompact: true,
                         ),
-                        label: tyreConditionLabel(
-                          l10n,
-                          normaliseCondition(r.condition),
-                        ),
-                        isCompact: true,
-                      ),
                     ],
                   ),
                 ),
@@ -240,7 +255,7 @@ class _TyrePositionEditorSheetState
                                   normaliseCondition(condition),
                                 ),
                               ),
-                              isSelected: r.condition == condition,
+                              isSelected: r.checked && r.condition == condition,
                               onTap: () =>
                                   _emit(r.copyWith(condition: condition)),
                             ),
@@ -422,7 +437,7 @@ class _TyrePositionEditorSheetState
           ),
         ),
         _StickyEditorAction(
-          label: l10n.actionClose,
+          label: r.checked ? l10n.inspectionTyreEditorSave : l10n.actionClose,
           onPressed: () {
             FocusManager.instance.primaryFocus?.unfocus();
             Navigator.of(context).maybePop();
@@ -565,7 +580,7 @@ class _ConditionChip extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
                   if (icon != null) ...<Widget>[
-                    Icon(
+                    TpIcon(
                       icon,
                       size: TpSizing.iconSm,
                       color: isSelected ? colors.onBase : colors.onSoft,

@@ -1092,7 +1092,7 @@ class _RouteBanner extends StatelessWidget {
         ),
         child: Row(
           children: <Widget>[
-            Icon(
+            TpIcon(
               Icons.assignment_turned_in_outlined,
               size: TpSizing.iconMd,
               color: colors.onSoft,
@@ -1155,7 +1155,7 @@ class _WarningOutlinedButton extends StatelessWidget {
     final TpStatusColors colors = TpPalette.of(context).warning;
     return OutlinedButton.icon(
       onPressed: onPressed,
-      icon: Icon(icon, size: TpSizing.iconMd),
+      icon: TpIcon(icon, size: TpSizing.iconMd),
       label: Text(label, textAlign: TextAlign.center),
       style: OutlinedButton.styleFrom(
         foregroundColor: colors.onSoft,
@@ -1322,7 +1322,7 @@ class _MonitorNote extends StatelessWidget {
         padding: const EdgeInsets.all(TpSpace.md),
         child: Row(
           children: <Widget>[
-            Icon(
+            TpIcon(
               Icons.person_outline_rounded,
               size: TpSizing.iconMd,
               color: colors.onSoft,

@@ -779,7 +779,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
         OutlinedButton.icon(
           key: const Key('accident.timeline.viewAll'),
           onPressed: () => context.push(const NotificationsRoute().location),
-          icon: const Icon(Icons.notifications_none),
+          icon: const TpIcon(Icons.notifications_none),
           label: Text(
             c.l10n.accTlViewAllNotifications,
           ),
@@ -817,7 +817,7 @@ class _State extends ConsumerState<AccidentTimelineMockWorkspace> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Icon(
+                    TpIcon(
                       Icons.person_outline,
                       color: TpPalette.of(context).primary,
                     ),
@@ -890,7 +890,7 @@ class _TimelineRow extends StatelessWidget {
                         ? null
                         : VerticalDivider(width: 2, thickness: 2, color: rail),
                   ),
-                  Icon(
+                  TpIcon(
                     dot,
                     size: 18,
                     color:
@@ -941,7 +941,7 @@ class _TimelineRow extends StatelessWidget {
                             : palette.primarySoft,
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
+                      child: TpIcon(
                         icon,
                         color: entry.status == TimelineStatus.pending
                             ? colors.base

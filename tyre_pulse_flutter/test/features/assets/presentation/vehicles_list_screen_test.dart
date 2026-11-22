@@ -542,7 +542,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('2 active assets'), findsOneWidget);
+    expect(find.text('2 active assets · 3 vehicles in fleet'), findsOneWidget);
     expect(find.text('All countries · All authorized sites'), findsOneWidget);
 
     await tester.tap(

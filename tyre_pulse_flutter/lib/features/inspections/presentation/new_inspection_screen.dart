@@ -41,6 +41,7 @@ import 'package:tyre_pulse/features/inspections/presentation/widgets/inspection_
 import 'package:tyre_pulse/features/inspections/presentation/widgets/tyre_position_editor_sheet.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_display.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_detail_screen.dart';
@@ -362,6 +363,7 @@ class _HeaderStep extends ConsumerWidget {
                           key: NewInspectionScreenKeys.vehicleSection,
                           title: l10n.vehiclesTitle,
                           icon: Icons.directions_car_outlined,
+                          assetIcon: TpAssetIconKind.mixer,
                           iconKey: NewInspectionScreenKeys.vehicleSectionIcon,
                           status: TpStatus.info,
                           child: _VehiclePicker(
@@ -425,23 +427,12 @@ class _InspectionHeaderHero extends StatelessWidget {
         children: <Widget>[
           DecoratedBox(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[palette.primary, palette.primaryDark],
-              ),
+              color: palette.primary,
               borderRadius: BorderRadius.circular(TpRadius.md),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: palette.primary.withValues(alpha: 0.30),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
             child: Padding(
               padding: const EdgeInsets.all(TpSpace.md),
-              child: Icon(
+              child: TpIcon(
                 Icons.assignment_outlined,
                 color: palette.onPrimary,
                 size: TpSizing.iconLg,
@@ -450,15 +441,16 @@ class _InspectionHeaderHero extends StatelessWidget {
           ),
           const SizedBox(width: TpSpace.md),
           Expanded(
-            child: Text(
-              l10n.inspectionNavTitle,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              // The numbered track is the step indicator; the sentence that
+              // repeated it is gone, but a screen reader still hears it.
+              child: Semantics(
+                label: l10n.inspectionStepOfTotal(1, 3),
+                child: const ExcludeSemantics(child: _StepTrack(current: 1)),
+              ),
             ),
           ),
-          const SizedBox(width: TpSpace.sm),
-          const _StepTrack(current: 1),
         ],
       ),
     );
@@ -472,6 +464,7 @@ class _SetupSection extends StatelessWidget {
     required this.status,
     required this.child,
     this.iconKey,
+    this.assetIcon,
     super.key,
   });
 
@@ -480,6 +473,9 @@ class _SetupSection extends StatelessWidget {
   final TpStatus status;
   final Widget child;
   final Key? iconKey;
+
+  /// Domain icon drawn instead of [icon] when set.
+  final TpAssetIconKind? assetIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -501,12 +497,19 @@ class _SetupSection extends StatelessWidget {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(TpSpace.sm),
-                    child: Icon(
-                      icon,
-                      key: iconKey,
-                      size: TpSizing.iconMd,
-                      color: tone.onSoft,
-                    ),
+                    child: assetIcon != null
+                        ? TpAssetIcon(
+                            assetIcon!,
+                            key: iconKey,
+                            size: TpSizing.iconMd,
+                            color: tone.onSoft,
+                          )
+                        : TpIcon(
+                            icon,
+                            key: iconKey,
+                            size: TpSizing.iconMd,
+                            color: tone.onSoft,
+                          ),
                   ),
                 ),
                 const SizedBox(width: TpSpace.md),
@@ -558,7 +561,7 @@ class _ResumeDraftRow extends StatelessWidget {
       padding: const EdgeInsets.all(TpSpace.md),
       child: Row(
         children: <Widget>[
-          Icon(_vehicleClassIcon(resolvedClass), color: palette.primary),
+          _vehicleClassGlyph(resolvedClass, color: palette.primary),
           const SizedBox(width: TpSpace.md),
           Expanded(
             child: Column(
@@ -651,7 +654,7 @@ class _SelectedVehicle extends ConsumerWidget {
 
     final Widget image = Container(
       key: NewInspectionScreenKeys.selectedVehicleImage,
-      height: 188,
+      height: 160,
       alignment: Alignment.center,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -664,13 +667,17 @@ class _SelectedVehicle extends ConsumerWidget {
         border: Border.all(color: palette.border),
       ),
       child: photo == null
-          ? Icon(
-              asset == null
-                  ? _vehicleClassIcon(resolvedClass)
-                  : vehicleFallbackIcon(asset),
-              size: 72,
-              color: palette.primary,
-            )
+          ? (asset == null
+              ? _vehicleClassGlyph(
+                  resolvedClass,
+                  size: 72,
+                  color: palette.primary,
+                )
+              : vehicleFallbackGlyph(
+                  asset,
+                  size: 72,
+                  color: palette.primary,
+                ))
           : Padding(
               padding: const EdgeInsets.all(TpSpace.sm),
               child: Image.asset(
@@ -691,7 +698,7 @@ class _SelectedVehicle extends ConsumerWidget {
         Row(
           children: <Widget>[
             _ClassBadge(
-              icon: _vehicleClassIcon(resolvedClass),
+              resolvedClass: resolvedClass,
               iconKey: NewInspectionScreenKeys.vehicleSectionIcon,
               code: classCode,
             ),
@@ -831,9 +838,13 @@ class _SelectedVehicle extends ConsumerWidget {
 /// the resolved vehicle class icon. A code with no recognisable prefix shows
 /// the icon alone - a class is never invented for it.
 class _ClassBadge extends StatelessWidget {
-  const _ClassBadge({required this.icon, required this.code, this.iconKey});
+  const _ClassBadge({
+    required this.resolvedClass,
+    required this.code,
+    this.iconKey,
+  });
 
-  final IconData icon;
+  final String resolvedClass;
   final String? code;
   final Key? iconKey;
 
@@ -852,8 +863,8 @@ class _ClassBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(
-            icon,
+          _vehicleClassGlyph(
+            resolvedClass,
             key: iconKey,
             size: TpSizing.iconSm,
             color: palette.primary,
@@ -886,7 +897,7 @@ class _IconLine extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     return Row(
       children: <Widget>[
-        Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+        TpIcon(icon, size: TpSizing.iconSm, color: palette.textMuted),
         const SizedBox(width: TpSpace.xs),
         Flexible(
           child: Text(
@@ -1154,7 +1165,7 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
           onChanged: (_) => setState(() {}),
         ),
         if (chips.isNotEmpty) ...<Widget>[
-          const SizedBox(height: TpSpace.md),
+          const SizedBox(height: TpSpace.lg),
           _ClassFilterRow(
             key: NewInspectionScreenKeys.pickerClassFilters,
             chips: chips,
@@ -1180,7 +1191,7 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
             ],
           )
         else if (!browsing)
-          Text(l10n.inspectionSearchToBeginHint, style: text.bodySmall)
+          const SizedBox.shrink()
         else if (matches.isEmpty)
           Text(l10n.inspectionVehicleNoMatch, style: text.bodySmall)
         else ...<Widget>[
@@ -1274,9 +1285,7 @@ class _ClassFilterRow extends StatelessWidget {
             _ClassFilterChip(
               key: NewInspectionScreenKeys.pickerClassChip(chip.assetClass),
               label: '${chip.assetClass} (${chip.count})',
-              icon: _vehicleClassIcon(
-                resolveVehicleType('', '${chip.assetClass}000'),
-              ),
+              resolvedClass: resolveVehicleType('', '${chip.assetClass}000'),
               isSelected: selected == chip.assetClass,
               onTap: () => onSelect(
                 selected == chip.assetClass ? null : chip.assetClass,
@@ -1292,14 +1301,18 @@ class _ClassFilterRow extends StatelessWidget {
 class _ClassFilterChip extends StatelessWidget {
   const _ClassFilterChip({
     required this.label,
-    required this.icon,
     required this.isSelected,
     required this.onTap,
+    this.icon,
+    this.resolvedClass,
     super.key,
   });
 
   final String label;
-  final IconData icon;
+  final IconData? icon;
+
+  /// When set, the class's domain icon is drawn instead of [icon].
+  final String? resolvedClass;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -1308,11 +1321,17 @@ class _ClassFilterChip extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     return ChoiceChip(
       avatar: ExcludeSemantics(
-        child: Icon(
-          icon,
-          size: 16,
-          color: isSelected ? palette.onPrimary : palette.primary,
-        ),
+        child: resolvedClass == null
+            ? TpIcon(
+                icon,
+                size: TpIconSize.sm,
+                color: isSelected ? palette.onPrimary : palette.primary,
+              )
+            : _vehicleClassGlyph(
+                resolvedClass!,
+                size: TpIconSize.sm,
+                color: isSelected ? palette.onPrimary : palette.primary,
+              ),
       ),
       label: Text(label),
       selected: isSelected,
@@ -1392,17 +1411,13 @@ class _VehicleChip extends StatelessWidget {
                     alignment: Alignment.center,
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: <Color>[palette.surface, palette.surfaceAlt],
-                      ),
+                      color: palette.surface,
                       border: Border.all(color: palette.border),
                       borderRadius: BorderRadius.circular(TpRadius.md),
                     ),
                     child: photo == null
-                        ? Icon(
-                            vehicleFallbackIcon(asset),
+                        ? vehicleFallbackGlyph(
+                            asset,
                             color: palette.primary,
                             size: 32,
                           )
@@ -1426,7 +1441,7 @@ class _VehicleChip extends StatelessWidget {
                           fit: BoxFit.scaleDown,
                           alignment: AlignmentDirectional.centerStart,
                           child: _ClassBadge(
-                            icon: _vehicleClassIcon(resolvedClass),
+                            resolvedClass: resolvedClass,
                             code: assetClassOf(asset.assetNo),
                           ),
                         ),
@@ -1574,6 +1589,7 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
       backFallback: TpBackFallbacks.forRoute(const NewInspectionRoute()),
       appBar: TpAppBar(
         title: l10n.tyreMockInspectionTitle,
+        subtitleMaxLines: 2,
         subtitle: <String>[
           if (state.selectedAssetNo.trim().isNotEmpty)
             state.selectedAssetNo.trim(),
@@ -1854,6 +1870,11 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
                   TyrePositionReading.seed(position);
           return TyrePositionEditorSheet(
             reading: reading,
+            positionLabel: tyrePositionDisplayCode(
+              liveState.effectiveLayoutType,
+              position,
+              assetNo: liveState.selectedAssetNo,
+            ),
             installedTyre: liveState.installedTyres[position],
             isCapturingPhoto: liveState.isCapturingPhoto,
             onChanged: (updated) => sheetRef
@@ -2139,7 +2160,7 @@ class _ConditionLegendItem extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, color: color, size: 20),
+          TpIcon(icon, color: color, size: 20),
           const SizedBox(width: 5),
           Text(
             label,
@@ -2448,6 +2469,7 @@ class _SelectedInspectionTyreCard extends StatelessWidget {
                               ),
                         valueColor: valueColor,
                         icon: Icons.speed_rounded,
+                        glyph: TpAssetIconKind.gauge,
                         status: status,
                       ),
                     ),
@@ -2648,7 +2670,7 @@ class _InspectionModuleSwitch extends StatelessWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
-                      Icon(
+                      TpIcon(
                         Icons.tire_repair_rounded,
                         size: TpSizing.iconSm,
                         color: palette.primary,
@@ -2875,6 +2897,7 @@ class _PanelValueTile extends StatelessWidget {
     required this.valueColor,
     required this.icon,
     required this.status,
+    this.glyph,
   });
 
   final String label;
@@ -2882,6 +2905,9 @@ class _PanelValueTile extends StatelessWidget {
   final Color? valueColor;
   final IconData icon;
   final TpStatus status;
+
+  /// Signature glyph drawn instead of [icon] when set (pressure -> gauge).
+  final TpAssetIconKind? glyph;
 
   @override
   Widget build(BuildContext context) {
@@ -2912,11 +2938,17 @@ class _PanelValueTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 ExcludeSemantics(
-                  child: Icon(
-                    icon,
-                    size: 14,
-                    color: flagged ? colors.base : palette.textMuted,
-                  ),
+                  child: glyph == null
+                      ? TpIcon(
+                          icon,
+                          size: 14,
+                          color: flagged ? colors.base : palette.textMuted,
+                        )
+                      : TpAssetIcon(
+                          glyph!,
+                          size: 14,
+                          color: flagged ? colors.base : palette.textMuted,
+                        ),
                 ),
                 const SizedBox(width: 3),
                 Flexible(
@@ -3003,7 +3035,11 @@ class _PanelActionTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: TpSpace.xs),
-                Icon(icon, size: TpSizing.iconSm, color: palette.textSecondary),
+                TpIcon(
+                  icon,
+                  size: TpSizing.iconSm,
+                  color: palette.textSecondary,
+                ),
               ],
             ),
           ),
@@ -3099,7 +3135,7 @@ class _PanelNavButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final bool enabled = onTap != null && code != null;
-    final Widget chevron = Icon(
+    final Widget chevron = TpIcon(
       icon,
       size: TpSizing.iconMd,
       color: enabled ? palette.textSecondary : palette.textMuted,
@@ -3299,18 +3335,40 @@ String _workflowLabel(
 /// diagram resolver. A transit mixer must never be shown with a bus icon, and
 /// a bus/pickup/loader/pump must keep the same class from selection through
 /// tyre entry and approval.
+Widget _vehicleClassGlyph(
+  String resolvedClass, {
+  double? size,
+  Color? color,
+  Key? key,
+}) {
+  final TpAssetIconKind? kind = switch (resolvedClass) {
+    'Tri-mixer' => TpAssetIconKind.mixer,
+    'Concrete pump' || 'Line pump' => TpAssetIconKind.pump,
+    _ => null,
+  };
+  if (kind != null) {
+    return TpAssetIcon(
+      kind,
+      key: key,
+      size: size ?? TpIconSize.lg,
+      color: color,
+    );
+  }
+  return Icon(
+    _vehicleClassIcon(resolvedClass),
+    key: key,
+    size: size,
+    color: color,
+  );
+}
+
+/// Material fallback for the classes the signature family has no glyph for.
 IconData _vehicleClassIcon(String resolvedClass) {
   return switch (resolvedClass) {
     'Pickup' => Icons.directions_car_outlined,
     'Bus' || 'Tata' || 'Ashok Leyland' => Icons.directions_bus_outlined,
     'Wheel loader' || 'Skid loader' => Icons.precision_manufacturing_outlined,
-    'Concrete pump' || 'Line pump' => Icons.construction_outlined,
     'Trailer' => Icons.rv_hookup_outlined,
-    'Tri-mixer' ||
-    'Canter' ||
-    'Truck 6x4' ||
-    'Tanker' =>
-      Icons.local_shipping_outlined,
     _ => Icons.local_shipping_outlined,
   };
 }
@@ -3395,6 +3453,24 @@ class _GpsChip extends StatelessWidget {
         ),
     };
     final TpStatusColors colors = palette.forStatus(status);
+    if (state.gpsStatus == InspectionGpsStatus.unavailable) {
+      // A crossed-out pin on its own says nothing: name the action so the
+      // inspector knows the location was not captured and can retry it.
+      return Tooltip(
+        message: '$label. ${l10n.inspectionGpsRetry}',
+        child: TextButton.icon(
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
+            minimumSize: const Size(40, 40),
+            foregroundColor: colors.base,
+          ),
+          onPressed: controller.retryGps,
+          icon: TpIcon(icon, size: TpSizing.iconMd),
+          label: Text(l10n.inspectionGpsRetry),
+        ),
+      );
+    }
     return Tooltip(
       message: state.gpsStatus == InspectionGpsStatus.unavailable
           ? '$label. ${l10n.inspectionGpsRetry}'
@@ -3406,7 +3482,7 @@ class _GpsChip extends StatelessWidget {
         onPressed: state.gpsStatus == InspectionGpsStatus.unavailable
             ? controller.retryGps
             : null,
-        icon: Icon(icon, color: colors.base, size: TpSizing.iconMd),
+        icon: TpIcon(icon, color: colors.base, size: TpSizing.iconMd),
       ),
     );
   }
@@ -3588,9 +3664,9 @@ class _SubmittedStep extends ConsumerWidget {
   }
 }
 
-/// A soft, theme-aware lift under a bordered surface. Additive only: the
-/// hairline border stays the primary edge (shadow disappears in direct
-/// sun, spec section 53), the shadow just gives depth indoors.
+/// Wraps a bordered surface. The decorative shadow was removed: the
+/// hairline border is the edge (a shadow disappears in direct sun, spec
+/// section 53). Kept so call sites stay unchanged.
 class _Raised extends StatelessWidget {
   const _Raised({
     required this.child,
@@ -3607,26 +3683,7 @@ class _Raised extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    final Color base = tint ?? palette.overlay;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: base.withValues(alpha: 0.10 * strength),
-            blurRadius: 18 * strength,
-            offset: Offset(0, 6 * strength),
-          ),
-          BoxShadow(
-            color: base.withValues(alpha: 0.06 * strength),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: child,
-    );
+    return child;
   }
 }
 

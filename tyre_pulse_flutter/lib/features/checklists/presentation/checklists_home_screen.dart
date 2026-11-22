@@ -868,7 +868,7 @@ class _ChecklistHubHeader extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Icon(Icons.sync_rounded, color: palette.ok.base, size: 22),
+                  TpIcon(Icons.sync_rounded, color: palette.ok.base, size: 22),
                   const SizedBox(width: TpSpace.xs),
                   Text(
                     syncedLabel,
@@ -918,7 +918,7 @@ class _ChecklistAssetSearch extends StatelessWidget {
             : IconButton(
                 tooltip: AppLocalizations.of(context).scannerTitle,
                 onPressed: onScan,
-                icon: Icon(
+                icon: TpIcon(
                   Icons.qr_code_scanner_rounded,
                   color: palette.primary,
                   size: 26,
@@ -1007,13 +1007,17 @@ class _SelectedChecklistAssetCard extends StatelessWidget {
                   child: photo == null
                       ? ColoredBox(
                           color: palette.surfaceSunken,
-                          child: Icon(
-                            asset == null
-                                ? Icons.local_shipping_outlined
-                                : vehicleFallbackIcon(asset),
-                            size: 48,
-                            color: palette.textMuted,
-                          ),
+                          child: asset == null
+                              ? Icon(
+                                  Icons.local_shipping_outlined,
+                                  size: 48,
+                                  color: palette.textMuted,
+                                )
+                              : vehicleFallbackGlyph(
+                                  asset,
+                                  size: 48,
+                                  color: palette.textMuted,
+                                ),
                         )
                       : Image.asset(
                           photo,
@@ -1106,7 +1110,7 @@ class _AssetFact extends StatelessWidget {
     final Color ink = TpPalette.of(context).textSecondary;
     return Row(
       children: <Widget>[
-        Icon(icon, size: TpSizing.iconMd, color: ink),
+        TpIcon(icon, size: TpSizing.iconMd, color: ink),
         const SizedBox(width: TpSpace.xs),
         Expanded(
           child: Text(
@@ -1214,16 +1218,21 @@ class _ChecklistLanguageOption extends StatelessWidget {
                 Icon(Icons.language_rounded, size: 20, color: accent),
                 const SizedBox(width: TpSpace.xs),
               ],
+              // Scales down rather than ending in "Engli...": the language
+              // name is the one thing this control must always show whole.
               Flexible(
-                child: Text(
-                  language.native,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: selected ? accent : palette.textSecondary,
-                        fontWeight:
-                            selected ? FontWeight.w800 : FontWeight.w500,
-                      ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    language.native,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: selected ? accent : palette.textSecondary,
+                          fontWeight:
+                              selected ? FontWeight.w800 : FontWeight.w500,
+                        ),
+                  ),
                 ),
               ),
             ],
@@ -1443,7 +1452,7 @@ class _RowIcon extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
-      child: Icon(icon, color: _checklistNavy(palette), size: 24),
+      child: TpIcon(icon, color: _checklistNavy(palette), size: 24),
     );
   }
 }
@@ -1733,14 +1742,17 @@ class _PendingApprovalChip extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colors.onSoft,
-                        fontWeight: FontWeight.w700,
-                      ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colors.onSoft,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
                 ),
               ),
               const SizedBox(width: TpSpace.xs),
@@ -1815,7 +1827,7 @@ class _ChecklistHubLink extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(icon, color: _checklistNavy(palette), size: 27),
+              child: TpIcon(icon, color: _checklistNavy(palette), size: 27),
             ),
             const SizedBox(width: TpSpace.md),
             Expanded(
@@ -1833,7 +1845,7 @@ class _ChecklistHubLink extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
-                      maxLines: 2,
+                      maxLines: 4,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context)
                           .textTheme
@@ -2048,7 +2060,7 @@ class _ChecklistRowLayout extends StatelessWidget {
                   color: iconColors.base.withValues(alpha: 0.18),
                 ),
               ),
-              child: Icon(icon, color: iconColors.base, size: 28),
+              child: TpIcon(icon, color: iconColors.base, size: 28),
             ),
             const SizedBox(width: TpSpace.md),
             Expanded(

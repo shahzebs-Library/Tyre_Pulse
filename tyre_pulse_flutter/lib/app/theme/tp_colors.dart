@@ -97,21 +97,21 @@ class TpPalette {
   /// Light is the primary theme. Spec section 53.
   static const TpPalette light = TpPalette(
     brightness: Brightness.light,
-    background: Color(0xFFFBFCFF),
+    background: Color(0xFFDAEEE2),
     surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFF5F8FF),
-    surfaceSunken: Color(0xFFEAF0FC),
-    text: Color(0xFF00145A),
-    textSecondary: Color(0xFF173577),
-    textMuted: Color(0xFF5E6E9A),
+    surfaceAlt: Color(0xFFF3FAF6),
+    surfaceSunken: Color(0xFFE4F2EA),
+    text: Color(0xFF0A2A1C),
+    textSecondary: Color(0xFF24473A),
+    textMuted: Color(0xFF52695D),
     textInverse: Color(0xFFFFFFFF),
     primary: Color(0xFF07883F),
-    primaryDark: Color(0xFF06385C),
-    primarySoft: Color(0xFFE7F7EE),
+    primaryDark: Color(0xFF0B5D35),
+    primarySoft: Color(0xFFDDF3E6),
     onPrimary: Color(0xFFFFFFFF),
-    border: Color(0xFFDCE4F2),
-    borderStrong: Color(0xFFBECBE1),
-    controlBorder: Color(0xFF75849F),
+    border: Color(0xFFB5CDBF),
+    borderStrong: Color(0xFF9DB8A9),
+    controlBorder: Color(0xFF6E8A7C),
     // Navy ink, not the green action colour: a field the person is typing in
     // must not look like a button or an "ok" status (owner, 2026-11-22).
     focus: Color(0xFF00145A),
@@ -225,21 +225,21 @@ class TpPalette {
   /// for sunlight and must never become the default.
   static const TpPalette dark = TpPalette(
     brightness: Brightness.dark,
-    background: Color(0xFF080C10),
-    surface: Color(0xFF11161B),
-    surfaceAlt: Color(0xFF171D23),
-    surfaceSunken: Color(0xFF0C1116),
-    text: Color(0xFFF1F5F9),
-    textSecondary: Color(0xFFC3CEDE),
-    textMuted: Color(0xFF8CA0B8),
-    textInverse: Color(0xFF080C10),
+    background: Color(0xFF07110D),
+    surface: Color(0xFF1E2C25),
+    surfaceAlt: Color(0xFF25352D),
+    surfaceSunken: Color(0xFF0B1712),
+    text: Color(0xFFF0F7F3),
+    textSecondary: Color(0xFFC2D6CB),
+    textMuted: Color(0xFF8BA89A),
+    textInverse: Color(0xFF07110D),
     primary: Color(0xFFFFD400),
     primaryDark: Color(0xFFEAB308),
     primarySoft: Color(0xFF332A00),
     onPrimary: Color(0xFF181200),
-    border: Color(0xFF252C33),
-    borderStrong: Color(0xFF39424C),
-    controlBorder: Color(0xFF6B7A8C),
+    border: Color(0xFF2E4238),
+    borderStrong: Color(0xFF3E5549),
+    controlBorder: Color(0xFF6F8A7D),
     focus: Color(0xFFFFD400),
     overlay: Color(0xB302060E),
     ok: TpStatusColors(
@@ -308,7 +308,7 @@ class TpPalette {
   /// (1.64:1) are for cards and dividers, which are not controls, and stay
   /// quiet on purpose. This token is at least 3:1 on every surface a control
   /// sits on in its own brightness: light 3.8:1 on surface, 3.3:1 on
-  /// surfaceSunken; dark 4.2:1 on surface, 3.9:1 on surfaceAlt.
+  /// surfaceSunken; dark 3.9:1 on surface, 3.4:1 on surfaceAlt.
   final Color controlBorder;
 
   final Color focus;

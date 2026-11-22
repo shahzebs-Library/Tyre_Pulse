@@ -152,7 +152,7 @@ void main() {
     await _pumpDashboard(tester);
 
     expect(find.text('Accident command centre'), findsOneWidget);
-    expect(find.text('Every case, one accountable trail'), findsOneWidget);
+    expect(find.text('Every case, one accountable trail'), findsNothing);
     expect(
       find.byKey(AccidentDashboardScreenKeys.reportAction),
       findsOneWidget,
@@ -205,20 +205,10 @@ void main() {
         await _pumpDashboard(tester);
 
     // The mock family carries ONE full-width primary action (no floating
-    // button). A compact app-bar icon also stays, so reporting an accident
-    // is still one tap away once the list has scrolled. Both reach the real
-    // report route.
+    // button, no duplicate app-bar icon). It reaches the real report route.
     expect(find.text('Report accident'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing);
     await tester.tap(find.byKey(AccidentDashboardScreenKeys.reportAction));
-    await tester.pumpAndSettle();
-    expect(find.text('report destination'), findsOneWidget);
-
-    router.go(TpRoutePaths.accidentDashboard);
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(AccidentDashboardScreenKeys.reportAppBarAction),
-    );
     await tester.pumpAndSettle();
     expect(find.text('report destination'), findsOneWidget);
 

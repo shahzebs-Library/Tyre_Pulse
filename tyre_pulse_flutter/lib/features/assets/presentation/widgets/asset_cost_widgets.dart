@@ -8,6 +8,7 @@ import 'package:intl/intl.dart' show DateFormat;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_financials.dart';
 
 /// `SAR 42,680`. The currency always comes from the data, never assumed.
@@ -173,7 +174,11 @@ class AssetKpiTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               if (noteIcon != null) ...<Widget>[
-                Icon(noteIcon, size: 14, color: noteColor ?? palette.textMuted),
+                TpIcon(
+                  noteIcon,
+                  size: 14,
+                  color: noteColor ?? palette.textMuted,
+                ),
                 const SizedBox(width: 2),
               ],
               Flexible(

@@ -109,7 +109,7 @@ class LoginCountryHero extends StatelessWidget {
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(TpSpace.sm),
-                            child: Icon(
+                            child: TpIcon(
                               Icons.tire_repair_outlined,
                               size: compact
                                   ? TpSizing.iconLg

@@ -120,7 +120,7 @@ class AdminNavTile extends StatelessWidget {
               color: palette.primarySoft,
               borderRadius: BorderRadius.circular(TpRadius.md),
             ),
-            child: Icon(icon, color: palette.primaryDark, size: 22),
+            child: TpIcon(icon, color: palette.primaryDark, size: 22),
           ),
           const SizedBox(width: TpSpace.md),
           Expanded(
@@ -195,7 +195,7 @@ class AdminNote extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(icon, size: 18, color: palette.textSecondary),
+          TpIcon(icon, size: 18, color: palette.textSecondary),
           const SizedBox(width: TpSpace.sm),
           Expanded(
             child: Text(

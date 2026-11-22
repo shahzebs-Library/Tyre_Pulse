@@ -464,7 +464,7 @@ class _ResultRow extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: <Widget>[
-          Icon(icon, size: TpSizing.iconMd, color: palette.textSecondary),
+          TpIcon(icon, size: TpSizing.iconMd, color: palette.textSecondary),
           const SizedBox(width: TpSpace.md),
           Expanded(
             child: Column(

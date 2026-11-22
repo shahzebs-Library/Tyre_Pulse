@@ -171,7 +171,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         !_exporting;
 
     return TpScaffold(
-      backgroundColor: TpPalette.of(context).surfaceAlt,
+      backgroundColor: TpPalette.of(context).background,
       appBar: TpAppBar(
         title: l10n.fleetMockFinReportTitle,
         onBack: () => Navigator.of(context).maybePop(),
@@ -667,8 +667,8 @@ class _AssetHeader extends StatelessWidget {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: photo == null
-                    ? Icon(
-                        vehicleFallbackIcon(asset),
+                    ? vehicleFallbackGlyph(
+                        asset,
                         color: palette.primary,
                         size: 36,
                       )
@@ -714,7 +714,7 @@ class _AssetHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              if (currency != null)
+              if (currency != null && currency!.trim().length > 1)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: TpSpace.sm,
@@ -833,7 +833,7 @@ class _Pill extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: 18, color: palette.text),
+          TpIcon(icon, size: 18, color: palette.text),
           const SizedBox(width: TpSpace.sm),
           Expanded(
             child: Text(
@@ -845,7 +845,7 @@ class _Pill extends StatelessWidget {
                   ),
             ),
           ),
-          if (trailing != null) Icon(trailing, color: palette.text),
+          if (trailing != null) TpIcon(trailing, color: palette.text),
         ],
       ),
     );

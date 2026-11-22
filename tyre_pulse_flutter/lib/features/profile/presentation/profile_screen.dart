@@ -132,6 +132,7 @@ import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
@@ -274,6 +275,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _chooseLanguage(Locale active) async {
     final Locale? chosen = await showModalBottomSheet<Locale>(
       context: context,
+      useRootNavigator: true,
       useSafeArea: true,
       builder: (BuildContext sheetContext) => SafeArea(
         child: Column(
@@ -304,6 +306,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final ThemeMode? chosen = await showModalBottomSheet<ThemeMode>(
       context: context,
+      useRootNavigator: true,
       useSafeArea: true,
       builder: (BuildContext sheetContext) => SafeArea(
         child: Column(
@@ -339,6 +342,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _chooseChecklistLanguage(String active) async {
     final String? chosen = await showModalBottomSheet<String>(
       context: context,
+      useRootNavigator: true,
       useSafeArea: true,
       builder: (BuildContext sheetContext) => SafeArea(
         child: Column(
@@ -368,6 +372,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _openSavedSignature() async {
     await showModalBottomSheet<void>(
       context: context,
+      useRootNavigator: true,
       useSafeArea: true,
       isScrollControlled: true,
       builder: (BuildContext sheetContext) => const _SavedSignatureSheet(),
@@ -394,10 +399,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             icon: Badge(
               key: ProfileScreenKeys.notificationsBadge,
               isLabelVisible: unreadCount > 0,
-              backgroundColor: palette.warning.base,
-              textColor: palette.warning.onBase,
+              backgroundColor: palette.critical.base,
+              textColor: palette.critical.onBase,
               label: Text(unreadCount > 99 ? '99+' : '$unreadCount'),
-              child: const Icon(Icons.notifications_none_rounded),
+              child: const TpIcon(Icons.notifications_none_rounded),
             ),
             tooltip: NotificationsCopy.of(context)('title'),
             onPressed: () => context.push(const NotificationsRoute().location),
@@ -480,8 +485,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: TpSpace.md),
-                    const DriverWorkspaceEntry(),
+                    // Traffic fines and driver records belong to drivers (and
+                    // the administrator who supports them), not to every role.
+                    if (profile.role.id == RoleId.driver ||
+                        profile.role.isAdministrator) ...<Widget>[
+                      const SizedBox(height: TpSpace.md),
+                      const DriverWorkspaceEntry(),
+                    ],
                     const SizedBox(height: TpSpace.md),
                     _ProfileStatusStrip(
                       drafts: drafts,
@@ -581,18 +591,12 @@ class _IdentityHeader extends StatelessWidget {
               // separated by a background-coloured gap so the ring reads as
               // a ring on either theme.
               Container(
-                width: 100,
-                height: 100,
+                width: 84,
+                height: 84,
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: palette.primary,
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: palette.primary.withValues(alpha: 0.18),
-                      blurRadius: 16,
-                    ),
-                  ],
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(3),
@@ -603,16 +607,12 @@ class _IdentityHeader extends StatelessWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[palette.primarySoft, palette.info.soft],
-                      ),
+                      color: palette.primarySoft,
                     ),
                     alignment: Alignment.center,
                     child: Text(
                       _profileInitials(name),
-                      style: text.headlineMedium?.copyWith(
+                      style: text.headlineSmall?.copyWith(
                         color: palette.primaryDark,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.5,
@@ -638,7 +638,7 @@ class _IdentityHeader extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(width: TpSpace.lg),
+          const SizedBox(width: TpSpace.xl),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,23 +731,35 @@ class _IdentityLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextStyle? base = Theme.of(context).textTheme.bodyMedium;
+    // The label and value flow together: when the value does not fit beside
+    // the label it moves to its own line instead of being squeezed.
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Icon(icon, size: 16, color: palette.primary),
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: TpIcon(icon, size: 16, color: palette.primary),
+        ),
         const SizedBox(width: 6),
-        if (label != null) ...<Widget>[
-          Text(label!, style: base?.copyWith(color: palette.textSecondary)),
-          const SizedBox(width: TpSpace.sm),
-        ],
-        Flexible(
-          child: Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: base?.copyWith(
-              color: palette.text,
-              fontWeight: FontWeight.w600,
-            ),
+        Expanded(
+          child: Wrap(
+            spacing: TpSpace.sm,
+            children: <Widget>[
+              if (label != null)
+                Text(
+                  label!,
+                  style: base?.copyWith(color: palette.textSecondary),
+                ),
+              Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: base?.copyWith(
+                  color: palette.text,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -796,7 +808,7 @@ class _IdentityBadge extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: TpSizing.iconSm, color: foreground),
+            TpIcon(icon, size: TpSizing.iconSm, color: foreground),
             const SizedBox(width: TpSpace.xs),
             Flexible(
               child: Text(
@@ -1010,7 +1022,7 @@ class _ProfileStatusItem extends StatelessWidget {
                     borderRadius: BorderRadius.circular(TpRadius.md),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, size: 20, color: tone.base),
+                  child: TpIcon(icon, size: 20, color: tone.base),
                 ),
                 const SizedBox(height: TpSpace.xs),
                 Text(
@@ -1056,7 +1068,7 @@ class _ProfileStatusItem extends StatelessWidget {
               borderRadius: BorderRadius.circular(TpRadius.md),
             ),
             alignment: Alignment.center,
-            child: Icon(icon, size: TpSizing.iconMd, color: tone.base),
+            child: TpIcon(icon, size: TpSizing.iconMd, color: tone.base),
           ),
           const SizedBox(width: TpSpace.sm),
           Expanded(
@@ -1175,6 +1187,8 @@ class _SettingsColumn extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final LoginSecurityCopy loginCopy = LoginSecurityCopy.of(context);
     final String countries = _countryScopeLabel(profile, l10n);
+    final bool countriesKnown = profile.countryScope.seesAllCountries ||
+        profile.countryScope.namedCountries.isNotEmpty;
     final int? pending = pendingSync.asData?.value;
     final int? draftCount = drafts.asData?.value;
     final String locale = Localizations.localeOf(context).toLanguageTag();
@@ -1189,14 +1203,16 @@ class _SettingsColumn extends StatelessWidget {
           return l10n.profileFixSignatureCouldNotCheck;
         }
         if (value == null) return l10n.clMockSignatureNotSaved;
-        final DateTime? at = value.updatedAt?.toLocal();
-        return at == null
-            ? l10n.clMockSignatureCaptured
-            : l10n.clMockSignatureCapturedOn(
-                DateFormat('d MMM', locale).format(at),
-              );
+        return l10n.clMockSignatureCaptured;
       },
     );
+    // The date sits on its own caption line so the long sentence never
+    // squeezes the row label onto several lines.
+    final DateTime? signatureAt =
+        savedSignature.asData?.value.signature?.updatedAt?.toLocal();
+    final String? signatureCaption = signatureAt == null
+        ? null
+        : DateFormat('d MMM', locale).format(signatureAt);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1205,22 +1221,31 @@ class _SettingsColumn extends StatelessWidget {
           key: ProfileScreenKeys.access,
           title: l10n.profileSectionWorkspace,
           rows: <Widget>[
-            _SettingsRow(
-              key: ProfileScreenKeys.siteRow,
-              icon: Icons.location_city_outlined,
-              tone: palette.warning,
-              label: l10n.clMockActiveSite,
-              value: _siteScopeLabel(profile, l10n),
-            ),
-            _SettingsRow(
-              key: ProfileScreenKeys.countryRow,
-              icon: Icons.public_outlined,
-              tone: palette.ok,
-              label: l10n.clMockCountryCurrency,
-              value: currency == null || currency!.trim().isEmpty
-                  ? countries
-                  : '$countries · ${currency!.trim()}',
-            ),
+            // Organisation-wide scope is already stated in the header
+            // ("All sites"), so the row appears only for a named-site scope.
+            if (!profile.siteScope.isOrganisationWide)
+              _SettingsRow(
+                key: ProfileScreenKeys.siteRow,
+                icon: Icons.location_city_outlined,
+                tone: palette.warning,
+                label: l10n.clMockActiveSite,
+                value: _siteScopeLabel(profile, l10n),
+              ),
+            // Omitted when the profile carries neither a country nor a
+            // currency: a row reading "Unavailable" teaches nothing.
+            if (countriesKnown ||
+                (currency != null && currency!.trim().isNotEmpty))
+              _SettingsRow(
+                key: ProfileScreenKeys.countryRow,
+                icon: Icons.public_outlined,
+                tone: palette.ok,
+                label: l10n.clMockCountryCurrency,
+                value: currency == null || currency!.trim().isEmpty
+                    ? countries
+                    : countriesKnown
+                        ? '$countries · ${currency!.trim()}'
+                        : currency!.trim(),
+              ),
             _SettingsRow(
               key: ProfileScreenKeys.rolesRow,
               icon: Icons.groups_outlined,
@@ -1228,9 +1253,10 @@ class _SettingsColumn extends StatelessWidget {
               label: l10n.clMockRolesAccess,
               // The role is the server's catalogue name (Latin script); a
               // first-strong isolate keeps it from pulling the module count
-              // out of order inside an Arabic or Urdu row.
-              value: '\u2068${profile.role.displayName}\u2069 · '
-                  '${l10n.clMockModuleCount(moduleCount)}',
+              // out of order inside an Arabic or Urdu row. The count sits on
+              // its own caption line so the row never wraps both sides.
+              value: '\u2068${profile.role.displayName}\u2069',
+              caption: l10n.clMockModuleCount(moduleCount),
             ),
           ],
         ),
@@ -1252,7 +1278,6 @@ class _SettingsColumn extends StatelessWidget {
               tone: palette.info,
               label: l10n.clMockChecklistLanguage,
               value: langMeta(checklistLanguage).native,
-              caption: l10n.clMockChecklistLanguageCaption,
               onTap: onChooseChecklistLanguage,
             ),
             _SettingsRow(
@@ -1275,6 +1300,7 @@ class _SettingsColumn extends StatelessWidget {
               tone: palette.ok,
               label: l10n.clMockSavedSignature,
               value: signatureValue,
+              caption: signatureCaption,
               valueColor: signatureUnknown ? palette.textMuted : null,
               onTap: onOpenSignature,
             ),
@@ -1625,15 +1651,6 @@ class _SettingsSection extends StatelessWidget {
             border: Border.all(color: palette.border),
             // Depth only in light: a shadow tinted from white text would
             // glow on the dark theme.
-            boxShadow: palette.brightness == Brightness.light
-                ? <BoxShadow>[
-                    BoxShadow(
-                      color: palette.text.withValues(alpha: 0.05),
-                      blurRadius: 12,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : null,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(TpRadius.lg),
@@ -1687,6 +1704,7 @@ class _SettingsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
+    final bool alert = identical(tone, palette.critical);
 
     final Widget content = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 56),
@@ -1702,11 +1720,17 @@ class _SettingsRow extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: tone.soft,
+                  color: alert ? tone.soft : palette.primarySoft,
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
-                child: Icon(icon, size: 20, color: tone.base),
+                // One tint for every setting row (the theme's accent family);
+                // only a critical state keeps its own colour.
+                child: TpIcon(
+                  icon,
+                  size: 20,
+                  color: alert ? tone.base : palette.primary,
+                ),
               ),
               const SizedBox(width: TpSpace.md),
               // The label takes whatever the value does not need, so a short
@@ -1725,7 +1749,7 @@ class _SettingsRow extends StatelessWidget {
                 const SizedBox(width: TpSpace.md),
                 ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxWidth: constraints.maxWidth * 0.45,
+                    maxWidth: constraints.maxWidth * 0.6,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,

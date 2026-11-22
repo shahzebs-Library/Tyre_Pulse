@@ -405,7 +405,7 @@ class _TyreIdentityHeader extends StatelessWidget {
               child: SizedBox(
                 width: 52,
                 height: 52,
-                child: Icon(
+                child: TpIcon(
                   Icons.tire_repair_outlined,
                   color: tone.onBase,
                   size: TpSizing.iconLg,

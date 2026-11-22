@@ -55,6 +55,14 @@ class MyPlansScreen extends ConsumerWidget {
       appBar: TpAppBar(
         title: l10n.myPlansNavTitle,
         subtitle: l10n.myPlansSubtitle,
+        // A tab root has nowhere to go back to.
+        showBack: Navigator.of(context).canPop(),
+      ),
+      // New inspection is one tap from the Inspect tab, not a detour.
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.go(const NewInspectionRoute().location),
+        icon: const Icon(Icons.add),
+        label: Text(l10n.inspectionNewInspection),
       ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(myInspectionPlansProvider),
@@ -113,7 +121,7 @@ class _PlanList extends StatelessWidget {
         TpSpace.lg,
         TpSpace.lg,
         TpSpace.lg,
-        TpSpace.xxl,
+        TpSpace.xxl * 4,
       ),
       children: <Widget>[
         _SummaryRow(summary: page.summary),

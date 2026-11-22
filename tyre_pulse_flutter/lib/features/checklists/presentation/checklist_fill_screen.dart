@@ -1040,7 +1040,7 @@ class _ContextRow extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Icon(icon, color: palette.primary, size: TpSizing.iconMd),
+          TpIcon(icon, color: palette.primary, size: TpSizing.iconMd),
           const SizedBox(width: TpSpace.sm),
           Expanded(
             child: Text(

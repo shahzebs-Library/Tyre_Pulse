@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/tp_asset_icons.dart';
 import 'package:tyre_pulse/core/design_system/tp_card.dart';
 
 /// Keys that separate a measured figure from an unmeasured one.
@@ -123,7 +124,7 @@ class TpStatCard extends StatelessWidget {
           Row(
             children: <Widget>[
               if (icon != null) ...<Widget>[
-                Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+                TpIcon(icon, size: TpSizing.iconSm, color: palette.textMuted),
                 const SizedBox(width: TpSpace.xs),
               ],
               Expanded(

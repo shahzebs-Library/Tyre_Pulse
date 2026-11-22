@@ -190,7 +190,7 @@ class _RecentWashRow extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Icon(Icons.local_car_wash_outlined, color: palette.textMuted),
+          TpIcon(Icons.local_car_wash_outlined, color: palette.textMuted),
           const SizedBox(width: TpSpace.md),
           Expanded(
             child: Column(

@@ -87,7 +87,7 @@ class InspectionFindingPhoto extends ConsumerWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
-                  Icon(icon, size: TpSizing.iconSm, color: palette.textMuted),
+                  TpIcon(icon, size: TpSizing.iconSm, color: palette.textMuted),
                   const SizedBox(height: 2),
                   Text(
                     text,

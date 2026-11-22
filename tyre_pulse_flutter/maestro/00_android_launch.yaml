@@ -1,0 +1,5 @@
+appId: com.shahzebrahman.tyrepulse
+tags: [smoke, android]
+---
+- launchApp
+- takeScreenshot: android_launch

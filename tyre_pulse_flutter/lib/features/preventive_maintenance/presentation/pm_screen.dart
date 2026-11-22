@@ -11,6 +11,7 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -66,7 +67,7 @@ class _PreventiveMaintenanceScreenState
               key: const Key('pm.notificationsBadge'),
               isLabelVisible: unread > 0,
               label: Text(unread > 99 ? '99+' : '$unread'),
-              child: const Icon(Icons.notifications_none_rounded),
+              child: const TpIcon(Icons.notifications_none_rounded),
             ),
           ),
           const SizedBox(width: TpSpace.sm),
@@ -203,15 +204,6 @@ class _PreventiveMaintenanceScreenState
             DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(TpRadius.md),
-                boxShadow: palette.brightness == Brightness.light
-                    ? <BoxShadow>[
-                        BoxShadow(
-                          color: palette.primary.withValues(alpha: 0.26),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ]
-                    : null,
               ),
               child: SizedBox(
                 height: 58,
@@ -559,7 +551,7 @@ class _PmMetric extends StatelessWidget {
             child: SizedBox(
               width: 52,
               height: 52,
-              child: Icon(icon, color: colors.base, size: 28),
+              child: TpIcon(icon, color: colors.base, size: 28),
             ),
           ),
           const SizedBox(height: TpSpace.xs),
@@ -638,7 +630,7 @@ class _PmInitialsAvatar extends StatelessWidget {
         borderRadius: BorderRadius.circular(TpRadius.md),
       ),
       child: initials == null
-          ? Icon(Icons.person_outline_rounded, color: palette.onPrimary)
+          ? TpIcon(Icons.person_outline_rounded, color: palette.onPrimary)
           : Text(
               initials,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -839,19 +831,9 @@ class _QuickAccessTile extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: onTap == null ? palette.surfaceSunken : tone.base,
                       borderRadius: BorderRadius.circular(TpRadius.md),
-                      boxShadow: onTap == null ||
-                              palette.brightness != Brightness.light
-                          ? null
-                          : <BoxShadow>[
-                              BoxShadow(
-                                color: tone.base.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
                     ),
                     alignment: Alignment.center,
-                    child: Icon(
+                    child: TpIcon(
                       icon,
                       color: onTap == null ? palette.textMuted : tone.onBase,
                       size: 24,
@@ -937,7 +919,7 @@ class _TyresRow extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: Icon(
+                    child: TpIcon(
                       Icons.tire_repair_rounded,
                       color: enabled ? palette.onPrimary : palette.textMuted,
                     ),
@@ -1084,7 +1066,7 @@ class _PmPlanRow extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: TpSpace.xs),
-                          Icon(dueIcon, size: 16, color: tone.base),
+                          TpIcon(dueIcon, size: 16, color: tone.base),
                           const SizedBox(width: 3),
                           Flexible(
                             child: Text(
@@ -1632,11 +1614,7 @@ class _QueueThumbnail extends StatelessWidget {
       width: 84,
       height: 76,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: <Color>[palette.surfaceAlt, palette.surfaceSunken],
-        ),
+        color: palette.surfaceAlt,
         borderRadius: BorderRadius.circular(TpRadius.md),
         border: Border.all(color: palette.border),
       ),
@@ -1644,7 +1622,7 @@ class _QueueThumbnail extends StatelessWidget {
       alignment: Alignment.center,
       padding: const EdgeInsets.all(4),
       child: photo == null
-          ? Icon(vehicleFallbackIcon(asset), size: 32, color: palette.primary)
+          ? vehicleFallbackGlyph(asset, size: 32, color: palette.primary)
           : Image.asset(
               photo!,
               width: double.infinity,
@@ -1830,11 +1808,24 @@ class _RecordServiceSheetState extends ConsumerState<_RecordServiceSheet> {
             ),
           );
       if (mounted) Navigator.pop(context, true);
-    } on Object {
+    } on Object catch (error) {
       if (mounted) {
         setState(() => saving = false);
+        // The server states WHY it refused; say so rather than one generic
+        // "could not be saved" for every cause.
+        final String raw = error is SupabaseFailure
+            ? (error.rawMessage ?? '').toLowerCase()
+            : '';
+        final String key = raw.contains('below the last recorded reading')
+            ? 'saveMeterBelow'
+            : (raw.contains('not authorized') ||
+                    (error is SupabaseFailure &&
+                        (error.cause == SupabaseFailureCause.rowLevelSecurity ||
+                            error.cause == SupabaseFailureCause.forbidden)))
+                ? 'saveNotAllowed'
+                : 'saveFailed';
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(copy('saveFailed'))));
+            .showSnackBar(SnackBar(content: Text(copy(key))));
       }
     }
   }

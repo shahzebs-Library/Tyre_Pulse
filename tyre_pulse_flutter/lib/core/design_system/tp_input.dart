@@ -110,8 +110,19 @@ class TpInput extends StatelessWidget {
           style: textStyle ?? text.bodyLarge,
           decoration: InputDecoration(
             hintText: hint,
+            // A placeholder is a prompt, not the value: cap its size so a
+            // large value style (the meter reading) does not turn
+            // "Enter the reading" into "Enter the readi...".
+            hintMaxLines: 1,
+            hintStyle: (textStyle ?? text.bodyLarge)?.copyWith(
+              fontSize: _hintSize(textStyle ?? text.bodyLarge),
+              fontWeight: FontWeight.w500,
+              color: palette.textMuted,
+            ),
             errorText: errorText,
             helperText: helperText,
+            helperMaxLines: 3,
+            errorMaxLines: 3,
             filled: true,
             fillColor: enabled ? palette.surface : palette.surfaceAlt,
             prefixIcon: prefixIcon == null
@@ -143,5 +154,10 @@ class TpInput extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  static double _hintSize(TextStyle? style) {
+    final double size = style?.fontSize ?? 16;
+    return size > 18 ? 18 : size;
   }
 }

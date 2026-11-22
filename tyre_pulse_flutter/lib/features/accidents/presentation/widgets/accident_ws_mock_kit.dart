@@ -336,7 +336,7 @@ class AccidentMockChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (icon != null) ...<Widget>[
-            Icon(icon, size: TpSizing.iconMd, color: colors.base),
+            TpIcon(icon, size: TpSizing.iconMd, color: colors.base),
             const SizedBox(width: TpSpace.sm),
           ],
           Flexible(
@@ -543,7 +543,7 @@ class AccidentMockToneButton extends StatelessWidget {
               dimension: TpSizing.iconMd,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : Icon(icon, size: TpSizing.iconMd),
+          : TpIcon(icon, size: TpSizing.iconMd),
       label: Text(label, textAlign: TextAlign.center),
     );
     return isFullWidth
@@ -607,7 +607,7 @@ class AccidentMockChoiceTile extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: <Widget>[
-                      Icon(
+                      TpIcon(
                         icon,
                         size: TpSizing.iconLg,
                         color: iconColor ?? palette.primary,

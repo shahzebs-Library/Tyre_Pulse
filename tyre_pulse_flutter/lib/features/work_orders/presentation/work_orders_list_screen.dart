@@ -495,7 +495,7 @@ class _MetaLine extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 14, color: TpPalette.of(context).textMuted),
+          TpIcon(icon, size: 14, color: TpPalette.of(context).textMuted),
           const SizedBox(width: TpSpace.xs),
           Text(value, style: Theme.of(context).textTheme.labelSmall),
         ],

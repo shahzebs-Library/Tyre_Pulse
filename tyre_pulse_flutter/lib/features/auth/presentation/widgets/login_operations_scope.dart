@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
 
 @visibleForTesting
 abstract final class LoginOperationsScopeKeys {
@@ -114,7 +115,7 @@ class _OperationScopeItem extends StatelessWidget {
           child: Row(
             children: <Widget>[
               ExcludeSemantics(
-                child: Icon(
+                child: TpIcon(
                   icon,
                   size: TpSizing.iconSm,
                   color: palette.primaryDark,

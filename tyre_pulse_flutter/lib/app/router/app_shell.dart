@@ -25,6 +25,7 @@ import 'package:tyre_pulse/app/router/shell_gates.dart';
 import 'package:tyre_pulse/app/router/shell_tabs.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/tp_asset_icons.dart';
 import 'package:tyre_pulse/core/design_system/tp_text_scale.dart';
 import 'package:tyre_pulse/features/inspections/presentation/controllers/inspection_wizard_controller.dart';
 import 'package:tyre_pulse/features/inspections/presentation/state/inspection_wizard_state.dart';
@@ -91,9 +92,12 @@ class TpAppShell extends ConsumerWidget {
             ),
           )
         : null;
+    // The accident report has its own Back / Continue row on every step, so
+    // the tab bar would stack a second bar under it.
     final bool hasScreenOwnedNavigation =
         inspectionStep == InspectionWizardStep.tyres ||
-            inspectionStep == InspectionWizardStep.review;
+            inspectionStep == InspectionWizardStep.review ||
+            activePath == TpRoutePaths.accidentReport;
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -105,6 +109,21 @@ class TpAppShell extends ConsumerWidget {
           : _TabBar(layout: layout, navigationShell: navigationShell),
     );
   }
+}
+
+/// Selected tabs draw the filled glyph; the others draw the outline one, so
+/// the selected state never relies on colour alone. Glyphs Material has no
+/// outline for keep their single form.
+IconData _outlineFor(IconData filled) {
+  if (filled == Icons.speed) return Icons.speed_outlined;
+  return filled;
+}
+
+/// The signature glyph for a tab, or null when the tab keeps a Material icon
+/// (odometer and history have no glyph in the owner's family).
+TpAssetIconKind? _tabGlyph(IconData icon) {
+  if (icon == Icons.report_problem) return TpAssetIconKind.accident;
+  return tpGlyphForMaterial(icon);
 }
 
 class _TabBar extends StatelessWidget {
@@ -135,7 +154,7 @@ class _TabBar extends StatelessWidget {
         child: SizedBox(
           // The tab label grows with the person's text size; a fixed 72 left
           // it 4 px short on every screen at text scale 2.0.
-          height: tpTextScaledExtent(context, base: 72, textHeight: 16),
+          height: tpTextScaledExtent(context, base: 64, textHeight: 16),
           child: Row(
             children: <Widget>[
               for (int index = 0; index < layout.visible.length; index++)
@@ -214,7 +233,29 @@ class _TabDestination extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Icon(destination.icon, color: color, size: 26),
+              if (_tabGlyph(destination.icon) case final TpAssetIconKind kind)
+                // Selected: the glyph on a filled pill, so the state never
+                // relies on colour alone. Unselected: the plain stroked glyph.
+                Container(
+                  width: 48,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isSelected ? palette.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: TpAssetIcon(
+                    kind,
+                    size: 22,
+                    color: isSelected ? palette.onPrimary : color,
+                  ),
+                )
+              else
+                Icon(
+                  isSelected ? destination.icon : _outlineFor(destination.icon),
+                  color: color,
+                  size: 26,
+                ),
               const SizedBox(height: 3),
               Text(
                 label,

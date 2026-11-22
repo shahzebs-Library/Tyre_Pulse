@@ -8,6 +8,7 @@ library;
 
 export 'package:tyre_pulse/core/design_system/tp_app_bar.dart';
 export 'package:tyre_pulse/core/design_system/tp_asset_card.dart';
+export 'package:tyre_pulse/core/design_system/tp_asset_icons.dart';
 export 'package:tyre_pulse/core/design_system/tp_bottom_sheet.dart';
 export 'package:tyre_pulse/core/design_system/tp_button.dart';
 export 'package:tyre_pulse/core/design_system/tp_card.dart';

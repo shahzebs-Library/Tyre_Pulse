@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/tp_asset_icons.dart';
 import 'package:tyre_pulse/core/design_system/tp_button.dart';
 import 'package:tyre_pulse/core/design_system/tp_text_scale.dart';
 
@@ -145,7 +146,7 @@ class TpActionRow extends StatelessWidget {
       child: Row(
         children: <Widget>[
           if (icon != null) ...<Widget>[
-            Icon(icon, size: TpSizing.iconMd, color: ink),
+            TpIcon(icon, size: TpSizing.iconMd, color: ink),
             const SizedBox(width: TpSpace.sm),
           ],
           Expanded(

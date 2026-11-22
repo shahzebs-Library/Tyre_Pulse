@@ -1,0 +1,22 @@
+# Signed-in admin account required (sign in once by hand; no passwords are stored here).
+# Runs against the existing app. iOS bundle id shown; Android is com.shahzebrahman.tyrepulse.
+appId: com.shahzebrahman.tyrepulseinspector
+tags: [smoke, navigation]
+---
+- launchApp
+- assertVisible: "(?s).*Good (morning|afternoon|evening).*"
+- assertVisible: "New inspection"
+- takeScreenshot: 01_home
+- tapOn: "(?s)Inspect.*"
+- assertVisible: "(?s).*(New inspection|Inspect).*"
+- takeScreenshot: 02_inspect
+- tapOn: "(?s)Approvals.*"
+- takeScreenshot: 03_approvals
+- tapOn: "(?s)Accidents.*"
+- takeScreenshot: 04_accidents
+- tapOn: "(?s)Profile.*"
+- takeScreenshot: 05_profile
+- launchApp
+- assertVisible: "(?s).*Good (morning|afternoon|evening).*"
+- tapOn: "(?s)New inspection.*"
+- takeScreenshot: 06_new_inspection

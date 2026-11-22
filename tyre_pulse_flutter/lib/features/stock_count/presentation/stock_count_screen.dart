@@ -250,7 +250,7 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
           IconButton(
             key: const Key('stock.myCounts'),
             tooltip: copy('myCounts'),
-            icon: const Icon(Icons.fact_check_outlined),
+            icon: const TpIcon(Icons.fact_check_outlined),
             onPressed: () =>
                 unawaited(Navigator.of(context).push(MyAuditsScreen.route())),
           ),

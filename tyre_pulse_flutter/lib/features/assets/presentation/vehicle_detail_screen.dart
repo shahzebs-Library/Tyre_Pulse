@@ -120,7 +120,7 @@ class _VehicleDetailBody extends ConsumerWidget {
     return TpScaffold(
       // A softly tinted canvas so the white hero, metric and detail cards
       // carry the mock's depth.
-      backgroundColor: TpPalette.of(context).surfaceAlt,
+      backgroundColor: TpPalette.of(context).background,
       appBar: TpAppBar(
         title: l10n.vehiclesDetailSubtitle,
         onBack: () => Navigator.of(context).maybePop(),
@@ -693,7 +693,6 @@ class _AssetHeroCard extends StatelessWidget {
         color: palette.surface,
         borderRadius: BorderRadius.circular(TpRadius.xl),
         border: Border.all(color: palette.border),
-        boxShadow: <BoxShadow>[_softLift(palette)],
       ),
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
@@ -810,7 +809,7 @@ class _HeroMeters extends StatelessWidget {
     Widget meter(IconData icon, String value) => Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: TpSizing.iconSm, color: palette.textSecondary),
+            TpIcon(icon, size: TpSizing.iconSm, color: palette.textSecondary),
             const SizedBox(width: TpSpace.xs),
             Flexible(
               child: Text(
@@ -957,7 +956,7 @@ class _AlertCell extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                Icon(icon, size: TpSizing.iconSm, color: colors.base),
+                TpIcon(icon, size: TpSizing.iconSm, color: colors.base),
                 const SizedBox(width: TpSpace.xs),
                 Flexible(
                   child: Text(
@@ -1031,8 +1030,8 @@ class _HeroPhoto extends StatelessWidget {
                 color: palette.primarySoft,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                vehicleFallbackIcon(asset),
+              child: vehicleFallbackGlyph(
+                asset,
                 size: height * 0.36,
                 color: palette.primary,
               ),
@@ -1435,11 +1434,11 @@ class _StickyAssetActions extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final VoidCallback? report = onReportIssue;
     final VoidCallback? createWorkOrder = onCreateWorkOrder;
-    // On a narrow phone (360dp and below) the two labelled buttons cannot
+    // On a narrow phone (under 430dp: "New work order" was cut at 390) the two labelled buttons cannot
     // both fit with their icons, and TpButton cuts the label to one line
     // ("Report an is..."). The words carry the meaning, so on a narrow bar
     // the icons go and the side padding tightens; the labels stay whole.
-    final bool narrow = MediaQuery.sizeOf(context).width < 380;
+    final bool narrow = MediaQuery.sizeOf(context).width < 430;
     final double side = narrow ? TpSpace.md : TpSpace.lg;
     return Container(
       key: VehicleDetailScreenKeys.actionBar,
@@ -1453,14 +1452,6 @@ class _StickyAssetActions extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border(top: BorderSide(color: palette.border)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: _shadowTint(palette),
-            offset: const Offset(0, -4),
-            blurRadius: 12,
-            spreadRadius: -4,
-          ),
-        ],
       ),
       child: Row(
         children: <Widget>[
@@ -1546,22 +1537,8 @@ class _FieldRow extends StatelessWidget {
   }
 }
 
-/// The shadow tint this screen uses: a faint navy lift on the light theme,
-/// a plain dark drop on the dark theme (a light-ink shadow would glow).
-Color _shadowTint(TpPalette palette) => palette.brightness == Brightness.dark
-    ? Colors.black.withValues(alpha: 0.45)
-    : palette.text.withValues(alpha: 0.07);
-
-/// The quiet card lift shared by the hero and the metric cards.
-BoxShadow _softLift(TpPalette palette) => BoxShadow(
-      color: _shadowTint(palette),
-      offset: const Offset(0, 4),
-      blurRadius: 14,
-      spreadRadius: -6,
-    );
-
-/// A soft brand-green glow under the one primary action on this screen
-/// (the sticky bar's "Inspect now").
+/// Wraps the sticky bar's "Inspect now". The decorative glow was removed
+/// (flat, sun-readable surfaces); kept so call sites stay unchanged.
 class _PrimaryLift extends StatelessWidget {
   const _PrimaryLift({required this.child});
 
@@ -1569,22 +1546,6 @@ class _PrimaryLift extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: palette.primary.withValues(
-              alpha: palette.brightness == Brightness.dark ? 0.35 : 0.3,
-            ),
-            offset: const Offset(0, 6),
-            blurRadius: 16,
-            spreadRadius: -4,
-          ),
-        ],
-      ),
-      child: child,
-    );
+    return child;
   }
 }

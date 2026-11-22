@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/inventory/domain/physical_capture.dart';
 import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
 import 'package:tyre_pulse/features/inventory/presentation/inventory_theme.dart';
@@ -62,7 +63,7 @@ class PiConnectionPill extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Icon(
+                TpIcon(
                   icon,
                   size: icon == Icons.circle ? 10 : TpSizing.iconSm,
                   color: c.base,
@@ -364,7 +365,7 @@ class PiQtyStepper extends StatelessWidget {
             borderRadius: BorderRadius.circular(TpRadius.md),
             onTap: () => _bump(delta),
             onLongPress: () => _bump(delta * 10),
-            child: Icon(icon, color: p.onPrimary, size: 28),
+            child: TpIcon(icon, color: p.onPrimary, size: 28),
           ),
         ),
       ),

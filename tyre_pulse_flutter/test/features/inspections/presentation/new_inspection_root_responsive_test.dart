@@ -617,6 +617,8 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Wheel loader'), findsOneWidget);
+      // The signature family has no loader glyph, so a loader keeps its
+      // Material outlined icon.
       final Icon classIcon = tester.widget<Icon>(
         find.byKey(NewInspectionScreenKeys.vehicleSectionIcon),
       );

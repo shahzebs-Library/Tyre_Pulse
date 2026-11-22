@@ -21,6 +21,9 @@ class AppLocalizationsUr extends AppLocalizations {
   String get actionClose => 'بند کریں';
 
   @override
+  String get inspectionTyreEditorSave => 'محفوظ کریں';
+
+  @override
   String get actionCancel => 'منسوخ کریں';
 
   @override
@@ -1302,6 +1305,38 @@ class AppLocalizationsUr extends AppLocalizations {
       'تمام معائنوں کا جائزہ لیا جا چکا ہے۔ دوبارہ چیک کرنے کے لیے نیچے کھینچیں۔';
 
   @override
+  String get inspectionApprovalsEmptyApprovedTitle =>
+      'ابھی تک کوئی معائنہ منظور نہیں ہوا';
+
+  @override
+  String get inspectionApprovalsEmptyApprovedMessage =>
+      'آپ جو معائنے منظور کریں گے وہ یہاں نظر آئیں گے۔ دوبارہ دیکھنے کے لیے نیچے کھینچیں۔';
+
+  @override
+  String get inspectionApprovalsEmptyReturnedTitle =>
+      'ابھی تک کوئی معائنہ واپس نہیں کیا گیا';
+
+  @override
+  String get inspectionApprovalsEmptyReturnedMessage =>
+      'آپ جو معائنے فیلڈ کو واپس بھیجیں گے وہ یہاں نظر آئیں گے۔ دوبارہ دیکھنے کے لیے نیچے کھینچیں۔';
+
+  @override
+  String get inspectionApprovalConfirmApproveTitle =>
+      'کیا یہ معائنہ منظور کریں؟';
+
+  @override
+  String get inspectionApprovalConfirmApproveMessage =>
+      'اس سے معائنے پر آپ کی منظوری اور دستخط درج ہو جائیں گے اور وہ مقفل ہو جائے گا۔ اسے واپس نہیں کیا جا سکتا۔';
+
+  @override
+  String get inspectionApprovalConfirmReturnTitle =>
+      'کیا یہ معائنہ واپس بھیجیں؟';
+
+  @override
+  String get inspectionApprovalConfirmReturnMessage =>
+      'یہ معائنہ آپ کی وجہ کے ساتھ فیلڈ کو واپس بھیج دے گا۔';
+
+  @override
   String get inspectionApprovalsLoadErrorMessage =>
       'منظوریاں لوڈ نہیں ہو سکیں۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔';
 
@@ -1680,7 +1715,7 @@ class AppLocalizationsUr extends AppLocalizations {
   String get meterLogAssetLabel => 'اثاثہ';
 
   @override
-  String get meterLogAssetHint => 'اثاثے کا نمبر ٹائپ کریں یا اسکین کریں';
+  String get meterLogAssetHint => 'اثاثہ نمبر یا اسکین';
 
   @override
   String get meterLogSiteLabel => 'سائٹ';
@@ -2846,6 +2881,10 @@ class AppLocalizationsUr extends AppLocalizations {
       'title=ٹائر الرٹس~all=تمام~critical=سنگین~warnings=انتباہات~info=معلومات~flagged=نشان زدہ~criticalCount=سنگین~emptyTitle=کوئی فعال الرٹ نہیں~emptyFilter=اس فلٹر سے کوئی الرٹ نہیں ملا۔~loadError=الرٹس لوڈ نہیں ہو سکے۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~unknownAsset=نامعلوم اثاثہ~pressureLow=ٹائر کا دباؤ کم ہے~treadLow=ٹریڈ کی گہرائی کم ہے~position=پوزیشن~serial=سیریل~tread=ٹریڈ~retry=دوبارہ کوشش~acknowledge=تسلیم کریں~ackTitle=الرٹ تسلیم کریں~ackBody=کیا اس الرٹ کو جائزہ شدہ نشان زد کریں؟ یہ فہرست سے ہٹا دیا جائے گا۔~ackFailed=تسلیم نہیں ہو سکا۔ دوبارہ کوشش کریں۔~cancel=منسوخ';
 
   @override
+  String get alertsEmptyMessage =>
+      'ٹائر کے دباؤ اور گہرائی کے الرٹس جاری ہوتے ہی یہاں نظر آئیں گے۔';
+
+  @override
   String get notificationInboxCopyCatalog =>
       'title=اطلاعات~markAll=سب کو پڑھا ہوا کریں~fallbackTitle=اطلاع~emptyTitle=آپ تمام تازہ معلومات دیکھ چکے ہیں~emptyBody=ذمہ داریاں، منظوریوں اور عملی اپ ڈیٹس یہاں نظر آئیں گی۔~loadFailed=اطلاعات لوڈ نہیں ہو سکیں۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔~markFailed=اس اطلاع کو پڑھا ہوا نہیں کیا جا سکا۔~markAllFailed=تمام اطلاعات کو پڑھا ہوا نہیں کیا جا سکا۔~justNow=ابھی~minutesAgo=%count% منٹ پہلے~hoursAgo=%count% گھنٹے پہلے~daysAgo=%count% دن پہلے~messageUnavailable=یہ پیغام اب دستیاب نہیں یا آپ کے اکاؤنٹ کو نہیں بھیجا گیا تھا۔';
 
@@ -2859,7 +2898,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get pmCopyCatalog =>
-      'title=دیکھ بھال کنٹرول سینٹر~subtitle=آج کے دیکھ بھال کے کام کو کنٹرول کریں~createWorkOrder=ورک آرڈر بنائیں~pmDue=پی ایم واجب~priorityQueue=ترجیحی کاموں کی قطار~viewAll=سب دیکھیں~allWorkOrders=تمام ورک آرڈرز دیکھیں~quickAccess=فوری رسائی~workOrders=ورک آرڈرز~workOrdersHint=بنائیں اور منظم کریں~pmSchedule=پی ایم شیڈول~pmScheduleHint=پی ایم کی منصوبہ بندی اور پیروی~inspections=معائنے~inspectionsHint=جانچیں اور رپورٹ کریں~parts=پرزے~partsHint=اسٹاک اور درخواستیں~tyres=ٹائر~tyresHint=ریکارڈ، گردش اور تبدیلی~overdue=تاخیر شدہ~dueSoon=جلد واجب~active=فعال منصوبے~due=اب واجب~all=تمام منصوبے~empty=دیکھ بھال کا کوئی منصوبہ نہیں~emptyDue=اگلے 14 دنوں میں کوئی احتیاطی دیکھ بھال واجب نہیں۔~emptyAll=کوئی فعال احتیاطی دیکھ بھال منصوبہ دستیاب نہیں۔~plan=دیکھ بھال منصوبہ~daysOverdue=دن تاخیر~daysLeft=دن باقی~noDate=واجب تاریخ نہیں~record=سروس ریکارڈ کریں~meter=میٹر ریڈنگ~performedBy=کام کرنے والا~workshop=ورکشاپ~partsCost=پرزوں کی قیمت~labourCost=مزدوری کی قیمت~findings=مشاہدات~completed=مکمل~partial=جزوی مکمل~deferred=ملتوی~failed=ناکام~save=سروس محفوظ کریں~invalidNumber=درست عددی قدریں درج کریں۔~loadFailed=دیکھ بھال منصوبے لوڈ نہیں ہو سکے۔~saveFailed=سروس ریکارڈ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~openBreakdowns=کھلی خرابیاں~activeWorkOrders=فعال ورک آرڈرز~breakdown=خرابی~workOrder=ورک آرڈر~dueToday=آج واجب~since=سے~opened=کھولا گیا~queueEmpty=کسی چیز پر توجہ درکار نہیں~woLoadFailed=کھلے ورک آرڈرز لوڈ نہیں ہو سکے۔~retry=دوبارہ کوشش کریں~countFailed=یہ تعداد لوڈ نہیں ہو سکی۔ دوبارہ کوشش کے لیے ٹیپ کریں۔';
+      'title=دیکھ بھال کنٹرول سینٹر~subtitle=آج کے دیکھ بھال کے کام کو کنٹرول کریں~createWorkOrder=ورک آرڈر بنائیں~pmDue=پی ایم واجب~priorityQueue=ترجیحی کاموں کی قطار~viewAll=سب دیکھیں~allWorkOrders=تمام ورک آرڈرز دیکھیں~quickAccess=فوری رسائی~workOrders=ورک آرڈرز~workOrdersHint=بنائیں اور منظم کریں~pmSchedule=پی ایم شیڈول~pmScheduleHint=پی ایم کی منصوبہ بندی اور پیروی~inspections=معائنے~inspectionsHint=جانچیں اور رپورٹ کریں~parts=پرزے~partsHint=اسٹاک اور درخواستیں~tyres=ٹائر~tyresHint=ریکارڈ، گردش اور تبدیلی~overdue=تاخیر شدہ~dueSoon=جلد واجب~active=فعال منصوبے~due=اب واجب~all=تمام منصوبے~empty=دیکھ بھال کا کوئی منصوبہ نہیں~emptyDue=اگلے 14 دنوں میں کوئی احتیاطی دیکھ بھال واجب نہیں۔~emptyAll=کوئی فعال احتیاطی دیکھ بھال منصوبہ دستیاب نہیں۔~plan=دیکھ بھال منصوبہ~daysOverdue=دن تاخیر~daysLeft=دن باقی~noDate=واجب تاریخ نہیں~record=سروس ریکارڈ کریں~meter=میٹر ریڈنگ~performedBy=کام کرنے والا~workshop=ورکشاپ~partsCost=پرزوں کی قیمت~labourCost=مزدوری کی قیمت~findings=مشاہدات~completed=مکمل~partial=جزوی مکمل~deferred=ملتوی~failed=ناکام~save=سروس محفوظ کریں~invalidNumber=درست عددی قدریں درج کریں۔~loadFailed=دیکھ بھال منصوبے لوڈ نہیں ہو سکے۔~saveFailed=سروس ریکارڈ محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~openBreakdowns=کھلی خرابیاں~activeWorkOrders=فعال ورک آرڈرز~breakdown=خرابی~workOrder=ورک آرڈر~dueToday=آج واجب~since=سے~opened=کھولا گیا~queueEmpty=کسی چیز پر توجہ درکار نہیں~woLoadFailed=کھلے ورک آرڈرز لوڈ نہیں ہو سکے۔~retry=دوبارہ کوشش کریں~countFailed=یہ تعداد لوڈ نہیں ہو سکی۔ دوبارہ کوشش کے لیے ٹیپ کریں۔~saveMeterBelow=میٹر ریڈنگ آخری درج شدہ ریڈنگ سے کم ہے۔ اسے چیک کر کے دوبارہ کوشش کریں۔~saveNotAllowed=آپ کا اکاؤنٹ اس منصوبے پر سروس درج نہیں کر سکتا (منصوبے کے ورک اسپیس میں ایڈمن، مینیجر یا ڈائریکٹر کا کردار درکار ہے)۔';
 
   @override
   String get stockCountCopyCatalog =>

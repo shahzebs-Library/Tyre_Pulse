@@ -21,6 +21,7 @@ class TpAppBar extends StatelessWidget implements PreferredSizeWidget {
   const TpAppBar({
     required this.title,
     this.subtitle,
+    this.subtitleMaxLines = 1,
     this.actions,
     this.backFallback,
     this.onBack,
@@ -33,6 +34,10 @@ class TpAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   /// A second line: the asset, the site, the document number.
   final String? subtitle;
+
+  /// Lines the subtitle may use before it ellipsizes. Two lets a long
+  /// "asset · vehicle · site" line keep its last part on a phone.
+  final int subtitleMaxLines;
 
   final List<Widget>? actions;
 
@@ -54,7 +59,7 @@ class TpAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => Size.fromHeight(
         kToolbarHeight +
-            (subtitle == null ? 0 : TpSpace.lg) +
+            (subtitle == null ? 0 : TpSpace.lg * subtitleMaxLines) +
             (bottom?.preferredSize.height ?? 0),
       );
 
@@ -106,7 +111,7 @@ class TpAppBar extends StatelessWidget implements PreferredSizeWidget {
             Text(
               subtitle!,
               style: text.labelSmall,
-              maxLines: 1,
+              maxLines: subtitleMaxLines,
               overflow: TextOverflow.ellipsis,
             ),
         ],

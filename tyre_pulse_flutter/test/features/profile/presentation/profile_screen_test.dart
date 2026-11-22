@@ -639,7 +639,9 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('\u2068Manager\u2069 · 2 modules'), findsOneWidget);
+      // The role and its module count sit on separate lines on purpose.
+      expect(find.text('\u2068Manager\u2069'), findsOneWidget);
+      expect(find.text('2 modules'), findsOneWidget);
       expect(find.text('Checklist content language'), findsOneWidget);
       expect(find.text('Independent from app language'), findsOneWidget);
       await tester.scrollUntilVisible(

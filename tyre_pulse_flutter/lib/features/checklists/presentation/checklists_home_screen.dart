@@ -1214,16 +1214,21 @@ class _ChecklistLanguageOption extends StatelessWidget {
                 Icon(Icons.language_rounded, size: 20, color: accent),
                 const SizedBox(width: TpSpace.xs),
               ],
+              // Scales down rather than ending in "Engli...": the language
+              // name is the one thing this control must always show whole.
               Flexible(
-                child: Text(
-                  language.native,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: selected ? accent : palette.textSecondary,
-                        fontWeight:
-                            selected ? FontWeight.w800 : FontWeight.w500,
-                      ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    language.native,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: selected ? accent : palette.textSecondary,
+                          fontWeight:
+                              selected ? FontWeight.w800 : FontWeight.w500,
+                        ),
+                  ),
                 ),
               ),
             ],
@@ -1733,14 +1738,17 @@ class _PendingApprovalChip extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: colors.onSoft,
-                        fontWeight: FontWeight.w700,
-                      ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colors.onSoft,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
                 ),
               ),
               const SizedBox(width: TpSpace.xs),
@@ -1833,7 +1841,7 @@ class _ChecklistHubLink extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle!,
-                      maxLines: 2,
+                      maxLines: 4,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context)
                           .textTheme

@@ -268,6 +268,7 @@ class _NotificationsList extends StatelessWidget {
       );
     }
 
+    final List<List<AppNotification>> groups = _grouped();
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.separated(
@@ -279,19 +280,39 @@ class _NotificationsList extends StatelessWidget {
           TpSpace.md,
           TpSpace.xxxl,
         ),
-        itemCount: rows.length,
+        itemCount: groups.length,
         separatorBuilder: (_, __) => const SizedBox(height: TpSpace.sm),
         itemBuilder: (BuildContext context, int index) {
-          final AppNotification row = rows[index];
+          final List<AppNotification> group = groups[index];
+          final AppNotification row = group.first;
           return _NotificationCard(
             row: row,
             copy: copy,
-            isRead: isRead(row),
+            // A group reads as unread while any member is.
+            isRead: group.every(isRead),
+            count: group.length,
             onTap: () => onOpen(row),
           );
         },
       ),
     );
+  }
+
+  /// Identical notifications (same title and body) collapse into one card
+  /// with a count, so sixteen "Inspection awaiting approval" rows are one
+  /// line, not a wall. Order follows each group's newest member.
+  List<List<AppNotification>> _grouped() {
+    final Map<String, List<AppNotification>> byKey =
+        <String, List<AppNotification>>{};
+    for (final AppNotification row in rows) {
+      byKey
+          .putIfAbsent(
+            '${row.title}\u0000${row.body}',
+            () => <AppNotification>[],
+          )
+          .add(row);
+    }
+    return byKey.values.toList(growable: false);
   }
 }
 
@@ -301,12 +322,16 @@ class _NotificationCard extends StatelessWidget {
     required this.copy,
     required this.isRead,
     required this.onTap,
+    this.count = 1,
   });
 
   final AppNotification row;
   final NotificationsCopy copy;
   final bool isRead;
   final VoidCallback onTap;
+
+  /// How many identical notifications this card stands for.
+  final int count;
 
   @override
   Widget build(BuildContext context) {
@@ -362,6 +387,17 @@ class _NotificationCard extends StatelessWidget {
                               ),
                         ),
                       ),
+                      if (count > 1) ...<Widget>[
+                        const SizedBox(width: TpSpace.sm),
+                        Text(
+                          '\u00d7$count',
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: palette.textSecondary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ],
                       if (!isRead) ...<Widget>[
                         const SizedBox(width: TpSpace.sm),
                         Container(
@@ -369,7 +405,7 @@ class _NotificationCard extends StatelessWidget {
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
-                            color: palette.primary,
+                            color: palette.critical.base,
                             shape: BoxShape.circle,
                           ),
                         ),

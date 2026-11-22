@@ -438,8 +438,17 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     }
     // Filters come from the authoritative vehicle_type values on the loaded
     // fleet rows, not from an inferred asset-number prefix.
+    // Counts follow the search, so the chips and "All (N)" describe what the
+    // search can actually reach instead of the whole fleet.
+    final List<VehicleAsset> countScope = _searchTerm.trim().isEmpty
+        ? assets
+        : applyVehicleFilters(
+            assets,
+            vehicleTypeFilter: null,
+            searchTerm: _searchTerm,
+          );
     final Map<String, int> vehicleTypeCounts = <String, int>{};
-    for (final VehicleAsset asset in assets) {
+    for (final VehicleAsset asset in countScope) {
       final String? type = asset.vehicleType?.trim();
       if (type == null || type.isEmpty) continue;
       vehicleTypeCounts.update(
@@ -496,8 +505,11 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
               ),
               const SizedBox(height: 2),
               Text(
+                // Active and total together, so the header and the "All (N)"
+                // chip below it can never read as two different fleet sizes.
                 _hasAnyStatus(assets)
-                    ? l10n.fleetMockActiveAssets(_activeCount(assets))
+                    ? '${l10n.fleetMockActiveAssets(_activeCount(assets))}'
+                        ' \u00b7 ${l10n.vehiclesCount(assets.length)}'
                     : l10n.vehiclesCount(assets.length),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: TpPalette.of(context).textSecondary,
@@ -544,7 +556,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
         key: VehiclesListScreenKeys.classFilters,
         selected: _vehicleTypeFilter,
         vehicleTypes: vehicleTypes,
-        allLabel: '${l10n.vehiclesAllFilter} (${assets.length})',
+        allLabel: '${l10n.vehiclesAllFilter} (${countScope.length})',
         onSelect: _selectVehicleType,
       ),
       Padding(
@@ -1268,61 +1280,61 @@ class _FleetAssetCard extends StatelessWidget {
                       // Identity and status share the title row, as in
                       // the fleet mock: the status belongs to the vehicle,
                       // not to the chevron.
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      // A Wrap, not a Row: a long identity takes its own line
+                      // and the status pill drops beneath it instead of
+                      // being overlapped.
+                      Wrap(
+                        spacing: TpSpace.sm,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: <Widget>[
-                          Expanded(
-                            child: TpIdentifierText(
-                              identity,
-                              style: text.titleMedium?.copyWith(
-                                color: palette.text,
-                                fontWeight: FontWeight.w900,
-                              ),
+                          TpIdentifierText(
+                            identity,
+                            style: text.titleMedium?.copyWith(
+                              color: palette.text,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
                           if (displayStatus?.isNotEmpty == true) ...<Widget>[
-                            const SizedBox(width: TpSpace.sm),
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: TpSpace.sm,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: statusColors.soft,
-                                  borderRadius:
-                                      BorderRadius.circular(TpRadius.md),
-                                  border: Border.all(color: statusColors.base),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: <Widget>[
-                                    // The mock's status dot. Colour is never
-                                    // the only signal: the label is beside it.
-                                    ExcludeSemantics(
-                                      child: Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          color: statusColors.base,
-                                          shape: BoxShape.circle,
-                                        ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: TpSpace.sm,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusColors.soft,
+                                borderRadius:
+                                    BorderRadius.circular(TpRadius.md),
+                                border: Border.all(color: statusColors.base),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  // The mock's status dot. Colour is never
+                                  // the only signal: the label is beside it.
+                                  ExcludeSemantics(
+                                    child: Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: statusColors.base,
+                                        shape: BoxShape.circle,
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
-                                    Flexible(
-                                      child: Text(
-                                        displayStatus!,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: text.labelSmall?.copyWith(
-                                          color: statusColors.onSoft,
-                                          fontWeight: FontWeight.w800,
-                                        ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      displayStatus!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: text.labelSmall?.copyWith(
+                                        color: statusColors.onSoft,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],

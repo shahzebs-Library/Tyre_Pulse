@@ -1435,11 +1435,11 @@ class _StickyAssetActions extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final VoidCallback? report = onReportIssue;
     final VoidCallback? createWorkOrder = onCreateWorkOrder;
-    // On a narrow phone (360dp and below) the two labelled buttons cannot
+    // On a narrow phone (under 430dp: "New work order" was cut at 390) the two labelled buttons cannot
     // both fit with their icons, and TpButton cuts the label to one line
     // ("Report an is..."). The words carry the meaning, so on a narrow bar
     // the icons go and the side padding tightens; the labels stay whole.
-    final bool narrow = MediaQuery.sizeOf(context).width < 380;
+    final bool narrow = MediaQuery.sizeOf(context).width < 430;
     final double side = narrow ? TpSpace.md : TpSpace.lg;
     return Container(
       key: VehicleDetailScreenKeys.actionBar,

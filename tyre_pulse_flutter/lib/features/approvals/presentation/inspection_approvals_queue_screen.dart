@@ -89,6 +89,12 @@ class _InspectionApprovalsQueueScreenState
   AppError? _error;
   List<InspectionApprovalItem> _items = const <InspectionApprovalItem>[];
   String _query = '';
+
+  /// Owns the search text. The header is rebuilt under a different parent
+  /// whenever the list switches between loading / error / data, which used
+  /// to recreate the search field EMPTY while `_query` kept the old text -
+  /// so Returned read "No matches" beside a blank search box.
+  final TextEditingController _search = TextEditingController();
   InspectionApprovalTab _tab = InspectionApprovalTab.pending;
 
   /// The Pending count shown on the tab strip, tracked separately from
@@ -112,6 +118,12 @@ class _InspectionApprovalsQueueScreenState
   void initState() {
     super.initState();
     unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
 
   @override
@@ -207,14 +219,17 @@ class _InspectionApprovalsQueueScreenState
           if (_tab == InspectionApprovalTab.pending &&
               _items.isNotEmpty &&
               _bulkProgress == null)
-            TextButton(
-              key: InspectionApprovalsQueueKeys.selectToggle,
-              onPressed: () => setState(() {
-                _selecting = !_selecting;
-                _selected.clear();
-              }),
-              child: Text(
-                _selecting ? l10n.actionCancel : l10n.approvalsBulkSelect,
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: TpSpace.sm),
+              child: TextButton(
+                key: InspectionApprovalsQueueKeys.selectToggle,
+                onPressed: () => setState(() {
+                  _selecting = !_selecting;
+                  _selected.clear();
+                }),
+                child: Text(
+                  _selecting ? l10n.actionCancel : l10n.approvalsBulkSelect,
+                ),
               ),
             ),
         ],
@@ -393,6 +408,7 @@ class _InspectionApprovalsQueueScreenState
         tab: _tab,
         pendingCount: _pendingCount ?? _items.length,
         onTabChanged: _changeTab,
+        searchController: _search,
         onSearchChanged: (String value) => setState(() => _query = value),
       ),
     );
@@ -562,8 +578,10 @@ class _QueueSummary extends StatelessWidget {
     required this.pendingCount,
     required this.onTabChanged,
     required this.onSearchChanged,
+    required this.searchController,
   });
 
+  final TextEditingController searchController;
   final InspectionApprovalTab tab;
   final int pendingCount;
   final ValueChanged<InspectionApprovalTab> onTabChanged;
@@ -600,7 +618,10 @@ class _QueueSummary extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            TpSearchField(onChanged: onSearchChanged),
+            TpSearchField(
+              controller: searchController,
+              onChanged: onSearchChanged,
+            ),
             const SizedBox(height: TpSpace.md),
             Wrap(
               spacing: TpSpace.sm,

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
@@ -83,7 +84,7 @@ class _AlertsScreenState extends ConsumerState<AlertsScreen> {
       backFallback: widget.backFallback,
       appBar: TpAppBar(
         title: copy('title'),
-        showBack: false,
+        showBack: Navigator.of(context).canPop(),
         actions: <Widget>[
           IconButton(
             key: const Key('alerts.filter.action'),
@@ -299,7 +300,9 @@ class _AlertsList extends StatelessWidget {
                     icon: Icons.notifications_none_rounded,
                     title: copy('emptyTitle'),
                     message:
-                        hasFilter ? copy('emptyFilter') : copy('emptyTitle'),
+                        hasFilter
+                        ? copy('emptyFilter')
+                        : AppLocalizations.of(context).alertsEmptyMessage,
                   ),
                 ),
               ],

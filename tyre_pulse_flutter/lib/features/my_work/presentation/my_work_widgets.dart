@@ -370,7 +370,7 @@ class _StatCell extends StatelessWidget {
         // mid-word; below that width the icon sits above the figures.
         child: LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
-            final bool stacked = constraints.maxWidth < 100;
+            final bool stacked = constraints.maxWidth < 130;
             final Widget badge = Container(
               width: stacked ? 32 : 40,
               height: stacked ? 32 : 40,
@@ -396,15 +396,19 @@ class _StatCell extends StatelessWidget {
                       ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  stat.label,
-                  maxLines: 2,
-                  textAlign: stacked ? TextAlign.center : TextAlign.start,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: palette.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
+                // One line, shrunk to fit: "Completed" must never break
+                // mid-word ("Complete/d") on a narrow card.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    stat.label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: palette.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
                 ),
               ],
             );

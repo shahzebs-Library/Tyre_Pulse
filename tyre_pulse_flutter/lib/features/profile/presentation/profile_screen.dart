@@ -1191,6 +1191,8 @@ class _SettingsColumn extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final LoginSecurityCopy loginCopy = LoginSecurityCopy.of(context);
     final String countries = _countryScopeLabel(profile, l10n);
+    final bool countriesKnown = profile.countryScope.seesAllCountries ||
+        profile.countryScope.namedCountries.isNotEmpty;
     final int? pending = pendingSync.asData?.value;
     final int? draftCount = drafts.asData?.value;
     final String locale = Localizations.localeOf(context).toLanguageTag();
@@ -1228,15 +1230,21 @@ class _SettingsColumn extends StatelessWidget {
               label: l10n.clMockActiveSite,
               value: _siteScopeLabel(profile, l10n),
             ),
-            _SettingsRow(
-              key: ProfileScreenKeys.countryRow,
-              icon: Icons.public_outlined,
-              tone: palette.ok,
-              label: l10n.clMockCountryCurrency,
-              value: currency == null || currency!.trim().isEmpty
-                  ? countries
-                  : '$countries · ${currency!.trim()}',
-            ),
+            // Omitted when the profile carries neither a country nor a
+            // currency: a row reading "Unavailable" teaches nothing.
+            if (countriesKnown ||
+                (currency != null && currency!.trim().isNotEmpty))
+              _SettingsRow(
+                key: ProfileScreenKeys.countryRow,
+                icon: Icons.public_outlined,
+                tone: palette.ok,
+                label: l10n.clMockCountryCurrency,
+                value: currency == null || currency!.trim().isEmpty
+                    ? countries
+                    : countriesKnown
+                        ? '$countries · ${currency!.trim()}'
+                        : currency!.trim(),
+              ),
             _SettingsRow(
               key: ProfileScreenKeys.rolesRow,
               icon: Icons.groups_outlined,
@@ -1244,9 +1252,10 @@ class _SettingsColumn extends StatelessWidget {
               label: l10n.clMockRolesAccess,
               // The role is the server's catalogue name (Latin script); a
               // first-strong isolate keeps it from pulling the module count
-              // out of order inside an Arabic or Urdu row.
-              value: '\u2068${profile.role.displayName}\u2069 · '
-                  '${l10n.clMockModuleCount(moduleCount)}',
+              // out of order inside an Arabic or Urdu row. The count sits on
+              // its own caption line so the row never wraps both sides.
+              value: '\u2068${profile.role.displayName}\u2069',
+              caption: l10n.clMockModuleCount(moduleCount),
             ),
           ],
         ),

@@ -11,6 +11,7 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -1830,11 +1831,24 @@ class _RecordServiceSheetState extends ConsumerState<_RecordServiceSheet> {
             ),
           );
       if (mounted) Navigator.pop(context, true);
-    } on Object {
+    } on Object catch (error) {
       if (mounted) {
         setState(() => saving = false);
+        // The server states WHY it refused; say so rather than one generic
+        // "could not be saved" for every cause.
+        final String raw = error is SupabaseFailure
+            ? (error.rawMessage ?? '').toLowerCase()
+            : '';
+        final String key = raw.contains('below the last recorded reading')
+            ? 'saveMeterBelow'
+            : (raw.contains('not authorized') ||
+                    (error is SupabaseFailure &&
+                        (error.cause == SupabaseFailureCause.rowLevelSecurity ||
+                            error.cause == SupabaseFailureCause.forbidden)))
+                ? 'saveNotAllowed'
+                : 'saveFailed';
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(copy('saveFailed'))));
+            .showSnackBar(SnackBar(content: Text(copy(key))));
       }
     }
   }

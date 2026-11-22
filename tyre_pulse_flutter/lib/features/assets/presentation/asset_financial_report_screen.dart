@@ -714,7 +714,7 @@ class _AssetHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              if (currency != null)
+              if (currency != null && currency!.trim().length > 1)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: TpSpace.sm,

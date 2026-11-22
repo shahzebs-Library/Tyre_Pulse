@@ -49,6 +49,16 @@ abstract final class TpTheme {
       outline: palette.borderStrong,
       outlineVariant: palette.border,
       scrim: palette.overlay,
+      // Material 3 derives sheet, menu and card fills from a seed-tinted
+      // surfaceContainer ramp, which read as olive / sage on the More sheet
+      // and every popup. Pin the whole ramp to the palette's own surfaces
+      // and switch the tint off.
+      surfaceTint: Colors.transparent,
+      surfaceContainerLowest: palette.surface,
+      surfaceContainerLow: palette.surface,
+      surfaceContainer: palette.surface,
+      surfaceContainerHigh: palette.surface,
+      surfaceContainerHighest: palette.surfaceAlt,
     );
 
     return ThemeData(
@@ -66,6 +76,32 @@ abstract final class TpTheme {
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
         elevation: 0,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: palette.surface,
+        surfaceTintColor: Colors.transparent,
+        modalBackgroundColor: palette.surface,
+        modalBarrierColor: palette.overlay,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: palette.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      cardTheme: CardThemeData(
+        color: palette.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: palette.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll<Color>(palette.surface),
+          surfaceTintColor: const WidgetStatePropertyAll<Color>(
+            Colors.transparent,
+          ),
+        ),
       ),
       textTheme: TpTypography.textThemeFor(palette),
       // Standard rather than compact. Density is achieved through the spacing

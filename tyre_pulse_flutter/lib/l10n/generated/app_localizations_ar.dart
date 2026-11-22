@@ -1718,7 +1718,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get meterLogAssetLabel => 'الأصل';
 
   @override
-  String get meterLogAssetHint => 'اكتب رقم الأصل أو امسحه ضوئيًا';
+  String get meterLogAssetHint => 'رقم الأصل أو امسح';
 
   @override
   String get meterLogSiteLabel => 'الموقع';
@@ -2873,6 +2873,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'title=تنبيهات الإطارات~all=الكل~critical=حرج~warnings=تحذيرات~info=معلومات~flagged=تنبيهات~criticalCount=حرجة~emptyTitle=لا توجد تنبيهات نشطة~emptyFilter=لا توجد تنبيهات تطابق هذا الفلتر.~loadError=تعذر تحميل التنبيهات. اسحب للأسفل لإعادة المحاولة.~unknownAsset=معدة غير معروفة~pressureLow=ضغط الإطار منخفض~treadLow=عمق النقشة منخفض~position=الموضع~serial=الرقم التسلسلي~tread=عمق النقشة~retry=إعادة المحاولة~acknowledge=إقرار~ackTitle=الإقرار بالتنبيه~ackBody=هل تريد تعليم هذا التنبيه كمراجَع؟ ستتم إزالته من القائمة.~ackFailed=تعذّر الإقرار. يرجى المحاولة مرة أخرى.~cancel=إلغاء';
 
   @override
+  String get alertsEmptyMessage =>
+      'ستظهر هنا تنبيهات ضغط الإطارات وعمق النقش فور إصدارها.';
+
+  @override
   String get notificationInboxCopyCatalog =>
       'title=الإشعارات~markAll=تعيين الكل كمقروء~fallbackTitle=إشعار~emptyTitle=اطلعت على كل المستجدات~emptyBody=ستظهر هنا المهام والموافقات والتحديثات التشغيلية.~loadFailed=تعذر تحميل الإشعارات. اسحب للأسفل لإعادة المحاولة.~markFailed=تعذر تعيين هذا الإشعار كمقروء.~markAllFailed=تعذر تعيين جميع الإشعارات كمقروءة.~justNow=الآن~minutesAgo=قبل %count% د~hoursAgo=قبل %count% س~daysAgo=قبل %count% ي~messageUnavailable=هذه الرسالة لم تعد متاحة أو لم تُرسل إلى حسابك.';
 
@@ -2886,7 +2890,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get pmCopyCatalog =>
-      'title=مركز التحكم بالصيانة~subtitle=تحكم في عبء أعمال الصيانة اليوم~createWorkOrder=إنشاء أمر عمل~pmDue=الصيانة الوقائية المستحقة~priorityQueue=قائمة الأعمال ذات الأولوية~viewAll=عرض الكل~allWorkOrders=عرض جميع أوامر العمل~quickAccess=وصول سريع~workOrders=أوامر العمل~workOrdersHint=إنشاء وإدارة~pmSchedule=جدول الصيانة~pmScheduleHint=تخطيط ومتابعة الصيانة~inspections=الفحوصات~inspectionsHint=فحص وإبلاغ~parts=قطع الغيار~partsHint=المخزون والطلبات~tyres=الإطارات~tyresHint=السجلات والتدوير والاستبدال~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.~openBreakdowns=الأعطال المفتوحة~activeWorkOrders=أوامر العمل النشطة~breakdown=عطل~workOrder=أمر عمل~dueToday=مستحق اليوم~since=منذ~opened=فُتح~queueEmpty=لا يوجد ما يحتاج إلى متابعة~woLoadFailed=تعذر تحميل أوامر العمل المفتوحة.~retry=إعادة المحاولة~countFailed=تعذر تحميل هذا العدد. اضغط لإعادة المحاولة.';
+      'title=مركز التحكم بالصيانة~subtitle=تحكم في عبء أعمال الصيانة اليوم~createWorkOrder=إنشاء أمر عمل~pmDue=الصيانة الوقائية المستحقة~priorityQueue=قائمة الأعمال ذات الأولوية~viewAll=عرض الكل~allWorkOrders=عرض جميع أوامر العمل~quickAccess=وصول سريع~workOrders=أوامر العمل~workOrdersHint=إنشاء وإدارة~pmSchedule=جدول الصيانة~pmScheduleHint=تخطيط ومتابعة الصيانة~inspections=الفحوصات~inspectionsHint=فحص وإبلاغ~parts=قطع الغيار~partsHint=المخزون والطلبات~tyres=الإطارات~tyresHint=السجلات والتدوير والاستبدال~overdue=متأخرة~dueSoon=مستحقة قريباً~active=الخطط النشطة~due=المستحقة الآن~all=كل الخطط~empty=لا توجد خطط صيانة~emptyDue=لا توجد صيانة وقائية مستحقة خلال 14 يوماً القادمة.~emptyAll=لا توجد خطط صيانة وقائية نشطة.~plan=خطة الصيانة~daysOverdue=يوم تأخير~daysLeft=يوم متبقٍ~noDate=لا يوجد تاريخ استحقاق~record=تسجيل الخدمة~meter=قراءة العداد~performedBy=نفذها~workshop=الورشة~partsCost=تكلفة القطع~labourCost=تكلفة العمالة~findings=الملاحظات~completed=مكتملة~partial=مكتملة جزئياً~deferred=مؤجلة~failed=غير مكتملة~save=حفظ الخدمة~invalidNumber=أدخل قيماً رقمية صحيحة.~loadFailed=تعذر تحميل خطط الصيانة.~saveFailed=تعذر حفظ سجل الخدمة. حاول مرة أخرى.~openBreakdowns=الأعطال المفتوحة~activeWorkOrders=أوامر العمل النشطة~breakdown=عطل~workOrder=أمر عمل~dueToday=مستحق اليوم~since=منذ~opened=فُتح~queueEmpty=لا يوجد ما يحتاج إلى متابعة~woLoadFailed=تعذر تحميل أوامر العمل المفتوحة.~retry=إعادة المحاولة~countFailed=تعذر تحميل هذا العدد. اضغط لإعادة المحاولة.~saveMeterBelow=قراءة العداد أقل من آخر قراءة مسجلة. راجعها وحاول مرة أخرى.~saveNotAllowed=لا يمكن لحسابك تسجيل صيانة على هذه الخطة (يلزم دور مسؤول أو مدير أو مدير عام في مساحة عمل الخطة).';
 
   @override
   String get stockCountCopyCatalog =>

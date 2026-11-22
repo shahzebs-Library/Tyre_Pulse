@@ -237,7 +237,7 @@ class _InspectionHistoryScreenState
           TpSpace.lg,
           TpSpace.lg,
           TpSpace.lg,
-          TpSpace.xxl * 2,
+          TpSpace.xxl * 4,
         ),
         children: <Widget>[
           if (_error != null)

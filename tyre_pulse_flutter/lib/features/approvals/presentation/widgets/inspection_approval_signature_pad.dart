@@ -53,6 +53,7 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
 
 /// One captured signature, ready for
 /// `InspectionApprovalDecision.approverSignature`.
@@ -104,6 +105,20 @@ class _InspectionApprovalSignaturePadState
       exportBackgroundColor: Colors.white,
     );
     _showingSavedPreview = widget.value != null;
+  }
+
+  @override
+  void didUpdateWidget(covariant InspectionApprovalSignaturePad oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A saved signature (V601) that arrives AFTER the pad was built is shown
+    // as a preview too - but never over a mark the person has already
+    // started drawing here.
+    if (oldWidget.value == null &&
+        widget.value != null &&
+        _controller.isEmpty &&
+        !_showingSavedPreview) {
+      _showingSavedPreview = true;
+    }
   }
 
   @override
@@ -160,10 +175,12 @@ class _InspectionApprovalSignaturePadState
               borderRadius: BorderRadius.circular(TpRadius.md),
               border: Border.all(color: palette.border),
             ),
-            child: Image.memory(
-              _decodeDataUrl(widget.value!),
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stack) => Center(
+            child: ApprovalSignaturePreview(
+              // Handles both stored shapes - a `<svg>` document (Expo pads)
+              // and a `data:` URL - and degrades to the label instead of
+              // throwing on a value it cannot decode.
+              value: widget.value,
+              fallback: Center(
                 child: Text(
                   l10n.inspectionApprovalSignatureSavedLabel,
                   style: Theme.of(context).textTheme.bodyMedium,
@@ -209,11 +226,5 @@ class _InspectionApprovalSignaturePadState
         ),
       ],
     );
-  }
-
-  static Uint8List _decodeDataUrl(String dataUrl) {
-    final int comma = dataUrl.indexOf(',');
-    final String b64 = comma < 0 ? dataUrl : dataUrl.substring(comma + 1);
-    return base64Decode(b64);
   }
 }

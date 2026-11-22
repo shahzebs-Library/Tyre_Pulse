@@ -664,9 +664,9 @@ void main() {
     // readings come from, and says when they could not be loaded; the
     // inspection meter fields refuse a date typed as a reading.
     test('en, ar and ur each carry exactly 2528 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2528);
-      expect(_translatableKeys(ar).length, 2528);
-      expect(_translatableKeys(ur).length, 2528);
+      expect(_translatableKeys(en).length, 2539);
+      expect(_translatableKeys(ar).length, 2539);
+      expect(_translatableKeys(ur).length, 2539);
     });
   });
 

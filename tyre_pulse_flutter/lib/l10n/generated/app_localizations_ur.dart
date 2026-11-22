@@ -8743,4 +8743,49 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get inspectionMeterLooksLikeDate =>
       'یہ تاریخ ہے، ریڈنگ نہیں۔ اگر مشین پر میٹر نہیں ہے تو خالی چھوڑ دیں۔';
+
+  @override
+  String get approvalsBulkSelect => 'منتخب کریں';
+
+  @override
+  String get approvalsBulkSelectAll => 'سب منتخب کریں';
+
+  @override
+  String approvalsBulkApproveSelected(int count) {
+    return '$count منتخب منظور کریں';
+  }
+
+  @override
+  String get approvalsBulkNoSignatureTitle => 'پہلے اپنا دستخط محفوظ کریں';
+
+  @override
+  String get approvalsBulkNoSignatureMessage =>
+      'ایک ساتھ کئی منظور کرنے پر ہر ایک پر آپ کا محفوظ دستخط لگتا ہے۔ پروفائل میں اپنا دستخط بنا کر محفوظ کریں، پھر دوبارہ کوشش کریں۔';
+
+  @override
+  String get approvalsBulkSignatureUnavailable =>
+      'آپ کا محفوظ دستخط چیک نہیں ہو سکا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String approvalsBulkConfirmTitle(int count) {
+    return '$count معائنے منظور کریں؟';
+  }
+
+  @override
+  String get approvalsBulkConfirmMessage =>
+      'ہر ایک پر آپ کا محفوظ دستخط لگے گا۔ جن معائنوں میں ٹائر کی ریڈنگ نامکمل ہے وہ چھوڑ دیے جائیں گے اور زیرِ التوا رہیں گے۔';
+
+  @override
+  String get approvalsBulkResultTitle => 'اجتماعی منظوری مکمل';
+
+  @override
+  String approvalsBulkResultMessage(
+      int approved, int skipped, int decided, int failed) {
+    return 'منظور: $approved\nٹائر ریڈنگ نامکمل، چھوڑے گئے: $skipped\nکسی اور نے پہلے فیصلہ کیا: $decided\nناکام: $failed';
+  }
+
+  @override
+  String approvalsBulkProgress(int done, int total) {
+    return '$total میں سے $done منظور ہو رہے ہیں';
+  }
 }

@@ -502,6 +502,12 @@ abstract class AppLocalizations {
   /// **'Not measured'**
   String get statusUnknown;
 
+  /// Status for a record saved on this phone that has not reached the server yet. Not a warning.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to sync'**
+  String get statusPending;
+
   /// No description provided for @vehiclesTitle.
   ///
   /// In en, this message translates to:

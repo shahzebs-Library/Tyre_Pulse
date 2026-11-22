@@ -93,6 +93,7 @@ TyreDiagramStats computeTyreDiagramStats(
         unrecorded++;
       case TpStatus.info:
       case TpStatus.neutral:
+      case TpStatus.pending:
         // Not a band `wheelStatusFor` ever returns - kept exhaustive so a
         // future status value fails to compile here rather than silently
         // vanishing from every count.

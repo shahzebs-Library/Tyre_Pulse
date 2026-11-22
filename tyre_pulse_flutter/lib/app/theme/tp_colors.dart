@@ -10,9 +10,9 @@
 /// are different claims and they get different colours.
 ///
 /// The neutral/status scale remains aligned with the production field app.
-/// The interaction accents match the approved Tyre Pulse mobile family:
-/// fleet green on daylight surfaces and safety yellow on night-shift
-/// surfaces.
+/// Visual direction "Porcelain" (owner pick, 2026-11-22): warm porcelain
+/// surfaces, navy ink, brand green for action and good state, in both
+/// brightnesses. See docs/flutter-redesign/02_design_tokens.md.
 library;
 
 import 'package:flutter/material.dart';
@@ -38,6 +38,11 @@ enum TpStatus {
   /// NOT measured. Deliberately distinct from [neutral]: neutral means "we
   /// looked and there is nothing to flag", unknown means "we never looked".
   unknown,
+
+  /// Saved on this phone and waiting to sync. Deliberately NOT [warning]:
+  /// nothing is wrong with the record, it simply has not reached the server
+  /// yet. Owner decision 4 (Porcelain, 2026-11-22).
+  pending,
 }
 
 /// A status rendered three ways: a strong fill, a tinted background, and the
@@ -86,51 +91,60 @@ class TpPalette {
     required this.controlBorder,
     required this.focus,
     required this.overlay,
+    required this.brandInk,
+    required this.brandAccent,
     required this.ok,
     required this.warning,
     required this.critical,
     required this.info,
     required this.neutral,
     required this.unknown,
+    required this.pending,
   });
 
   /// Light is the primary theme. Spec section 53.
+  ///
+  /// "Porcelain" (owner pick, 2026-11-22): warm porcelain paper, deep navy
+  /// ink, and brand green only where it means something. Every text pair here
+  /// is at least 4.5:1; [controlBorder] is at least 3:1 on every surface.
   static const TpPalette light = TpPalette(
     brightness: Brightness.light,
-    background: Color(0xFFFBFCFF),
+    background: Color(0xFFF3F1EC),
     surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFF5F8FF),
-    surfaceSunken: Color(0xFFEAF0FC),
-    text: Color(0xFF00145A),
-    textSecondary: Color(0xFF173577),
-    textMuted: Color(0xFF5E6E9A),
+    surfaceAlt: Color(0xFFF8F7F3),
+    surfaceSunken: Color(0xFFECE9E2),
+    text: Color(0xFF0C1626),
+    textSecondary: Color(0xFF3D4757),
+    textMuted: Color(0xFF5E6675),
     textInverse: Color(0xFFFFFFFF),
-    primary: Color(0xFF07883F),
-    primaryDark: Color(0xFF06385C),
-    primarySoft: Color(0xFFE7F7EE),
+    primary: Color(0xFF12873F),
+    primaryDark: Color(0xFF0B6B32),
+    primarySoft: Color(0xFFE2F3E7),
     onPrimary: Color(0xFFFFFFFF),
-    border: Color(0xFFDCE4F2),
-    borderStrong: Color(0xFFBECBE1),
-    controlBorder: Color(0xFF75849F),
-    focus: Color(0xFF07883F),
-    overlay: Color(0x80080E18),
+    border: Color(0xFFE3DFD6),
+    borderStrong: Color(0xFFCFCAC0),
+    controlBorder: Color(0xFF737985),
+    focus: Color(0xFF12873F),
+    overlay: Color(0x7A0C1626),
+    brandInk: Color(0xFF0C1626),
+    brandAccent: Color(0xFF16A34A),
     ok: TpStatusColors(
       base: Color(0xFF15803D),
-      soft: Color(0xFFDCFCE7),
+      soft: Color(0xFFE2F3E7),
       onBase: Color(0xFFFFFFFF),
-      onSoft: Color(0xFF0F5C2E),
+      onSoft: Color(0xFF0B6B32),
     ),
     warning: TpStatusColors(
-      base: Color(0xFFB45309),
-      soft: Color(0xFFFEF3C7),
+      base: Color(0xFF9A4A06),
+      soft: Color(0xFFFCEFD9),
       onBase: Color(0xFFFFFFFF),
-      onSoft: Color(0xFF8A3D07),
+      onSoft: Color(0xFF7A3A05),
     ),
     critical: TpStatusColors(
-      base: Color(0xFFB91C1C),
-      soft: Color(0xFFFEE2E2),
+      base: Color(0xFFB42318),
+      soft: Color(0xFFFDE6E2),
       onBase: Color(0xFFFFFFFF),
-      onSoft: Color(0xFF7F1D1D),
+      onSoft: Color(0xFF8A1A12),
     ),
     info: TpStatusColors(
       base: Color(0xFF0369A1),
@@ -140,9 +154,9 @@ class TpPalette {
     ),
     neutral: TpStatusColors(
       base: Color(0xFF475569),
-      soft: Color(0xFFEDF2F8),
+      soft: Color(0xFFECE9E2),
       onBase: Color(0xFFFFFFFF),
-      onSoft: Color(0xFF33415A),
+      onSoft: Color(0xFF3D4757),
     ),
     // Deliberately a different hue family from neutral, and paired with a
     // dashed border wherever it is drawn, so "not measured" cannot be mistaken
@@ -152,6 +166,12 @@ class TpPalette {
       soft: Color(0xFFF3EEFE),
       onBase: Color(0xFFFFFFFF),
       onSoft: Color(0xFF5B21B6),
+    ),
+    pending: TpStatusColors(
+      base: Color(0xFF2F4F7F),
+      soft: Color(0xFFE5ECF6),
+      onBase: Color(0xFFFFFFFF),
+      onSoft: Color(0xFF24406B),
     ),
   );
 
@@ -180,6 +200,8 @@ class TpPalette {
     controlBorder: Color(0xFF75849F),
     focus: Color(0xFF007333),
     overlay: Color(0x80080E18),
+    brandInk: Color(0xFF041742),
+    brandAccent: Color(0xFF16A34A),
     ok: TpStatusColors(
       base: Color(0xFF15803D),
       soft: Color(0xFFDCFCE7),
@@ -216,29 +238,40 @@ class TpPalette {
       onBase: Color(0xFFFFFFFF),
       onSoft: Color(0xFF5B21B6),
     ),
+    pending: TpStatusColors(
+      base: Color(0xFF2F4F7F),
+      soft: Color(0xFFE5ECF6),
+      onBase: Color(0xFFFFFFFF),
+      onSoft: Color(0xFF24406B),
+    ),
   );
 
   /// Dark is secondary: night shifts and indoor management. It is not tuned
   /// for sunlight and must never become the default.
+  ///
+  /// Porcelain at night: the same navy family deepened, and brand green (not
+  /// yellow) as the action colour so both brightnesses read as one product.
   static const TpPalette dark = TpPalette(
     brightness: Brightness.dark,
-    background: Color(0xFF080C10),
-    surface: Color(0xFF11161B),
-    surfaceAlt: Color(0xFF171D23),
-    surfaceSunken: Color(0xFF0C1116),
-    text: Color(0xFFF1F5F9),
-    textSecondary: Color(0xFFC3CEDE),
-    textMuted: Color(0xFF8CA0B8),
-    textInverse: Color(0xFF080C10),
-    primary: Color(0xFFFFD400),
-    primaryDark: Color(0xFFEAB308),
-    primarySoft: Color(0xFF332A00),
-    onPrimary: Color(0xFF181200),
-    border: Color(0xFF252C33),
-    borderStrong: Color(0xFF39424C),
+    background: Color(0xFF0B111B),
+    surface: Color(0xFF121A27),
+    surfaceAlt: Color(0xFF182233),
+    surfaceSunken: Color(0xFF0E1520),
+    text: Color(0xFFF1F4F8),
+    textSecondary: Color(0xFFC3CCDA),
+    textMuted: Color(0xFF93A0B4),
+    textInverse: Color(0xFF0B111B),
+    primary: Color(0xFF4ADE80),
+    primaryDark: Color(0xFF86EFAC),
+    primarySoft: Color(0xFF143022),
+    onPrimary: Color(0xFF04210F),
+    border: Color(0xFF243044),
+    borderStrong: Color(0xFF334156),
     controlBorder: Color(0xFF6B7A8C),
-    focus: Color(0xFFFFD400),
+    focus: Color(0xFF4ADE80),
     overlay: Color(0xB302060E),
+    brandInk: Color(0xFF070C14),
+    brandAccent: Color(0xFF4ADE80),
     ok: TpStatusColors(
       base: Color(0xFF22C55E),
       soft: Color(0xFF14301F),
@@ -274,6 +307,12 @@ class TpPalette {
       soft: Color(0xFF241A3D),
       onBase: Color(0xFF150A2B),
       onSoft: Color(0xFFC4B5FD),
+    ),
+    pending: TpStatusColors(
+      base: Color(0xFF7FA7E0),
+      soft: Color(0xFF1A2740),
+      onBase: Color(0xFF08111F),
+      onSoft: Color(0xFFB5CCEF),
     ),
   );
 
@@ -313,12 +352,22 @@ class TpPalette {
   /// Modal scrim.
   final Color overlay;
 
+  /// The navy brand ink: hero cards, the floating navigation bar and the
+  /// strongest headers. Owner decision 1 (Porcelain): navy is a named role.
+  final Color brandInk;
+
+  /// The bright brand green, for decoration that carries no text: progress
+  /// rings, status dots, the scan button glow. NEVER put text on it in light
+  /// mode (white on it is 3.3:1); text-bearing fills use [primary].
+  final Color brandAccent;
+
   final TpStatusColors ok;
   final TpStatusColors warning;
   final TpStatusColors critical;
   final TpStatusColors info;
   final TpStatusColors neutral;
   final TpStatusColors unknown;
+  final TpStatusColors pending;
 
   /// The palette for the ambient theme.
   ///
@@ -342,6 +391,7 @@ class TpPalette {
       TpStatus.info => info,
       TpStatus.neutral => neutral,
       TpStatus.unknown => unknown,
+      TpStatus.pending => pending,
     };
   }
 }

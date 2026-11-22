@@ -192,10 +192,50 @@ The 29 literal durations map onto these.
 | 40 `BoxShadow` | `TpElevation.flat/lift/overlay` | new tokens |
 | 29 `Duration` literals | `TpMotion.*` | new tokens |
 
-## 9. Decisions needed from the owner
+## 9. Owner decisions (settled 2026-11-22: direction "Porcelain")
 
-1. Approve `brand.ink` navy as a named role for headers (it is already in the mocks).
-2. Approve retiring w900 (headlines become slightly lighter where w900 was used).
-3. Approve the chart palette built from existing brand colours (removes the off-brand purple and blue).
-4. Approve `TpStatus.pending` as a separate value from `warning`.
-5. Approve allowing one shadow level (`lift`) in light mode, against the "no shadow" rule, for the single primary action.
+The owner chose direction A "Porcelain" (warm porcelain paper, navy ink, brand
+green only where it means something). Mockups:
+https://claude.ai/artifact/Lz58gKg8jLB368cbftJPo1. The five open decisions,
+answered inside that direction:
+
+1. **Navy is a named role: yes.** `TpPalette.brandInk` (#0C1626 light) is the
+   ink for the hero card, the floating navigation bar and the strongest headers.
+   It is also the main text colour, so headers and body read as one family.
+2. **Retire w900: yes.** Porcelain's numbers are big, not heavier. The heaviest
+   weight is w800; every w900 literal maps to w800 (done screen by screen in the
+   widget PRs, not in the token PR).
+3. **Brand-only chart palette: yes.** Charts use navy, brand green, amber, red
+   and the slate pending blue, plus tints of them. The off-brand purple and
+   bright blues go. `unknown` keeps its violet because "not measured" must not
+   look like any measured state.
+4. **Pending sync is its own status: yes.** `TpStatus.pending` (slate blue
+   #2F4F7F on #E5ECF6) means "saved on this phone, waiting to sync". It is not
+   amber `warning`, because nothing is wrong with the record.
+5. **One soft shadow: yes, narrowly.** `TpElevation.lift` exists only for the
+   single primary action; `TpElevation.overlay` for bottom sheets and the
+   floating navigation bar. Cards stay `flat` with a hairline border. In dark
+   mode `lift` returns `flat`.
+
+### Porcelain token values (light)
+
+| Role | Value | Notes |
+|---|---|---|
+| background | #F3F1EC | porcelain canvas |
+| surface / surfaceAlt / surfaceSunken | #FFFFFF / #F8F7F3 / #ECE9E2 | |
+| text / textSecondary / textMuted | #0C1626 / #3D4757 / #5E6675 | 16.1 / 7.7 / 5.1:1 on canvas |
+| primary (text-bearing fills) | #12873F | white on it 4.6:1 |
+| brandAccent (decoration only) | #16A34A | rings, dots; never text-bearing (3.3:1) |
+| primaryDark (green ink) | #0B6B32 | green text on tint 5.8:1 |
+| border / borderStrong / controlBorder | #E3DFD6 / #CFCAC0 / #737985 | control border 3.6:1 on sunken |
+| warning base / soft | #9A4A06 / #FCEFD9 | 5.5:1 |
+| critical base / soft | #B42318 / #FDE6E2 | 5.5:1 |
+| pending base / soft | #2F4F7F / #E5ECF6 | 6.9:1 |
+| TpRadius.xxl | 24 | cards and sheets |
+
+Dark keeps the same identity: navy-black surfaces (#0B111B / #121A27) with
+brand green #4ADE80 as the action colour (replaces the old safety yellow).
+
+Typography: Porcelain is drawn in Plus Jakarta Sans. Bundling that font adds
+files to the app, so it waits for the owner's go-ahead; until then the system
+font is used with the same sizes and weights.

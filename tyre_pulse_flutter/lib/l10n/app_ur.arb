@@ -81,6 +81,7 @@
   "statusInfo": "معلومات",
   "statusNeutral": "غیر جانبدار",
   "statusUnknown": "ناپا نہیں گیا",
+  "statusPending": "ہم آہنگی کا منتظر",
 
   "vehiclesTitle": "گاڑیاں",
   "vehiclesCount": "{count, plural, =0{فلیٹ میں کوئی گاڑی نہیں} =1{فلیٹ میں 1 گاڑی} other{فلیٹ میں {count} گاڑیاں}}",

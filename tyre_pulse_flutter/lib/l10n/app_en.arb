@@ -205,6 +205,10 @@
   "@statusUnknown": {
     "description": "Deliberately not the word Unknown on its own. It says that nobody took the reading, which is different from a reading that came back neutral."
   },
+  "statusPending": "Waiting to sync",
+  "@statusPending": {
+    "description": "Status for a record saved on this phone that has not reached the server yet. Not a warning."
+  },
 
   "vehiclesTitle": "Vehicles",
   "@vehiclesTitle": {},

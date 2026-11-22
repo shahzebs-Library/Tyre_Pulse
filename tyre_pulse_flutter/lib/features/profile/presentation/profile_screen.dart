@@ -597,12 +597,6 @@ class _IdentityHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: palette.primary,
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: palette.primary.withValues(alpha: 0.18),
-                      blurRadius: 16,
-                    ),
-                  ],
                 ),
                 child: Container(
                   padding: const EdgeInsets.all(3),
@@ -613,11 +607,7 @@ class _IdentityHeader extends StatelessWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[palette.primarySoft, palette.info.soft],
-                      ),
+                      color: palette.primarySoft,
                     ),
                     alignment: Alignment.center,
                     child: Text(
@@ -1661,15 +1651,6 @@ class _SettingsSection extends StatelessWidget {
             border: Border.all(color: palette.border),
             // Depth only in light: a shadow tinted from white text would
             // glow on the dark theme.
-            boxShadow: palette.brightness == Brightness.light
-                ? <BoxShadow>[
-                    BoxShadow(
-                      color: palette.text.withValues(alpha: 0.05),
-                      blurRadius: 12,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : null,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(TpRadius.lg),

@@ -408,16 +408,6 @@ class QueueListRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: palette.border,
           borderRadius: outerRadius,
-          boxShadow: isLast
-              ? <BoxShadow>[
-                  BoxShadow(
-                    color: queueShadowColor(context),
-                    offset: const Offset(0, 6),
-                    blurRadius: 12,
-                    spreadRadius: -4,
-                  ),
-                ]
-              : null,
         ),
         child: Padding(
           padding: EdgeInsets.fromLTRB(1, isFirst ? 1 : 0, 1, isLast ? 1 : 0),
@@ -438,9 +428,8 @@ class QueueListRow extends StatelessWidget {
   }
 }
 
-/// A soft brand-green lift under the one primary action of a list landing
-/// (the mock family's "New inspection" / "Create work order" bar). Purely
-/// decorative: [child] keeps its own semantics, keys and callback.
+/// Wraps the one primary action of a list landing. The decorative glow was
+/// removed (flat, sun-readable surfaces); kept so call sites stay unchanged.
 class QueuePrimaryLift extends StatelessWidget {
   const QueuePrimaryLift({required this.child, super.key});
 
@@ -448,22 +437,6 @@ class QueuePrimaryLift extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: palette.primary.withValues(
-              alpha: palette.brightness == Brightness.dark ? 0.35 : 0.28,
-            ),
-            offset: const Offset(0, 6),
-            blurRadius: 16,
-            spreadRadius: -4,
-          ),
-        ],
-      ),
-      child: child,
-    );
+    return child;
   }
 }

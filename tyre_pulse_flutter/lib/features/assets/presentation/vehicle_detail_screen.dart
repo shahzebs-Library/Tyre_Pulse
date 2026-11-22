@@ -693,7 +693,6 @@ class _AssetHeroCard extends StatelessWidget {
         color: palette.surface,
         borderRadius: BorderRadius.circular(TpRadius.xl),
         border: Border.all(color: palette.border),
-        boxShadow: <BoxShadow>[_softLift(palette)],
       ),
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
@@ -1453,14 +1452,6 @@ class _StickyAssetActions extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border(top: BorderSide(color: palette.border)),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: _shadowTint(palette),
-            offset: const Offset(0, -4),
-            blurRadius: 12,
-            spreadRadius: -4,
-          ),
-        ],
       ),
       child: Row(
         children: <Widget>[
@@ -1546,22 +1537,8 @@ class _FieldRow extends StatelessWidget {
   }
 }
 
-/// The shadow tint this screen uses: a faint navy lift on the light theme,
-/// a plain dark drop on the dark theme (a light-ink shadow would glow).
-Color _shadowTint(TpPalette palette) => palette.brightness == Brightness.dark
-    ? Colors.black.withValues(alpha: 0.45)
-    : palette.text.withValues(alpha: 0.07);
-
-/// The quiet card lift shared by the hero and the metric cards.
-BoxShadow _softLift(TpPalette palette) => BoxShadow(
-      color: _shadowTint(palette),
-      offset: const Offset(0, 4),
-      blurRadius: 14,
-      spreadRadius: -6,
-    );
-
-/// A soft brand-green glow under the one primary action on this screen
-/// (the sticky bar's "Inspect now").
+/// Wraps the sticky bar's "Inspect now". The decorative glow was removed
+/// (flat, sun-readable surfaces); kept so call sites stay unchanged.
 class _PrimaryLift extends StatelessWidget {
   const _PrimaryLift({required this.child});
 
@@ -1569,22 +1546,6 @@ class _PrimaryLift extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: palette.primary.withValues(
-              alpha: palette.brightness == Brightness.dark ? 0.35 : 0.3,
-            ),
-            offset: const Offset(0, 6),
-            blurRadius: 16,
-            spreadRadius: -4,
-          ),
-        ],
-      ),
-      child: child,
-    );
+    return child;
   }
 }

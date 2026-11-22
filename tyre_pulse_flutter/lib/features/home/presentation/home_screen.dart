@@ -1114,27 +1114,6 @@ class _Band extends StatelessWidget {
   }
 }
 
-/// The soft, two-layer card shadow Home uses for depth.
-///
-/// Light mode gets a faint ink-tinted lift; dark mode a deeper black one,
-/// because an ink-tinted shadow disappears on a near-black background.
-List<BoxShadow> _homeShadow(TpPalette palette, {double lift = 1}) {
-  final bool dark = palette.brightness == Brightness.dark;
-  final Color ink = dark ? Colors.black : palette.text;
-  return <BoxShadow>[
-    BoxShadow(
-      color: ink.withValues(alpha: (dark ? 0.38 : 0.07) * lift),
-      blurRadius: 18 * lift,
-      offset: Offset(0, 6 * lift),
-    ),
-    BoxShadow(
-      color: ink.withValues(alpha: dark ? 0.30 : 0.04),
-      blurRadius: 2,
-      offset: const Offset(0, 1),
-    ),
-  ];
-}
-
 /// A short, staggered fade-and-rise as Home first appears.
 ///
 /// Skipped entirely when the platform asks for reduced motion, so the
@@ -1208,27 +1187,15 @@ class _HomeHeader extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            // A gradient ring around the initials gives the avatar the
-            // presence of the mock's profile photo without inventing one.
-            Container(
+            SizedBox(
               width: 56,
               height: 56,
-              padding: const EdgeInsets.all(2.5),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: AlignmentDirectional.topStart,
-                  end: AlignmentDirectional.bottomEnd,
-                  colors: <Color>[palette.primary, palette.info.base],
-                ),
-                boxShadow: _homeShadow(palette, lift: 0.6),
-              ),
               child: Container(
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: palette.primarySoft,
                   shape: BoxShape.circle,
-                  border: Border.all(color: palette.surface, width: 2),
+                  border: Border.all(color: palette.border),
                 ),
                 child: initials == null
                     ? TpIcon(
@@ -1537,7 +1504,6 @@ class _NewInspectionButtonState extends State<_NewInspectionButton> {
     final TpPalette palette = TpPalette.of(context);
     final bool reduceMotion =
         MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    final Color deep = Color.lerp(palette.primary, Colors.black, 0.22)!;
     return Semantics(
       button: true,
       label: widget.label,
@@ -1547,82 +1513,50 @@ class _NewInspectionButtonState extends State<_NewInspectionButton> {
         duration:
             reduceMotion ? Duration.zero : const Duration(milliseconds: 120),
         curve: Curves.easeOut,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(TpRadius.md),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color:
-                    palette.primary.withValues(alpha: _pressed ? 0.22 : 0.34),
-                blurRadius: _pressed ? 8 : 18,
-                offset: Offset(0, _pressed ? 3 : 8),
-              ),
-            ],
-          ),
-          child: Material(
-            key: HomeScreenKeys.newInspection,
-            borderRadius: BorderRadius.circular(TpRadius.md),
-            clipBehavior: Clip.antiAlias,
-            color: palette.primary,
-            child: Ink(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: AlignmentDirectional.topStart,
-                  end: AlignmentDirectional.bottomEnd,
-                  colors: <Color>[palette.primary, deep],
-                ),
-              ),
-              child: InkWell(
-                onTap: widget.onTap,
-                onHighlightChanged: _setPressed,
-                splashColor: palette.onPrimary.withValues(alpha: 0.12),
-                highlightColor: palette.onPrimary.withValues(alpha: 0.06),
-                child: SizedBox(
-                  height: 68,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: palette.onPrimary,
-                            shape: BoxShape.circle,
-                            boxShadow: <BoxShadow>[
-                              BoxShadow(
-                                color: deep.withValues(alpha: 0.45),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.add_rounded,
-                            color: palette.primary,
-                            size: 26,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Flexible(
-                          child: Text(
-                            widget.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  color: palette.onPrimary,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.2,
-                                ),
-                          ),
-                        ),
-                      ],
+        child: Material(
+          key: HomeScreenKeys.newInspection,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+          clipBehavior: Clip.antiAlias,
+          color: palette.primary,
+          child: InkWell(
+            onTap: widget.onTap,
+            onHighlightChanged: _setPressed,
+            splashColor: palette.onPrimary.withValues(alpha: 0.12),
+            highlightColor: palette.onPrimary.withValues(alpha: 0.06),
+            child: SizedBox(
+              height: 68,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: palette.onPrimary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.add_rounded,
+                        color: palette.primary,
+                        size: 26,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 14),
+                    Flexible(
+                      child: Text(
+                        widget.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: palette.onPrimary,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.2,
+                            ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1837,8 +1771,7 @@ class _TodaysWorkCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surface,
         borderRadius: BorderRadius.circular(TpRadius.lg),
-        border: Border.all(color: palette.border.withValues(alpha: 0.7)),
-        boxShadow: _homeShadow(palette),
+        border: Border.all(color: palette.border),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(TpRadius.lg),
@@ -1882,18 +1815,6 @@ class _WorkTimelineRow extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
     final String? time = data.time;
 
-    Widget connector(bool visible) => Expanded(
-          child: Center(
-            child: SizedBox(
-              width: 2,
-              height: double.infinity,
-              child: ColoredBox(
-                color: visible ? palette.borderStrong : Colors.transparent,
-              ),
-            ),
-          ),
-        );
-
     return Semantics(
       button: data.onTap != null,
       child: Material(
@@ -1911,12 +1832,6 @@ class _WorkTimelineRow extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: <Widget>[
-                      Column(
-                        children: <Widget>[
-                          connector(!isFirst),
-                          connector(!isLast),
-                        ],
-                      ),
                       Center(
                         child: Container(
                           width: 50,
@@ -2112,7 +2027,6 @@ class _AccidentCommandShortcut extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(TpRadius.md),
-        boxShadow: _homeShadow(palette, lift: 0.7),
       ),
       child: Material(
         key: HomeScreenKeys.action('accidents'),
@@ -2130,9 +2044,6 @@ class _AccidentCommandShortcut extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                // The red leading rail marks this as the urgent lane without
-                // flooding the whole card in red.
-                ColoredBox(color: tone.base, child: const SizedBox(width: 5)),
                 Expanded(
                   child: Container(
                     constraints: const BoxConstraints(minHeight: 66),
@@ -2332,13 +2243,12 @@ class _DashboardActionCard extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(TpRadius.md),
-        boxShadow: _homeShadow(palette, lift: 0.6),
       ),
       child: Material(
         color: palette.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(TpRadius.md),
-          side: BorderSide(color: palette.border.withValues(alpha: 0.7)),
+          side: BorderSide(color: palette.border),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

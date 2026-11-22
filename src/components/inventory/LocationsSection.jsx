@@ -11,9 +11,9 @@
  * Writes are Admin / Manager / Director only, enforced by inv_location_upsert
  * and inv_location_bulk_create on the server; the gate here only hides buttons.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import QRCode from 'qrcode'
-import { Plus, Pencil, Printer, FileDown, MapPin, Layers } from 'lucide-react'
+import { Plus, Pencil, Printer, FileDown, MapPin, Layers, Box } from 'lucide-react'
 import Modal from '../ui/Modal'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -90,6 +90,8 @@ async function qrFor(id) {
   return QRCode.toDataURL(labelCode(id), { width: 300, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } })
 }
 
+const Store3DPanel = lazy(() => import('./Store3DPanel'))
+
 export default function LocationsSection({ scope }) {
   const { t } = useLanguage()
   const { profile, isSuperAdmin } = useAuth()
@@ -106,6 +108,7 @@ export default function LocationsSection({ scope }) {
   const [labels, setLabels] = useState(null)
   const [labelSize, setLabelSize] = useState(DEFAULT_SIZE)
   const [labelErr, setLabelErr] = useState('')
+  const [show3d, setShow3d] = useState(false)
   const canManage = canManageLocations({ role: profile?.role, isSuperAdmin })
 
   useEffect(() => {
@@ -146,9 +149,13 @@ export default function LocationsSection({ scope }) {
     } finally { setBusy(false) }
   }
 
-  const onBulkCreated = (result, codes) => {
-    setBulkOpen(false)
-    setCreated({ created: result?.created ?? 0, existing: result?.existing ?? 0, codes: new Set(codes.map((c) => String(c).toUpperCase())) })
+  const onBulkCreated = (result, codes, { keepOpen = false } = {}) => {
+    if (!keepOpen) setBulkOpen(false)
+    setCreated((prev) => {
+      const add = codes.map((c) => String(c).toUpperCase())
+      if (keepOpen && prev) return { created: prev.created + (result?.created ?? 0), existing: prev.existing + (result?.existing ?? 0), codes: new Set([...prev.codes, ...add]) }
+      return { created: result?.created ?? 0, existing: result?.existing ?? 0, codes: new Set(add) }
+    })
     q.retry()
   }
   const createdNodes = created ? flatAll.filter((n) => created.codes.has(String(n.code).toUpperCase())) : []
@@ -192,6 +199,9 @@ export default function LocationsSection({ scope }) {
       <div className="cc-filters">
         <SearchBox value={search} onChange={setSearch} placeholder={t('inventory.locations.search')} />
         <div className="inv-actions">
+          <button type="button" className="cc-btn-ghost" aria-pressed={show3d} onClick={() => setShow3d((v) => !v)}>
+            <Box size={14} aria-hidden="true" /> {t('inventory.store3d.toggle')}
+          </button>
           <button type="button" className="cc-btn-ghost" disabled={!flat.length} onClick={() => buildLabels(flat)}>
             <Printer size={14} aria-hidden="true" /> {t('inventory.locations.labels', { n: flat.length })}
           </button>
@@ -219,6 +229,12 @@ export default function LocationsSection({ scope }) {
         )}>
           {t('inventory.locations.bulk.done', { created: created.created, existing: created.existing })}
         </Note>
+      )}
+
+      {show3d && (
+        <Suspense fallback={<div className="cc-skel" style={{ height: 320 }} aria-busy="true" />}>
+          <Store3DPanel scope={scope} initialSite={defaultSite} />
+        </Suspense>
       )}
 
       <SectionCard title={t('inventory.locations.title')} sub={t('inventory.locations.sub', { n: rows.length })}>

@@ -7,10 +7,10 @@
  * Nothing is saved until the person presses "Create" on the preview.
  */
 import { useMemo, useState } from 'react'
-import { Eye, Layers, ArrowLeft } from 'lucide-react'
+import { Eye, Layers, ArrowLeft, Container, DoorOpen, SlidersHorizontal, Plus } from 'lucide-react'
 import Modal from '../ui/Modal'
 import { bulkCreateLocations, newIdempotencyKey } from '../../lib/api/inventory'
-import { buildBulkPlan, bulkPayload, BULK_MAX_NODES } from '../../lib/inventory/locationBulk'
+import { buildBulkPlan, bulkPayload, templateSpec, BULK_MAX_NODES } from '../../lib/inventory/locationBulk'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { ErrorNote, Field, Note, StatusPill } from './InvUi'
 
@@ -27,6 +27,21 @@ export default function LocationBulkSetup({ open, onClose, onCreated, stores, ro
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [key, setKey] = useState(() => newIdempotencyKey())
+  // Codes created in this dialog, so "Add another container" keeps numbering
+  // (C02, C03) before the parent list has reloaded.
+  const [made, setMade] = useState([])
+  const [lastDone, setLastDone] = useState(null)
+
+  const applyTemplate = (kind, site = spec.site, extra = made, size = spec.containerSize || '20ft') => {
+    setStep('edit'); setServer(null); setErr(''); setLastDone(null)
+    if (kind === 'custom') { setSpec((s) => ({ ...s, template: null, zoneCode: '', zoneName: '', rackNames: null })); return }
+    const word = t(`inventory.locations.bulk.tpl.${kind}`)
+    const tpl = templateSpec(kind, { site, rows, extraCodes: extra, word, size })
+    if (!tpl) { setSpec((s) => ({ ...s, template: kind })); return }
+    const rackNames = kind === 'container'
+      ? { L: t('inventory.locations.bulk.tpl.leftWall'), R: t('inventory.locations.bulk.tpl.rightWall') } : null
+    setSpec((s) => ({ ...s, ...tpl, rackNames }))
+  }
 
   const store = stores.find((s) => s.name === spec.site) || null
   const parents = useMemo(() => rows.filter((r) => r.site === String(spec.site).toUpperCase()
@@ -38,7 +53,7 @@ export default function LocationBulkSetup({ open, onClose, onCreated, stores, ro
     setStep('edit'); setServer(null); setErr('')
     setSpec((s) => {
       const next = { ...s, [k]: v }
-      if (k === 'site') { next.parentId = ''; next.prefix = '' }
+      if (k === 'site') { next.parentId = ''; next.prefix = ''; next.zoneCode = ''; next.zoneName = '' }
       if (k === 'parentId') next.prefix = rows.find((r) => r.id === v)?.code || ''
       return next
     })
@@ -60,7 +75,14 @@ export default function LocationBulkSetup({ open, onClose, onCreated, stores, ro
     try {
       const r = await bulkCreateLocations(payload(), key)
       setKey(newIdempotencyKey())
-      onCreated(r, plan.nodes.map((n) => n.code))
+      const codes = plan.nodes.map((n) => n.code)
+      const keepOpen = !!spec.template && !!spec.zoneCode
+      if (keepOpen) {
+        setMade((m) => [...m, ...codes])
+        setLastDone({ created: r?.created ?? 0, existing: r?.existing ?? 0, zone: spec.zoneCode })
+        setStep('done')
+      }
+      onCreated(r, codes, { keepOpen })
     } catch (e) { setErr(toUserMessage(e)) } finally { setBusy(false) }
   }
 
@@ -78,7 +100,7 @@ export default function LocationBulkSetup({ open, onClose, onCreated, stores, ro
             </button>
           )}
           <button type="button" className="cc-btn-ghost" onClick={onClose} disabled={busy}>{t('inventory.actions.cancel')}</button>
-          {step === 'edit' ? (
+          {step === 'done' ? null : step === 'edit' ? (
             <button type="button" className="cc-btn-primary" onClick={preview} disabled={busy || !!plan.errors.length || !plan.nodes.length || !store}>
               <Eye size={14} aria-hidden="true" /> {busy ? t('inventory.locations.bulk.checking') : t('inventory.locations.bulk.preview')}
             </button>
@@ -89,10 +111,40 @@ export default function LocationBulkSetup({ open, onClose, onCreated, stores, ro
           )}
         </div>
       )}>
+      {step === 'done' && lastDone && (
+        <div className="inv-hub">
+          <Note tone="good">{t('inventory.locations.bulk.tpl.done', { zone: lastDone.zone, created: lastDone.created, existing: lastDone.existing })}</Note>
+          <div className="inv-actions">
+            <button type="button" className="cc-btn-primary" onClick={() => applyTemplate(spec.template, spec.site, made)}>
+              <Plus size={14} aria-hidden="true" /> {t(`inventory.locations.bulk.tpl.another.${spec.template}`)}
+            </button>
+          </div>
+        </div>
+      )}
       {step === 'edit' && (
         <div className="inv-form">
+          <div className="inv-full" role="group" aria-label={t('inventory.locations.bulk.tpl.label')}>
+            <p className="cc-card-sub">{t('inventory.locations.bulk.tpl.label')}</p>
+            <div className="inv-tpl-row">
+              {[['custom', SlidersHorizontal], ['container', Container], ['room', DoorOpen]].map(([k, Icon]) => (
+                <button key={k} type="button" className="inv-tpl" aria-pressed={(spec.template || 'custom') === k} onClick={() => applyTemplate(k)}>
+                  <Icon size={18} aria-hidden="true" />
+                  <b>{t(`inventory.locations.bulk.tpl.${k}`)}</b>
+                  <small>{t(`inventory.locations.bulk.tpl.${k}Hint`)}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+          {spec.template === 'container' && (
+            <Field label={t('inventory.locations.bulk.tpl.size')} full>
+              <select className="cc-select" value={spec.containerSize || '20ft'} onChange={(e) => applyTemplate('container', spec.site, made, e.target.value)}>
+                <option value="20ft">{t('inventory.locations.bulk.tpl.size20')}</option>
+                <option value="40ft">{t('inventory.locations.bulk.tpl.size40')}</option>
+              </select>
+            </Field>
+          )}
           <Field label={t('inventory.locations.store')} full>
-            <select className="cc-select" value={spec.site} onChange={set('site')}>
+            <select className="cc-select" value={spec.site} onChange={(e) => { set('site')(e); if (spec.template) applyTemplate(spec.template, e.target.value) }}>
               <option value="">{t('inventory.common.choose')}</option>
               {stores.map((s) => <option key={`${s.country}:${s.name}`} value={s.name}>{s.name}{s.country ? ` (${s.country})` : ''}</option>)}
             </select>
@@ -103,6 +155,16 @@ export default function LocationBulkSetup({ open, onClose, onCreated, stores, ro
               {parents.map((p) => <option key={p.id} value={p.id}>{p.path || p.code} ({t(`inventory.locationTypes.${p.location_type}`)})</option>)}
             </select>
           </Field>
+          {spec.template && (
+            <>
+              <Field label={t('inventory.locations.bulk.tpl.zoneCode')}>
+                <input className="inv-input inv-mono" value={spec.zoneCode || ''} onChange={(e) => { const v = e.target.value.toUpperCase(); setStep('edit'); setServer(null); setSpec((s) => ({ ...s, zoneCode: v, prefix: v })) }} maxLength={30} autoComplete="off" />
+              </Field>
+              <Field label={t('inventory.locations.bulk.tpl.zoneName')}>
+                <input className="inv-input" value={spec.zoneName || ''} onChange={set('zoneName')} maxLength={60} autoComplete="off" />
+              </Field>
+            </>
+          )}
           <Field label={t('inventory.locations.bulk.prefix')}>
             <input className="inv-input" value={spec.prefix} onChange={set('prefix')} maxLength={20} autoComplete="off" placeholder="WH1" />
           </Field>
@@ -138,7 +200,7 @@ export default function LocationBulkSetup({ open, onClose, onCreated, stores, ro
           <div className="inv-full">
             {plan.errors.length > 0
               ? plan.errors.map((k) => <p key={k} className="inv-err" role="alert">{t(k, { max: BULK_MAX_NODES })}</p>)
-              : <Note>{t('inventory.locations.bulk.summary', { racks: plan.counts.rack, shelves: plan.counts.shelf, bins: plan.counts.bin, existing: plan.counts.existing })}</Note>}
+              : <Note>{plan.counts.zone ? `${t('inventory.locations.bulk.tpl.zoneSummary', { zone: spec.zoneCode })} ` : ''}{t('inventory.locations.bulk.summary', { racks: plan.counts.rack, shelves: plan.counts.shelf, bins: plan.counts.bin, existing: plan.counts.existing })}</Note>}
           </div>
           {plan.nodes.length > 0 && (
             <div className="inv-full inv-scroll">

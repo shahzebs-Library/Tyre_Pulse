@@ -10,7 +10,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 import { listMovements, reverseMovement, newIdempotencyKey } from '../../lib/api/inventory'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
-import { useInvQuery, PagedTable, SearchBox, Field, ErrorNote, StatusPill, fmtDateTime } from './InvUi'
+import { useInvQuery, useHubTab, PagedTable, SearchBox, Field, ErrorNote, StatusPill, fmtDateTime } from './InvUi'
 import { Tabs } from '../commandCenter/kit'
 import { TransfersPanel } from './StockFlows'
 import DateField from '../ui/DateField'
@@ -109,7 +109,7 @@ function LedgerPanel({ scope, can }) {
 /** Movements: the ledger and the transfers that move stock between locations. */
 export default function MovementsSection(props) {
   const { t } = useLanguage()
-  const [tab, setTab] = useState('ledger')
+  const [tab, setTab] = useHubTab(props.tab, props.onTab, ['ledger', 'transfers'], 'ledger')
   return (
     <div className="inv-hub">
       <Tabs label={t('inventory.sections.movements')} value={tab} onChange={setTab} tabs={[

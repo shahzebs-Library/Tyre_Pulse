@@ -51,8 +51,11 @@ describe('Inventory Control Center hub', () => {
     renderHub('register', onSection)
     expect(await screen.findByRole('heading', { name: 'Inventory Control Center' })).toBeTruthy()
     expect(screen.getByText('legacy register')).toBeTruthy()
-    fireEvent.click(screen.getByRole('tab', { name: 'Audit & control' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Audits' }))
     expect(onSection).toHaveBeenCalledWith('audits', null)
+    // The left menu reaches every section too, including ones outside the top tabs.
+    fireEvent.click(screen.getByRole('button', { name: /Master Data/ }))
+    expect(onSection).toHaveBeenCalledWith('locations', null)
   })
 
   it('"Open evidence" lands on the named tab inside the section, and picking a tab reports it back', async () => {
@@ -98,11 +101,16 @@ describe('Inventory Control Center hub', () => {
     expect(screen.queryAllByText('0').length).toBe(0)
   })
 
+  // The old version of this test clicked a group tab whose handler was a no-op,
+  // so it never looked at the Valuation entry. With caps ['view'] the
+  // documented fallback (view_value -> view) legitimately SHOWS Valuation; a
+  // user with no stock capability at all must not see it.
   it('hides Valuation from users without the view_value capability', async () => {
-    auth.caps = ['view']
+    auth.caps = []
     renderHub('overview')
-    fireEvent.click(await screen.findByRole('tab', { name: 'Value & reports' }))
-    expect(screen.queryByRole('tab', { name: 'Valuation' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: /More/ }))
+    expect(screen.getByRole('button', { name: 'Stock classification' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Valuation' })).toBeNull()
   })
 })
 

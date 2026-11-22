@@ -9,7 +9,8 @@
  * Every decision is enforced in the database; the screen shows the refusal.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { Check, X, Link2, Search, Truck, Image as ImageIcon } from 'lucide-react'
+import { Check, X, Link2, Search, Truck, Image as ImageIcon, FileWarning } from 'lucide-react'
+import { Pager } from '../commandCenter/kit'
 import Modal from '../ui/Modal'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { newIdempotencyKey, searchItems } from '../../lib/api/inventory'
@@ -324,6 +325,38 @@ function CorrectionDetail({ row, onClose, onDone, userId, t }) {
   )
 }
 
+/**
+ * Correction rows in the Control Center look: what is wrong, who asked and
+ * when, the status and a Review button. Reviewing opens the detail where the
+ * database decides (a requester can never approve their own request).
+ */
+export function CorrectionRows({ query, t, onReview, empty }) {
+  if (query.error) return <ErrorNote error={query.error} onRetry={query.retry} />
+  if (query.data?.status === 'not_provisioned') return <NotSetUp what={t('inventory.pi.title')} />
+  if (query.loading && !query.data) return <div className="cc-skel" style={{ height: 96 }} aria-busy="true" />
+  const rows = query.data?.rows || []
+  if (!rows.length) return <p className="cc-na">{empty || t('inventory.pi.corr.empty')}</p>
+  return (
+    <ul className="inv-corr-list">
+      {rows.map((r) => (
+        <li key={r.id} className="inv-corr-row">
+          <span className="inv-corr-icon" aria-hidden="true"><FileWarning size={16} /></span>
+          <span className="inv-corr-text">
+            <b>{t(`inventory.pi.topic.${r.topic}`)}</b>
+            <small>{t(`inventory.pi.corr.action.${r.action}`)}{r.reason ? ` · ${r.reason}` : ''}</small>
+            <small>{t('inventory.ui.corrections.requested', { when: fmtDateTime(r.requested_at) })}</small>
+          </span>
+          <StatusPill value={r.status} tone={r.status === 'submitted' ? 'warn' : r.status === 'approved' ? 'good' : 'muted'} label={t(`inventory.pi.corr.status.${r.status}`)} />
+          <button type="button" className="inv-btn-review" onClick={() => onReview(r)}>{t('inventory.ui.corrections.review')}</button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Detail modal for one correction, reused by the Material Master panel. */
+export { CorrectionDetail }
+
 function CorrectionsView({ userId, t }) {
   const [page, setPage] = useState(0)
   const [size, setSize] = useState(25)
@@ -344,21 +377,20 @@ function CorrectionsView({ userId, t }) {
         : { ...base, topic: 'duplicate', new_value: { keep_canonical_id: draft.keep?.canonicalId } }
     return a.run((k) => requestCorrection(payload, k), t('inventory.pi.corr.submitted')).then(() => setStamp((s) => s + 1))
   }
-  const cols = [
-    { key: 'requested_at', header: t('inventory.pi.common.when'), cell: (r) => fmtDateTime(r.requested_at) },
-    { key: 'topic', header: t('inventory.pi.corr.topic'), cell: (r) => t(`inventory.pi.topic.${r.topic}`) },
-    { key: 'action', header: t('inventory.pi.corr.actionCol'), cell: (r) => t(`inventory.pi.corr.action.${r.action}`) },
-    { key: 'reason', header: t('inventory.pi.corr.reason') },
-    { key: 'status', header: t('inventory.pi.common.status'), cell: (r) => <StatusPill value={r.status} tone={r.status === 'submitted' ? 'warn' : r.status === 'approved' ? 'good' : 'muted'} label={t(`inventory.pi.corr.status.${r.status}`)} /> },
-  ]
   return (
     <div className="inv-hub">
-      <SectionCard title={t('inventory.pi.corr.title')} sub={t('inventory.pi.corr.sub')}>
-        <select className="cc-select" value={status} onChange={(e) => { setStatus(e.target.value); setPage(0) }} aria-label={t('inventory.pi.common.status')}>
-          {['submitted', 'approved', 'rejected', 'cancelled', 'all'].map((s) => <option key={s} value={s}>{t(`inventory.pi.corr.status.${s}`)}</option>)}
-        </select>
-        <PagedTable query={q} columns={cols} page={page} pageSize={size} onPage={setPage} onPageSize={(s) => { setSize(s); setPage(0) }}
-          empty={t('inventory.pi.corr.empty')} what={t('inventory.pi.title')} noun={t('inventory.pi.corr.noun')} onRowClick={setOpen} />
+      <SectionCard
+        title={status === 'submitted' && q.data?.status === 'ok' ? t('inventory.ui.corrections.titlePending', { n: q.data.total }) : t('inventory.pi.corr.title')}
+        sub={t('inventory.pi.corr.sub')}
+        action={(
+          <select className="cc-select" value={status} onChange={(e) => { setStatus(e.target.value); setPage(0) }} aria-label={t('inventory.pi.common.status')}>
+            {['submitted', 'approved', 'rejected', 'cancelled', 'all'].map((s) => <option key={s} value={s}>{t(`inventory.pi.corr.status.${s}`)}</option>)}
+          </select>
+        )}>
+        <CorrectionRows query={q} t={t} onReview={setOpen} />
+        {(q.data?.total ?? 0) > size && (
+          <Pager page={page} pageSize={size} total={q.data.total} onPage={setPage} onPageSize={(s) => { setSize(s); setPage(0) }} sizes={[25, 50, 100]} noun={t('inventory.pi.corr.noun')} />
+        )}
         {open && <CorrectionDetail row={open} userId={userId} t={t} onClose={() => setOpen(null)} onDone={() => { setOpen(null); setStamp((s) => s + 1) }} />}
       </SectionCard>
       <SectionCard title={t('inventory.pi.corr.newTitle')} sub={t('inventory.pi.corr.newSub')}>

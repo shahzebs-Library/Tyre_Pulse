@@ -25,11 +25,11 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   second person approves. BLOCKER: ~800 KB cannot go through the MCP SQL tool (~400k tokens); it needs the Supabase CLI,
   which needs the owner to run `npx supabase login` once. Empty staging tables `_bak.book2_items` / `_bak.book2_lines`
   exist for that load. Owner approvers: Anum (d2d43a5f, proposer) + shahzeb Rahman (58787cc7, second approver).
-- **Other branches that may still hold unmerged work** (`git cherry` shows commits not in main; some may be squash-merged
-  already, check before acting): claude/ui-spacing-polish (17), claude/vehicle360-inspection-tyre-map (7),
-  claude/login-focus-colour (3), claude/inventory-web-mockup (2), claude/inventory-flutter-mockup (2),
-  claude/parts-list-all-clickable (2).
-
+- **Branch audit done 2026-11-23: every recent feature branch is already in main.** inventory-center-polish was the only
+  one truly missing (merged as #604). ui-spacing-polish, parts-list-all-clickable, inventory-web-mockup (light theme),
+  inventory-flutter-mockup (yellow accent), login-focus-colour (navy focus) and vehicle360-inspection-tyre-map were all
+  squash-merged (#597-#600 etc.). A diff that won't reverse-apply onto main is NOT proof of missing work: main later
+  restyled the same lines (TpIcon, green accent, no glows). Read hunks before re-merging an old branch.
 ---
 
 # ⚑ 2026-11-22 — WEB INVENTORY CONTROL CENTER RESTYLED TO THE OWNER MOCKUP + MATERIAL MASTER + CONTAINER TEMPLATES + 3D STORE (branch claude/inventory-web-mockup). No migration.

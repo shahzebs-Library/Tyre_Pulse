@@ -34,6 +34,12 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   Send -> `inv_correction_request` / `inv_material_variant_propose`). Live: 12 brand proposals, 0 part-type (all 12 ORIGINAL items
   already have a pending genuine variant). OEM# is a part-number label, NOT genuine. "local" cannot be stored (CHECK allows
   genuine/oes/aftermarket/unknown). TYRE_BRANDS carries misspellings (Westlike, Ericle) -> brand_aliases rows would correct them.
+- **WP1 APPLIED LIVE (owner OK 2026-11-23), migration 20261123200000_wms_wp1_links_oem_norm_brand_aliases.sql:** 3,508 KSA links
+  material_canonical -> material_master in `material_canonical_items` (exact item code; UAE's 726 shared codes deliberately NOT linked,
+  same code = different item per country); 5,533 stock rows now reach Material Master through the link. Trigger
+  `trg_oem_ref_normalize` fills `oem_part_references.oem_part_no_normalized` (upper, letters+digits only = oem_parts_entries rule),
+  so the live unique index now blocks duplicate OEM links (verified rolled back). brand_aliases += westlike->Westlake, ericle->Eracle.
+  Undo SQL is in the migration header. OWNER RULING: part type stays 'unknown' when not stated; NO 'local' value / no CHECK widening.
 - Flaky CI fix: two workforce page tests opened a real realtime WebSocket in jsdom; now stub channel/removeChannel + afterEach cleanup.
 - OPEN decisions (docs/warehouse/00 item 10): single master + link fill; reorder-level policy; brand alias merges; codes for the 43
   rows; source for genuine/local/aftermarket on 1,313 unknown variants; Store Keeper site scopes.

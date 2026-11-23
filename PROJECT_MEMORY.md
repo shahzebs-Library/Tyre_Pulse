@@ -27,6 +27,14 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   BOTH the sidebar and Ctrl+K via `src/components/ui/NavEmoji.jsx`; art in one cached sprite `public/nav-emoji.svg` (170 KB, 58 KB gz),
   rebuilt by `scripts/build-nav-emoji.cjs <icons.json>`. Soft tile `.nav-emoji` in index.css. `src/test/navEmoji.test.js` fails if a
   sidebar page has no emoji or a name is missing from the sprite. Mobile bottom tabs keep line icons.
+- **WP2 review queues (same PR, proposals only, nothing auto-applied):** (a) OEM cross-reference panel at the foot of Material Master
+  (`src/lib/inventory/oemCrossRef.js`, exact normalised part-number match; Accept -> `inv_compat_propose`, second person ->
+  `inv_compat_decide`). Live: 7 of 1,652 manual rows match. DB gap: `inv_compat_propose` never fills `oem_part_no_normalized`, so the
+  live unique index cannot stop duplicate links. (b) Classification tab "Brand and part type" (`src/lib/inventory/variantClassify.js`;
+  Send -> `inv_correction_request` / `inv_material_variant_propose`). Live: 12 brand proposals, 0 part-type (all 12 ORIGINAL items
+  already have a pending genuine variant). OEM# is a part-number label, NOT genuine. "local" cannot be stored (CHECK allows
+  genuine/oes/aftermarket/unknown). TYRE_BRANDS carries misspellings (Westlike, Ericle) -> brand_aliases rows would correct them.
+- Flaky CI fix: two workforce page tests opened a real realtime WebSocket in jsdom; now stub channel/removeChannel + afterEach cleanup.
 - OPEN decisions (docs/warehouse/00 item 10): single master + link fill; reorder-level policy; brand alias merges; codes for the 43
   rows; source for genuine/local/aftermarket on 1,313 unknown variants; Store Keeper site scopes.
 

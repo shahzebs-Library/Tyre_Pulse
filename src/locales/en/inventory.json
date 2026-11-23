@@ -961,7 +961,15 @@
       "linkSub": "Map a country ERP item to the material or variant. Country ERP numbers are kept as they are.",
       "erpSku": "ERP SKU (search)",
       "link": "Link",
-      "linked": "ERP SKU linked."
+      "linked": "ERP SKU linked.",
+      "bulkTitle": "Approve many at once",
+      "bulkSub": "Approves up to 500 proposed items per press, oldest first. Items you proposed yourself are skipped: a different person must approve them.",
+      "bulkFilter": "Only items matching (optional)",
+      "bulkReason": "Why these are new items (needed when duplicates are flagged)",
+      "bulkApprove": "Approve next {n}",
+      "bulkConfirm": "Approve up to {n} proposed items now? Each still passes the normal checks.",
+      "bulkResult": "Approved {done}. Skipped {skipped}. Still waiting: {remaining}.",
+      "bulkSkipReason": "First reason skipped: {reason}"
     },
     "corr": {
       "title": "Master-data corrections",

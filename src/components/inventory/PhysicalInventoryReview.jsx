@@ -15,7 +15,7 @@ import Modal from '../ui/Modal'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { newIdempotencyKey, searchItems } from '../../lib/api/inventory'
 import {
-  listCaptures, mapCapture, listMaterials, listVariants, decideMaterial, decideVariant, linkErpItem, searchMaterials,
+  listCaptures, mapCapture, listMaterials, listVariants, decideMaterial, decideMaterialsBulk, decideVariant, linkErpItem, searchMaterials,
   listCorrections, listCorrectionHistory, requestCorrection, decideCorrection, requestTransfer, listPhotos, proposeVariant,
   listTransferRequests, decideTransferRequest,
 } from '../../lib/api/physicalInventory'
@@ -213,6 +213,46 @@ function DecideRow({ onApprove, onReject, needsReason, t, busy }) {
   )
 }
 
+const BULK_SIZE = 500
+
+/** Approve many proposals per press. The server applies the single-item rules to each one and reports what it skipped. */
+function BulkApprove({ t, onDone }) {
+  const [search, setSearch] = useState('')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState('')
+  const run = async () => {
+    if (!window.confirm(t('inventory.pi.materials.bulkConfirm', { n: BULK_SIZE }))) return
+    setBusy(true); setError(''); setResult(null)
+    try {
+      const r = await decideMaterialsBulk({ decision: 'approve', search, limit: BULK_SIZE, notDuplicateReason: reason })
+      setResult(r)
+      onDone()
+    } catch (x) { setError(toUserMessage(x)) } finally { setBusy(false) }
+  }
+  return (
+    <SectionCard title={t('inventory.pi.materials.bulkTitle')} sub={t('inventory.pi.materials.bulkSub')}>
+      <div className="inv-actions">
+        <input className="inv-input" placeholder={t('inventory.pi.materials.bulkFilter')} aria-label={t('inventory.pi.materials.bulkFilter')}
+          value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input className="inv-input" placeholder={t('inventory.pi.materials.bulkReason')} aria-label={t('inventory.pi.materials.bulkReason')}
+          value={reason} onChange={(e) => setReason(e.target.value)} />
+        <button type="button" className="cc-btn" disabled={busy} onClick={run}>
+          <Check size={14} aria-hidden="true" /> {t('inventory.pi.materials.bulkApprove', { n: BULK_SIZE })}
+        </button>
+      </div>
+      {error && <Note tone="bad">{error}</Note>}
+      {result && (
+        <Note tone={result.skipped ? 'warn' : 'good'}>
+          {t('inventory.pi.materials.bulkResult', { done: result.done, skipped: result.skipped, remaining: result.remaining_proposed })}
+          {result.skipped_detail?.[0]?.reason ? ` ${t('inventory.pi.materials.bulkSkipReason', { reason: result.skipped_detail[0].reason })}` : ''}
+        </Note>
+      )}
+    </SectionCard>
+  )
+}
+
 function MaterialsView({ scope, t }) {
   const [stamp, setStamp] = useState(0)
   const mats = useInvQuery(() => listMaterials({ status: 'proposed', pageSize: 50 }), [stamp])
@@ -230,6 +270,7 @@ function MaterialsView({ scope, t }) {
   if (mats.data?.status === 'not_provisioned') return <NotSetUp what={t('inventory.pi.title')} />
   return (
     <div className="inv-hub">
+      <BulkApprove t={t} onDone={refresh} />
       <SectionCard title={t('inventory.pi.materials.title')} sub={t('inventory.pi.materials.sub')}>
         {mats.error && <ErrorNote error={mats.error} onRetry={mats.retry} />}
         {(mats.data?.rows || []).length === 0 && !mats.loading && <p className="cc-na">{t('inventory.pi.materials.empty')}</p>}

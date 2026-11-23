@@ -1,8 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, cleanup, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('react-chartjs-2', () => ({ Bar: () => null }))
+// The page subscribes to a Supabase realtime channel on mount. The real client
+// opens a WebSocket that can outlive the jsdom environment and surface as an
+// unhandled "WebSocket not available" error after the file finishes, so the
+// channel is replaced with an inert stub. Every other client method is real.
+vi.mock('../lib/supabase', async importOriginal => {
+  const mod = await importOriginal()
+  const channel = { on: () => channel, subscribe: () => channel }
+  mod.supabase.channel = () => channel
+  mod.supabase.removeChannel = vi.fn(() => Promise.resolve('ok'))
+  return mod
+})
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ profile: { id: 'm1', role: 'Manager', organisation_id: 'org1' } }) }))
 const api = vi.hoisted(() => ({
   listWorkforceAssignments: vi.fn(), listWorkforceAssignmentsPage: vi.fn(), getBoardSummary: vi.fn(),
@@ -33,6 +44,9 @@ import { LanguageProvider } from '../contexts/LanguageContext'
 const rows = Object.assign([
   { id: 'a1', title: 'Replace steer tyre', site: 'NHC', status: 'blocked', priority: 'high', assigned_to: 'u1', assigned_by: 'm1', asset_no: 'TM514', tyre_serial: 'YMA1', tyre_position: 'LHF1', operational_record_table: 'tyre_records', created_at: '2026-11-09T06:00:00Z' },
 ], { total: 250 })
+
+// Unmount after the last test too, so no load() or debounce timer outlives the file.
+afterEach(() => cleanup())
 
 beforeEach(() => {
   cleanup()

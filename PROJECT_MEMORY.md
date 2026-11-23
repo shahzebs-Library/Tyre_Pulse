@@ -40,6 +40,16 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   `trg_oem_ref_normalize` fills `oem_part_references.oem_part_no_normalized` (upper, letters+digits only = oem_parts_entries rule),
   so the live unique index now blocks duplicate OEM links (verified rolled back). brand_aliases += westlike->Westlake, ericle->Eracle.
   Undo SQL is in the migration header. OWNER RULING: part type stays 'unknown' when not stated; NO 'local' value / no CHECK widening.
+- **WP3/WP4/WP5 (code only, same PR, no DB writes):** WP3 "Reorder levels" tab in the register (`src/lib/inventory/reorderLevels.js`;
+  site usage only, lead time = material_master.lead_time_days else 30 days (filled on 0 items today); Apply = same stock edit path,
+  needs stock:edit; live 1,735 suggestions). WP4 procurement chain (`src/lib/procurementChain.js`, `api/procurementChain.js`,
+  `components/procurement/`): supplier register, requisition approve -> raise PO, real PO lines via `inv_po_add_line`, receive
+  against PO via `inv_receive_goods`; procure/receive rights are effectively Admin or explicit grant. NOT yet run end to end live.
+  WP5 (`src/lib/inventory/stockFlowRules.js`, StockFlows.jsx): issue/reserve/return linked to job card, release, return issued
+  stock, return transfer to source, partial transfer receipt fixed (a 0 line failed the whole receipt). Material issue slips are
+  documents only (no ledger posting) until DB item 2 in docs/warehouse/05 is approved. Store Keeper site scope IS enforced
+  server-side (_inv_post -> _inv_scope_ok); gap: in-transit stock sits at the destination, so a site-scoped keeper cannot dispatch
+  across sites. Proposed DB SQL (NOT applied): docs/warehouse/04_PROCUREMENT_DB_CHANGES.md, 05_ISSUE_TRANSFER_DB_CHANGES.md.
 - Flaky CI fix: two workforce page tests opened a real realtime WebSocket in jsdom; now stub channel/removeChannel + afterEach cleanup.
 - OPEN decisions (docs/warehouse/00 item 10): single master + link fill; reorder-level policy; brand alias merges; codes for the 43
   rows; source for genuine/local/aftermarket on 1,313 unknown variants; Store Keeper site scopes.

@@ -8,7 +8,7 @@ describe('stock quick-entry item and quantity rules',()=>{
  })
  it('preserves recorded existing stock and explicit units',()=>{
   expect(stockDraft({stock:{id:'s1',custom_data:{stock_item:{condition:'Retread',unit:'SET'}}},unit:'SET'})).toMatchObject({unit:'SET',condition:'Retread'})
-  expect(stockDraft({stock:{id:'legacy'}})).toMatchObject({unit:'',condition:'Unspecified'})
+  expect(stockDraft({stock:{id:'legacy'}})).toMatchObject({unit:'',condition:'Unspecified',unitBasis:'confirm',suggestedUnit:'PCS'})
  })
  it('allows an honest zero count but rejects blank, fractional and negative quantities',()=>{
   const row={key:'x',name:'Tyre',kind:'tyre',unit:'PCS',quantity:'0',bin:'',condition:'New'};const context={site:'A',country:'KSA',mode:'count',reference:''}

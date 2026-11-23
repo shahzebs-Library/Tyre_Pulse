@@ -11,14 +11,64 @@ export function stockUnit(value) {
 export const stockItem = row => row?.custom_data?.stock_item || {}
 export const normalizeStockText = value => String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 
+// Mirrors public.stock_item_kind (database). Part numbers such as
+// 9617234210/0034305981 used to read as a tyre size, so brake boosters and
+// window regulators were offered as tyres; a size now needs clear edges, and
+// named non-tyre assemblies are excluded.
+const NON_TYRE_PART = /\b(brake|clutch|exhaust|intake|relay|butterfly|solenoid|governor|dryer|drier|injector|radiator|gear|pump|hydraulic|steering|suspension|cylinder|piston|compressor|unloader|check valve|safety valve|tipping|tipper)\b/
+const TYRE_SIZE = /(?<![0-9/])\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}(?:\.\d)?(?!\d)|(?<![0-9.])\d{2}\.\d{1,2}\s*[-r]\s*\d{2}(?!\d)|(?<!\d)\d{4}\s*r\s*\d{2}(?!\d)/i
 export function stockKind(description) {
   const d = String(description || '').toLowerCase()
   if (/\b(filter|lubricant|coolant|engine oil|hydraulic oil|labour|labor|service|fitting charge)\b/.test(d)) return null
-  const size = /\d{3}\s*\/\s*\d{2}\s*r?\s*\d{2}|\d{2}\.\d{1,2}\s*[-r]\s*\d{2}|\d{4}\s*r\s*\d{2}/i.test(d)
-  if (/\b(valve|tube|flap|patch|repair kit|nut|stud|glue|cement|gauge|lever|inflator|balancing weight|bead sealer|tyre paste|tire paste|tyre soap|tire soap)\b/.test(d) && (/\b(tyre|tire|wheel|rim)\b/.test(d) || size)) return 'accessory'
+  if (NON_TYRE_PART.test(d)) return null
+  const size = TYRE_SIZE.test(d)
+  if (/\b(valve|tube|flap|patch|repair kit|nut|stud|glue|cement|gauge|lever|inflator|balancing weight|bead sealer|tyre paste|tire paste|tyre soap|tire soap)\b/.test(d) && (/\b(tyre|tire|wheel|rim|tubeless)\b/.test(d) || size)) return 'accessory'
   if (/\b(rim|wheel disc)\b/.test(d)) return 'rim'
   if (size || /\b(tyre|tire)\b/.test(d)) return 'tyre'
   return null
+}
+
+/** Pack size written in the description, e.g. "260 ML" or "650 G". */
+export function packSizeFrom(description) {
+  const m = String(description || '').match(/(\d+(?:\.\d+)?)\s*(ml|ltrs?|litres?|liters?|l|gms?|grams?|g|kgs?)\b/i)
+  if (!m) return ''
+  const unit = m[2].toLowerCase()
+  const label = /^m/.test(unit) ? 'ML' : /^l/.test(unit) ? 'L' : /^k/.test(unit) ? 'KG' : 'G'
+  return `${m[1]} ${label}`
+}
+
+/**
+ * Suggest a unit of measure for a stock item, with the reason shown to the
+ * user. Order: a unit recorded on the item, a unit already used for the same
+ * item in stock, then a rule from what the item is. Never silent: the result
+ * always says where the unit came from, and the user can change it.
+ * Units are limited to what the stock ledger accepts (PCS SET PAIR BOX KG L);
+ * quantities are whole numbers, so tins and tubes are counted per piece.
+ * @returns {{unit:string, basis:'recorded'|'learned'|'rule', reason:string, pack:string}}
+ */
+export function suggestStockUnit({ name = '', kind = null, unit = '', learnedUnit = '' } = {}) {
+  const pack = packSizeFrom(name)
+  const recorded = stockUnit(unit)
+  if (recorded) return { unit: recorded, basis: 'recorded', reason: 'Unit recorded on this item.', pack }
+  const learned = stockUnit(learnedUnit)
+  if (learned) return { unit: learned, basis: 'learned', reason: 'Same unit as this item already in stock.', pack }
+  const d = String(name || '').toLowerCase()
+  const k = kind || stockKind(name)
+  if (/\bpairs?\b/.test(d)) return { unit: 'PAIR', basis: 'rule', reason: 'The description says pair.', pack }
+  if (/\b(box|boxes|pkt|packet|pack|carton|ctn)\b/.test(d)) return { unit: 'BOX', basis: 'rule', reason: 'Supplied in boxes or packets.', pack }
+  if (/\b(kit|set)\b/.test(d)) return { unit: 'SET', basis: 'rule', reason: 'Supplied as a kit or set.', pack }
+  if (k === 'tyre') return { unit: 'PCS', basis: 'rule', reason: 'Tyres are counted one by one.', pack }
+  if (k === 'rim') return { unit: 'PCS', basis: 'rule', reason: 'Rims are counted one by one.', pack }
+  if (/\b(glue|cement|sealer|paste|soap|solution)\b/.test(d)) {
+    if (pack) return { unit: 'PCS', basis: 'rule', reason: `Counted per tin or tube (${pack} each).`, pack }
+    if (/\b(paste|soap)\b/.test(d)) return { unit: 'KG', basis: 'rule', reason: 'Bulk paste is weighed. Check the pack.', pack }
+    return { unit: 'PCS', basis: 'rule', reason: 'Counted per tin or tube. Pack size not stated, check it.', pack }
+  }
+  if (/\bbalancing weight\b/.test(d)) {
+    if (/\bkgs?\b/.test(d) && !/\d+\s*g\b/.test(d)) return { unit: 'KG', basis: 'rule', reason: 'Loose weights are weighed.', pack }
+    return { unit: 'PCS', basis: 'rule', reason: 'Weights are counted one by one.', pack }
+  }
+  return { unit: 'PCS', basis: 'rule', reason: 'Counted one by one.', pack }
 }
 
 export function tyreSizeFrom(description) {
@@ -34,7 +84,7 @@ export function existingStockOptions(records, site, query) {
       key: `stock:${r.id}`, source: 'stock', source_id: r.id, name: r.description,
       code: stockItem(r).code || '', kind: stockItem(r).kind || stockKind(r.description),
       brand: r.brand || '', size: r.tyre_size || tyreSizeFrom(r.description),
-      unit: stockItem(r).unit || '', stock: r, label: 'Existing stock',
+      unit: stockItem(r).unit || stockUnit(r.uom) || '', stock: r, label: 'Existing stock',
     }))
 }
 
@@ -51,12 +101,19 @@ export function mergeStockSuggestions(local, remote) {
 
 export function stockDraft(option) {
   const meta = stockItem(option.stock)
+  const guess = suggestStockUnit({ name: option.name, kind: option.kind, unit: option.unit, learnedUnit: option.learned_unit })
   return {
     ...option, brand: option.brand || brandOf(option.name) || '', rowKey: option.key || crypto.randomUUID(),
     stock_id: option.stock?.id || null,
     expected_qty: option.stock?.stock_qty ?? null,
     expected_updated_at: option.stock?.updated_at || null,
-    quantity: '', unit: stockUnit(option.unit) || (option.stock ? '' : 'PCS'),
+    // A balance already on the shelf is never given an assumed unit: a wrong
+    // unit would misstate it. The rule-based guess is offered for one-click
+    // confirmation instead. New items take the suggestion, shown with why.
+    ...(option.stock && guess.basis === 'rule'
+      ? { unit: '', suggestedUnit: guess.unit, unitBasis: 'confirm', unitReason: guess.reason }
+      : { unit: guess.unit, unitBasis: guess.basis, unitReason: guess.reason }),
+    quantity: '', pack: guess.pack,
     condition: meta.condition || (option.stock ? 'Unspecified' : 'New'),
     bin: meta.bin || '', size: option.size || tyreSizeFrom(option.name),
   }

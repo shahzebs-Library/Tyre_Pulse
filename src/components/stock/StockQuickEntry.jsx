@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { listSites } from '../../lib/api/sites'
 import { searchStockItems, saveStockEntry } from '../../lib/api/stockQuickEntry'
-import { stockDraft, stockItem, STOCK_KIND_LABELS, existingStockOptions, mergeStockSuggestions, entryErrors, entryPayload } from '../../lib/stockQuickEntry'
+import { stockDraft, stockItem, STOCK_KIND_LABELS, existingStockOptions, mergeStockSuggestions, entryErrors, entryPayload, suggestStockUnit } from '../../lib/stockQuickEntry'
 import { todayStr } from '../../lib/stockManagementAnalytics'
 import { toUserMessage } from '../../lib/safeError'
 import './stockWorkspace.css'
@@ -40,6 +40,8 @@ export default function StockQuickEntry({ records, initialSite = '', onClose, on
   const [errors, setErrors] = useState([])
   const [manualOpen, setManualOpen] = useState(false)
   const [manual, setManual] = useState(emptyManual)
+  const [manualUnitTouched, setManualUnitTouched] = useState(false)
+  const manualGuess = useMemo(() => suggestStockUnit({ name: manual.name, kind: manual.kind }), [manual.name, manual.kind])
   const request = useRef(null)
   const alive = useRef(true)
   const searchRef = useRef(null)
@@ -103,9 +105,10 @@ export default function StockQuickEntry({ records, initialSite = '', onClose, on
   }
   function addManual(e) {
     e.preventDefault()
-    if (!manual.name.trim() || !manual.unit) return
-    choose({ ...manual, source: 'manual', source_id: null, key: `manual:${crypto.randomUUID()}`, label: 'Manual item' })
-    setManualOpen(false); setManual(emptyManual)
+    const unit = manualUnitTouched ? manual.unit : manualGuess.unit
+    if (!manual.name.trim() || !unit) return
+    choose({ ...manual, unit, source: 'manual', source_id: null, key: `manual:${crypto.randomUUID()}`, label: 'Manual item' })
+    setManualOpen(false); setManual(emptyManual); setManualUnitTouched(false)
   }
   const backToEntry = () => { setReview(false); setConfirmed(false); setErrors([]); request.current = null }
   const current = selected || rows[rows.length - 1]
@@ -140,7 +143,7 @@ export default function StockQuickEntry({ records, initialSite = '', onClose, on
             <p className="stock-help">Searches existing stock, the MIS / ERP item catalogue and DTR tyre records. Only tyre and rim related items are suggested.</p>
           </div>
           <aside className="stock-item-preview" aria-label="Selected item details">
-            <strong>Selected item</strong>{current ? <><h2>{current.code || current.name}</h2><p>{current.code ? current.name : ''}</p><dl><div><dt>Brand</dt><dd>{current.brand || 'Not recorded'}</dd></div><div><dt>Type</dt><dd>{STOCK_KIND_LABELS[current.kind] || 'Confirm type'}</dd></div><div><dt>Unit</dt><dd>{current.unit || 'Confirm below'}</dd></div></dl><span className="stock-source">{sourceLabel(current.source)}</span>{current.reference && <p className="stock-help">Source reference: {current.reference}{current.date ? ` · ${current.date}` : ''}</p>}<p className="stock-help">DTR means Daily Tyre Report. Issued or fitted tyres are not added to stock automatically.</p></> : <p>Choose a suggestion to fill the item details automatically.</p>}
+            <strong>Selected item</strong>{current ? <><h2>{current.code || current.name}</h2><p>{current.code ? current.name : ''}</p><dl><div><dt>Brand</dt><dd>{current.brand || 'Not recorded'}</dd></div><div><dt>Type</dt><dd>{STOCK_KIND_LABELS[current.kind] || 'Confirm type'}</dd></div><div><dt>Size</dt><dd>{current.size || 'Not recorded'}</dd></div><div><dt>Unit</dt><dd>{current.unit ? `${current.unit}${current.pack ? ` (${current.pack} each)` : ''}` : 'Confirm below'}{current.unitReason && <small className="stock-unit-why">{current.unitReason}</small>}</dd></div></dl><span className="stock-source">{sourceLabel(current.source)}</span>{current.reference && <p className="stock-help">Source reference: {current.reference}{current.date ? ` · ${current.date}` : ''}</p>}<p className="stock-help">DTR means Daily Tyre Report. Issued or fitted tyres are not added to stock automatically.</p></> : <p>Choose a suggestion to fill the item details automatically.</p>}
           </aside>
         </div>
         <p className="stock-notice"><Lock size={16} aria-hidden="true" />Item details fill automatically. Check them and enter only what you physically {mode === 'count' ? 'counted' : 'received'}.</p>
@@ -156,7 +159,7 @@ export default function StockQuickEntry({ records, initialSite = '', onClose, on
           return <tr key={r.rowKey}><td><strong>{r.code || r.name}</strong><span>{r.code ? r.name : r.brand}</span><small>{sourceLabel(r.source)}{r.source === 'dtr' ? ' · Confirm item match' : ''}</small></td><td>{r.stock_id ? `${before} ${r.unit || 'units'}` : 'No opening count'}</td>
             <td>{review ? <strong>{r.quantity} {r.unit}</strong> : <input type="number" min={mode === 'count' ? 0 : 1} step="1" aria-label={`${mode === 'count' ? 'Physical count' : 'Quantity received'} for ${r.name}`} value={r.quantity} onChange={e => update(i, { quantity: e.target.value })} />}</td>
             <td><span className={impact < 0 ? 'stock-difference-warning' : 'stock-difference'}>{impact === null ? 'Enter quantity' : `${mode === 'count' && impact > 0 ? '+' : ''}${impact} ${r.unit || ''}`}</span></td>
-            <td><select aria-label={`Unit for ${r.name}`} value={r.unit} disabled={review || !!stockItem(r.stock).unit} onChange={e => update(i, { unit: e.target.value })}><option value="">Confirm unit</option>{UNITS.map(u => <option key={u}>{u}</option>)}</select></td>
+            <td>{review ? <strong>{r.unit}</strong> : <select aria-label={`Unit for ${r.name}`} aria-describedby={`unit-why-${r.rowKey}`} value={r.unit} disabled={!!stockItem(r.stock).unit} onChange={e => update(i, { unit: e.target.value, unitBasis: 'chosen', unitReason: e.target.value ? 'Chosen by you.' : '' })}><option value="">Confirm unit</option>{UNITS.map(u => <option key={u}>{u}</option>)}</select>}{r.unitReason && <small id={`unit-why-${r.rowKey}`} className={`stock-unit-why${r.unitBasis === 'rule' || r.unitBasis === 'confirm' ? ' is-suggested' : ''}`}>{r.unitBasis === 'rule' ? 'Suggested: ' : ''}{r.unitBasis === 'confirm' ? `No unit on record. Suggested ${r.suggestedUnit}: ` : ''}{r.unitReason}{r.pack && r.unitBasis !== 'rule' && r.unitBasis !== 'confirm' ? ` ${r.pack} each.` : ''}</small>}{!review && r.unitBasis === 'confirm' && !r.unit && <button type="button" className="stock-link stock-unit-use" onClick={() => update(i, { unit: r.suggestedUnit, unitBasis: 'chosen', unitReason: 'Confirmed by you.' })}>Use {r.suggestedUnit}</button>}</td>
             <td><select aria-label={`Condition for ${r.name}`} value={r.condition} disabled={review || !!r.stock_id} onChange={e => update(i, { condition: e.target.value })}>{CONDITIONS.map(c => <option key={c}>{c}</option>)}</select></td>
             <td><input aria-label={`Bin for ${r.name}`} value={r.bin} maxLength={80} disabled={review || !!r.stock_id} onChange={e => update(i, { bin: e.target.value })} /></td>
             {!review && <td><button type="button" className="stock-remove" aria-label={`Remove ${r.name}`} onClick={() => { setRows(prev => prev.filter((_, index) => index !== i)); if (selected?.rowKey === r.rowKey) setSelected(null) }}><Trash2 size={17} /></button></td>}</tr>
@@ -178,7 +181,8 @@ export default function StockQuickEntry({ records, initialSite = '', onClose, on
       <p>Use this when the item is not in MIS / ERP or DTR. Item details alone do not create a stock balance.</p>
       <label>Category<select value={manual.kind} onChange={e => setManual(r => ({ ...r, kind: e.target.value }))}>{Object.entries(STOCK_KIND_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
       <label>Description *<input required maxLength={500} value={manual.name} onChange={e => setManual(r => ({ ...r, name: e.target.value }))} /></label>
-      <div className="stock-entry-context"><label>ERP item code (only if known)<input maxLength={100} value={manual.code} onChange={e => setManual(r => ({ ...r, code: e.target.value }))} /></label><label>Size<input maxLength={80} value={manual.size} onChange={e => setManual(r => ({ ...r, size: e.target.value }))} /></label><label>Brand (optional)<input maxLength={80} value={manual.brand} onChange={e => setManual(r => ({ ...r, brand: e.target.value }))} /></label><label>Unit *<select required value={manual.unit} onChange={e => setManual(r => ({ ...r, unit: e.target.value }))}><option value="">Confirm unit</option>{UNITS.map(u => <option key={u}>{u}</option>)}</select></label></div>
+      <div className="stock-entry-context"><label>ERP item code (only if known)<input maxLength={100} value={manual.code} onChange={e => setManual(r => ({ ...r, code: e.target.value }))} /></label><label>Size<input maxLength={80} value={manual.size} onChange={e => setManual(r => ({ ...r, size: e.target.value }))} /></label><label>Brand (optional)<input maxLength={80} value={manual.brand} onChange={e => setManual(r => ({ ...r, brand: e.target.value }))} /></label><label>Unit *<select required value={manualUnitTouched ? manual.unit : manualGuess.unit} aria-describedby="manual-unit-why" onChange={e => { setManualUnitTouched(true); setManual(r => ({ ...r, unit: e.target.value })) }}><option value="">Confirm unit</option>{UNITS.map(u => <option key={u}>{u}</option>)}</select></label></div>
+      <p id="manual-unit-why" className="stock-unit-why" role="status">Unit: {manualUnitTouched ? 'chosen by you.' : `suggested ${manualGuess.unit}. ${manualGuess.reason}`}</p>
       <p className="stock-help">Without an ERP code this remains a manual item. It does not change financial classifications or historical expenses.</p><button type="submit" className="btn-primary">Add item to count</button>
     </form></Modal>
     <span className="sr-only">Stock entry for {profile?.full_name || 'current user'}</span>

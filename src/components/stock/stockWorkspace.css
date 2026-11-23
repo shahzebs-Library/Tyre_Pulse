@@ -84,3 +84,8 @@ html.light .stock-mode button[aria-pressed="true"] { color: #fff; }
  .stock-entry-footer button { padding-inline: 10px; font-size: 12px; }
  .stock-suggestions button { flex-wrap: wrap; }
 }
+/* Why a unit was filled in: recorded, learned from stock, chosen, or suggested. */
+.stock-unit-why { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; color: var(--text-muted); max-width: 200px; white-space: normal; }
+.stock-unit-why.is-suggested { color: var(--stock-green); }
+.stock-item-preview dd .stock-unit-why { max-width: none; }
+.stock-unit-use { margin-top: 4px; font-size: 12px; }

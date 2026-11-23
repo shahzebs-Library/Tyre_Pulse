@@ -183,6 +183,25 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 - **Loop 18 (Flutter) — DONE.** Steps 1-2 merged (closing-role gate + `flutter-release-play.yml` `APP_ENV=production`/Sentry pin); step 3 `stock_status` derive APPLIED LIVE this session (`20261112113000`), which was the last deferred piece. No Loop 18 remainder.
 - **STILL OPEN (Wave 2):** loop 13 (running life / fitmentCpk — the 3 helper callers merged #495; `continuousImprovementAnalytics.lifeKmOf` migrated to `fitmentKm` (#497, it was a DEAD export — only its test imported it, computeMetrics/meanLifeKm already use the lifetime path — so ZERO live-visible delta, pruned from the scan backlog). REMAINING = the 10-file KM_DIFF/CPK_DIVIDE scan backlog in `cpkSourceScan.test.js`: advancedAnalyticsAnalytics, fuelEfficiencyAnalytics, tyreBay, VehicleHistory [KM_DIFF] + anomalyEngine, fleetRisk, tyreBay, tyreScrapView, UploadData [CPK_DIVIDE]. **EVERY remaining file is LIVE-WIRED to a displayed number** (failure-km buckets, fuel monthly-km estimate, per-vehicle avgKm, scrap/anomaly/risk CPK), so each is a reviewed owner-visible number-change pass that needs a live before→after like #495's 302/9 — DO NOT ship them blind while Supabase MCP is down; produce the live delta when it reconnects. The labelled per-stint uses in tyreBay/analyticsEngine stay.), 15 (edge-fn redeploys — code merged #490, deploy deferred: needs authenticated `supabase functions deploy` or a CI deploy job), 19 (ops hygiene); re-run Loop 16; HELD items from Wave 1 (F-H-01/02 Flutter offline sync = reserved wiring files, human only; F-K-04 profiles PII slice; mixer km cap 80k-vs-100k owner decision). **#2 workshop_status reconcile = DONE (draft retired, see above).**
 
+# ⚑ SESSION 2026-11-23 (later) — STOCK POSTED VIA OWNER OVERRIDE, MATERIAL MASTER, PHONE COLOURS, ICONS. Next free migration after 20261123160000.
+- **Book2 stock is LIVE**: 11 opening batches approved, 5,533 lines posted, 3,508 materials active. Owner ruled "I don't want approval things" for their own load.
+  THREE locks enforce the two-person rule and all three had to allow it: (1) `_inv_opening_batch_decide` / `inv_material_canonical_decide`
+  preparer=approver check, (2) `inv_gate_opening_approve` trigger -> `_inv_approval_consume` (needs an approved `inventory_approval_requests`
+  row), (3) CHECKs `opening_balance_batches_sod_chk` + `material_canonical_check`. Override = `inv_owner_override_post(reason, limit)`:
+  super admin only, reason required, sets tx-local `inv.owner_override`, recorded under the owner's OWN id with note "Owner override: ...",
+  logged to system_logs. CHECK exception only matches that note prefix. Everyone else still needs a second person.
+  Migration file `supabase/migrations/20261123160000_inv_owner_override.sql`. The auto-mode classifier blocks this kind of change; it ran
+  only after the owner switched to Ask-permissions mode and clicked Allow.
+- **"Original"/"ORG" in a description = OEM (owner).** Only 3 items say it; their variants are `genuine` (20 genuine total). The `-O`
+  code suffix is on 3,484 of 3,508 items incl. uniforms and wrenches, so it is NOT an OEM marker. Never infer genuine from `-O`.
+- PR #606: Material Master (brand, part type, posted vs pending stock), Inventory filters/dates/colours, saved themes
+  (`profiles.ui_preferences`, applied live). Posted stock links by item_code because `material_canonical_items` is EMPTY.
+- PR #607 Flutter palette (owner screenshots): dark was too black and cards did not stand out; light mint read too green. Now light =
+  grey canvas #E7EAE9 + white cards, dark = charcoal #15181C + grey cards #272B32, yellow dark action kept. Draft #596 "Porcelain"
+  conflicts with main and is superseded by this; do not merge it blind.
+- Icons: owner rejected plain lucide in coloured tiles as "too basic"; wants researched, richer icons. Preview `docs/icon-preview.html`.
+- Disk was FULL (ENOSPC) mid-session: freed npm cache + dist only. Owner rule: never delete anything unmerged.
+
 # ⚑ TWO SESSIONS WORK THIS REPO IN PARALLEL (owner, 2026-10-06). EVERY SESSION FOLLOWS THIS.
 - One session works the APP (`src/`, e.g. branch claude/modest-hopper-5bnq8c), another the MARKETING site (`marketing/`,
   branch claude/relaxed-planck-ur3ji5). Either can merge to main at any time without the other seeing it.

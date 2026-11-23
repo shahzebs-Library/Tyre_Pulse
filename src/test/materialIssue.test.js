@@ -645,7 +645,7 @@ describe('StoreMaterialIssue page renders', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByText('Issue register').length).toBeGreaterThan(0))
     fireEvent.click(screen.getAllByRole('button').find((b) => b.textContent?.trim() === 'Raise an issue'))
-    await waitFor(() => expect(screen.getByText('Stock availability is not checked when recording an issue.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Records the slip only: it does not take stock off the shelf. Issue stock in Stock, Receiving.')).toBeTruthy())
     expect(screen.queryByText(/stock is recorded by site and description/i)).toBeNull()
   })
 

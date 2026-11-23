@@ -36,6 +36,7 @@ import {
 import { sanitizeSearchTerm, escapeLike } from '../searchFilter'
 import { sanitizeCounterLines } from '../inventory/auditView'
 import { CUSTODY_STATES } from '../inventory/tyreInventoryView'
+import { receivableLines } from '../inventory/stockFlowRules'
 
 export const NOT_SET_UP_CODE = 'INV_NOT_PROVISIONED'
 export const NOT_SET_UP_MESSAGE = 'This part of inventory is not set up yet.'
@@ -1082,11 +1083,50 @@ export function dispatchTransfer({ fromLocationId, toLocationId, lines, remarks 
 
 /** inv_transfer_receive: received qty per line (a short receipt stays in transit). */
 export function receiveTransfer({ transferId, lines }, key) {
-  const clean = (lines || []).filter((l) => l.line_id && l.received_qty !== '' && l.received_qty != null && Number(l.received_qty) >= 0)
+  // Only lines with a quantity above zero are sent. The server refuses a zero on
+  // any line, so sending a not-yet-arrived line at 0 used to fail the whole
+  // receipt. A line left out simply stays in transit.
+  const clean = receivableLines(lines)
   if (!transferId || !clean.length) return Promise.reject(new ServiceError('Enter the received quantity for at least one line.', 'INV_NO_LINES'))
   return rpcWrite('inv_transfer_receive', {
     transfer_id: transferId,
     lines: clean.map((l) => ({ line_id: l.line_id, received_qty: Number(l.received_qty), condition: l.condition || 'good', remarks: l.remarks || null })),
+  }, key)
+}
+
+/**
+ * inv_transfer_return_remaining: send what is still in transit back to the
+ * source location (both legs posted: out of transit, into the source). With no
+ * lines, every remaining quantity returns. A reason is required by the server.
+ */
+export function returnTransferRemaining({ transferId, reason, lines }, key) {
+  if (!transferId) return Promise.reject(new ServiceError('Choose a transfer.', 'INV_NO_TRANSFER'))
+  if (!String(reason || '').trim()) return Promise.reject(new ServiceError('Give a reason for returning the transfer.', 'INV_NO_REASON'))
+  const picked = Array.isArray(lines) ? lines.filter((l) => l.line_id && qtyOk(l.qty)).map((l) => ({ line_id: l.line_id, qty: Number(l.qty) })) : []
+  return rpcWrite('inv_transfer_return_remaining', {
+    transfer_id: transferId, reason: String(reason).trim(), ...(picked.length ? { lines: picked } : {}),
+  }, key)
+}
+
+/** inv_release: give back reserved stock (all of what is left when qty is blank). */
+export function releaseReservation({ reservationId, qty }, key) {
+  if (!reservationId) return Promise.reject(new ServiceError('There is no reservation to release.', 'INV_NO_RESERVATION'))
+  if (qty !== '' && qty != null && !qtyOk(qty)) return Promise.reject(new ServiceError('Choose a quantity above zero.', 'INV_BAD_QTY'))
+  return rpcWrite('inv_release', { reservation_id: reservationId, qty: qtyOk(qty) ? Number(qty) : null }, key)
+}
+
+/**
+ * Return issued stock to the shelf (movement_type issue_return) through
+ * inv_post_movement. Linked to the job card it came back from. A return carries
+ * no assumed cost: without a unit cost the units come back at unknown cost and
+ * open a cost reconciliation, never a guessed value.
+ */
+export function returnIssuedStock({ stockId, qty, reason, sourceDocType, sourceDocId, referenceNo }, key) {
+  if (!stockId || !qtyOk(qty)) return Promise.reject(new ServiceError('Choose a stock line and a quantity above zero.', 'INV_BAD_QTY'))
+  if (!String(reason || '').trim()) return Promise.reject(new ServiceError('Give a reason for the return.', 'INV_NO_REASON'))
+  return rpcWrite('inv_post_movement', {
+    stock_id: stockId, movement_type: 'issue_return', qty_change: Number(qty), reason: String(reason).trim(),
+    reference_no: referenceNo || null, source_doc_type: sourceDocType || 'issue_return', source_doc_id: sourceDocId || null,
   }, key)
 }
 

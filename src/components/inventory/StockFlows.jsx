@@ -9,13 +9,16 @@
  * by the server (missing permission, wrong scope) is shown as written.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { PackageCheck, Lock, PackageMinus, Truck, Plus, Trash2, Inbox } from 'lucide-react'
+import { PackageCheck, Lock, PackageMinus, Truck, Plus, Trash2, Inbox, Unlock, Undo2 } from 'lucide-react'
 import SideDrawer from '../ui/SideDrawer'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useAuth } from '../../contexts/AuthContext'
 import {
   receiveGoods, reserveStock, issueStock, dispatchTransfer, receiveTransfer, listTransfers, listLocations,
-  listBalances, searchItems, newIdempotencyKey, listReceiptSources,
+  listBalances, searchItems, newIdempotencyKey, listReceiptSources, releaseReservation, returnIssuedStock,
+  returnTransferRemaining,
 } from '../../lib/api/inventory'
+import { issueDocFields, issueShortfall, receivableLines, overReceived, crossSiteOutOfScope } from '../../lib/inventory/stockFlowRules'
 import { openTransferLines, movedSplit } from '../../lib/inventory/integrationView'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
@@ -209,27 +212,58 @@ export function ReceiveGoodsPanel({ scope, can }) {
 export function ReserveIssuePanel({ scope, can }) {
   const { t } = useLanguage()
   const [stock, setStock] = useState(null)
-  const [form, setForm] = useState(() => ({ qty: '', doc: '', reason: '', reservationId: '', sourceReceipt: null, reserveKey: newIdempotencyKey(), issueKey: newIdempotencyKey() }))
+  const [form, setForm] = useState(() => ({
+    qty: '', doc: '', reason: '', reservationId: '', reservationLeft: 0, sourceReceipt: null,
+    reserveKey: newIdempotencyKey(), issueKey: newIdempotencyKey(), releaseKey: newIdempotencyKey(), returnKey: newIdempotencyKey(),
+  }))
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
   const [result, setResult] = useState(null)
   if (!can('issue')) return null
+  const KEY = { reserve: 'reserveKey', issue: 'issueKey', release: 'releaseKey', return: 'returnKey' }
+  // A job card typed here is recorded as the movement's source document, so the
+  // issue (or return) is linked to the job card, not only mentioned in the reference.
+  const doc = issueDocFields(form.doc)
+  const shortfall = issueShortfall({ stock, qty: form.qty, reservedForMe: form.reservationId ? form.reservationLeft : 0 })
   const run = async (kind) => {
     setBusy(kind); setErr(''); setResult(null)
     try {
-      const res = kind === 'reserve'
-        ? await reserveStock({ stockId: stock?.id, qty: form.qty, sourceDocType: 'job_card', sourceDocId: form.doc || null }, form.reserveKey)
-        : await issueStock({ stockId: stock?.id, qty: form.qty, reservationId: form.reservationId || null, reason: form.reason || null, referenceNo: form.doc || null, sourceReceiptMovementId: form.sourceReceipt || null }, form.issueKey)
+      let res
+      if (kind === 'reserve') {
+        res = await reserveStock({ stockId: stock?.id, qty: form.qty, sourceDocType: 'job_card', sourceDocId: doc.sourceDocId }, form.reserveKey)
+      } else if (kind === 'issue') {
+        res = await issueStock({
+          stockId: stock?.id, qty: form.qty, reservationId: form.reservationId || null, reason: form.reason || null,
+          referenceNo: doc.referenceNo, sourceDocType: doc.sourceDocType, sourceDocId: doc.sourceDocId, sourceReceiptMovementId: form.sourceReceipt || null,
+        }, form.issueKey)
+      } else if (kind === 'release') {
+        res = await releaseReservation({ reservationId: form.reservationId }, form.releaseKey)
+      } else {
+        res = await returnIssuedStock({
+          stockId: stock?.id, qty: form.qty, reason: form.reason, referenceNo: doc.referenceNo,
+          sourceDocType: doc.sourceDocType, sourceDocId: doc.sourceDocId,
+        }, form.returnKey)
+      }
       setResult(res || { status: 'posted' })
-      if (kind === 'reserve' && res?.reservation_id) setForm((f) => ({ ...f, reservationId: res.reservation_id }))
-      setForm((f) => ({ ...f, [kind === 'reserve' ? 'reserveKey' : 'issueKey']: newIdempotencyKey() }))
+      setForm((f) => {
+        const next = { ...f, [KEY[kind]]: newIdempotencyKey() }
+        if (kind === 'reserve' && res?.reservation_id && res.status !== 'refused_shortage') {
+          next.reservationId = res.reservation_id
+          next.reservationLeft = Number(res.qty || f.qty) || 0
+        }
+        if (kind === 'release') { next.reservationId = ''; next.reservationLeft = 0 }
+        if (kind === 'issue' && f.reservationId && res?.status !== 'refused_shortage') {
+          next.reservationLeft = Math.max(0, (Number(f.reservationLeft) || 0) - (Number(f.qty) || 0))
+        }
+        return next
+      })
     } catch (e) { setErr(toUserMessage(e)) } finally { setBusy('') }
   }
   return (
     <SectionCard title={t('inventory.flows.reserveIssueTitle')} sub={t('inventory.flows.reserveIssueSub')}>
       <div className="inv-hub" style={{ gap: 10 }}>
         <div className="inv-form">
-          <StockPicker label={t('inventory.flows.stockLine')} value={stock} onPick={(s) => { setStock(s); setForm((f) => ({ ...f, sourceReceipt: null })) }} scope={scope} />
+          <StockPicker label={t('inventory.flows.stockLine')} value={stock} onPick={(s) => { setStock(s); setForm((f) => ({ ...f, sourceReceipt: null, reservationId: '', reservationLeft: 0 })) }} scope={scope} />
           <Field label={t('inventory.flows.qty')}><input className="inv-input inv-num" type="number" min="0" step="any" value={form.qty} onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))} /></Field>
           <Field label={t('inventory.flows.document')}><input className="inv-input" maxLength={80} value={form.doc} placeholder="GCKR/JC/..." onChange={(e) => setForm((f) => ({ ...f, doc: e.target.value }))} /></Field>
           <Field label={t('inventory.movements.reason')}><input className="inv-input" maxLength={200} value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))} /></Field>
@@ -241,11 +275,17 @@ export function ReserveIssuePanel({ scope, can }) {
             {form.reservationId && <> | {t('inventory.flows.reservationRef')}: <span className="inv-mono">{String(form.reservationId).slice(0, 8)}</span></>}
           </p>
         )}
+        <p className="cc-card-sub">{doc.sourceDocId ? t('inventory.flows.linkedToJobCard', { doc: doc.sourceDocId }) : t('inventory.flows.noJobCard')}</p>
+        {shortfall && <Note tone="warn">{t('inventory.flows.shortfallWarn', { requested: formatQty(shortfall.requested), available: formatQty(shortfall.available) })}</Note>}
         <div className="inv-actions">
-          <button type="button" className="cc-btn-ghost" disabled={!!busy} onClick={() => run('reserve')}><Lock size={14} aria-hidden="true" /> {busy === 'reserve' ? t('inventory.actions.saving') : t('inventory.flows.reserve')}</button>
-          <button type="button" className="cc-btn-primary" disabled={!!busy} onClick={() => run('issue')}><PackageMinus size={14} aria-hidden="true" /> {busy === 'issue' ? t('inventory.actions.saving') : t('inventory.flows.issue')}</button>
+          <button type="button" className="cc-btn-ghost" disabled={!!busy || !stock} onClick={() => run('reserve')}><Lock size={14} aria-hidden="true" /> {busy === 'reserve' ? t('inventory.actions.saving') : t('inventory.flows.reserve')}</button>
+          {form.reservationId && (
+            <button type="button" className="cc-btn-ghost" disabled={!!busy} onClick={() => run('release')}><Unlock size={14} aria-hidden="true" /> {busy === 'release' ? t('inventory.actions.saving') : t('inventory.flows.release')}</button>
+          )}
+          <button type="button" className="cc-btn-ghost" disabled={!!busy || !stock || !form.reason.trim()} title={form.reason.trim() ? undefined : t('inventory.flows.returnNeedsReason')} onClick={() => run('return')}><Undo2 size={14} aria-hidden="true" /> {busy === 'return' ? t('inventory.actions.saving') : t('inventory.flows.returnToStock')}</button>
+          <button type="button" className="cc-btn-primary" disabled={!!busy || !stock} onClick={() => run('issue')}><PackageMinus size={14} aria-hidden="true" /> {busy === 'issue' ? t('inventory.actions.saving') : t('inventory.flows.issue')}</button>
         </div>
-        <p className="cc-card-sub">{t('inventory.flows.noNegative')}</p>
+        <p className="cc-card-sub">{t('inventory.flows.noNegative')} {t('inventory.flows.returnUnvalued')}</p>
         <ResultNote result={result} />
         {err && <ErrorNote error={err} />}
       </div>
@@ -257,6 +297,8 @@ const TRANSFER_TONE = { dispatched: 'info', in_transit: 'info', partially_receiv
 
 export function TransfersPanel({ scope, can }) {
   const { t } = useLanguage()
+  const { profile, isSuperAdmin } = useAuth() || {}
+  const isAdmin = !!isSuperAdmin || profile?.role === 'Admin'
   const locs = useLocations(scope)
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(25)
@@ -268,6 +310,7 @@ export function TransfersPanel({ scope, can }) {
   }, [locs.rows])
   const [dispatch, setDispatch] = useState(null)
   const [receiving, setReceiving] = useState(null)
+  const [returning, setReturning] = useState(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [result, setResult] = useState(null)
@@ -290,12 +333,25 @@ export function TransfersPanel({ scope, can }) {
     setReceiving({ tr, lines: openTransferLines(tr).map((l) => ({ line_id: l.id, label: l.itm?.item_code || l.item_id, outstanding: l.outstanding, received_qty: String(l.outstanding), condition: 'good' })), key: newIdempotencyKey() })
   }
   const sendReceive = async () => {
-    setBusy(true); setErr('')
+    setErr('')
+    if (overReceived(receiving.lines).length) { setErr(t('inventory.flows.overReceived')); return }
+    if (!receivableLines(receiving.lines).length) { setErr(t('inventory.flows.nothingToReceive')); return }
+    setBusy(true)
     try {
       const res = await receiveTransfer({ transferId: receiving.tr.id, lines: receiving.lines }, receiving.key)
       setResult(res || { status: 'posted' }); setReceiving(null); q.retry()
     } catch (e) { setErr(toUserMessage(e)) } finally { setBusy(false) }
   }
+  const openReturn = (tr) => { setErr(''); setResult(null); setReturning({ tr, reason: '', key: newIdempotencyKey() }) }
+  const sendReturn = async () => {
+    setBusy(true); setErr('')
+    try {
+      const res = await returnTransferRemaining({ transferId: returning.tr.id, reason: returning.reason }, returning.key)
+      setResult(res || { status: 'posted' }); setReturning(null); q.retry()
+    } catch (e) { setErr(toUserMessage(e)) } finally { setBusy(false) }
+  }
+  const locById = (id) => locs.rows.find((l) => l.id === id)
+  const dispatchOutOfScope = dispatch ? crossSiteOutOfScope(locById(dispatch.from), locById(dispatch.to), { sites: profile?.sites, isAdmin }) : false
   const scopeForFrom = dispatch?.from ? { ...scope, site: locs.rows.find((l) => l.id === dispatch.from)?.site || scope.site } : scope
 
   return (
@@ -314,7 +370,8 @@ export function TransfersPanel({ scope, can }) {
           <button type="button" className="cc-btn-primary" onClick={openDispatch}><Truck size={14} aria-hidden="true" /> {t('inventory.flows.newTransfer')}</button>
         )}
       </div>
-      <ResultNote result={!dispatch && !receiving ? result : null} />
+      <ResultNote result={!dispatch && !receiving && !returning ? result : null} />
+      {!dispatch && !receiving && !returning && err && <ErrorNote error={err} />}
       <PagedTable query={q} page={page} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(0) }}
         empty={t('inventory.flows.noTransfers')} what={t('inventory.flows.transfers')} noun={t('inventory.flows.transfersNoun')}
         columns={[
@@ -325,7 +382,10 @@ export function TransfersPanel({ scope, can }) {
           { key: 'status', header: t('inventory.common.status'), cell: (r) => <StatusPill value={r.status} tone={TRANSFER_TONE[r.status]} label={t(`inventory.flows.transferStatus.${r.status}`)} /> },
           { key: 'dispatched_at', header: t('inventory.flows.dispatchedAt'), cell: (r) => fmtDateTime(r.dispatched_at) },
           { key: 'act', header: '', cell: (r) => (canTransfer && openTransferLines(r).length > 0 ? (
-            <button type="button" className="cc-btn-ghost" onClick={(e) => { e.stopPropagation(); openReceive(r) }}><Inbox size={14} aria-hidden="true" /> {t('inventory.flows.receiveTransfer')}</button>
+            <span className="inv-actions" style={{ flexWrap: 'nowrap' }}>
+              <button type="button" className="cc-btn-ghost" onClick={(e) => { e.stopPropagation(); openReceive(r) }}><Inbox size={14} aria-hidden="true" /> {t('inventory.flows.receiveTransfer')}</button>
+              <button type="button" className="cc-btn-ghost" onClick={(e) => { e.stopPropagation(); openReturn(r) }}><Undo2 size={14} aria-hidden="true" /> {t('inventory.flows.returnTransfer')}</button>
+            </span>
           ) : null) },
         ]} />
 
@@ -349,6 +409,7 @@ export function TransfersPanel({ scope, can }) {
                 </div>
               ))}
             </div>
+            {dispatchOutOfScope && <Note tone="warn">{t('inventory.flows.crossSiteScope')}</Note>}
             <Field label={t('inventory.flows.remarks')} full><textarea className="inv-input" maxLength={500} value={dispatch.remarks} onChange={(e) => setDispatch((d) => ({ ...d, remarks: e.target.value }))} /></Field>
             <div className="inv-actions">
               <button type="button" className="cc-btn-ghost" onClick={() => setDispatch((d) => ({ ...d, lines: [...d.lines, { stock: null, qty: '' }] }))}><Plus size={14} aria-hidden="true" /> {t('inventory.flows.addLine')}</button>
@@ -380,6 +441,23 @@ export function TransfersPanel({ scope, can }) {
             ))}
             <div className="inv-actions">
               <button type="button" className="cc-btn-primary" disabled={busy} onClick={sendReceive}><Inbox size={14} aria-hidden="true" /> {busy ? t('inventory.actions.saving') : t('inventory.flows.confirmReceipt')}</button>
+            </div>
+            <p className="cc-card-sub">{t('inventory.flows.zeroStaysInTransit')}</p>
+            {err && <ErrorNote error={err} />}
+          </div>
+        )}
+      </SideDrawer>
+
+      <SideDrawer className="cc inv-panel" open={!!returning} onClose={() => !busy && setReturning(null)} busy={busy} size="md"
+        title={t('inventory.flows.returnTransfer')} subtitle={returning?.tr?.ref || ''} closeLabel={t('inventory.actions.close')}>
+        {returning && (
+          <div className="inv-hub" style={{ gap: 12 }}>
+            <p className="cc-card-sub">{t('inventory.flows.returnTransferSub')}</p>
+            <Field label={t('inventory.movements.reason')} full>
+              <textarea className="inv-input" maxLength={500} value={returning.reason} onChange={(e) => setReturning((r) => ({ ...r, reason: e.target.value }))} />
+            </Field>
+            <div className="inv-actions">
+              <button type="button" className="cc-btn-primary" disabled={busy || !returning.reason.trim()} onClick={sendReturn}><Undo2 size={14} aria-hidden="true" /> {busy ? t('inventory.actions.saving') : t('inventory.flows.returnTransfer')}</button>
             </div>
             {err && <ErrorNote error={err} />}
           </div>

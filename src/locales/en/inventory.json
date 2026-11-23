@@ -411,7 +411,7 @@
       "unvalued": "Inventory cost unknown"
     }
   },
-  "flows": { "movedPendingNote": "The undecided part is recorded for a person to decide from evidence; no value was assumed for it.",
+  "flows": { "linkedToJobCard": "Recorded against job card {doc}.", "noJobCard": "No job card given: the movement will not be linked to a job card.", "shortfallWarn": "Only {available} available for {requested} requested. The server will refuse the issue and record a shortage.", "release": "Release reservation", "returnToStock": "Return to stock", "returnNeedsReason": "Give a reason to return stock.", "returnUnvalued": "A return comes back at unknown cost and opens a cost reconciliation; no value is assumed.", "overReceived": "A received quantity is more than what is still in transit.", "nothingToReceive": "Enter a received quantity above zero on at least one line.", "zeroStaysInTransit": "A line left at 0 is not received and stays in transit.", "returnTransfer": "Return to source", "returnTransferSub": "Everything still in transit goes back to the source location. Both sides post to the ledger.", "crossSiteScope": "The destination site is outside your site scope. Stock in transit is held at the destination, so the server will refuse this dispatch. Ask someone with access to both sites.", "movedPendingNote": "The undecided part is recorded for a person to decide from evidence; no value was assumed for it.",
     "movedSplit": "Moved at known cost: {valued}. Moved at unknown cost: {unvalued}. Split undecided: {pending}.",
     "movedUnvaluedNote": "The part at unknown cost has an open cost reconciliation; the value moved covers the known part only.",
     "tabs": { "ledger": "Ledger", "transfers": "Transfers" },

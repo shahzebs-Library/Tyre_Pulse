@@ -156,8 +156,12 @@ function Notice({ tone = 'info', icon: Icon = Info, title, children, action }) {
 
 export default function StoreMaterialIssue() {
   const { activeCountry } = useSettings()
-  const { profile, isSuperAdmin } = useAuth()
+  const { profile, isSuperAdmin, hasCapability } = useAuth()
+  // Mirrors the server: material_issues is writable by an elevated role OR a
+  // person granted stock:edit (RLS `material_issues_write`). Checking roles only
+  // hid the form from someone the server would accept.
   const canWrite = isSuperAdmin || WRITE_ROLES.has(profile?.role)
+    || (typeof hasCapability === 'function' && !!hasCapability('stock', 'edit'))
   // Recorded on the slip so a paper document names who issued it. `issued_by`
   // is stamped server-side from auth.uid(); this is the readable name beside it.
   const profileName = profile?.full_name || profile?.username || ''
@@ -1037,7 +1041,8 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
   if (!canWrite) {
     return (
       <Notice tone="info" icon={Ban} title="You can read the register but not raise a slip.">
-        <p>Raising a material issue is limited to Admin, Manager and Director.</p>
+        <p>Raising a material issue needs Admin, Manager or Director, or the stock edit permission.</p>
+        <p>To take stock off the shelf against a job card, use Stock, Receiving, Issue stock.</p>
       </Notice>
     )
   }
@@ -1059,7 +1064,7 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
           real in-flow results list inside this card, and the country/document
           controls are native <select>, so nothing here wants cropping. */}
       <Card>
-        <CardHeader title="Slip details" description="Stock availability is not checked when recording an issue." />
+        <CardHeader title="Slip details" description="Records the slip only: it does not take stock off the shelf. Issue stock in Stock, Receiving." />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>Document type</span>

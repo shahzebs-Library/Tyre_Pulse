@@ -201,10 +201,13 @@ const groupBy = (rows, key) => {
  * Join one page of materials with its batched lookups. A lookup passed as null
  * means "could not be read": the matching fields come back null (N/A), never 0.
  */
+const uniqueById = (rows) => [...new Map(rows.map((r) => [r.id, r])).values()]
+
 export function enrichMaterials(materials, { variants, aliases, balances, openingLines } = {}) {
   const vBy = variants ? groupBy(variants, (v) => v.canonical_id) : null
   const aBy = aliases ? groupBy(aliases, (a) => a.canonical_id) : null
   const bBy = balances ? groupBy(balances, (b) => skuKey(b.item_code)) : null
+  const bByCanon = balances ? groupBy(balances.filter((b) => b.canonical_id), (b) => b.canonical_id) : null
   const lBy = openingLines ? groupBy(openingLines, (l) => skuKey(l.item_code_raw ?? l.item_code)) : null
   return (materials || []).map((m) => {
     const vs = vBy ? vBy.get(m.id) || [] : null
@@ -221,7 +224,7 @@ export function enrichMaterials(materials, { variants, aliases, balances, openin
       partType: vs ? partTypeOf(vs) : null,
       partTypes: vs ? partTypesOf(vs) : null,
       oem: vs && aBy ? oemNumbers(aBy.get(m.id) || [], vs) : null,
-      posted: bBy ? postedStock(sku ? bBy.get(sku) || [] : []) : null,
+      posted: bBy ? postedStock(uniqueById([...(sku ? bBy.get(sku) || [] : []), ...(bByCanon.get(m.id) || [])])) : null,
       pending: lBy ? pendingOpening(sku ? lBy.get(sku) || [] : []) : null,
     }
   })

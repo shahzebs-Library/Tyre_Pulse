@@ -136,3 +136,17 @@ describe('material catalogue facets and filters', () => {
     expect(skuKey(null)).toBe('')
   })
 })
+
+describe('posted stock through canonical -> ERP item links', () => {
+  it('counts a balance linked by canonical_id even when its ERP code differs, without double counting', () => {
+    const [m] = enrichMaterials([{ id: 'c1', company_sku: 'SKU-1' }], {
+      variants: [], aliases: [], openingLines: [],
+      balances: [
+        { id: 'b1', item_code: 'SKU-1', site: 'NHC', qty_on_hand: 2, qty_reserved: 0 },
+        { id: 'b2', item_code: 'ERP-77', canonical_id: 'c1', site: 'NHC', qty_on_hand: 3, qty_reserved: 0 },
+        { id: 'b1', item_code: 'SKU-1', canonical_id: 'c1', site: 'NHC', qty_on_hand: 2, qty_reserved: 0 },
+      ],
+    })
+    expect(m.posted.onHand).toBe(5)
+  })
+})

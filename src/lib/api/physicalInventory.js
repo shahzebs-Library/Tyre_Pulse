@@ -464,14 +464,19 @@ async function partTypeIdSet(partType) {
 /** Company SKUs with posted stock on hand, or with opening stock still waiting for approval. */
 async function stockSkuSet(stock) {
   if (stock === 'posted') {
-    const { rows, truncated } = await readAll(() => supabase.from('v_inv_balances').select('id, item_code')
-      .gt('qty_on_hand', 0).order('id', { ascending: true }))
-    return { skus: new Set(rows.map((r) => skuKey(r.item_code))), truncated }
+    const [bal, links] = await Promise.all([
+      readAll(() => supabase.from('v_inv_balances').select('id, item_id, item_code')
+        .gt('qty_on_hand', 0).order('id', { ascending: true })),
+      readAll(() => supabase.from('material_canonical_items').select('id, canonical_id, item_id').order('id', { ascending: true })),
+    ])
+    const stocked = new Set(bal.rows.map((r) => r.item_id).filter(Boolean))
+    const ids = new Set(links.rows.filter((l) => stocked.has(l.item_id)).map((l) => l.canonical_id))
+    return { skus: new Set(bal.rows.map((r) => skuKey(r.item_code))), ids, truncated: bal.truncated || links.truncated }
   }
   if (stock === 'pending') {
     const { rows, truncated } = await readAll(() => supabase.from('opening_balance_lines')
       .select('id, item_code_raw, batch:opening_balance_batches!inner(status)')
-      .in('batch.status', PENDING_BATCH_STATUSES).order('id', { ascending: true }), 50000)
+      .in('batch.status', PENDING_BATCH_STATUSES).neq('mapping_status', 'excluded').order('id', { ascending: true }), 50000)
     return { skus: new Set(rows.map((r) => skuKey(r.item_code_raw))), truncated }
   }
   return null
@@ -505,7 +510,7 @@ export async function listMaterialCatalog({ page = 0, pageSize = 25, search, sta
         const has = types.ids.has(r.id)
         if (partType === 'not_stated' ? has : !has) return false
       }
-      if (skus && !skus.skus.has(skuKey(r.company_sku))) return false
+      if (skus && !skus.skus.has(skuKey(r.company_sku)) && !skus.ids?.has(r.id)) return false
       return true
     })
     const truncated = candidates.truncated || !!types?.truncated || !!skus?.truncated
@@ -540,6 +545,11 @@ export async function loadMaterialCatalogDetail(materials) {
   const skus = [...new Set((materials || []).map((m) => (m?.company_sku ? String(m.company_sku).trim() : '')).filter(Boolean))].slice(0, 100)
   const none = { variants: [], aliases: [], balances: [], openingLines: [] }
   if (!ids.length) return none
+  // Canonical -> country ERP item links (material_canonical_items): stock can sit
+  // under an ERP code that differs from the company SKU.
+  const links = await settle(async () => (await readAll(() => supabase.from('material_canonical_items')
+    .select('id, canonical_id, item_id').in('canonical_id', ids).order('id', { ascending: true }), 5000)).rows)
+  const linkedItemIds = [...new Set((links || []).map((l) => l.item_id).filter(Boolean))].slice(0, 300)
   const [variants, aliases, balances, openingLines] = await Promise.all([
     settle(async () => (await readAll(() => supabase.from('material_variants')
       .select('id, canonical_id, manufacturer, brand, part_number, part_classification, country_of_manufacture, classification_evidence, status')
@@ -547,12 +557,19 @@ export async function loadMaterialCatalogDetail(materials) {
     settle(async () => (await readAll(() => supabase.from('material_aliases')
       .select('id, canonical_id, alias_type, value, manufacturer, ref_status, verified')
       .in('canonical_id', ids).eq('alias_type', 'oem').order('id', { ascending: true }), 5000)).rows),
-    skus.length ? settle(async () => (await readAll(() => supabase.from('v_inv_balances')
-      .select('id, item_code, site, country, location_code, condition, qty_on_hand, qty_reserved, uom')
-      .in('item_code', skus).order('id', { ascending: true }), 5000)).rows) : [],
+    (skus.length || linkedItemIds.length) ? settle(async () => {
+      const ors = []
+      if (skus.length) ors.push(`item_code.in.(${skus.map((k) => `"${k.replace(/"/g, '')}"`).join(',')})`)
+      if (linkedItemIds.length) ors.push(`item_id.in.(${linkedItemIds.join(',')})`)
+      const rows = (await readAll(() => supabase.from('v_inv_balances')
+        .select('id, item_id, item_code, site, country, location_code, condition, qty_on_hand, qty_reserved, uom')
+        .or(ors.join(',')).order('id', { ascending: true }), 5000)).rows
+      const canonByItem = new Map((links || []).map((l) => [l.item_id, l.canonical_id]))
+      return rows.map((r) => ({ ...r, canonical_id: canonByItem.get(r.item_id) ?? null }))
+    }) : [],
     skus.length ? settle(async () => (await readAll(() => supabase.from('opening_balance_lines')
       .select('id, batch_id, item_code_raw, qty, uom, location_code_raw, batch:opening_balance_batches!inner(status, site, country, reference)')
-      .in('item_code_raw', skus).in('batch.status', PENDING_BATCH_STATUSES).order('id', { ascending: true }), 5000)).rows) : [],
+      .in('item_code_raw', skus).in('batch.status', PENDING_BATCH_STATUSES).neq('mapping_status', 'excluded').order('id', { ascending: true }), 5000)).rows) : [],
   ])
   return { variants, aliases, balances, openingLines }
 }

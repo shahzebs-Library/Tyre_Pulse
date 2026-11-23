@@ -748,7 +748,7 @@ function MainApp() {
                       <Route path="/inspection-intelligence" element={<Safe><ModuleRoute moduleKey="inspections"><InspectionIntelligence /></ModuleRoute></Safe>} />
                       <Route path="/root-cause"              element={<Safe><ModuleRoute moduleKey="root_cause_engine"><RootCauseEngine /></ModuleRoute></Safe>} />
                       <Route path="/predictive-maintenance"  element={<Safe><ModuleRoute moduleKey="predictive_maintenance"><PredictiveMaintenance /></ModuleRoute></Safe>} />
-                      <Route path="/vendor-intelligence"     element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><VendorIntelligence /></RoleRoute></Safe>} />
+                      <Route path="/vendor-intelligence"     element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ModuleRoute moduleKey="vendor_intelligence"><VendorIntelligence /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/driver-management"       element={<Safe><ModuleRoute moduleKey="fleet_master"><DriverManagement /></ModuleRoute></Safe>} />
                       <Route path="/driver-workspace" element={<Safe><RoleRoute allowed={['Driver', 'Manager', 'Director']}><DriverWorkspace /></RoleRoute></Safe>} />
                       <Route path="/fleet-intelligence"      element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetIntelligence /></ModuleRoute></Safe>} />
@@ -775,8 +775,8 @@ function MainApp() {
                       <Route path="/forecasting"             element={<Safe><ModuleRoute moduleKey="forecasting"><ForecastingEngine /></ModuleRoute></Safe>} />
                       <Route path="/cost-center"             element={<Safe><ModuleRoute moduleKey="budgets"><CostCenter /></ModuleRoute></Safe>} />
                       <Route path="/benchmark"               element={<Safe><ModuleRoute moduleKey="analytics"><PerformanceBenchmark /></ModuleRoute></Safe>} />
-                      <Route path="/procurement"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><Procurement /></RoleRoute></Safe>} />
-                      <Route path="/suppliers"               element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><SupplierManagement /></RoleRoute></Safe>} />
+                      <Route path="/procurement"             element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ModuleRoute moduleKey="stock"><Procurement /></ModuleRoute></RoleRoute></Safe>} />
+                      <Route path="/suppliers"               element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ModuleRoute moduleKey="stock"><SupplierManagement /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/tyre-size"               element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreSizeAnalysis /></ModuleRoute></Safe>} />
                       <Route path="/tyre-lifecycle"          element={<Safe><ModuleRoute moduleKey="tyre_records"><TyreLifecycle /></ModuleRoute></Safe>} />
                       <Route path="/downtime"                element={<Safe><ModuleRoute moduleKey="fleet_analytics"><DowntimeTracker /></ModuleRoute></Safe>} />

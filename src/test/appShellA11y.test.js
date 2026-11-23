@@ -67,7 +67,7 @@ describe('sidebar behaviour', () => {
     // The dimming used to be a first `style=` that a second `style=` on the same
     // element silently replaced.
     const start = LAYOUT.indexOf('title={_outOfContext')
-    const end = LAYOUT.indexOf('>\n                          {({ isActive }) => (', start)
+    const end = LAYOUT.indexOf('>\n                          {({ isActive: _ia }) => {', start)
     const tag = LAYOUT.slice(start, end)
     expect(tag.match(/\bstyle=/g)?.length).toBe(1)
     expect(tag).toMatch(/_outOfContext \? \{ opacity: 0\.45 \}/)

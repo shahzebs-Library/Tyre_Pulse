@@ -43,6 +43,9 @@ import { compareValues } from '../lib/consoleTable'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { isMissingRelation } from '../lib/api/_client'
+import { listGrnLineTotals } from '../lib/api/procurementChain'
+import { summarizeGrnLines, withLineTotals } from '../lib/procurementChain'
+import { ReceiveAgainstPoPanel, useProcurementCaps } from '../components/procurement/ProcurementChainPanels'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -88,12 +91,18 @@ export default function GoodsReceipt() {
   const [formError, setFormError] = useState('')
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const caps = useProcurementCaps()
 
   const load = useCallback(async () => {
     setRefreshing(true); setError(''); setMissing(false)
     try {
       const data = await listGoodsReceipts({ country: activeCountry })
-      setRows(Array.isArray(data) ? data : [])
+      const list = Array.isArray(data) ? data : []
+      // A GRN posted through the stock ledger keeps its item and quantities on
+      // goods_receipt_lines, not on the header. Fold the lines in so it reads.
+      let lineTotals = []
+      try { lineTotals = await listGrnLineTotals(list.map((r) => r.id)) } catch { lineTotals = [] }
+      setRows(withLineTotals(list, summarizeGrnLines(lineTotals)))
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) { setMissing(true); setRows([]) }
@@ -239,8 +248,9 @@ export default function GoodsReceipt() {
       id: 'actions', header: '', enableSorting: false, size: 104, meta: { export: false },
       cell: ({ row: { original: r } }) => (
         <div className="flex items-center gap-1 justify-end">
-          <button type="button" onClick={() => openEdit(r)} className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]" aria-label={`Edit goods receipt ${r.grn_no || r.item || ''}`.trim()}><Pencil size={15} aria-hidden="true" /></button>
-          <button type="button" onClick={() => setConfirmDel(r)} className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-900/20" aria-label={`Delete goods receipt ${r.grn_no || r.item || ''}`.trim()}><Trash2 size={15} aria-hidden="true" /></button>
+          {caps.receive && !r.posted_to_stock && <button type="button" onClick={() => openEdit(r)} className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]" aria-label={`Edit goods receipt ${r.grn_no || r.item || ''}`.trim()}><Pencil size={15} aria-hidden="true" /></button>}
+          {r.posted_to_stock && <span className="text-[11px] text-[var(--text-muted)] px-1" title="Posted to stock through the movement ledger; correct it with a stock adjustment.">In stock ledger</span>}
+          {caps.adminDelete && !r.posted_to_stock && <button type="button" onClick={() => setConfirmDel(r)} className="inline-flex items-center justify-center w-11 h-11 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-900/20" aria-label={`Delete goods receipt ${r.grn_no || r.item || ''}`.trim()}><Trash2 size={15} aria-hidden="true" /></button>}
         </div>
       ),
     },
@@ -279,14 +289,19 @@ export default function GoodsReceipt() {
             <button type="button" onClick={() => runExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!known || !filtered.length}>
               <FileText size={14} aria-hidden="true" /> PDF
             </button>
-            <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}>
-              <Plus size={14} aria-hidden="true" /> New GRN
-            </button>
+            {caps.receive && (
+              <button type="button" onClick={openCreate} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={missing}
+                title="Records a delivery note only. It does not post stock; use Receive against a purchase order for that.">
+                <Plus size={14} aria-hidden="true" /> Delivery note only
+              </button>
+            )}
           </div>
         }
       />
       <NotInUseNotice count={known ? rows.length : undefined} label="goods receipts"
         hint="Receipts appear once stock is received against a purchase order." />
+
+      {!missing && <ReceiveAgainstPoPanel country={activeCountry} onReceived={() => load()} />}
 
       {missing && (
         <div role="status" className="card border border-amber-800/50 flex items-start gap-3">
@@ -419,7 +434,7 @@ export default function GoodsReceipt() {
               <div className="flex flex-col items-center gap-3">
                 <Package size={26} className="opacity-60" aria-hidden="true" />
                 <p>No goods receipts recorded yet.</p>
-                <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><Plus size={14} aria-hidden="true" /> Record your first GRN</button>
+                {caps.receive ? <p className="text-xs">Receive against a purchase order above to post the first receipt into stock.</p> : <p className="text-xs">You do not have permission to receive goods.</p>}
               </div>
             ) : missing ? (
               <p>Goods receipts are not provisioned on this database.</p>
@@ -452,7 +467,7 @@ export default function GoodsReceipt() {
       <Modal
         open={modalOpen}
         onClose={closeModal}
-        title={editing ? 'Edit goods receipt' : 'New goods receipt'}
+        title={editing ? 'Edit delivery note' : 'Delivery note (no stock posted)'}
         size="lg"
         footer={(
           <>
@@ -464,6 +479,9 @@ export default function GoodsReceipt() {
         )}
       >
         <form id="grn-form" onSubmit={submit} className="space-y-4">
+          <p className="text-xs text-amber-300" role="note">
+            This records the paperwork only. Stock on hand does not change. To put goods into stock, use Receive against a purchase order.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {field('grn-no', 'GRN number', <input id="grn-no" className="input w-full" placeholder="GRN-2026-00042" value={form.grn_no} onChange={(e) => set('grn_no', e.target.value)} maxLength={120} />)}
             {field('grn-po', 'PO reference', <input id="grn-po" className="input w-full" placeholder="PO-2026-00318" value={form.po_ref} onChange={(e) => set('po_ref', e.target.value)} maxLength={120} />)}

@@ -32,6 +32,12 @@ import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import { probeRelation } from '../lib/api/_client'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import { useAuth } from '../contexts/AuthContext'
+import { decideRequisition } from '../lib/api/procurementChain'
+import {
+  requisitionStatusOptions, canEditRequisition, canDecideRequisition, canRaisePo, currencyScope, scopedCountry,
+} from '../lib/procurementChain'
+import { useProcurementCaps, MaterialPicker, RaisePoModal } from '../components/procurement/ProcurementChainPanels'
 
 const STATUS_META = {
   draft: { label: 'Draft', cls: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]' },
@@ -64,8 +70,9 @@ function fmtDate(v) {
 const cap = (s) => (s ? String(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '')
 
 // ─── Create / Edit modal ──────────────────────────────────────────────────────
-function RequisitionModal({ open, initial, onClose, onSaved }) {
+function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId, country }) {
   const [form, setForm] = useState(EMPTY_FORM)
+  const [material, setMaterial] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -83,27 +90,35 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
         status: initial.status || 'draft',
         notes: initial.notes || '',
       } : EMPTY_FORM)
+      setMaterial(null)
       setError('')
     }
   }, [open, initial])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+  const statusOptions = useMemo(
+    () => requisitionStatusOptions({ canProcure, current: initial?.status || null }),
+    [canProcure, initial?.status],
+  )
+  const editable = canEditRequisition(initial, { canProcure, userId })
 
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
     setError('')
     if (!form.item.trim()) { setError('Please enter the item being requested.'); return }
+    if (!statusOptions.includes(form.status)) { setError('You cannot set this status.'); return }
     setBusy(true)
     try {
       if (initial?.id) await updateRequisition(initial.id, form)
-      else await createRequisition(form)
+      // A new request belongs to the country being worked in, never "All".
+      else await createRequisition({ ...form, country: scopedCountry(country) })
       onSaved?.()
     } catch (err) {
       setError(toUserMessage(err, 'Could not save the requisition.'))
     } finally {
       setBusy(false)
     }
-  }, [form, initial, onSaved])
+  }, [form, initial, onSaved, statusOptions, country])
 
   if (!open) return null
 
@@ -122,7 +137,16 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
       )}
     >
       <form onSubmit={submit} className="space-y-4">
-
+        {!editable && (
+          <p role="status" className="text-xs text-amber-300">
+            This request is {initial?.status}. Only procurement can change it now, so it is shown read only.
+          </p>
+        )}
+        <fieldset disabled={!editable} className="space-y-4">
+        <MaterialPicker
+          id="req-material" label="Pick from the Material Master (optional)" country={country} value={material}
+          onPick={(m) => { setMaterial(m); if (m) set('item', `${m.item_code} ${m.item_name || ''}`.trim()) }}
+        />
         <div>
           <label className="label" htmlFor="req-item">Item *</label>
           <input
@@ -158,8 +182,9 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
           <div>
             <label className="label" htmlFor="req-status">Status</label>
             <select id="req-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-              {REQUISITION_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>)}
+              {statusOptions.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>)}
             </select>
+            {!canProcure && <p className="text-[11px] text-[var(--text-muted)] mt-1">Submit the request; procurement approves it.</p>}
           </div>
         </div>
 
@@ -199,7 +224,7 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
 
         {estTotal > 0 && (
           <p className="text-xs text-[var(--text-muted)] -mt-1">
-            Estimated total: <span className="font-semibold text-[var(--text-secondary)]">{estTotal.toLocaleString()}</span> (qty x est. unit cost)
+            Estimated total: <span className="font-semibold text-[var(--text-secondary)]">{estTotal.toLocaleString()}</span> (qty x est. unit cost, in the {scopedCountry(initial?.country || country) || 'requisition country'} currency)
           </p>
         )}
 
@@ -212,6 +237,7 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
           />
         </div>
 
+        </fieldset>
         {error && (
           <div className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
             <AlertTriangle size={15} className="mt-0.5 shrink-0" /> {error}
@@ -220,7 +246,7 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
 
         <div className="flex items-center justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
-          <button type="submit" disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
+          <button type="submit" disabled={busy || !editable} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
             {busy ? 'Saving' : 'Save requisition'}
           </button>
@@ -290,6 +316,10 @@ function Kpi({ label, value, hint, icon, tone, onClick, active, index }) {
 
 export default function Requisitions() {
   const { activeCountry, activeCurrency } = useSettings()
+  const { user, profile } = useAuth() || {}
+  const caps = useProcurementCaps()
+  const [raising, setRaising] = useState(null)
+  const [actionMsg, setActionMsg] = useState('')
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [missing, setMissing] = useState(false)
@@ -345,7 +375,14 @@ export default function Requisitions() {
     status: statusFilter, category: categoryFilter, site: siteFilter, due: dueFilter, search,
   }, now), [rows, statusFilter, categoryFilter, siteFilter, dueFilter, search, now])
 
-  const fmtMoney = useCallback((v) => (v == null ? 'N/A' : formatCurrencyCompact(v, activeCurrency)), [activeCurrency])
+  // Requisitions carry no currency column; each reads in its country's currency.
+  // On the All-countries view SAR, AED and EGP must not be added together.
+  const money = useMemo(() => currencyScope(rows || []), [rows])
+  const fmtMoney = useCallback((v) => {
+    if (v == null) return 'N/A'
+    if (money.mixed) return 'Mixed currencies'
+    return formatCurrencyCompact(v, money.currency || activeCurrency)
+  }, [activeCurrency, money])
   const loaded = rows !== null
   const show = (v) => (loaded ? v : 'N/A')
 
@@ -381,6 +418,14 @@ export default function Requisitions() {
   const openEdit = useCallback((row) => { setEditing(row); setModalOpen(true) }, [])
   const onSaved = () => { setModalOpen(false); setEditing(null); load() }
   const confirmDelete = async () => { await deleteRequisition(deleting.id); setDeleting(null); load() }
+  const decide = useCallback(async (row, decision) => {
+    setActionMsg('')
+    try {
+      await decideRequisition(row.id, decision, { approverName: profile?.full_name || user?.email || null })
+      setActionMsg(`${row.requisition_no || row.item} ${decision}.`)
+      load()
+    } catch (e) { setActionMsg(toUserMessage(e, 'Could not record the decision.')) }
+  }, [load, profile, user])
 
   const columns = useMemo(() => [
     {
@@ -391,6 +436,7 @@ export default function Requisitions() {
     { id: 'category', header: 'Category', accessorFn: (r) => cap(r.category) || '', cell: ({ getValue }) => getValue() || 'N/A' },
     { id: 'requester', header: 'Requester', accessorFn: (r) => r.requester || '', cell: ({ getValue }) => getValue() || 'N/A' },
     { id: 'site', header: 'Site', accessorFn: (r) => r.site || '', cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'po_ref', header: 'PO', accessorFn: (r) => r.po_ref || '', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() || 'N/A'}</span> },
     { id: 'quantity', header: 'Qty', accessorFn: (r) => (r.quantity == null || r.quantity === '' ? null : Number(r.quantity)), meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : getValue()) },
     { id: 'est_cost', header: 'Unit cost', accessorFn: (r) => (r.est_cost == null || r.est_cost === '' ? null : Number(r.est_cost)), meta: { align: 'right' }, cell: ({ getValue }) => fmtMoney(getValue()) },
     { id: 'line_value', header: 'Est. value', accessorFn: (r) => lineValue(r), meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-medium">{fmtMoney(getValue())}</span> },
@@ -419,12 +465,21 @@ export default function Requisitions() {
       id: 'actions', header: '', enableSorting: false, enableHiding: false, meta: { export: false },
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-1">
+          {canDecideRequisition(row.original, { canProcure: caps.procure }) && (
+            <>
+              <button type="button" onClick={(e) => { e.stopPropagation(); decide(row.original, 'approved') }} className="btn-secondary text-xs min-h-[44px]">Approve</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); decide(row.original, 'rejected') }} className="btn-secondary text-xs min-h-[44px]">Reject</button>
+            </>
+          )}
+          {canRaisePo(row.original, { canProcure: caps.procure }) && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); setRaising(row.original) }} className="btn-primary text-xs min-h-[44px]">Raise PO</button>
+          )}
           <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} aria-label={`Edit ${row.original.item || 'requisition'}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"><Pencil size={15} /></button>
-          <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(row.original) }} aria-label={`Delete ${row.original.item || 'requisition'}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-400"><Trash2 size={15} /></button>
+          {caps.adminDelete && <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(row.original) }} aria-label={`Delete ${row.original.item || 'requisition'}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-400"><Trash2 size={15} /></button>}
         </div>
       ),
     },
-  ], [fmtMoney, now, openEdit])
+  ], [fmtMoney, now, openEdit, caps.procure, caps.adminDelete, decide])
 
   const capped = loaded && rows.length >= READ_CAP
 
@@ -471,6 +526,13 @@ export default function Requisitions() {
           </div>
         </div>
       )}
+
+      {money.mixed && (
+        <p className="text-xs text-amber-300" role="status">
+          These requisitions span {money.currencies.join(', ')}. Values are not added across currencies; pick a country to see totals.
+        </p>
+      )}
+      {actionMsg && <p className="text-sm text-[var(--text-secondary)]" role="status">{actionMsg}</p>}
 
       {capped && (
         <p className="text-xs text-amber-300" role="status">
@@ -552,7 +614,17 @@ export default function Requisitions() {
         onRowClick={(r) => openEdit(r)}
       />
 
-      <RequisitionModal open={modalOpen} initial={editing} onClose={() => { setModalOpen(false); setEditing(null) }} onSaved={onSaved} />
+      <RequisitionModal
+        open={modalOpen} initial={editing} onClose={() => { setModalOpen(false); setEditing(null) }} onSaved={onSaved}
+        canProcure={caps.procure} userId={user?.id || null} country={editing?.country || activeCountry}
+      />
+      {raising && (
+        <RaisePoModal
+          requisition={raising}
+          onClose={() => setRaising(null)}
+          onDone={(po) => { setRaising(null); setActionMsg(po ? `Purchase order ${po.po_number} raised.` : 'Purchase order raised.'); load() }}
+        />
+      )}
       <DeleteDialog row={deleting} onCancel={() => setDeleting(null)} onConfirm={confirmDelete} />
     </div>
   )

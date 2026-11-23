@@ -11,7 +11,7 @@ import { supabase, unwrap, applyCountry, toServiceError } from './_client'
 
 export const COLS =
   'id,organisation_id,country,requisition_no,requester,item,category,quantity,est_cost,' +
-  'needed_by,site,status,notes,created_by,created_at,updated_at'
+  'needed_by,site,status,notes,created_by,created_at,updated_at,priority,approved_by,decided_at,po_ref'
 
 export const REQUISITION_STATUSES = ['draft', 'submitted', 'approved', 'rejected', 'ordered']
 export const REQUISITION_CATEGORIES = [
@@ -101,6 +101,11 @@ export async function updateRequisition(id, patch = {}) {
   delete clean.created_by
   delete clean.created_at
   delete clean.updated_at
+  // Set only by the approval step / PO link, never from the edit form.
+  delete clean.approved_by
+  delete clean.decided_at
+  delete clean.po_ref
+  delete clean.priority
 
   if ('item' in clean) {
     const it = String(clean.item || '').trim()

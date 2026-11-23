@@ -117,6 +117,7 @@ export default function Store3DPanel({ scope, initialSite = '' }) {
         </button>
       )}>
       <div className="inv-3d-bar">
+        {!(scope?.site && scope.site !== 'all') && (
         <label className="cc-field">
           <span>{t('inventory.locations.store')}</span>
           <select className="cc-select" value={site} onChange={(e) => setSite(e.target.value)}>
@@ -124,6 +125,7 @@ export default function Store3DPanel({ scope, initialSite = '' }) {
             {stores.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
+        )}
         {counts && (
           <ul className="inv-3d-legend" aria-label={t('inventory.store3d.legend')}>
             {BIN_STATUSES.map((k) => (

@@ -51,7 +51,7 @@ describe('Inventory Control Center hub', () => {
     renderHub('register', onSection)
     expect(await screen.findByRole('heading', { name: 'Inventory Control Center' })).toBeTruthy()
     expect(screen.getByText('legacy register')).toBeTruthy()
-    fireEvent.click(screen.getByRole('tab', { name: 'Audits' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Audits' }))
     expect(onSection).toHaveBeenCalledWith('audits', null)
     // The left menu reaches every section too, including ones outside the top tabs.
     fireEvent.click(screen.getByRole('button', { name: /Master Data/ }))

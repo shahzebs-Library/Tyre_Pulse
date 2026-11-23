@@ -136,6 +136,7 @@
   ],
   "git": {
     "deploymentEnabled": {
+      "claude/inventory-procurement-layout": false,
       "claude/physical-inventory-master-7rxp2t": false,
       "claude/multi-company-client-7rxp2t": false,
       "claude/release-543-545-7rxp2t": false,

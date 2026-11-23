@@ -666,7 +666,80 @@
     "axis": {
       "abc": "ABC (value)",
       "fsn": "FSN (movement)",
-      "ved": "VED (criticality)"
+      "ved": "VED (criticality)",
+      "review": "Brand and part type"
+    },
+    "review": {
+      "what": "Brand and part type review",
+      "method": "Proposals for items with no brand or no part type, read from the item description. ORIGINAL or ORG means genuine (OEM). OEM# is a part number label and the -O code ending is not evidence. LOCAL, CHINA and TAIWAN count only when written. Brands come only from existing brand lists. Nothing changes until a second person approves it.",
+      "summaryLabel": "Review summary",
+      "kpi": {
+        "withoutBrand": "Items without a brand",
+        "brandProposals": "Brand proposals",
+        "typeProposals": "Part type proposals",
+        "alreadyProposed": "Types already waiting for approval"
+      },
+      "readOnly": "You can see the proposals but not send them. Sending needs counting or approval rights.",
+      "title": "Proposals to review",
+      "sub": "{n} shown of {total}",
+      "search": "Search code, description or brand",
+      "fieldFilter": "Show",
+      "field": {
+        "all": "Brand and part type",
+        "brand": "Brand only",
+        "partType": "Part type only"
+      },
+      "ruleFilter": "Rule",
+      "allRules": "All rules",
+      "confFilter": "Confidence",
+      "conf": {
+        "all": "Any confidence",
+        "high": "High",
+        "medium": "Medium"
+      },
+      "rule": {
+        "original": "Says ORIGINAL",
+        "oes": "Says OES",
+        "local": "Says LOCAL",
+        "origin_country": "Names a country",
+        "aftermarket_word": "Says AFTERMARKET",
+        "brand_alias": "Brand list",
+        "brand_recorded": "Brand used on other items",
+        "brand_tyre": "Tyre brand list",
+        "conflict": "Two answers found"
+      },
+      "type": {
+        "genuine": "Genuine (OEM)",
+        "oes": "OES",
+        "aftermarket": "Aftermarket",
+        "local": "Local"
+      },
+      "conflict": "Not clear: {found}",
+      "blocked": {
+        "conflict": "Two answers in the text. Decide by hand.",
+        "local_not_storable": "Local cannot be saved yet. The database allows genuine, OES and aftermarket only.",
+        "pending": "A change for this item is already waiting for approval."
+      },
+      "send": "Send for approval",
+      "sendAria": "Send proposal for {sku} for approval",
+      "sent": "Sent for approval",
+      "sentOne": "{sku} sent for approval. A second person must approve it.",
+      "failed": "Could not send this proposal.",
+      "progress": "Sending {n} of {total}",
+      "bulkDone": "{sent} sent for approval, {failed} failed.",
+      "bulk": "Send all ORIGINAL ({n})",
+      "reject": "Reject",
+      "rejectAria": "Reject proposal for {sku}",
+      "unhide": "Show {n} rejected",
+      "col": {
+        "description": "Description",
+        "brand": "Brand proposal",
+        "partType": "Part type proposal",
+        "action": "Action"
+      },
+      "empty": "No proposals. Every item either has a brand and part type, or its description states neither.",
+      "noMatch": "No proposals match these filters.",
+      "footnote": "Reject hides a proposal on this device only. Sent proposals appear in Corrections or variant approvals, where a different person approves or rejects them."
     },
     "method": {
       "abc": "Items ranked by valued issue value in the last 12 months, inside one currency. A: up to {a}% of cumulative value, B: up to {b}%, C: the rest. An item with unknown value is unclassified, never C.",

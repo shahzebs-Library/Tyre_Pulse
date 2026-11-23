@@ -11,10 +11,7 @@
  * their sections rather than rebuilt.
  */
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import {
-  Search, LayoutDashboard, Package, ScanLine, ClipboardCheck, AlertTriangle, FileWarning, FileBarChart,
-  ArrowLeftRight, Truck, BookOpen, Database, Settings, Boxes, ChevronDown, Box,
-} from 'lucide-react'
+import { Search, Box } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -49,31 +46,8 @@ const SECTION_COMPONENTS = {
   reports: lazy(() => import('./ReportsSection')),
 }
 
-/** The main inventory sections (listed in the side navigation). Label keys live under inventory.ui.tabs. */
-export const TOP_TABS = [
-  { key: 'overview', icon: LayoutDashboard },
-  { key: 'materials', icon: Package },
-  { key: 'physical', icon: ScanLine },
-  { key: 'audits', icon: ClipboardCheck },
-  { key: 'discrepancies', icon: AlertTriangle },
-  { key: 'corrections', icon: FileWarning },
-  { key: 'reports', icon: FileBarChart },
-]
-
 /** Sections that show the four inventory headline tiles above them. */
 const KPI_SECTIONS = new Set(['materials', 'physical', 'audits', 'discrepancies', 'corrections'])
-
-/** Left sub-navigation. `tab` opens a named tab inside the section. */
-const SIDE_NAV = [
-  { id: 'dashboard', section: 'overview', icon: LayoutDashboard },
-  { id: 'inventory', icon: Boxes, children: ['overview', 'materials', 'physical', 'audits', 'discrepancies', 'corrections', 'reports', 'register'] },
-  { id: 'transactions', section: 'movements', tab: null, icon: ArrowLeftRight },
-  { id: 'transfers', section: 'movements', tab: 'transfers', icon: Truck },
-  { id: 'catalog', section: 'identification', icon: BookOpen },
-  { id: 'masterData', section: 'locations', icon: Database },
-  { id: 'admin', section: 'controls', icon: Settings },
-]
-const IN_SIDE = new Set(['overview', 'materials', 'physical', 'audits', 'discrepancies', 'corrections', 'reports', 'register', 'movements', 'identification', 'locations', 'controls'])
 
 function SectionLoading() {
   return <div style={{ display: 'grid', gap: 10 }} aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="cc-skel" style={{ height: 44 }} />)}</div>
@@ -89,7 +63,6 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
   const [sites, setSites] = useState([])
   const [term, setTerm] = useState('')
   const [seedQuery, setSeedQuery] = useState('')
-  const [moreOpen, setMoreOpen] = useState(false)
   const [show3d, setShow3d] = useState(false)
 
   useEffect(() => {
@@ -107,7 +80,6 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
   const scope = useMemo(() => ({ country: activeCountry && activeCountry !== 'All' ? activeCountry : null, site }), [activeCountry, site])
   const Comp = SECTION_COMPONENTS[current]
   const sectionProps = { scope, can, userId, onNavigate: onSection, tab, onTab, seedQuery }
-  const moreSections = groups.flatMap((g) => g.sections.map((s) => s.key)).filter((k) => !IN_SIDE.has(k))
 
   const go = (key, linkTab = null) => onSection(key, linkTab)
   const submitSearch = (e) => {
@@ -117,7 +89,6 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
     setSeedQuery(q)
     go('materials')
   }
-  const isCurrent = (item) => (item.section === current && (item.tab === undefined || (tab || null) === (item.tab || null)))
 
   return (
     <div className="cc inv-hub inv-pmv">
@@ -133,61 +104,7 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
         </form>
       </header>
 
-      <div className="inv-shell">
-        <nav className="inv-side" aria-label={t('inventory.ui.sideNav')}>
-          <ul>
-            {SIDE_NAV.map((item) => {
-              const Icon = item.icon
-              if (item.children) {
-                const kids = item.children.filter((k) => visible.has(k))
-                if (!kids.length) return null
-                return (
-                  <li key={item.id}>
-                    <span className="inv-side-head"><Icon size={15} aria-hidden="true" /> {t(`inventory.ui.side.${item.id}`)}</span>
-                    <ul className="inv-side-sub">
-                      {kids.map((k) => (
-                        <li key={k}>
-                          <button type="button" className="inv-side-link" aria-current={current === k ? 'page' : undefined} onClick={() => go(k)}>
-                            {t(k === 'register' ? 'inventory.sections.register' : `inventory.ui.tabs.${k}`)}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                )
-              }
-              if (!visible.has(item.section)) return null
-              return (
-                <li key={item.id}>
-                  <button type="button" className="inv-side-link inv-side-top" aria-current={isCurrent(item) ? 'page' : undefined}
-                    onClick={() => go(item.section, item.tab || null)}>
-                    <Icon size={15} aria-hidden="true" /> {t(`inventory.ui.side.${item.id}`)}
-                  </button>
-                </li>
-              )
-            })}
-            {moreSections.length > 0 && (
-              <li>
-                <button type="button" className="inv-side-link inv-side-top" aria-expanded={moreOpen || moreSections.includes(current)}
-                  onClick={() => setMoreOpen((v) => !v)}>
-                  <ChevronDown size={15} aria-hidden="true" /> {t('inventory.ui.side.more')}
-                </button>
-                {(moreOpen || moreSections.includes(current)) && (
-                  <ul className="inv-side-sub">
-                    {moreSections.map((k) => (
-                      <li key={k}>
-                        <button type="button" className="inv-side-link" aria-current={current === k ? 'page' : undefined} onClick={() => go(k)}>
-                          {t(`inventory.sections.${k}`)}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            )}
-          </ul>
-        </nav>
-
+      <div className="inv-shell inv-shell-full">
         <div className="inv-main">
           <div className="inv-scope">
             <span className="cc-pill info" title={t('inventory.scope.countryHint')}>

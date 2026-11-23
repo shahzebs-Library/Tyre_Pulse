@@ -46,48 +46,12 @@ beforeEach(() => {
 })
 
 describe('Inventory Control Center hub', () => {
-  it('renders the shell, the grouped navigation and the legacy register section', async () => {
-    const onSection = vi.fn()
-    renderHub('register', onSection)
+  it('renders the page header and the legacy register section, with no second sidebar', async () => {
+    renderHub('register', vi.fn())
     expect(await screen.findByRole('heading', { name: 'Inventory Control Center' })).toBeTruthy()
     expect(screen.getByText('legacy register')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Audits' }))
-    expect(onSection).toHaveBeenCalledWith('audits', null)
-    // The left menu reaches every section too, including ones outside the top tabs.
-    fireEvent.click(screen.getByRole('button', { name: /Master Data/ }))
-    expect(onSection).toHaveBeenCalledWith('locations', null)
-  })
-
-  it('"Open evidence" lands on the named tab inside the section, and picking a tab reports it back', async () => {
-    const onTab = vi.fn()
-    render(
-      <LanguageProvider>
-        <MemoryRouter>
-          <InventoryHub section="controls" tab="opening" onSection={() => {}} onTab={onTab} renderRegister={() => null} />
-        </MemoryRouter>
-      </LanguageProvider>,
-    )
-    const opening = await screen.findByRole('tab', { name: 'Opening balances' })
-    expect(opening.getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('tab', { name: 'Approvals' }).getAttribute('aria-selected')).toBe('false')
-    fireEvent.click(screen.getByRole('tab', { name: 'Master data reviews' }))
-    expect(onTab).toHaveBeenCalledWith('master')
-  })
-
-  it('valuation honours the linked tab and ignores an unknown one', async () => {
-    const { unmount } = render(
-      <LanguageProvider><MemoryRouter>
-        <InventoryHub section="valuation" tab="costs" onSection={() => {}} renderRegister={() => null} />
-      </MemoryRouter></LanguageProvider>,
-    )
-    expect((await screen.findByRole('tab', { name: 'Cost reconciliation' })).getAttribute('aria-selected')).toBe('true')
-    unmount()
-    render(
-      <LanguageProvider><MemoryRouter>
-        <InventoryHub section="valuation" tab="nonsense" onSection={() => {}} renderRegister={() => null} />
-      </MemoryRouter></LanguageProvider>,
-    )
-    expect((await screen.findByRole('tab', { name: 'Value' })).getAttribute('aria-selected')).toBe('true')
+    // Section navigation lives in the app's own menu, not inside the page.
+    expect(screen.queryByRole('navigation', { name: /inventory/i })).toBeNull()
   })
 
   it('shows honest "not set up" states instead of fake data when the DB objects are missing', async () => {
@@ -105,12 +69,11 @@ describe('Inventory Control Center hub', () => {
   // so it never looked at the Valuation entry. With caps ['view'] the
   // documented fallback (view_value -> view) legitimately SHOWS Valuation; a
   // user with no stock capability at all must not see it.
-  it('hides Valuation from users without the view_value capability', async () => {
+  it('does not open Valuation for users without the view_value capability', async () => {
     auth.caps = []
-    renderHub('overview')
-    fireEvent.click(await screen.findByRole('button', { name: /More/ }))
-    expect(screen.getByRole('button', { name: 'Stock classification' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Valuation' })).toBeNull()
+    renderHub('valuation')
+    expect(await screen.findAllByText('Not installed')).toBeTruthy()
+    expect(screen.queryByRole('tab', { name: 'Cost reconciliation' })).toBeNull()
   })
 })
 

@@ -276,3 +276,5 @@ html.light .inv-pmv .inv-bar-search input, html.light .inv-pmv .inv-mm-input inp
 .inv-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; }
 .inv-title { margin: 0; font-size: 20px; font-weight: 800; color: var(--cc-ink); }
 .inv-head .inv-bar-search { flex: 0 1 380px; }
+
+.inv-shell.inv-shell-full { grid-template-columns: minmax(0, 1fr); }

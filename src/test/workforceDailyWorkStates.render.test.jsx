@@ -68,7 +68,7 @@ beforeEach(() => {
 
 async function openAssignments() {
   render(<LanguageProvider><MemoryRouter><WorkforceDailyWork /></MemoryRouter></LanguageProvider>)
-  fireEvent.click(await screen.findByRole('button', { name: /^(Team Board|My Work)$/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /^(Team Board|My Work)$/ }, { timeout: 10000 }))
 }
 
 describe('WorkforceDailyWork states', () => {

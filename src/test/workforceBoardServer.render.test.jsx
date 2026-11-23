@@ -63,7 +63,9 @@ beforeEach(() => {
 
 async function openBoard () {
   render(<LanguageProvider><MemoryRouter><WorkforceDailyWork /></MemoryRouter></LanguageProvider>)
-  fireEvent.click(await screen.findByRole('button', { name: /^(Team Board|My Work)$/ }))
+  // The first render loads the page's whole module graph; on a busy CI runner that
+  // can take longer than findBy's 1 s default (it failed once that way).
+  fireEvent.click(await screen.findByRole('button', { name: /^(Team Board|My Work)$/ }, { timeout: 10000 }))
 }
 
 describe('team assignments board', () => {

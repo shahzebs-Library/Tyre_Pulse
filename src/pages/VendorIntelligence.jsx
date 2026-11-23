@@ -786,7 +786,7 @@ export default function VendorIntelligence() {
             {/* ─── 3a: Vendor Leaderboard ──────────────────────────────────── */}
             <div>
               <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                <Award size={15} className="text-yellow-400" /> {t('vendorintel.vendor.leaderboard')}
+                <Award size={15} className="text-green-400" /> {t('vendorintel.vendor.leaderboard')}
               </h2>
 
               {!hasVendorData ? (
@@ -1373,7 +1373,7 @@ export default function VendorIntelligence() {
       {/* ─── Section 6: Executive Summary Card ──────────────────────────────── */}
       <div>
         <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-          <Star size={15} className="text-yellow-400" /> {t('vendorintel.execSummary.title')}
+          <Star size={15} className="text-green-400" /> {t('vendorintel.execSummary.title')}
         </h2>
         <div className="bg-[var(--surface-1)] border border-[var(--border-bright)] rounded-xl p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1409,17 +1409,17 @@ export default function VendorIntelligence() {
             </div>
 
             {/* Estimated Annual Saving */}
-            <div className="bg-yellow-950/20 border border-yellow-800/30 rounded-xl p-4">
+            <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <DollarSign size={14} className="text-yellow-400" />
-                <span className="text-xs font-semibold text-yellow-300">{t('vendorintel.execSummary.potentialAnnualSaving')}</span>
+                <DollarSign size={14} className="text-green-400" />
+                <span className="text-xs font-semibold text-[var(--text-secondary)]">{t('vendorintel.execSummary.potentialAnnualSaving')}</span>
               </div>
-              <p className="text-lg font-black text-yellow-300">
+              <p className="text-lg font-black text-[var(--text-primary)]">
                 {(execSummary.estAnnualSaving ?? 0) > 0
                   ? fmtCurrency(execSummary.estAnnualSaving, activeCurrency)
                   : 'N/A'}
               </p>
-              <p className="text-[11px] text-yellow-400/70 mt-1">
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">
                 {(execSummary.estAnnualSaving ?? 0) > 0
                   ? t('vendorintel.execSummary.savingSwitch', { worst: execSummary.worstBrand?.brand ?? 'N/A', best: execSummary.bestBrand?.brand ?? 'N/A' })
                   : t('vendorintel.execSummary.savingUnlock')}
@@ -1427,10 +1427,10 @@ export default function VendorIntelligence() {
             </div>
 
             {/* Best Site */}
-            <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl p-4">
+            <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <CheckCircle size={14} className="text-blue-400" />
-                <span className="text-xs font-semibold text-blue-300">{t('vendorintel.execSummary.bestPerformingSite')}</span>
+                <CheckCircle size={14} className="text-green-400" />
+                <span className="text-xs font-semibold text-[var(--text-secondary)]">{t('vendorintel.execSummary.bestPerformingSite')}</span>
               </div>
               <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.bestSite?.site ?? 'N/A'}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -1438,14 +1438,14 @@ export default function VendorIntelligence() {
                   ? t('vendorintel.execSummary.siteScoreLine', { score: execSummary.bestSite.displayScore.toFixed(0), pct: fmtNum(execSummary.bestSite.highRiskPct) })
                   : t('vendorintel.execSummary.noSiteData')}
               </p>
-              <p className="text-[11px] text-blue-400/70 mt-1">{t('vendorintel.execSummary.bestSiteNote')}</p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">{t('vendorintel.execSummary.bestSiteNote')}</p>
             </div>
 
             {/* Site Needing Attention */}
-            <div className="bg-orange-950/20 border border-orange-800/30 rounded-xl p-4">
+            <div className="bg-amber-950/20 border border-amber-800/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle size={14} className="text-orange-400" />
-                <span className="text-xs font-semibold text-orange-300">{t('vendorintel.execSummary.siteNeedingAttention')}</span>
+                <AlertTriangle size={14} className="text-amber-400" />
+                <span className="text-xs font-semibold text-amber-300">{t('vendorintel.execSummary.siteNeedingAttention')}</span>
               </div>
               <p className="text-lg font-black text-[var(--text-primary)]">{execSummary.worstSite?.site ?? 'N/A'}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -1453,14 +1453,14 @@ export default function VendorIntelligence() {
                   ? t('vendorintel.execSummary.siteScoreLine', { score: execSummary.worstSite.displayScore.toFixed(0), pct: fmtNum(execSummary.worstSite.highRiskPct) })
                   : t('vendorintel.execSummary.noSiteData')}
               </p>
-              <p className="text-[11px] text-orange-400/70 mt-1">{t('vendorintel.execSummary.attentionNote')}</p>
+              <p className="text-[11px] text-amber-400/70 mt-1">{t('vendorintel.execSummary.attentionNote')}</p>
             </div>
 
             {/* Total Fleet Investment */}
-            <div className="bg-blue-950/20 border border-blue-800/30 rounded-xl p-4">
+            <div className="bg-[var(--surface-2)] border border-[var(--border-dim)] rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <Wrench size={14} className="text-blue-400" />
-                <span className="text-xs font-semibold text-blue-300">{t('vendorintel.execSummary.totalFleetInvestment')}</span>
+                <Wrench size={14} className="text-green-400" />
+                <span className="text-xs font-semibold text-[var(--text-secondary)]">{t('vendorintel.execSummary.totalFleetInvestment')}</span>
               </div>
               <p className="text-lg font-black text-[var(--text-primary)]">{fleetTyreCost != null ? fmtCurrency(fleetTyreCost, activeCurrency) : 'N/A'}</p>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -1470,7 +1470,7 @@ export default function VendorIntelligence() {
                     ? 'The expense grid could not be read.'
                     : 'From the classified expense grid, last 12 months, all sites.'}
               </p>
-              <p className="text-[11px] text-blue-400/70 mt-1">
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">
                 {enrichedVendors.length > 0 ? t('vendorintel.execSummary.brandsTracked', { count: enrichedVendors.length }) : t('vendorintel.execSummary.noBrandData')}
               </p>
             </div>

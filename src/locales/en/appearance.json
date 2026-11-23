@@ -1,6 +1,6 @@
 {
   "title": "Appearance",
-  "subtitle": "Personalise how TyrePulse looks for you. Saved on this device.",
+  "subtitle": "Personalise how TyrePulse looks for you. Saved on this device and to your account.",
   "reset": "Reset",
   "theme": "Theme",
   "modes": {
@@ -17,5 +17,17 @@
     "compact": "Compact"
   },
   "reduceMotion": "Reduce motion",
-  "reduceMotionHint": "Minimise animations and transitions."
+  "reduceMotionHint": "Minimise animations and transitions.",
+  "accents": {
+    "green": "Fleet Green",
+    "blue": "Blue",
+    "teal": "Teal",
+    "indigo": "Indigo",
+    "orange": "Orange",
+    "slate": "Slate"
+  },
+  "preview": "Preview",
+  "previewNav": "Active menu item",
+  "previewButton": "Primary button",
+  "previewLink": "Accent text"
 }

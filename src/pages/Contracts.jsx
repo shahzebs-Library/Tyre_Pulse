@@ -27,6 +27,7 @@ import {
 } from 'chart.js'
 import { Bar, Doughnut } from 'react-chartjs-2'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import Card from '../components/ui/Card'
 import Modal from '../components/ui/Modal'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -165,11 +166,11 @@ function ContractModal({ open, initial, currency, onClose, onSaved }) {
             </div>
             <div>
               <label className="label" htmlFor="ct-start">Start date</label>
-              <input id="ct-start" type="date" className="input w-full" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} />
+              <DateField ariaLabel="Start date" value={form.start_date} onChange={(v) => set('start_date', v)} />
             </div>
             <div>
               <label className="label" htmlFor="ct-end">End / renewal date</label>
-              <input id="ct-end" type="date" className="input w-full" value={form.end_date} onChange={(e) => set('end_date', e.target.value)} />
+              <DateField ariaLabel="End / renewal date" value={form.end_date} onChange={(v) => set('end_date', v)} />
             </div>
             <div>
               <label className="label" htmlFor="ct-value">Value ({currency})</label>
@@ -354,13 +355,13 @@ export default function Contracts() {
     {
       label: 'Annualized live',
       value: kpis.liveAnnualizedValue == null ? 'N/A' : money(kpis.liveAnnualizedValue),
-      icon: TrendingUp, tone: 'text-sky-400', sub: kpis.liveAnnualizedValue == null ? 'Needs start and end dates' : mixedNote,
+      icon: TrendingUp, tone: 'text-[var(--brand-bright)]', sub: kpis.liveAnnualizedValue == null ? 'Needs start and end dates' : mixedNote,
     },
     {
       label: 'Next renewal',
       value: kpis.nextRenewal ? `${kpis.nextRenewal.daysRemaining} days` : 'N/A',
       sub: kpis.nextRenewal ? kpis.nextRenewal.contract.title : 'None upcoming',
-      icon: Repeat, tone: 'text-blue-400',
+      icon: Repeat, tone: 'text-[var(--text-primary)]',
     },
   ]
 
@@ -667,9 +668,9 @@ export default function Contracts() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-[var(--text-muted)] inline-flex items-center gap-1"><ArrowUpDown size={12} aria-hidden="true" /> Renewal between</span>
-              <input type="date" className="input" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="Renewal from" />
+              <DateField className="w-40" value={fromDate} onChange={(v) => setFromDate(v)} ariaLabel="Renewal from" placeholder="From date" />
               <span className="text-xs text-[var(--text-muted)]">and</span>
-              <input type="date" className="input" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="Renewal to" />
+              <DateField className="w-40" value={toDate} onChange={(v) => setToDate(v)} ariaLabel="Renewal to" placeholder="To date" />
               {hasFilters && (
                 <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
                   <X size={14} aria-hidden="true" /> Clear

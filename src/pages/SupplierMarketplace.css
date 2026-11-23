@@ -83,11 +83,13 @@
 .sm-funnel-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .sm-funnel-bar { justify-self: center; display: block; text-align: center; font-size: 11.5px; font-weight: 600; padding: 7px 6px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sm-funnel-bar { color: #fff; clip-path: polygon(0 0, 100% 0, 95% 100%, 5% 100%); border-radius: 4px; font-size: 10.5px; padding: 7px 8px; }
+/* Funnel stages are a progression, not a status: one brand-green ramp
+   (no amber / orange / red, which read as warnings). */
 .sm-funnel-bar.t-green { background: #16a34a; }
-.sm-funnel-bar.t-green2 { background: #4fae3b; }
-.sm-funnel-bar.t-amber { background: #c99a12; }
-.sm-funnel-bar.t-orange { background: #e0662a; }
-.sm-funnel-bar.t-red { background: #d43a4a; }
+.sm-funnel-bar.t-green2 { background: #15803d; }
+.sm-funnel-bar.t-amber { background: #166534; }
+.sm-funnel-bar.t-orange { background: #14532d; }
+.sm-funnel-bar.t-red { background: #0f3d22; }
 .sm-funnel-list li.is-unrecorded .sm-funnel-bar { opacity: 0.45; }
 .sm-funnel-list li { display: grid; grid-template-columns: minmax(0, 1fr) 34px 64px; align-items: center; gap: 8px; }
 .sm-funnel-list b { text-align: right; font-size: 15px; color: var(--cc-ink); }

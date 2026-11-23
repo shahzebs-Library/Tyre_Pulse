@@ -511,7 +511,7 @@ export default function PartsCatalog() {
       {loaded && summary.total > 0 && (
         <div className="space-y-6">
           <div className="flex items-center gap-2 pt-1">
-            <BarChart3 size={18} className="text-sky-400" aria-hidden="true" />
+            <BarChart3 size={18} className="text-green-400" aria-hidden="true" />
             <h2 className="font-bold text-[var(--text-primary)]">Inventory analytics</h2>
             <span className="text-xs text-[var(--text-muted)] ml-auto">Across all {summary.total} catalog parts</span>
           </div>

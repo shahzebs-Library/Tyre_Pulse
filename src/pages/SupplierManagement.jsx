@@ -745,7 +745,7 @@ export default function SupplierManagement() {
                   <Lock size={11} /> Locked
                 </span>
               )}
-              <button onClick={() => setContractModal(c)} aria-label="Edit contract" className="p-1.5 text-[var(--text-muted)] hover:text-blue-400 hover:bg-[var(--input-bg)] rounded">
+              <button onClick={() => setContractModal(c)} aria-label="Edit contract" className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] rounded">
                 <Edit3 size={13} />
               </button>
               <button
@@ -860,13 +860,13 @@ export default function SupplierManagement() {
         icon={Building2}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg">
+            <button onClick={fetchData} className="btn-secondary">
               <RefreshCw size={13} /> {t('suppliers.actions.refresh')}
             </button>
-            <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm rounded-lg">
+            <button onClick={handleExcelExport} className="btn-secondary">
               <FileSpreadsheet size={13} /> {t('suppliers.actions.excel')}
             </button>
-            <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white text-sm rounded-lg">
+            <button onClick={handlePdfExport} className="btn-secondary">
               <FileText size={13} /> {t('suppliers.actions.pdf')}
             </button>
           </div>
@@ -915,7 +915,7 @@ export default function SupplierManagement() {
         <div className="relative">
           <Search size={13} className="absolute left-2.5 top-2.5 text-[var(--text-muted)]" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('suppliers.searchPlaceholder')}
-            className="pl-7 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-44" />
+            className="input pl-7 w-44" />
         </div>
         {[
           { label: 'Country', allKey: 'allCountries', value: filterCountry, opts: countries, set: setFilterCountry },
@@ -924,7 +924,7 @@ export default function SupplierManagement() {
         ].map(f => (
           <div key={f.label} className="relative">
             <select value={f.value} onChange={e => f.set(e.target.value)}
-              className="appearance-none bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] px-3 py-2 pr-7 focus:outline-none focus:border-blue-500">
+              className="input w-auto min-w-[9rem] appearance-none pr-7">
               {f.opts.map(o => <option key={o} value={o}>{o === 'All' ? t(`suppliers.filters.${f.allKey}`) : (f.label === 'Rating' ? t(`suppliers.ratings.${RATING_I18N_KEYS[o]}`) : o)}</option>)}
             </select>
             <ChevronDown size={12} className="absolute right-2 top-3 text-[var(--text-muted)] pointer-events-none" />
@@ -944,7 +944,7 @@ export default function SupplierManagement() {
         {TABS.map((tabLabel, i) => (
           <button key={tabLabel} onClick={() => setActiveTab(i)}
             className={`flex-1 min-w-max px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-              activeTab === i ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
+              activeTab === i ? 'bg-brand-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
             }`}>
             {t(`suppliers.tabs.${TAB_I18N_KEYS[i]}`)}
           </button>
@@ -987,7 +987,7 @@ export default function SupplierManagement() {
                           </div>
                         </div>
                         <button onClick={() => toggleCompare(supplier.brand)}
-                          className={`p-1.5 rounded-lg text-xs transition-colors ${inCompare ? 'bg-blue-600 text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                          className={`p-1.5 rounded-lg text-xs transition-colors ${inCompare ? 'bg-brand-600 text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                           title={inCompare ? t('suppliers.directory.removeFromCompare') : t('suppliers.directory.addToCompare')}>
                           <BarChart3 size={13} />
                         </button>
@@ -1060,7 +1060,7 @@ export default function SupplierManagement() {
                   return (
                     <button key={m.brand} onClick={() => toggleCompare(m.brand)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        sel ? 'bg-blue-600 border-blue-500 text-white' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--input-border)]'
+                        sel ? 'bg-brand-600 border-brand-500 text-white' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--input-border)]'
                       } ${!sel && compareList.length >= 4 ? 'opacity-40 cursor-not-allowed' : ''}`}
                       disabled={!sel && compareList.length >= 4}>
                       {m.brand}
@@ -1181,14 +1181,14 @@ export default function SupplierManagement() {
             {!contractsLoading && !contractsError && (
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 {[
-                  { label: 'Contracts', value: contractSummary.total, color: 'text-blue-400', status: 'All' },
+                  { label: 'Contracts', value: contractSummary.total, color: 'text-[var(--text-primary)]', status: 'All' },
                   { label: 'Active', value: contractSummary.active, color: 'text-emerald-400', status: 'Active' },
                   { label: 'Expiring in 30 days', value: contractSummary.expiringSoon, color: 'text-amber-400', status: 'Expiring Soon' },
                   { label: 'Expired', value: contractSummary.expired, color: 'text-red-400', status: 'Expired' },
                 ].map(k => (
                   <button key={k.label} type="button" onClick={() => setContractStatusFilter(k.status)}
                     aria-pressed={contractStatusFilter === k.status}
-                    className={`text-left bg-[var(--surface-1)] border rounded-xl p-3 transition-colors ${contractStatusFilter === k.status ? 'border-blue-500' : 'border-[var(--input-border)] hover:border-blue-500/50'}`}>
+                    className={`text-left bg-[var(--surface-1)] border rounded-xl p-3 transition-colors ${contractStatusFilter === k.status ? 'border-brand-500' : 'border-[var(--input-border)] hover:border-brand-500/50'}`}>
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <p className={`text-xl font-bold ${k.color}`}>{k.value}</p>
                   </button>
@@ -1212,12 +1212,12 @@ export default function SupplierManagement() {
                   <input value={contractSearch} onChange={e => setContractSearch(e.target.value)}
                     placeholder={t('suppliers.contracts.searchPlaceholder')}
                     aria-label={t('suppliers.contracts.searchPlaceholder')}
-                    className="pl-7 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-52" />
+                    className="input pl-7 w-52" />
                 </div>
                 <div className="relative">
                   <select value={contractStatusFilter} onChange={e => setContractStatusFilter(e.target.value)}
                     aria-label="Contract status"
-                    className="appearance-none bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] px-3 py-2 pr-7 focus:outline-none focus:border-blue-500">
+                    className="input w-auto min-w-[9rem] appearance-none pr-7">
                     <option value="All">All statuses</option>
                     {CONTRACT_STATUSES.map(st => (
                       <option key={st} value={st}>{t(`suppliers.contracts.statuses.${CONTRACT_STATUS_I18N_KEYS[st]}`)}</option>
@@ -1251,7 +1251,7 @@ export default function SupplierManagement() {
 
             {contractsLoading ? (
               <div className="flex items-center justify-center py-16">
-                <Loader2 size={28} className="animate-spin text-blue-500" />
+                <Loader2 size={28} className="animate-spin text-green-400" />
               </div>
             ) : contractsError ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -1291,7 +1291,7 @@ export default function SupplierManagement() {
         {activeTab === 4 && (
           <motion.div key="recs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
             <div className="flex items-center gap-2 mb-1">
-              <Zap size={16} className="text-blue-400" />
+              <Zap size={16} className="text-green-400" />
               <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.recommendations.title')}</h3>
               <span className="text-xs text-[var(--text-dim)] ml-auto">{t('suppliers.recommendations.basedOn', { count: records.length })}</span>
             </div>
@@ -1372,7 +1372,7 @@ export default function SupplierManagement() {
             {/* Band / grade summary (from lifecycleBand + scoreGrade) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: 'Avg Score', value: scorecard.totals.avgScore, icon: Gauge, color: 'text-blue-400' },
+                { label: 'Avg Score', value: scorecard.totals.avgScore, icon: Gauge, color: 'text-[var(--text-primary)]' },
                 { label: 'Preferred', value: scorecard.totals.preferredCount, icon: Award, color: 'text-emerald-400' },
                 { label: 'At Risk', value: scorecard.totals.atRiskCount, icon: ShieldCheck, color: 'text-orange-400' },
                 { label: 'Flagged', value: scorecard.totals.flaggedCount, icon: Flag, color: 'text-red-400' },

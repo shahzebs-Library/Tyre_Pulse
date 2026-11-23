@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { ACCENT_THEMES, applyAccentVars, accentCache, normalizeAccentChoice } from '../lib/appThemes'
 
 /**
  * Appearance context — the single source of truth for how the app looks for the
@@ -18,19 +19,19 @@ import { createContext, useContext, useEffect, useState, useCallback, useMemo } 
 
 const AppearanceContext = createContext(null)
 
-const KEY = { mode: 'tp_mode', accent: 'tp_accent', density: 'tp_density', motion: 'tp_motion' }
+const KEY = {
+  mode: 'tp_mode', accent: 'tp_accent', density: 'tp_density', motion: 'tp_motion',
+  // Pre-paint cache read by public/theme-init.js, and the time of the last
+  // local appearance change (used to decide whether the device or the account
+  // copy is newer when a user signs in on another device).
+  accentVars: 'tp_accent_vars', changedAt: 'tp_appearance_at',
+}
 
-/** Curated accent presets. `value` seeds the accent + the whole brand ramp. */
-export const ACCENT_PRESETS = [
-  { id: 'green',   label: 'Fleet Green', value: '#16a34a' },
-  { id: 'emerald', label: 'Emerald',     value: '#059669' },
-  { id: 'teal',    label: 'Teal',        value: '#0d9488' },
-  { id: 'cyan',    label: 'Cyan',        value: '#0891b2' },
-  { id: 'blue',    label: 'Ocean',       value: '#2563eb' },
-  { id: 'rose',    label: 'Rose',        value: '#e11d48' },
-  { id: 'amber',   label: 'Amber',       value: '#d97706' },
-  { id: 'slate',   label: 'Graphite',    value: '#475569' },
-]
+/**
+ * Accent presets come from src/lib/appThemes.js (the single source). `value`
+ * is the stored choice (a preset id); `swatch` is what the picker paints.
+ */
+export const ACCENT_PRESETS = ACCENT_THEMES.map((t) => ({ id: t.id, label: t.label, value: t.id, swatch: t.swatch }))
 
 export const THEME_MODES = [
   { id: 'light',  label: 'Light' },
@@ -42,28 +43,6 @@ export const DENSITIES = [
   { id: 'comfortable', label: 'Comfortable' },
   { id: 'compact',     label: 'Compact' },
 ]
-
-const HEX_RE = /^#([0-9a-f]{6})$/i
-
-function normHex(v) {
-  if (!v) return ''
-  let s = String(v).trim()
-  if (s && s[0] !== '#') s = `#${s}`
-  if (/^#([0-9a-f]{3})$/i.test(s)) s = '#' + s.slice(1).split('').map((c) => c + c).join('')
-  return HEX_RE.test(s) ? s.toLowerCase() : ''
-}
-
-function hexToRgb(hex) {
-  const m = normHex(hex).slice(1)
-  return { r: parseInt(m.slice(0, 2), 16), g: parseInt(m.slice(2, 4), 16), b: parseInt(m.slice(4, 6), 16) }
-}
-function rgba(hex, a) { const { r, g, b } = hexToRgb(hex); return `rgba(${r},${g},${b},${a})` }
-/** Lighten toward white by t (0..1) — used to derive the brighter accent stop. */
-function lighten(hex, t) {
-  const { r, g, b } = hexToRgb(hex)
-  const mix = (c) => Math.round(c + (255 - c) * t)
-  return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`
-}
 
 function systemDark() {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -78,11 +57,14 @@ function readInitial(key, fallback, legacyKeys = []) {
   return fallback
 }
 
+// Account sync is skipped under the test runner: it would reach the network.
+const SYNC_ENABLED = typeof window !== 'undefined' && import.meta.env?.MODE !== 'test'
+
 export function ThemeProvider({ children }) {
   // Light-first: a clean professional light theme is the default experience.
   // Users can still pick Dark or System in Settings → Appearance.
   const [mode, setMode] = useState(() => readInitial(KEY.mode, 'light', ['tyrepulse-theme', 'theme']))
-  const [accent, setAccentRaw] = useState(() => normHex(readInitial(KEY.accent, '')))
+  const [accent, setAccentRaw] = useState(() => normalizeAccentChoice(readInitial(KEY.accent, '')))
   const [density, setDensity] = useState(() => readInitial(KEY.density, 'comfortable'))
   const [reducedMotion, setReducedMotion] = useState(() => readInitial(KEY.motion, '0') === '1')
 
@@ -104,26 +86,16 @@ export function ThemeProvider({ children }) {
     try { localStorage.setItem(KEY.mode, mode); localStorage.removeItem('tyrepulse-theme'); localStorage.removeItem('theme') } catch { /* ignore */ }
   }, [isDark, mode])
 
-  // Personal accent → seeds the accent + brand ramp so buttons, focus rings and
-  // gradients all follow it. Clearing it hands control back to the org brand.
+  // Personal accent → writes the accent token set (src/lib/appThemes.js) for
+  // the resolved mode onto <html>. '' hands control back to the org brand;
+  // Green writes nothing, so the stylesheet defaults apply unchanged.
   useEffect(() => {
-    const r = document.documentElement
-    const props = ['--accent', '--accent-strong', '--accent-ring', '--brand', '--brand-bright', '--brand-electric', '--brand-glow']
-    if (accent) {
-      r.style.setProperty('--accent', accent)
-      r.style.setProperty('--accent-strong', lighten(accent, 0.18))
-      r.style.setProperty('--accent-ring', rgba(accent, 0.55))
-      r.style.setProperty('--brand', accent)
-      r.style.setProperty('--brand-bright', lighten(accent, 0.16))
-      r.style.setProperty('--brand-electric', lighten(accent, 0.32))
-      r.style.setProperty('--brand-glow', rgba(accent, 0.4))
-      r.dataset.userAccent = '1'
-    } else if (r.dataset.userAccent) {
-      props.forEach((p) => r.style.removeProperty(p))
-      delete r.dataset.userAccent
-    }
-    try { localStorage.setItem(KEY.accent, accent) } catch { /* ignore */ }
-  }, [accent])
+    applyAccentVars(document.documentElement, accent, isDark ? 'dark' : 'light')
+    try {
+      localStorage.setItem(KEY.accent, accent)
+      localStorage.setItem(KEY.accentVars, JSON.stringify(accentCache(accent)))
+    } catch { /* ignore */ }
+  }, [accent, isDark])
 
   // Density + motion
   useEffect(() => {
@@ -135,15 +107,78 @@ export function ThemeProvider({ children }) {
     try { localStorage.setItem(KEY.motion, reducedMotion ? '1' : '0') } catch { /* ignore */ }
   }, [reducedMotion])
 
-  const setAccent = useCallback((v) => setAccentRaw(v ? normHex(v) : ''), [])
-  const toggleTheme = useCallback(() => setMode(isDark ? 'light' : 'dark'), [isDark])
+  // ── Account sync ─────────────────────────────────────────────────────────
+  // Every user change stamps a local time and is saved to the signed-in
+  // user's profile (debounced). On sign-in the newer of device vs account
+  // wins, so the choice follows the user to any device.
+  const remoteApplying = useRef(false)
+  const saveTimer = useRef(null)
+  const dirty = useRef(false)
+  const stamp = useCallback(() => {
+    if (remoteApplying.current) return
+    dirty.current = true
+    try { localStorage.setItem(KEY.changedAt, String(Date.now())) } catch { /* ignore */ }
+  }, [])
+  const setAccent = useCallback((v) => { stamp(); setAccentRaw(normalizeAccentChoice(v)) }, [stamp])
+  const setModeTracked = useCallback((m) => { stamp(); setMode(m) }, [stamp])
+
+  useEffect(() => {
+    if (!SYNC_ENABLED) return undefined
+    let cancelled = false
+    let unsub = () => {}
+    import('../lib/api/uiPreferences').then(async (api) => {
+      if (cancelled) return
+      const sync = async (uid) => {
+        try {
+          const res = await api.readUiPreferences(uid)
+          if (!res.ok || cancelled) return
+          const remote = api.parseAppearance(res.prefs)
+          const localAt = Number(readInitial(KEY.changedAt, '0')) || 0
+          if (remote && remote.updatedAt > localAt) {
+            remoteApplying.current = true
+            if (remote.mode) setMode(remote.mode)
+            if (remote.accent != null) setAccentRaw(normalizeAccentChoice(remote.accent))
+            remoteApplying.current = false
+            try { localStorage.setItem(KEY.changedAt, String(remote.updatedAt)) } catch { /* ignore */ }
+          } else if (localAt && (!remote || localAt > remote.updatedAt)) {
+            await api.saveAppearancePreference(uid, {
+              mode: readInitial(KEY.mode, 'light'),
+              accent: readInitial(KEY.accent, ''),
+              updatedAt: localAt,
+            })
+          }
+        } catch { /* the device copy keeps working */ }
+      }
+      unsub = api.onSignedIn(sync)
+    }).catch(() => {})
+    return () => { cancelled = true; unsub() }
+  }, [])
+
+  // Push local changes to the account shortly after they happen.
+  useEffect(() => {
+    // Only a change the user just made is pushed; never the value loaded at
+    // start-up, which could overwrite a newer copy saved from another device.
+    if (!SYNC_ENABLED || !dirty.current) return undefined
+    dirty.current = false
+    const at = Number(readInitial(KEY.changedAt, '0')) || 0
+    if (!at) return undefined
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      import('../lib/api/uiPreferences').then(async (api) => {
+        const uid = await api.currentUserId()
+        if (uid) await api.saveAppearancePreference(uid, { mode, accent, updatedAt: at })
+      }).catch(() => {})
+    }, 800)
+    return () => clearTimeout(saveTimer.current)
+  }, [mode, accent])
+  const toggleTheme = useCallback(() => setModeTracked(isDark ? 'light' : 'dark'), [isDark, setModeTracked])
   // `setTheme` is the mode setter with a guard so only valid modes are accepted.
   const setTheme = useCallback((m) => {
-    if (m === 'light' || m === 'dark' || m === 'system') setMode(m)
-  }, [])
+    if (m === 'light' || m === 'dark' || m === 'system') setModeTracked(m)
+  }, [setModeTracked])
   const reset = useCallback(() => {
-    setMode('system'); setAccentRaw(''); setDensity('comfortable'); setReducedMotion(false)
-  }, [])
+    stamp(); setMode('system'); setAccentRaw(''); setDensity('comfortable'); setReducedMotion(false)
+  }, [stamp])
 
   const resolvedTheme = isDark ? 'dark' : 'light'
 
@@ -154,10 +189,10 @@ export function ThemeProvider({ children }) {
     // `resolvedTheme` = what is actually applied, `setTheme`/`toggleTheme` mutate it.
     resolvedTheme, setTheme,
     // appearance
-    mode, setMode, accent, setAccent, density, setDensity, reducedMotion, setReducedMotion,
+    mode, setMode: setTheme, accent, setAccent, density, setDensity, reducedMotion, setReducedMotion,
     reset, presets: ACCENT_PRESETS, modes: THEME_MODES, densities: DENSITIES,
     isCustomAccent: !!accent, isDefaultAppearance: mode === 'system' && !accent && density === 'comfortable' && !reducedMotion,
-  }), [resolvedTheme, isDark, toggleTheme, setTheme, mode, setMode, accent, setAccent, density, reducedMotion, reset])
+  }), [resolvedTheme, isDark, toggleTheme, setTheme, mode, accent, setAccent, density, reducedMotion, reset])
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>
 }

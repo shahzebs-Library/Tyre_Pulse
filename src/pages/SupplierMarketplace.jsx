@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { toUserMessage } from '../lib/safeError'
 import Modal from '../components/ui/Modal'
+import DateField from '../components/ui/DateField'
 import { Card, CardState, Kpi, KitTable, PageHero, Tabs, ViewAll, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
@@ -671,7 +672,7 @@ export default function SupplierMarketplace() {
                 <label className="block"><span className="label">Quantity</span>
                   <input className="input w-full" type="number" step="1" min="0" inputMode="numeric" placeholder="40" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} /></label>
                 <label className="block"><span className="label">Needed by</span>
-                  <input className="input w-full" type="date" value={form.needed_by} onChange={(e) => set('needed_by', e.target.value)} /></label>
+                  <DateField ariaLabel="Needed by" value={form.needed_by} onChange={(v) => set('needed_by', v)} /></label>
                 <label className="block"><span className="label">Target price</span>
                   <input className="input w-full" type="number" step="0.01" min="0" inputMode="decimal" placeholder="1100" value={form.target_price} onChange={(e) => set('target_price', e.target.value)} /></label>
                 <label className="block"><span className="label">Best quote</span>

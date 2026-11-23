@@ -38,6 +38,7 @@ import Card, { CardHeader } from '../components/ui/Card'
 import StatTile from '../components/ui/StatTile'
 import EChart from '../components/charts/EChart'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import DateField from '../components/ui/DateField'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -71,9 +72,8 @@ const TABS = [
   { key: 'analytics', label: 'Analytics', icon: TrendingUp },
 ]
 
-const inputCls = 'w-full bg-[var(--input-bg)] border border-[var(--input-border)] '
-  + 'rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none '
-  + 'focus:border-[var(--accent)]'
+// The app's shared `.input` control style (same as every other register).
+const inputCls = 'input'
 
 const btnCls = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg '
   + 'bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] '
@@ -369,9 +369,9 @@ export default function StoreMaterialIssue() {
         </label>
       </Card>
 
-      {/* Window + filters. No `clip`: every control here is a native <select> or
-          <input type="date">, whose popups the browser paints outside the
-          page's overflow context, so there is nothing to crop. */}
+      {/* Window + filters. No `clip`: the selects are native and the dates use
+          DateField, whose calendar is portalled outside the card, so there is
+          nothing to crop. */}
       <Card className="gap-[var(--space-3)]">
         <CardHeader
           className="!mb-0"
@@ -382,11 +382,11 @@ export default function StoreMaterialIssue() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>From</span>
-            <input type="date" value={from} onChange={(e) => { setHistoryPeriod('custom'); setFrom(e.target.value) }} className={inputCls} />
+            <DateField ariaLabel="From" value={from} onChange={(v) => { setHistoryPeriod('custom'); setFrom(v) }} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>To</span>
-            <input type="date" value={to} onChange={(e) => { setHistoryPeriod('custom'); setTo(e.target.value) }} className={inputCls} />
+            <DateField ariaLabel="To" value={to} onChange={(v) => { setHistoryPeriod('custom'); setTo(v) }} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>Document</span>

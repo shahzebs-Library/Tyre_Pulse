@@ -61,7 +61,8 @@ const EMPTY_FORM = {
 const MOVEMENT_TYPES = ['receipt', 'return', 'transfer_in', 'adjustment_up', 'issue', 'transfer_out', 'scrap', 'adjustment_down']
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-bright,#22c55e)]'
-const CTRL = `min-h-[44px] bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg px-3 ${FOCUS}`
+// Filter controls use the app's shared `.input` style (same as every other register).
+const CTRL = `input min-h-[44px] ${FOCUS}`
 
 // Cover band -> text colour. The day count is always printed beside it.
 const COVER_TONE = {

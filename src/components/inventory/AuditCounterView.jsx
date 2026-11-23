@@ -125,7 +125,7 @@ export default function AuditCounterView({ audit, round = 1, onSubmitted }) {
             <div style={{ minWidth: 0 }}>
               <b style={{ color: 'var(--cc-ink)' }}>{l.item_code || l.serial_no || t('inventory.count.unnamed')}</b>
               <div className="cc-card-sub">{[l.description, l.location_code, l.serial_no && `${t('inventory.common.serial')} ${l.serial_no}`].filter(Boolean).join(' | ')}</div>
-              {why && <div className="cc-card-sub" role="alert" style={{ color: 'var(--cc-bad, #b91c1c)' }}>{why}</div>}
+              {why && <div className="cc-card-sub" role="alert" style={{ color: 'var(--cc-red)' }}>{why}</div>}
             </div>
             <input className="inv-input inv-num" inputMode="decimal" type="number" min="0" step="any"
               aria-label={t('inventory.count.qtyFor', { item: l.item_code || l.serial_no || '' })}
@@ -154,7 +154,7 @@ export default function AuditCounterView({ audit, round = 1, onSubmitted }) {
           <Field label={t('inventory.count.qty')}><input className="inv-input" type="number" min="0" step="any" value={x.counted_qty} onChange={(e) => setExtras((xs) => xs.map((y, j) => (j === i ? { ...y, counted_qty: e.target.value } : y)))} /></Field>
           <Field label={t('inventory.count.remarks')}><input className="inv-input" value={x.remarks} onChange={(e) => setExtras((xs) => xs.map((y, j) => (j === i ? { ...y, remarks: e.target.value } : y)))} /></Field>
           {(extraErr.get(x.id) || reasonFor(x.id)) && (
-            <div className="cc-card-sub" role="alert" style={{ color: 'var(--cc-bad, #b91c1c)' }}>
+            <div className="cc-card-sub" role="alert" style={{ color: 'var(--cc-red)' }}>
               {extraErr.get(x.id) ? t(extraErr.get(x.id)) : reasonFor(x.id)}
             </div>
           )}

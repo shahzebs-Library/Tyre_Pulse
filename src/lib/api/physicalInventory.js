@@ -11,12 +11,13 @@
  * Each image is resized in the browser, hashed (SHA-256) and attached once:
  * the same bytes on the same record are stored once.
  */
-import { supabase, ServiceError, toServiceError, isNotProvisioned, isMissingColumn } from './_client'
+import { supabase, ServiceError, toServiceError, isNotProvisioned, isMissingColumn, fetchAllPages } from './_client'
 import { sanitizeSearchTerm, escapeLike } from '../searchFilter'
 import { NOT_SET_UP_CODE, NOT_SET_UP_MESSAGE, inventoryRefusalText, newIdempotencyKey, listLocations, loadBalanceSnapshot } from './inventory'
 import { resolveStorageUrlMap } from '../storageRefs'
 import { photoPath, newClientUuid } from '../inventory/physicalInventory'
 import { currentOrgId, isOrgId } from './companyScope'
+import { STATED_CLASSES, PENDING_BATCH_STATUSES, quoteFilterValue, skuKey } from '../inventory/materialCatalogView'
 
 export const PHOTO_BUCKET = 'tyre-photos'
 const MAX_PHOTO_BYTES = 20 * 1024 * 1024
@@ -404,4 +405,166 @@ export async function getMaterial(id) {
     throw toServiceError(error)
   }
   return data || null
+}
+
+// ── Material Master catalogue (brand, part type, stock) ─────────────────────
+// Server-paged list of company materials plus batched lookups for the visible
+// page only. Posted stock is read from v_inv_balances (security-invoker view
+// over stock_records) matched on item_code = company SKU; pending opening stock
+// from opening_balance_lines in draft / submitted batches, matched on the raw
+// item code of the line. RLS decides what the caller sees in every read.
+
+export const CATALOG_COLS = `${CANONICAL_COLS}, specs`
+const CATALOG_SET_MAX = 20000
+
+const readAll = async (build, max = CATALOG_SET_MAX) => {
+  const { data, error, truncated } = await fetchAllPages((from, to) => build().range(from, to), { max })
+  if (error) throw error
+  return { rows: data || [], truncated: !!truncated }
+}
+
+const PART_TYPE_CLASSES = { genuine: ['genuine'], oes: ['oes'], aftermarket: ['aftermarket'], local: ['local'], not_stated: STATED_CLASSES }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function catalogOr({ search, brand, matchIds }) {
+  const parts = []
+  const s = sanitizeSearchTerm(search)
+  if (s) {
+    const v = quoteFilterValue(like(s))
+    // matchIds: materials the reference search found by OEM / part number / alias.
+    const ids = (matchIds || []).filter((id) => UUID_RE.test(String(id))).slice(0, 50)
+    const byId = ids.length ? `,id.in.(${ids.join(',')})` : ''
+    parts.push(`or(description.ilike.${v},company_sku.ilike.${v},brand.ilike.${v},manufacturer.ilike.${v}${byId})`)
+  }
+  if (brand && brand !== 'all') {
+    const v = quoteFilterValue(brand)
+    parts.push(`or(brand.eq.${v},manufacturer.eq.${v},specs->>brand.eq.${v})`)
+  }
+  if (!parts.length) return null
+  return parts.length === 1 ? parts[0].slice(3, -1) : `and(${parts.join(',')})`
+}
+
+function applyCatalogBase(q, { status, category, search, brand, matchIds }) {
+  if (status && status !== 'all') q = q.eq('status', status)
+  if (category && category !== 'all') q = q.eq('category', category)
+  const or = catalogOr({ search, brand, matchIds })
+  return or ? q.or(or) : q
+}
+
+/** Canonical ids carrying a variant of the requested part type (or, for not_stated, any stated type). */
+async function partTypeIdSet(partType) {
+  const cls = PART_TYPE_CLASSES[partType]
+  if (!cls) return null
+  const { rows, truncated } = await readAll(() => supabase.from('material_variants').select('canonical_id, id')
+    .in('part_classification', cls).in('status', ['proposed', 'active']).order('id', { ascending: true }))
+  return { ids: new Set(rows.map((r) => r.canonical_id)), truncated }
+}
+
+/** Company SKUs with posted stock on hand, or with opening stock still waiting for approval. */
+async function stockSkuSet(stock) {
+  if (stock === 'posted') {
+    const { rows, truncated } = await readAll(() => supabase.from('v_inv_balances').select('id, item_code')
+      .gt('qty_on_hand', 0).order('id', { ascending: true }))
+    return { skus: new Set(rows.map((r) => skuKey(r.item_code))), truncated }
+  }
+  if (stock === 'pending') {
+    const { rows, truncated } = await readAll(() => supabase.from('opening_balance_lines')
+      .select('id, item_code_raw, batch:opening_balance_batches!inner(status)')
+      .in('batch.status', PENDING_BATCH_STATUSES).order('id', { ascending: true }), 50000)
+    return { skus: new Set(rows.map((r) => skuKey(r.item_code_raw))), truncated }
+  }
+  return null
+}
+
+/**
+ * One page of company materials. `partType` (genuine | oes | aftermarket |
+ * not_stated) and `stock` (posted | pending) are set filters: when either is
+ * on, the matching ids are resolved first (id + SKU columns only) and only the
+ * page slice is read in full. `matchIds` (from inv_material_search) widens a
+ * text search to OEM / part numbers. `{ status, rows, total, truncated }`.
+ */
+export async function listMaterialCatalog({ page = 0, pageSize = 25, search, status = 'all', category, brand, partType = 'all', stock = 'all', matchIds } = {}) {
+  const size = clamp(pageSize, 1, 100, 25)
+  const from = clamp(page, 0, 1e6, 0) * size
+  const base = { status, category, search, brand, matchIds }
+  try {
+    if ((!partType || partType === 'all') && (!stock || stock === 'all')) {
+      return await paged('material_canonical', CATALOG_COLS, {
+        page, pageSize: size, order: 'company_sku', ascending: true, build: (q) => applyCatalogBase(q, base),
+      })
+    }
+    const [types, skus, candidates] = await Promise.all([
+      partType && partType !== 'all' ? partTypeIdSet(partType) : null,
+      stock && stock !== 'all' ? stockSkuSet(stock) : null,
+      readAll(() => applyCatalogBase(supabase.from('material_canonical').select('id, company_sku'), base)
+        .order('company_sku', { ascending: true }).order('id', { ascending: true })),
+    ])
+    const matched = candidates.rows.filter((r) => {
+      if (types) {
+        const has = types.ids.has(r.id)
+        if (partType === 'not_stated' ? has : !has) return false
+      }
+      if (skus && !skus.skus.has(skuKey(r.company_sku))) return false
+      return true
+    })
+    const truncated = candidates.truncated || !!types?.truncated || !!skus?.truncated
+    const slice = matched.slice(from, from + size).map((r) => r.id)
+    if (!slice.length) return { status: 'ok', rows: [], total: matched.length, truncated }
+    const { data, error } = await supabase.from('material_canonical').select(CATALOG_COLS).in('id', slice)
+    if (error) throw error
+    const order = new Map(slice.map((id, i) => [id, i]))
+    const rows = (data || []).sort((a, b) => order.get(a.id) - order.get(b.id))
+    return { status: 'ok', rows, total: matched.length, truncated }
+  } catch (err) {
+    if (notProvisioned(err)) return { status: 'not_provisioned', rows: [], total: 0, truncated: false }
+    throw toServiceError(err)
+  }
+}
+
+const settle = async (fn) => {
+  try {
+    return await fn()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Batched lookups for one page of materials (at most 100). Each part is read
+ * with `.in(...)` over the page's ids or SKUs only; a part that fails comes
+ * back null so the screen prints N/A instead of a false zero.
+ */
+export async function loadMaterialCatalogDetail(materials) {
+  const ids = [...new Set((materials || []).map((m) => m?.id).filter(Boolean))].slice(0, 100)
+  const skus = [...new Set((materials || []).map((m) => (m?.company_sku ? String(m.company_sku).trim() : '')).filter(Boolean))].slice(0, 100)
+  const none = { variants: [], aliases: [], balances: [], openingLines: [] }
+  if (!ids.length) return none
+  const [variants, aliases, balances, openingLines] = await Promise.all([
+    settle(async () => (await readAll(() => supabase.from('material_variants')
+      .select('id, canonical_id, manufacturer, brand, part_number, part_classification, country_of_manufacture, classification_evidence, status')
+      .in('canonical_id', ids).order('id', { ascending: true }), 5000)).rows),
+    settle(async () => (await readAll(() => supabase.from('material_aliases')
+      .select('id, canonical_id, alias_type, value, manufacturer, ref_status, verified')
+      .in('canonical_id', ids).eq('alias_type', 'oem').order('id', { ascending: true }), 5000)).rows),
+    skus.length ? settle(async () => (await readAll(() => supabase.from('v_inv_balances')
+      .select('id, item_code, site, country, location_code, condition, qty_on_hand, qty_reserved, uom')
+      .in('item_code', skus).order('id', { ascending: true }), 5000)).rows) : [],
+    skus.length ? settle(async () => (await readAll(() => supabase.from('opening_balance_lines')
+      .select('id, batch_id, item_code_raw, qty, uom, location_code_raw, batch:opening_balance_batches!inner(status, site, country, reference)')
+      .in('item_code_raw', skus).in('batch.status', PENDING_BATCH_STATUSES).order('id', { ascending: true }), 5000)).rows) : [],
+  ])
+  return { variants, aliases, balances, openingLines }
+}
+
+/** Brand, manufacturer and category columns only, for the filter dropdowns. */
+export async function loadMaterialCatalogFacets() {
+  try {
+    const { rows, truncated } = await readAll(() => supabase.from('material_canonical')
+      .select('id, category, brand, manufacturer, spec_brand:specs->>brand').order('id', { ascending: true }))
+    return { status: 'ok', rows, truncated }
+  } catch (err) {
+    if (notProvisioned(err)) return { status: 'not_provisioned', rows: [], truncated: false }
+    throw toServiceError(err)
+  }
 }

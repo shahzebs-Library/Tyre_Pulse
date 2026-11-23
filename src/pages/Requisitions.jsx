@@ -16,6 +16,7 @@ import {
   FileText, CalendarX, CalendarClock, Users,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import Modal from '../components/ui/Modal'
 import StatTile from '../components/ui/StatTile'
 import { useSettings } from '../contexts/SettingsContext'
@@ -182,9 +183,9 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="label" htmlFor="req-needed">Needed by</label>
-            <input
-              id="req-needed" className="input w-full" type="date"
-              value={form.needed_by || ''} onChange={(e) => set('needed_by', e.target.value)}
+            <DateField
+              ariaLabel="Needed by"
+              value={form.needed_by || ''} onChange={(v) => set('needed_by', v)}
             />
           </div>
           <div>

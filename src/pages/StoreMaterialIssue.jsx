@@ -35,6 +35,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
+import StatTile from '../components/ui/StatTile'
 import EChart from '../components/charts/EChart'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import { useSettings } from '../contexts/SettingsContext'
@@ -149,19 +150,6 @@ function Notice({ tone = 'info', icon: Icon = Info, title, children, action }) {
         <div className="text-[var(--text-muted)] text-sm mt-1 space-y-1">{children}</div>
       </div>
       {action}
-    </Card>
-  )
-}
-
-function Kpi({ label, value, sub, icon: Icon, tone }) {
-  return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        {Icon && <Icon size={15} className="text-[var(--text-muted)]" />}
-      </div>
-      <p className={`text-xl font-bold mt-1 ${tone || 'text-[var(--text-primary)]'}`}>{value}</p>
-      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
     </Card>
   )
 }
@@ -629,19 +617,19 @@ function RegisterTab({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Kpi label="Slips" value={loading ? '-' : nOr(summary.slips)} icon={Receipt}
+        <StatTile label="Slips" value={loading ? '-' : nOr(summary.slips)} icon={Receipt}
           sub={`${nOr(summary.docTypeSplit.MIS)} issues, ${nOr(summary.docTypeSplit.MRT)} returns`} />
-        <Kpi label="Lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList}
+        <StatTile label="Lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList}
           sub={summary.avgLinesPerSlip == null ? 'Not measurable' : `${nOr(summary.avgLinesPerSlip, 1)} per slip`} />
-        <Kpi label="Value (as booked)" value={loading ? '-' : valueLabel} icon={Store}
+        <StatTile label="Value (as booked)" value={loading ? '-' : valueLabel} icon={Store}
           sub={singleCurrency ? 'In this country currency' : 'Shown per country below'} />
-        <Kpi label="Linked to a job card" value={loading ? '-' : pctOr(summary.linkageRate)} icon={Link2}
+        <StatTile label="Linked to a job card" value={loading ? '-' : pctOr(summary.linkageRate)} icon={Link2}
           sub={summary.linkageRate == null ? 'No slips to measure' : `${nOr(summary.linkedSlips)} of ${nOr(summary.slips)}`} />
-        <Kpi
+        <StatTile
           label="Returns booked as a charge"
           value={loading ? '-' : nOr(summary.returnSignAnomalies)}
           icon={AlertTriangle}
-          tone={summary.returnSignAnomalies > 0 ? 'text-amber-300' : undefined}
+          tone={summary.returnSignAnomalies > 0 ? 'warn' : 'neutral'}
           sub={summary.returnSignAnomalies > 0 ? 'See the Returns tab' : 'None in this window'}
         />
       </div>
@@ -812,9 +800,9 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
       </Notice>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Return slips" value={loading ? '-' : nOr(summary.slips)} icon={Undo2} />
-        <Kpi label="Return lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList} />
-        <Kpi
+        <StatTile label="Return slips" value={loading ? '-' : nOr(summary.slips)} icon={Undo2} />
+        <StatTile label="Return lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList} />
+        <StatTile
           label="Value as booked"
           value={loading ? '-' : (singleCurrency
             ? money(headlineValue(summary, singleCurrency), singleCurrency)
@@ -822,13 +810,13 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
           icon={Store}
           sub="What the ledger holds today"
         />
-        <Kpi
+        <StatTile
           label="Value if credited"
           value={loading ? '-' : (singleCurrency
             ? money(headlineValue(summary, singleCurrency, 'creditedValue'), singleCurrency)
             : 'Per country')}
           icon={Undo2}
-          tone="text-amber-300"
+          tone="warn"
           sub="Not applied anywhere"
         />
       </div>

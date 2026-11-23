@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
+import StatTile from '../components/ui/StatTile'
 import Modal from '../components/ui/Modal'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../components/ui/TablePagination'
@@ -139,19 +140,6 @@ function SortedPagedTable({ columns, rows, defaultSort, getRowId, emptyMessage, 
       />
       {!loading && !error && <TablePagination {...pager} />}
     </div>
-  )
-}
-
-function Kpi({ label, value, sub, icon: Icon, tone = 'text-[var(--text-primary)]' }) {
-  return (
-    <Card>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-[var(--text-muted)] truncate">{label}</p>
-        <Icon size={16} className={tone} aria-hidden="true" />
-      </div>
-      <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums ${tone}`}>{value}</p>
-      {sub ? <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p> : null}
-    </Card>
   )
 }
 
@@ -463,12 +451,12 @@ export default function PartsCatalog() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi label="Total SKUs" value={na(kpi.totalSkus)} sub={loaded ? `${kpi.active} active, ${kpi.discontinued} discontinued` : null} icon={Package} />
-        <Kpi label="Inventory value" value={loaded ? money(kpi.inventoryValue) : pending} sub={loaded ? `${kpi.valuedSkus} SKU${kpi.valuedSkus === 1 ? '' : 's'} costed` : null} icon={DollarSign} tone="text-amber-400" />
-        <Kpi label="Out of stock" value={na(kpi.outOfStock)} sub="on hand at or below zero" icon={PackageX} tone={kpi.outOfStock ? 'text-red-400' : 'text-[var(--text-primary)]'} />
-        <Kpi label="At or below reorder" value={na(kpi.belowReorder)} sub="includes out of stock" icon={ShoppingCart} tone={kpi.belowReorder ? 'text-orange-400' : 'text-[var(--text-primary)]'} />
-        <Kpi label="Reorder spend" value={loaded ? money(kpi.reorderSpend) : pending} sub={loaded ? (kpi.reorderUncosted ? `${kpi.reorderUncosted} line${kpi.reorderUncosted === 1 ? '' : 's'} without a unit cost` : `${kpi.reorderLines} line${kpi.reorderLines === 1 ? '' : 's'} to order`) : null} icon={ClipboardList} tone="text-sky-400" />
-        <Kpi label="Data issues" value={na(kpi.dataIssues)} sub="missing cost, reorder or category" icon={ShieldAlert} tone={kpi.dataIssues ? 'text-amber-400' : 'text-[var(--text-primary)]'} />
+        <StatTile index={0} label="Total SKUs" value={na(kpi.totalSkus)} sub={loaded ? `${kpi.active} active, ${kpi.discontinued} discontinued` : null} icon={Package} />
+        <StatTile index={1} label="Inventory value" value={loaded ? money(kpi.inventoryValue) : pending} sub={loaded ? `${kpi.valuedSkus} SKU${kpi.valuedSkus === 1 ? '' : 's'} costed` : null} icon={DollarSign} tone="warn" />
+        <StatTile index={2} label="Out of stock" value={na(kpi.outOfStock)} sub="on hand at or below zero" icon={PackageX} tone={kpi.outOfStock ? 'crit' : 'neutral'} />
+        <StatTile index={3} label="At or below reorder" value={na(kpi.belowReorder)} sub="includes out of stock" icon={ShoppingCart} tone={kpi.belowReorder ? 'warn' : 'neutral'} />
+        <StatTile index={4} label="Reorder spend" value={loaded ? money(kpi.reorderSpend) : pending} sub={loaded ? (kpi.reorderUncosted ? `${kpi.reorderUncosted} line${kpi.reorderUncosted === 1 ? '' : 's'} without a unit cost` : `${kpi.reorderLines} line${kpi.reorderLines === 1 ? '' : 's'} to order`) : null} icon={ClipboardList} tone="info" />
+        <StatTile index={5} label="Data issues" value={na(kpi.dataIssues)} sub="missing cost, reorder or category" icon={ShieldAlert} tone={kpi.dataIssues ? 'warn' : 'neutral'} />
       </div>
 
       {/* Filters */}

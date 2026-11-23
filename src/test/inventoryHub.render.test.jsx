@@ -46,9 +46,10 @@ beforeEach(() => {
 })
 
 describe('Inventory Control Center hub', () => {
-  it('renders the page header and the legacy register section, with no second sidebar', async () => {
+  it('renders the shared page header named after the section, and the legacy register, with no second sidebar', async () => {
     renderHub('register', vi.fn())
-    expect(await screen.findByRole('heading', { name: 'Inventory Control Center' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Stock register' })).toBeTruthy()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(screen.getByText('legacy register')).toBeTruthy()
     // Section navigation lives in the app's own menu, not inside the page.
     expect(screen.queryByRole('navigation', { name: /inventory/i })).toBeNull()
@@ -69,11 +70,18 @@ describe('Inventory Control Center hub', () => {
   // so it never looked at the Valuation entry. With caps ['view'] the
   // documented fallback (view_value -> view) legitimately SHOWS Valuation; a
   // user with no stock capability at all must not see it.
-  it('does not open Valuation for users without the view_value capability', async () => {
+  it('says Valuation is not available for users without the view_value capability, instead of showing Overview', async () => {
     auth.caps = []
     renderHub('valuation')
-    expect(await screen.findAllByText('Not installed')).toBeTruthy()
+    expect(await screen.findByText('You do not have access to this')).toBeTruthy()
+    expect(screen.getByText(/needs the "Valuation" permission/)).toBeTruthy()
     expect(screen.queryByRole('tab', { name: 'Cost reconciliation' })).toBeNull()
+    expect(screen.queryAllByText('Not installed')).toHaveLength(0)
+  })
+
+  it('opens Overview when no section is named', async () => {
+    renderHub(undefined)
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeTruthy()
   })
 })
 

@@ -1,9 +1,9 @@
 /**
- * Inventory Control Center shell (owner-approved look): a brand bar with a
- * company-wide material search, the alerts bell and the signed-in user, the
- * main inventory tabs with icons, a left sub-navigation, the scope (country
- * from the working context + a site filter) and the lazily loaded section.
- * The section lives in `?section=` so a link survives refresh.
+ * Inventory Control Center shell. Follows the app's own page design: the
+ * shared PageHeader (the current section's name), the scope (country from the
+ * working context + a site filter) and the lazily loaded section. The section
+ * links live in the app sidebar; the section is in `?section=` so a link
+ * survives refresh.
  *
  * Existing stock screens are not duplicated: the Stock register section is
  * the original register (rendered by StockManagement.jsx), and Procurement,
@@ -11,13 +11,15 @@
  * their sections rather than rebuilt.
  */
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Search, Box } from 'lucide-react'
+import { Box, Warehouse } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useSettings } from '../../contexts/SettingsContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { listSites } from '../../lib/api/sites'
-import { visibleGroups, makeCan } from '../../lib/inventory/hubSections'
+import { visibleGroups, makeCan, SECTION_KEYS } from '../../lib/inventory/hubSections'
+import PageHeader from '../ui/PageHeader'
 import InventoryKpiRow from './InventoryKpiRow'
+import { Denied } from './InvUi'
 import '../commandCenter/commandCenter.css'
 import './inventory.css'
 import './inventoryPmv.css'
@@ -61,8 +63,6 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
   const userId = profile?.id || user?.id || null
   const [site, setSite] = useState('all')
   const [sites, setSites] = useState([])
-  const [term, setTerm] = useState('')
-  const [seedQuery, setSeedQuery] = useState('')
   const [show3d, setShow3d] = useState(false)
 
   useEffect(() => {
@@ -76,35 +76,20 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
 
   const groups = useMemo(() => visibleGroups(can), [can])
   const visible = useMemo(() => new Set(groups.flatMap((g) => g.sections.map((s) => s.key))), [groups])
+  // A known section the user may not see (e.g. Valuation without view_value)
+  // says so, instead of silently showing Overview. No section -> Overview.
+  const denied = SECTION_KEYS.includes(section) && !visible.has(section) ? section : null
   const current = visible.has(section) ? section : 'overview'
+  const headingKey = denied || current
   const scope = useMemo(() => ({ country: activeCountry && activeCountry !== 'All' ? activeCountry : null, site }), [activeCountry, site])
   const Comp = SECTION_COMPONENTS[current]
-  const sectionProps = { scope, can, userId, onNavigate: onSection, tab, onTab, seedQuery }
-
-  const go = (key, linkTab = null) => onSection(key, linkTab)
-  const submitSearch = (e) => {
-    e.preventDefault()
-    const q = term.trim()
-    if (!q) return
-    setSeedQuery(q)
-    go('materials')
-  }
+  const sectionProps = { scope, can, userId, onNavigate: onSection, tab, onTab }
 
   return (
     <div className="cc inv-hub inv-pmv">
-      <header className="inv-head">
-        <div>
-          <h1 className="inv-title">{t('inventory.title')}</h1>
-          <p className="inv-lead">{t('inventory.lead')}</p>
-        </div>
-        <form className="inv-bar-search" role="search" onSubmit={submitSearch}>
-          <Search size={16} aria-hidden="true" />
-          <input type="search" value={term} onChange={(e) => setTerm(e.target.value)}
-            placeholder={t('inventory.ui.globalSearch')} aria-label={t('inventory.ui.globalSearch')} />
-        </form>
-      </header>
+      <PageHeader title={t(`inventory.sections.${headingKey}`)} subtitle={t('inventory.lead')} icon={Warehouse} />
 
-      <div className="inv-shell inv-shell-full">
+      {denied ? <Denied capLabel={t(`inventory.sections.${denied}`)} /> : (
         <div className="inv-main">
           <div className="inv-scope">
             <span className="cc-pill info" title={t('inventory.scope.countryHint')}>
@@ -144,7 +129,7 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
               )}
           </section>
         </div>
-      </div>
+      )}
     </div>
   )
 }

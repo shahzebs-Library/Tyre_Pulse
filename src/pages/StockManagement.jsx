@@ -768,7 +768,9 @@ function StockRegisterView({ embedded = false }) {
     <div className="stock-workspace space-y-4">
       <PageHeader
         className="stock-register-heading"
-        title={embedded ? t('inventory.sections.register') : t('stock.title')}
+        // Embedded in the Inventory Control Center, whose header already names
+        // this section: no second h1.
+        title={embedded ? null : t('stock.title')}
         subtitle={t('stock.subtitle', { count: records.length })}
         icon={Package}
         actions={

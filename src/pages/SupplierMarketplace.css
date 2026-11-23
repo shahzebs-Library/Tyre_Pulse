@@ -3,18 +3,7 @@
 .sm-page .cc-strong { font-weight: 600; }
 .sm-page .cc-sub { display: block; font-size: 11px; color: var(--cc-ink-3); margin-top: 1px; font-weight: 400; }
 
-/* Header with photo art on the right */
-.sm-head { position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; min-height: 128px; padding: 16px 4px 4px; border-radius: 14px; overflow: hidden; }
-.sm-head { min-height: 150px; }
-.sm-head-img { position: absolute; inset: 0 0 0 48%; background-size: cover; background-position: center 45%; -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 100%); mask-image: linear-gradient(90deg, transparent 0%, #000 30%, #000 100%); opacity: 1; pointer-events: none; }
-.sm-head-img::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg, var(--cc-hero-fade) 0%, rgba(0,0,0,0) 45%); }
-html.light .sm-head-img::after { background: linear-gradient(0deg, var(--cc-hero-fade) 0%, rgba(246,247,249,0) 50%); }
-.sm-head-copy { position: relative; min-width: 0; flex: 1 1 360px; }
-.sm-crumb { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: 12.5px; color: var(--cc-ink-3); }
-.sm-crumb span { color: var(--cc-ink-2); font-weight: 600; }
-.sm-head h1 { margin: 6px 0 4px; font-size: clamp(22px, 2.4vw, 30px); font-weight: 800; letter-spacing: -0.02em; color: var(--cc-ink); }
-.sm-head-copy > p:last-child { margin: 0; font-size: 13.5px; color: var(--cc-ink-2); max-width: 64ch; }
-.sm-head-actions { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sm-head-actions { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .sm-head-actions .cc-select { padding-top: 8px; padding-bottom: 8px; font-size: 12.5px; }
 
 .sm-banner { flex-direction: row; align-items: flex-start; gap: 10px; }
@@ -120,7 +109,6 @@ html.light .sm-head-img::after { background: linear-gradient(0deg, var(--cc-hero
   .sm-card-tools .sm-search { flex: 1 1 180px; width: auto; }
   .sm-page .sm-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sm-funnel, .sm-recent { grid-column: span 12; }
-  .sm-head-img { inset: 0; opacity: 0.2; }
   .sm-detail-actions { grid-template-columns: 1fr; }
   .sm-filterbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sm-filterbar-more { max-width: none; }

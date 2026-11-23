@@ -25,6 +25,8 @@ import {
   contractExportRows, CONTRACT_EXPORT_COLUMNS,
 } from '../lib/supplierManagementAnalytics'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
+import StatTile from '../components/ui/StatTile'
+import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import EmptyState from '../components/EmptyState'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
@@ -65,11 +67,6 @@ function numToRating(num) {
 }
 // Whitelisted writable columns
 const CONTRACT_COLS = ['supplier_name', 'contract_start', 'contract_end', 'payment_terms', 'price_per_unit', 'min_order', 'notes', 'country', 'created_by']
-const PALETTE = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#475569',
-  '#0f766e', '#14b8a6', '#f97316', '#1d4ed8', '#84cc16',
-  '#06b6d4', '#64748b',
-]
 const RATING_CONFIG = {
   Preferred:     { color: 'text-emerald-400', bg: 'bg-emerald-900/40', border: 'border-emerald-700', icon: Star },
   Approved:      { color: 'text-blue-400',    bg: 'bg-blue-900/40',    border: 'border-blue-700',    icon: CheckCircle },
@@ -81,18 +78,18 @@ const CHART_DEFAULTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
+    legend: { labels: { color: 'var(--text-secondary)', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: 'var(--panel-2)',
-      titleColor: '#f3f4f6',
-      bodyColor: '#9ca3af',
-      borderColor: 'rgba(59,130,246,0.3)',
+      backgroundColor: 'var(--panel)',
+      titleColor: 'var(--text-primary)',
+      bodyColor: 'var(--text-secondary)',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 
@@ -153,32 +150,6 @@ function pick(obj, cols) {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', trend }) {
-  const { t } = useLanguage()
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="card flex flex-col gap-1"
-    >
-      <div className="flex items-center gap-2 mb-1">
-        <div className={`p-1.5 rounded-lg bg-[var(--input-bg)] ${color}`}>
-          <Icon size={15} />
-        </div>
-        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{label}</span>
-      </div>
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      {sub && <div className="text-xs text-[var(--text-muted)]">{sub}</div>}
-      {trend != null && (
-        <div className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {trend >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-          {t('suppliers.kpi.vsLastYear', { pct: Math.abs(trend).toFixed(1) })}
-        </div>
-      )}
-    </motion.div>
-  )
-}
-
 function RatingBadge({ rating }) {
   const { t } = useLanguage()
   const cfg = RATING_CONFIG[rating] || RATING_CONFIG['Approved']
@@ -623,7 +594,7 @@ export default function SupplierManagement() {
       labels: [...top5.map(m => m.brand), 'Other'],
       datasets: [{
         data: [...top5.map(m => m.totalSpend), Math.max(0, totalSpend - top5.reduce((s, m) => s + m.totalSpend, 0))],
-        backgroundColor: [...PALETTE.slice(0, 5), '#6b7280'],
+        backgroundColor: [...categorical(5), 'var(--text-muted)'],
         borderWidth: 0,
       }],
     }
@@ -633,9 +604,9 @@ export default function SupplierManagement() {
       datasets: [
         ...top5.map((m, i) => ({
           label: m.brand, data: monthlyByBrand[i],
-          backgroundColor: PALETTE[i % PALETTE.length], borderWidth: 0, stack: 'a',
+          backgroundColor: colorAt(i), borderWidth: 0, stack: 'a',
         })),
-        { label: 'Other', data: otherMonthly, backgroundColor: '#6b7280', borderWidth: 0, stack: 'a' },
+        { label: 'Other', data: otherMonthly, backgroundColor: 'var(--text-muted)', borderWidth: 0, stack: 'a' },
       ],
     }
 
@@ -646,7 +617,7 @@ export default function SupplierManagement() {
   const compareData = useMemo(() => {
     const selected = allMetrics.filter(m => compareList.includes(m.brand))
     if (selected.length === 0) return null
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
+    const colors = categorical(4)
     return {
       labels: ['CPK Score', 'Life Score', 'Reliability', 'Value', 'Coverage'],
       datasets: selected.map((m, i) => {
@@ -654,7 +625,7 @@ export default function SupplierManagement() {
         return {
           label: m.brand,
           data: [scores.cpkScore, scores.lifeScore, scores.reliabilityScore, scores.valueScore, scores.coverageScore],
-          backgroundColor: `${colors[i]}33`,
+          backgroundColor: withAlpha(colors[i], 0.2),
           borderColor: colors[i],
           pointBackgroundColor: colors[i],
           borderWidth: 2,
@@ -875,7 +846,7 @@ export default function SupplierManagement() {
         <AlertTriangle size={32} className="text-red-400 mx-auto mb-2" />
         <p className="text-red-400 font-medium">{t('suppliers.errors.loadFailed')}</p>
         <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
-        <button onClick={fetchData} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
+        <button onClick={fetchData} type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] mt-3"><RefreshCw size={14} aria-hidden="true" /> {t('suppliers.retry')}</button>
       </div>
     </div>
     </div>
@@ -906,18 +877,18 @@ export default function SupplierManagement() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        <KpiCard icon={Building2} label={t('suppliers.kpi.totalSuppliers')} value={kpiSummary.total} sub={t('suppliers.kpi.uniqueBrands')} color="text-blue-400" />
-        <KpiCard icon={Star} label={t('suppliers.kpi.preferred')} value={kpiSummary.preferredCount} sub={t('suppliers.kpi.ofTotalSuppliers', { total: kpiSummary.total })} color="text-emerald-400" />
-        <KpiCard icon={Target} label={t('suppliers.kpi.cpkRange')}
+        <StatTile index={0} icon={Building2} label={t('suppliers.kpi.totalSuppliers')} value={kpiSummary.total} sub={t('suppliers.kpi.uniqueBrands')} tone="info" />
+        <StatTile index={1} icon={Star} label={t('suppliers.kpi.preferred')} value={kpiSummary.preferredCount} sub={t('suppliers.kpi.ofTotalSuppliers', { total: kpiSummary.total })} tone="accent" />
+        <StatTile index={2} icon={Target} label={t('suppliers.kpi.cpkRange')}
           value={kpiSummary.cpkMin != null ? `${fmtCpk(kpiSummary.cpkMin, activeCurrency).split(' ')[1]}` : t('suppliers.recommendations.na')}
           sub={kpiSummary.cpkMax != null ? t('suppliers.kpi.toValue', { value: fmtCpk(kpiSummary.cpkMax, activeCurrency) }) : 'N/A'}
-          color="text-blue-400" />
-        <KpiCard icon={Award} label={t('suppliers.kpi.bestCpk')} value={kpiSummary.best?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : 'N/A'} color="text-emerald-400" />
-        <KpiCard icon={AlertTriangle} label={t('suppliers.kpi.worstCpk')} value={kpiSummary.worst?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : 'N/A'} color="text-red-400" />
-        <KpiCard icon={DollarSign} label="Total spend" value={fmtCurrency(kpiSummary.totalSpend, activeCurrency)}
-          sub={kpiSummary.cpkCoverage == null ? 'N/A' : `CPK measurable for ${Math.round(kpiSummary.cpkCoverage * 100)}% of suppliers`} color="text-[var(--text-primary)]" />
-        <KpiCard icon={Flag} label="Failure above 15%" value={kpiSummary.atRiskCount}
-          sub={`of ${kpiSummary.total} suppliers on screen`} color={kpiSummary.atRiskCount > 0 ? 'text-orange-400' : 'text-emerald-400'} />
+          tone="info" />
+        <StatTile index={3} icon={Award} label={t('suppliers.kpi.bestCpk')} value={kpiSummary.best?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : 'N/A'} tone="accent" />
+        <StatTile index={4} icon={AlertTriangle} label={t('suppliers.kpi.worstCpk')} value={kpiSummary.worst?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : 'N/A'} tone="crit" />
+        <StatTile index={5} icon={DollarSign} label="Total spend" value={fmtCurrency(kpiSummary.totalSpend, activeCurrency)}
+          sub={kpiSummary.cpkCoverage == null ? 'N/A' : `CPK measurable for ${Math.round(kpiSummary.cpkCoverage * 100)}% of suppliers`} tone="neutral" />
+        <StatTile index={6} icon={Flag} label="Failure above 15%" value={kpiSummary.atRiskCount}
+          sub={`of ${kpiSummary.total} suppliers on screen`} tone={kpiSummary.atRiskCount > 0 ? 'warn' : 'accent'} />
       </div>
 
       {/* Ratings persistence error banner */}
@@ -1114,14 +1085,14 @@ export default function SupplierManagement() {
                       {compareData && (
                         <Radar data={compareData} options={{
                           responsive: true, maintainAspectRatio: false,
-                          plugins: { legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
+                          plugins: { legend: { labels: { color: 'var(--text-secondary)', font: { size: 11 } } } },
                           scales: {
                             r: {
                               min: 0, max: 100,
-                              ticks: { color: '#6b7280', font: { size: 10 }, stepSize: 25 },
-                              grid: { color:'var(--text-muted)' },
-                              pointLabels: { color: '#9ca3af', font: { size: 11 } },
-                              angleLines: { color:'var(--text-muted)' },
+                              ticks: { color: 'var(--text-muted)', font: { size: 10 }, stepSize: 25 },
+                              grid: { color: 'var(--panel-2)' },
+                              pointLabels: { color: 'var(--text-secondary)', font: { size: 11 } },
+                              angleLines: { color: 'var(--panel-2)' },
                             },
                           },
                         }} />
@@ -1164,7 +1135,7 @@ export default function SupplierManagement() {
                     <Doughnut data={spendAnalysis.doughnutData} options={{
                       responsive: true, maintainAspectRatio: false, cutout: '65%',
                       plugins: {
-                        legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 11 }, padding: 10 } },
+                        legend: { position: 'right', labels: { color: 'var(--text-secondary)', font: { size: 11 }, padding: 10 } },
                         tooltip: CHART_DEFAULTS.plugins.tooltip,
                       },
                     }} />
@@ -1287,7 +1258,7 @@ export default function SupplierManagement() {
                 <AlertTriangle size={32} className="text-red-400 mb-2" />
                 <p className="text-red-400 font-medium">{t('suppliers.contracts.loadError')}</p>
                 <p className="text-[var(--text-muted)] text-sm mt-1">{contractsError}</p>
-                <button onClick={fetchContracts} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
+                <button onClick={fetchContracts} type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] mt-3"><RefreshCw size={14} aria-hidden="true" /> {t('suppliers.retry')}</button>
               </div>
             ) : filteredContracts.length === 0 ? (
               <EmptyState

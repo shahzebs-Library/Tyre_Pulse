@@ -1,6 +1,6 @@
 /**
  * Physical Inventory: the one entry point for "Start Physical Inventory",
- * identification review, company materials, master-data corrections, global
+ * identification review, company materials, global
  * material search and the management dashboard.
  *
  * A capture is evidence (what was found, where, how many, by whom, with
@@ -35,7 +35,8 @@ import {
 } from './InvUi'
 
 const PhysicalInventoryReview = lazy(() => import('./PhysicalInventoryReview'))
-const TABS = ['capture', 'review', 'materials', 'corrections', 'search', 'dashboard']
+// Corrections is its own section in the app sidebar (CorrectionsSection), not a tab here.
+const TABS = ['capture', 'review', 'materials', 'search', 'dashboard']
 const EMPTY_FORM = { scanned_code: '', scanned_code_type: '', picked: null, refs: {}, quantity: '', uom: '', condition: 'new',
   ownership: 'owned', location_id: '', location_hint: '', remarks: '', photos: [], photoRole: 'item' }
 
@@ -470,7 +471,7 @@ export default function PhysicalInventorySection({ scope, can, userId, tab: link
       <Tabs variant="line" label={t('inventory.pi.title')} value={tab} tabs={tabs} onChange={setTab} />
       {tab === 'capture' && <CaptureTab scope={scope} orgId={orgId} t={t} onNavigate={onNavigate} />}
       {tab === 'dashboard' && <DashboardTab scope={scope} t={t} can={can} />}
-      {['review', 'materials', 'corrections', 'search'].includes(tab) && (
+      {['review', 'materials', 'search'].includes(tab) && (
         <Suspense fallback={<div className="cc-skel" style={{ height: 120 }} />}>
           <PhysicalInventoryReview view={tab} scope={scope} can={can} userId={userId} orgId={orgId} />
         </Suspense>

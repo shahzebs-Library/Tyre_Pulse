@@ -9,6 +9,7 @@
 import { useMemo, useState } from 'react'
 import { Eye, Layers, ArrowLeft, Container, DoorOpen, SlidersHorizontal, Plus } from 'lucide-react'
 import Modal from '../ui/Modal'
+import { KitTable } from '../commandCenter/kit'
 import { bulkCreateLocations, newIdempotencyKey } from '../../lib/api/inventory'
 import { buildBulkPlan, bulkPayload, templateSpec, BULK_MAX_NODES } from '../../lib/inventory/locationBulk'
 import { toUserMessage } from '../../lib/inventory/errorText'
@@ -215,26 +216,16 @@ export default function LocationBulkSetup({ open, onClose, onCreated, stores, ro
           <Note tone={server?.existing ? 'warn' : 'info'}>
             {t('inventory.locations.bulk.previewNote', { created: server?.created ?? 0, existing: server?.existing ?? 0, site: spec.site })}
           </Note>
-          <div className="cc-et inv-scroll">
-            <table>
-              <thead><tr>
-                <th>{t('inventory.locations.code')}</th><th>{t('inventory.locations.name')}</th>
-                <th>{t('inventory.locations.type')}</th><th>{t('inventory.common.status')}</th>
-              </tr></thead>
-              <tbody>
-                {shown.map((n) => {
-                  const st = serverStatus.get(n.code) || (n.existingId ? 'existing' : 'new')
-                  return (
-                    <tr key={n.ref}>
-                      <td className="inv-mono" style={{ paddingInlineStart: 8 + n.depth * 16 }}>{n.code}</td>
-                      <td>{n.name}</td>
-                      <td>{t(`inventory.locationTypes.${n.location_type}`)}</td>
-                      <td><StatusPill value={st} tone={st === 'existing' ? 'muted' : 'good'} label={t(`inventory.locations.bulk.status.${st}`)} /></td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div className="inv-scroll">
+            <KitTable compact rows={shown} columns={[
+              { key: 'code', header: t('inventory.locations.code'), cell: (n) => <span className="inv-mono" style={{ paddingInlineStart: n.depth * 16 }}>{n.code}</span> },
+              { key: 'name', header: t('inventory.locations.name') },
+              { key: 'location_type', header: t('inventory.locations.type'), cell: (n) => t(`inventory.locationTypes.${n.location_type}`) },
+              { key: 'status', header: t('inventory.common.status'), cell: (n) => {
+                const st = serverStatus.get(n.code) || (n.existingId ? 'existing' : 'new')
+                return <StatusPill value={st} tone={st === 'existing' ? 'muted' : 'good'} label={t(`inventory.locations.bulk.status.${st}`)} />
+              } },
+            ]} />
           </div>
           {plan.nodes.length > PREVIEW_ROWS && <Note>{t('inventory.locations.bulk.more', { n: plan.nodes.length - PREVIEW_ROWS })}</Note>}
         </div>

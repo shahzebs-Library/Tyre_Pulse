@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { toUserMessage } from '../lib/safeError'
 import Modal from '../components/ui/Modal'
-import { Card, CardState, Kpi, KitTable, Tabs, ViewAll, fmtInt } from '../components/commandCenter/kit'
+import { Card, CardState, Kpi, KitTable, PageHero, Tabs, ViewAll, fmtInt } from '../components/commandCenter/kit'
 import { useSettings } from '../contexts/SettingsContext'
 import {
   listMarketplaceListings, createListing, updateListing, deleteListing,
@@ -353,23 +353,20 @@ export default function SupplierMarketplace() {
 
   return (
     <div className="cc sm-page">
-      <header className="sm-head">
-        <div className="sm-head-img cc-hero-dark" style={{ backgroundImage: `url(${HERO_DARK})` }} aria-hidden="true" />
-        <div className="sm-head-img cc-hero-light" style={{ backgroundImage: `url(${HERO_LIGHT})` }} aria-hidden="true" />
-        <div className="sm-head-copy">
-          <p className="sm-crumb">Inventory and Procurement <ChevronRight size={12} aria-hidden="true" /> <span>Supplier Marketplace</span></p>
-          <h1>Supplier Marketplace</h1>
-          <p>Compare supplier listings, run RFQs and manage the sourcing funnel for tyres, retreads, parts and services.</p>
-        </div>
-        <div className="sm-head-actions">
-          <select className="cc-select" aria-label="RFQ period" value={period} onChange={(e) => setPeriod(e.target.value)}>
-            {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-          </select>
-          <button type="button" className="cc-icon-btn" onClick={load} aria-label="Refresh" title="Refresh"><RefreshCw size={14} /></button>
-          <button type="button" className="cc-btn-ghost" onClick={() => openCreate('listing')} disabled={notProvisioned}><Plus size={14} aria-hidden="true" /> Add listing</button>
-          <button type="button" className="cc-btn-primary" onClick={() => openCreate('rfq')} disabled={notProvisioned}><Plus size={14} aria-hidden="true" /> Create RFQ</button>
-        </div>
-      </header>
+      <PageHero
+        title="Supplier Marketplace"
+        lead="Compare supplier listings, run RFQs and manage the sourcing funnel for tyres, retreads, parts and services."
+        imgLight={HERO_LIGHT}
+        imgDark={HERO_DARK}
+      />
+      <div className="sm-head-actions">
+        <select className="cc-select" aria-label="RFQ period" value={period} onChange={(e) => setPeriod(e.target.value)}>
+          {PERIODS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+        </select>
+        <button type="button" className="cc-icon-btn" onClick={load} aria-label="Refresh" title="Refresh"><RefreshCw size={14} /></button>
+        <button type="button" className="cc-btn-ghost" onClick={() => openCreate('listing')} disabled={notProvisioned}><Plus size={14} aria-hidden="true" /> Add listing</button>
+        <button type="button" className="cc-btn-primary" onClick={() => openCreate('rfq')} disabled={notProvisioned}><Plus size={14} aria-hidden="true" /> Create RFQ</button>
+      </div>
 
       {notProvisioned && (
         <div className="cc-card sm-banner" role="status"><AlertTriangle size={18} aria-hidden="true" /><div><b>The Supplier Marketplace is not enabled on this database yet.</b><p>Ask your administrator to enable the marketplace, then refresh.</p></div></div>

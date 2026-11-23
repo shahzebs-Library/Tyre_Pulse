@@ -22,6 +22,7 @@ import {
 import { toUserMessage } from '../../lib/inventory/errorText'
 import CodeScanCamera, { codeScanSupported } from './CodeScanCamera'
 import { CorrectionRows, CorrectionDetail } from './PhysicalInventoryReview'
+import { KitTable } from '../commandCenter/kit'
 import { useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, StatusPill, fmtDateTime } from './InvUi'
 
 const DETAIL_TABS = ['availability', 'references', 'compatibility', 'photos', 'history', 'corrections', 'documents']
@@ -166,21 +167,14 @@ function ReferencesTab({ r, t }) {
     <div className="inv-hub" style={{ gap: 12 }}>
       <h3 className="inv-h3">{t('inventory.mm.altRefs')}</h3>
       {refs.length ? (
-        <div className="cc-et inv-scroll">
-          <table>
-            <thead><tr><th>{t('inventory.mm.f.manufacturer')}</th><th>{t('inventory.mm.f.partNumber')}</th><th>{t('inventory.pi.common.status')}</th></tr></thead>
-            <tbody>
-              {refs.map((x) => (
-                <tr key={`${x.manufacturer}|${x.partNumber}`}>
-                  <td>{na(x.manufacturer)}</td>
-                  <td><span className="inv-mono" dir="ltr">{x.partNumber}</span> <CopyButton value={x.partNumber} label={t('inventory.mm.f.partNumber')} t={t} /></td>
-                  <td>{x.verified
-                    ? <span className="inv-verified"><CheckCircle2 size={14} aria-hidden="true" /> {t('inventory.mm.verified')}</span>
-                    : <StatusPill value="unverified" tone="warn" label={t('inventory.mm.filter.unverified')} />}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="inv-scroll">
+          <KitTable compact rows={refs} columns={[
+            { key: 'manufacturer', header: t('inventory.mm.f.manufacturer'), cell: (x) => na(x.manufacturer) },
+            { key: 'partNumber', header: t('inventory.mm.f.partNumber'), cell: (x) => <><span className="inv-mono" dir="ltr">{x.partNumber}</span> <CopyButton value={x.partNumber} label={t('inventory.mm.f.partNumber')} t={t} /></> },
+            { key: 'verified', header: t('inventory.pi.common.status'), cell: (x) => (x.verified
+              ? <span className="inv-verified"><CheckCircle2 size={14} aria-hidden="true" /> {t('inventory.mm.verified')}</span>
+              : <StatusPill value="unverified" tone="warn" label={t('inventory.mm.filter.unverified')} />) },
+          ]} />
         </div>
       ) : <p className="cc-na">{t('inventory.mm.noAltRefs')}</p>}
       <h3 className="inv-h3">{t('inventory.mm.allRefs')}</h3>

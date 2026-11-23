@@ -241,6 +241,23 @@ const ROUTES_BEFORE_REGROUP = [
 // list rather than folded into ROUTES_BEFORE_REGROUP, whose name would otherwise become
 // a lie. Adding an entry here is a deliberate act that says "this route is new".
 const ROUTES_ADDED_SINCE_REGROUP = [
+  // Inventory Control Center sections: deep links into /stock, replacing the in-page sidebar.
+  '/stock?section=register',
+  '/stock?section=locations',
+  '/stock?section=materials',
+  '/stock?section=physical',
+  '/stock?section=movements',
+  '/stock?section=audits',
+  '/stock?section=discrepancies',
+  '/stock?section=corrections',
+  '/stock?section=controls',
+  '/stock?section=tyres',
+  '/stock?section=identification',
+  '/stock?section=valuation',
+  '/stock?section=kpis',
+  '/stock?section=classification',
+  '/stock?section=planning',
+  '/stock?section=reports',
   '/repair-requests',
   '/store-material-issue',
   '/driver-workspace',

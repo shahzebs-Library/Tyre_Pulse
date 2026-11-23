@@ -1,30 +1,15 @@
-/* Inventory Control Center: owner-approved look (dark, near-black surfaces,
-   safety yellow accent). Scoped to .inv-pmv so no other screen changes.
-   The accent is a FILL behind dark text; on the light theme accent TEXT uses
-   a dark amber so it stays readable on white. Semantic green / red / amber
-   status colours are untouched. Logical properties only (RTL safe). */
+/* Inventory Control Center: follows the app's own look (Command Center kit,
+   green accent, light and dark). Scoped to .inv-pmv / .inv-panel so no other
+   screen changes. Semantic status colours are untouched. Logical properties
+   only (RTL safe). */
 .inv-pmv, .inv-panel {
-  --inv-accent: #ffc629;
-  --inv-accent-strong: #f5b700;
-  --inv-accent-ink: #161616;
-  --inv-accent-text: #ffc629;
-  --inv-accent-tint: rgba(255, 198, 41, 0.12);
+  --inv-accent: var(--cc-green-strong, #16a34a);
+  --inv-accent-strong: var(--cc-green, #15803d);
+  --inv-accent-ink: #ffffff;
+  --inv-accent-text: var(--cc-green, #22c55e);
+  --inv-accent-tint: var(--cc-green-tint, rgba(34, 197, 94, 0.14));
 }
-.inv-pmv {
-  --cc-card: linear-gradient(180deg, #141414, #0e0e0e);
-  --cc-card-flat: #111111;
-  --cc-border: #262626;
-  --cc-inner: #171717;
-  --cc-inner-border: #2a2a2a;
-  --cc-ink: #f4f4f5;
-  --cc-ink-2: #c4c4c8;
-  --cc-ink-3: #9a9aa1;
-}
-html.light .inv-pmv, html.light .inv-panel { --inv-accent-text: #8a5a00; --inv-accent-tint: #fff6d8; }
-html.light .inv-pmv {
-  --cc-card: #ffffff; --cc-card-flat: #ffffff; --cc-border: #e6e6e6; --cc-inner: #ffffff; --cc-inner-border: #e5e5e5;
-  --cc-ink: #101828; --cc-ink-2: #475467; --cc-ink-3: #667085;
-}
+html.light .inv-pmv, html.light .inv-panel { --inv-accent-text: #15803d; --inv-accent-tint: #e7f7ee; }
 .inv-pmv .cc-btn-primary, .inv-panel .cc-btn-primary { background: var(--inv-accent); border-color: var(--inv-accent); color: var(--inv-accent-ink); }
 .inv-pmv .cc-btn-primary:hover, .inv-panel .cc-btn-primary:hover { background: var(--inv-accent-strong); }
 .inv-pmv .cc-tab[aria-selected="true"] { border-color: var(--inv-accent); background: var(--inv-accent-tint); }
@@ -287,3 +272,9 @@ html.light .inv-pmv .inv-3d-stage { background: #eef0f3; border-color: #d0d5dd; 
 html.light .inv-pmv .inv-3d-tag { background: rgba(255, 255, 255, 0.94); color: #111827; border: 1px solid #f5d36b; }
 html.light .inv-pmv :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select) { border-color: #d0d5dd; }
 html.light .inv-pmv .inv-bar-search input, html.light .inv-pmv .inv-mm-input input { border: 0; }
+
+.inv-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; }
+.inv-title { margin: 0; font-size: 20px; font-weight: 800; color: var(--cc-ink); }
+.inv-head .inv-bar-search { flex: 0 1 380px; }
+
+.inv-shell.inv-shell-full { grid-template-columns: minmax(0, 1fr); }

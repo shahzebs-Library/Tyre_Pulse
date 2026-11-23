@@ -54,6 +54,7 @@ import {
   CalendarRange, ListTodo, Thermometer, Network, Play, Code, Repeat, Store, Rocket,
   Wallet, FileCheck, Building2, Lock, ArrowLeft,
   Megaphone, Star,
+  Coins, LineChart, FileBarChart,
 } from 'lucide-react'
 // Branded domain icons (custom Tyre Pulse set) for the clearest fleet/tyre nav
 // items. Same ({ size, strokeWidth }) API as Lucide, so they drop straight in.
@@ -288,7 +289,23 @@ const NAV_GROUPS = [
   {
     label: 'Inventory & Procurement',
     items: [
-      { to: '/stock',               label: 'Inventory Control', parent: 'Stock',               icon: StockBoxIc },
+      { to: '/stock', label: 'Inventory Control', parent: 'Inventory Control', icon: StockBoxIc },
+      { to: '/stock?section=register', label: 'Stock Register', parent: 'Inventory Control', icon: Boxes },
+      { to: '/stock?section=locations', label: 'Locations & Bins', parent: 'Inventory Control', icon: Layers },
+      { to: '/stock?section=materials', label: 'Material Master', parent: 'Inventory Control', icon: Layers },
+      { to: '/stock?section=physical', label: 'Physical Inventory', parent: 'Inventory Control', icon: ClipboardCheck },
+      { to: '/stock?section=movements', label: 'Transactions & Transfers', parent: 'Inventory Control', icon: ArrowLeftRight },
+      { to: '/stock?section=audits', label: 'Stock Audits', parent: 'Inventory Control', icon: ClipboardCheck },
+      { to: '/stock?section=discrepancies', label: 'Discrepancies', parent: 'Inventory Control', icon: AlertTriangle },
+      { to: '/stock?section=corrections', label: 'Corrections', parent: 'Inventory Control', icon: FileWarning },
+      { to: '/stock?section=controls', label: 'Approvals & Controls', parent: 'Inventory Control', icon: ShieldCheck },
+      { to: '/stock?section=tyres', label: 'Tyre Inventory', parent: 'Inventory Control', icon: CircleDot },
+      { to: '/stock?section=identification', label: 'Catalog (OEM)', parent: 'Inventory Control', icon: Boxes },
+      { to: '/stock?section=valuation', label: 'Valuation', parent: 'Inventory Control', icon: Coins },
+      { to: '/stock?section=kpis', label: 'Inventory KPIs', parent: 'Inventory Control', icon: Gauge },
+      { to: '/stock?section=classification', label: 'Stock Classification', parent: 'Inventory Control', icon: Layers },
+      { to: '/stock?section=planning', label: 'Planning', parent: 'Inventory Control', icon: LineChart },
+      { to: '/stock?section=reports', label: 'Inventory Reports', parent: 'Inventory Control', icon: FileBarChart },
       { to: '/stock-replenishment', label: 'Stock Replenishment', parent: 'Stock', icon: PackagePlus, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/parts-catalog',       label: 'Parts Catalog', parent: 'Stock',       icon: Boxes, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/materials',           label: 'Materials', parent: 'Stock',           icon: Layers, adminOnly: A },
@@ -414,6 +431,17 @@ const GROUP_PARENTS = new Map(
 // item key = its route) for the super-admin Navigation Customizer console page.
 // Single source of truth: derived from NAV_GROUPS so the editor can never drift
 // from the real sidebar. NAV_GROUPS itself stays the applied definition.
+/** Active state for a nav item. A link may carry `?section=`; the path alone cannot tell
+ *  the Inventory sections apart, so those compare the section too. */
+function navActive(to, pathActive, search) {
+  const [path, query] = String(to).split('?')
+  if (!pathActive) return false
+  const want = query ? new URLSearchParams(query).get('section') : null
+  const have = new URLSearchParams(search || '').get('section')
+  if (want) return have === want
+  return path === '/stock' ? !have : true
+}
+
 export const NAV_CATALOG = NAV_GROUPS.map((g) => ({
   key: g.label,
   label: g.label,
@@ -1416,18 +1444,18 @@ export default function Layout({ children }) {
                           title={_outOfContext
                             ? `${navLabel} - no data in ${activeCountry}`
                             : (!sidebarOpen ? navLabel : undefined)}
-                          className={({ isActive }) =>
+                          className={({ isActive: _ia }) =>
                             `relative flex items-center gap-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                              transition-all duration-150 mb-px group
                              ${sidebarOpen ? 'ps-2.5 pe-7' : 'px-2.5 justify-center'}
-                             ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
+                             ${navActive(to, _ia, location.search) ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
                           }
                           // ONE style prop. There used to be two on this element:
                           // the out-of-context dimming came first and JSX let the
                           // later one silently replace it, so the documented
                           // "dimmed, not removed" state was never actually drawn.
-                          style={({ isActive }) => ({
-                            ...(isActive ? {
+                          style={({ isActive: _ia }) => ({
+                            ...(navActive(to, _ia, location.search) ? {
                               background: 'linear-gradient(135deg, rgba(22,163,74,0.16) 0%, rgba(22,163,74,0.07) 100%)',
                               border: '1px solid rgba(22,163,74,0.24)',
                               boxShadow: '0 0 18px rgba(22,163,74,0.1), inset 0 1px 0 rgba(22,163,74,0.05)',
@@ -1437,7 +1465,7 @@ export default function Layout({ children }) {
                             ...(_outOfContext ? { opacity: 0.45 } : null),
                           })}
                         >
-                          {({ isActive }) => (
+                          {({ isActive: _ia }) => { const isActive = navActive(to, _ia, location.search); return (
                             <>
                               {/* active indicator bar */}
                               {isActive && (
@@ -1475,7 +1503,7 @@ export default function Layout({ children }) {
                                 </span>
                               )}
                             </>
-                          )}
+                          ) }}
                         </NavLink>
                         {sidebarOpen && (
                           <FavStar

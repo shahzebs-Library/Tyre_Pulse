@@ -40,10 +40,18 @@ import {
   timelineSummary, coverBand, stockExportRows, STOCK_EXPORT_COLS, STOCK_EXPORT_HEADERS, STATUSES,
   todayStr, offsetDate, firstOfMonth, velocitySince, localDay, summarizeTyreStock, summarizeTyreStockBySite, tyreChangeSummary,
 } from '../lib/stockManagementAnalytics'
+import {
+  buildCatalogIndex, buildUsageIndex, buildErpVelocityMap, catalogFor, registerCoverage, USAGE_MONTHS,
+} from '../lib/stockRegisterDetail'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
 // trigger, so it loads on first click instead of riding with the route chunk.
 const loadExportUtils = () => import('../lib/exportUtils')
+
+// Stock text only adds information when it is more than the catalogue name plus a
+// trailing part number; compare letters and digits only.
+const squash = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+const sameText = (stockText, name) => squash(stockText).startsWith(squash(name))
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
@@ -196,6 +204,11 @@ function StockRegisterView({ embedded = false }) {
 
   // Velocity state
   const [velocityMap, setVelocityMap] = useState({})
+  // Material Master facts + ERP consumption for the register. Loaded after the
+  // register paints; a failure leaves the extra columns at N/A, never blocks stock.
+  const [catalogIdx, setCatalogIdx] = useState(null)
+  const [usageIdx, setUsageIdx] = useState(null)
+  const [detailState, setDetailState] = useState('loading')
 
   // Timeline tab state
   const [activeTab, setActiveTab]       = useState('stock')
@@ -283,6 +296,27 @@ function StockRegisterView({ embedded = false }) {
   }, [activeCountry, t, latestStock])
 
   useEffect(() => { load() }, [load, stockScope])
+
+  useEffect(() => {
+    let cancelled = false
+    setDetailState('loading')
+    setUsageIdx(null)
+    const since = offsetDate(-Math.round(USAGE_MONTHS * 30.4))
+    Promise.allSettled([
+      catalogIdx ? Promise.resolve(null) : stock.listRegisterCatalog(),
+      stock.listConsumptionSince(since, { country: activeCountry }),
+    ]).then(([cat, use]) => {
+      if (cancelled) return
+      if (cat.status === 'fulfilled' && cat.value) {
+        setCatalogIdx(buildCatalogIndex(cat.value.canonical, cat.value.variants, cat.value.aliases))
+      }
+      if (use.status === 'fulfilled') setUsageIdx(buildUsageIndex(use.value))
+      setDetailState(cat.status === 'rejected' || use.status === 'rejected' ? 'partial' : 'ready')
+    })
+    return () => { cancelled = true }
+  // catalogIdx is read once; re-reading it on every load would refetch 6k rows.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCountry, stockScope])
 
   useEffect(() => {
     if (activeTab !== 'by-site') return undefined
@@ -484,7 +518,12 @@ function StockRegisterView({ embedded = false }) {
   const tlDays = useMemo(() => timelineByDate(tlRecords), [tlRecords])
   const tlSummary = useMemo(() => timelineSummary(tlDays, new Date()), [tlDays])
 
-  const enriched = useMemo(() => enrichStock(records, velocityMap), [records, velocityMap])
+  const erpVelocity = useMemo(() => buildErpVelocityMap(records, usageIdx), [records, usageIdx])
+  const enriched = useMemo(
+    () => enrichStock(records.map(r => ({ ...r, cat: catalogFor(r, catalogIdx) })), { ...velocityMap, ...erpVelocity }),
+    [records, velocityMap, erpVelocity, catalogIdx],
+  )
+  const coverage = useMemo(() => registerCoverage(records, catalogIdx, usageIdx), [records, catalogIdx, usageIdx])
   const visibleStock = useMemo(
     () => filterStock(enriched, { search, site: siteFilter, status: statusFilter }),
     [enriched, search, siteFilter, statusFilter],
@@ -601,7 +640,7 @@ function StockRegisterView({ embedded = false }) {
   async function exportPdf() {
     try {
       const { exportToPdf, reportFileName } = await loadExportUtils()
-      const keys = ['site', 'description', 'stock_qty', 'min_level', 'critical_level', 'status', 'days_left', 'suggestion']
+      const keys = ['site', 'item_code', 'item_name', 'brand', 'part_type', 'stock_qty', 'status', 'velocity', 'days_left', 'suggestion']
       await exportToPdf(
         stockExportRows(visibleStock),
         keys.map(k => ({ key: k, header: STOCK_EXPORT_HEADERS[STOCK_EXPORT_COLS.indexOf(k)] })),
@@ -661,8 +700,40 @@ function StockRegisterView({ embedded = false }) {
   const stockColumns = useMemo(() => [
     { id: 'site', header: t('stock.table.columns.site'), sort: r => r.site, size: 130, firstDir: 'asc',
       cell: r => <span className="font-medium text-[var(--text-primary)]">{r.site || 'N/A'}</span> },
-    { id: 'description', header: t('stock.table.columns.description'), sort: r => r.description, size: 200, firstDir: 'asc',
-      cell: r => <div><span className="font-medium text-[var(--text-primary)]">{stockItem(r).code || r.description || 'N/A'}</span>{stockItem(r).code && <p className="text-xs text-[var(--text-muted)] mt-1">{r.description}</p>}{stockItem(r).unit && <p className="text-xs text-[var(--text-muted)] mt-1">{stockItem(r).condition} · {stockItem(r).unit}{stockItem(r).bin ? ` · ${stockItem(r).bin}` : ''}</p>}</div> },
+    { id: 'description', header: 'Item', sort: r => r.item?.item_code || r.description, size: 320, firstDir: 'asc',
+      cell: r => {
+        const code = r.item?.item_code || stockItem(r).code
+        const name = r.cat?.name || r.item?.item_name
+        return (
+          <div className="min-w-0">
+            {code
+              ? <span className="font-mono text-xs font-semibold text-[var(--text-primary)]" dir="ltr">{code}</span>
+              : <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border border-amber-500/40 text-amber-500">No item code</span>}
+            <p className="text-sm text-[var(--text-primary)] mt-0.5">{name || r.description || 'N/A'}</p>
+            {name && r.description && !sameText(r.description, name) && (
+              <p className="text-xs text-[var(--text-muted)] mt-0.5" title="Description as loaded into stock">Stock text: {r.description}</p>
+            )}
+            {(stockItem(r).unit || r.uom || r.condition) && (
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">{[stockItem(r).condition || r.condition, stockItem(r).unit || r.uom, stockItem(r).bin].filter(Boolean).join(' · ')}</p>
+            )}
+          </div>
+        )
+      } },
+    { id: 'brand', header: 'Brand', sort: r => r.cat?.brand || r.brand, size: 130, firstDir: 'asc',
+      cell: r => <span className="text-xs text-[var(--text-secondary)]">{r.cat?.brand || r.brand || <span className="text-[var(--text-dim)]">N/A</span>}</span> },
+    { id: 'partType', header: 'Genuine / aftermarket', sort: r => r.cat?.partType, size: 120,
+      cell: r => {
+        const pt = r.cat?.partType
+        if (!pt || pt === 'not_stated') return <span className="text-xs text-[var(--text-dim)]">{r.cat ? 'Not stated' : 'N/A'}</span>
+        const tone = pt === 'genuine' || pt === 'oes' ? 'border-green-500/40 text-green-500' : 'border-amber-500/40 text-amber-500'
+        return <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${tone}`}>{pt === 'oes' ? 'OES' : pt}</span>
+      } },
+    { id: 'category', header: 'Category', sort: r => r.cat?.category || r.item?.category, size: 130, firstDir: 'asc',
+      cell: r => <span className="text-xs text-[var(--text-secondary)]">{r.cat?.category || r.item?.category || <span className="text-[var(--text-dim)]">N/A</span>}</span> },
+    { id: 'oem', header: 'OEM number', sort: r => (r.cat?.oem || [])[0], size: 130,
+      cell: r => (r.cat?.oem?.length
+        ? <span className="font-mono text-xs text-[var(--text-secondary)]" dir="ltr" title={r.cat.oem.join(', ')}>{r.cat.oem[0]}{r.cat.oem.length > 1 ? ` +${r.cat.oem.length - 1}` : ''}</span>
+        : <span className="text-xs text-[var(--text-dim)]">N/A</span>) },
     { id: 'stock_qty', header: t('stock.table.columns.stock'), sort: r => r.stock_qty, size: 90, align: 'right',
       cell: r => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{r.stock_qty ?? 'N/A'}</span> },
     { id: 'min_level', header: t('stock.table.columns.min'), sort: r => r.min_level, size: 80, align: 'right',
@@ -674,18 +745,29 @@ function StockRegisterView({ embedded = false }) {
     { id: 'status', header: t('stock.table.columns.status'), sort: r => STATUSES.indexOf(r.status), size: 100, firstDir: 'desc',
       cell: r => <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGE[r.status]}`}>{t(`stock.statuses.${r.status}`)}</span> },
     { id: 'avgPerMonth', header: t('stock.table.columns.velocity'), sort: r => r.avgPerMonth, size: 100, align: 'right',
-      cell: r => <span className="tabular-nums text-xs text-[var(--text-secondary)]">{r.avgPerMonth > 0 ? `${r.avgPerMonth}/mo` : 'None recorded'}</span> },
+      cell: r => {
+        if (r.avgPerMonth > 0) {
+          return (
+            <span className="tabular-nums text-xs text-[var(--text-secondary)]"
+              title={r.usageScope === 'country' ? 'Issued elsewhere in the country, not at this site, in the last 12 months' : `Average issued per month at this site over ${USAGE_MONTHS} months (ERP issues)`}>
+              {r.avgPerMonth}/mo{r.usageScope === 'country' ? ' (country)' : ''}
+            </span>
+          )
+        }
+        if (r.avgPerMonth === null) return <span className="text-xs text-[var(--text-dim)]">{detailState === 'loading' ? '...' : 'N/A'}</span>
+        return <span className="text-xs text-[var(--text-dim)]">No issues in {USAGE_MONTHS} months</span>
+      } },
     { id: 'daysRemaining', header: t('stock.table.columns.daysLeft'), sort: r => r.daysRemaining, size: 100, align: 'right', firstDir: 'asc',
       cell: r => (
         <span className={`tabular-nums text-xs ${COVER_TONE[coverBand(r.daysRemaining)]}`}
-          title={r.daysRemaining === null ? 'No consumption recorded at this site, so cover cannot be measured' : undefined}>
+          title={r.daysRemaining === null ? (r.usageScope === 'country' ? 'Only issued at other sites, so cover at this site cannot be measured' : 'No issues at this site, so cover cannot be measured') : undefined}>
           {r.daysRemaining === null ? 'N/A' : `${r.daysRemaining}d`}
         </span>
       ) },
     { id: 'action', header: t('stock.table.columns.action'), sort: r => r.management_action, size: 200,
       cell: r => (
         <div className="flex flex-col gap-1 text-xs text-[var(--text-muted)] max-w-xs">
-          {r.management_action ? <span className="truncate" title={r.management_action}>{r.management_action}</span> : <span className="text-[var(--text-dim)]">None</span>}
+          {r.management_action ? <span className="truncate" title={r.management_action}>{r.management_action}</span> : (r.suggestion === null ? <span className="text-[var(--text-dim)]">N/A</span> : null)}
           {r.suggestion !== null && (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border border-amber-500/40 text-amber-500 whitespace-nowrap w-fit">
               {t('stock.table.reorderBadge', { qty: r.suggestion })}
@@ -716,7 +798,7 @@ function StockRegisterView({ embedded = false }) {
       ) },
   // startEdit / generateReorderPdf are plain handlers over current state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, openMovement])
+  ], [t, openMovement, detailState])
 
   const timelineColumns = useMemo(() => [
     { id: 'date', header: t('stock.timeline.columns.date'), sort: r => r.date, size: 130,
@@ -944,6 +1026,14 @@ function StockRegisterView({ embedded = false }) {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--text-dim)]" aria-live="polite">
               <span>{loading ? 'Loading stock...' : `${visibleStock.length.toLocaleString()} of ${records.length.toLocaleString()} items`}</span>
+              {!loading && records.length > 0 && (
+                <span>
+                  {detailState === 'loading' ? 'Loading Material Master details and usage...'
+                    : `${coverage.catalogued.toLocaleString()} linked to Material Master · ${coverage.withUsage.toLocaleString()} issued in the last ${USAGE_MONTHS} months`
+                      + (coverage.noCode ? ` · ${coverage.noCode} with no item code` : '')
+                      + (detailState === 'partial' ? ' · some details could not be loaded' : '')}
+                </span>
+              )}
               {filtersActive && (
                 <button type="button" onClick={clearFilters}
                   className={`min-h-[44px] inline-flex items-center gap-1 px-3 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${FOCUS}`}>

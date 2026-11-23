@@ -5,6 +5,31 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-23 (night) — WMS SPEC: AUDIT DONE, WP0 (REGISTER = MATERIAL MASTER DETAIL + REAL USAGE) + PAGE EMOJI. Branch claude/wms-wp0-register. No migration, no production write.
+- **OWNER WMS SPEC RULES (standing):** no merge / deploy / production change without the owner's explicit OK per item; no automatic
+  fuzzy match that changes production; never widen Store Keeper site access for testing; never replace a missing cost with 0; keep
+  SAR/AED/EGP separate; enforce permissions in the database. Deliverables live in `docs/warehouse/` (00_FIRST_RESPONSE.md = the
+  10-point audit with every number measured live).
+- **THE STRUCTURAL GAP:** `stock_records.item_id` -> `material_master` (23,274 per-country ERP codes) while Material Master page =
+  `material_canonical` (3,508 company SKUs from Book2). The link table `material_canonical_items` holds **0 rows**; the two meet only
+  by text (`item_code = company_sku`, 3,507/3,508). Proposed WP1 (needs owner OK, production write): fill the link from the exact matches.
+- **"Stock not showing in Material Master" = STALE BROWSER BUILD, not data.** Edge logs over 24h held NO request with the Material
+  Master stock select; the owner's account reads the rows (25 materials -> 39 positive stock rows). Reload the app.
+- **REGISTER "None recorded" cause:** usage was read from `stock_movements` (1 consumption movement of 5,619; 5,533 are `opening`).
+  Real consumption = `parts_consumption` ERP issue lines (KSA 32,651 in 12 months). Reorder levels are 0 on 5,568/5,583 rows;
+  management_action empty on all. 43 stock rows have no item code (the "Doublecoin" / "Double coin" spellings are among them).
+- **WP0 (code only):** register rows now carry the linked ERP item (`item:material_master(item_code,item_name,category)` embed) and
+  show item code, Material Master name, brand, genuine/aftermarket, category, OEM number (`src/lib/stockRegisterDetail.js`, loaders
+  `stock.listRegisterCatalog` / `stock.listConsumptionSince`). Usage = 12 months of ERP issues: per SITE when that site issued it
+  (days of cover stated), else per COUNTRY labelled "(country)" with days of cover N/A. reorderSuggestion no longer emits a
+  "Reorder 0" when no levels are set (uses 2 months of measured usage instead). Store Keeper RLS verified to read every new table.
+- **PAGE EMOJI (owner-approved Fluent Emoji Flat):** ONE route->emoji map `src/lib/navEmojiMap.json` (226 routes, 151 emoji) read by
+  BOTH the sidebar and Ctrl+K via `src/components/ui/NavEmoji.jsx`; art in one cached sprite `public/nav-emoji.svg` (170 KB, 58 KB gz),
+  rebuilt by `scripts/build-nav-emoji.cjs <icons.json>`. Soft tile `.nav-emoji` in index.css. `src/test/navEmoji.test.js` fails if a
+  sidebar page has no emoji or a name is missing from the sprite. Mobile bottom tabs keep line icons.
+- OPEN decisions (docs/warehouse/00 item 10): single master + link fill; reorder-level policy; brand alias merges; codes for the 43
+  rows; source for genuine/local/aftermarket on 1,313 unknown variants; Store Keeper site scopes.
+
 # ⚑ 2026-11-23 (later) — BOOK2 LOADED LIVE VIA OWNER OVERRIDE, MATERIAL MASTER, SAVED THEMES, FLUTTER GREY SURFACES. PRs #606 (web) + #607 (Flutter).
 - **Book2.xlsx IS LOADED (supersedes "NOT LOADED YET" below):** 11 opening-balance batches approved, 5,533 lines posted,
   3,508 materials active. Stock by site: NHC 40,270 / DIRIYAH 20,170 / RIY-MET 17,581 / RED SEA 16,816 / DHAHBAN 15,701 /

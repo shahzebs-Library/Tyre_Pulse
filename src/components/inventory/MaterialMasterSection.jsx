@@ -12,6 +12,9 @@
  * physical_inventory_photos and material_correction_requests. Proposing a material and deciding a
  * correction use the existing flows and RPCs; nothing is written here
  * directly. Unknown values print N/A.
+ * The OEM cross-reference review (OemCrossRefPanel) proposes OEM-manual to
+ * material links; a person accepts each one through inv_compat_propose and a
+ * second person decides it through inv_compat_decide.
  */
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -29,6 +32,7 @@ import {
 } from '../../lib/inventory/materialCatalogView'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import CodeScanCamera, { codeScanSupported } from './CodeScanCamera'
+import OemCrossRefPanel from './OemCrossRefPanel'
 import { CorrectionRows, CorrectionDetail } from './PhysicalInventoryReview'
 import { KitTable, Pager } from '../commandCenter/kit'
 import { useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, StatusPill, fmtDateTime } from './InvUi'
@@ -532,6 +536,7 @@ export default function MaterialMasterSection({ scope, userId, onNavigate, seedQ
                 )}
               </>
             )}
+      <OemCrossRefPanel scope={scope} userId={userId} />
       {scan && <CodeScanCamera open={scan} t={t} onClose={() => setScan(false)} onCode={(code) => { setScan(false); setTerm(code); setQuery(code); setPage(0) }} />}
     </div>
   )

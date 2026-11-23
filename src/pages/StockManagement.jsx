@@ -1,6 +1,7 @@
 import DateField from '../components/ui/DateField'
 import { classifyMovement } from '../lib/stockLedger'
 import StockMovementsPanel from '../components/stock/StockMovementsPanel'
+import ReorderLevelsPanel from '../components/stock/ReorderLevelsPanel'
 import { useSearchParams } from 'react-router-dom'
 import InventoryHub from '../components/inventory/InventoryHub'
 import { resolveSection } from '../lib/inventory/hubSections'
@@ -687,8 +688,9 @@ function StockRegisterView({ embedded = false }) {
 
   // Tabs: show Transfer only if >= 2 sites
   const tabs = useMemo(() => {
-    const base = [['stock', t('stock.tabs.stock')], ['movements', t('stock.tabs.movements')], ['by-site', t('stock.tabs.bySite')], ['timeline', t('stock.tabs.timeline')]]
-    if (sites.length >= 2) return [['stock', t('stock.tabs.stock')], ['movements', t('stock.tabs.movements')], ['by-site', t('stock.tabs.bySite')], ['transfer', t('stock.tabs.transfer')], ['timeline', t('stock.tabs.timeline')]]
+    const reorder = ['reorder', 'Reorder levels']
+    const base = [['stock', t('stock.tabs.stock')], ['movements', t('stock.tabs.movements')], ['by-site', t('stock.tabs.bySite')], reorder, ['timeline', t('stock.tabs.timeline')]]
+    if (sites.length >= 2) return [['stock', t('stock.tabs.stock')], ['movements', t('stock.tabs.movements')], ['by-site', t('stock.tabs.bySite')], ['transfer', t('stock.tabs.transfer')], reorder, ['timeline', t('stock.tabs.timeline')]]
     return base
   }, [sites, t])
 
@@ -1058,6 +1060,17 @@ function StockRegisterView({ embedded = false }) {
 
       {/* ── TYRE STOCK BY SITE AND SIZE ──────────────────────────────────────── */}
       {activeTab === 'movements' && <StockMovementsPanel records={records} country={activeCountry} site={siteFilter} />}
+
+      {activeTab === 'reorder' && (
+        <ReorderLevelsPanel
+          records={records}
+          usageIdx={usageIdx}
+          detailState={detailState}
+          canApply={typeof hasCapability === 'function' && hasCapability('stock', 'edit')}
+          userId={profile?.id ?? null}
+          onApplied={load}
+        />
+      )}
 
       {activeTab === 'by-site' && (
         <section className="space-y-4" aria-labelledby="tyre-stock-by-site-title">

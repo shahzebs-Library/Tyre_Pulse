@@ -10,7 +10,7 @@ const COLS =
   'id,site,description,stock_qty,min_level,critical_level,stock_status,reorder_qty,management_action,region,country,updated_by,updated_at,custom_data,brand,tyre_size,last_counted_at,' +
   // The linked ERP item (stock_records.item_id -> material_master): the item code
   // the register matches to Material Master and to ERP consumption.
-  'item_id,uom,condition,qty_reserved,item:material_master(item_code,item_name,category)'
+  'item_id,uom,condition,qty_reserved,item:material_master(item_code,item_name,category,lead_time_days)'
 
 // Movement ledger (stock_movements). Full row - the movement-history modal
 // renders every audit field.

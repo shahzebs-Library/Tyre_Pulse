@@ -74,7 +74,7 @@ export const NAV_COMMANDS = [
   { id: 'fuel-efficiency', label: 'Fuel Efficiency',     path: '/fuel-efficiency', icon: 'Gauge',   adminOnly: true, moduleKey: 'fleet_analytics' },
   // Stock & Procurement
   { id: 'stock',          label: 'Inventory Control Center', path: '/stock',      icon: 'Package', keywords: ['stock', 'stock management', 'inventory', 'stock count', 'physical audit', 'stocktake', 'cycle count', 'discrepancy', 'bin', 'location', 'valuation', 'opening balance', 'consignment'] },
-  { id: 'stock-register', label: 'Stock Register', path: '/stock?section=register', icon: 'Package', moduleKey: 'stock', keywords: ['stock register', 'balances'] },
+  { id: 'stock-register', label: 'Stock Register', path: '/stock?section=register', icon: 'Package', moduleKey: 'stock', keywords: ['balances', 'on hand', 'stock levels'] },
   { id: 'stock-locations', label: 'Locations & Bins', path: '/stock?section=locations', icon: 'Package', moduleKey: 'stock', keywords: ['rack', 'shelf', 'bin', 'qr label', 'bulk setup'] },
   { id: 'stock-materials', label: 'Material Master', path: '/stock?section=materials', icon: 'Package', moduleKey: 'stock', keywords: ['sku', 'oem', 'part number', 'aftermarket'] },
   { id: 'stock-physical', label: 'Physical Inventory', path: '/stock?section=physical', icon: 'Package', moduleKey: 'stock', keywords: ['stocktake', 'count', 'opening balance'] },
@@ -90,6 +90,9 @@ export const NAV_COMMANDS = [
   { id: 'stock-classification', label: 'Stock Classification', path: '/stock?section=classification', icon: 'Package', moduleKey: 'stock', keywords: ['abc', 'fsn', 'ved'] },
   { id: 'stock-planning', label: 'Inventory Planning', path: '/stock?section=planning', icon: 'Package', moduleKey: 'stock', keywords: ['reorder', 'forecast'] },
   { id: 'stock-reports', label: 'Inventory Reports', path: '/stock?section=reports', icon: 'Package', moduleKey: 'stock', keywords: ['report', 'export'] },
+  { id: 'stock-procurement', label: 'Inventory Purchasing', path: '/stock?section=procurement', icon: 'Package', moduleKey: 'stock', keywords: ['purchase request', 'reorder', 'buy'] },
+  { id: 'stock-receiving', label: 'Receiving & Issue', path: '/stock?section=receiving', icon: 'Package', moduleKey: 'stock', keywords: ['grn', 'goods in', 'issue to job'] },
+  { id: 'stock-supplier', label: 'Supplier Stock', path: '/stock?section=supplier', icon: 'Package', moduleKey: 'stock', keywords: ['consignment', 'vendor stock'] },
   { id: 'stock-replenishment', label: 'Stock Replenishment', path: '/stock-replenishment', icon: 'Package' },
   { id: 'scrap',          label: 'Scrap Management',     path: '/scrap',        icon: 'Trash2' },
   { id: 'budgets',        label: 'Budgets',              path: '/budgets',      icon: 'FileText' },

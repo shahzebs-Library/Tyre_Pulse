@@ -306,6 +306,9 @@ const NAV_GROUPS = [
       { to: '/stock?section=classification', label: 'Stock Classification', parent: 'Inventory Control', icon: Layers },
       { to: '/stock?section=planning', label: 'Planning', parent: 'Inventory Control', icon: LineChart },
       { to: '/stock?section=reports', label: 'Inventory Reports', parent: 'Inventory Control', icon: FileBarChart },
+      { to: '/stock?section=procurement', label: 'Inventory Purchasing', parent: 'Inventory Control', icon: PurchaseOrderIc },
+      { to: '/stock?section=receiving', label: 'Receiving & Issue', parent: 'Inventory Control', icon: PackageCheck },
+      { to: '/stock?section=supplier', label: 'Supplier Stock', parent: 'Inventory Control', icon: SupplierTruckIc },
       { to: '/stock-replenishment', label: 'Stock Replenishment', parent: 'Stock', icon: PackagePlus, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/parts-catalog',       label: 'Parts Catalog', parent: 'Stock',       icon: Boxes, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/materials',           label: 'Materials', parent: 'Stock',           icon: Layers, adminOnly: A },
@@ -427,10 +430,6 @@ const GROUP_PARENTS = new Map(
   NAV_GROUPS.map((g) => [g.label, new Set(g.items.map((i) => i.parent).filter(Boolean))]),
 )
 
-// Lightweight, icon-free descriptor of the built-in nav (group key = its label,
-// item key = its route) for the super-admin Navigation Customizer console page.
-// Single source of truth: derived from NAV_GROUPS so the editor can never drift
-// from the real sidebar. NAV_GROUPS itself stays the applied definition.
 /** Active state for a nav item. A link may carry `?section=`; the path alone cannot tell
  *  the Inventory sections apart, so those compare the section too. */
 function navActive(to, pathActive, search) {
@@ -442,6 +441,10 @@ function navActive(to, pathActive, search) {
   return path === '/stock' ? !have : true
 }
 
+// Lightweight, icon-free descriptor of the built-in nav (group key = its label,
+// item key = its route) for the super-admin Navigation Customizer console page.
+// Single source of truth: derived from NAV_GROUPS so the editor can never drift
+// from the real sidebar. NAV_GROUPS itself stays the applied definition.
 export const NAV_CATALOG = NAV_GROUPS.map((g) => ({
   key: g.label,
   label: g.label,
@@ -479,7 +482,8 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
 
   if (item.to === '/odometer-logs') return typeof hasPermission === 'function' && hasPermission('odometer_logs') === true
 
-  const grantKey = NAV_MODULE_KEY[item.to]
+  // A sidebar link may carry ?section= (Inventory deep links); the module key is the path's.
+  const grantKey = NAV_MODULE_KEY[String(item.to).split('?')[0]]
   // The GRANT check uses the same key the route guard resolves (NAV_MODULE_KEY,
   // else the route slug), so a page that has no NAV_MODULE_KEY entry - e.g.
   // /serial-tracker -> 'serial_tracker' - still becomes visible once an admin

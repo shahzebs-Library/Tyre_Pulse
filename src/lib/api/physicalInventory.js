@@ -142,6 +142,12 @@ export function listVariants({ page, pageSize, status = 'proposed', canonicalId 
 export const proposeMaterial = (draft, key) => rpc('inv_material_canonical_propose', draft, key)
 export const decideMaterial = ({ canonicalId, decision, note, notDuplicateReason }, key) =>
   rpc('inv_material_canonical_decide', { canonical_id: canonicalId, decision, note: note || null, not_duplicate_reason: notDuplicateReason || null }, key)
+/** Decides up to 500 proposed materials in one call; every item still passes the single-item rules. */
+export const decideMaterialsBulk = ({ decision, search, limit, note, notDuplicateReason }, key) =>
+  rpc('inv_material_canonical_decide_bulk', {
+    decision, search: search || null, limit: limit || 500,
+    note: note || null, not_duplicate_reason: notDuplicateReason || null,
+  }, key)
 export const proposeVariant = (draft, key) => rpc('inv_material_variant_propose', draft, key)
 export const decideVariant = ({ variantId, decision, note }, key) =>
   rpc('inv_material_variant_decide', { variant_id: variantId, decision, note: note || null }, key)

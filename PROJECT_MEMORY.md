@@ -5,6 +5,33 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-23 — INVENTORY: BOOK2 LOAD PREPARED, BULK APPROVE (#603), MENU MOVED INTO THE APP SIDEBAR. Migration 20261123120000 applied live.
+- **RULE (owner, after repeating himself): before building a change he asks for, check unmerged branches and worktrees.**
+  `git log --all --oneline -i --grep=<topic>`, `git worktree list`, `git merge-base --is-ancestor <sha> origin/main`.
+  The inventory menu move he asked for twice was ALREADY DONE on `claude/inventory-center-polish` (e05f00ef + 9beeb742,
+  worktree `.claude/worktrees/inventory-center-polish`) and never merged, so he kept seeing the old menu.
+- **Inventory navigation (merged via branch claude/inventory-nav-to-main):** the Inventory Control Center's own black/yellow
+  in-page side menu (InventoryHub `inv-side`) is REMOVED. Every section is a deep link in the app sidebar under
+  Inventory & Procurement (`/stock?section=materials`, `/stock?section=movements&tab=transfers`, ...) with query-aware
+  active state; command-palette entries added. RULE: do NOT add navigation back inside the inventory page; new
+  inventory sections get a sidebar entry in Layout.jsx NAV_GROUPS, in the app's own style.
+- **Bulk approve (#603):** RPC `inv_material_canonical_decide_bulk(p_payload)` decides up to 500 proposed materials per
+  call by running each through `inv_material_canonical_decide`, so the two-person rule (proposer cannot approve),
+  duplicate reason and status checks hold per item; skipped items return with reasons. UI: "Approve many at once"
+  panel at the top of /stock?section=physical&tab=materials. Verified rolled back: own proposals refused, second admin approves.
+- **Book2.xlsx inventory list (3,510 items, 11 stores, 5,533 opening-balance lines) is NOT LOADED YET.** Load files are
+  built in the session scratchpad (catalogue_01..15.sql + opening_balances.sql via build_sql.cjs; compact staging
+  batches via stage.cjs). They go through the governed RPCs as the owner (items = proposed, batches = draft), so a
+  second person approves. BLOCKER: ~800 KB cannot go through the MCP SQL tool (~400k tokens); it needs the Supabase CLI,
+  which needs the owner to run `npx supabase login` once. Empty staging tables `_bak.book2_items` / `_bak.book2_lines`
+  exist for that load. Owner approvers: Anum (d2d43a5f, proposer) + shahzeb Rahman (58787cc7, second approver).
+- **Other branches that may still hold unmerged work** (`git cherry` shows commits not in main; some may be squash-merged
+  already, check before acting): claude/ui-spacing-polish (17), claude/vehicle360-inspection-tyre-map (7),
+  claude/login-focus-colour (3), claude/inventory-web-mockup (2), claude/inventory-flutter-mockup (2),
+  claude/parts-list-all-clickable (2).
+
+---
+
 # ⚑ 2026-11-22 — WEB INVENTORY CONTROL CENTER RESTYLED TO THE OWNER MOCKUP + MATERIAL MASTER + CONTAINER TEMPLATES + 3D STORE (branch claude/inventory-web-mockup). No migration.
 - Look: `inventoryPmv.css` scoped to `.inv-pmv` (near-black, safety yellow #FFC629 as a FILL behind dark text; light theme uses #8a5a00 for yellow TEXT). Hub = brand bar (global material search -> Material Master, bell -> /alerts, user chip), icon top tabs (Overview, Material Master, Initial Physical Inventory, Audits, Discrepancies, Corrections, Reports), left sub-nav (Dashboard / Inventory / Stock Transactions / Transfers / Catalog (OEM)=identification / Master Data=locations / Administration=controls / More). Old group/section Tabs are gone; every section is still reachable.
 - New sections `materials` (MaterialMasterSection: inv_material_search + material_canonical browse, genuine/aftermarket/unverified chips, store availability + cross-location tables, references, photos, history, per-material corrections) and `corrections` (reuses PhysicalInventoryReview corrections view, now card rows with Review). SECTION_KEYS = 20. Pure engine `src/lib/inventory/materialMasterView.js`. KPI row `InventoryKpiRow` (inv_pi_dashboard + inventory_audits completion per store; N/A, never invented).

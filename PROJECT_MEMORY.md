@@ -5,6 +5,36 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-23 (later) — BOOK2 LOADED LIVE VIA OWNER OVERRIDE, MATERIAL MASTER, SAVED THEMES, FLUTTER GREY SURFACES. PRs #606 (web) + #607 (Flutter).
+- **Book2.xlsx IS LOADED (supersedes "NOT LOADED YET" below):** 11 opening-balance batches approved, 5,533 lines posted,
+  3,508 materials active. Stock by site: NHC 40,270 / DIRIYAH 20,170 / RIY-MET 17,581 / RED SEA 16,816 / DHAHBAN 15,701 /
+  AMAALA 8,319 / LAHEQ 7,927 / KSP-T1 2,045 / QIDDIYA 732. Staging `_bak.book2_*` still exists (drop only on owner OK).
+- **OWNER OVERRIDE (migration 20261123160000_inv_owner_override.sql, applied live):** the owner does NOT want two-person
+  approval on his own data loads. `inv_owner_override_post(p_reason, p_limit)` (super admin only, reason required) sets
+  txn-local `inv.owner_override`; `_inv_owner_override_on()` = that setting AND is_super_admin(). Both decide functions,
+  the `inv_gate_opening_approve` trigger and the two SoD CHECKs (`opening_balance_batches_sod_chk`,
+  `material_canonical_check`) allow it ONLY when the decision note starts "Owner override:". Decision is recorded under
+  the owner's OWN id + system_logs row. RULE: never approve as another person; the two-person rule stays for everyone else.
+- **OEM rule (owner):** "Original"/"ORG" in a description = genuine OEM part (20 genuine variants now). The `-O` item-code
+  suffix is NOT OEM (it is on 3,484 of 3,508 items).
+- **Material Master (#606):** catalogue shows brand, genuine/local/aftermarket and current posted stock.
+  Engine `src/lib/inventory/materialCatalogView.js`; posted stock reads `v_inv_balances` by item_code AND via
+  `material_canonical_items` (canonical->ERP item_id; empty today but used). Filters/dates/colours on the Inventory &
+  Procurement pages aligned to the app design. `/procurement`, `/suppliers`, `/vendor-intelligence` keep BOTH RoleRoute
+  and ModuleRoute.
+- **Saved themes (#606):** `src/lib/appThemes.js` + `src/lib/api/uiPreferences.js`, stored in `profiles.ui_preferences`
+  (migration 20261123150000, applied live, verified not a guarded column).
+- **Flutter palette (#607, `tp_colors.dart`):** owner said dark mode was "too black" and light mode "too green".
+  Dark = charcoal canvas 15181C with grey cards 272B32 (yellow primary kept); light = grey canvas E7EAE9, white cards,
+  deeper green 0B8A4C. Sunlight contrast tests (card/bg >= 1.2, border/bg >= 1.25) were met by adjusting colours, not tests.
+  Goldens regenerated via flutter-ci.yml `update_goldens=true` (do not push to the branch while that run is going: its
+  commit-back is rejected). Needs a new TestFlight/Play build (owner's call) before phones show it.
+- **Icons (open):** owner finds plain line icons "too basic". Self-contained style board `docs/icon-preview.html`
+  (5 options: Fluent Color, Phosphor Duotone [recommended], Solar Bold Duotone, Fluent Emoji Flat, IconPark) plus what
+  the app uses today (Lucide, NAV_GROUPS `icon:` field, Ctrl+K). Awaiting the owner's pick before applying app-wide.
+  RULE: previews must be self-contained (inline SVG); external-file previews showed broken boxes on his machine.
+- **Disk-space rule (owner):** when freeing space, delete nothing that is unmerged; only build output, scratch and caches.
+
 # ⚑ 2026-11-23 — INVENTORY: BOOK2 LOAD PREPARED, BULK APPROVE (#603), MENU MOVED INTO THE APP SIDEBAR. Migration 20261123120000 applied live.
 - **RULE (owner, after repeating himself): before building a change he asks for, check unmerged branches and worktrees.**
   `git log --all --oneline -i --grep=<topic>`, `git worktree list`, `git merge-base --is-ancestor <sha> origin/main`.
@@ -19,7 +49,7 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
   call by running each through `inv_material_canonical_decide`, so the two-person rule (proposer cannot approve),
   duplicate reason and status checks hold per item; skipped items return with reasons. UI: "Approve many at once"
   panel at the top of /stock?section=physical&tab=materials. Verified rolled back: own proposals refused, second admin approves.
-- **Book2.xlsx inventory list (3,510 items, 11 stores, 5,533 opening-balance lines) is NOT LOADED YET.** Load files are
+- **[SUPERSEDED: loaded later the same day, see entry above] Book2.xlsx inventory list (3,510 items, 11 stores, 5,533 opening-balance lines) was not loaded yet.** Load files are
   built in the session scratchpad (catalogue_01..15.sql + opening_balances.sql via build_sql.cjs; compact staging
   batches via stage.cjs). They go through the governed RPCs as the owner (items = proposed, batches = draft), so a
   second person approves. BLOCKER: ~800 KB cannot go through the MCP SQL tool (~400k tokens); it needs the Supabase CLI,

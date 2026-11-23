@@ -16,7 +16,9 @@ import {
   FileText, CalendarX, CalendarClock, Users,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import Modal from '../components/ui/Modal'
+import StatTile from '../components/ui/StatTile'
 import { useSettings } from '../contexts/SettingsContext'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
@@ -181,9 +183,9 @@ function RequisitionModal({ open, initial, onClose, onSaved }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="label" htmlFor="req-needed">Needed by</label>
-            <input
-              id="req-needed" className="input w-full" type="date"
-              value={form.needed_by || ''} onChange={(e) => set('needed_by', e.target.value)}
+            <DateField
+              ariaLabel="Needed by"
+              value={form.needed_by || ''} onChange={(v) => set('needed_by', v)}
             />
           </div>
           <div>
@@ -269,26 +271,19 @@ function DeleteDialog({ row, onCancel, onConfirm }) {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-function Kpi({ label, value, hint, icon: Icon, tone, onClick, active }) {
-  const body = (
-    <>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        <Icon size={16} className={tone} aria-hidden="true" />
-      </div>
-      <p className={`text-2xl sm:text-3xl font-bold mt-1 tabular-nums ${tone}`}>{value}</p>
-      {hint && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{hint}</p>}
-    </>
-  )
-  if (!onClick) return <div className="card">{body}</div>
+// Wraps the shared StatTile. A tile that filters the register is a toggle
+// button (aria-pressed), with the ring marking the active filter.
+function Kpi({ label, value, hint, icon, tone, onClick, active, index }) {
+  const tile = <StatTile label={label} value={value} sub={hint} icon={icon} tone={tone} index={index} />
+  if (!onClick) return tile
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={!!active}
-      className={`card text-left min-h-[44px] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] ${active ? 'ring-2 ring-[var(--brand-bright)]' : ''}`}
+      className={`block h-full w-full text-left min-h-[44px] rounded-[var(--radius-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] ${active ? 'ring-2 ring-[var(--brand-bright)]' : ''}`}
     >
-      {body}
+      {tile}
     </button>
   )
 }
@@ -355,14 +350,14 @@ export default function Requisitions() {
   const show = (v) => (loaded ? v : 'N/A')
 
   const kpis = [
-    { label: 'Total requisitions', value: show(summary.total), icon: ShoppingCart, tone: 'text-[var(--text-primary)]', hint: loaded ? `${summary.requesters} requester${summary.requesters === 1 ? '' : 's'}` : null },
-    { label: 'Pending approval', value: show(summary.pending), icon: Clock, tone: 'text-amber-400', hint: loaded ? `${summary.byStatus.draft} draft, ${summary.byStatus.submitted} submitted` : null },
-    { label: 'Approved', value: show(summary.approved), icon: CheckCircle2, tone: 'text-sky-400', hint: loaded && summary.approvalRate != null ? `${summary.approvalRate}% of decided` : 'No decisions yet', onClick: () => setStatusFilter(statusFilter === 'approved' ? 'all' : 'approved'), active: statusFilter === 'approved' },
-    { label: 'Overdue', value: show(summary.overdue), icon: CalendarX, tone: 'text-red-400', hint: 'Open past needed-by', onClick: () => setDueFilter(dueFilter === 'overdue' ? 'all' : 'overdue'), active: dueFilter === 'overdue' },
-    { label: 'Due in 14 days', value: show(summary.dueSoon), icon: CalendarClock, tone: 'text-amber-300', onClick: () => setDueFilter(dueFilter === 'due_soon' ? 'all' : 'due_soon'), active: dueFilter === 'due_soon' },
-    { label: 'Est. value (qty x unit)', value: loaded ? fmtMoney(summary.totalValue) : 'N/A', icon: DollarSign, tone: 'text-[var(--brand-bright)]', hint: loaded ? `${summary.valued} of ${summary.total} priced` : null },
-    { label: 'Open est. value', value: loaded ? fmtMoney(summary.openValue) : 'N/A', icon: DollarSign, tone: 'text-[var(--text-primary)]', hint: 'Excludes ordered and rejected' },
-    { label: 'Requesters', value: show(summary.requesters), icon: Users, tone: 'text-[var(--text-primary)]' },
+    { label: 'Total requisitions', value: show(summary.total), icon: ShoppingCart, tone: 'neutral', hint: loaded ? `${summary.requesters} requester${summary.requesters === 1 ? '' : 's'}` : null },
+    { label: 'Pending approval', value: show(summary.pending), icon: Clock, tone: 'warn', hint: loaded ? `${summary.byStatus.draft} draft, ${summary.byStatus.submitted} submitted` : null },
+    { label: 'Approved', value: show(summary.approved), icon: CheckCircle2, tone: 'info', hint: loaded && summary.approvalRate != null ? `${summary.approvalRate}% of decided` : 'No decisions yet', onClick: () => setStatusFilter(statusFilter === 'approved' ? 'all' : 'approved'), active: statusFilter === 'approved' },
+    { label: 'Overdue', value: show(summary.overdue), icon: CalendarX, tone: 'crit', hint: 'Open past needed-by', onClick: () => setDueFilter(dueFilter === 'overdue' ? 'all' : 'overdue'), active: dueFilter === 'overdue' },
+    { label: 'Due in 14 days', value: show(summary.dueSoon), icon: CalendarClock, tone: 'warn', onClick: () => setDueFilter(dueFilter === 'due_soon' ? 'all' : 'due_soon'), active: dueFilter === 'due_soon' },
+    { label: 'Est. value (qty x unit)', value: loaded ? fmtMoney(summary.totalValue) : 'N/A', icon: DollarSign, tone: 'accent', hint: loaded ? `${summary.valued} of ${summary.total} priced` : null },
+    { label: 'Open est. value', value: loaded ? fmtMoney(summary.openValue) : 'N/A', icon: DollarSign, tone: 'neutral', hint: 'Excludes ordered and rejected' },
+    { label: 'Requesters', value: show(summary.requesters), icon: Users, tone: 'neutral' },
   ]
 
   const EXPORT_COLS = ['requisition_no', 'item', 'category', 'requester', 'quantity', 'est_cost', 'line_value', 'needed_by', 'due', 'site', 'status']
@@ -484,7 +479,7 @@ export default function Requisitions() {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map((k) => <Kpi key={k.label} {...k} />)}
+        {kpis.map((k, i) => <Kpi key={k.label} index={i} {...k} />)}
       </div>
 
       {loaded && summary.byCategory.length > 0 && (

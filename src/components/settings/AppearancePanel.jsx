@@ -5,9 +5,10 @@ import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * Appearance — personal theme, accent colour, density and motion controls.
- * Every choice applies live and persists per user on this device (localStorage),
- * so anyone can make TyrePulse look the way they want without touching the org
- * brand. A personal accent overrides the organisation brand for this user only.
+ * Every choice applies live, is kept on this device (localStorage, applied
+ * before first paint) and is saved to the user's account so it follows them to
+ * other devices. A personal accent overrides the organisation brand for this
+ * user only.
  */
 const MODE_ICON = { light: Sun, dark: Moon, system: Monitor }
 
@@ -88,21 +89,40 @@ export default function AppearancePanel() {
             </button>
           )}
         </div>
-        <div className="flex flex-wrap gap-2 mt-1">
+        <div
+          role="radiogroup"
+          aria-label={t('appearance.accent')}
+          className="flex flex-wrap gap-2 mt-1"
+          onKeyDown={(e) => {
+            if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
+            e.preventDefault()
+            const ids = presets.map((p) => p.value)
+            const cur = Math.max(0, ids.indexOf(accent))
+            const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1
+            const next = ids[(cur + step + ids.length) % ids.length]
+            setAccent(next)
+            e.currentTarget.querySelector(`[data-accent-id="${next}"]`)?.focus()
+          }}
+        >
           {presets.map((p) => {
-            const active = accent.toLowerCase() === p.value.toLowerCase()
+            const active = accent === p.value
+            const tabbable = active || (!presets.some((x) => x.value === accent) && p.value === presets[0].value)
+            const name = t(`appearance.accents.${p.id}`)
             return (
               <button
                 key={p.id}
                 type="button"
-                title={p.label}
+                role="radio"
+                aria-checked={active}
+                aria-label={name}
+                title={name}
+                tabIndex={tabbable ? 0 : -1}
+                data-accent-id={p.value}
                 onClick={() => setAccent(p.value)}
-                aria-label={p.label}
-                aria-pressed={active}
-                className={`w-8 h-8 rounded-full grid place-items-center transition-transform hover:scale-110 ${active ? 'ring-2 ring-offset-2 ring-offset-[var(--surface-1)]' : ''}`}
-                style={{ background: p.value, boxShadow: active ? `0 0 0 2px ${p.value}` : 'none' }}
+                className={`w-8 h-8 rounded-full grid place-items-center transition-transform hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-ring)] ${active ? 'ring-2 ring-offset-2 ring-offset-[var(--surface-1)]' : ''}`}
+                style={{ background: p.swatch, boxShadow: active ? `0 0 0 2px ${p.swatch}` : 'none' }}
               >
-                {active && <Check size={15} className="text-white drop-shadow" />}
+                {active && <Check size={15} className="text-white drop-shadow" aria-hidden="true" />}
               </button>
             )
           })}
@@ -121,14 +141,14 @@ export default function AppearancePanel() {
           <div className="flex items-center gap-2 mt-3">
             <input
               type="color"
-              value={accent || '#16a34a'}
+              value={accent.startsWith('#') ? accent : '#16a34a'}
               onChange={(e) => setAccent(e.target.value)}
               className="w-10 h-9 rounded-lg bg-transparent border border-[var(--input-border)] cursor-pointer p-0.5"
               aria-label={t('appearance.custom')}
             />
             <input
               type="text"
-              value={accent}
+              value={accent.startsWith('#') ? accent : ''}
               onChange={(e) => setAccent(e.target.value)}
               placeholder="#16a34a"
               spellCheck={false}
@@ -136,6 +156,22 @@ export default function AppearancePanel() {
             />
           </div>
         )}
+        {/* Live preview: painted from the same accent tokens the whole app reads. */}
+        <div className="mt-3 rounded-xl border border-[var(--input-border)] p-3 flex flex-wrap items-center gap-3" aria-label={t('appearance.preview')}>
+          <span className="text-[11px] uppercase tracking-wide text-[var(--text-muted)] w-full">{t('appearance.preview')}</span>
+          <span
+            className="inline-flex items-center gap-2 py-1.5 ps-2.5 pe-3 rounded-xl text-[12.5px] font-medium text-[var(--accent-ink)]"
+            style={{
+              background: 'linear-gradient(135deg, rgba(var(--accent-rgb),0.16) 0%, rgba(var(--accent-rgb),0.07) 100%)',
+              border: '1px solid rgba(var(--accent-rgb),0.24)',
+            }}
+          >
+            <span className="w-[3px] h-3.5 rounded-full" style={{ background: 'linear-gradient(180deg, var(--accent-light), var(--accent-strong), var(--accent-deep))' }} />
+            <Palette size={13} className="text-[var(--accent-icon)]" aria-hidden="true" /> {t('appearance.previewNav')}
+          </span>
+          <span className="btn-primary pointer-events-none" aria-hidden="true">{t('appearance.previewButton')}</span>
+          <span className="text-xs font-semibold" style={{ color: 'var(--brand-on-tint)' }}>{t('appearance.previewLink')}</span>
+        </div>
       </div>
 
       {/* Density */}

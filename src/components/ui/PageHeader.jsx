@@ -19,7 +19,8 @@ function relativeTime(ts) {
 /**
  * PageHeader - standard premium page header used across all pages.
  *
- * @param {string}   title
+ * @param {string}   title      - omit when the page already has its heading
+ *   (an embedded view), so a second h1 is never rendered
  * @param {string}   subtitle
  * @param {ReactNode} icon       - optional Lucide icon component
  * @param {ReactNode} actions    - right-side action buttons
@@ -81,14 +82,14 @@ export default function PageHeader({
           </div>
         )}
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">{title}</h1>
+          {(title || badge) && <div className="flex items-center gap-2">
+            {title && <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">{title}</h1>}
             {badge && (
               <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-brand-subtle text-brand-bright border border-[rgba(22,163,74,0.2)]">
                 {badge}
               </span>
             )}
-          </div>
+          </div>}
           {subtitle && (
             <p className="text-sm text-muted mt-0.5">{subtitle}</p>
           )}

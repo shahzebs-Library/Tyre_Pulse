@@ -124,11 +124,11 @@ export default function Materials() {
 
   const kpis = [
     { label: 'Items', value: kpi.totalItems, icon: Package, tone: 'text-[var(--text-primary)]' },
-    { label: 'Stock value', value: money(kpi.stockValue), sub: kpi.unpricedItems ? `${kpi.unpricedItems} unpriced item${kpi.unpricedItems === 1 ? '' : 's'} not valued` : 'every item priced', icon: DollarSign, tone: 'text-amber-400' },
+    { label: 'Stock value', value: money(kpi.stockValue), sub: kpi.unpricedItems ? `${kpi.unpricedItems} unpriced item${kpi.unpricedItems === 1 ? '' : 's'} not valued` : 'every item priced', icon: DollarSign, tone: 'text-[var(--brand-bright)]' },
     { label: 'Low stock', value: kpi.lowStock, icon: TrendingDown, tone: 'text-amber-400' },
     { label: 'Out of stock', value: kpi.outOfStock, sub: kpi.availabilityPct == null ? '' : `${kpi.availabilityPct}% of items available`, icon: PackageX, tone: kpi.outOfStock > 0 ? 'text-red-400' : 'text-[var(--text-muted)]' },
-    { label: 'Reorder needed', value: kpi.reorderCount, sub: kpi.reorderSpend == null ? 'order cost not measurable' : `about ${money(kpi.reorderSpend)} to reorder`, icon: ShoppingCart, tone: 'text-sky-400' },
-    { label: 'Categories', value: kpi.categories, icon: Layers, tone: 'text-blue-400' },
+    { label: 'Reorder needed', value: kpi.reorderCount, sub: kpi.reorderSpend == null ? 'order cost not measurable' : `about ${money(kpi.reorderSpend)} to reorder`, icon: ShoppingCart, tone: 'text-[var(--text-primary)]' },
+    { label: 'Categories', value: kpi.categories, icon: Layers, tone: 'text-[var(--text-primary)]' },
   ]
 
   const exportName = reportFileName('Materials')
@@ -301,7 +301,7 @@ export default function Materials() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card">
           <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <ShoppingCart size={15} className="text-sky-400" aria-hidden="true" /> Reorder worklist
+            <ShoppingCart size={15} className="text-green-400" aria-hidden="true" /> Reorder worklist
             {known && kpi.reorderCount > 0 && <span className="ml-1 text-xs font-normal text-[var(--text-muted)]">({kpi.reorderCount})</span>}
           </h2>
           {rows === null ? (
@@ -331,7 +331,7 @@ export default function Materials() {
 
         <div className="card">
           <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <Warehouse size={15} className="text-blue-400" aria-hidden="true" /> On-hand value by category
+            <Warehouse size={15} className="text-green-400" aria-hidden="true" /> On-hand value by category
           </h2>
           {rows === null ? (
             <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-7 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>

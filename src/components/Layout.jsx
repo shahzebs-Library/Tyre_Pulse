@@ -314,10 +314,10 @@ const NAV_GROUPS = [
       { to: '/materials',           label: 'Materials', parent: 'Stock',           icon: Layers, adminOnly: A },
       { to: '/goods-receipt',       label: 'Goods Receipt', parent: 'Stock',       icon: PackageCheck, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/store-material-issue', label: 'Material Issue (MIS)', parent: 'Stock', icon: Receipt, roles: ['Admin', 'Manager', 'Director'] },
-      { to: '/procurement',         label: 'Procurement', parent: 'Purchasing',         icon: PurchaseOrderIc, adminOnly: A },
+      { to: '/procurement',         label: 'Procurement', parent: 'Purchasing',         icon: PurchaseOrderIc, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/requisitions',        label: 'Requisitions', parent: 'Purchasing',        icon: ClipboardList, roles: ['Admin', 'Manager', 'Director'] },
-      { to: '/suppliers',           label: 'Supplier Management', parent: 'Purchasing', icon: SupplierTruckIc, adminOnly: A },
-      { to: '/vendor-intelligence', label: 'Vendor Intelligence', parent: 'Purchasing', icon: Trophy, adminOnly: A },
+      { to: '/suppliers',           label: 'Supplier Management', parent: 'Purchasing', icon: SupplierTruckIc, roles: ['Admin', 'Manager', 'Director'] },
+      { to: '/vendor-intelligence', label: 'Vendor Intelligence', parent: 'Purchasing', icon: Trophy, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/marketplace',         label: 'Supplier Marketplace', parent: 'Purchasing', icon: Store, adminOnly: A },
       { to: '/contracts',           label: 'Contracts', parent: 'Purchasing',           icon: FileText, roles: ['Admin', 'Manager', 'Director'] },
     ],
@@ -577,7 +577,7 @@ function FavStar({ pinned, label, onToggle, t }) {
       aria-label={`${action}: ${label}`}
       aria-pressed={pinned}
       className={`absolute end-1 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
-        rounded-md transition-opacity duration-150 focus-visible:opacity-100 hover:bg-green-400/10
+        rounded-md transition-opacity duration-150 focus-visible:opacity-100 hover:bg-[rgba(var(--accent-bright-rgb),0.1)]
         ${pinned
           ? 'opacity-100 text-amber-300'
           : 'opacity-0 text-gray-600 hover:text-amber-300 group-hover/fav:opacity-100 group-focus-within/fav:opacity-100'}`}
@@ -697,7 +697,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
           height: 'calc(52px + env(safe-area-inset-top))',
           paddingTop: 'env(safe-area-inset-top)',
           background: 'rgba(255,255,255,0.97)',
-          borderBottom: '1px solid rgba(22,163,74,0.15)',
+          borderBottom: '1px solid rgba(var(--accent-rgb),0.15)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           boxShadow: '0 1px 12px rgba(0,0,0,0.06)',
@@ -706,7 +706,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
         <div className="flex items-center gap-2.5">
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.22)' }}
+            style={{ background: 'rgba(var(--accent-rgb),0.1)', border: '1px solid rgba(var(--accent-rgb),0.22)' }}
           >
             <BrandIcon src={appIcon} custom={hasCustomIcon} size={16} />
           </div>
@@ -798,7 +798,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
         aria-label="Tyre Man navigation"
         style={{
           background: 'rgba(255,255,255,0.97)',
-          borderTop: '1px solid rgba(22,163,74,0.15)',
+          borderTop: '1px solid rgba(var(--accent-rgb),0.15)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           paddingBottom: 'env(safe-area-inset-bottom)',
@@ -812,7 +812,7 @@ function TyreManShell({ children, alertCount, appIcon, customAppIcon }) {
               to={to}
               end={end}
               style={({ isActive }) => ({
-                color: isActive ? '#16a34a' : '#9ca3af',
+                color: isActive ? 'var(--accent)' : '#9ca3af',
               })}
               className="flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 active:opacity-60"
             >
@@ -1251,12 +1251,12 @@ export default function Layout({ children }) {
       >
         {/* subtle inner glow at bottom of sidebar */}
         <div className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
-          style={{ background: 'linear-gradient(0deg, rgba(22,163,74,0.04) 0%, transparent 100%)' }} />
+          style={{ background: 'linear-gradient(0deg, rgba(var(--accent-rgb),0.04) 0%, transparent 100%)' }} />
 
         {/* ── Logo row ──────────────────────────────────────────────────────── */}
         <div
           className={`flex items-center h-[64px] px-3 flex-shrink-0 ${!sidebarOpen ? 'justify-center' : ''}`}
-          style={{ borderBottom: '1px solid rgba(22,163,74,0.1)' }}
+          style={{ borderBottom: '1px solid rgba(var(--accent-rgb),0.1)' }}
         >
           <div className="tp-workspace-heading">
             {isMobile && <BrandIcon src={appIcon} custom={hasCustomIcon} size={24} />}
@@ -1274,7 +1274,7 @@ export default function Layout({ children }) {
               ? tOr(t, 'shell.closeMenu', 'Close menu')
               : (sidebarOpen ? tOr(t, 'shell.collapseSidebar', 'Collapse sidebar') : tOr(t, 'shell.expandSidebar', 'Expand sidebar'))}
             aria-expanded={isMobile ? undefined : sidebarOpen}
-            className="tp-touch-target flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-green-400 transition-all duration-200 hover:bg-green-400/10"
+            className="tp-touch-target flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-gray-600 hover:text-[var(--brand-electric)] transition-all duration-200 hover:bg-[rgba(var(--accent-bright-rgb),0.1)]"
           >
             <motion.div animate={{ rotate: sidebarOpen ? 0 : 180 }} transition={{ duration: 0.22 }}>
               {sidebarOpen ? <X size={13} /> : <Menu size={13} />}
@@ -1346,11 +1346,11 @@ export default function Layout({ children }) {
                     className={({ isActive }) =>
                       `relative flex items-center gap-2.5 ps-2.5 pe-7 py-[6.5px] rounded-xl text-[12.5px] font-medium
                        transition-all duration-150 mb-px group
-                       ${isActive ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
+                       ${isActive ? 'text-[var(--accent-ink)]' : 'text-gray-600 hover:text-gray-200'}`
                     }
                     style={({ isActive }) => isActive ? {
-                      background: 'linear-gradient(135deg, rgba(22,163,74,0.16) 0%, rgba(22,163,74,0.07) 100%)',
-                      border: '1px solid rgba(22,163,74,0.24)',
+                      background: 'linear-gradient(135deg, rgba(var(--accent-rgb),0.16) 0%, rgba(var(--accent-rgb),0.07) 100%)',
+                      border: '1px solid rgba(var(--accent-rgb),0.24)',
                     } : { border: '1px solid transparent' }}
                   >
                     {FavIcon
@@ -1361,7 +1361,7 @@ export default function Layout({ children }) {
                   <FavStar pinned label={label} t={t} onToggle={() => toggleFav(route)} />
                 </div>
               ))}
-              <div className="mt-1.5 mx-2.5" style={{ borderTop: '1px solid rgba(22,163,74,0.12)' }} />
+              <div className="mt-1.5 mx-2.5" style={{ borderTop: '1px solid rgba(var(--accent-rgb),0.12)' }} />
             </div>
           )}
 
@@ -1452,7 +1452,7 @@ export default function Layout({ children }) {
                             `relative flex items-center gap-2.5 py-[6.5px] rounded-xl text-[12.5px] font-medium
                              transition-all duration-150 mb-px group
                              ${sidebarOpen ? 'ps-2.5 pe-7' : 'px-2.5 justify-center'}
-                             ${navActive(to, _ia, location.search) ? 'text-green-300' : 'text-gray-600 hover:text-gray-200'}`
+                             ${navActive(to, _ia, location.search) ? 'text-[var(--accent-ink)]' : 'text-gray-600 hover:text-gray-200'}`
                           }
                           // ONE style prop. There used to be two on this element:
                           // the out-of-context dimming came first and JSX let the
@@ -1460,9 +1460,9 @@ export default function Layout({ children }) {
                           // "dimmed, not removed" state was never actually drawn.
                           style={({ isActive: _ia }) => ({
                             ...(navActive(to, _ia, location.search) ? {
-                              background: 'linear-gradient(135deg, rgba(22,163,74,0.16) 0%, rgba(22,163,74,0.07) 100%)',
-                              border: '1px solid rgba(22,163,74,0.24)',
-                              boxShadow: '0 0 18px rgba(22,163,74,0.1), inset 0 1px 0 rgba(22,163,74,0.05)',
+                              background: 'linear-gradient(135deg, rgba(var(--accent-rgb),0.16) 0%, rgba(var(--accent-rgb),0.07) 100%)',
+                              border: '1px solid rgba(var(--accent-rgb),0.24)',
+                              boxShadow: '0 0 18px rgba(var(--accent-rgb),0.1), inset 0 1px 0 rgba(var(--accent-rgb),0.05)',
                             } : {
                               border: '1px solid transparent',
                             }),
@@ -1477,8 +1477,8 @@ export default function Layout({ children }) {
                                   layoutId="activeBar"
                                   className="absolute start-0 top-1/2 -translate-y-1/2 w-[3px] h-[52%] rounded-e-full"
                                   style={{
-                                    background: 'linear-gradient(180deg, #86efac, #22c55e, #15803d)',
-                                    boxShadow: '0 0 10px rgba(74,222,128,0.8)',
+                                    background: 'linear-gradient(180deg, var(--accent-light), var(--accent-strong), var(--accent-deep))',
+                                    boxShadow: '0 0 10px rgba(var(--accent-bright-rgb),0.8)',
                                   }}
                                   transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                                 />
@@ -1489,7 +1489,7 @@ export default function Layout({ children }) {
                                 strokeWidth={isActive ? 2.2 : 1.8}
                                 className={`flex-shrink-0 transition-colors duration-150 ${
                                   isActive
-                                    ? 'text-green-400'
+                                    ? 'text-[var(--accent-icon)]'
                                     : 'text-gray-600 group-hover:text-gray-300'
                                 }`}
                               />
@@ -1604,11 +1604,11 @@ export default function Layout({ children }) {
                     onClick={() => navigate(-1)}
                     title="Back to previous page"
                     aria-label="Back to previous page"
-                    className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors hover:text-green-400"
+                    className="flex-shrink-0 inline-flex items-center gap-1.5 h-7 px-2 rounded-lg text-[12px] font-medium transition-colors hover:text-[var(--brand-electric)]"
                     style={{
                       color: 'var(--text-muted)',
-                      background: 'rgba(22,163,74,0.05)',
-                      border: '1px solid rgba(22,163,74,0.12)',
+                      background: 'rgba(var(--accent-rgb),0.05)',
+                      border: '1px solid rgba(var(--accent-rgb),0.12)',
                     }}
                   >
                     <ArrowLeft size={13} aria-hidden="true" className="flex-shrink-0 rtl:rotate-180" />

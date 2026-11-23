@@ -16,8 +16,8 @@ const PULSE_MS = 4000
 
 /** Scene colours per app theme. Bin colours stay the same in both. */
 export const SCENE = {
-  dark: { bg: '#0b0b0c', grid1: '#27272a', grid2: '#1c1c1f', floor: '#18181b', door: '#FFC629', doorEdge: '#FFC629', rack: '#71717a', ambient: 0.6 },
-  light: { bg: '#eef0f3', grid1: '#c4c9d1', grid2: '#dde1e7', floor: '#e5e7eb', door: '#FFC629', doorEdge: '#a16207', rack: '#6b7280', ambient: 0.85 },
+  dark: { bg: '#0b0b0c', grid1: '#27272a', grid2: '#1c1c1f', floor: '#18181b', door: '#16a34a', doorEdge: '#16a34a', rack: '#71717a', ambient: 0.6 },
+  light: { bg: '#eef0f3', grid1: '#c4c9d1', grid2: '#dde1e7', floor: '#e5e7eb', door: '#16a34a', doorEdge: '#15803d', rack: '#6b7280', ambient: 0.85 },
 }
 
 function Bin({ bin, rack, selected, pulseAt, reducedMotion, onPick }) {
@@ -34,9 +34,9 @@ function Bin({ bin, rack, selected, pulseAt, reducedMotion, onPick }) {
       onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer' }}
       onPointerOut={() => { document.body.style.cursor = '' }}>
       <boxGeometry args={bin.size} />
-      <meshStandardMaterial color={BIN_COLORS[bin.status] || BIN_COLORS.empty} emissive={selected || pulseAt ? '#FFC629' : '#000000'}
+      <meshStandardMaterial color={BIN_COLORS[bin.status] || BIN_COLORS.empty} emissive={selected || pulseAt ? '#16a34a' : '#000000'}
         emissiveIntensity={selected ? 0.6 : (pulseAt && Date.now() - pulseAt < PULSE_MS ? 0.4 : 0)} />
-      {selected && <Edges color="#FFC629" />}
+      {selected && <Edges color="#16a34a" />}
     </mesh>
   )
 }

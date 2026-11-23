@@ -118,7 +118,7 @@ describe('locale coverage for the dynamic key families', () => {
     'pi.photoRole': PHOTO_ROLES, 'pi.purpose': PHOTO_PURPOSES, 'pi.corr.action': CORRECTION_ACTIONS,
     'pi.field': [...CORRECTABLE_FIELDS.canonical, ...CORRECTABLE_FIELDS.variant],
     'pi.status': ['identified', 'pending_review', 'mapped', 'rejected', 'all', 'proposed', 'active', 'obsolete', 'retired'],
-    'pi.tabs': ['capture', 'review', 'materials', 'corrections', 'search', 'dashboard'],
+    'pi.tabs': ['capture', 'review', 'materials', 'search', 'dashboard'],
     'pi.dash': dashboardTiles({ captures: 1 }).map((x) => x.key),
     'pi.batch': ['not_prepared', 'draft', 'submitted', 'approved', 'rejected', 'cancelled'],
     'pi.val': ['promoted', 'unvalued', 'not_promoted'],

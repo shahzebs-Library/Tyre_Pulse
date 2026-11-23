@@ -39,7 +39,7 @@ export default function ThemeToggle({
       aria-label={title}
       className={
         className ||
-        'inline-flex items-center justify-center gap-1.5 w-7 h-7 rounded-lg text-gray-600 hover:text-green-400 transition-all duration-200 hover:bg-green-400/10'
+        'inline-flex items-center justify-center gap-1.5 w-7 h-7 rounded-lg text-gray-600 hover:text-[var(--brand-electric)] transition-all duration-200 hover:bg-[rgba(var(--accent-bright-rgb),0.1)]'
       }
     >
       <Icon size={size} aria-hidden="true" />

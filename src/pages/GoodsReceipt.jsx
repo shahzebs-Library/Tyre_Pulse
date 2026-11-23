@@ -22,6 +22,7 @@ import {
   Trash2, Search, X, Filter, FileSpreadsheet, FileText, Percent, Users, RefreshCw, Loader2,
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
+import DateField from '../components/ui/DateField'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
@@ -137,8 +138,8 @@ export default function GoodsReceipt() {
     { label: 'Received', value: kpi.received, icon: CheckCircle2, tone: 'text-green-400' },
     { label: 'Partial / pending', value: kpi.outstanding, icon: Truck, tone: 'text-amber-400' },
     { label: 'Shortfall units', value: kpi.shortfallUnits.toLocaleString(), sub: `${kpi.shortLines} short line${kpi.shortLines === 1 ? '' : 's'}`, icon: AlertTriangle, tone: kpi.shortfallUnits > 0 ? 'text-red-400' : 'text-[var(--text-muted)]' },
-    { label: 'Fill rate', value: fmtPct(kpi.fillRatePct), sub: 'received vs ordered', icon: Percent, tone: 'text-sky-400' },
-    { label: 'Suppliers', value: kpi.suppliers, sub: kpi.qualityIssuePct == null ? 'no condition recorded' : `${fmtPct(kpi.qualityIssuePct)} damaged or rejected`, icon: Users, tone: 'text-blue-400' },
+    { label: 'Fill rate', value: fmtPct(kpi.fillRatePct), sub: 'received vs ordered', icon: Percent, tone: 'text-[var(--text-primary)]' },
+    { label: 'Suppliers', value: kpi.suppliers, sub: kpi.qualityIssuePct == null ? 'no condition recorded' : `${fmtPct(kpi.qualityIssuePct)} damaged or rejected`, icon: Users, tone: 'text-[var(--text-primary)]' },
   ]
 
   const exportName = reportFileName('Goods Receipts')
@@ -400,10 +401,10 @@ export default function GoodsReceipt() {
             {supplierOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <label className="text-xs text-[var(--text-muted)] flex flex-col gap-1">From
-            <input type="date" className="input min-h-[44px]" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+            <DateField className="min-h-[44px]" ariaLabel="From" value={fromDate} onChange={(v) => setFromDate(v)} />
           </label>
           <label className="text-xs text-[var(--text-muted)] flex flex-col gap-1">To
-            <input type="date" className="input min-h-[44px]" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            <DateField className="min-h-[44px]" ariaLabel="To" value={toDate} onChange={(v) => setToDate(v)} />
           </label>
           {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear</button>}
           <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{known ? `${filtered.length} of ${rows.length}` : 'N/A'}</span>
@@ -475,7 +476,7 @@ export default function GoodsReceipt() {
                 {GOODS_RECEIPT_CONDITIONS.map((c) => <option key={c} value={c}>{CONDITION_LABEL[c] || c}</option>)}
               </select>
             ))}
-            {field('grn-date', 'Received date', <input id="grn-date" type="date" className="input w-full" value={form.received_date} onChange={(e) => set('received_date', e.target.value)} />)}
+            {field('grn-date', 'Received date', <DateField ariaLabel="Received date" value={form.received_date} onChange={(v) => set('received_date', v)} />)}
             {field('grn-site', 'Site', <input id="grn-site" className="input w-full" placeholder="Riyadh Depot" value={form.site} onChange={(e) => set('site', e.target.value)} maxLength={120} />)}
             {field('grn-status', 'Status', (
               <select id="grn-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>

@@ -25,6 +25,8 @@ import {
   contractExportRows, CONTRACT_EXPORT_COLUMNS,
 } from '../lib/supplierManagementAnalytics'
 import NotInUseNotice from '../components/ui/NotInUseNotice'
+import StatTile from '../components/ui/StatTile'
+import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import EmptyState from '../components/EmptyState'
 import EntityApprovalPanel from '../components/workflow/EntityApprovalPanel'
 import {
@@ -65,11 +67,6 @@ function numToRating(num) {
 }
 // Whitelisted writable columns
 const CONTRACT_COLS = ['supplier_name', 'contract_start', 'contract_end', 'payment_terms', 'price_per_unit', 'min_order', 'notes', 'country', 'created_by']
-const PALETTE = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#475569',
-  '#0f766e', '#14b8a6', '#f97316', '#1d4ed8', '#84cc16',
-  '#06b6d4', '#64748b',
-]
 const RATING_CONFIG = {
   Preferred:     { color: 'text-emerald-400', bg: 'bg-emerald-900/40', border: 'border-emerald-700', icon: Star },
   Approved:      { color: 'text-blue-400',    bg: 'bg-blue-900/40',    border: 'border-blue-700',    icon: CheckCircle },
@@ -81,18 +78,18 @@ const CHART_DEFAULTS = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { labels: { color: '#9ca3af', font: { size: 11 } } },
+    legend: { labels: { color: 'var(--text-secondary)', font: { size: 11 } } },
     tooltip: {
-      backgroundColor: 'var(--panel-2)',
-      titleColor: '#f3f4f6',
-      bodyColor: '#9ca3af',
-      borderColor: 'rgba(59,130,246,0.3)',
+      backgroundColor: 'var(--panel)',
+      titleColor: 'var(--text-primary)',
+      bodyColor: 'var(--text-secondary)',
+      borderColor: 'var(--hairline)',
       borderWidth: 1,
     },
   },
   scales: {
-    x: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
-    y: { ticks: { color: '#6b7280', font: { size: 11 } }, grid: { color:'var(--text-muted)' } },
+    x: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
+    y: { ticks: { color: 'var(--text-muted)', font: { size: 11 } }, grid: { color: 'var(--panel-2)' } },
   },
 }
 
@@ -153,32 +150,6 @@ function pick(obj, cols) {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-function KpiCard({ icon: Icon, label, value, sub, color = 'text-blue-400', trend }) {
-  const { t } = useLanguage()
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="card flex flex-col gap-1"
-    >
-      <div className="flex items-center gap-2 mb-1">
-        <div className={`p-1.5 rounded-lg bg-[var(--input-bg)] ${color}`}>
-          <Icon size={15} />
-        </div>
-        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">{label}</span>
-      </div>
-      <div className={`text-2xl font-bold ${color}`}>{value}</div>
-      {sub && <div className="text-xs text-[var(--text-muted)]">{sub}</div>}
-      {trend != null && (
-        <div className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {trend >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-          {t('suppliers.kpi.vsLastYear', { pct: Math.abs(trend).toFixed(1) })}
-        </div>
-      )}
-    </motion.div>
-  )
-}
-
 function RatingBadge({ rating }) {
   const { t } = useLanguage()
   const cfg = RATING_CONFIG[rating] || RATING_CONFIG['Approved']
@@ -623,7 +594,7 @@ export default function SupplierManagement() {
       labels: [...top5.map(m => m.brand), 'Other'],
       datasets: [{
         data: [...top5.map(m => m.totalSpend), Math.max(0, totalSpend - top5.reduce((s, m) => s + m.totalSpend, 0))],
-        backgroundColor: [...PALETTE.slice(0, 5), '#6b7280'],
+        backgroundColor: [...categorical(5), 'var(--text-muted)'],
         borderWidth: 0,
       }],
     }
@@ -633,9 +604,9 @@ export default function SupplierManagement() {
       datasets: [
         ...top5.map((m, i) => ({
           label: m.brand, data: monthlyByBrand[i],
-          backgroundColor: PALETTE[i % PALETTE.length], borderWidth: 0, stack: 'a',
+          backgroundColor: colorAt(i), borderWidth: 0, stack: 'a',
         })),
-        { label: 'Other', data: otherMonthly, backgroundColor: '#6b7280', borderWidth: 0, stack: 'a' },
+        { label: 'Other', data: otherMonthly, backgroundColor: 'var(--text-muted)', borderWidth: 0, stack: 'a' },
       ],
     }
 
@@ -646,7 +617,7 @@ export default function SupplierManagement() {
   const compareData = useMemo(() => {
     const selected = allMetrics.filter(m => compareList.includes(m.brand))
     if (selected.length === 0) return null
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
+    const colors = categorical(4)
     return {
       labels: ['CPK Score', 'Life Score', 'Reliability', 'Value', 'Coverage'],
       datasets: selected.map((m, i) => {
@@ -654,7 +625,7 @@ export default function SupplierManagement() {
         return {
           label: m.brand,
           data: [scores.cpkScore, scores.lifeScore, scores.reliabilityScore, scores.valueScore, scores.coverageScore],
-          backgroundColor: `${colors[i]}33`,
+          backgroundColor: withAlpha(colors[i], 0.2),
           borderColor: colors[i],
           pointBackgroundColor: colors[i],
           borderWidth: 2,
@@ -774,7 +745,7 @@ export default function SupplierManagement() {
                   <Lock size={11} /> Locked
                 </span>
               )}
-              <button onClick={() => setContractModal(c)} aria-label="Edit contract" className="p-1.5 text-[var(--text-muted)] hover:text-blue-400 hover:bg-[var(--input-bg)] rounded">
+              <button onClick={() => setContractModal(c)} aria-label="Edit contract" className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)] rounded">
                 <Edit3 size={13} />
               </button>
               <button
@@ -875,7 +846,7 @@ export default function SupplierManagement() {
         <AlertTriangle size={32} className="text-red-400 mx-auto mb-2" />
         <p className="text-red-400 font-medium">{t('suppliers.errors.loadFailed')}</p>
         <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
-        <button onClick={fetchData} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
+        <button onClick={fetchData} type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] mt-3"><RefreshCw size={14} aria-hidden="true" /> {t('suppliers.retry')}</button>
       </div>
     </div>
     </div>
@@ -889,13 +860,13 @@ export default function SupplierManagement() {
         icon={Building2}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={fetchData} className="flex items-center gap-1.5 px-3 py-2 bg-[var(--input-bg)] hover:bg-[var(--input-bg-hover)] border border-[var(--input-border)] text-[var(--text-secondary)] text-sm rounded-lg">
+            <button onClick={fetchData} className="btn-secondary">
               <RefreshCw size={13} /> {t('suppliers.actions.refresh')}
             </button>
-            <button onClick={handleExcelExport} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-600 text-white text-sm rounded-lg">
+            <button onClick={handleExcelExport} className="btn-secondary">
               <FileSpreadsheet size={13} /> {t('suppliers.actions.excel')}
             </button>
-            <button onClick={handlePdfExport} className="flex items-center gap-1.5 px-3 py-2 bg-blue-700 hover:bg-blue-600 text-white text-sm rounded-lg">
+            <button onClick={handlePdfExport} className="btn-secondary">
               <FileText size={13} /> {t('suppliers.actions.pdf')}
             </button>
           </div>
@@ -906,18 +877,18 @@ export default function SupplierManagement() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        <KpiCard icon={Building2} label={t('suppliers.kpi.totalSuppliers')} value={kpiSummary.total} sub={t('suppliers.kpi.uniqueBrands')} color="text-blue-400" />
-        <KpiCard icon={Star} label={t('suppliers.kpi.preferred')} value={kpiSummary.preferredCount} sub={t('suppliers.kpi.ofTotalSuppliers', { total: kpiSummary.total })} color="text-emerald-400" />
-        <KpiCard icon={Target} label={t('suppliers.kpi.cpkRange')}
+        <StatTile index={0} icon={Building2} label={t('suppliers.kpi.totalSuppliers')} value={kpiSummary.total} sub={t('suppliers.kpi.uniqueBrands')} tone="info" />
+        <StatTile index={1} icon={Star} label={t('suppliers.kpi.preferred')} value={kpiSummary.preferredCount} sub={t('suppliers.kpi.ofTotalSuppliers', { total: kpiSummary.total })} tone="accent" />
+        <StatTile index={2} icon={Target} label={t('suppliers.kpi.cpkRange')}
           value={kpiSummary.cpkMin != null ? `${fmtCpk(kpiSummary.cpkMin, activeCurrency).split(' ')[1]}` : t('suppliers.recommendations.na')}
           sub={kpiSummary.cpkMax != null ? t('suppliers.kpi.toValue', { value: fmtCpk(kpiSummary.cpkMax, activeCurrency) }) : 'N/A'}
-          color="text-blue-400" />
-        <KpiCard icon={Award} label={t('suppliers.kpi.bestCpk')} value={kpiSummary.best?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : 'N/A'} color="text-emerald-400" />
-        <KpiCard icon={AlertTriangle} label={t('suppliers.kpi.worstCpk')} value={kpiSummary.worst?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : 'N/A'} color="text-red-400" />
-        <KpiCard icon={DollarSign} label="Total spend" value={fmtCurrency(kpiSummary.totalSpend, activeCurrency)}
-          sub={kpiSummary.cpkCoverage == null ? 'N/A' : `CPK measurable for ${Math.round(kpiSummary.cpkCoverage * 100)}% of suppliers`} color="text-[var(--text-primary)]" />
-        <KpiCard icon={Flag} label="Failure above 15%" value={kpiSummary.atRiskCount}
-          sub={`of ${kpiSummary.total} suppliers on screen`} color={kpiSummary.atRiskCount > 0 ? 'text-orange-400' : 'text-emerald-400'} />
+          tone="info" />
+        <StatTile index={3} icon={Award} label={t('suppliers.kpi.bestCpk')} value={kpiSummary.best?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : 'N/A'} tone="accent" />
+        <StatTile index={4} icon={AlertTriangle} label={t('suppliers.kpi.worstCpk')} value={kpiSummary.worst?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : 'N/A'} tone="crit" />
+        <StatTile index={5} icon={DollarSign} label="Total spend" value={fmtCurrency(kpiSummary.totalSpend, activeCurrency)}
+          sub={kpiSummary.cpkCoverage == null ? 'N/A' : `CPK measurable for ${Math.round(kpiSummary.cpkCoverage * 100)}% of suppliers`} tone="neutral" />
+        <StatTile index={6} icon={Flag} label="Failure above 15%" value={kpiSummary.atRiskCount}
+          sub={`of ${kpiSummary.total} suppliers on screen`} tone={kpiSummary.atRiskCount > 0 ? 'warn' : 'accent'} />
       </div>
 
       {/* Ratings persistence error banner */}
@@ -944,7 +915,7 @@ export default function SupplierManagement() {
         <div className="relative">
           <Search size={13} className="absolute left-2.5 top-2.5 text-[var(--text-muted)]" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('suppliers.searchPlaceholder')}
-            className="pl-7 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-44" />
+            className="input pl-7 w-44" />
         </div>
         {[
           { label: 'Country', allKey: 'allCountries', value: filterCountry, opts: countries, set: setFilterCountry },
@@ -953,7 +924,7 @@ export default function SupplierManagement() {
         ].map(f => (
           <div key={f.label} className="relative">
             <select value={f.value} onChange={e => f.set(e.target.value)}
-              className="appearance-none bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] px-3 py-2 pr-7 focus:outline-none focus:border-blue-500">
+              className="input w-auto min-w-[9rem] appearance-none pr-7">
               {f.opts.map(o => <option key={o} value={o}>{o === 'All' ? t(`suppliers.filters.${f.allKey}`) : (f.label === 'Rating' ? t(`suppliers.ratings.${RATING_I18N_KEYS[o]}`) : o)}</option>)}
             </select>
             <ChevronDown size={12} className="absolute right-2 top-3 text-[var(--text-muted)] pointer-events-none" />
@@ -973,7 +944,7 @@ export default function SupplierManagement() {
         {TABS.map((tabLabel, i) => (
           <button key={tabLabel} onClick={() => setActiveTab(i)}
             className={`flex-1 min-w-max px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-              activeTab === i ? 'bg-blue-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
+              activeTab === i ? 'bg-brand-600 text-white' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--input-bg)]'
             }`}>
             {t(`suppliers.tabs.${TAB_I18N_KEYS[i]}`)}
           </button>
@@ -1016,7 +987,7 @@ export default function SupplierManagement() {
                           </div>
                         </div>
                         <button onClick={() => toggleCompare(supplier.brand)}
-                          className={`p-1.5 rounded-lg text-xs transition-colors ${inCompare ? 'bg-blue-600 text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+                          className={`p-1.5 rounded-lg text-xs transition-colors ${inCompare ? 'bg-brand-600 text-white' : 'bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                           title={inCompare ? t('suppliers.directory.removeFromCompare') : t('suppliers.directory.addToCompare')}>
                           <BarChart3 size={13} />
                         </button>
@@ -1089,7 +1060,7 @@ export default function SupplierManagement() {
                   return (
                     <button key={m.brand} onClick={() => toggleCompare(m.brand)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        sel ? 'bg-blue-600 border-blue-500 text-white' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--input-border)]'
+                        sel ? 'bg-brand-600 border-brand-500 text-white' : 'bg-[var(--input-bg)] border-[var(--input-border)] text-[var(--text-muted)] hover:border-[var(--input-border)]'
                       } ${!sel && compareList.length >= 4 ? 'opacity-40 cursor-not-allowed' : ''}`}
                       disabled={!sel && compareList.length >= 4}>
                       {m.brand}
@@ -1114,14 +1085,14 @@ export default function SupplierManagement() {
                       {compareData && (
                         <Radar data={compareData} options={{
                           responsive: true, maintainAspectRatio: false,
-                          plugins: { legend: { labels: { color: '#9ca3af', font: { size: 11 } } } },
+                          plugins: { legend: { labels: { color: 'var(--text-secondary)', font: { size: 11 } } } },
                           scales: {
                             r: {
                               min: 0, max: 100,
-                              ticks: { color: '#6b7280', font: { size: 10 }, stepSize: 25 },
-                              grid: { color:'var(--text-muted)' },
-                              pointLabels: { color: '#9ca3af', font: { size: 11 } },
-                              angleLines: { color:'var(--text-muted)' },
+                              ticks: { color: 'var(--text-muted)', font: { size: 10 }, stepSize: 25 },
+                              grid: { color: 'var(--panel-2)' },
+                              pointLabels: { color: 'var(--text-secondary)', font: { size: 11 } },
+                              angleLines: { color: 'var(--panel-2)' },
                             },
                           },
                         }} />
@@ -1164,7 +1135,7 @@ export default function SupplierManagement() {
                     <Doughnut data={spendAnalysis.doughnutData} options={{
                       responsive: true, maintainAspectRatio: false, cutout: '65%',
                       plugins: {
-                        legend: { position: 'right', labels: { color: '#9ca3af', font: { size: 11 }, padding: 10 } },
+                        legend: { position: 'right', labels: { color: 'var(--text-secondary)', font: { size: 11 }, padding: 10 } },
                         tooltip: CHART_DEFAULTS.plugins.tooltip,
                       },
                     }} />
@@ -1210,14 +1181,14 @@ export default function SupplierManagement() {
             {!contractsLoading && !contractsError && (
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 {[
-                  { label: 'Contracts', value: contractSummary.total, color: 'text-blue-400', status: 'All' },
+                  { label: 'Contracts', value: contractSummary.total, color: 'text-[var(--text-primary)]', status: 'All' },
                   { label: 'Active', value: contractSummary.active, color: 'text-emerald-400', status: 'Active' },
                   { label: 'Expiring in 30 days', value: contractSummary.expiringSoon, color: 'text-amber-400', status: 'Expiring Soon' },
                   { label: 'Expired', value: contractSummary.expired, color: 'text-red-400', status: 'Expired' },
                 ].map(k => (
                   <button key={k.label} type="button" onClick={() => setContractStatusFilter(k.status)}
                     aria-pressed={contractStatusFilter === k.status}
-                    className={`text-left bg-[var(--surface-1)] border rounded-xl p-3 transition-colors ${contractStatusFilter === k.status ? 'border-blue-500' : 'border-[var(--input-border)] hover:border-blue-500/50'}`}>
+                    className={`text-left bg-[var(--surface-1)] border rounded-xl p-3 transition-colors ${contractStatusFilter === k.status ? 'border-brand-500' : 'border-[var(--input-border)] hover:border-brand-500/50'}`}>
                     <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                     <p className={`text-xl font-bold ${k.color}`}>{k.value}</p>
                   </button>
@@ -1241,12 +1212,12 @@ export default function SupplierManagement() {
                   <input value={contractSearch} onChange={e => setContractSearch(e.target.value)}
                     placeholder={t('suppliers.contracts.searchPlaceholder')}
                     aria-label={t('suppliers.contracts.searchPlaceholder')}
-                    className="pl-7 pr-3 py-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 w-52" />
+                    className="input pl-7 w-52" />
                 </div>
                 <div className="relative">
                   <select value={contractStatusFilter} onChange={e => setContractStatusFilter(e.target.value)}
                     aria-label="Contract status"
-                    className="appearance-none bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg text-sm text-[var(--text-secondary)] px-3 py-2 pr-7 focus:outline-none focus:border-blue-500">
+                    className="input w-auto min-w-[9rem] appearance-none pr-7">
                     <option value="All">All statuses</option>
                     {CONTRACT_STATUSES.map(st => (
                       <option key={st} value={st}>{t(`suppliers.contracts.statuses.${CONTRACT_STATUS_I18N_KEYS[st]}`)}</option>
@@ -1280,14 +1251,14 @@ export default function SupplierManagement() {
 
             {contractsLoading ? (
               <div className="flex items-center justify-center py-16">
-                <Loader2 size={28} className="animate-spin text-blue-500" />
+                <Loader2 size={28} className="animate-spin text-green-400" />
               </div>
             ) : contractsError ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <AlertTriangle size={32} className="text-red-400 mb-2" />
                 <p className="text-red-400 font-medium">{t('suppliers.contracts.loadError')}</p>
                 <p className="text-[var(--text-muted)] text-sm mt-1">{contractsError}</p>
-                <button onClick={fetchContracts} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
+                <button onClick={fetchContracts} type="button" className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px] mt-3"><RefreshCw size={14} aria-hidden="true" /> {t('suppliers.retry')}</button>
               </div>
             ) : filteredContracts.length === 0 ? (
               <EmptyState
@@ -1320,7 +1291,7 @@ export default function SupplierManagement() {
         {activeTab === 4 && (
           <motion.div key="recs" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
             <div className="flex items-center gap-2 mb-1">
-              <Zap size={16} className="text-blue-400" />
+              <Zap size={16} className="text-green-400" />
               <h3 className="text-sm font-semibold text-[var(--text-primary)]">{t('suppliers.recommendations.title')}</h3>
               <span className="text-xs text-[var(--text-dim)] ml-auto">{t('suppliers.recommendations.basedOn', { count: records.length })}</span>
             </div>
@@ -1401,7 +1372,7 @@ export default function SupplierManagement() {
             {/* Band / grade summary (from lifecycleBand + scoreGrade) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: 'Avg Score', value: scorecard.totals.avgScore, icon: Gauge, color: 'text-blue-400' },
+                { label: 'Avg Score', value: scorecard.totals.avgScore, icon: Gauge, color: 'text-[var(--text-primary)]' },
                 { label: 'Preferred', value: scorecard.totals.preferredCount, icon: Award, color: 'text-emerald-400' },
                 { label: 'At Risk', value: scorecard.totals.atRiskCount, icon: ShieldCheck, color: 'text-orange-400' },
                 { label: 'Flagged', value: scorecard.totals.flaggedCount, icon: Flag, color: 'text-red-400' },

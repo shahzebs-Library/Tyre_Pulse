@@ -50,7 +50,8 @@ const TABS = [
 ]
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-bright,#22c55e)]'
-const CTRL = `min-h-[44px] bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-primary)] text-sm rounded-lg px-3 ${FOCUS}`
+// Filter controls use the app's shared `.input` style (same as every other register).
+const CTRL = `input min-h-[44px] ${FOCUS}`
 const CELL_INPUT = `min-h-[40px] px-2 bg-[var(--input-bg)] border border-[var(--input-border)] rounded text-[var(--text-primary)] text-sm ${FOCUS}`
 
 // Semantic urgency tones: always shown with the text label.
@@ -762,7 +763,7 @@ export default function StockReplenishment() {
               {sizes.length > 0 && (
                 <label className="block">
                   <span className="sr-only">Tyre size</span>
-                  <select value={selectedSize} onChange={e => setSelectedSize(e.target.value)} className={CTRL}>
+                  <select value={selectedSize} onChange={e => setSelectedSize(e.target.value)} className={`w-auto ${CTRL}`}>
                     {sizes.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </label>

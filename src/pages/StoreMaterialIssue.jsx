@@ -35,8 +35,10 @@ import {
 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import Card, { CardHeader } from '../components/ui/Card'
+import StatTile from '../components/ui/StatTile'
 import EChart from '../components/charts/EChart'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import DateField from '../components/ui/DateField'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -70,9 +72,8 @@ const TABS = [
   { key: 'analytics', label: 'Analytics', icon: TrendingUp },
 ]
 
-const inputCls = 'w-full bg-[var(--input-bg)] border border-[var(--input-border)] '
-  + 'rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none '
-  + 'focus:border-[var(--accent)]'
+// The app's shared `.input` control style (same as every other register).
+const inputCls = 'input'
 
 const btnCls = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg '
   + 'bg-[var(--input-bg)] border border-[var(--input-border)] text-[var(--text-secondary)] '
@@ -149,19 +150,6 @@ function Notice({ tone = 'info', icon: Icon = Info, title, children, action }) {
         <div className="text-[var(--text-muted)] text-sm mt-1 space-y-1">{children}</div>
       </div>
       {action}
-    </Card>
-  )
-}
-
-function Kpi({ label, value, sub, icon: Icon, tone }) {
-  return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[var(--text-muted)]">{label}</p>
-        {Icon && <Icon size={15} className="text-[var(--text-muted)]" />}
-      </div>
-      <p className={`text-xl font-bold mt-1 ${tone || 'text-[var(--text-primary)]'}`}>{value}</p>
-      {sub && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{sub}</p>}
     </Card>
   )
 }
@@ -381,9 +369,9 @@ export default function StoreMaterialIssue() {
         </label>
       </Card>
 
-      {/* Window + filters. No `clip`: every control here is a native <select> or
-          <input type="date">, whose popups the browser paints outside the
-          page's overflow context, so there is nothing to crop. */}
+      {/* Window + filters. No `clip`: the selects are native and the dates use
+          DateField, whose calendar is portalled outside the card, so there is
+          nothing to crop. */}
       <Card className="gap-[var(--space-3)]">
         <CardHeader
           className="!mb-0"
@@ -394,11 +382,11 @@ export default function StoreMaterialIssue() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>From</span>
-            <input type="date" value={from} onChange={(e) => { setHistoryPeriod('custom'); setFrom(e.target.value) }} className={inputCls} />
+            <DateField ariaLabel="From" value={from} onChange={(v) => { setHistoryPeriod('custom'); setFrom(v) }} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>To</span>
-            <input type="date" value={to} onChange={(e) => { setHistoryPeriod('custom'); setTo(e.target.value) }} className={inputCls} />
+            <DateField ariaLabel="To" value={to} onChange={(v) => { setHistoryPeriod('custom'); setTo(v) }} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>Document</span>
@@ -629,19 +617,19 @@ function RegisterTab({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Kpi label="Slips" value={loading ? '-' : nOr(summary.slips)} icon={Receipt}
+        <StatTile label="Slips" value={loading ? '-' : nOr(summary.slips)} icon={Receipt}
           sub={`${nOr(summary.docTypeSplit.MIS)} issues, ${nOr(summary.docTypeSplit.MRT)} returns`} />
-        <Kpi label="Lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList}
+        <StatTile label="Lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList}
           sub={summary.avgLinesPerSlip == null ? 'Not measurable' : `${nOr(summary.avgLinesPerSlip, 1)} per slip`} />
-        <Kpi label="Value (as booked)" value={loading ? '-' : valueLabel} icon={Store}
+        <StatTile label="Value (as booked)" value={loading ? '-' : valueLabel} icon={Store}
           sub={singleCurrency ? 'In this country currency' : 'Shown per country below'} />
-        <Kpi label="Linked to a job card" value={loading ? '-' : pctOr(summary.linkageRate)} icon={Link2}
+        <StatTile label="Linked to a job card" value={loading ? '-' : pctOr(summary.linkageRate)} icon={Link2}
           sub={summary.linkageRate == null ? 'No slips to measure' : `${nOr(summary.linkedSlips)} of ${nOr(summary.slips)}`} />
-        <Kpi
+        <StatTile
           label="Returns booked as a charge"
           value={loading ? '-' : nOr(summary.returnSignAnomalies)}
           icon={AlertTriangle}
-          tone={summary.returnSignAnomalies > 0 ? 'text-amber-300' : undefined}
+          tone={summary.returnSignAnomalies > 0 ? 'warn' : 'neutral'}
           sub={summary.returnSignAnomalies > 0 ? 'See the Returns tab' : 'None in this window'}
         />
       </div>
@@ -812,9 +800,9 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
       </Notice>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Return slips" value={loading ? '-' : nOr(summary.slips)} icon={Undo2} />
-        <Kpi label="Return lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList} />
-        <Kpi
+        <StatTile label="Return slips" value={loading ? '-' : nOr(summary.slips)} icon={Undo2} />
+        <StatTile label="Return lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList} />
+        <StatTile
           label="Value as booked"
           value={loading ? '-' : (singleCurrency
             ? money(headlineValue(summary, singleCurrency), singleCurrency)
@@ -822,13 +810,13 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
           icon={Store}
           sub="What the ledger holds today"
         />
-        <Kpi
+        <StatTile
           label="Value if credited"
           value={loading ? '-' : (singleCurrency
             ? money(headlineValue(summary, singleCurrency, 'creditedValue'), singleCurrency)
             : 'Per country')}
           icon={Undo2}
-          tone="text-amber-300"
+          tone="warn"
           sub="Not applied anywhere"
         />
       </div>

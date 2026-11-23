@@ -10,7 +10,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Check, X, Link2, Search, Truck, Image as ImageIcon, FileWarning } from 'lucide-react'
-import { Pager } from '../commandCenter/kit'
+import { KitTable, Pager } from '../commandCenter/kit'
 import Modal from '../ui/Modal'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { newIdempotencyKey, searchItems } from '../../lib/api/inventory'
@@ -348,12 +348,14 @@ function CorrectionDetail({ row, onClose, onDone, userId, t }) {
         </div>
       )}>
       <div className="inv-hub" style={{ gap: 12 }}>
-        <table className="inv-pi-diff">
-          <thead><tr><th>{t('inventory.pi.corr.field')}</th><th>{t('inventory.pi.corr.before')}</th><th>{t('inventory.pi.corr.after')}</th></tr></thead>
-          <tbody>
-            {diff.map((d) => <tr key={d.field} className={d.changed ? 'changed' : ''}><td>{d.field}</td><td>{d.before == null ? 'N/A' : JSON.stringify(d.before)}</td><td>{d.after == null ? 'N/A' : JSON.stringify(d.after)}</td></tr>)}
-          </tbody>
-        </table>
+        <KitTable compact rows={diff} columns={[
+          { key: 'field', header: t('inventory.pi.corr.field'), cell: (d) => (d.changed ? <strong>{d.field}</strong> : d.field) },
+          { key: 'before', header: t('inventory.pi.corr.before'), cell: (d) => (d.before == null ? 'N/A' : JSON.stringify(d.before)) },
+          { key: 'after', header: t('inventory.pi.corr.after'), cell: (d) => {
+            const v = d.after == null ? 'N/A' : JSON.stringify(d.after)
+            return d.changed ? <strong>{v}</strong> : v
+          } },
+        ]} />
         <p><strong>{t('inventory.pi.corr.reason')}:</strong> {row.reason}</p>
         <p><strong>{t('inventory.pi.field.evidence')}:</strong> {(row.evidence || []).map((e) => e.ref || JSON.stringify(e)).join('; ') || 'N/A'}</p>
         {own && row.status === 'submitted' && <Note>{t('inventory.pi.corr.ownNote')}</Note>}

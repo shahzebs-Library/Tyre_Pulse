@@ -30,6 +30,7 @@ import Modal from '../components/ui/Modal'
 import SideDrawer from '../components/ui/SideDrawer'
 import { loadAutoTable } from '../lib/pdfEngine'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
+import DateField from '../components/ui/DateField'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import {
   PO_STATUSES, PO_PRIORITIES, calcItemTotal, calcSubtotal, filterOrdersBase, filterOrdersByStatus,
@@ -286,8 +287,8 @@ export default function Procurement() {
         {
           label: t('procurement.charts.actualSpendLabel'),
           data: series.spend,
-          borderColor: '#10b981',
-          backgroundColor: 'rgba(16,185,129,0.1)',
+          borderColor: colorAt(0),
+          backgroundColor: withAlpha(colorAt(0), 0.1),
           tension: 0.4,
           fill: true,
           pointRadius: 3,
@@ -295,7 +296,7 @@ export default function Procurement() {
         ...(series.budget ? [{
           label: t('procurement.charts.budgetLabel'),
           data: series.budget,
-          borderColor: '#f59e0b',
+          borderColor: colorAt(1),
           backgroundColor: 'transparent',
           borderDash: [5, 5],
           tension: 0,
@@ -516,7 +517,7 @@ export default function Procurement() {
   // ── Register columns (EnterpriseTable) ────────────────────────────────────
   const iconBtn = 'min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500'
   const poColumns = [
-    { accessorKey: 'po_number', header: t('procurement.table.columns.poNumber'), cell: ({ getValue }) => <span className="text-orange-400 font-mono text-xs font-semibold">{getValue() || 'N/A'}</span> },
+    { accessorKey: 'po_number', header: t('procurement.table.columns.poNumber'), cell: ({ getValue }) => <span className="text-green-400 font-mono text-xs font-semibold">{getValue() || 'N/A'}</span> },
     { accessorKey: 'vendor_name', header: t('procurement.table.columns.vendor'), cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue() || 'N/A'}</span> },
     { accessorKey: 'order_date', header: t('procurement.table.columns.orderDate'), cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : 'N/A'}</span> },
     { accessorKey: 'expected_delivery', header: t('procurement.table.columns.expDelivery'), cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : 'N/A'}</span> },
@@ -571,7 +572,7 @@ export default function Procurement() {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[var(--surface-0)]">
         <div className="text-center">
-          <Loader2 className="animate-spin text-orange-400 mx-auto mb-3" size={40} />
+          <Loader2 className="animate-spin text-green-400 mx-auto mb-3" size={40} />
           <p className="text-[var(--text-secondary)]">{t('procurement.loading')}</p>
         </div>
       </div>
@@ -593,7 +594,7 @@ export default function Procurement() {
             <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors">
               <FileSpreadsheet size={16} />{t('procurement.actions.excel')}
             </button>
-            <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold rounded-lg transition-colors">
+            <button onClick={openNew} className="btn-primary">
               <Plus size={16} />{t('procurement.actions.newPo')}
             </button>
           </div>
@@ -626,7 +627,7 @@ export default function Procurement() {
             label: t('procurement.kpi.totalPos'),
             value: kpis.totalPOs,
             suffix: '',
-            color: 'orange',
+            color: 'neutral',
             icon: ShoppingCart,
             sub: scopeActive
               ? t('procurement.kpi.totalPosSubFiltered', { count: filtered.length })
@@ -646,7 +647,7 @@ export default function Procurement() {
             label: t('procurement.kpi.pendingDelivery'),
             value: kpis.pendingDelivery,
             suffix: '',
-            color: 'yellow',
+            color: 'neutral',
             icon: Truck,
             sub: t('procurement.kpi.pendingDeliverySub', { value: `${activeCurrency} ${(kpis.pendingValue / 1000).toFixed(1)}k` }),
           },
@@ -666,7 +667,7 @@ export default function Procurement() {
             label: t('procurement.kpi.avgLeadTime'),
             value: kpis.avgLeadTime !== null ? `${kpis.avgLeadTime}d` : 'N/A',
             suffix: '',
-            color: 'purple',
+            color: 'neutral',
             icon: Clock,
             sub: t('procurement.kpi.avgLeadTimeSub'),
           },
@@ -720,7 +721,7 @@ export default function Procurement() {
             <h3 className="text-[var(--text-primary)] font-semibold">{t('procurement.budgetPanel.title')}</h3>
             <button
               onClick={() => { setEditBudget(!editBudget); setBudgetInput(budget > 0 ? budget.toString() : '') }}
-              className="text-xs text-orange-400 hover:text-orange-300 px-2 py-1 rounded border border-orange-700/50 hover:border-orange-500 transition-colors"
+              className="text-xs text-green-400 hover:text-green-300 px-2 py-1 rounded border border-[var(--border-bright)] hover:border-green-500 transition-colors"
             >
               {editBudget ? t('procurement.budgetPanel.cancel') : t('procurement.budgetPanel.setBudget')}
             </button>
@@ -733,10 +734,10 @@ export default function Procurement() {
                 value={budgetInput}
                 onChange={e => setBudgetInput(e.target.value)}
                 placeholder={t('procurement.budgetPanel.placeholder', { currency: activeCurrency })}
-                className="flex-1 px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500"
+                className="input flex-1"
                 onKeyDown={e => e.key === 'Enter' && saveBudget()}
               />
-              <button onClick={saveBudget} className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors">
+              <button onClick={saveBudget} className="btn-primary">
                 {t('procurement.budgetPanel.save')}
               </button>
             </div>
@@ -809,26 +810,24 @@ export default function Procurement() {
               value={search}
               onChange={e => { setSearch(e.target.value)}}
               placeholder={t('procurement.filters.searchPlaceholder')}
-              className="w-full pl-9 pr-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm placeholder-[var(--text-muted)] focus:outline-none focus:border-orange-500"
+              className="input pl-9"
             />
           </div>
           <select aria-label="Status" value={statusFilter} onChange={e => { setStatus(e.target.value)}}
-            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
+            className="input w-auto min-w-[9rem]">
             <option value="All">{t('procurement.filters.allStatuses')}</option>
             {STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
           <select aria-label="Vendor" value={vendorFilter} onChange={e => { setVendor(e.target.value)}}
-            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
+            className="input w-auto min-w-[9rem]">
             {vendors.map(v => <option key={v}>{v === 'All' ? t('procurement.filters.allVendors') : v}</option>)}
           </select>
           <select aria-label="Site" value={siteFilter} onChange={e => { setSite(e.target.value)}}
-            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
+            className="input w-auto min-w-[9rem]">
             {sites.map(s => <option key={s}>{s === 'All' ? t('procurement.filters.allSites') : s}</option>)}
           </select>
-          <input type="date" aria-label="Order date from" value={dateFrom} onChange={e => { setDateFrom(e.target.value)}}
-            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
-          <input type="date" aria-label="Order date to" value={dateTo} onChange={e => { setDateTo(e.target.value)}}
-            className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+          <DateField className="w-40" ariaLabel="Order date from" placeholder="From date" value={dateFrom} onChange={v => setDateFrom(v)} />
+          <DateField className="w-40" ariaLabel="Order date to" placeholder="To date" value={dateTo} onChange={v => setDateTo(v)} />
           {(search || statusFilter !== 'All' || vendorFilter !== 'All' || siteFilter !== 'All' || dateFrom || dateTo) && (
             <button onClick={() => { setSearch(''); setStatus('All'); setVendor('All'); setSite('All'); setDateFrom(''); setDateTo('')}}
               className="px-3 py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
@@ -852,7 +851,7 @@ export default function Procurement() {
         onRowClick={(po) => setViewPO(po)}
         viewKey="procurement-orders"
         toolbarExtras={orders.length === 0 ? (
-          <button type="button" onClick={openNew} className="min-h-[44px] px-3 text-orange-400 hover:text-orange-300 text-sm">{t('procurement.table.createFirst')}</button>
+          <button type="button" onClick={openNew} className="min-h-[44px] px-3 text-green-400 hover:text-green-300 text-sm">{t('procurement.table.createFirst')}</button>
         ) : null}
       />
 
@@ -865,7 +864,7 @@ export default function Procurement() {
         size="xl"
         title={(
           <span className="flex items-center gap-3">
-            <ShoppingCart size={18} className="text-orange-400" />
+            <ShoppingCart size={18} className="text-green-400" />
             {editPO ? t('procurement.modal.editTitle', { poNumber: editPO.po_number }) : t('procurement.modal.newTitle')}
           </span>
         )}
@@ -881,7 +880,7 @@ export default function Procurement() {
               </button>
               <button onClick={handleSave} disabled={saving || (editPO && poLocked)}
                 title={editPO && poLocked ? 'Locked, in approval' : undefined}
-                className="flex items-center gap-2 px-5 py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors">
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                 {saving ? t('procurement.modal.saving') : editPO ? t('procurement.modal.saveChanges') : t('procurement.modal.createPo')}
               </button>
@@ -895,12 +894,11 @@ export default function Procurement() {
                   <div>
                     <label htmlFor="po-field" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.vendorName')}</label>
                     <input id="po-field" value={formData.vendor_name} onChange={e => setFormData(f => ({ ...f, vendor_name: e.target.value }))}
-                      placeholder={t('procurement.modal.vendorNamePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.vendorNamePlaceholder')} className="input" />
                   </div>
                   <div>
                     <label htmlFor="po-field-2" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.orderDate')}</label>
-                    <input id="po-field-2" type="date" value={formData.order_date} onChange={e => setFormData(f => ({ ...f, order_date: e.target.value }))}
-                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                    <DateField id="po-field-2" ariaLabel={t('procurement.modal.orderDate')} value={formData.order_date} onChange={v => setFormData(f => ({ ...f, order_date: v }))} />
                   </div>
                 </div>
 
@@ -908,20 +906,19 @@ export default function Procurement() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label htmlFor="po-field-3" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.expectedDelivery')}</label>
-                    <input id="po-field-3" type="date" value={formData.expected_delivery} onChange={e => setFormData(f => ({ ...f, expected_delivery: e.target.value }))}
-                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                    <DateField id="po-field-3" ariaLabel={t('procurement.modal.expectedDelivery')} value={formData.expected_delivery} onChange={v => setFormData(f => ({ ...f, expected_delivery: v }))} />
                   </div>
                   <div>
                     <label htmlFor="po-field-4" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.priority')}</label>
                     <select id="po-field-4" value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value }))}
-                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
+                      className="input">
                       {PRIORITIES.map(p => <option key={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
                     <label htmlFor="po-field-5" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.status')}</label>
                     <select id="po-field-5" value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
-                      className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500">
+                      className="input">
                       {STATUSES.map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
@@ -932,17 +929,17 @@ export default function Procurement() {
                   <div>
                     <label htmlFor="po-field-6" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.site')}</label>
                     <input id="po-field-6" value={formData.site} onChange={e => setFormData(f => ({ ...f, site: e.target.value }))}
-                      placeholder={t('procurement.modal.sitePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.sitePlaceholder')} className="input" />
                   </div>
                   <div>
                     <label htmlFor="po-field-7" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.country')}</label>
                     <input id="po-field-7" value={formData.country} onChange={e => setFormData(f => ({ ...f, country: e.target.value }))}
-                      placeholder={t('procurement.modal.countryPlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.countryPlaceholder')} className="input" />
                   </div>
                   <div>
                     <label htmlFor="po-field-8" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.budgetCode')}</label>
                     <input id="po-field-8" value={formData.budget_code} onChange={e => setFormData(f => ({ ...f, budget_code: e.target.value }))}
-                      placeholder={t('procurement.modal.budgetCodePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.budgetCodePlaceholder')} className="input" />
                   </div>
                 </div>
 
@@ -951,12 +948,12 @@ export default function Procurement() {
                   <div>
                     <label htmlFor="po-field-9" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.requestedBy')}</label>
                     <input id="po-field-9" value={formData.requested_by} onChange={e => setFormData(f => ({ ...f, requested_by: e.target.value }))}
-                      placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.namePlaceholder')} className="input" />
                   </div>
                   <div>
                     <label htmlFor="po-field-10" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.approvedBy')}</label>
                     <input id="po-field-10" value={formData.approved_by} onChange={e => setFormData(f => ({ ...f, approved_by: e.target.value }))}
-                      placeholder={t('procurement.modal.namePlaceholder')} className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.namePlaceholder')} className="input" />
                   </div>
                 </div>
 
@@ -985,15 +982,15 @@ export default function Procurement() {
                   {/* Add item row */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
                     <input value={itemRow.brand} onChange={e => setItemRow(r => ({ ...r, brand: e.target.value }))}
-                      placeholder={t('procurement.modal.brandPlaceholder')} aria-label={t('procurement.modal.brandPlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.brandPlaceholder')} aria-label={t('procurement.modal.brandPlaceholder')} className="input" />
                     <input value={itemRow.size} onChange={e => setItemRow(r => ({ ...r, size: e.target.value }))}
-                      placeholder={t('procurement.modal.sizePlaceholder')} aria-label={t('procurement.modal.sizePlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.sizePlaceholder')} aria-label={t('procurement.modal.sizePlaceholder')} className="input" />
                     <input type="number" min="1" value={itemRow.quantity} onChange={e => setItemRow(r => ({ ...r, quantity: e.target.value }))}
-                      placeholder={t('procurement.modal.qtyPlaceholder')} aria-label={t('procurement.modal.qtyPlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500" />
+                      placeholder={t('procurement.modal.qtyPlaceholder')} aria-label={t('procurement.modal.qtyPlaceholder')} className="input" />
                     <input type="number" min="0" step="0.01" value={itemRow.unit_price} onChange={e => setItemRow(r => ({ ...r, unit_price: e.target.value }))}
-                      placeholder={t('procurement.modal.unitPricePlaceholder')} aria-label={t('procurement.modal.unitPricePlaceholder')} className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500"
+                      placeholder={t('procurement.modal.unitPricePlaceholder')} aria-label={t('procurement.modal.unitPricePlaceholder')} className="input"
                       onKeyDown={e => e.key === 'Enter' && addItem()} />
-                    <button onClick={addItem} className="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-1">
+                    <button onClick={addItem} className="btn-primary">
                       <Plus size={14} />{t('procurement.modal.add')}
                     </button>
                   </div>
@@ -1027,7 +1024,7 @@ export default function Procurement() {
                   <label htmlFor="po-field-11" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.notes')}</label>
                   <textarea id="po-field-11" value={formData.notes} onChange={e => setFormData(f => ({ ...f, notes: e.target.value }))}
                     rows={3} placeholder={t('procurement.modal.notesPlaceholder')}
-                    className="w-full px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                    className="input resize-none" />
                 </div>
               </div>
       </Modal>
@@ -1067,12 +1064,12 @@ export default function Procurement() {
                           <div className={`flex flex-col items-center min-w-0 flex-1 ${idx === 0 ? 'items-start' : idx === STATUS_TIMELINE.length - 1 ? 'items-end' : 'items-center'}`}>
                             <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
                               isCancelled ? 'bg-red-500' :
-                              isCurrent   ? 'bg-orange-400 ring-2 ring-orange-400/30' :
+                              isCurrent   ? 'bg-green-400 ring-2 ring-green-400/30' :
                               isPast      ? 'bg-green-500' :
                                             'bg-[var(--surface-3)]'
                             }`} />
                             <span className={`text-[10px] mt-1 leading-tight text-center ${
-                              isCurrent ? 'text-orange-400 font-semibold' :
+                              isCurrent ? 'text-green-400 font-semibold' :
                               isPast    ? 'text-green-400' :
                                           'text-[var(--text-dim)]'
                             }`}>{s}</span>
@@ -1260,11 +1257,11 @@ export default function Procurement() {
                   <button onClick={() => { if (poLocked) return; const po = viewPO; setViewPO(null); openEdit(po) }}
                     disabled={poLocked}
                     title={poLocked ? 'Locked, in approval' : undefined}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600">
+                    className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed">
                     <Edit2 size={15} />{t('procurement.drawer.editPo')}
                   </button>
                   <button onClick={() => exportPDF(viewPO)}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[var(--surface-3)] hover:bg-gray-600 text-[var(--text-primary)] text-sm font-medium rounded-xl transition-colors">
+                    className="btn-secondary flex-1">
                     <FileText size={15} />{t('procurement.drawer.exportPdf')}
                   </button>
                 </div>

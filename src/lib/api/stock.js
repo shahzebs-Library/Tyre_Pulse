@@ -215,11 +215,15 @@ export async function listRegisterCatalog() {
  * almost none. Country scoped; bounded.
  */
 export async function listConsumptionSince(sinceIso, { country } = {}) {
-  return unwrap(await fetchAllPages((from, to) => {
-    let q = supabase.from('parts_consumption').select('id,item_code,site,qty_n,qty')
+  const res = await fetchAllPages((from, to) => {
+    let q = supabase.from('parts_consumption').select('id,item_code,site,country,qty_n,qty')
       .gte('event_date', sinceIso).not('item_code', 'is', null)
       .order('id').range(from, to)
     if (country && country !== 'All') q = q.eq('country', country)
     return q
-  }, { max: 150000 }))
+  }, { max: 150000 })
+  // A capped read would understate usage and make items look unused; refuse it
+  // so the register shows usage as unavailable instead of wrong.
+  if (res?.truncated) throw new ServiceError('Too many issue lines to measure usage for this scope. Pick one country.', 'TRUNCATED')
+  return unwrap(res)
 }

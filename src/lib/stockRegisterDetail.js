@@ -24,6 +24,7 @@ const num = (v) => {
   return Number.isFinite(n) ? n : null
 }
 const siteKey = (v) => String(v ?? '').trim().toUpperCase()
+const countryKey = siteKey
 
 /** Item code of a register row: the linked ERP item, then the quick-entry code. */
 export function registerItemCode(r) {
@@ -70,7 +71,11 @@ function brandFromVariants(vs) {
   return null
 }
 
-/** Usage totals over the window: by code+site and by code (whole country). */
+/**
+ * Usage totals over the window, always within one country: by country+code+site
+ * and by country+code. Item codes and site names repeat across countries, so a
+ * key without the country would mix KSA, UAE and Egypt issues.
+ */
 export function buildUsageIndex(lines = []) {
   const bySite = new Map()
   const byCode = new Map()
@@ -79,9 +84,10 @@ export function buildUsageIndex(lines = []) {
     if (!code) continue
     const q = num(l.qty_n ?? l.qty)
     if (q === null || q <= 0) continue
-    const k = `${code}|${siteKey(l.site)}`
+    const c = countryKey(l.country)
+    const k = `${c}|${code}|${siteKey(l.site)}`
     bySite.set(k, (bySite.get(k) || 0) + q)
-    byCode.set(code, (byCode.get(code) || 0) + q)
+    byCode.set(`${c}|${code}`, (byCode.get(`${c}|${code}`) || 0) + q)
   }
   return { bySite, byCode }
 }
@@ -90,8 +96,9 @@ export function buildUsageIndex(lines = []) {
 export function usageFor(r, usage, months = USAGE_MONTHS) {
   const code = registerItemCode(r)
   if (!code || !usage) return null
-  const site = usage.bySite.get(`${code}|${siteKey(r.site)}`)
-  const country = usage.byCode.get(code)
+  const c = countryKey(r.country)
+  const site = usage.bySite.get(`${c}|${code}|${siteKey(r.site)}`)
+  const country = usage.byCode.get(`${c}|${code}`)
   const qty = num(r.stock_qty ?? r.qty_on_hand)
   if (site) {
     const avgPerMonth = +(site / months).toFixed(2)
@@ -130,7 +137,7 @@ export function registerCoverage(records = [], index, usage) {
     const code = registerItemCode(r)
     if (!code) { noCode += 1; continue }
     if (index?.has(code)) catalogued += 1
-    if (usage?.byCode.has(code)) withUsage += 1
+    if (usage?.byCode.has(`${countryKey(r.country)}|${code}`)) withUsage += 1
   }
   return { total: (records || []).length, noCode, catalogued, withUsage }
 }

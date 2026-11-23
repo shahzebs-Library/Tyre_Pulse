@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   registerItemCode, buildCatalogIndex, buildUsageIndex, usageFor, buildErpVelocityMap, catalogFor, registerCoverage,
 } from '../lib/stockRegisterDetail'
@@ -31,16 +31,20 @@ describe('stock register detail', () => {
 
   it('states days of cover only for a site rate', () => {
     const usage = buildUsageIndex([
-      { item_code: '310371-O', site: 'NHC', qty_n: 12 },
-      { item_code: '310371-O', site: 'AMAALA', qty_n: 24 },
-      { item_code: 'X', site: 'NHC', qty_n: 'bad' },
+      { item_code: '310371-O', site: 'NHC', country: 'KSA', qty_n: 12 },
+      { item_code: '310371-O', site: 'AMAALA', country: 'KSA', qty_n: 24 },
+      { item_code: '310371-O', site: 'NHC', country: 'UAE', qty_n: 240 },
+      { item_code: 'X', site: 'NHC', country: 'KSA', qty_n: 'bad' },
     ])
-    const nhc = usageFor({ item: { item_code: '310371-O' }, site: 'nhc', stock_qty: 3 }, usage, 12)
+    const nhc = usageFor({ item: { item_code: '310371-O' }, site: 'nhc', country: 'KSA', stock_qty: 3 }, usage, 12)
     expect(nhc).toEqual({ scope: 'site', avgPerMonth: 1, daysRemaining: 90 })
-    const other = usageFor({ item: { item_code: '310371-O' }, site: 'JED', stock_qty: 3 }, usage, 12)
+    const other = usageFor({ item: { item_code: '310371-O' }, site: 'JED', country: 'KSA', stock_qty: 3 }, usage, 12)
     expect(other.scope).toBe('country')
+    // UAE issues never leak into a KSA row: (12 + 24) / 12 months.
+    expect(other.avgPerMonth).toBe(3)
+    expect(usageFor({ item: { item_code: '310371-O' }, site: 'NHC', country: 'UAE', stock_qty: 20 }, usage, 12).avgPerMonth).toBe(20)
     expect(other.daysRemaining).toBeNull()
-    expect(usageFor({ item: { item_code: 'Z' }, site: 'NHC' }, usage).scope).toBe('none')
+    expect(usageFor({ item: { item_code: 'Z' }, site: 'NHC', country: 'KSA' }, usage).scope).toBe('none')
     expect(usageFor({ description: 'no code' }, usage)).toBeNull()
     expect(buildErpVelocityMap([{ id: 1, description: 'no code' }], usage)).toEqual({})
   })
@@ -54,9 +58,19 @@ describe('stock register detail', () => {
 
   it('counts coverage honestly', () => {
     const idx = buildCatalogIndex(canonical, [], [])
-    const usage = buildUsageIndex([{ item_code: '310371-O', site: 'NHC', qty_n: 1 }])
+    const usage = buildUsageIndex([{ item_code: '310371-O', site: 'NHC', country: 'KSA', qty_n: 1 }])
     expect(registerCoverage([
-      { item: { item_code: '310371-O' } }, { item: { item_code: 'ZZ' } }, { description: 'none' },
+      { item: { item_code: '310371-O' }, country: 'KSA' }, { item: { item_code: 'ZZ' }, country: 'KSA' }, { description: 'none' },
     ], idx, usage)).toEqual({ total: 3, noCode: 1, catalogued: 1, withUsage: 1 })
+  })
+})
+
+describe('consumption read', () => {
+  it('refuses a capped read instead of returning partial usage', async () => {
+    vi.resetModules()
+    vi.doMock('../lib/api/_client', async (orig) => ({ ...(await orig()), fetchAllPages: async () => ({ data: [{ id: 1 }], error: null, truncated: true }) }))
+    const { listConsumptionSince } = await import('../lib/api/stock')
+    await expect(listConsumptionSince('2025-11-23', { country: 'All' })).rejects.toThrow(/Too many issue lines/)
+    vi.doUnmock('../lib/api/_client')
   })
 })

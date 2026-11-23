@@ -168,7 +168,7 @@ export default function DriverTraining() {
     { label: 'Training records', value: na(vk.totalRecords), sub: `${vk.distinctDrivers} drivers`, icon: GraduationCap, tone: 'text-[var(--text-primary)]' },
     { label: 'Drivers trained', value: na(vk.distinctDrivers), sub: `${vk.driversWithExpired} with an expired cert`, icon: Users, tone: 'text-sky-400' },
     { label: 'Pass rate', value: na(vk.passRate, (x) => `${x}%`), sub: `${vk.passCount + vk.failCount} with a result`, icon: Percent, tone: 'text-emerald-400' },
-    { label: 'Average score', value: na(vk.avgScore), sub: 'recorded scores only', icon: Target, tone: 'text-indigo-400' },
+    { label: 'Average score', value: na(vk.avgScore), sub: 'recorded scores only', icon: Target, tone: 'text-blue-400' },
     { label: 'Certs current', value: na(vk.currencyRate, (x) => `${x}%`), sub: 'of certs with an expiry', icon: ShieldCheck, tone: 'text-green-400' },
     { label: 'Expired certs', value: na(vk.expiredCount), sub: 'renew now', icon: AlertTriangle, tone: vk.expiredCount > 0 ? 'text-red-400' : 'text-green-400' },
     { label: 'Expiring in 30 days', value: na(vk.expiringSoonCount), sub: 'plan renewal', icon: CalendarClock, tone: vk.expiringSoonCount > 0 ? 'text-amber-400' : 'text-green-400' },

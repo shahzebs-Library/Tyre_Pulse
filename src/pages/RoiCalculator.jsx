@@ -28,7 +28,7 @@ const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
-const COLORS = ['#6366f1', '#3b82f6', '#22c55e', '#0ea5e9', '#a855f7', '#ef4444']
+const COLORS = ['#1d4ed8', '#3b82f6', '#22c55e', '#0ea5e9', '#475569', '#ef4444']
 
 const FLEET_FIELDS = [
   ['Fleet size (vehicles)', 'fleet_size'],

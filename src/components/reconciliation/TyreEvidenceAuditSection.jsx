@@ -13,7 +13,7 @@ const COUNTRIES = ['KSA', 'UAE', 'Egypt']
 const fmt = (n) => (n == null ? 'N/A' : Number(n).toLocaleString('en-US'))
 const STATUS_TONE = {
   RECONCILED: '#16a34a', UNDER_RECORDED: '#d97706', OVER_RECORDED: '#dc2626',
-  NO_ERP_ISSUES: '#7c3aed', NO_FITMENTS: '#6b7280', LOW_VOLUME: 'var(--text-muted)',
+  NO_ERP_ISSUES: '#2a78d6', NO_FITMENTS: '#6b7280', LOW_VOLUME: 'var(--text-muted)',
 }
 
 /**

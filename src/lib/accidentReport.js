@@ -18,7 +18,7 @@ import { getReportPalette } from './reportColors'
 
 // ── WYSIWYG paper theme (dark-on-white so on-screen preview == exported PDF) ──
 export const PAPER = { ink: '#0f172a', muted: '#475569', grid: 'rgba(15,23,42,0.08)' }
-export const PALETTE = ['#ea580c', '#2563eb', '#16a34a', '#9333ea', '#dc2626', '#ca8a04', '#0891b2', '#64748b', '#db2777', '#4f46e5']
+export const PALETTE = ['#ea580c', '#2563eb', '#16a34a', '#0f766e', '#dc2626', '#ca8a04', '#0891b2', '#64748b', '#475569', '#1d4ed8']
 
 // ── Per-chart colour palettes (all readable dark-on-white paper). Selected by a
 // chart block's `palette` key; 'default' re-uses the canonical PALETTE so every
@@ -27,11 +27,11 @@ export const PALETTE = ['#ea580c', '#2563eb', '#16a34a', '#9333ea', '#dc2626', '
 // PALETTE_KEYS is the ordered enumeration the builder UI reads (no hardcoding). ──
 export const PALETTES = {
   default: PALETTE,
-  cool: ['#2563eb', '#0891b2', '#0d9488', '#16a34a', '#4f46e5', '#7c3aed', '#0369a1', '#0f766e', '#1d4ed8', '#155e75'],
+  cool: ['#2563eb', '#0891b2', '#0d9488', '#16a34a', '#1e40af', '#475569', '#0369a1', '#0f766e', '#1d4ed8', '#155e75'],
   warm: ['#ea580c', '#dc2626', '#d97706', '#ca8a04', '#e11d48', '#f97316', '#b45309', '#9f1239', '#c2410c', '#a16207'],
   mono: ['#0f172a', '#334155', '#475569', '#64748b', '#94a3b8', '#1e293b', '#0b1220', '#7c8ca3', '#52627a', '#293548'],
-  contrast: ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2', '#db2777', '#0f172a', '#ea580c', '#4f46e5'],
-  pastel: ['#f97316', '#60a5fa', '#34d399', '#a78bfa', '#f472b6', '#fbbf24', '#22d3ee', '#94a3b8', '#fb7185', '#818cf8'],
+  contrast: ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#0f766e', '#0891b2', '#475569', '#0f172a', '#ea580c', '#1d4ed8'],
+  pastel: ['#f97316', '#60a5fa', '#34d399', '#5eead4', '#cbd5e1', '#fbbf24', '#22d3ee', '#94a3b8', '#fb7185', '#93c5fd'],
   // Green-forward (explicitly requested): forests, olives and teals.
   forest: ['#166534', '#15803d', '#16a34a', '#22c55e', '#4d7c0f', '#65a30d', '#059669', '#0d9488', '#347433', '#3f6212'],
   // Gray / neutral-forward (explicitly requested): slate + stone neutrals.
@@ -39,7 +39,7 @@ export const PALETTES = {
   ocean: ['#0c4a6e', '#0369a1', '#0284c7', '#0891b2', '#0e7490', '#155e75', '#1e40af', '#2563eb', '#0d9488', '#0f766e'],
   sunset: ['#7c2d12', '#9a3412', '#c2410c', '#ea580c', '#f97316', '#b91c1c', '#dc2626', '#e11d48', '#be123c', '#a16207'],
   earth: ['#78350f', '#92400e', '#b45309', '#a16207', '#ca8a04', '#854d0e', '#3f6212', '#4d7c0f', '#57534e', '#5c4033'],
-  vibrant: ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#db2777', '#0d9488', '#9333ea'],
+  vibrant: ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#475569', '#1d4ed8', '#0d9488', '#64748b'],
 }
 /** Ordered list of every palette key — the builder UI enumerates this instead of
  *  hardcoding palette names, so adding a palette above surfaces it automatically. */
@@ -207,11 +207,11 @@ export const CHARTS = {
   insurerValue: {
     label: 'Claim value by insurer', description: 'Claimed value ranked by insurer', kind: 'bar-h', build: ({ claims, currency }) => {
       const e = claims.byInsurer
-      return { labels: e.map((x) => x.label), datasets: [{ label: `Value (${currency})`, data: e.map((x) => Math.round(x.value)), backgroundColor: '#4f46e5', borderRadius: 3 }] }
+      return { labels: e.map((x) => x.label), datasets: [{ label: `Value (${currency})`, data: e.map((x) => Math.round(x.value)), backgroundColor: '#2a78d6', borderRadius: 3 }] }
     },
   },
   recovery: {
-    label: 'Recovery funnel', description: 'Claimed → approved → recovered', kind: 'bar', build: ({ claims }) => ({ labels: ['Claimed', 'Approved', 'Recovered'], datasets: [{ data: [Math.round(claims.claimed), Math.round(claims.approved), Math.round(claims.recovered)], backgroundColor: ['#2563eb', '#9333ea', '#16a34a'], borderRadius: 3 }] }),
+    label: 'Recovery funnel', description: 'Claimed → approved → recovered', kind: 'bar', build: ({ claims }) => ({ labels: ['Claimed', 'Approved', 'Recovered'], datasets: [{ data: [Math.round(claims.claimed), Math.round(claims.approved), Math.round(claims.recovered)], backgroundColor: ['#2563eb', '#0f766e', '#16a34a'], borderRadius: 3 }] }),
   },
   aging: {
     label: 'Open-claim ageing', description: 'Open claims by days outstanding', kind: 'bar', build: ({ claims }) => ({ labels: ['0 to 30d', '31 to 60d', '61 to 90d', '90+d'], datasets: [{ data: [claims.aging['0-30'].count, claims.aging['31-60'].count, claims.aging['61-90'].count, claims.aging['90+'].count], backgroundColor: ['#16a34a', '#ca8a04', '#fb923c', '#dc2626'], borderRadius: 3 }] }),

@@ -36,12 +36,12 @@ const ACCENTS = {
     bar: 'linear-gradient(90deg, #dc2626, #f87171)',
   },
   purple: {
-    text: 'text-purple-400',
-    bg: 'bg-purple-400/10',
-    glow: 'rgba(192,132,252,0.2)',
-    border: 'rgba(192,132,252,0.35)',
-    ring: 'rgba(192,132,252,0.15)',
-    bar: 'linear-gradient(90deg, #7c3aed, #c084fc)',
+    text: 'text-teal-400',
+    bg: 'bg-teal-400/10',
+    glow: 'rgba(45,212,191,0.2)',
+    border: 'rgba(45,212,191,0.35)',
+    ring: 'rgba(45,212,191,0.15)',
+    bar: 'linear-gradient(90deg, #0f766e, #2dd4bf)',
   },
   orange: {
     text: 'text-orange-400',
@@ -109,7 +109,7 @@ function useCountUp(target, duration = 900) {
 }
 
 // Bar gradient start colour per accent → used as the sparkline stroke.
-const SPARK_STROKE = { green: '#4ade80', blue: '#60a5fa', yellow: '#fbbf24', red: '#f87171', purple: '#c084fc', orange: '#fb923c' }
+const SPARK_STROKE = { green: '#4ade80', blue: '#60a5fa', yellow: '#fbbf24', red: '#f87171', purple: '#2dd4bf', orange: '#fb923c' }
 
 export default function StatCard({
   label, value, sub, icon: Icon,

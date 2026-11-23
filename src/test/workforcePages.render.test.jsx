@@ -25,6 +25,7 @@ vi.mock('../lib/api/technicianScorecard', () => ({
   ])),
   listSkills: vi.fn(() => Promise.resolve([])),
   listCerts: vi.fn(() => Promise.reject(new Error('denied'))),
+  countUnassignedWorkOrders: vi.fn(() => Promise.resolve(42)),
   upsertSkill: vi.fn(), deleteSkill: vi.fn(), createCert: vi.fn(), deleteCert: vi.fn(),
 }))
 vi.mock('../lib/api/users', () => ({

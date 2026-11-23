@@ -177,8 +177,8 @@ export default function FleetOptimizer() {
     { label: 'Redeploy', value: kpi.counts.redeploy, icon: ArrowRightLeft, tone: 'text-sky-500' },
     { label: 'Keep', value: kpi.counts.keep, icon: ShieldCheck, tone: 'text-emerald-500' },
     { label: 'Projected saving', value: savingValue, sub: savingSub, icon: Wallet, tone: 'text-emerald-500' },
-    { label: 'Avg utilisation', value: fmtPct(kpi.avgUtilization), sub: kpi.utilCoverage != null && kpi.utilCoverage < 1 ? `${Math.round(kpi.utilCoverage * 100)}% report utilisation` : null, icon: Percent, tone: 'text-violet-500' },
-    { label: 'Disagree with model', value: kpi.mismatches, sub: 'Recorded vs suggested', icon: Sparkles, tone: kpi.mismatches ? 'text-violet-500' : 'text-[var(--text-primary)]' },
+    { label: 'Avg utilisation', value: fmtPct(kpi.avgUtilization), sub: kpi.utilCoverage != null && kpi.utilCoverage < 1 ? `${Math.round(kpi.utilCoverage * 100)}% report utilisation` : null, icon: Percent, tone: 'text-blue-500' },
+    { label: 'Disagree with model', value: kpi.mismatches, sub: 'Recorded vs suggested', icon: Sparkles, tone: kpi.mismatches ? 'text-blue-500' : 'text-[var(--text-primary)]' },
   ]
 
   const exportRows = useMemo(() => optimizerExportRows(filtered, primaryCurrency), [filtered, primaryCurrency])
@@ -285,7 +285,7 @@ export default function FleetOptimizer() {
       id: 'suggested', header: 'Suggested', accessorFn: (r) => recLabel(r.suggested), sortingFn: valueSort, size: 150,
       cell: ({ row }) => (
         <span className="inline-flex items-center gap-1">
-          {row.original.mismatch && <Sparkles size={11} className="text-violet-500" aria-label="Differs from recorded decision" />}
+          {row.original.mismatch && <Sparkles size={11} className="text-blue-500" aria-label="Differs from recorded decision" />}
           <RecBadge value={row.original.suggested} />
         </span>
       ),
@@ -553,7 +553,7 @@ export default function FleetOptimizer() {
                   {REC_KEYS.map((r) => <option key={r} value={r}>{recLabel(r)}</option>)}
                 </select>
                 <p className="text-[11px] text-[var(--text-muted)] mt-1 flex items-center gap-1" aria-live="polite">
-                  <Sparkles size={11} className="text-violet-500" aria-hidden="true" /> Model suggests <span className="font-semibold text-[var(--text-primary)]">{recLabel(liveSuggestion)}</span>
+                  <Sparkles size={11} className="text-blue-500" aria-hidden="true" /> Model suggests <span className="font-semibold text-[var(--text-primary)]">{recLabel(liveSuggestion)}</span>
                 </p>
               </div>
               <div>

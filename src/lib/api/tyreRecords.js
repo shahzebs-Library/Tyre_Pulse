@@ -16,6 +16,9 @@ import { refuseEmpty } from './writeGuard'
 import { toUserMessage } from '../safeError'
 import { sanitizeSearchTerm } from '../searchFilter'
 import { createServiceEvent } from './tyreServiceEvents'
+import { z } from 'zod'
+import { tyreRecordFormSchema } from '../validation/schemas'
+import { canonicalCode, layoutCodes, AXLE_LAYOUTS } from '../tyrePositions'
 
 /**
  * Distinct `site` + `brand` filter options for the records grid, in ONE round
@@ -250,6 +253,69 @@ export async function updateRecord(id, payload) {
     await supabase.from('tyre_records').update(payload).eq('id', id).select('id'),
     TYRE_UPDATE_REFUSED,
   )
+}
+
+/**
+ * Add / Edit form schema: the shared raw-string schema plus the two fields the
+ * form used to lack. `z.object` strips unknown keys, so without this extension
+ * a size or position typed into the form would never reach the payload.
+ * `size` and `position` are the live tyre_records columns the register reads
+ * (listSizePositionOptions, applyRecordFilters, positionOf).
+ */
+export const tyreRecordEditSchema = tyreRecordFormSchema.extend({
+  size: z.string().max(40, { message: 'Size must be at most 40 characters.' }),
+  position: z.string().max(20, { message: 'Position must be at most 20 characters.' }),
+})
+
+/** Common wheel position codes, offered as suggestions in the form. */
+export const POSITION_SUGGESTIONS = Array.from(new Set([
+  ...Object.keys(AXLE_LAYOUTS).flatMap(layoutCodes),
+  'LHR1-O', 'LHR1-I', 'RHR1-I', 'RHR1-O',
+  'LHR2-O', 'LHR2-I', 'RHR2-I', 'RHR2-O',
+]))
+
+/** Form values for an existing record (two position columns exist; `position` is primary). */
+export function recordToFormValues(r = {}) {
+  return {
+    sr: r.sr ?? '', issue_date: r.issue_date ?? '', description: r.description ?? '',
+    brand: r.brand ?? '', serial_no: r.serial_no ?? '', qty: r.qty ?? 1,
+    job_card: r.job_card ?? '', mis_number: r.mis_number ?? '', asset_no: r.asset_no ?? '',
+    site: r.site ?? '', country: r.country ?? 'KSA', remarks: r.remarks ?? '',
+    cost_per_tyre: r.cost_per_tyre ?? '',
+    risk_level: r.risk_level ?? '', category: r.category ?? '',
+    km_at_fitment: r.km_at_fitment ?? '', km_at_removal: r.km_at_removal ?? '',
+    size: String(r.size ?? '').trim(),
+    position: String(r.position ?? '').trim() || String(r.tyre_position ?? '').trim(),
+  }
+}
+
+/**
+ * The insert/update payload for the Add / Edit form. Blank size/position are
+ * stored as null; a position that parses is stored in its canonical code
+ * (lhr1o -> LHR1-O) so the same wheel always reads identically.
+ */
+export function buildRecordPayload(form, { profile } = {}) {
+  const size = String(form.size ?? '').trim()
+  const position = String(form.position ?? '').trim()
+  return {
+    ...form,
+    // Empty date field must be null, not '' - Postgres rejects '' for type date
+    // (22007), which broke editing/saving any record with no issue date.
+    issue_date: form.issue_date || null,
+    qty: +form.qty || 1,
+    // Store the actual entered cost, or null when left blank - never a default.
+    cost_per_tyre: form.cost_per_tyre !== '' && form.cost_per_tyre != null ? +form.cost_per_tyre : null,
+    km_at_fitment: form.km_at_fitment !== '' ? +form.km_at_fitment : null,
+    km_at_removal: form.km_at_removal !== '' ? +form.km_at_removal : null,
+    size: size || null,
+    position: position ? canonicalCode(position) : null,
+    // Both columns are read across the app (tyre bay, AI inspection, approvals);
+    // write the same code to each so a new tyre is visible everywhere.
+    tyre_position: position ? canonicalCode(position) : null,
+    country: form.country,
+    region: profile?.region ?? 'KSA',
+    uploaded_by: profile?.id,
+  }
 }
 
 /** Insert a single tyre record. */

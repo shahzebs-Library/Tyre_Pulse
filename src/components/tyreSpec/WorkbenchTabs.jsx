@@ -240,7 +240,7 @@ export function QuickSetupTab({ ctx }) {
                       <div>
                         <p className="text-[var(--text-muted)] text-xs mb-1">Approved Brands</p>
                         <div className="flex flex-wrap gap-1">
-                          {def.approved_brands.map(b => <span key={b} className="text-xs bg-purple-900/30 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">{b}</span>)}
+                          {def.approved_brands.map(b => <span key={b} className="text-xs bg-blue-900/30 text-blue-300 border border-blue-800 px-2 py-0.5 rounded-full">{b}</span>)}
                         </div>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[var(--input-border)]">
@@ -323,7 +323,7 @@ export function FitmentPolicyTab({ ctx }) {
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-[var(--input-border)] flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex-1 flex items-start gap-2.5">
-                  <div className="p-1.5 rounded-lg bg-[var(--input-bg)] text-purple-400 shrink-0 mt-0.5">
+                  <div className="p-1.5 rounded-lg bg-[var(--input-bg)] text-blue-400 shrink-0 mt-0.5">
                     <Gauge size={15} />
                   </div>
                   <div>

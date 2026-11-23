@@ -18,7 +18,7 @@ const CATEGORY_CONFIG = {
   inspections: { label: 'Inspections',    icon: ClipboardCheck,color: 'text-yellow-400', route: '/inspections' },
   alerts:      { label: 'Alerts',         icon: AlertTriangle, color: 'text-red-400',    route: '/alerts' },
   workorders:  { label: 'Work Orders',    icon: Wrench,        color: 'text-orange-400', route: '/work-orders' },
-  stock:       { label: 'Stock',          icon: Package,       color: 'text-purple-400', route: '/stock' },
+  stock:       { label: 'Stock',          icon: Package,       color: 'text-slate-400', route: '/stock' },
   reports:     { label: 'Reports',        icon: FileText,      color: 'text-teal-400',   route: '/reports' },
 }
 

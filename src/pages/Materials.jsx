@@ -128,7 +128,7 @@ export default function Materials() {
     { label: 'Low stock', value: kpi.lowStock, icon: TrendingDown, tone: 'text-amber-400' },
     { label: 'Out of stock', value: kpi.outOfStock, sub: kpi.availabilityPct == null ? '' : `${kpi.availabilityPct}% of items available`, icon: PackageX, tone: kpi.outOfStock > 0 ? 'text-red-400' : 'text-[var(--text-muted)]' },
     { label: 'Reorder needed', value: kpi.reorderCount, sub: kpi.reorderSpend == null ? 'order cost not measurable' : `about ${money(kpi.reorderSpend)} to reorder`, icon: ShoppingCart, tone: 'text-sky-400' },
-    { label: 'Categories', value: kpi.categories, icon: Layers, tone: 'text-violet-400' },
+    { label: 'Categories', value: kpi.categories, icon: Layers, tone: 'text-blue-400' },
   ]
 
   const exportName = reportFileName('Materials')
@@ -331,7 +331,7 @@ export default function Materials() {
 
         <div className="card">
           <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <Warehouse size={15} className="text-violet-400" aria-hidden="true" /> On-hand value by category
+            <Warehouse size={15} className="text-blue-400" aria-hidden="true" /> On-hand value by category
           </h2>
           {rows === null ? (
             <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-7 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>

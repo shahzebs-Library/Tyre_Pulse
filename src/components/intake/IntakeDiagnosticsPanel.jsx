@@ -356,7 +356,7 @@ function ResultBody({ commit, openSet, toggle }) {
         <Stat label="Skipped" value={c.skipped} tone="text-[var(--text-secondary)]" />
         <Stat label="Failed" value={c.failed} tone="text-red-400" />
         <Stat label="Merged" value={c.merged} tone="text-sky-400" />
-        <Stat label="Enriched" value={c.enriched} tone="text-purple-400" />
+        <Stat label="Enriched" value={c.enriched} tone="text-teal-400" />
         <SuccessBar rate={c.successRate} />
       </div>
 

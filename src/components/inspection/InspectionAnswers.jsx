@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
-import { getInspectionForPage } from '../../lib/api/inspections'
+import { getInspectionForPage, positionsRecordedValue } from '../../lib/api/inspections'
 import { resolveInspectionSigners } from '../../lib/api/profileDirectory'
-import { inspectionMeta, inspectionSummary, isComplete } from '../../lib/inspectionView'
+import { inspectionMeta, inspectionSummary, inspectionDiagramModel, isComplete } from '../../lib/inspectionView'
+import { isTyrelessEquipment } from '../VehicleTyreDiagram'
 import { toUserMessage } from '../../lib/safeError'
 import InspectionDiagram from './InspectionDiagram'
 import InspectionPhotos from './InspectionPhotos'
@@ -69,6 +70,8 @@ export default function InspectionAnswers({
   const row = inspection || fetched
   const meta = useMemo(() => inspectionMeta(row), [row])
   const summary = useMemo(() => inspectionSummary(row), [row])
+  // Same model the wheel map draws from, so the tile and the map agree on the wheel count.
+  const diagramModel = useMemo(() => (row ? inspectionDiagramModel(row, { isTyreless: isTyrelessEquipment }) : null), [row])
 
   // Resolve the sign-off identities to "Full Name (EMP-ID)" from the shared
   // profiles read, so the on-screen evidence block never shows the approver's
@@ -113,7 +116,7 @@ export default function InspectionAnswers({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
           {[
             ['Completeness', isComplete(row) ? 'Complete' : 'Incomplete'],
-            ['Positions recorded', summary.recorded == null ? null : `${summary.recorded} of ${summary.positions}`],
+            ['Positions recorded', positionsRecordedValue(summary, diagramModel)],
             ['Damage found', summary.damaged],
             ['Average pressure', summary.avgPressure == null ? 'Not recorded' : `${summary.avgPressure.toFixed(1)} PSI`],
           ].map(([label, value]) => (

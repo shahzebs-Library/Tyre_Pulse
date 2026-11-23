@@ -247,7 +247,7 @@ export default function AutomationRules() {
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1 max-w-[220px]">
           {(row.original.event_types || []).map(ev => (
-            <span key={ev} className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 text-[10px] font-mono">{ev}</span>
+            <span key={ev} className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 text-[10px] font-mono">{ev}</span>
           ))}
           {!(row.original.event_types || []).length && <span className="text-gray-500 text-xs">N/A</span>}
         </div>
@@ -383,7 +383,7 @@ export default function AutomationRules() {
         <Kpi icon={Activity} label="Run success rate" value={fmtPct(kpis.successRate)} tone="text-green-400" loading={execLoading} hint={runsHint} />
         <Kpi icon={AlertTriangle} label="Run failure rate" value={fmtPct(kpis.failureRate)} tone="text-red-400" loading={execLoading}
           hint={kpis.errors == null ? 'Executions unavailable' : `${kpis.errors.toLocaleString()} errors`} />
-        <Kpi icon={Ban} label="Never fired" value={fmtNum(kpis.neverFired)} tone="text-purple-400" loading={loading}
+        <Kpi icon={Ban} label="Never fired" value={fmtNum(kpis.neverFired)} tone="text-blue-400" loading={loading}
           onClick={() => setActivity(activity === 'never' ? 'all' : 'never')} active={activity === 'never'}
           hint={`${kpis.dormant} active but silent over ${DORMANT_DAYS} days`} />
       </div>

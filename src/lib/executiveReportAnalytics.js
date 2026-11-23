@@ -163,7 +163,7 @@ export const RC_CATEGORIES = [
   { key: 'driver', label: 'Driver Behavior', color: '#eab308',
     keywords: ['driver', 'driving', 'speed', 'braking', 'cornering', 'abuse', 'misuse', 'overload'],
     prevention: 'Deploy telematics, run defensive driving training, review high-loss records monthly.' },
-  { key: 'road', label: 'Road / Load Conditions', color: '#8b5cf6',
+  { key: 'road', label: 'Road / Load Conditions', color: '#475569',
     keywords: ['road', 'terrain', 'load', 'overload', 'weight', 'debris', 'pothole', 'cut'],
     prevention: 'Map high-risk routes, enforce load compliance, carry puncture repair kits.' },
   { key: 'maintenance', label: 'Maintenance Quality', color: '#06b6d4',

@@ -1304,7 +1304,7 @@ export default function DataIntakeCenter() {
           )}
           {counts && (
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-              {[['Total', counts.total, 'text-[var(--text-primary)]'], ['Ready', counts.ready, 'text-green-400'], ['Warning', counts.warning, 'text-amber-400'], ['Error', counts.error, 'text-red-400'], ['Duplicate', counts.duplicate, 'text-purple-400'], ['Exact live copy', counts.liveDuplicate || 0, 'text-sky-400']].map(([l, v, c]) => (
+              {[['Total', counts.total, 'text-[var(--text-primary)]'], ['Ready', counts.ready, 'text-green-400'], ['Warning', counts.warning, 'text-amber-400'], ['Error', counts.error, 'text-red-400'], ['Duplicate', counts.duplicate, 'text-blue-400'], ['Exact live copy', counts.liveDuplicate || 0, 'text-sky-400']].map(([l, v, c]) => (
                 <div key={l} className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-3"><p className="text-xs text-[var(--text-muted)]">{l}</p><p className={`text-2xl font-bold ${c}`}>{v}</p></div>
               ))}
             </div>

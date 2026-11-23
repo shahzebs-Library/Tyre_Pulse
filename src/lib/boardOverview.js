@@ -56,7 +56,9 @@ export function bucketMonthly(rows, dateField, valueFn = () => 1, now = new Date
  * Consolidated headline KPIs across every module. Values are null when the
  * source is empty / not computable, so the UI can render an honest "N/A".
  */
-export function buildBoardKpis({ tyres = [], inspections = [], actions = [], fleetSize = 0, accidents = [], workOrders = [], stock = [], now = new Date() } = {}) {
+// workOrdersKnown: the caller read the open job cards successfully, so an empty
+// list means zero open - not 'not measured'. (Board Overview reads open rows only.)
+export function buildBoardKpis({ tyres = [], inspections = [], actions = [], fleetSize = 0, accidents = [], workOrders = [], stock = [], now = new Date(), workOrdersKnown = false } = {}) {
   const kpi = computeAllKpis(tyres, inspections, actions, fleetSize)
   const claims = analyzeClaims(accidents, { now })
 
@@ -99,7 +101,7 @@ export function buildBoardKpis({ tyres = [], inspections = [], actions = [], fle
     netExposure: claims.total ? claims.netExposure : null,
     inspections: inspections.length,
     inspectionCompliancePct: kpi?.inspectionCompliance?.compliancePct ?? null,
-    workOrdersOpen: workOrders.length ? openWo : null,
+    workOrdersOpen: (workOrdersKnown || workOrders.length) ? openWo : null,
     workOrdersOverdue: overdueWo,
     stockItems: stock.length,
     lowStock,

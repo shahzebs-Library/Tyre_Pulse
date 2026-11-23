@@ -33,7 +33,7 @@ import './checklistWorkspace.css'
 const PAGE_SIZE = 8
 // SVG presentation attributes cannot resolve CSS variables, so the donut takes
 // literal colours. They read on both the light and the dark card.
-const DONUT_COLORS = ['#dc2626', '#f59e0b', '#2563eb', '#9333ea', '#0d9488', '#64748b']
+const DONUT_COLORS = ['#dc2626', '#f59e0b', '#2563eb', '#0891b2', '#0d9488', '#64748b']
 
 function fmtWhen(ms) {
   if (ms == null) return 'N/A'

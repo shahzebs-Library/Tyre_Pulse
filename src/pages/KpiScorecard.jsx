@@ -397,7 +397,7 @@ export default function KpiScorecard() {
               aria-pressed={showYoY}
               title={yoyAvailable ? undefined : 'YoY comparison is unavailable for ranges longer than 12 months'}
               className={`flex items-center gap-1.5 text-sm px-3 ${TOUCH} rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                showYoY ? 'bg-purple-900/40 border-purple-600 text-purple-300' : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)]'
+                showYoY ? 'bg-green-900/40 border-green-600 text-green-300' : 'bg-[var(--surface-2)] border-[var(--border-bright)] text-[var(--text-secondary)]'
               }`}
             >
               {showYoY ? <ToggleRight size={16} aria-hidden="true" /> : <ToggleLeft size={16} aria-hidden="true" />}

@@ -205,7 +205,7 @@ function KpiCard({ icon: Icon, label, value, sub, color = 'blue', loading, trend
     amber:  { wrap: 'bg-amber-900/20 border-amber-800/40', icon: 'text-amber-400',  val: 'text-amber-300' },
     green:  { wrap: 'bg-green-900/20 border-green-800/40', icon: 'text-green-400',  val: 'text-green-300' },
     blue:   { wrap: 'bg-blue-900/20 border-blue-800/40',  icon: 'text-blue-400',   val: 'text-blue-300' },
-    purple: { wrap: 'bg-purple-900/20 border-purple-800/40', icon: 'text-purple-400', val: 'text-purple-300' },
+    purple: { wrap: 'bg-slate-900/20 border-slate-800/40', icon: 'text-slate-400', val: 'text-slate-300' },
     cyan:   { wrap: 'bg-cyan-900/20 border-cyan-800/40',  icon: 'text-cyan-400',   val: 'text-cyan-300' },
   }
   const c = colorMap[color] || colorMap.blue

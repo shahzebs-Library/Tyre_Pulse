@@ -316,12 +316,12 @@ export default function RetreadClaims() {
 
   const na = loading || loadFailed
   const kpis = [
-    { label: 'Total claims', value: na ? 'N/A' : k.total, sub: na ? '' : `${k.openCount} open`, icon: LayoutGrid, tone: 'text-[var(--text-primary)]', accent: 'text-indigo-400' },
+    { label: 'Total claims', value: na ? 'N/A' : k.total, sub: na ? '' : `${k.openCount} open`, icon: LayoutGrid, tone: 'text-[var(--text-primary)]', accent: 'text-blue-400' },
     { label: 'Open exposure', value: na ? 'N/A' : money(k.openExposure), sub: 'cost of live claims', icon: Inbox, tone: 'text-sky-400', accent: 'text-sky-400' },
     { label: 'Approval rate', value: na || k.approvalRate == null ? 'N/A' : `${k.approvalRate}%`, sub: na ? '' : `${k.decidedCount} decided`, icon: Percent, tone: k.approvalRate != null && k.approvalRate >= 60 ? 'text-green-400' : 'text-amber-400', accent: 'text-amber-400' },
     { label: 'Value claimed', value: na ? 'N/A' : money(k.totalClaimed), sub: 'gross exposure', icon: DollarSign, tone: 'text-[var(--text-primary)]', accent: 'text-[var(--text-muted)]' },
     { label: 'Recovered', value: na ? 'N/A' : money(k.totalRecovered), sub: na ? '' : recoveryRate == null ? 'no cost recorded' : `${recoveryRate}% recovery`, icon: TrendingUp, tone: 'text-emerald-400', accent: 'text-emerald-400' },
-    { label: 'Avg resolution', value: na || k.avgResolutionDays == null ? 'N/A' : `${k.avgResolutionDays}d`, sub: na ? '' : `${k.resolvedCount} resolved`, icon: Clock, tone: 'text-[var(--text-primary)]', accent: 'text-violet-400' },
+    { label: 'Avg resolution', value: na || k.avgResolutionDays == null ? 'N/A' : `${k.avgResolutionDays}d`, sub: na ? '' : `${k.resolvedCount} resolved`, icon: Clock, tone: 'text-[var(--text-primary)]', accent: 'text-blue-400' },
   ]
 
   const clearFilters = () => { setStatusFilter('all'); setVendorFilter(''); setSearch(''); setFromDate(''); setToDate('') }

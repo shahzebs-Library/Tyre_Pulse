@@ -49,7 +49,7 @@ const STATUS_META = {
   delivered: { label: 'Delivered', tone: 'text-green-400',   badge: 'bg-green-900/30 text-green-300 border-green-800/50',   icon: CheckCircle2 },
   partial:   { label: 'Partial',   tone: 'text-sky-400',     badge: 'bg-sky-900/30 text-sky-300 border-sky-800/50',         icon: Package },
   failed:    { label: 'Failed',    tone: 'text-red-400',     badge: 'bg-red-900/30 text-red-300 border-red-800/50',         icon: XCircle },
-  returned:  { label: 'Returned',  tone: 'text-violet-400',  badge: 'bg-violet-900/30 text-violet-300 border-violet-800/50', icon: Truck },
+  returned:  { label: 'Returned',  tone: 'text-slate-400',  badge: 'bg-slate-900/30 text-slate-300 border-slate-800/50', icon: Truck },
 }
 
 const fmtInt = (v) => (v == null || v === '' ? 'N/A' : Number(v).toLocaleString())

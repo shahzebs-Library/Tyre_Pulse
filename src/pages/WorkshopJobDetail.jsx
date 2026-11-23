@@ -411,7 +411,7 @@ export default function WorkshopJobDetail() {
             <div className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl overflow-hidden">
               {[
                 { label: t('workshop.detail.cost.labour'), value: job.labour_cost, color: 'bg-blue-500' },
-                { label: t('workshop.detail.cost.parts'), value: job.parts_cost, color: 'bg-purple-500' },
+                { label: t('workshop.detail.cost.parts'), value: job.parts_cost, color: 'bg-teal-500' },
                 { label: t('workshop.detail.cost.total'), value: job.total_cost, color: 'bg-green-500', bold: true },
               ].map(({ label, value, color, bold }) => (
                 <div key={label} className={`flex items-center justify-between px-4 py-3 ${bold ? 'border-t border-[var(--input-border)]' : ''}`}>
@@ -429,7 +429,7 @@ export default function WorkshopJobDetail() {
               <div className="mt-2 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-lg p-3">
                 <div className="flex gap-1 h-3 rounded overflow-hidden">
                   <div className="bg-blue-500 rounded-l" style={{ width: `${((job.labour_cost || 0) / total) * 100}%` }} />
-                  <div className="bg-purple-500 rounded-r" style={{ width: `${((job.parts_cost || 0) / total) * 100}%` }} />
+                  <div className="bg-teal-500 rounded-r" style={{ width: `${((job.parts_cost || 0) / total) * 100}%` }} />
                 </div>
                 <div className="flex justify-between mt-1.5 text-xs text-[var(--text-muted)]">
                   <span>{t('workshop.detail.cost.labourShare', { pct: formatPct(labourPct) })}</span>

@@ -104,7 +104,7 @@ export default function WorkshopTvShareButton({ className = '' }) {
         open={open}
         onClose={close}
         size="sm"
-        title={<span className="flex items-center gap-2"><Tv size={20} className="text-indigo-500" aria-hidden="true" /> Share workshop TV board</span>}
+        title={<span className="flex items-center gap-2"><Tv size={20} className="text-blue-500" aria-hidden="true" /> Share workshop TV board</span>}
       >
         {minted ? (
           <div className="space-y-4">
@@ -114,13 +114,13 @@ export default function WorkshopTvShareButton({ className = '' }) {
             </div>
             <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-2">
               <input readOnly value={minted.url} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 bg-transparent px-2 text-sm text-[var(--text-primary)] outline-none" aria-label="Share link" />
-              <button type="button" onClick={copyLink} className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 min-h-[44px] text-sm font-semibold text-white hover:bg-indigo-500">
+              <button type="button" onClick={copyLink} className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 min-h-[44px] text-sm font-semibold text-white hover:bg-green-500">
                 {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
                 <span aria-live="polite">{copied ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <a href={minted.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 min-h-[44px] text-sm font-semibold text-indigo-500 hover:text-indigo-400">
+              <a href={minted.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 min-h-[44px] text-sm font-semibold text-blue-500 hover:text-blue-400">
                 <ExternalLink size={15} aria-hidden="true" /> Open board
               </a>
               <button type="button" onClick={close} className="btn-secondary px-3 min-h-[44px] text-sm font-semibold">Done</button>
@@ -133,7 +133,7 @@ export default function WorkshopTvShareButton({ className = '' }) {
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-indigo-400"
+                className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-green-500"
                 placeholder="Workshop live board"
               />
             </label>
@@ -144,7 +144,7 @@ export default function WorkshopTvShareButton({ className = '' }) {
                 type="number" min={REFRESH_SEC_MIN} max={REFRESH_SEC_MAX}
                 value={form.refreshSeconds}
                 onChange={(e) => setForm((f) => ({ ...f, refreshSeconds: e.target.value }))}
-                className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-indigo-400"
+                className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-green-500"
               />
               <span className="mt-1 block text-xs text-[var(--text-muted)]">The board reloads its numbers on this cadence ({REFRESH_SEC_MIN} to {REFRESH_SEC_MAX} seconds).</span>
             </label>
@@ -155,7 +155,7 @@ export default function WorkshopTvShareButton({ className = '' }) {
                 type="text" autoComplete="off"
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-indigo-400"
+                className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-green-500"
                 placeholder="Leave blank for no password"
               />
             </label>
@@ -166,7 +166,7 @@ export default function WorkshopTvShareButton({ className = '' }) {
                 type="date"
                 value={form.expires}
                 onChange={(e) => setForm((f) => ({ ...f, expires: e.target.value }))}
-                className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-indigo-400"
+                className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-green-500"
               />
             </label>
 
@@ -178,7 +178,7 @@ export default function WorkshopTvShareButton({ className = '' }) {
 
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={close} className="btn-secondary px-4 min-h-[44px] text-sm font-semibold">Cancel</button>
-              <button type="submit" disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 min-h-[44px] text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60">
+              <button type="submit" disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 min-h-[44px] text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-60">
                 {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Tv size={16} aria-hidden="true" />}
                 <span>{busy ? 'Creating...' : 'Create link'}</span>
               </button>

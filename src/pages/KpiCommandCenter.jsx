@@ -802,7 +802,7 @@ export default function KpiCommandCenter() {
 
           {/* Radar + period comparison */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <Panel id="kcc-radar-h" icon={Layers} iconClass="text-purple-400" title={t('kpicommand.sections.fleetVsBenchmark')} hint={t('kpicommand.sections.fleetVsBenchmarkDesc')}>
+            <Panel id="kcc-radar-h" icon={Layers} iconClass="text-blue-400" title={t('kpicommand.sections.fleetVsBenchmark')} hint={t('kpicommand.sections.fleetVsBenchmarkDesc')}>
               <div className="h-72">
                 <Radar data={radarData} role="img" aria-label="Radar chart of KPI scores against benchmark bands" options={{
                   responsive: true, maintainAspectRatio: false,

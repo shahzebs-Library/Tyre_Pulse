@@ -11,6 +11,7 @@ import {
 import { useLanguage } from '../../contexts/LanguageContext'
 import TyreDueBanner from './TyreDueBanner'
 import { displayPositionCode } from '../../lib/tyreBay'
+import { layoutKeyForVehicleType, stripRequiredMark } from '../../lib/api/inspections'
 
 // Every wheel layout the diagram can draw, so this picker can never drift from
 // the diagram (it used to omit Line pump / Truck 6x4 / Tanker / Trailer).
@@ -34,15 +35,17 @@ export default function InspectionFormModal({
   // Admin, Manager or Director; everything else stays read-only.
   const metersOnly = wfLocked && canEditMetersLocked && !!form.id
   const missing = [
-    !form.title?.trim() && t('inspections.modal.titleField'),
-    !form.site?.trim() && t('inspections.modal.siteField'),
-    !form.scheduled_date && t('inspections.modal.dateField'),
+    !form.title?.trim() && stripRequiredMark(t('inspections.modal.titleField')),
+    !form.site?.trim() && stripRequiredMark(t('inspections.modal.siteField')),
+    !form.scheduled_date && stripRequiredMark(t('inspections.modal.dateField')),
   ].filter(Boolean)
   const canSave = !saving && (metersOnly || (!wfLocked && missing.length === 0))
   const num = (v) => (v === '' || v == null ? null : Number(v))
   const kmLow = previousMeters?.km != null && num(form.odometer_km) != null && num(form.odometer_km) < previousMeters.km
   const hrsLow = previousMeters?.hours != null && num(form.hour_meter) != null && num(form.hour_meter) < previousMeters.hours
   const meterDisabled = wfLocked && !metersOnly
+  // The layout the diagram draws: the person's pick, else the one the stored type resolves to.
+  const layoutKey = form.layout_key || layoutKeyForVehicleType(form.vehicle_type)
   return (
     <Modal
       open
@@ -144,7 +147,7 @@ export default function InspectionFormModal({
 
       <fieldset disabled={wfLocked} className="space-y-4 disabled:opacity-60">
         <div>
-          <label className="label" htmlFor="insp-title">{t('inspections.modal.titleField')} <span aria-hidden className="text-red-500">*</span></label>
+          <label className="label" htmlFor="insp-title">{stripRequiredMark(t('inspections.modal.titleField'))} <span aria-hidden className="text-red-500">*</span></label>
           <input id="insp-title" required className="input" value={form.title}
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             placeholder={t('inspections.modal.titlePlaceholder')} />
@@ -175,14 +178,14 @@ export default function InspectionFormModal({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="label" htmlFor="insp-site">{t('inspections.modal.siteField')} <span aria-hidden className="text-red-500">*</span></label>
+            <label className="label" htmlFor="insp-site">{stripRequiredMark(t('inspections.modal.siteField'))} <span aria-hidden className="text-red-500">*</span></label>
             <input id="insp-site" required className="input" value={form.site}
               onChange={e => setForm(f => ({ ...f, site: e.target.value }))}
               placeholder={t('inspections.form.sitePlaceholder')} list="insp-sites" />
             <datalist id="insp-sites">{sites.map(s => <option key={s} value={s} />)}</datalist>
           </div>
           <div>
-            <label className="label" htmlFor="insp-date">{t('inspections.modal.dateField')} <span aria-hidden className="text-red-500">*</span></label>
+            <label className="label" htmlFor="insp-date">{stripRequiredMark(t('inspections.modal.dateField'))} <span aria-hidden className="text-red-500">*</span></label>
             <input id="insp-date" required type="date" className="input" value={form.scheduled_date}
               onChange={e => setForm(f => ({ ...f, scheduled_date: e.target.value }))} />
           </div>
@@ -217,17 +220,26 @@ export default function InspectionFormModal({
         {!isObservationType(form.inspection_type) && !isTrainingType(form.inspection_type) && (
           <div>
             <label className="label" htmlFor="insp-vtype">{t('inspections.modal.vehicleType')}</label>
-            <select id="insp-vtype" className="input mb-3" value={form.vehicle_type || ''}
-              onChange={e => { setForm(f => ({ ...f, vehicle_type: e.target.value, tyre_conditions: {} })); setSelectedTyre(null) }}>
+            <select id="insp-vtype" className="input mb-3" value={layoutKey}
+              onChange={e => {
+                const v = e.target.value
+                // The picker chooses the DRAWN layout. When the asset came from the
+                // fleet register, its own vehicle type is what is saved.
+                setForm(f => ({ ...f, layout_key: v, vehicle_type: f._fleet_vehicle_type || v, tyre_conditions: {} }))
+                setSelectedTyre(null)
+              }}>
               <option value="">{t('inspections.modal.selectVehicleType')}</option>
               {VEHICLE_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
 
-            {form.vehicle_type && (
+            {form.vehicle_type && form._fleet_vehicle_type && (
+              <p className="text-xs text-[var(--text-muted)] -mt-2 mb-3">Fleet register type: {form._fleet_vehicle_type}</p>
+            )}
+            {layoutKey && (
               <div className="bg-[var(--surface-2)] rounded-xl p-4 border border-[var(--border-bright)]">
                 <p className="text-xs text-[var(--text-secondary)] mb-3">{t('inspections.modal.clickTyre')}</p>
                 <VehicleTyreDiagram
-                  vehicleType={form.vehicle_type}
+                  vehicleType={layoutKey}
                   assetNo={form.asset_no}
                   country={form.country}
                   tyreData={form.tyre_conditions || {}}
@@ -240,7 +252,7 @@ export default function InspectionFormModal({
                 {selectedTyre && (
                   <div className="mt-4 p-3 bg-[var(--surface-1)] rounded-lg border border-[var(--border-bright)]">
                     <p className="text-xs font-semibold text-[var(--text-primary)] mb-2">{t('inspections.modal.tyreLabel', { id: displayPositionCode(form?.vehicle_type, selectedTyre) || selectedTyre })}</p>
-                    <div className="flex gap-2 flex-wrap mb-2">
+                    <div className="flex gap-2 flex-wrap mb-2" role="group" aria-label={`Condition for tyre ${displayPositionCode(form?.vehicle_type, selectedTyre) || selectedTyre}`}>
                       {RISK_LEVELS.map(r => (
                         <button
                           key={r}
@@ -266,7 +278,9 @@ export default function InspectionFormModal({
                         </button>
                       ))}
                     </div>
+                    <label className="label" htmlFor="insp-tyre-pressure">Pressure (PSI)</label>
                     <input
+                      id="insp-tyre-pressure"
                       type="number"
                       aria-label={`Pressure for tyre ${displayPositionCode(form?.vehicle_type, selectedTyre) || selectedTyre}`}
                       className="input text-xs py-1"
@@ -318,8 +332,8 @@ export default function InspectionFormModal({
 
         {/* Photo upload */}
         <div>
-          <p className="label">{t('inspections.modal.photo')}</p>
-          <div className="flex items-center gap-3">
+          <p className="label" id="insp-photo-label">{t('inspections.modal.photo')}</p>
+          <div className="flex items-center gap-3" role="group" aria-labelledby="insp-photo-label">
             <button type="button"
               onClick={() => fileRef.current?.click()}
               className="btn-secondary text-sm flex items-center gap-2 px-3 py-2">

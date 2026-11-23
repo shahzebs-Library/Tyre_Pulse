@@ -26,6 +26,7 @@
     "eventsCount": "{count} events"
   },
   "periods": {
+    "This month": "This month",
     "30d": "30d",
     "90d": "90d",
     "6m": "6m",

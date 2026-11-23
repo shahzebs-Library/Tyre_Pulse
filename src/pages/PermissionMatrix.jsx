@@ -19,7 +19,7 @@ import {
 import { toUserMessage } from '../lib/safeError'
 
 const ROLE_TINT = {
-  Admin: 'text-purple-300', Manager: 'text-blue-300', Director: 'text-indigo-300',
+  Admin: 'text-red-300', Manager: 'text-blue-300', Director: 'text-teal-300',
   Reporter: 'text-cyan-300', Inspector: 'text-green-300', 'Tyre Man': 'text-amber-300',
   Driver: 'text-secondary',
 }

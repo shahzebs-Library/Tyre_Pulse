@@ -138,22 +138,22 @@ const FREQ_LABEL   = Object.fromEntries(FREQUENCIES.map(f => [f.value, f.label])
 const PERIOD_LABEL = Object.fromEntries(PERIODS.map(p => [p.value, p.label]))
 
 const ICON_CFG = {
-  executive:  { Icon: FileText,      color: 'text-purple-400',  bg: 'bg-purple-400/10' },
+  executive:  { Icon: FileText,      color: 'text-slate-400',   bg: 'bg-slate-400/10' },
   kpi:        { Icon: BarChart2,     color: 'text-blue-400',    bg: 'bg-blue-400/10'   },
   fleet:      { Icon: Truck,         color: 'text-green-400',   bg: 'bg-green-400/10'  },
   cost:       { Icon: DollarSign,    color: 'text-orange-400',  bg: 'bg-orange-400/10' },
   inspection: { Icon: ClipboardList, color: 'text-yellow-400',  bg: 'bg-yellow-400/10' },
   accidents:  { Icon: AlertTriangle, color: 'text-red-400',     bg: 'bg-red-400/10'    },
-  claims:     { Icon: ShieldCheck,   color: 'text-indigo-400',  bg: 'bg-indigo-400/10' },
+  claims:     { Icon: ShieldCheck,   color: 'text-teal-400',    bg: 'bg-teal-400/10' },
   stock:      { Icon: Package,       color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
   tyre_stock_alert: { Icon: Package, color: 'text-amber-400', bg: 'bg-amber-400/10' },
   vendor:     { Icon: Building2,     color: 'text-cyan-400',    bg: 'bg-cyan-400/10'   },
-  builder:    { Icon: LayoutTemplate, color: 'text-pink-400',   bg: 'bg-pink-400/10'   },
+  builder:    { Icon: LayoutTemplate, color: 'text-sky-400',    bg: 'bg-sky-400/10'   },
 }
 
 const iconCfgFor = (type) => (isBuilderType(type) ? ICON_CFG.builder : (ICON_CFG[type] || ICON_CFG.executive))
 
-const FREQ_DOT = { once: 'bg-orange-400', daily: 'bg-green-400', weekly: 'bg-blue-400', monthly: 'bg-purple-400' }
+const FREQ_DOT = { once: 'bg-orange-400', daily: 'bg-green-400', weekly: 'bg-blue-400', monthly: 'bg-slate-400' }
 
 const DAYS_OF_WEEK = [0, 1, 2, 3, 4, 5, 6]
 const DAY_LABELS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -544,7 +544,7 @@ function ScheduleModal({ title, onClose, onSave, saving, form, setForm, formErro
             )}
             {isBuilderType(form.report_type) && (
               <p className="text-xs text-[var(--text-muted)] mt-1.5 flex items-start gap-1.5">
-                <LayoutTemplate className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-pink-400" />
+                <LayoutTemplate className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-sky-400" />
                 {td('schedreports.modal.builderHint', 'A saved Accident Report Builder layout - "Generate now" renders its exact block design over the covered period. Manage layouts in Accidents > Report Builder.')}
               </p>
             )}

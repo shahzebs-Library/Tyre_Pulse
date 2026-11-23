@@ -1310,7 +1310,7 @@ function CostPerUnitPage({ snapshot }) {
       <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(4,minmax(0,1fr))' }}>
         <CostTile label="Cost / km" value={c.cost_per_km} decimals={2} suffix="per km" icon={Activity} tone="teal" />
         <CostTile label="Cost / engine hour" value={c.cost_per_hour} decimals={2} suffix="per hr" icon={Clock} tone="blue" />
-        <CostTile label="Cost / m3" value={c.cost_per_m3} decimals={2} suffix="per m3" icon={Grid} tone="indigo" />
+        <CostTile label="Cost / m3" value={c.cost_per_m3} decimals={2} suffix="per m3" icon={Grid} tone="slate" />
         <CostTile label="Tyre CPK" value={c.tyre_cpk} decimals={2} suffix="per km" icon={CircleDot} tone="green" />
       </div>
       {mixed && byCountry.length > 0 ? (
@@ -1380,7 +1380,7 @@ function OpsCommandPage({ snapshot }) {
   return (
     <div className="rs-page">
       <div className="rs-stat-strip rs-stat-6">
-        <StatTile label="Open Job Cards" value={ops.work_orders_open} icon={Wrench} tone="indigo" />
+        <StatTile label="Open Job Cards" value={ops.work_orders_open} icon={Wrench} tone="slate" />
         <StatTile label="Job Cards Today" value={ops.job_cards_today} icon={ClipboardCheck} tone="blue" />
         <StatTile label="Inspections Today" value={ops.inspections_today} icon={ListChecks} tone="green" />
         <StatTile label="Accidents Today" value={ops.accidents_today} icon={ShieldAlert} tone="amber" />
@@ -1637,7 +1637,7 @@ function ClaimsDeskPage({ snapshot }) {
 }
 
 // ── Operations "today" stat tile (direct counts, no sparkline) ────────────────
-function StatTile({ label, value, icon: Icon, tone = 'indigo', accent }) {
+function StatTile({ label, value, icon: Icon, tone = 'slate', accent }) {
   return (
     <div className={`rs-stat rs-stat-${tone}`}>
       <div className="rs-stat-head">
@@ -1667,7 +1667,7 @@ function OpsTodayPage({ snapshot }) {
   return (
     <div className="rs-page">
       <div className="rs-stat-strip rs-stat-6">
-        <StatTile label="Open Job Cards" value={ops.work_orders_open} icon={Wrench} tone="indigo" />
+        <StatTile label="Open Job Cards" value={ops.work_orders_open} icon={Wrench} tone="slate" />
         <StatTile label="Job Cards Today" value={ops.job_cards_today} icon={ClipboardCheck} tone="blue" />
         <StatTile label="Tyre Changes Today" value={ops.tyre_changes_today} icon={CircleDot} tone="teal" />
         <StatTile label="Inspections Today" value={ops.inspections_today} icon={ListChecks} tone="green" />
@@ -1804,7 +1804,7 @@ function TyreFailurePage({ data }) {
       <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(5,minmax(0,1fr))' }}>
         <CostTile label="Active Tyres" value={active} icon={CircleDot} tone="green" />
         <CostTile label="Removed Tyres" value={removed} icon={AlertTriangle} tone="red" />
-        <CostTile label="Total Tyres" value={total} icon={LayoutGrid} tone="indigo" />
+        <CostTile label="Total Tyres" value={total} icon={LayoutGrid} tone="slate" />
         <CostTile label="Avg CPK" value={tf.avg_cpk} decimals={2} suffix="per km" icon={Wallet} tone="amber" />
         <CostTile label="Avg Tyre Life" value={tf.avg_life_km} decimals={0} suffix="km" icon={Activity} tone="teal" />
       </div>
@@ -1844,7 +1844,7 @@ function MaintenanceCostPage({ data }) {
   return (
     <div className="rs-page">
       <div className="rs-stat-strip" style={{ gridTemplateColumns: 'repeat(4,minmax(0,1fr))' }}>
-        <CostTile label="Job Cards" value={jobCards} icon={ClipboardCheck} tone="indigo" />
+        <CostTile label="Job Cards" value={jobCards} icon={ClipboardCheck} tone="slate" />
         <CostTile label="Line Items" value={mn.line_items} icon={ListChecks} tone="blue" />
         <CostTile label="Total Spend" value={totalSpend} icon={Wallet} tone="amber" />
         <CostTile label="Open Jobs" value={mn.open_jobs} icon={Wrench} tone="red" />
@@ -1875,14 +1875,14 @@ function ScopedStyle() {
     <style>{`
       .rs-root {
         --rs-bg:#f1f5f9; --rs-card:#ffffff; --rs-text:#0f172a; --rs-sub:#334155;
-        --rs-muted:#64748b; --rs-border:#e2e8f0; --rs-accent:#6366f1;
+        --rs-muted:#64748b; --rs-border:#e2e8f0; --rs-accent:#15803d;
         /* Flip shared report vars light so any reused .card / chart shell stays white */
         --surface-0:#ffffff; --surface-1:#f8fafc; --surface-2:#f1f5f9; --surface-3:#e2e8f0;
         --card-from:#ffffff; --card-to:#ffffff; --card-text:#0f172a;
         --border-dim:#e5e7eb; --border-bright:#cbd5e1; --border-brand:#e6e9ee;
         --text-primary:#0f172a; --text-secondary:#334155; --text-muted:#64748b; --text-dim:#94a3b8;
         --input-bg:#ffffff; --input-border:#cbd5e1; --input-text:#0f172a;
-        --shadow-card:0 1px 2px rgba(15,23,42,0.06); --brand-subtle:rgba(99,102,241,0.08);
+        --shadow-card:0 1px 2px rgba(15,23,42,0.06); --brand-subtle:rgba(21,128,61,0.08);
         min-height:100vh; width:100%;
         background:var(--rs-bg); color:var(--rs-text);
         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
@@ -1908,10 +1908,10 @@ function ScopedStyle() {
         flex:1; min-height:44px; padding:11px 14px; border:1px solid var(--rs-border); border-radius:12px;
         font-size:15px; color:var(--rs-text); background:#f8fafc; outline:none;
       }
-      .rs-pwinput:focus { border-color:var(--rs-accent); box-shadow:0 0 0 3px rgba(99,102,241,0.15); }
+      .rs-pwinput:focus { border-color:var(--rs-accent); box-shadow:0 0 0 3px rgba(21,128,61,0.15); }
       .rs-pwbtn {
         display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 18px; border:none;
-        min-height:44px; border-radius:12px; background:#4f46e5; color:#ffffff; font-size:14px;
+        min-height:44px; border-radius:12px; background:#15803d; color:#ffffff; font-size:14px;
         font-weight:600; cursor:pointer; transition:opacity .15s;
       }
       .rs-pwbtn:disabled { opacity:.5; cursor:not-allowed; }
@@ -1931,8 +1931,8 @@ function ScopedStyle() {
       .rs-brand-mark {
         flex:0 0 auto; width:44px; height:44px; border-radius:13px;
         display:flex; align-items:center; justify-content:center; color:#ffffff;
-        background:linear-gradient(135deg,var(--rs-accent) 0%,#8b5cf6 100%);
-        box-shadow:0 6px 16px rgba(99,102,241,0.32);
+        background:linear-gradient(135deg,var(--rs-accent) 0%,#166534 100%);
+        box-shadow:0 6px 16px rgba(21,128,61,0.32);
       }
       .rs-head-titles { min-width:0; }
       .rs-company { margin:0; font-size:12px; font-weight:700; letter-spacing:.14em;
@@ -1943,12 +1943,12 @@ function ScopedStyle() {
       .rs-head-mid { display:flex; align-items:center; gap:14px; }
       .rs-page-chip {
         font-size:15px; font-weight:700; color:var(--rs-accent);
-        background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.2);
+        background:rgba(21,128,61,0.1); border:1px solid rgba(21,128,61,0.2);
         padding:7px 16px; border-radius:999px; white-space:nowrap;
       }
       .rs-dots { display:flex; align-items:center; gap:7px; }
       .rs-dot { width:9px; height:9px; border-radius:999px; background:var(--rs-border); transition:all .25s ease; }
-      .rs-dot-on { background:var(--rs-accent); width:26px; box-shadow:0 0 0 3px rgba(99,102,241,0.14); }
+      .rs-dot-on { background:var(--rs-accent); width:26px; box-shadow:0 0 0 3px rgba(21,128,61,0.14); }
       .rs-head-right { display:flex; align-items:center; gap:16px; }
       .rs-clock { display:inline-flex; align-items:center; gap:7px; color:var(--rs-text);
         font-weight:700; white-space:nowrap; }
@@ -1960,7 +1960,7 @@ function ScopedStyle() {
         border:1px solid var(--rs-border); border-radius:12px; background:#ffffff;
         color:var(--rs-sub); cursor:pointer; transition:all .15s;
       }
-      .rs-fsbtn:hover { color:var(--rs-text); border-color:var(--rs-accent); box-shadow:0 4px 12px rgba(99,102,241,0.16); }
+      .rs-fsbtn:hover { color:var(--rs-text); border-color:var(--rs-accent); box-shadow:0 4px 12px rgba(21,128,61,0.16); }
 
       .rs-body { flex:1 1 auto; min-height:0; padding:20px 28px 24px; overflow:hidden; }
       .rs-page-anim { height:100%; animation:rs-enter .5s cubic-bezier(.22,.61,.36,1) both; }
@@ -1981,7 +1981,7 @@ function ScopedStyle() {
       }
       .rs-tile::before {
         content:''; position:absolute; left:0; top:0; bottom:0; width:4px;
-        background:linear-gradient(180deg,var(--rs-accent),#8b5cf6); opacity:.85;
+        background:linear-gradient(180deg,var(--rs-accent),#166534); opacity:.85;
       }
       .rs-tile-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
       .rs-tile-label { font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--rs-muted); }
@@ -2009,7 +2009,7 @@ function ScopedStyle() {
       .rs-stat-value { font-size:clamp(30px,4vw,54px); font-weight:800; line-height:1; color:var(--rs-text);
         font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
       .rs-stat-accent { font-size:12px; font-weight:600; color:var(--st); text-transform:uppercase; letter-spacing:.06em; }
-      .rs-stat-indigo { --st:#6366f1; } .rs-stat-blue { --st:#2563eb; } .rs-stat-teal { --st:#0d9488; }
+      .rs-stat-slate { --st:#475569; } .rs-stat-blue { --st:#2563eb; } .rs-stat-teal { --st:#0d9488; }
       .rs-stat-green { --st:#16a34a; } .rs-stat-amber { --st:#d97706; } .rs-stat-red { --st:#dc2626; }
 
       /* TV-legible operations table */
@@ -2077,7 +2077,7 @@ function ScopedStyle() {
         color:var(--rs-sub); cursor:pointer; transition:all .15s; flex:0 0 auto;
       }
       .rs-navbtn:hover:not(:disabled) { color:#ffffff; background:var(--rs-accent); border-color:var(--rs-accent);
-        box-shadow:0 6px 16px rgba(99,102,241,0.28); }
+        box-shadow:0 6px 16px rgba(21,128,61,0.28); }
       .rs-navbtn:disabled { opacity:.4; cursor:not-allowed; }
       .rs-board-now { display:flex; flex-direction:column; min-width:0; }
       .rs-board-kicker { font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--rs-muted); }
@@ -2087,7 +2087,7 @@ function ScopedStyle() {
       .rs-dot { width:10px; height:10px; border-radius:999px; background:var(--rs-border);
         border:none; padding:0; cursor:pointer; transition:all .25s ease; }
       .rs-dot:hover { background:#c7cdda; }
-      .rs-dot-on { background:var(--rs-accent); width:28px; box-shadow:0 0 0 3px rgba(99,102,241,0.14); }
+      .rs-dot-on { background:var(--rs-accent); width:28px; box-shadow:0 0 0 3px rgba(21,128,61,0.14); }
       .rs-dot-on:hover { background:var(--rs-accent); }
 
       .rs-controls-right { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
@@ -2121,7 +2121,7 @@ function ScopedStyle() {
         font-size:14px; font-weight:600; cursor:pointer; transition:all .15s;
       }
       .rs-refbtn:hover:not(:disabled) { color:var(--rs-text); border-color:var(--rs-accent);
-        box-shadow:0 4px 12px rgba(99,102,241,0.16); }
+        box-shadow:0 4px 12px rgba(21,128,61,0.16); }
       .rs-refbtn:disabled { opacity:.6; cursor:progress; }
       .rs-lastref { font-size:13px; color:var(--rs-muted); white-space:nowrap; font-variant-numeric:tabular-nums; }
 

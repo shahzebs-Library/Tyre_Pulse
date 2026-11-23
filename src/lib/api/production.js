@@ -188,11 +188,45 @@ export async function deleteProduction(id) {
  * @returns {Promise<number>}
  */
 export async function sumProductionM3({ country, site, from, to } = {}) {
-  const rows = await listProduction({ country, site, from, to })
+  // Summed on the server. Paging rows here capped at 20,000 of ~300,000, so the
+  // m3 this divides cost by was silently short whenever a window was wide, and
+  // the 20 page reads made Cost Center take ~20 s. get_production_monthly is
+  // SECURITY INVOKER, so row-level security still decides what is counted.
+  const { data, error } = await supabase.rpc('get_production_monthly', {
+    p_country: country && country !== 'All' ? country : null,
+    p_from: from ? asDate(from) : null,
+    p_to: to ? asDate(to) : null,
+  })
+  if (!error && Array.isArray(data)) return sumMonthlyM3(data, site)
+  if (error && isMissingRelation(error)) return 0
+  // Fall back to reading rows only if the aggregate is unavailable.
+  const rows = await listProduction({ country, site, from, to, limit: 400000 })
   let total = 0
   for (const r of rows) {
     const n = Number(r?.m3)
     if (Number.isFinite(n)) total += n
   }
   return total
+}
+
+/**
+ * Total supplied m3 from get_production_monthly rows, optionally for one site
+ * (matched trimmed and case-insensitive, as the function groups by trimmed site).
+ */
+export function sumMonthlyM3(months, site) {
+  const wanted = site && site !== 'All' ? String(site).trim().toLowerCase() : null
+  let total = 0
+  for (const m of months || []) {
+    if (!wanted) {
+      const n = Number(m?.supplied_m3)
+      if (Number.isFinite(n)) total += n
+      continue
+    }
+    for (const s of m?.sites || []) {
+      if (String(s?.site ?? '').trim().toLowerCase() !== wanted) continue
+      const n = Number(s?.supplied_m3)
+      if (Number.isFinite(n)) total += n
+    }
+  }
+  return Math.round(total * 10) / 10
 }

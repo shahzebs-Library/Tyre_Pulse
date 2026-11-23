@@ -173,7 +173,7 @@ export default function OcrScanner() {
     { label: 'Confirmed', value: summary.confirmedCount, icon: CheckCircle2, tone: 'text-green-400' },
     { label: 'Needs review', value: summary.needsReviewCount, icon: ClipboardCheck, tone: 'text-amber-400' },
     { label: 'Avg confidence', value: summary.avgConfidence == null ? 'Not scored' : fmtConf(summary.avgConfidence), icon: Percent, tone: 'text-sky-400' },
-    { label: 'Auto-extracted', value: summary.autoExtractedCount, icon: Sparkles, tone: 'text-violet-400' },
+    { label: 'Auto-extracted', value: summary.autoExtractedCount, icon: Sparkles, tone: 'text-blue-400' },
     { label: 'Acceptance rate', value: perf.acceptanceRate == null ? 'N/A' : `${perf.acceptanceRate}%`, icon: ThumbsUp, tone: 'text-green-400', hint: 'Confirmed against confirmed plus rejected' },
     { label: 'Oldest waiting', value: perf.oldestWaitingDays == null ? 'N/A' : `${perf.oldestWaitingDays} d`, icon: Hourglass, tone: perf.oldestWaitingDays > 7 ? 'text-red-400' : 'text-[var(--text-primary)]', hint: 'Age of the oldest scan in the review queue' },
   ]
@@ -471,7 +471,7 @@ export default function OcrScanner() {
 
           <div className="border-t border-[var(--input-border)] pt-3">
             <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
-              <BarChart3 size={15} className="text-violet-400" /> Confidence distribution
+              <BarChart3 size={15} className="text-blue-400" /> Confidence distribution
             </h3>
             {rows === null ? (
               failedFirstLoad ? <p className="text-xs text-[var(--text-muted)]">Not available.</p> : <div className="h-10 bg-[var(--input-bg)] rounded animate-pulse" />

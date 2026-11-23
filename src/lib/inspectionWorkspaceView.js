@@ -207,7 +207,7 @@ export function recentFindings(rows, limit = 6) {
 }
 
 const titleCase = (s) => String(s).toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
-export const DEFECT_COLORS = ['#ef4444', '#f59e0b', '#f97316', '#3b82f6', '#a855f7', '#94a3b8']
+export const DEFECT_COLORS = ['#ef4444', '#f59e0b', '#f97316', '#3b82f6', '#0f766e', '#94a3b8']
 
 /** Non-Good tyre conditions by recorded word, top five plus Others. */
 export function defectCategories(rows, top = 5) {

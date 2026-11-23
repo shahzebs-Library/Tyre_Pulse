@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
+import { defaultWindow } from '../lib/defaultPeriod'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
 import PageHeader from '../components/ui/PageHeader'
@@ -76,9 +77,10 @@ export default function Anomalies() {
   const [search, setSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState('all')
   const [siteFilter, setSiteFilter] = useState('all')
-  // Optional date range - blank = all time. Applied server-side so detection
-  // runs over exactly the chosen window.
-  const [fromDate, setFromDate] = useState('')
+  // Date range, applied server-side so detection runs over exactly the chosen
+  // window. Opens on this year (at least 3 months): scanning all history read
+  // 40,000 job cards, took ~17 s and still hit the cap. "All dates" clears it.
+  const [fromDate, setFromDate] = useState(() => defaultWindow().from)
   const [toDate, setToDate] = useState('')
 
   // Changing the date range refetches without waiting for the load already in
@@ -534,7 +536,7 @@ function WorkshopVisitsView({ summary, rows, columns, activeCurrency, searching 
         />
         <SeverityCard
           label="Visits This Month" value={summary.thisMonth} icon={CalendarClock}
-          valueClass="text-indigo-400" ringClass="ring-indigo-500/20"
+          valueClass="text-blue-400" ringClass="ring-blue-500/20"
           hint="Shop trips in the last 30 days"
         />
         <SeverityCard

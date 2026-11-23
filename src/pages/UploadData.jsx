@@ -1336,7 +1336,7 @@ export default function UploadData() {
               {[
                 { val: 'tyres', label: t('uploaddata.idle.types.tyres.label'), desc: t('uploaddata.idle.types.tyres.desc'), icon: FileSpreadsheet, color: 'green' },
                 { val: 'fleet', label: t('uploaddata.idle.types.fleet.label'), desc: t('uploaddata.idle.types.fleet.desc'), icon: Package,         color: 'blue' },
-                { val: 'stock', label: t('uploaddata.idle.types.stock.label'), desc: t('uploaddata.idle.types.stock.desc'), icon: Layers,          color: 'purple' },
+                { val: 'stock', label: t('uploaddata.idle.types.stock.label'), desc: t('uploaddata.idle.types.stock.desc'), icon: Layers,          color: 'teal' },
                 { val: 'auto',  label: t('uploaddata.idle.types.auto.label'),  desc: t('uploaddata.idle.types.auto.desc'),  icon: Wand2,           color: 'yellow' },
               ].map(opt => {
                 const Icon = opt.icon
@@ -1344,7 +1344,7 @@ export default function UploadData() {
                 const colorMap = {
                   green:  { border: 'rgba(22,163,74,0.5)',  bg: 'rgba(22,163,74,0.1)',  text: 'text-green-500',  icon: 'text-green-500' },
                   blue:   { border: 'rgba(59,130,246,0.5)', bg: 'rgba(59,130,246,0.1)', text: 'text-blue-500',   icon: 'text-blue-500' },
-                  purple: { border: 'rgba(168,85,247,0.5)', bg: 'rgba(168,85,247,0.1)', text: 'text-purple-500', icon: 'text-purple-500' },
+                  teal:   { border: 'rgba(15,118,110,0.5)', bg: 'rgba(15,118,110,0.1)', text: 'text-teal-500',   icon: 'text-teal-500' },
                   yellow: { border: 'rgba(234,179,8,0.5)',  bg: 'rgba(234,179,8,0.08)', text: 'text-yellow-500', icon: 'text-yellow-500' },
                 }
                 const c = colorMap[opt.color]
@@ -1824,13 +1824,13 @@ export default function UploadData() {
 
             {/* Cleaning preview + optional AI model */}
             {cleanPreview && (
-              // Header stays hand-rolled to keep the purple Wand2, which pairs
-              // with the purple AI opt-in below it. ICON_TONE has no purple,
+              // Header stays hand-rolled to keep the blue Wand2, which pairs
+              // with the blue AI opt-in below it. ICON_TONE has no matching blue,
               // and quietly recolouring it to the brand accent would break
               // that pairing.
               <Card>
                 <div className="flex items-center gap-2 mb-3">
-                  <Wand2 size={15} className="text-purple-500" />
+                  <Wand2 size={15} className="text-blue-500" />
                   <h2 className="text-base font-semibold text-[var(--text-primary)]">Cleaning Preview</h2>
                 </div>
                 <div className="flex flex-wrap gap-4 text-sm mb-3">
@@ -1852,7 +1852,7 @@ export default function UploadData() {
                   </div>
                 )}
                 <label className="flex items-start gap-2 cursor-pointer border-t border-[var(--border-bright)] pt-3">
-                  <input type="checkbox" className="accent-purple-500 mt-0.5" checked={useAI} onChange={e => setUseAI(e.target.checked)} />
+                  <input type="checkbox" className="accent-blue-500 mt-0.5" checked={useAI} onChange={e => setUseAI(e.target.checked)} />
                   <span className="text-sm text-[var(--panel-ink-2)]">
                     Clean low-confidence rows with AI
                     <span className="text-xs text-[var(--panel-ink-4)] block">Routes the {cleanPreview.review.toLocaleString()} "need review" rows through the secure AI cleaning function for better category/risk. Uses AI tokens, off by default.</span>
@@ -1969,8 +1969,8 @@ export default function UploadData() {
 
             {/* Extra fields confirmation */}
             {result.extraColCount > 0 && (
-              <div className="bg-purple-500/10 border border-purple-500/40 rounded-xl p-4 mb-4 flex items-start gap-3">
-                <Info size={18} className="text-purple-500 flex-shrink-0 mt-0.5" />
+              <div className="bg-blue-500/10 border border-blue-500/40 rounded-xl p-4 mb-4 flex items-start gap-3">
+                <Info size={18} className="text-blue-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-[var(--text-primary)] font-medium">
                     {result.extraColCount} extra column{result.extraColCount !== 1 ? 's' : ''} saved as custom data, nothing was lost
@@ -1978,7 +1978,7 @@ export default function UploadData() {
                   <p className="text-sm text-[var(--panel-ink-3)] mt-0.5">
                     All columns that don't match a standard field are preserved in Custom Data. You can browse, search, export, or teach the system to recognise them permanently.
                   </p>
-                  <Link to="/custom-data" className="inline-flex items-center gap-1.5 mt-2 text-sm text-purple-500 hover:text-purple-200 underline">
+                  <Link to="/custom-data" className="inline-flex items-center gap-1.5 mt-2 text-sm text-blue-500 hover:text-blue-200 underline">
                     View Custom Data <ChevronRight size={14} aria-hidden="true" />
                   </Link>
                 </div>

@@ -44,8 +44,8 @@ const SEVERITY_BADGE = {
 }
 const STATUS_BADGE = {
   reported: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border border-[var(--input-border)]',
-  dispatched: 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40',
-  on_site: 'bg-violet-500/15 text-violet-300 border border-violet-500/40',
+  dispatched: 'bg-blue-500/15 text-blue-300 border border-blue-500/40',
+  on_site: 'bg-teal-500/15 text-teal-300 border border-teal-500/40',
   resolved: 'bg-green-500/15 text-green-300 border border-green-500/40',
   cancelled: 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
 }
@@ -152,7 +152,7 @@ export default function BreakdownCallouts() {
     { label: 'Open callouts', value: kv(kpi.openCount), icon: Siren, tone: 'text-amber-400' },
     { label: 'Critical open', value: kv(kpi.criticalOpenCount), icon: ShieldAlert, tone: 'text-red-400' },
     { label: 'Avg response', value: failed ? null : fmtMinutes(kpi.avgResponseMinutes), icon: Clock, tone: 'text-sky-400', sub: failed || kpi.responseSlaPct == null ? 'No dispatch times recorded' : `${kpi.responseSlaPct}% within ${RESPONSE_SLA_MIN} min` },
-    { label: 'Avg resolution', value: failed ? null : fmtMinutes(kpi.avgResolutionMinutes), icon: Timer, tone: 'text-violet-400' },
+    { label: 'Avg resolution', value: failed ? null : fmtMinutes(kpi.avgResolutionMinutes), icon: Timer, tone: 'text-blue-400' },
     { label: 'Callout cost', value: costValue, icon: Wallet, tone: 'text-[var(--text-primary)]', sub: kpi.mixedCurrency ? 'Per currency, never added together' : kpi.costs.length ? null : 'No costs recorded' },
   ]
 

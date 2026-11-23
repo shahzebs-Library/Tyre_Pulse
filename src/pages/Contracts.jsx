@@ -360,7 +360,7 @@ export default function Contracts() {
       label: 'Next renewal',
       value: kpis.nextRenewal ? `${kpis.nextRenewal.daysRemaining} days` : 'N/A',
       sub: kpis.nextRenewal ? kpis.nextRenewal.contract.title : 'None upcoming',
-      icon: Repeat, tone: 'text-violet-400',
+      icon: Repeat, tone: 'text-blue-400',
     },
   ]
 

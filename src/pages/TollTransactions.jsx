@@ -94,7 +94,7 @@ const DONUT_OPTS = {
   cutout: '62%',
   plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-muted)', boxWidth: 10, font: { size: 11 } } }, tooltip: TOOLTIP },
 }
-const SERIES = ['#22c55e', '#06b6d4', '#f59e0b', '#ef4444', '#f97316', '#3b82f6', '#a855f7', '#94a3b8']
+const SERIES = ['#22c55e', '#06b6d4', '#f59e0b', '#ef4444', '#f97316', '#3b82f6', '#0f766e', '#94a3b8']
 
 const NOT_RECORDED = <span className="cc-na">Not recorded</span>
 

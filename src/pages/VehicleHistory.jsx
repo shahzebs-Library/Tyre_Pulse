@@ -1554,7 +1554,7 @@ function AnalysisTab({ monthlyBuckets, categoryBreakdown, brandBreakdown, totalC
           { label: t('vehiclehistory.analysis.stats.totalCost'),      value: `${currency} ${Math.round(totalCost).toLocaleString()}`,    color: 'text-blue-400' },
           { label: t('vehiclehistory.analysis.stats.avgCostTyre'),   value: `${currency} ${Math.round(avgCostTyre).toLocaleString()}`,  color: 'text-green-400' },
           { label: t('vehiclehistory.analysis.stats.highRiskPct'),     value: `${highRiskPct.toFixed(1)}%`,                               color: highRiskPct > 30 ? 'text-red-400' : 'text-yellow-400' },
-          { label: avgKm !== null ? t('vehiclehistory.analysis.stats.avgKmTyre') : t('vehiclehistory.analysis.stats.kmData'), value: avgKm !== null ? `${avgKm.toLocaleString()} km` : t('vehiclehistory.analysis.stats.na'), color: 'text-purple-400' },
+          { label: avgKm !== null ? t('vehiclehistory.analysis.stats.avgKmTyre') : t('vehiclehistory.analysis.stats.kmData'), value: avgKm !== null ? `${avgKm.toLocaleString()} km` : t('vehiclehistory.analysis.stats.na'), color: 'text-blue-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-lg p-4 text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <p className={`text-xl font-bold ${color}`}>{value}</p>
@@ -1916,7 +1916,7 @@ function ForecastTab({ row, tyrePositions, currency, defaultCost, fleetRecord })
       {/* ── Section 2: Replacement Forecast ──────────────────────────────────── */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <TrendingUp size={15} className="text-purple-400" />
+          <TrendingUp size={15} className="text-blue-400" />
           <p className="text-sm font-semibold text-secondary">{t('vehiclehistory.forecast.replacementForecastTitle')}</p>
         </div>
 

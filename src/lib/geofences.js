@@ -14,7 +14,7 @@ export const ZONE_TYPE_META = {
   site: { label: 'Site', tint: 'text-sky-400' },
   restricted: { label: 'Restricted', tint: 'text-red-400' },
   service: { label: 'Service', tint: 'text-emerald-400' },
-  custom: { label: 'Custom', tint: 'text-violet-400' },
+  custom: { label: 'Custom', tint: 'text-slate-400' },
 }
 
 /** Parse a value to a finite number, or null when it isn't numeric. */

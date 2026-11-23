@@ -405,10 +405,10 @@ export default function ClaimsSummary() {
         <>
           {/* KPI tiles */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Kpi label="Total claims" value={a.total} sub={`${a.open} open, ${a.closed} closed`} icon={ShieldAlert} accent="text-indigo-400" />
+            <Kpi label="Total claims" value={a.total} sub={`${a.open} open, ${a.closed} closed`} icon={ShieldAlert} accent="text-blue-400" />
             <Kpi label="Delayed" value={a.delayed} sub="past expected release" icon={Clock} tone={a.delayed ? 'text-red-400' : 'text-emerald-500'} accent={a.delayed ? 'text-red-400' : 'text-emerald-500'} />
             <Kpi label="Total claimed" value={money(a.claimed)} sub={`avg ${money(a.avgClaim)}`} icon={DollarSign} accent="text-blue-400" />
-            <Kpi label="Approved" value={money(a.approved)} sub={a.approvalRate == null ? 'N/A' : `${a.approvalRate}% of claimed`} icon={ShieldCheck} accent="text-violet-400" />
+            <Kpi label="Approved" value={money(a.approved)} sub={a.approvalRate == null ? 'N/A' : `${a.approvalRate}% of claimed`} icon={ShieldCheck} accent="text-blue-400" />
             <Kpi label="Recovered" value={money(a.recovered)} sub={a.recoveryRate == null ? 'N/A' : `${a.recoveryRate}% recovery`} icon={TrendingUp} tone="text-emerald-500" accent="text-emerald-500" />
             <Kpi label="Net exposure" value={money(a.netExposure)} sub="after recoveries" icon={Wallet} tone={a.netExposure ? 'text-red-400' : 'text-emerald-500'} accent="text-red-400" />
             <Kpi label="Outstanding" value={money(a.outstanding)} sub="approved, not recovered" icon={Percent} tone={a.outstanding ? 'text-amber-500' : 'text-emerald-500'} accent="text-amber-500" />

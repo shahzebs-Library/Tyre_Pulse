@@ -65,7 +65,7 @@ function CountryBlock({ entry, compact, grain }) {
       })),
       {
         label: 'Forecast', type: 'line', data: [...histLabels.map(() => null), ...t.forecast.map((y) => y.total)],
-        borderColor: '#e879f9', borderDash: [6, 4], pointRadius: 3, borderWidth: 2, fill: false,
+        borderColor: '#475569', borderDash: [6, 4], pointRadius: 3, borderWidth: 2, fill: false,
       },
     ],
   }
@@ -88,7 +88,7 @@ function CountryBlock({ entry, compact, grain }) {
             {grain === 'month' ? 'MoM' : grain === 'quarter' ? 'QoQ' : 'YoY'} {pct(yoyPct)}
           </span>
           {fc1 && (
-            <span className="inline-flex items-center gap-1 text-fuchsia-300"><Sparkles className="w-3.5 h-3.5" /> {fc1.label} ~ {fmt(fc1.total, cur)}</span>
+            <span className="inline-flex items-center gap-1 text-slate-300"><Sparkles className="w-3.5 h-3.5" /> {fc1.label} ~ {fmt(fc1.total, cur)}</span>
           )}
         </div>
       </div>

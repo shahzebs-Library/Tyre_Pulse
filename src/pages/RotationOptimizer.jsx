@@ -459,7 +459,7 @@ export default function RotationOptimizer() {
                     </span>
                     <span className="ml-auto flex flex-wrap items-center gap-1.5">
                       <span className="text-[11px] px-1.5 py-0.5 rounded bg-green-500/15 text-green-300 border border-green-500/40">+{s.tread_delta_mm}mm, about {Number(s.expected_benefit_km).toLocaleString()} km</span>
-                      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/40" title="Impact score (0 to 100)"><Zap size={11} aria-hidden="true" /> {s.impact_score}</span>
+                      <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/40" title="Impact score (0 to 100)"><Zap size={11} aria-hidden="true" /> {s.impact_score}</span>
                     </span>
                   </div>
                 ))}

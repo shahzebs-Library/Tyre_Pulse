@@ -39,10 +39,10 @@ import { isMissingRelation } from '../lib/api/_client'
 
 // ── Entity metadata (labels, icons, live-result shaping) ─────────────────────
 const ENTITY_META = {
-  all:          { label: 'All entities', short: 'All',          icon: Layers,         tone: 'text-indigo-400' },
+  all:          { label: 'All entities', short: 'All',          icon: Layers,         tone: 'text-blue-400' },
   assets:       { label: 'Assets',        short: 'Assets',       icon: Truck,          tone: 'text-sky-400' },
   tyres:        { label: 'Tyres',         short: 'Tyres',        icon: Package,        tone: 'text-amber-400' },
-  work_orders:  { label: 'Work orders',   short: 'Work orders',  icon: Wrench,         tone: 'text-violet-400' },
+  work_orders:  { label: 'Work orders',   short: 'Work orders',  icon: Wrench,         tone: 'text-slate-400' },
   inspections:  { label: 'Inspections',   short: 'Inspections',  icon: ClipboardCheck, tone: 'text-green-400' },
 }
 const ENTITY_ORDER = ['all', 'assets', 'tyres', 'work_orders', 'inspections']
@@ -62,7 +62,7 @@ const RESULT_GROUPS = [
     tags: (r) => [r.asset_no, r.position, r.risk_level].filter(Boolean),
   },
   {
-    key: 'workOrders', entity: 'work_orders', icon: Wrench, tone: 'text-violet-400',
+    key: 'workOrders', entity: 'work_orders', icon: Wrench, tone: 'text-slate-400',
     title: (r) => r.work_order_no || 'Work order',
     sub: (r) => [r.work_type, r.workshop_name].filter(Boolean).join(', ') || 'N/A',
     tags: (r) => [r.asset_no, r.status, r.priority].filter(Boolean),
@@ -227,7 +227,7 @@ export default function AdvancedSearch() {
       label: 'Last recorded matches', value: failed || kpi.lastRecordedMatches == null ? null : kpi.lastRecordedMatches.toLocaleString(),
       icon: Database, tone: 'text-green-400', sub: failed ? null : `${kpi.recordedCount} of ${kpi.totalSaved} searches have a count`,
     },
-    { label: 'Never run', value: kv(kpi.neverRun), icon: Play, tone: 'text-violet-400' },
+    { label: 'Never run', value: kv(kpi.neverRun), icon: Play, tone: 'text-slate-400' },
     { label: `Not run in ${STALE_DAYS}+ days`, value: kv(kpi.stale), icon: History, tone: 'text-orange-400' },
   ]
 
@@ -340,7 +340,7 @@ export default function AdvancedSearch() {
       id: 'actions', header: '', enableSorting: false, size: 160, meta: { export: false },
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-1">
-          <button type="button" onClick={(e) => { e.stopPropagation(); rerunSaved(row.original) }} className={`${ICON_BTN} hover:text-indigo-400`} aria-label={`Re-run ${row.original.name}`}><Play size={15} /></button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); rerunSaved(row.original) }} className={`${ICON_BTN} hover:text-blue-400`} aria-label={`Re-run ${row.original.name}`}><Play size={15} /></button>
           <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} className={`${ICON_BTN} hover:text-[var(--text-primary)]`} aria-label={`Edit ${row.original.name}`}><Pencil size={15} /></button>
           <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDelete(row.original) }} className={`${ICON_BTN} hover:text-red-400`} aria-label={`Delete ${row.original.name}`}><Trash2 size={15} /></button>
         </div>
@@ -407,7 +407,7 @@ export default function AdvancedSearch() {
       {/* ── Live global search builder ─────────────────────────────────────── */}
       <section className="card space-y-4" aria-labelledby="global-query-heading">
         <div className="flex flex-wrap items-center gap-2">
-          <Zap size={16} className="text-indigo-400" aria-hidden="true" />
+          <Zap size={16} className="text-blue-400" aria-hidden="true" />
           <h2 id="global-query-heading" className="text-sm font-semibold text-[var(--text-primary)]">Global query builder</h2>
           <span className="text-xs text-[var(--text-muted)]">Live search across the fleet core tables</span>
         </div>

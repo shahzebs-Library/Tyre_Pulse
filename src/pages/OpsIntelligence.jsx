@@ -65,8 +65,8 @@ const SEVERITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#64748b' }
 const CATEGORY_COLOR = {
   aged_tyre: '#ef4444',
   low_tread: '#f97316',
-  high_cpk: '#8b5cf6',
-  recent_failure: '#ec4899',
+  high_cpk: '#0f766e',
+  recent_failure: '#475569',
   open_work_order: '#3b82f6',
 }
 

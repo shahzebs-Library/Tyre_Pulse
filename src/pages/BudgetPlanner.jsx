@@ -657,7 +657,7 @@ export default function BudgetPlanner() {
       'Warning': 'bg-amber-900/60 text-amber-400 border border-amber-800',
       'Over Budget': 'bg-red-900/60 text-red-400 border border-red-800',
       'Complete': 'bg-blue-900/60 text-blue-400 border border-blue-800',
-      'Active': 'bg-purple-900/60 text-purple-400 border border-purple-800',
+      'Active': 'bg-teal-900/60 text-teal-400 border border-teal-800',
       'Over': 'bg-red-900/60 text-red-400 border border-red-800',
       'Pending': 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
       'No Budget': 'bg-[var(--input-bg)] text-[var(--text-muted)] border border-[var(--input-border)]',
@@ -944,7 +944,7 @@ export default function BudgetPlanner() {
         ].map((kpi, i) => {
           const colorMap = {
             blue: 'text-blue-400 bg-blue-900/20 border-blue-900',
-            purple: 'text-purple-400 bg-purple-900/20 border-purple-900',
+            purple: 'text-teal-400 bg-teal-900/20 border-teal-900',
             green: 'text-green-400 bg-green-900/20 border-green-900',
             red: 'text-red-400 bg-red-900/20 border-red-900',
             amber: 'text-amber-400 bg-amber-900/20 border-amber-900',
@@ -1010,7 +1010,7 @@ export default function BudgetPlanner() {
       {/* ── Quarterly Cards ── */}
       <div>
         <h2 className="text-[var(--text-primary)] font-semibold mb-3 flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-purple-400" />
+          <Calendar className="w-5 h-5 text-teal-400" />
           {t('budgetplanner.quarterly.heading')}
         </h2>
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
@@ -1153,7 +1153,7 @@ export default function BudgetPlanner() {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.25 }}
         className="card">
         <h2 className="text-[var(--text-primary)] font-semibold mb-5 flex items-center gap-2">
-          <Sliders className="w-5 h-5 text-purple-400" />
+          <Sliders className="w-5 h-5 text-teal-400" />
           {t('budgetplanner.whatIf.heading')}
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -1197,7 +1197,7 @@ export default function BudgetPlanner() {
                 step="1"
                 value={volumeChange}
                 onChange={e => setVolumeChange(Number(e.target.value))}
-                className="w-full h-2 bg-[var(--input-bg)] rounded-full appearance-none cursor-pointer accent-purple-500"
+                className="w-full h-2 bg-[var(--input-bg)] rounded-full appearance-none cursor-pointer accent-green-500"
               />
               <div className="flex justify-between text-xs text-[var(--text-dim)] mt-1">
                 <span>{t('budgetplanner.whatIf.rangeFewer')}</span>

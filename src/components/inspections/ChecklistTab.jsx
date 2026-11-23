@@ -128,7 +128,7 @@ export default function ChecklistTab({
                 </span>
               )}
               {clPhotos.length > 0 && (
-                <span className="text-xs px-2 py-1 rounded-full bg-purple-900/30 text-purple-400 border border-purple-700/40">
+                <span className="text-xs px-2 py-1 rounded-full bg-teal-900/30 text-teal-400 border border-teal-700/40">
                   {t('inspections.saved.badgePhotos', { count: clPhotos.length })}
                 </span>
               )}
@@ -169,7 +169,7 @@ export default function ChecklistTab({
                 <button
                   onClick={() => setShowApprovalForm(v => !v)}
                   className="btn-secondary flex items-center gap-2 text-sm min-h-[44px]"
-                  style={{ borderColor: '#6366f1', color: '#6366f1' }}
+                  style={{ borderColor: '#2a78d6', color: '#2a78d6' }}
                 >
                   <Send size={14} /> {t('inspections.saved.sendForApproval')}
                 </button>
@@ -182,7 +182,7 @@ export default function ChecklistTab({
 
             {/* Approval workflow panel */}
             {showApprovalForm && !clOffline && (
-              <div className="mt-3 p-4 rounded-xl" style={{ background: 'var(--panel-3)', border: '1px solid #4338ca' }}>
+              <div className="mt-3 p-4 rounded-xl" style={{ background: 'var(--panel-3)', border: '1px solid #1d4ed8' }}>
                 <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
                   <Send size={14} /> {t('inspections.approval.title')}
                 </h4>
@@ -206,7 +206,7 @@ export default function ChecklistTab({
                     disabled={!clApproverEmail.trim() || clSendingEmail}
                     onClick={onSendForApproval}
                     className="btn-primary text-sm w-full disabled:opacity-50"
-                    style={{ background: '#4338ca' }}
+                    style={{ background: '#1d4ed8' }}
                   >
                     {clSendingEmail
                       ? <><span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" /> {t('inspections.approval.sending')}</>
@@ -219,7 +219,7 @@ export default function ChecklistTab({
 
             {clApprovalStatus === 'pending_approval' && !showApprovalForm && (
               <div className="mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-sm"
-                style={{ background: 'var(--panel-3)', border: '1px solid #4338ca', color: '#4f46e5' }}>
+                style={{ background: 'var(--panel-3)', border: '1px solid #1d4ed8', color: '#2a78d6' }}>
                 <Send size={14} />
                 <span>
                   {clEmailSent ? t('inspections.approval.sentTo') : t('inspections.approval.awaiting')}{' '}
@@ -504,7 +504,7 @@ export default function ChecklistTab({
                       type="button"
                       onClick={() => galleryInputRef.current?.click()}
                       className="flex items-center gap-1.5 px-3 min-h-[44px] rounded-lg text-xs font-semibold bg-[var(--surface-2)] text-[var(--text-primary)]"
-                      style={{ border: '1.5px solid #4338ca' }}
+                      style={{ border: '1.5px solid #1d4ed8' }}
                     >
                       <ImageIcon size={13} /> {t('inspections.form.gallery')}
                     </button>

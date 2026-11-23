@@ -34,7 +34,7 @@ import {
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend)
 
 // Palette for scenario series (aligned with the app's chart accents).
-const SERIES = ['#6366f1', '#22c55e', '#f59e0b', '#0ea5e9', '#a855f7', '#ef4444', '#14b8a6', '#ec4899']
+const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#475569', '#008300', '#e34948', '#0891b2']
 
 const SHARED_FIELDS = [
   ['Fleet size (vehicles)', 'fleet_size', '1'],
@@ -142,7 +142,7 @@ export default function CostScenarioPlanner() {
       {
         label: 'Annual tyre cost',
         data: r.rows.map((x) => x.annualTyreCost),
-        backgroundColor: '#6366f1',
+        backgroundColor: '#2a78d6',
         borderRadius: 4,
       },
       {

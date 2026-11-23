@@ -129,7 +129,7 @@ const TONE = {
   warning: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   orange:  'bg-orange-500/15 text-orange-400 border-orange-500/30',
   danger:  'bg-red-500/15 text-red-400 border-red-500/30',
-  purple:  'bg-purple-500/15 text-purple-400 border-purple-500/30',
+  purple:  'bg-slate-500/15 text-slate-400 border-slate-500/30',
   quiet:   'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
 
@@ -191,7 +191,7 @@ function applyDatePreset(days) {
 const KPI_ACCENT = {
   blue: 'text-blue-400 bg-blue-500/10', green: 'text-green-400 bg-green-500/10',
   yellow: 'text-yellow-400 bg-yellow-500/10', orange: 'text-orange-400 bg-orange-500/10',
-  red: 'text-red-400 bg-red-500/10', purple: 'text-purple-400 bg-purple-500/10',
+  red: 'text-red-400 bg-red-500/10', purple: 'text-slate-400 bg-slate-500/10',
 }
 function KpiCard({ icon: Icon, label, value, sub, color = 'blue' }) {
   return (
@@ -949,7 +949,7 @@ export default function WorkshopManagement({ embedded = false }) {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {[
                     { label: 'Total Labour Cost', value: split.labour, pct: split.labourPct, bar: 'bg-blue-500', icon: User, iconColor: 'text-blue-400' },
-                    { label: 'Total Parts Cost', value: split.parts, pct: split.partsPct, bar: 'bg-purple-500', icon: Package, iconColor: 'text-purple-400' },
+                    { label: 'Total Parts Cost', value: split.parts, pct: split.partsPct, bar: 'bg-slate-500', icon: Package, iconColor: 'text-slate-400' },
                     { label: 'Total Workshop Cost', value: split.total, pct: split.total > 0 ? 100 : null, bar: 'bg-green-500', icon: DollarSign, iconColor: 'text-green-400' },
                   ].map(c => (
                     <div key={c.label} className="bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-5">

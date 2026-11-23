@@ -71,7 +71,7 @@ const DONUT_OPTS = {
 const SEVERITY_COLORS = {
   Critical: '#ef4444', High: '#f97316', Medium: '#eab308', Low: '#22c55e', Info: '#38bdf8',
 }
-const STATUS_PALETTE = ['#3b82f6', '#f59e0b', '#22c55e', '#8b5cf6', '#06b6d4', '#ef4444', '#ec4899', '#64748b']
+const STATUS_PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#475569', '#008300', '#e34948', '#0891b2']
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 // Global dashboard filters (resolveDashboardFilters output) are threaded into
@@ -643,7 +643,7 @@ function TopTasksWidget({ rows }) {
 
 // ── Widgets added for the builder mockup ──────────────────────────────────────
 const WO_STATUS_COLORS = {
-  Completed: '#22c55e', 'In Progress': '#3b82f6', New: '#f59e0b', Assigned: '#8b5cf6',
+  Completed: '#22c55e', 'In Progress': '#3b82f6', New: '#f59e0b', Assigned: '#0891b2',
   'Waiting for Parts': '#f97316', 'Waiting for Approval': '#eab308', 'Quality Inspection': '#06b6d4',
   Cancelled: '#94a3b8', 'On Hold': '#64748b', Other: '#cbd5e1',
 }

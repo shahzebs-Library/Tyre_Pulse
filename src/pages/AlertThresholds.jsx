@@ -17,7 +17,7 @@ import { selectableMetrics } from '../lib/alertThresholdMetrics'
 const METRICS = [
   { value: 'tread_depth',           label: 'Tread Depth',                unit: 'mm',   icon: Layers,        color: 'orange' },
   { value: 'pressure',              label: 'Tyre Pressure',              unit: 'PSI',  icon: Gauge,         color: 'blue' },
-  { value: 'tyre_age_days',         label: 'Tyre Age',                   unit: 'days', icon: Calendar,      color: 'purple' },
+  { value: 'tyre_age_days',         label: 'Tyre Age',                   unit: 'days', icon: Calendar,      color: 'teal' },
   { value: 'cpk',                   label: 'Cost Per KM (CPK)',          unit: 'cost', icon: DollarSign,    color: 'green' },
   { value: 'inspection_overdue_days', label: 'Days Since Last Inspection', unit: 'days', icon: Clock,       color: 'yellow' },
 ]
@@ -46,7 +46,7 @@ const NEW_RULE_PRESETS = selectableMetrics(PRESETS)
 const METRIC_BORDER = {
   tread_depth:             'border-orange-500',
   pressure:                'border-blue-500',
-  tyre_age_days:           'border-purple-500',
+  tyre_age_days:           'border-teal-500',
   cpk:                     'border-green-500',
   inspection_overdue_days: 'border-yellow-500',
 }
@@ -54,7 +54,7 @@ const METRIC_BORDER = {
 const METRIC_BADGE = {
   tread_depth:             'bg-orange-500/20 text-orange-400',
   pressure:                'bg-blue-500/20 text-blue-400',
-  tyre_age_days:           'bg-purple-500/20 text-purple-400',
+  tyre_age_days:           'bg-teal-500/20 text-teal-400',
   cpk:                     'bg-green-500/20 text-green-400',
   inspection_overdue_days: 'bg-yellow-500/20 text-yellow-400',
 }
@@ -62,7 +62,7 @@ const METRIC_BADGE = {
 const METRIC_ICON_COLOR = {
   tread_depth:             'text-orange-400',
   pressure:                'text-blue-400',
-  tyre_age_days:           'text-purple-400',
+  tyre_age_days:           'text-teal-400',
   cpk:                     'text-green-400',
   inspection_overdue_days: 'text-yellow-400',
 }

@@ -171,7 +171,7 @@ export default function SlaDashboard() {
     { label: 'Compliance', value: failed || kpi.complianceRate == null ? null : `${kpi.complianceRate}%`, icon: Percent, tone: 'text-sky-400', sub: failed ? null : kpi.complianceRate == null ? 'Nothing decided yet' : `${kpi.met} met of ${kpi.decided}` },
     { label: 'Breached', value: kv(kpi.breached), icon: AlertOctagon, tone: 'text-red-400', sub: failed ? null : `${kpi.openBreached} still open` },
     { label: 'At risk', value: kv(kpi.atRisk), icon: Timer, tone: 'text-amber-400', sub: 'Under 20% of the window left' },
-    { label: 'Avg resolution', value: failed ? null : fmtHours(kpi.avgResolutionHours), icon: Hourglass, tone: 'text-violet-400', sub: failed ? null : `${kpi.resolutionSample} resolved with a start time` },
+    { label: 'Avg resolution', value: failed ? null : fmtHours(kpi.avgResolutionHours), icon: Hourglass, tone: 'text-blue-400', sub: failed ? null : `${kpi.resolutionSample} resolved with a start time` },
     { label: 'No due date', value: kv(kpi.noDueDate), icon: CalendarOff, tone: kpi.noDueDate ? 'text-orange-400' : 'text-green-400', sub: 'Open SLAs that cannot be judged' },
   ]
 

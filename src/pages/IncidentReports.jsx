@@ -146,7 +146,7 @@ export default function IncidentReports() {
     { label: 'Open / investigating', value: kpi.open, icon: Inbox, tone: 'text-sky-400' },
     { label: 'High / critical', value: kpi.highCritical, icon: ShieldAlert, tone: kpi.highCritical > 0 ? 'text-red-400' : 'text-[var(--text-muted)]' },
     { label: 'Resolved / closed', value: kpi.resolved, icon: CheckCircle2, tone: 'text-green-400' },
-    { label: 'Resolution rate', value: kpi.resolutionRatePct == null ? 'N/A' : `${kpi.resolutionRatePct}%`, icon: Percent, tone: 'text-violet-400' },
+    { label: 'Resolution rate', value: kpi.resolutionRatePct == null ? 'N/A' : `${kpi.resolutionRatePct}%`, icon: Percent, tone: 'text-slate-400' },
     { label: 'Avg open age', value: kpi.avgOpenAgeDays == null ? 'N/A' : `${kpi.avgOpenAgeDays}d`, sub: kpi.oldestOpenDays == null ? 'no dated open incidents' : `oldest ${kpi.oldestOpenDays}d`, icon: Timer, tone: 'text-amber-400' },
   ]
 

@@ -11,7 +11,7 @@ export const EVENT_TYPE_META = {
   rotation:    { label: 'Rotation',    color: '#3b82f6' },
   repair:      { label: 'Repair',      color: '#ef4444' },
   inflation:   { label: 'Inflation',   color: '#22c55e' },
-  inspection:  { label: 'Inspection',  color: '#8b5cf6' },
+  inspection:  { label: 'Inspection',  color: '#0f766e' },
   replacement: { label: 'Replacement', color: '#f59e0b' },
   other:       { label: 'Other',       color: '#64748b' },
 }

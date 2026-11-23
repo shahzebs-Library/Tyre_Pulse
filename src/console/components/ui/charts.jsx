@@ -29,8 +29,8 @@ ChartJS.register(LineElement, PointElement, BarElement, ArcElement, CategoryScal
 /** Validated series colors: brand orange first, then hues that stay apart for
  *  colour-blind readers in both themes. Assigned in this order, never cycled. */
 export const SERIES = {
-  dark:  ['#fb923c', '#60a5fa', '#34d399', '#c084fc', '#f472b6', '#facc15'],
-  light: ['#ea580c', '#2563eb', '#059669', '#9333ea', '#db2777', '#ca8a04'],
+  dark:  ['#fb923c', '#60a5fa', '#34d399', '#94a3b8', '#22d3ee', '#facc15'],
+  light: ['#ea580c', '#2563eb', '#059669', '#475569', '#0891b2', '#ca8a04'],
 }
 
 /** Status colors are reserved for state and always ship with a text label. */

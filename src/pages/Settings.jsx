@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import * as settingsApi from '../lib/api/settings'
+import { decodeConfigRows } from '../lib/configurationStore'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import LanguageSwitcher from '../components/LanguageSwitcher'
@@ -38,7 +39,7 @@ import {
 } from '../lib/accountRecovery'
 
 const ROLE_BADGE = {
-  Admin:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
+  Admin:   'bg-teal-900/50 text-teal-300 border border-teal-700/50',
   Manager: 'bg-blue-900/50 text-blue-300 border border-blue-700/50',
   Viewer:  'bg-[var(--surface-2)] text-[var(--text-secondary)] border border-[var(--border-bright)]',
 }
@@ -318,12 +319,7 @@ export default function Settings() {
     try {
       const { data, error } = await settingsApi.listSettings()
       if (error) throw error
-      const map = {}
-      for (const { key, value } of data ?? []) {
-        if (typeof value === 'string') {
-          try { map[key] = JSON.parse(value) } catch { map[key] = value }
-        } else map[key] = value
-      }
+      const map = decodeConfigRows(data)
       setAppSettings({ cost_per_tyre: '', company_name: '', currency: '', ...map })
       setAppLoadFailed(false)
       setAppMsg(data?.length ? '' : 'Organisation settings have not been configured. Enter verified values before saving.')
@@ -442,7 +438,7 @@ export default function Settings() {
   async function saveAppSettings(e) {
     e.preventDefault()
     if (appLoadFailed) return
-    if (!appSettings.company_name.trim() || !['SAR', 'AED', 'EGP', 'USD'].includes(appSettings.currency) || appSettings.cost_per_tyre === '' || !Number.isFinite(Number(appSettings.cost_per_tyre)) || Number(appSettings.cost_per_tyre) < 0) {
+    if (!String(appSettings.company_name ?? "").trim() || !['SAR', 'AED', 'EGP', 'USD'].includes(appSettings.currency) || appSettings.cost_per_tyre === '' || !Number.isFinite(Number(appSettings.cost_per_tyre)) || Number(appSettings.cost_per_tyre) < 0) {
       setAppMsg('Enter a company name, currency and valid tyre cost before saving.')
       return
     }
@@ -451,8 +447,8 @@ export default function Settings() {
     try {
       const result = await settingsApi.saveAppSettings([
         { key: 'cost_per_tyre', value: String(appSettings.cost_per_tyre) },
-        { key: 'company_name', value: JSON.stringify(appSettings.company_name) },
-        { key: 'currency', value: JSON.stringify(appSettings.currency) },
+        { key: 'company_name', value: String(appSettings.company_name).trim() },
+        { key: 'currency', value: String(appSettings.currency) },
       ])
       if (result.error) throw result.error
       await refreshSettings()

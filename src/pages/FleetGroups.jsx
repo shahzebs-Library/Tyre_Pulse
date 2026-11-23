@@ -57,7 +57,7 @@ const EMPTY_FORM = {
 const TYPE_TONE = {
   holding: 'info', subsidiary: 'fg-purple', division: 'good', depot: 'orange', cost_center: 'warn', custom: 'muted',
 }
-const DONUT_COLORS = ['#16a34a', '#f59e0b', '#0d9488', '#2563eb', '#db2777', '#eab308', '#92400e', '#0f766e', '#7c3aed', '#64748b']
+const DONUT_COLORS = ['#16a34a', '#f59e0b', '#0d9488', '#2563eb', '#475569', '#eab308', '#92400e', '#0f766e', '#0891b2', '#64748b']
 const MEMBERS_RULE = 'Fleet groups store an asset count, not a member list. Members are the assets registered at the site whose name or code matches the group (a parent group includes the sites of every group beneath it).'
 const ISSUE_RULE = 'Open issues on member assets: open corrective actions, fitted tyres rated Critical, and active maintenance plans past their due date. Groups with no matched site cannot be assessed.'
 const VIEWS_KEY = 'fleetGroups.views.v1'
@@ -858,7 +858,7 @@ export default function FleetGroups() {
               <textarea id="fg-notes" className="input w-full min-h-[70px] resize-y" placeholder="e.g. consolidated cost centre for northern depots" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />
             </div>
             <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer min-h-[44px]">
-              <input type="checkbox" className="accent-indigo-500 h-4 w-4" checked={form.active} onChange={(e) => set('active', e.target.checked)} />
+              <input type="checkbox" className="accent-green-600 h-4 w-4" checked={form.active} onChange={(e) => set('active', e.target.checked)} />
               Active group
             </label>
             {formError && (

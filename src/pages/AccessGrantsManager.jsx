@@ -45,7 +45,7 @@ import {
 } from '../lib/accessGrantsAnalytics'
 
 const ROLE_TINT = {
-  Admin: 'text-purple-500', Manager: 'text-blue-500', Director: 'text-indigo-500',
+  Admin: 'text-teal-500', Manager: 'text-blue-500', Director: 'text-slate-500',
   Reporter: 'text-cyan-500', Inspector: 'text-green-500', 'Tyre Man': 'text-amber-500',
   Driver: 'text-[var(--text-secondary)]',
 }
@@ -137,11 +137,11 @@ function ModulePicker({ value, onPick }) {
                     aria-pressed={on}
                     className={`flex items-center gap-2 px-2.5 py-1.5 min-h-[44px] rounded-lg border text-left text-sm transition-colors ${
                       on
-                        ? 'border-indigo-500/50 bg-indigo-500/10 text-[var(--text-primary)]'
+                        ? 'border-blue-500/50 bg-blue-500/10 text-[var(--text-primary)]'
                         : 'border-[var(--input-border)] text-[var(--text-secondary)] hover:bg-[var(--input-bg)]'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border shrink-0 ${on ? 'border-indigo-400 bg-indigo-500' : 'border-[var(--input-border)]'}`}>
+                    <span className={`w-3.5 h-3.5 rounded-full border shrink-0 ${on ? 'border-blue-400 bg-blue-500' : 'border-[var(--input-border)]'}`}>
                       {on && <Check size={11} className="text-white" />}
                     </span>
                     <span className="truncate">{m.label}</span>
@@ -394,7 +394,7 @@ export default function AccessGrantsManager() {
         {[
           { label: 'Users', value: Array.isArray(users) && !usersError ? dirSummary.users : 'N/A', icon: Users, tone: 'text-[var(--text-primary)]' },
           { label: 'Super Admins', value: Array.isArray(users) && !usersError ? dirSummary.superAdmins : 'N/A', icon: Crown, tone: 'text-amber-500' },
-          { label: 'Roles in use', value: Array.isArray(users) && !usersError ? dirSummary.roles : 'N/A', icon: ShieldCheck, tone: 'text-indigo-500' },
+          { label: 'Roles in use', value: Array.isArray(users) && !usersError ? dirSummary.roles : 'N/A', icon: ShieldCheck, tone: 'text-blue-500' },
           { label: 'Selected user overrides', value: selectedUser ? (gSummary ? gSummary.liveGrants + gSummary.liveRevokes : 'N/A') : 'None selected', icon: KeyRound, tone: 'text-sky-500' },
         ].map((k) => (
           <div key={k.label} className="card min-w-0">
@@ -478,7 +478,7 @@ export default function AccessGrantsManager() {
                         onClick={() => selectUser(u.id)}
                         aria-pressed={on}
                         className={`w-full text-left px-3 py-2.5 min-h-[44px] flex items-center gap-2.5 border-b border-[var(--input-border)]/50 transition-colors ${
-                          on ? 'bg-indigo-500/10' : 'hover:bg-[var(--input-bg)]/50'
+                          on ? 'bg-blue-500/10' : 'hover:bg-[var(--input-bg)]/50'
                         }`}
                       >
                         <div className="w-8 h-8 rounded-full bg-[var(--input-bg)] flex items-center justify-center shrink-0 text-xs font-semibold text-[var(--text-secondary)]">
@@ -494,7 +494,7 @@ export default function AccessGrantsManager() {
                         <span className={`text-[11px] font-medium shrink-0 ${ROLE_TINT[u.role] || 'text-[var(--text-secondary)]'}`}>
                           {u.role || 'No role'}
                         </span>
-                        <ChevronRight size={14} aria-hidden="true" className={`shrink-0 ${on ? 'text-indigo-500' : 'text-[var(--text-muted)]'}`} />
+                        <ChevronRight size={14} aria-hidden="true" className={`shrink-0 ${on ? 'text-blue-500' : 'text-[var(--text-muted)]'}`} />
                       </button>
                     </li>
                   )
@@ -666,7 +666,7 @@ export default function AccessGrantsManager() {
               <section className="space-y-2" aria-labelledby="agm-current">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 id="agm-current" className="text-sm font-semibold text-[var(--text-primary)] inline-flex items-center gap-1.5">
-                    <KeyRound size={15} className="text-indigo-500" aria-hidden="true" /> Current grants
+                    <KeyRound size={15} className="text-blue-500" aria-hidden="true" /> Current grants
                     {Array.isArray(grants) && !grantsError && <span className="text-[var(--text-muted)] font-normal">({grants.length})</span>}
                   </h3>
                   <div className="flex items-center gap-1">

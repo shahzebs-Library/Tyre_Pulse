@@ -38,7 +38,7 @@ export const EVIDENCE_CLASSES = [
   { id: 'PROVISIONAL', label: 'Provisional', tone: '#d97706', note: 'Fitment odometer is the placeholder 1, or the purchase price is an estimate.' },
   { id: 'MISSING_EVIDENCE', label: 'Missing evidence', tone: '#6b7280', note: 'No real serial and no job card that exists in the job card register.' },
   { id: 'CONFLICTING', label: 'Conflicting', tone: '#dc2626', note: 'Reversed or future dates, overlapping fitment, two active tyres on one wheel, a serial active on two vehicles, or a life above the class cap.' },
-  { id: 'DUPLICATE', label: 'Duplicate copy', tone: '#7c3aed', note: 'Identical content to an earlier-loaded row. Only the copies are counted.' },
+  { id: 'DUPLICATE', label: 'Duplicate copy', tone: '#475569', note: 'Identical content to an earlier-loaded row. Only the copies are counted.' },
 ]
 export const CLASS_BY_ID = Object.fromEntries(EVIDENCE_CLASSES.map((c) => [c.id, c]))
 

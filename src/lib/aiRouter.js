@@ -22,7 +22,7 @@ export const AGENT_LABELS = {
 export const AGENT_COLORS = {
   [AGENT_TYPES.ANALYST]:       { bg: 'bg-blue-900/40', text: 'text-blue-300', border: 'border-blue-700/50' },
   [AGENT_TYPES.TYRE_ENGINEER]: { bg: 'bg-amber-900/40', text: 'text-amber-300', border: 'border-amber-700/50' },
-  [AGENT_TYPES.QA_DATA]:       { bg: 'bg-purple-900/40', text: 'text-purple-300', border: 'border-purple-700/50' },
+  [AGENT_TYPES.QA_DATA]:       { bg: 'bg-slate-900/40', text: 'text-slate-300', border: 'border-slate-700/50' },
   [AGENT_TYPES.PLANNER]:       { bg: 'bg-emerald-900/40', text: 'text-emerald-300', border: 'border-emerald-700/50' },
   [AGENT_TYPES.SAFETY]:        { bg: 'bg-red-900/40', text: 'text-red-300', border: 'border-red-700/50' },
   [AGENT_TYPES.PROCUREMENT]:   { bg: 'bg-teal-900/40', text: 'text-teal-300', border: 'border-teal-700/50' },

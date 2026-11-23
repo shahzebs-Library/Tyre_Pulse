@@ -39,7 +39,7 @@ ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Le
 
 const TYPE_STYLES = {
   pre_trip: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
-  post_trip: 'bg-violet-900/40 text-violet-300 border border-violet-700/50',
+  post_trip: 'bg-slate-900/40 text-slate-300 border border-slate-700/50',
 }
 const STATUS_STYLES = {
   open: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
@@ -299,7 +299,7 @@ export default function Dvir() {
     { label: 'Unsafe to operate', value: na(k.unsafe), sub: `${k.openUnsafe} still open`, icon: Truck, tone: k.unsafe > 0 ? 'text-amber-400' : 'text-green-400' },
     { label: 'Open', value: na(k.open), sub: k.oldestOpenDays == null ? 'no dated open report' : `oldest ${k.oldestOpenDays} days`, icon: Clock, tone: 'text-sky-400' },
     { label: 'Clean reports', value: na(k.clean), sub: 'no defects found', icon: CheckCircle2, tone: 'text-green-400' },
-    { label: 'Repeat-defect assets', value: na(k.repeatDefectAssets), sub: '2 or more defect reports', icon: Repeat, tone: 'text-indigo-400' },
+    { label: 'Repeat-defect assets', value: na(k.repeatDefectAssets), sub: '2 or more defect reports', icon: Repeat, tone: 'text-blue-400' },
     { label: 'Pre-trip', value: na(k.preTrip), sub: 'inspections', icon: ClipboardCheck, tone: 'text-[var(--text-secondary)]' },
     { label: 'Post-trip', value: na(k.postTrip), sub: 'inspections', icon: ClipboardCheck, tone: 'text-[var(--text-secondary)]' },
   ]
@@ -473,7 +473,7 @@ export default function Dvir() {
       {/* Repeat-defect assets */}
       {!unknown && view.repeatAssets.length > 0 && (
         <div className="card">
-          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 inline-flex items-center gap-2"><Repeat size={15} className="text-indigo-400" aria-hidden="true" /> Assets with repeat defects</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 inline-flex items-center gap-2"><Repeat size={15} className="text-blue-400" aria-hidden="true" /> Assets with repeat defects</h3>
           <div className="flex flex-wrap gap-2">
             {view.repeatAssets.slice(0, 20).map((a) => (
               <button type="button" key={a.asset_no} onClick={() => setAssetFilter(a.asset_no)}

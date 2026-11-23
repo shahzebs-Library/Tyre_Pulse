@@ -667,7 +667,7 @@ export default function DisplayDashboard() {
       { label: 'Available',        value: Number(wsKpis.available) || 0,       color: '#38bdf8' },
       { label: 'Waiting Parts',    value: Number(wsKpis.waitingParts) || 0,    color: '#f97316' },
       { label: 'Waiting Approval', value: Number(wsKpis.waitingApproval) || 0, color: '#eab308' },
-      { label: 'On Break',         value: Number(wsKpis.onBreak) || 0,         color: '#a78bfa' },
+      { label: 'On Break',         value: Number(wsKpis.onBreak) || 0,         color: '#94a3b8' },
     ].filter((x) => x.value > 0)
   }, [wsKpis])
   const wsJobStatusItems = useMemo(() => (workshop.rows?.jobsByStatus || []).slice(0, 7), [workshop.rows])

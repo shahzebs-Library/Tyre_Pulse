@@ -30,10 +30,10 @@ const STATUS_META = {
 const TYPE_COLORS = [
   'bg-orange-500/15 text-orange-300',
   'bg-blue-500/15 text-blue-300',
-  'bg-purple-500/15 text-purple-300',
+  'bg-slate-500/15 text-slate-300',
   'bg-teal-500/15 text-teal-300',
-  'bg-pink-500/15 text-pink-300',
-  'bg-indigo-500/15 text-indigo-300',
+  'bg-cyan-500/15 text-cyan-300',
+  'bg-emerald-500/15 text-emerald-300',
   'bg-amber-500/15 text-amber-300',
 ]
 
@@ -410,7 +410,7 @@ export default function EventStream() {
         />
         <Kpi icon={Timer} label="Last event" value={formatAge(kpis.lastEventAgeMs)} loading={statsLoading} hint={kpis.lastEventAgeMs == null ? 'No events recorded' : 'ago'} />
         <Kpi
-          icon={Plug} label="Consumers needing attention" tone="text-purple-400" loading={metaLoading}
+          icon={Plug} label="Consumers needing attention" tone="text-slate-400" loading={metaLoading}
           value={kpis.consumers == null ? 'N/A' : `${kpis.consumersAttention} of ${kpis.consumers}`}
           hint={kpis.consumersDisabled == null ? 'Consumers unavailable' : `${kpis.consumersDisabled} disabled`}
         />

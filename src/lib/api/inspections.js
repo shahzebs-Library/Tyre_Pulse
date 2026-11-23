@@ -7,6 +7,7 @@ import { supabase, unwrap, applyCountry, fetchAllPages, ServiceError } from './_
 import { expectRows } from './writeGuard'
 import { firstForCallerCompany } from './companyScope'
 import { toUserMessage } from '../safeError'
+import { LAYOUT_KEYS, resolveLayoutKeyStrict } from '../vehicleTyreLayout'
 
 const COLS =
   'id,title,inspection_type,site,asset_no,tyre_serial,status,findings,severity,inspection_date,scheduled_date,completed_date,inspector,notes,country,created_by,created_at'
@@ -360,4 +361,86 @@ export async function countAssetInspections(assetNo, { country, upTo } = {}) {
   } catch {
     return null
   }
+}
+
+// ── Add Record form: pure helpers (tested in src/test/inspectionAddRecord.test.js) ──
+
+/**
+ * The diagram layout a stored vehicle type draws with, or '' when nothing
+ * identifies one. The fleet register spells types its own way ('TR-MIXER'); the
+ * form's layout picker offers the diagram's keys ('Tri-mixer'). They are kept
+ * apart so the register's type is what gets saved, while the picker still shows
+ * the matching layout.
+ */
+export function layoutKeyForVehicleType(vehicleType) {
+  const raw = String(vehicleType ?? '').trim()
+  if (!raw) return ''
+  if (LAYOUT_KEYS.includes(raw)) return raw
+  return resolveLayoutKeyStrict(raw) || ''
+}
+
+/**
+ * What the fleet register adds to the Add Record form once an asset number is
+ * found. Only EMPTY fields are filled; a value the person typed is never
+ * replaced. The one exception is a vehicle type that only came from the layout
+ * picker: the register's spelling is saved instead, and the picker keeps the
+ * layout the person chose (`layout_key`). Returns a patch ({} when nothing to do).
+ *
+ * @param {object} form      current form state
+ * @param {object|null} fleet vehicle_fleet row ({ site, vehicle_type, country, asset_no })
+ */
+export function assetAutofillPatch(form, fleet) {
+  if (!form || !fleet) return {}
+  const patch = {}
+  const site = String(fleet.site ?? '').trim()
+  if (site && !String(form.site ?? '').trim()) patch.site = site
+  const fleetType = String(fleet.vehicle_type ?? '').trim()
+  const formType = String(form.vehicle_type ?? '').trim()
+  const fromPicker = formType && form.layout_key && formType === form.layout_key
+  if (fleetType && (!formType || fromPicker)) {
+    patch.vehicle_type = fleetType
+    patch._fleet_vehicle_type = fleetType
+    // Keep the drawn layout stable: the person's choice, else the register's.
+    if (!form.layout_key) {
+      const key = layoutKeyForVehicleType(fleetType)
+      if (key) patch.layout_key = key
+    }
+  }
+  if (fleet.country && !form.country) patch.country = fleet.country
+  return patch
+}
+
+/**
+ * approval_status to write on save, or undefined to leave the stored value.
+ * The column DEFAULTS to 'done', so an insert that omits it stamped a Scheduled
+ * or In Progress inspection as done. Rule (same as the checklist flow): only a
+ * Done inspection is 'done'; a decided or pending sign-off is never touched.
+ */
+export function approvalStatusForSave(form) {
+  const current = form?.approval_status ?? null
+  if (['approved', 'pending_approval', 'rejected'].includes(current)) return undefined
+  const isDone = String(form?.status ?? '').trim().toLowerCase() === 'done'
+  if (isDone) return current === 'done' ? undefined : 'done'
+  // Not done: a new record must not carry the 'done' default. An edit leaves
+  // the stored value alone (the approval guards own changes to a saved row).
+  return form?.id ? undefined : null
+}
+
+/** A translated label with any trailing required mark removed, so the form adds exactly one. */
+export function stripRequiredMark(label) {
+  return String(label ?? '').replace(/\s*\*+\s*$/, '')
+}
+
+/**
+ * The viewer's "Positions recorded" pair. The wheel map knows the layout's
+ * real wheel count; the reading table only counts what was recorded, which
+ * read "0 of 0" for a 12-wheel mixer with nothing filled in.
+ */
+export function positionsRecordedValue(summary, model) {
+  if (!summary || summary.recorded == null) return null
+  if (model?.renderable && Array.isArray(model.slots) && model.slots.length > 0) {
+    const recorded = Array.isArray(model.readings) ? model.readings.length : summary.recorded
+    return `${recorded} of ${model.slots.length}`
+  }
+  return `${summary.recorded} of ${summary.positions ?? 0}`
 }

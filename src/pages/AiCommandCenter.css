@@ -34,7 +34,7 @@
 .ai-minibars.t-green rect { fill: #22c55e; }
 .ai-minibars.t-amber rect { fill: #f59e0b; }
 .ai-minibars.t-blue rect { fill: #3b82f6; }
-.ai-minibars.t-purple rect { fill: #8b5cf6; }
+.ai-minibars.t-purple rect { fill: #475569; }
 
 .ai-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
 .ai-grid > .ai-feed { height: 100%; }

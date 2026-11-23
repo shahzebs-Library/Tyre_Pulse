@@ -67,12 +67,12 @@ function roleLabel(t, role) {
 const ROLE_BADGE = {
   Admin: 'bg-red-900/40 text-red-300 border-red-700/30',
   Manager: 'bg-orange-900/40 text-orange-300 border-orange-700/30',
-  Inspector: 'bg-purple-900/40 text-purple-300 border-purple-700/30',
+  Inspector: 'bg-slate-900/40 text-slate-300 border-slate-700/30',
   Director: 'bg-blue-900/40 text-blue-300 border-blue-700/30',
   'Tyre Man': 'bg-teal-900/40 text-teal-300 border-teal-700/30',
   'Integration Admin': 'bg-emerald-900/40 text-emerald-300 border-emerald-700/30',
   'Data Engineer': 'bg-cyan-900/40 text-cyan-300 border-cyan-700/30',
-  Automation: 'bg-indigo-900/40 text-indigo-300 border-indigo-700/30',
+  Automation: 'bg-gray-800/60 text-gray-300 border-gray-600/30',
 }
 
 function roleBadgeClass(role) {

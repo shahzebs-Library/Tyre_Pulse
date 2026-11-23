@@ -16,8 +16,8 @@
 
 // High-contrast categorical palette for a dark wall display.
 export const KIOSK_PALETTE = [
-  '#38bdf8', '#22c55e', '#f97316', '#a78bfa', '#eab308',
-  '#f472b6', '#2dd4bf', '#fb7185', '#60a5fa', '#34d399',
+  '#38bdf8', '#22c55e', '#f97316', '#94a3b8', '#eab308',
+  '#64748b', '#2dd4bf', '#fb7185', '#60a5fa', '#34d399',
 ]
 
 // Shared dark ink tokens (kept local so the module has zero deps).

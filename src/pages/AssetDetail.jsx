@@ -918,7 +918,7 @@ export default function AssetDetail() {
               {/* Recommendations */}
               <div className="card">
                 <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-3 flex items-center gap-2">
-                  <Target className="w-4 h-4 text-purple-400" /> {t('assetmgmt.drawer.recommendations')}
+                  <Target className="w-4 h-4 text-blue-400" /> {t('assetmgmt.drawer.recommendations')}
                 </h3>
                 <div className="space-y-2">
                   {recommendations.map((r, i) => {
@@ -1015,13 +1015,13 @@ export default function AssetDetail() {
                   </div>
                   <DollarSign className="w-10 h-10 text-blue-500 opacity-40" />
                 </div>
-                <div className="bg-gradient-to-br from-purple-900/20 to-purple-800/10 rounded-xl border border-purple-800/30 p-4 flex items-center justify-between">
+                <div className="bg-slate-900/20 rounded-xl border border-slate-800/30 p-4 flex items-center justify-between">
                   <div>
                     <p className="text-xs text-[var(--text-muted)] uppercase tracking-widest">{t('assetmgmt.detail.ytdCost')}</p>
                     <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{ytdCost == null ? 'N/A' : fmtCurrency(ytdCost, activeCurrency)}</p>
                     <p className="text-xs text-[var(--text-muted)] mt-1">{t('assetmgmt.detail.ytdCostSub')}</p>
                   </div>
-                  <DollarSign className="w-10 h-10 text-purple-500 opacity-40" />
+                  <DollarSign className="w-10 h-10 text-slate-500 opacity-40" />
                 </div>
               </div>
             </motion.div>
@@ -1257,7 +1257,7 @@ const STAT_COLORS = {
   blue:   'text-blue-400',
   green:  'text-green-400',
   yellow: 'text-yellow-400',
-  purple: 'text-purple-400',
+  purple: 'text-slate-400',
   red:    'text-red-400',
   teal:   'text-teal-400',
 }

@@ -47,7 +47,7 @@ const TYPE_BADGE = {
   site: 'bg-sky-900/40 text-sky-300 border border-sky-700/50',
   restricted: 'bg-red-900/40 text-red-300 border border-red-700/50',
   service: 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50',
-  custom: 'bg-violet-900/40 text-violet-300 border border-violet-700/50',
+  custom: 'bg-slate-900/40 text-slate-300 border border-slate-700/50',
 }
 const ACTIVE_BADGE = {
   true: 'bg-green-900/40 text-green-300 border border-green-700/50',
@@ -291,7 +291,7 @@ export default function Geofencing() {
     { label: 'Total zones', value: summary.total, icon: MapPin, tone: 'text-[var(--text-primary)]' },
     { label: 'Active zones', value: summary.active, icon: CheckCircle2, tone: 'text-green-400' },
     { label: 'Site zones', value: summary.byType.site, icon: Layers, tone: 'text-sky-400' },
-    { label: 'Covered area', value: !known ? 'N/A' : fmtArea(summary.areaKm2), icon: Globe2, tone: 'text-violet-400' },
+    { label: 'Covered area', value: !known ? 'N/A' : fmtArea(summary.areaKm2), icon: Globe2, tone: 'text-slate-400' },
   ]
 
   // ── Register columns (sortable across the WHOLE filtered set) ──────────────
@@ -415,7 +415,7 @@ export default function Geofencing() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Total zones', value: !known ? 'N/A' : summary.total, sub: !known ? '' : `${summary.geolocated} geolocated`, icon: MapPin, tone: 'text-[var(--text-primary)]' },
-          { label: 'Total covered area', value: !known ? 'N/A' : fmtArea(summary.areaKm2), sub: !known ? '' : `${summary.radiusCount} zones with a radius`, icon: Globe2, tone: 'text-violet-400' },
+          { label: 'Total covered area', value: !known ? 'N/A' : fmtArea(summary.areaKm2), sub: !known ? '' : `${summary.radiusCount} zones with a radius`, icon: Globe2, tone: 'text-slate-400' },
           { label: 'Average radius', value: !known ? 'N/A' : fmtRadius(summary.avgRadiusM), sub: 'across geolocated zones', icon: Ruler, tone: 'text-sky-400' },
           { label: 'Overlapping pairs', value: !known ? 'N/A' : summary.overlapPairs, sub: !known ? '' : (summary.flaggedCount ? `${summary.flaggedCount} data-quality flags` : 'no data-quality flags'), icon: ShieldAlert, tone: summary.overlapPairs > 0 ? 'text-amber-400' : 'text-green-400' },
         ].map((s) => {

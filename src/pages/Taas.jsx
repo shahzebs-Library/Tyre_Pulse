@@ -43,9 +43,9 @@ const EMPTY_FORM = {
 }
 
 const PLAN_BADGE = {
-  per_km: 'bg-indigo-500/15 text-indigo-500 border-indigo-500/30',
+  per_km: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
   per_month: 'bg-sky-500/15 text-sky-500 border-sky-500/30',
-  per_tyre: 'bg-violet-500/15 text-violet-500 border-violet-500/30',
+  per_tyre: 'bg-teal-500/15 text-teal-500 border-teal-500/30',
   hybrid: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
   unspecified: 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]',
 }
@@ -331,7 +331,7 @@ export default function Taas() {
         <Kpi label="Active contracts" value={kpi ? kpi.activeCount : kpiNa} icon={Activity} tone="text-green-500" />
         <Kpi label="Monthly recurring revenue" value={mrrValue} sub={mrrSub} icon={CircleDollarSign} tone="text-amber-500" />
         <Kpi label="Tyres covered" value={kpi ? kpi.totalTyresCovered.toLocaleString() : kpiNa} icon={Package} tone="text-sky-500" />
-        <Kpi label="Avg utilisation" value={kpi == null ? kpiNa : kpi.avgUtilization == null ? 'N/A' : `${kpi.avgUtilization}%`} sub={kpi ? `${kpi.overrunCount} over committed km` : null} icon={TrendingUp} tone="text-indigo-500" />
+        <Kpi label="Avg utilisation" value={kpi == null ? kpiNa : kpi.avgUtilization == null ? 'N/A' : `${kpi.avgUtilization}%`} sub={kpi ? `${kpi.overrunCount} over committed km` : null} icon={TrendingUp} tone="text-blue-500" />
         <Kpi label="Renewals due (30d)" value={kpi ? kpi.renewalsDue30d : kpiNa} sub={kpi ? `${kpi.renewalsOverdue} overdue` : null} icon={CalendarClock} tone={kpi && (kpi.renewalsDue30d > 0 || kpi.renewalsOverdue > 0) ? 'text-orange-500' : 'text-[var(--text-primary)]'} />
       </div>
 

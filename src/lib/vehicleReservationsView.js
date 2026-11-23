@@ -43,7 +43,7 @@ export const VIEW_STATUS_META = {
   not_started: { label: 'Not collected', tone: 'warn', color: '#d97706' },
   completed: { label: 'Completed', tone: 'muted', color: '#94a3b8' },
   cancelled: { label: 'Cancelled', tone: 'muted', color: '#64748b' },
-  unscheduled: { label: 'Unscheduled', tone: 'muted', color: '#a855f7' },
+  unscheduled: { label: 'Unscheduled', tone: 'muted', color: '#0f766e' },
 }
 
 /**

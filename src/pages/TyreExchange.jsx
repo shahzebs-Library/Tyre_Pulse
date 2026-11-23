@@ -123,7 +123,7 @@ const FLOW_CELL = ['', 'bg-blue-700/10 text-blue-300', 'bg-blue-700/25 text-blue
 function transferTypeBadge(type) {
   const map = {
     'Inter-Vehicle': 'bg-blue-900/50 text-blue-300 border-blue-700/50',
-    'Inter-Site': 'bg-purple-900/50 text-purple-300 border-purple-700/50',
+    'Inter-Site': 'bg-teal-900/50 text-teal-300 border-teal-700/50',
     Retread: 'bg-green-900/50 text-green-300 border-green-700/50',
     Repair: 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
   }
@@ -327,7 +327,7 @@ export default function TyreExchange() {
       labels: TRANSFER_TYPES,
       datasets: [{
         data: TRANSFER_TYPES.map((t) => counts[t]),
-        backgroundColor: ['#2563eb', '#7c3aed', '#16a34a', '#d97706'],
+        backgroundColor: ['#2563eb', '#0f766e', '#16a34a', '#d97706'],
         borderWidth: 0,
       }],
     }
@@ -687,7 +687,7 @@ export default function TyreExchange() {
       id: `to_${to}`, header: to, meta: { align: 'center' },
       cell: ({ row }) => {
         const r = row.original
-        if (r.isTotal) return <span className="text-purple-400 font-semibold">{flow.totalIn[to] || 0}</span>
+        if (r.isTotal) return <span className="text-teal-400 font-semibold">{flow.totalIn[to] || 0}</span>
         if (r.site === to) return <span className="text-[var(--text-dim)]">N/A</span>
         const v = flow.matrix[r.site]?.[to] || 0
         const band = flowIntensity(v, flow.max)
@@ -1304,7 +1304,7 @@ export default function TyreExchange() {
                       <div key={brand} className="flex items-center gap-3">
                         <span className="text-xs text-[var(--text-secondary)] w-28 truncate">{brand}</span>
                         <div className="flex-1 bg-[var(--input-bg)] rounded-full h-2">
-                          <div className="bg-purple-600 h-2 rounded-full" style={{ width: `${(count / byBrand[0].count) * 100}%` }} />
+                          <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${(count / byBrand[0].count) * 100}%` }} />
                         </div>
                         <span className="text-xs text-[var(--text-muted)] w-10 text-right">{count}</span>
                       </div>

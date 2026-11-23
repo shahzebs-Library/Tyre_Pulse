@@ -81,13 +81,13 @@ const PART_LABELS = { needed: 'Needed', ordered: 'Ordered', received: 'Received'
 const PART_BADGE = {
   needed:   'bg-yellow-900/50 text-yellow-300',
   ordered:  'bg-blue-900/50 text-blue-300',
-  received: 'bg-purple-900/50 text-purple-300',
+  received: 'bg-teal-900/50 text-teal-300',
   fitted:   'bg-green-900/50 text-green-300',
 }
 
 const REMARK_DOT = {
   note: 'bg-gray-500', insurance: 'bg-blue-500', repair: 'bg-orange-500',
-  responsibility: 'bg-purple-500', status_change: 'bg-sky-500',
+  responsibility: 'bg-teal-500', status_change: 'bg-sky-500',
   closure_request: 'bg-yellow-500', closure_approved: 'bg-green-500', closure_rejected: 'bg-red-500',
 }
 
@@ -789,7 +789,7 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
                 {statusPill.label && <span className={`badge text-xs ${statusPill.className}`}>{statusPill.label}</span>}
                 <ClosureBadge closure={closure} />
                 <DelayBadge />
-                {wf.isActive && <span className="badge text-xs bg-purple-900/50 text-purple-300 border border-purple-700/50 flex items-center gap-1"><Lock size={10} /> In approval</span>}
+                {wf.isActive && <span className="badge text-xs bg-teal-900/50 text-teal-300 border border-teal-700/50 flex items-center gap-1"><Lock size={10} /> In approval</span>}
               </div>
               <CaseSlaHeader acc={acc} workstreams={caseData?.workstreams} />
             </div>
@@ -830,7 +830,7 @@ const STAGE_STEP_TONE = {
   slate:  { done: 'bg-slate-500 border-slate-400',   cur: 'bg-slate-500 border-slate-300 ring-2 ring-slate-400/40',   text: 'text-slate-300' },
   blue:   { done: 'bg-blue-500 border-blue-400',     cur: 'bg-blue-500 border-blue-300 ring-2 ring-blue-400/40',      text: 'text-blue-300' },
   amber:  { done: 'bg-amber-500 border-amber-400',   cur: 'bg-amber-500 border-amber-300 ring-2 ring-amber-400/40',   text: 'text-amber-300' },
-  purple: { done: 'bg-purple-500 border-purple-400', cur: 'bg-purple-500 border-purple-300 ring-2 ring-purple-400/40', text: 'text-purple-300' },
+  purple: { done: 'bg-teal-500 border-teal-400', cur: 'bg-teal-500 border-teal-300 ring-2 ring-teal-400/40', text: 'text-teal-300' },
   green:  { done: 'bg-green-500 border-green-400',    cur: 'bg-green-500 border-green-300 ring-2 ring-green-400/40',    text: 'text-green-300' },
 }
 
@@ -1006,7 +1006,7 @@ function WorkflowStageSection({ acc, elevated, isAdmin, locked, reload, setErr }
         <p className="text-xs text-[var(--text-muted)]">Only Admin / Manager / Director can change the workflow stage.</p>
       )}
       {locked && elevated && (
-        <p className="text-[11px] text-purple-300 flex items-center gap-1"><Lock size={10} /> Stage changes are locked while an approval workflow is active.</p>
+        <p className="text-[11px] text-teal-300 flex items-center gap-1"><Lock size={10} /> Stage changes are locked while an approval workflow is active.</p>
       )}
       {localErr && <p className="text-xs text-red-400">{localErr}</p>}
 

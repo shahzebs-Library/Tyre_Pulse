@@ -86,7 +86,7 @@ import './PmPrograms.css'
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 // ── Presentation maps ─────────────────────────────────────────────────────────
-const COST_MODE_COLOR = { combined: '#6366f1', tyres: '#22c55e', maintenance: '#f59e0b' }
+const COST_MODE_COLOR = { combined: '#2a78d6', tyres: '#22c55e', maintenance: '#f59e0b' }
 const WO_PRIORITY = { low: 'Low', medium: 'Medium', high: 'High', critical: 'Critical' }
 const mapToWOPriority = (p) => WO_PRIORITY[String(p || '').toLowerCase()] || 'Medium'
 
@@ -837,7 +837,7 @@ export default function PmPrograms() {
           title="Active plans due within the warning window by date or meter" onClick={() => goPlans({ dueOnly: true })} />
         <Kpi icon={ClipboardCheck} tone="t-blue" display={kv.compliance == null ? 'N/A' : `${kv.compliance}%`} label="Compliance" loading={notLoaded && !error}
           title={kv.compliance == null ? 'No active plans to measure' : 'Share of active plans that are not overdue'} />
-        <Kpi icon={Coins} tone="t-purple" display={kv.serviceCost12m == null ? 'N/A' : fmtMoney(kv.serviceCost12m, moneyCurrency)} label="Service cost, last 12 months" loading={notLoaded && !error}
+        <Kpi icon={Coins} tone="t-blue" display={kv.serviceCost12m == null ? 'N/A' : fmtMoney(kv.serviceCost12m, moneyCurrency)} label="Service cost, last 12 months" loading={notLoaded && !error}
           title={kv.costReason || 'Total cost of services recorded in the last 12 months'} onClick={() => setTab('history')} />
       </div>
       )}
@@ -1036,7 +1036,7 @@ export default function PmPrograms() {
         <>
           <div className="cc-kpis pmp-hist-kpis">
             <Kpi icon={Wrench} tone="t-green" display={history === null ? 'N/A' : fmtInt(histStats.services)} label={`Services, ${fmtInt(histStats.assets)} assets`} loading={history === null && !error} />
-            <Kpi icon={Wallet} tone="t-purple" display={singleCountry ? rowMoney(histStats.totalCost) : 'N/A'} label="Total service cost" loading={history === null && !error}
+            <Kpi icon={Wallet} tone="t-blue" display={singleCountry ? rowMoney(histStats.totalCost) : 'N/A'} label="Total service cost" loading={history === null && !error}
               title={!singleCountry ? MIXED_REASON : histStats.costedShare == null ? 'No services' : `${Math.round(histStats.costedShare * 100)}% of services costed`} />
             <Kpi icon={Gauge} tone="t-blue" display={singleCountry ? rowMoney(histStats.avgCost) : 'N/A'} label="Average per service" loading={history === null && !error}
               title={singleCountry ? 'Costed services only' : MIXED_REASON} />
@@ -1105,9 +1105,9 @@ export default function PmPrograms() {
           </p>}
           {/* Start from a template (create mode only) */}
           {!editing && (
-            <div className="rounded-xl border border-indigo-800/40 bg-indigo-500/5 p-4">
+            <div className="rounded-xl border border-blue-800/40 bg-blue-500/5 p-4">
               <div className="flex items-center gap-2 mb-1">
-                <LayoutTemplate size={15} className="text-indigo-300" />
+                <LayoutTemplate size={15} className="text-blue-300" />
                 <h3 className="text-sm font-semibold text-[var(--text-primary)]">Start from a template</h3>
               </div>
               <p className="text-[11px] text-[var(--text-muted)] mb-3">

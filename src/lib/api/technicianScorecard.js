@@ -22,17 +22,39 @@ const COLS =
  * @returns {Promise<Array<object>>}
  */
 export async function listWorkOrdersForScorecard({ country } = {}) {
+  // Only job cards that name a technician can be scored. Reading the whole
+  // register (97k rows, ~90% with no technician) took over 40 s and ranked
+  // the unassigned work as if "Unassigned" were a person.
   const { data, error } = await fetchAllPages((from, to) => {
     const q = supabase
       .from('work_orders')
       .select(COLS)
+      .not('technician_name', 'is', null)
+      .neq('technician_name', '')
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .range(from, to)
     return applyCountry(q, country)
   })
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
-  return data || []
+  return (data || []).filter((o) => String(o?.technician_name ?? '').trim() !== '')
+}
+
+/**
+ * How many job cards in scope name no technician. These are left out of the
+ * leaderboard, so the page states the number instead of hiding it.
+ * @param {{ country?: string }} [opts]
+ * @returns {Promise<number|null>} null when the count could not be read.
+ */
+export async function countUnassignedWorkOrders({ country } = {}) {
+  let q = supabase
+    .from('work_orders')
+    .select('id', { count: 'exact', head: true })
+    .or('technician_name.is.null,technician_name.eq.')
+  q = applyCountry(q, country)
+  const { count, error } = await q
+  if (error) return null
+  return typeof count === 'number' ? count : null
 }
 
 // ============================================================================

@@ -45,7 +45,7 @@ const DUTY_OPTIONS = DUTY_STATUSES.map((value) => ({ value, label: DUTY_LABELS[v
 // Semantic duty tints; the text label always carries the meaning.
 const DUTY_BADGE = {
   off_duty: 'bg-[var(--input-bg)] text-[var(--text-secondary)] border-[var(--input-border)]',
-  sleeper: 'bg-indigo-900/30 text-indigo-300 border-indigo-700/50',
+  sleeper: 'bg-slate-900/30 text-slate-300 border-slate-700/50',
   driving: 'bg-sky-900/30 text-sky-300 border-sky-700/50',
   on_duty: 'bg-amber-900/30 text-amber-300 border-amber-700/50',
 }

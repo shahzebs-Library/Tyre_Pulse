@@ -54,7 +54,7 @@ const KEY_STATUS_STYLE = {
   expired: 'bg-amber-900/30 text-amber-300 border-amber-800/50',
 }
 const ENV_STYLE = {
-  production: 'bg-indigo-900/30 text-indigo-300 border-indigo-800/50',
+  production: 'bg-blue-900/30 text-blue-300 border-blue-800/50',
   sandbox: 'bg-slate-700/40 text-[var(--text-secondary)] border-[var(--input-border)]',
 }
 const HOOK_STATUS_STYLE = {
@@ -177,7 +177,7 @@ export default function DeveloperPortal() {
     { label: 'Failing', value: hookSummary.failingCount, icon: AlertOctagon, tone: 'text-red-400', status: 'failing' },
     { label: 'Total failures', value: hookSummary.totalFailures, icon: AlertTriangle, tone: 'text-amber-400' },
     { label: 'No signing secret', value: hookInfo.withoutSecret, icon: ShieldAlert, tone: 'text-amber-400' },
-    { label: 'Production keys', value: keySummary.productionCount, icon: Server, tone: 'text-indigo-400', sub: 'live API credentials' },
+    { label: 'Production keys', value: keySummary.productionCount, icon: Server, tone: 'text-blue-400', sub: 'live API credentials' },
   ]
   const kpis = tab === 'keys' ? keyKpis : hookKpis
   const loaded = tab === 'keys' ? keys : hooks
@@ -400,10 +400,10 @@ export default function DeveloperPortal() {
               onClick={() => setTab(t.id)}
               role="tab"
               aria-selected={active}
-              className={`inline-flex items-center gap-2 px-4 min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 text-sm font-medium border-b-2 -mb-px transition-colors ${active ? 'border-indigo-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
+              className={`inline-flex items-center gap-2 px-4 min-h-[44px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 text-sm font-medium border-b-2 -mb-px transition-colors ${active ? 'border-green-500 text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
               <Icon size={15} aria-hidden="true" /> {t.label}
-              <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[11px] ${active ? 'bg-indigo-900/40 text-indigo-400' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
+              <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[11px] ${active ? 'bg-green-900/40 text-green-400' : 'bg-[var(--input-bg)] text-[var(--text-muted)]'}`}>
                 {(tab === t.id ? loaded : true) === null || readFailed ? 'N/A' : t.count}
               </span>
             </button>
@@ -429,7 +429,7 @@ export default function DeveloperPortal() {
           return k.status ? (
             <button key={k.label} type="button" aria-pressed={pressed}
               onClick={() => setStatusFilter(pressed ? '' : k.status)}
-              className={`card text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${pressed ? 'ring-2 ring-indigo-500' : ''}`}>
+              className={`card text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${pressed ? 'ring-2 ring-green-500' : ''}`}>
               {body}
             </button>
           ) : <div key={k.label} className="card">{body}</div>
@@ -573,7 +573,7 @@ export default function DeveloperPortal() {
                     </div>
                   </div>
                   <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
-                    <input type="checkbox" checked={hookForm.secret_set} onChange={(e) => setHook('secret_set', e.target.checked)} className="accent-indigo-500" />
+                    <input type="checkbox" checked={hookForm.secret_set} onChange={(e) => setHook('secret_set', e.target.checked)} className="accent-green-500" />
                     Signing secret recorded as configured
                     <span className="text-[11px] text-[var(--text-muted)]">(the secret value itself is never stored here)</span>
                   </label>

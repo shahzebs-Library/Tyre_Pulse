@@ -48,7 +48,7 @@ describe('reportColors', () => {
 
     const area = stylize({ datasets: [{ data: [1] }] }, 'area')
     expect(area.datasets[0].fill).toBe(true)
-    expect(area.datasets[0].backgroundColor).toMatch(/^#6366f1[0-9a-f]{2}$/)
+    expect(area.datasets[0].backgroundColor).toMatch(/^#2a78d6[0-9a-f]{2}$/)
   })
 
   it('tolerates empty / malformed input', () => {

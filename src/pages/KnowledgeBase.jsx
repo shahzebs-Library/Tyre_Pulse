@@ -56,7 +56,7 @@ import TableNotInUse from '../components/ui/TableNotInUse'
 
 const DOC_TYPES = [
   { value: 'sop',        color: 'text-blue-400',   bg: 'bg-blue-400/10'   },
-  { value: 'manual',     color: 'text-purple-400', bg: 'bg-purple-400/10' },
+  { value: 'manual',     color: 'text-teal-400', bg: 'bg-teal-400/10' },
   { value: 'policy',     color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
   { value: 'inspection', color: 'text-green-400',  bg: 'bg-green-400/10'  },
   { value: 'rca',        color: 'text-red-400',    bg: 'bg-red-400/10'    },

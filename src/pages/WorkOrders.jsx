@@ -84,7 +84,7 @@ const STATUS_CONFIG = {
   'In Progress':          { color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700', icon: Play },
   'Waiting for Parts':    { color: 'text-orange-400', bg: 'bg-orange-900/30', border: 'border-orange-700', icon: Package },
   'Waiting for Approval': { color: 'text-amber-400',  bg: 'bg-amber-900/30',  border: 'border-amber-700',  icon: AlertOctagon },
-  'Quality Inspection':   { color: 'text-purple-400', bg: 'bg-purple-900/30', border: 'border-purple-700', icon: Eye },
+  'Quality Inspection':   { color: 'text-teal-400',   bg: 'bg-teal-900/30',   border: 'border-teal-700',   icon: Eye },
   'Completed':            { color: 'text-green-400',  bg: 'bg-green-900/30',  border: 'border-green-700',  icon: CheckCircle },
   'Cancelled':            { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-700',    icon: XCircle },
   'On Hold':              { color: 'text-[var(--text-secondary)]', bg: 'bg-[var(--surface-2)]', border: 'border-[var(--border-bright)]', icon: Lock },
@@ -103,7 +103,7 @@ const KPI_TEXT_COLOR = {
   orange: 'text-orange-400',
   red:    'text-red-400',
   green:  'text-green-400',
-  purple: 'text-purple-400',
+  slate:  'text-slate-400',
   teal:   'text-teal-400',
 }
 
@@ -231,6 +231,13 @@ export default function WorkOrders() {
     const id = setInterval(() => setNowTick(Date.now()), 60000)
     return () => clearInterval(id)
   }, [])
+  // Re-read the clock whenever the drawer shows a new row. A status move stamps
+  // started_at/completed_at with the CURRENT time, which is after a tick that can
+  // be up to 60s old, so the flow measured a negative gap and reported "Workshop
+  // In was never recorded" directly under a stepper showing that very time.
+  useEffect(() => {
+    if (viewOrder) setNowTick(Date.now())
+  }, [viewOrder])
   const [partRow, setPartRow]       = useState({ part_name: '', quantity: 1, unit_cost: '' })
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -343,7 +350,7 @@ export default function WorkOrders() {
     const colors = {
       'New': '#3b82f6', 'Awaiting Assignment': '#0ea5e9', 'Assigned': '#06b6d4',
       'In Progress': '#f59e0b', 'Waiting for Parts': '#f97316', 'Waiting for Approval': '#eab308',
-      'Quality Inspection': '#8b5cf6', 'Completed': '#10b981', 'Cancelled': '#ef4444', 'On Hold': '#6b7280',
+      'Quality Inspection': '#0f766e', 'Completed': '#10b981', 'Cancelled': '#ef4444', 'On Hold': '#6b7280',
     }
     // Already folded to the canonical vocabulary server-side.
     const entries = breakdownEntries(statsData?.by_status)
@@ -837,7 +844,7 @@ export default function WorkOrders() {
           { label: t('workorders.kpi.awaitingParts'), value: stats.awaitParts, color: 'orange', icon: Package },
           { label: t('workorders.kpi.overdue'), value: stats.overdue, color: 'red', icon: AlertOctagon },
           { label: t('workorders.kpi.completedToday'), value: stats.completedToday, color: 'green', icon: CheckCircle },
-          { label: t('workorders.kpi.avgDaysOpen'), value: stats.avgDaysOpen === null ? null : Math.round(stats.avgDaysOpen * 10) / 10, color: 'purple', icon: Calendar },
+          { label: t('workorders.kpi.avgDaysOpen'), value: stats.avgDaysOpen === null ? null : Math.round(stats.avgDaysOpen * 10) / 10, color: 'slate', icon: Calendar },
           { label: t('workorders.kpi.totalCostAll'), value: stats.totalCost === null ? null : compactMoney(stats.totalCost, activeCurrency), color: 'teal', icon: DollarSign },
         ].map(({ label, value: raw, color, icon: Icon }) => ({ label, value: raw === null || raw === undefined ? 'N/A' : raw, color, icon: Icon })).map(({ label, value, color, icon: Icon }) => (
           <Card key={label} pad="tight">

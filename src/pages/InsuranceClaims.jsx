@@ -355,7 +355,7 @@ export default function InsuranceClaims() {
   // ── KPIs (pure engine over the filtered view; N/A when not measurable) ─────
   const na = loading || loadFailed
   const kpis = [
-    { label: 'Total claims', value: na ? 'N/A' : a.total, sub: na ? null : `${a.openCount} open`, icon: ShieldAlert, accent: 'text-indigo-400' },
+    { label: 'Total claims', value: na ? 'N/A' : a.total, sub: na ? null : `${a.openCount} open`, icon: ShieldAlert, accent: 'text-blue-400' },
     { label: 'Open claims', value: na ? 'N/A' : a.openCount, sub: na ? null : a.avgOpenAgeDays == null ? 'no dated open claims' : `avg age ${a.avgOpenAgeDays}d`, icon: Inbox, accent: 'text-sky-400', tone: 'text-sky-400' },
     { label: 'Total claimed', value: na ? 'N/A' : money(a.totalClaimed), sub: na || !a.total ? null : `avg ${money(a.avgClaim)}`, icon: DollarSign },
     { label: 'Total settled', value: na ? 'N/A' : money(a.totalSettled), sub: 'recovered from insurers', icon: TrendingUp, accent: 'text-emerald-400', tone: 'text-emerald-400' },

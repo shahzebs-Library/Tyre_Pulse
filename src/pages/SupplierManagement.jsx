@@ -66,9 +66,9 @@ function numToRating(num) {
 // Whitelisted writable columns
 const CONTRACT_COLS = ['supplier_name', 'contract_start', 'contract_end', 'payment_terms', 'price_per_unit', 'min_order', 'notes', 'country', 'created_by']
 const PALETTE = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
-  '#06b6d4', '#a855f7',
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#475569',
+  '#0f766e', '#14b8a6', '#f97316', '#1d4ed8', '#84cc16',
+  '#06b6d4', '#64748b',
 ]
 const RATING_CONFIG = {
   Preferred:     { color: 'text-emerald-400', bg: 'bg-emerald-900/40', border: 'border-emerald-700', icon: Star },
@@ -860,20 +860,24 @@ export default function SupplierManagement() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   if (loading) return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-busy="true">
+      <PageHeader title={t('suppliers.title')} subtitle={t('suppliers.subtitle')} icon={Building2} />
       <SkeletonCards count={4} />
       <SkeletonTable rows={8} cols={6} />
     </div>
   )
 
   if (error) return (
-    <div className="flex items-center justify-center h-64">
+    <div className="space-y-4">
+    <PageHeader title={t('suppliers.title')} subtitle={t('suppliers.subtitle')} icon={Building2} />
+    <div className="flex items-center justify-center h-64" role="alert">
       <div className="text-center">
         <AlertTriangle size={32} className="text-red-400 mx-auto mb-2" />
         <p className="text-red-400 font-medium">{t('suppliers.errors.loadFailed')}</p>
         <p className="text-[var(--text-muted)] text-sm mt-1">{error}</p>
         <button onClick={fetchData} className="mt-3 px-4 py-2 bg-blue-600 rounded-lg text-sm text-white hover:bg-blue-500">{t('suppliers.retry')}</button>
       </div>
+    </div>
     </div>
   )
 
@@ -907,7 +911,7 @@ export default function SupplierManagement() {
         <KpiCard icon={Target} label={t('suppliers.kpi.cpkRange')}
           value={kpiSummary.cpkMin != null ? `${fmtCpk(kpiSummary.cpkMin, activeCurrency).split(' ')[1]}` : t('suppliers.recommendations.na')}
           sub={kpiSummary.cpkMax != null ? t('suppliers.kpi.toValue', { value: fmtCpk(kpiSummary.cpkMax, activeCurrency) }) : 'N/A'}
-          color="text-purple-400" />
+          color="text-blue-400" />
         <KpiCard icon={Award} label={t('suppliers.kpi.bestCpk')} value={kpiSummary.best?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.best ? fmtCpk(kpiSummary.best.avgCpk, activeCurrency) : 'N/A'} color="text-emerald-400" />
         <KpiCard icon={AlertTriangle} label={t('suppliers.kpi.worstCpk')} value={kpiSummary.worst?.brand || t('suppliers.recommendations.na')} sub={kpiSummary.worst ? fmtCpk(kpiSummary.worst.avgCpk, activeCurrency) : 'N/A'} color="text-red-400" />
         <KpiCard icon={DollarSign} label="Total spend" value={fmtCurrency(kpiSummary.totalSpend, activeCurrency)}

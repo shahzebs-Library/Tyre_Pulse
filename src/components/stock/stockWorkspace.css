@@ -84,3 +84,24 @@ html.light .stock-mode button[aria-pressed="true"] { color: #fff; }
  .stock-entry-footer button { padding-inline: 10px; font-size: 12px; }
  .stock-suggestions button { flex-wrap: wrap; }
 }
+/* Why a unit was filled in: recorded, learned from stock, chosen, or suggested. */
+.stock-unit-why { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; color: var(--text-muted); max-width: 200px; white-space: normal; }
+.stock-unit-why.is-suggested { color: var(--stock-green); }
+.stock-item-preview dd .stock-unit-why { max-width: none; }
+.stock-unit-use { margin-top: 4px; font-size: 12px; }
+/* Phones and tablets: each item becomes a card that flows down, so unit, condition and count are all visible without sideways scrolling. */
+@media(max-width:900px) {
+ .stock-entry-table-wrap { overflow-x: visible; border: 0; }
+ .stock-entry-table { min-width: 0; display: block; }
+ .stock-entry-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+ .stock-entry-table tbody { display: grid; gap: 10px; }
+ .stock-entry-table tr { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px 12px; position: relative; padding: 14px; border: 1px solid var(--stock-edge); border-radius: 9px; }
+ .stock-entry-table td { display: block; padding: 0; border: 0; min-width: 0; }
+ .stock-entry-table td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 11px; font-weight: 500; color: var(--text-muted); }
+ .stock-entry-table td.stock-cell-item { grid-column: 1 / -1; max-width: none; padding-inline-end: 40px; }
+ .stock-entry-table td.stock-cell-unit { grid-column: 1 / -1; }
+ .stock-entry-table td.stock-cell-remove { position: absolute; top: 8px; inset-inline-end: 8px; }
+ .stock-entry-table input, .stock-entry-table select { width: 100%; min-width: 0 !important; min-height: 44px; }
+ .stock-entry-table .stock-unit-why { max-width: none; }
+ .stock-entry-table td.stock-empty { grid-column: 1 / -1; }
+}

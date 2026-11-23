@@ -49,7 +49,7 @@ export function buildRegisterColumns({
         const isTrn = isTrainingType(r.inspection_type)
         return (
           <span className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${
-            isObs ? 'bg-purple-900/20 text-purple-400 border-purple-700/40'
+            isObs ? 'bg-teal-900/20 text-teal-400 border-teal-700/40'
               : isTrn ? 'bg-blue-900/20 text-blue-400 border-blue-700/40'
                 : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'
           }`}>

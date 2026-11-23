@@ -26,7 +26,7 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // Stable palette for role badges, hashed off the role name.
-const ROLE_HUES = ['#f97316', '#3b82f6', '#a855f7', '#22c55e', '#eab308', '#ec4899', '#14b8a6', '#ef4444']
+const ROLE_HUES = ['#f97316', '#3b82f6', '#475569', '#22c55e', '#eab308', '#0891b2', '#14b8a6', '#ef4444']
 function roleHue(role) {
   let h = 0
   for (let i = 0; i < (role || '').length; i++) h = (h * 31 + role.charCodeAt(i)) >>> 0
@@ -76,7 +76,7 @@ function DefinitionCard({ def, health = 'ok', issues = [], onEdit, onClone, onDe
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 text-[11px]">
                 <Layers className="w-3 h-3" /> {def.entity_type}
               </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 text-[11px] font-mono">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 text-[11px] font-mono">
                 <Zap className="w-3 h-3" /> {def.trigger_event || 'manual'}
               </span>
             </div>

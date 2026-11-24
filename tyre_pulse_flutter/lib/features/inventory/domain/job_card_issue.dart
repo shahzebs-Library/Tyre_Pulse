@@ -78,6 +78,61 @@ final class JobCardRef {
   }
 }
 
+/// An open `stock_reservations` row holding this stock line for a job card
+/// (read through RLS). Issuing against it consumes the hold, so the reserved
+/// units stop counting as taken and the reservation closes when used up.
+final class JobCardReservation {
+  const JobCardReservation({
+    required this.id,
+    required this.qty,
+    required this.qtyReleased,
+    required this.qtyConsumed,
+    this.createdAt,
+  });
+
+  factory JobCardReservation.fromJson(Map<String, Object?> j) =>
+      JobCardReservation(
+        id: '${j['id'] ?? ''}',
+        qty: _num(j['qty']) ?? 0,
+        qtyReleased: _num(j['qty_released']) ?? 0,
+        qtyConsumed: _num(j['qty_consumed']) ?? 0,
+        createdAt: DateTime.tryParse('${j['created_at'] ?? ''}'),
+      );
+
+  final String id;
+  final num qty;
+  final num qtyReleased;
+  final num qtyConsumed;
+  final DateTime? createdAt;
+
+  /// What is still held (never below zero).
+  num get remaining {
+    final num r = qty - qtyReleased - qtyConsumed;
+    return r > 0 ? r : 0;
+  }
+}
+
+/// The reservation an issue consumes: the OLDEST one that still holds
+/// something (first reserved, first used). Null when none is open. Rows
+/// without a date sort after dated ones; ties break on id so the choice is
+/// stable between calls.
+JobCardReservation? pickReservation(Iterable<JobCardReservation> rows) {
+  final List<JobCardReservation> open = <JobCardReservation>[
+    for (final JobCardReservation r in rows)
+      if (r.id.isNotEmpty && r.remaining > 0) r,
+  ];
+  if (open.isEmpty) return null;
+  open.sort((JobCardReservation a, JobCardReservation b) {
+    final DateTime? x = a.createdAt;
+    final DateTime? y = b.createdAt;
+    if (x != null && y != null && x != y) return x.compareTo(y);
+    if (x == null && y != null) return 1;
+    if (x != null && y == null) return -1;
+    return a.id.compareTo(b.id);
+  });
+  return open.first;
+}
+
 /// What the person filled in. [validate] returns the copy key of the first
 /// problem, or null when the draft can be sent.
 final class JobCardMoveDraft {
@@ -88,6 +143,8 @@ final class JobCardMoveDraft {
     required this.qty,
     this.reason,
     this.available,
+    this.reservationId,
+    this.reserved,
   });
 
   final JobCardMove move;
@@ -100,12 +157,21 @@ final class JobCardMoveDraft {
   /// server decides with the live balance).
   final num? available;
 
+  /// The job card's reservation on this stock line to consume (issue only).
+  final String? reservationId;
+
+  /// What that reservation still holds. Those units are already set aside
+  /// for this job card, so they count towards what can be issued.
+  final num? reserved;
+
   String? validate() {
     if (stockId.trim().isEmpty) return 'jc_needStock';
     if (normalizeJobCard(jobCard) == null) return 'jc_needJobCard';
     final num? q = qty;
     if (q == null || q <= 0) return 'jc_needQty';
-    if (move == JobCardMove.issue && available != null && q > available!) {
+    if (move == JobCardMove.issue &&
+        available != null &&
+        q > available! + (reservationId == null ? 0 : (reserved ?? 0))) {
       return 'jc_moreThanOnHand';
     }
     if (move == JobCardMove.issueReturn && (reason ?? '').trim().isEmpty) {
@@ -118,7 +184,7 @@ final class JobCardMoveDraft {
   /// changes; an identical retry reuses the key.
   String get signature =>
       '${move.name}|$stockId|${normalizeJobCard(jobCard)}|$qty|'
-      '${(reason ?? '').trim()}';
+      '${(reason ?? '').trim()}|${reservationId ?? ''}';
 
   /// The RPC name this draft is sent to.
   String get rpc => switch (move) {
@@ -139,6 +205,7 @@ final class JobCardMoveDraft {
           'reason': r,
           'source_doc_type': 'job_card',
           'source_doc_id': jc,
+          if (reservationId != null) 'reservation_id': reservationId,
         },
       JobCardMove.issueReturn => <String, Object?>{
           'idempotency_key': idempotencyKey,

@@ -107,4 +107,52 @@ void main() {
     expect(const JobCardRef(workOrderNo: 'A', status: 'Open').isClosed, false);
     expect(const JobCardRef(workOrderNo: 'A').isClosed, false);
   });
+
+  test('the oldest reservation still holding units is picked', () {
+    final JobCardReservation a = JobCardReservation(
+      id: 'a',
+      qty: 2,
+      qtyReleased: 0,
+      qtyConsumed: 2,
+      createdAt: DateTime.utc(2026),
+    );
+    final JobCardReservation b = JobCardReservation(
+      id: 'b',
+      qty: 5,
+      qtyReleased: 1,
+      qtyConsumed: 0,
+      createdAt: DateTime.utc(2026, 2),
+    );
+    const JobCardReservation c =
+        JobCardReservation(id: 'c', qty: 1, qtyReleased: 0, qtyConsumed: 0);
+    expect(pickReservation(<JobCardReservation>[c, b, a])?.id, 'b');
+    expect(b.remaining, 4);
+    expect(pickReservation(<JobCardReservation>[a]), isNull);
+    expect(pickReservation(const <JobCardReservation>[]), isNull);
+  });
+
+  test('a reservation is sent, counts towards the limit and changes the key',
+      () {
+    const JobCardMoveDraft plain = JobCardMoveDraft(
+      move: JobCardMove.issue,
+      stockId: 'stock-1',
+      jobCard: 'JC',
+      qty: 4,
+      available: 2,
+    );
+    const JobCardMoveDraft held = JobCardMoveDraft(
+      move: JobCardMove.issue,
+      stockId: 'stock-1',
+      jobCard: 'JC',
+      qty: 4,
+      available: 2,
+      reservationId: 'res-1',
+      reserved: 2,
+    );
+    expect(plain.validate(), 'jc_moreThanOnHand');
+    expect(held.validate(), isNull);
+    expect(plain.toPayload('k').containsKey('reservation_id'), isFalse);
+    expect(held.toPayload('k')['reservation_id'], 'res-1');
+    expect(plain.signature == held.signature, isFalse);
+  });
 }

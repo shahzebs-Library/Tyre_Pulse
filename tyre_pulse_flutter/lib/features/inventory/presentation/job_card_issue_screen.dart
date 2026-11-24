@@ -72,6 +72,12 @@ class _JobCardIssueScreenState extends ConsumerState<JobCardIssueScreen> {
   bool _sending = false;
   String? _problem;
 
+  /// The job card's open reservation on this stock line (issue only): the
+  /// oldest one still holding units, consumed by the issue.
+  JobCardReservation? _reservation;
+  int _reservationCount = 0;
+  bool _reservationFailed = false;
+
   bool get _isIssue => widget.move == JobCardMove.issue;
 
   @override
@@ -89,6 +95,8 @@ class _JobCardIssueScreenState extends ConsumerState<JobCardIssueScreen> {
         qty: parseMoveQty(_qtyText.text),
         reason: _reason.text,
         available: _isIssue ? widget.item.available : null,
+        reservationId: _isIssue ? _reservation?.id : null,
+        reserved: _isIssue ? _reservation?.remaining : null,
       );
 
   void _jobCardChanged() {
@@ -96,7 +104,37 @@ class _JobCardIssueScreenState extends ConsumerState<JobCardIssueScreen> {
     setState(() {
       _lookup = _Lookup.idle;
       _found = null;
+      _reservation = null;
+      _reservationCount = 0;
+      _reservationFailed = false;
     });
+  }
+
+  /// Reads the job card's open reservations on this stock line. A failed
+  /// read does not block the issue (the server still checks the balance);
+  /// the screen says the reservation could not be checked.
+  Future<void> _loadReservation(String jobCard) async {
+    try {
+      final List<JobCardReservation> rows = await ref
+          .read(jobCardIssueRepositoryProvider)
+          .openReservations(jobCard: jobCard, stockId: widget.item.id);
+      if (!mounted) return;
+      final JobCardReservation? pick = pickReservation(rows);
+      setState(() {
+        _reservation = pick;
+        _reservationCount =
+            rows.where((JobCardReservation r) => r.remaining > 0).length;
+        _reservationFailed = false;
+      });
+    } on Object {
+      if (mounted) {
+        setState(() {
+          _reservation = null;
+          _reservationCount = 0;
+          _reservationFailed = true;
+        });
+      }
+    }
   }
 
   Future<void> _check(InventoryCopy copy) async {
@@ -108,6 +146,9 @@ class _JobCardIssueScreenState extends ConsumerState<JobCardIssueScreen> {
     setState(() {
       _lookup = _Lookup.checking;
       _problem = null;
+      _reservation = null;
+      _reservationCount = 0;
+      _reservationFailed = false;
     });
     try {
       final JobCardRef? hit =
@@ -117,6 +158,7 @@ class _JobCardIssueScreenState extends ConsumerState<JobCardIssueScreen> {
         _found = hit;
         _lookup = hit == null ? _Lookup.notFound : _Lookup.found;
       });
+      if (hit != null && _isIssue) await _loadReservation(hit.workOrderNo);
     } on Object {
       if (mounted) setState(() => _lookup = _Lookup.failed);
     }
@@ -163,6 +205,12 @@ class _JobCardIssueScreenState extends ConsumerState<JobCardIssueScreen> {
       if (!mounted) return;
       switch (out) {
         case JobCardMoveShortage(:final num? available):
+          // The server stored this key with the refusal, so pressing Send
+          // again (even unchanged, once stock arrives) is a NEW request and
+          // gets a new key; replaying the old one would answer the stored
+          // refusal. A network failure keeps the key (catch below).
+          _keySignature = null;
+          _key = null;
           setState(
             () => _problem = copy('jc_shortage')
                 .replaceAll('%n', available == null ? '0' : _qty(available)),
@@ -223,6 +271,32 @@ class _JobCardIssueScreenState extends ConsumerState<JobCardIssueScreen> {
           ),
         ),
     };
+  }
+
+  Widget _reservationLine(InventoryCopy copy, TpPalette palette) {
+    final TextStyle muted = TextStyle(color: palette.textSecondary);
+    final JobCardReservation? r = _reservation;
+    final String text;
+    final Key key;
+    if (_reservationFailed) {
+      text = copy('jc_reservationFailed');
+      key = const Key('inventory.jc.reservationFailed');
+    } else if (r == null) {
+      text = copy('jc_noReservation');
+      key = const Key('inventory.jc.noReservation');
+    } else {
+      text = <String>[
+        copy('jc_reserved').replaceAll('%n', _qty(r.remaining)),
+        if (_reservationCount > 1)
+          copy('jc_reservedOldest')
+              .replaceAll('%n', _reservationCount.toString()),
+      ].join(' ');
+      key = const Key('inventory.jc.reservation');
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: TpSpace.xs),
+      child: Text(text, key: key, style: r == null ? muted : null),
+    );
   }
 
   @override
@@ -306,6 +380,8 @@ class _JobCardIssueScreenState extends ConsumerState<JobCardIssueScreen> {
               ),
             ),
             _lookupLine(copy, palette),
+            if (_isIssue && _lookup == _Lookup.found)
+              _reservationLine(copy, palette),
             const SizedBox(height: TpSpace.lg),
             Text(copy('jc_qty'), style: theme.textTheme.titleSmall),
             const SizedBox(height: TpSpace.xs),

@@ -24,8 +24,20 @@ final class _Repo implements JobCardIssueRepository {
     status: 'Open',
   );
 
+  List<JobCardReservation> reservations = const <JobCardReservation>[];
+  bool reservationsFail = false;
+
   @override
   Future<JobCardRef?> findJobCard(String number) async => card;
+
+  @override
+  Future<List<JobCardReservation>> openReservations({
+    required String jobCard,
+    required String stockId,
+  }) async {
+    if (reservationsFail) throw StateError('read failed');
+    return reservations;
+  }
 
   @override
   Future<JobCardMoveOutcome> post(
@@ -125,6 +137,86 @@ void main() {
     expect(repo.keys, <String>['key-0', 'key-0']);
     expect(repo.payloads.first['source_doc_id'], 'GCKR/JC/1/0826');
     expect(repo.payloads.first['source_doc_type'], 'job_card');
+  });
+
+  testWidgets('after a shortage, Send again mints a new key',
+      (WidgetTester tester) async {
+    _tall(tester);
+    final _Repo repo = _Repo()
+      ..answers.addAll(<Object>[
+        const JobCardMoveShortage(available: 0, requested: 1),
+        const JobCardMovePosted(movementId: 'm'),
+      ]);
+    await tester.pumpWidget(_app(repo));
+    await tester.enterText(
+      find.byKey(const Key('inventory.jc.jobCard')),
+      'gckr/jc/1/0826',
+    );
+    await tester.tap(find.byKey(const Key('inventory.jc.check')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('inventory.jc.send')));
+    await tester.tap(find.byKey(const Key('inventory.jc.send')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('inventory.jc.send')));
+    await tester.pumpAndSettle();
+    expect(repo.keys, <String>['key-0', 'key-1']);
+  });
+
+  testWidgets('the oldest open reservation is shown and consumed',
+      (WidgetTester tester) async {
+    _tall(tester);
+    final _Repo repo = _Repo()
+      ..reservations = <JobCardReservation>[
+        JobCardReservation(
+          id: 'res-new',
+          qty: 3,
+          qtyReleased: 0,
+          qtyConsumed: 0,
+          createdAt: DateTime.utc(2026, 11, 20),
+        ),
+        JobCardReservation(
+          id: 'res-old',
+          qty: 2,
+          qtyReleased: 0,
+          qtyConsumed: 1,
+          createdAt: DateTime.utc(2026, 11, 1),
+        ),
+      ];
+    await tester.pumpWidget(_app(repo));
+    await tester.enterText(
+      find.byKey(const Key('inventory.jc.jobCard')),
+      'gckr/jc/1/0826',
+    );
+    await tester.tap(find.byKey(const Key('inventory.jc.check')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('inventory.jc.reservation')), findsOneWidget);
+    expect(find.textContaining('Reserved for this job card: 1.'), findsOne);
+    expect(find.textContaining('2 reservations'), findsOne);
+    await tester.ensureVisible(find.byKey(const Key('inventory.jc.send')));
+    await tester.tap(find.byKey(const Key('inventory.jc.send')));
+    await tester.pumpAndSettle();
+    expect(repo.payloads.single['reservation_id'], 'res-old');
+  });
+
+  testWidgets('a failed reservation read is said and does not block',
+      (WidgetTester tester) async {
+    _tall(tester);
+    final _Repo repo = _Repo()..reservationsFail = true;
+    await tester.pumpWidget(_app(repo));
+    await tester.enterText(
+      find.byKey(const Key('inventory.jc.jobCard')),
+      'gckr/jc/1/0826',
+    );
+    await tester.tap(find.byKey(const Key('inventory.jc.check')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('inventory.jc.reservationFailed')),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.byKey(const Key('inventory.jc.send')));
+    await tester.tap(find.byKey(const Key('inventory.jc.send')));
+    await tester.pumpAndSettle();
+    expect(repo.payloads.single.containsKey('reservation_id'), isFalse);
   });
 
   testWidgets('a closed job card cannot take material',

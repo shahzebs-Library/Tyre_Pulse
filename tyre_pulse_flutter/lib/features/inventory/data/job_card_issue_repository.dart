@@ -14,6 +14,13 @@ abstract interface class JobCardIssueRepository {
   /// or it does not exist. Matches case-insensitively and exactly.
   Future<JobCardRef?> findJobCard(String number);
 
+  /// Open reservations of [jobCard] on [stockId] (status active), oldest
+  /// first. The issue consumes the oldest ([pickReservation]).
+  Future<List<JobCardReservation>> openReservations({
+    required String jobCard,
+    required String stockId,
+  });
+
   Future<JobCardMoveOutcome> post(
     JobCardMoveDraft draft, {
     required String idempotencyKey,
@@ -40,6 +47,32 @@ final class SupabaseJobCardIssueRepository
             .limit(1);
         // work_order_no is globally unique, so one row is the job card.
         return rows.isEmpty ? null : JobCardRef.fromJson(rows.first);
+      });
+
+  @override
+  Future<List<JobCardReservation>> openReservations({
+    required String jobCard,
+    required String stockId,
+  }) =>
+      guard<List<JobCardReservation>>(() async {
+        final String? jc = normalizeJobCard(jobCard);
+        if (jc == null || stockId.trim().isEmpty) {
+          return const <JobCardReservation>[];
+        }
+        final List<Map<String, dynamic>> rows = await _client
+            .from('stock_reservations')
+            .select('id, qty, qty_released, qty_consumed, created_at')
+            .eq('source_doc_type', 'job_card')
+            .ilike('source_doc_id', escapeLikeExact(jc))
+            .eq('stock_id', stockId)
+            .eq('status', 'active')
+            .order('created_at')
+            .order('id')
+            .limit(50);
+        return <JobCardReservation>[
+          for (final Map<String, dynamic> r in rows)
+            JobCardReservation.fromJson(r),
+        ];
       });
 
   @override

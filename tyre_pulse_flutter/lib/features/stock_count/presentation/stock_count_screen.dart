@@ -105,114 +105,129 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
       context: context,
       builder: (BuildContext dialogContext) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setDialogState) =>
-            AlertDialog(
-          title: Text(copy('addTitle')),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                TextField(
-                  key: const Key('stock.add.size'),
-                  controller: size,
-                  autofocus: true,
-                  decoration: InputDecoration(labelText: copy('size')),
-                ),
-                TextField(
-                  key: const Key('stock.add.description'),
-                  controller: description,
-                  decoration: InputDecoration(labelText: copy('description')),
-                ),
-                TextField(
-                  key: const Key('stock.add.site'),
-                  controller: site,
-                  decoration: InputDecoration(labelText: copy('site')),
-                ),
-                if (sites.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: TpSpace.xs),
-                  Wrap(
-                    spacing: TpSpace.xs,
-                    runSpacing: TpSpace.xs,
-                    children: <Widget>[
-                      for (final String option in sites)
-                        ActionChip(
-                          label: Text(option),
-                          onPressed: () =>
-                              setDialogState(() => site.text = option),
-                        ),
-                    ],
+            // While a capture is being sent the dialog cannot be dismissed
+            // (back or barrier), so it cannot be reopened and sent twice.
+            PopScope(
+          canPop: !saving,
+          child: AlertDialog(
+            title: Text(copy('addTitle')),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  TextField(
+                    key: const Key('stock.add.size'),
+                    controller: size,
+                    autofocus: true,
+                    decoration: InputDecoration(labelText: copy('size')),
                   ),
-                ],
-                TextField(
-                  key: const Key('stock.add.quantity'),
-                  controller: quantity,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: false),
-                  decoration: InputDecoration(labelText: copy('quantity')),
-                ),
-                const SizedBox(height: TpSpace.sm),
-                Text(
-                  copy('addNote'),
-                  key: const Key('stock.add.note'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                if (problem != null) ...<Widget>[
+                  TextField(
+                    key: const Key('stock.add.description'),
+                    controller: description,
+                    decoration: InputDecoration(labelText: copy('description')),
+                  ),
+                  TextField(
+                    key: const Key('stock.add.site'),
+                    controller: site,
+                    decoration: InputDecoration(labelText: copy('site')),
+                  ),
+                  if (sites.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: TpSpace.xs),
+                    Wrap(
+                      spacing: TpSpace.xs,
+                      runSpacing: TpSpace.xs,
+                      children: <Widget>[
+                        for (final String option in sites)
+                          ActionChip(
+                            label: Text(option),
+                            onPressed: () =>
+                                setDialogState(() => site.text = option),
+                          ),
+                      ],
+                    ),
+                  ],
+                  TextField(
+                    key: const Key('stock.add.quantity'),
+                    controller: quantity,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: false),
+                    decoration: InputDecoration(labelText: copy('quantity')),
+                  ),
                   const SizedBox(height: TpSpace.sm),
                   Text(
-                    problem!,
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error),
+                    copy('addNote'),
+                    key: const Key('stock.add.note'),
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
+                  if (problem != null) ...<Widget>[
+                    const SizedBox(height: TpSpace.sm),
+                    Text(
+                      problem!,
+                      style:
+                          TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(context, false),
-              child: Text(copy('cancel')),
-            ),
-            FilledButton(
-              key: const Key('stock.add.save'),
-              onPressed: saving
-                  ? null
-                  : () async {
-                      final int? qty = int.tryParse(quantity.text.trim());
-                      final String? issue = size.text.trim().isEmpty
-                          ? copy('sizeRequired')
-                          : site.text.trim().isEmpty
-                              ? copy('siteRequired')
-                              : (qty == null || qty < 0)
-                                  ? copy('invalid')
-                                  : null;
-                      if (issue != null) {
-                        setDialogState(() => problem = issue);
-                        return;
-                      }
-                      setDialogState(() {
-                        saving = true;
-                        problem = null;
-                      });
-                      final _AddOutcome result = await _recordNew(
-                        size: size.text,
-                        description: description.text,
-                        site: site.text,
-                        quantity: qty!,
-                        copy: copy,
-                      );
-                      if (result.done) {
-                        outcome = result.message;
-                        if (context.mounted) Navigator.pop(context, true);
-                      } else {
+            actions: <Widget>[
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(context, false),
+                child: Text(copy('cancel')),
+              ),
+              FilledButton(
+                key: const Key('stock.add.save'),
+                onPressed: saving
+                    ? null
+                    : () async {
+                        // In-flight guard: a second tap that lands before the
+                        // rebuild disables the button would otherwise record
+                        // a second capture (each send mints its own key).
+                        if (saving) return;
+                        final int? qty = int.tryParse(quantity.text.trim());
+                        final String? issue = size.text.trim().isEmpty
+                            ? copy('sizeRequired')
+                            : site.text.trim().isEmpty
+                                ? copy('siteRequired')
+                                : (qty == null || qty < 0)
+                                    ? copy('invalid')
+                                    : null;
+                        if (issue != null) {
+                          setDialogState(() => problem = issue);
+                          return;
+                        }
                         setDialogState(() {
-                          saving = false;
-                          problem = result.message;
+                          saving = true;
+                          problem = null;
                         });
-                      }
-                    },
-              child: Text(copy('add')),
-            ),
-          ],
+                        final _AddOutcome result = await _recordNew(
+                          size: size.text,
+                          description: description.text,
+                          site: site.text,
+                          quantity: qty!,
+                          copy: copy,
+                        );
+                        if (result.done) {
+                          outcome = result.message;
+                          if (context.mounted) Navigator.pop(context, true);
+                        } else {
+                          setDialogState(() {
+                            saving = false;
+                            problem = result.message;
+                          });
+                        }
+                      },
+                child: saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : Text(copy('add')),
+              ),
+            ],
+          ),
         ),
       ),
     );

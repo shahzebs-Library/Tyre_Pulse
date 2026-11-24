@@ -29,6 +29,7 @@ import 'package:tyre_pulse/core/storage/secure_read.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_capture_outbox.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_inventory_repository.dart';
 import 'package:tyre_pulse/features/inventory/domain/physical_capture.dart';
+import 'package:tyre_pulse/features/stock_count/data/stock_count_repository.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 
 /// What happened to a recorded count.
@@ -106,6 +107,46 @@ PendingCapture stockCountCapture({
         piOwnerships.contains(item.ownership) ? item.ownership! : 'owned',
     locationId: _blank(item.locationId),
     remarks: _blank(reason),
+  );
+}
+
+/// The capture for a stock line that does not exist yet ("Add stock").
+///
+/// A new stock line never writes `stock_records` or `stock_movements`: the
+/// ledger guard refuses a non-zero balance from a client, and the movement
+/// ledger is append-only through the inv_* RPCs. So the line is recorded as a
+/// `proposed_new` physical inventory capture: a reviewer identifies the item
+/// (`inv_pi_capture_map`, never the person who counted it) and an approver
+/// posts the quantity through the opening-balance batch
+/// (`inv_pi_to_opening_batch`). Pure, for tests.
+PendingCapture newStockCapture({
+  required String size,
+  required String? description,
+  required num quantity,
+  required String clientUuid,
+  required String userId,
+  required String sessionId,
+  required DateTime capturedAt,
+}) {
+  final String text = composeStockDescription(size, description);
+  final String? sz = _blank(size);
+  return PendingCapture(
+    clientUuid: clientUuid,
+    userId: userId,
+    sessionId: sessionId,
+    kind: 'proposed_new',
+    quantity: quantity.toDouble(),
+    capturedAt: capturedAt,
+    label: _blank(text),
+    refs: <String, String>{
+      if (_blank(text) != null) 'description': text,
+      if (sz != null) 'tyre_size': sz,
+      'source': 'stock_count_add',
+    },
+    // Not stated by the person adding it, so it stays unknown for the
+    // reviewer to set; ownership follows the count default.
+    condition: 'unknown',
+    ownership: 'owned',
   );
 }
 
@@ -250,25 +291,80 @@ final class StockCountRecorder {
     required String? orgId,
     String? fallbackCountry,
     String? deviceId,
+  }) {
+    return _send(
+      site: item.site,
+      country: item.country,
+      fallbackCountry: fallbackCountry,
+      userId: userId,
+      orgId: orgId,
+      deviceId: deviceId,
+      build: (String sessionId, String clientUuid) => stockCountCapture(
+        item: item,
+        count: count,
+        reason: reason,
+        clientUuid: clientUuid,
+        userId: userId,
+        sessionId: sessionId,
+        capturedAt: _now(),
+      ),
+    );
+  }
+
+  /// Records a NEW stock line ("Add stock") for approval. Nothing reaches the
+  /// stock balance from here: see [newStockCapture]. Same offline and
+  /// idempotency rules as [record] (encrypted outbox, keyed by client_uuid).
+  ///
+  /// [country] is the active country; "All" or blank is refused as
+  /// [StockCountRecordProblem.noPlace] because a store is per country.
+  Future<StockCountRecordResult> recordNew({
+    required String size,
+    required String? description,
+    required String site,
+    required num quantity,
+    required String? country,
+    required String userId,
+    required String? orgId,
+    String? deviceId,
+  }) {
+    return _send(
+      site: site,
+      country: null,
+      fallbackCountry: country,
+      userId: userId,
+      orgId: orgId,
+      deviceId: deviceId,
+      build: (String sessionId, String clientUuid) => newStockCapture(
+        size: size,
+        description: description,
+        quantity: quantity,
+        clientUuid: clientUuid,
+        userId: userId,
+        sessionId: sessionId,
+        capturedAt: _now(),
+      ),
+    );
+  }
+
+  Future<StockCountRecordResult> _send({
+    required String? site,
+    required String? country,
+    required String? fallbackCountry,
+    required String userId,
+    required String? orgId,
+    required String? deviceId,
+    required PendingCapture Function(String sessionId, String clientUuid) build,
   }) async {
-    final String? site = _blank(item.site);
+    final String? place = _blank(site);
     final String? fb = _blank(fallbackCountry);
-    final String? country =
-        _blank(item.country) ?? (fb == null || fb == 'All' ? null : fb);
-    if (site == null || country == null) {
+    final String? countryName =
+        _blank(country) ?? (fb == null || fb == 'All' ? null : fb);
+    if (place == null || countryName == null) {
       throw const StockCountRecordFailure(StockCountRecordProblem.noPlace);
     }
     final String sessionId =
-        await _sessionFor(userId: userId, country: country, site: site);
-    final PendingCapture capture = stockCountCapture(
-      item: item,
-      count: count,
-      reason: reason,
-      clientUuid: _newId(),
-      userId: userId,
-      sessionId: sessionId,
-      capturedAt: _now(),
-    );
+        await _sessionFor(userId: userId, country: countryName, site: place);
+    final PendingCapture capture = build(sessionId, _newId());
     try {
       await _outbox.add(capture);
     } on Object catch (e) {
@@ -300,7 +396,7 @@ final class StockCountRecorder {
         // A session closed on the web since it was remembered: forget it so
         // the next count starts or finds an open one.
         if (err.toLowerCase().contains('session')) {
-          await _remember(userId, placeKey(country, site), null);
+          await _remember(userId, placeKey(countryName, place), null);
         }
         throw StockCountRefused(err);
       }

@@ -82,14 +82,13 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     if (posted == true) ref.invalidate(stockItemsProvider);
   }
 
-  /// Add a stock row for a tyre size at a site (Expo `openAdd`/`submitAdd`).
-  /// Reorder thresholds are offered to Admin and super admin only; everyone
-  /// else leaves them to the server defaults.
+  /// Add stock for a tyre size at a site. Recorded as a proposed new line
+  /// for approval (never a direct stock write): a reviewer identifies the
+  /// item and an approver posts the quantity. Reorder thresholds are set on
+  /// the web once the line exists.
   Future<void> _add(StockCountCopy copy, List<StockItem> rows) async {
     final workspace = ref.read(workspaceContextProvider);
     if (workspace == null) return;
-    final bool mayEditThresholds =
-        workspace.role.isAdministrator || workspace.isSuperAdmin;
     final List<String> sites = <String>{
       for (final StockItem row in rows)
         if ((row.site ?? '').trim().isNotEmpty) row.site!.trim(),
@@ -99,11 +98,10 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     final TextEditingController description = TextEditingController();
     final TextEditingController site = TextEditingController();
     final TextEditingController quantity = TextEditingController();
-    final TextEditingController minimum = TextEditingController(text: '5');
-    final TextEditingController critical = TextEditingController(text: '3');
     bool saving = false;
     String? problem;
-    final bool? saved = await showDialog<bool>(
+    String? outcome;
+    await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setDialogState) =>
@@ -152,23 +150,12 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                       const TextInputType.numberWithOptions(decimal: false),
                   decoration: InputDecoration(labelText: copy('quantity')),
                 ),
-                if (mayEditThresholds) ...<Widget>[
-                  TextField(
-                    key: const Key('stock.add.min'),
-                    controller: minimum,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: false),
-                    decoration: InputDecoration(labelText: copy('minLevel')),
-                  ),
-                  TextField(
-                    key: const Key('stock.add.critical'),
-                    controller: critical,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: false),
-                    decoration:
-                        InputDecoration(labelText: copy('criticalLevel')),
-                  ),
-                ],
+                const SizedBox(height: TpSpace.sm),
+                Text(
+                  copy('addNote'),
+                  key: const Key('stock.add.note'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 if (problem != null) ...<Widget>[
                   const SizedBox(height: TpSpace.sm),
                   Text(
@@ -206,22 +193,20 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                         saving = true;
                         problem = null;
                       });
-                      try {
-                        await ref.read(stockCountRepositoryProvider).create(
-                              size: size.text,
-                              description: description.text,
-                              site: site.text,
-                              quantity: qty!,
-                              workspace: workspace,
-                              writeThresholds: mayEditThresholds,
-                              minLevel: int.tryParse(minimum.text.trim()),
-                              criticalLevel: int.tryParse(critical.text.trim()),
-                            );
+                      final _AddOutcome result = await _recordNew(
+                        size: size.text,
+                        description: description.text,
+                        site: site.text,
+                        quantity: qty!,
+                        copy: copy,
+                      );
+                      if (result.done) {
+                        outcome = result.message;
                         if (context.mounted) Navigator.pop(context, true);
-                      } on Object {
+                      } else {
                         setDialogState(() {
                           saving = false;
-                          problem = copy('addFailed');
+                          problem = result.message;
                         });
                       }
                     },
@@ -235,9 +220,11 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     description.dispose();
     site.dispose();
     quantity.dispose();
-    minimum.dispose();
-    critical.dispose();
-    if (saved == true) ref.invalidate(stockItemsProvider);
+    if (outcome != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(outcome!)),
+      );
+    }
   }
 
   @override
@@ -510,6 +497,64 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     // The balance does not change from a count; nothing to reload.
   }
 
+  /// Records a new stock line for approval and returns what to show. Never
+  /// throws. `done` is false only when nothing was saved, so the dialog stays
+  /// open with the reason.
+  Future<_AddOutcome> _recordNew({
+    required String size,
+    required String description,
+    required String site,
+    required int quantity,
+    required StockCountCopy copy,
+  }) async {
+    final workspace = ref.read(workspaceContextProvider);
+    if (workspace == null) return _AddOutcome(false, copy('addFailed'));
+    String? device;
+    try {
+      device = await ref.read(inventoryDeviceIdProvider.future);
+    } on Object {
+      device = null;
+    }
+    try {
+      final StockCountRecordResult r =
+          await ref.read(stockCountRecorderProvider).recordNew(
+                size: size,
+                description: description,
+                site: site,
+                quantity: quantity,
+                country: workspace.activeCountry,
+                userId: workspace.userId,
+                orgId: workspace.tenantId ?? workspace.companyId,
+                deviceId: device,
+              );
+      return _AddOutcome(
+        true,
+        switch (r) {
+          StockCountRecordResult.sent => copy('addRecorded'),
+          StockCountRecordResult.savedOnPhone => copy('addSavedOnPhone'),
+        },
+      );
+    } on StockCountRecordFailure catch (f) {
+      return _AddOutcome(
+        false,
+        switch (f.problem) {
+          StockCountRecordProblem.noPlace => copy('addNoCountry'),
+          StockCountRecordProblem.needsConnectionForSession =>
+            copy('countNeedsConnection'),
+          StockCountRecordProblem.storage => copy('addFailed'),
+        },
+      );
+    } on StockCountRefused catch (r) {
+      // The line is kept on the phone with the reason (Physical inventory
+      // lists it under needs attention), so the dialog can close.
+      return _AddOutcome(true, '${copy('addRefused')} ${r.message}');
+    } on SupabaseFailure catch (f) {
+      return _AddOutcome(false, f.error.message);
+    } on Object {
+      return _AddOutcome(false, copy('addFailed'));
+    }
+  }
+
   /// Records the count as physical count evidence and returns the sentence
   /// to show. Never throws: every outcome is a message, and the count is kept
   /// on the phone whenever it could be saved at all.
@@ -559,6 +604,12 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
       return copy('saveFailed');
     }
   }
+}
+
+final class _AddOutcome {
+  const _AddOutcome(this.done, this.message);
+  final bool done;
+  final String message;
 }
 
 class _Metric extends StatelessWidget {

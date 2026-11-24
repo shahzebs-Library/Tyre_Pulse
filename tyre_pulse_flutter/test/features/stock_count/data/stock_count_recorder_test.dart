@@ -305,4 +305,137 @@ void main() {
     );
     expect(repo.started, isEmpty);
   });
+
+  group('Add stock (new line for approval)', () {
+    test('the capture is a proposed new line, never a stock write', () {
+      final PendingCapture c = newStockCapture(
+        size: ' 315/80R22.5 ',
+        description: 'Triangle',
+        quantity: 6,
+        clientUuid: 'c1',
+        userId: 'u1',
+        sessionId: 's1',
+        capturedAt: DateTime.utc(2026),
+      );
+      final Map<String, Object?> p = c.toPayload();
+      expect(p['kind'], 'proposed_new');
+      expect(p['item_id'], isNull);
+      expect(p['canonical_id'], isNull);
+      expect(p['quantity'], 6);
+      expect(p['condition'], 'unknown', reason: 'not stated, stays unknown');
+      expect(p['client_uuid'], 'c1');
+      expect(p['idempotency_key'], 'c1');
+      final Map<Object?, Object?> refs = p['refs']! as Map<Object?, Object?>;
+      expect(refs['description'], '315/80R22.5 Triangle');
+      expect(refs['tyre_size'], '315/80R22.5');
+      expect(refs['source'], 'stock_count_add');
+      expect(refs.containsKey('stock_id'), isFalse);
+    });
+
+    test('online: recorded through the capture RPC in that store', () async {
+      final StockCountRecordResult r = await recorder.recordNew(
+        size: '315/80R22.5',
+        description: null,
+        site: 'nhc',
+        quantity: 4,
+        country: 'KSA',
+        userId: 'u1',
+        orgId: 'org',
+      );
+      expect(r, StockCountRecordResult.sent);
+      expect(repo.started, <String>['KSA|nhc']);
+      expect(repo.captures.single['kind'], 'proposed_new');
+      expect(repo.captures.single['quantity'], 4);
+      expect(await outbox.pending('u1'), isEmpty);
+    });
+
+    test('offline with a known session: saved once, sent once', () async {
+      await recorder.recordNew(
+        size: '315/80R22.5',
+        description: null,
+        site: 'NHC',
+        quantity: 1,
+        country: 'KSA',
+        userId: 'u1',
+        orgId: 'org',
+      );
+      repo
+        ..sessionsFailure = _fail(SupabaseFailureCause.offline)
+        ..captureFailure = _fail(SupabaseFailureCause.offline);
+      final StockCountRecordResult r = await recorder.recordNew(
+        size: '385/65R22.5',
+        description: 'Spare',
+        site: 'NHC',
+        quantity: 9,
+        country: 'KSA',
+        userId: 'u1',
+        orgId: 'org',
+      );
+      expect(r, StockCountRecordResult.savedOnPhone);
+      repo
+        ..sessionsFailure = null
+        ..captureFailure = null;
+      await outbox.flush(userId: 'u1', orgId: 'org', repository: repo);
+      await outbox.flush(userId: 'u1', orgId: 'org', repository: repo);
+      expect(repo.captures.where((m) => m['quantity'] == 9), hasLength(1));
+      expect(await outbox.pending('u1'), isEmpty);
+    });
+
+    test('All countries or no store: refused, nothing saved', () async {
+      for (final String? country in <String?>['All', null, '  ']) {
+        await expectLater(
+          recorder.recordNew(
+            size: '315/80R22.5',
+            description: null,
+            site: 'NHC',
+            quantity: 2,
+            country: country,
+            userId: 'u1',
+            orgId: 'org',
+          ),
+          throwsA(
+            isA<StockCountRecordFailure>().having(
+              (StockCountRecordFailure f) => f.problem,
+              'problem',
+              StockCountRecordProblem.noPlace,
+            ),
+          ),
+        );
+      }
+      await expectLater(
+        recorder.recordNew(
+          size: '315/80R22.5',
+          description: null,
+          site: ' ',
+          quantity: 2,
+          country: 'KSA',
+          userId: 'u1',
+          orgId: 'org',
+        ),
+        throwsA(isA<StockCountRecordFailure>()),
+      );
+      expect(repo.started, isEmpty);
+      expect(await outbox.pending('u1'), isEmpty);
+    });
+
+    test('a server refusal is kept on the phone with its reason', () async {
+      repo.captureFailure = _fail(
+        SupabaseFailureCause.forbidden,
+        'Recording a physical inventory capture needs stock:count.',
+      );
+      await expectLater(
+        recorder.recordNew(
+          size: '315/80R22.5',
+          description: null,
+          site: 'NHC',
+          quantity: 2,
+          country: 'KSA',
+          userId: 'u1',
+          orgId: 'org',
+        ),
+        throwsA(isA<StockCountRefused>()),
+      );
+      expect((await outbox.pending('u1')).single.kind, 'proposed_new');
+    });
+  });
 }

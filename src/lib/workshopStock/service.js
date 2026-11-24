@@ -20,9 +20,11 @@ import { createMaterialIssue, postMaterialIssueSlip, issueSlipPostingAvailable }
 import { sanitizeSearchTerm, escapeLike } from '../searchFilter'
 import { jobCardVariants, handoverReason } from '../inventory/floorWorkflow'
 import { buildJobMaterials, summariseJobMaterials, assetMaterialCost } from './jobMaterials'
+import { mapWithConcurrency, chunkArray } from '../concurrency'
 
 export const ROW_LIMIT = 500
 const ID_CHUNK = 150
+const ID_CONCURRENCY = 4
 const BAL_COLS = 'id, item_id, item_code, description, site, country, location_id, location_code, condition, qty_on_hand, qty_reserved, avg_unit_cost, currency, uom'
 const MOVE_COLS = 'id, movement_type, item_id, item_code, site, country, location_code, qty_change, unit_cost, value_change, unvalued_qty_change, valuation_status, currency, source_doc_type, source_doc_id, reverses_movement_id, reference_no, reason, actor_id, created_by, posted_at, created_at, stock_id'
 const INST_COLS = 'id, job_card_no, work_order_id, asset_no, movement_id, stock_id, item_id, qty, installed_by, installed_at, note, photo_path, created_at'
@@ -32,14 +34,15 @@ const missing = (err) => isNotProvisioned(err) || isMissingColumn(err)
 
 async function readByIds(table, cols, col, ids) {
   const unique = [...new Set((ids || []).filter(Boolean))]
-  const out = []
-  for (let i = 0; i < unique.length; i += ID_CHUNK) {
-    const { data, error } = await supabase.from(table).select(cols).in(col, unique.slice(i, i + ID_CHUNK))
+  // Chunks go out ID_CONCURRENCY at a time and are joined in chunk order, so
+  // the rows and the first error are the same as the one-at-a-time loop.
+  const pages = await mapWithConcurrency(chunkArray(unique, ID_CHUNK), ID_CONCURRENCY, async (chunk) => {
+    const { data, error } = await supabase.from(table).select(cols).in(col, chunk)
       .order('id', { ascending: true }).limit(ID_CHUNK * 4)
     if (error) throw error
-    out.push(...(data || []))
-  }
-  return out
+    return data || []
+  })
+  return pages.flat()
 }
 
 /** Installations of some job cards; `available:false` before migration 20261124131000. */

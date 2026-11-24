@@ -11,6 +11,12 @@
 import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { validateWashDetails, canonicalWashValue, comparableWashDetails } from '../washDetails'
+import { mapSettled, settledValue, chunkArray } from '../concurrency'
+
+// Chunked export reads in flight at once. Each chunk already pages through
+// fetchAllPages, so this stays small. Results are replayed in chunk order, so
+// rows and the first failure are the same as the one-at-a-time loops.
+const EXPORT_CHUNK_CONCURRENCY = 3
 
 export const COLS =
   'id,organisation_id,country,site,area,asset_no,vehicle_type,wash_date,wash_time,' +
@@ -314,10 +320,12 @@ function distinctField(rows, key) {
 export async function washExportFleet(rows) {
   const assets = [...new Set(rows.map(r => r.asset_no).filter(Boolean))]
   const fleet = []
-  for (let i = 0; i < assets.length; i += 100) {
-    const result = await fetchAllPages((from, to) => supabase.from('vehicle_fleet')
+  const results = await mapSettled(chunkArray(assets, 100), EXPORT_CHUNK_CONCURRENCY, (part) =>
+    fetchAllPages((from, to) => supabase.from('vehicle_fleet')
       .select('id,organisation_id,country,asset_no,registration_no,region')
-      .in('asset_no', assets.slice(i, i + 100)).order('id').range(from, to))
+      .in('asset_no', part).order('id').range(from, to)))
+  for (const entry of results) {
+    const result = settledValue(entry)
     if (result.truncated) throw new Error('Vehicle details could not be loaded completely. Narrow the export filters.')
     fleet.push(...(unwrap(result) || []))
   }
@@ -327,13 +335,21 @@ export async function washExportFleet(rows) {
 export async function enrichWashPeople(rows) {
   const people = new Map()
   const missing = rows.filter(r => r.created_by && !r.entry_name && !r.entry_username)
-  for (let i = 0; i < missing.length; i += 500) {
-    const data = unwrap(await supabase.rpc('wash_entry_people', { p_ids: missing.slice(i, i + 500).map(r => r.id) }))
+  // People and corrections are independent reads; both go out together, each
+  // chunked with bounded concurrency, and are replayed in the old order.
+  const [peopleResults, correctionResults] = await Promise.all([
+    mapSettled(chunkArray(missing, 500), EXPORT_CHUNK_CONCURRENCY, (part) =>
+      supabase.rpc('wash_entry_people', { p_ids: part.map(r => r.id) })),
+    mapSettled(chunkArray(rows, 500), EXPORT_CHUNK_CONCURRENCY, (part) =>
+      fetchAllPages((from,to) => supabase.from('wash_record_corrections').select('id,wash_id,corrected_by').in('wash_id',part.map(r=>r.id)).order('id').range(from,to))),
+  ])
+  for (const entry of peopleResults) {
+    const data = unwrap(settledValue(entry))
     for (const p of data || []) people.set(p.id, p)
   }
   const corrected = new Map()
-  for(let i=0;i<rows.length;i+=500) {
-    const result = await fetchAllPages((from,to) => supabase.from('wash_record_corrections').select('id,wash_id,corrected_by').in('wash_id',rows.slice(i,i+500).map(r=>r.id)).order('id').range(from,to))
+  for (const entry of correctionResults) {
+    const result = settledValue(entry)
     if(result.truncated) throw new Error('Correction history could not be loaded completely.')
     for(const c of unwrap(result) || []) corrected.set(c.wash_id,[...new Set([...(corrected.get(c.wash_id) || []),c.corrected_by].filter(Boolean))])
   }

@@ -8,7 +8,7 @@
  * change still applies and is still audited by the caller.
  */
 import { supabase } from './_client'
-import { setModuleStatus, bulkSetStatus } from './modulesRegistry'
+import { setModuleStatus, bulkSetStatus, invalidateModuleStatuses } from './modulesRegistry'
 import { toUserMessage } from '../safeError'
 
 const HISTORY_COLS = 'id,module_id,old_status,new_status,old_until,new_until,note,changed_by,reason,changed_at'
@@ -44,6 +44,7 @@ export async function setModuleStatusWithReason(ids, status, { until = null, not
     const d = new Date(until)
     if (!Number.isNaN(d.getTime())) untilIso = d.toISOString()
   }
+  invalidateModuleStatuses()
   try {
     const { data, error } = await supabase.rpc('admin_set_module_status', {
       p_ids: list, p_status: status, p_until: untilIso, p_note: note || null, p_reason: reason,

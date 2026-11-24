@@ -11,6 +11,10 @@ import { actionRowsForInspection, applyPlanToRow } from '../inspectionTyreFlags'
 import { sanitizeSearchTerm } from '../searchFilter'
 import { ensureActionItem, updateActionItem } from './actionCenter'
 import { fetchDirectory } from './profileDirectory'
+import { mapWithConcurrency } from '../concurrency'
+
+/** Corrective-action inserts in flight at once when raising from an inspection. */
+const ACTION_CONCURRENCY = 3
 
 // Least-privilege column set covering the CorrectiveActions page (list + detail
 // + edit form). Omits organisation_id (RLS-managed) and the legacy `photos`
@@ -179,16 +183,23 @@ export async function raiseActionsForInspection(inspection, defects = [], { plan
   const notifyFailed = []
   let skipped = skippedUpFront
 
-  // One at a time: a single duplicate must not roll back the rest of the batch.
-  for (const row of rows) {
+  // Each row is its own insert, so a single duplicate never rolls back the rest
+  // of the batch. Rows go out ACTION_CONCURRENCY at a time (each insert and its
+  // Action Center assignment is a full round trip to the database region) and
+  // the outcomes are folded in input order, so created / failed / notified lists
+  // read exactly as the one-at-a-time loop produced them. When two rows share a
+  // defect key the uniqueness guard decides which one lands, so that batch stays
+  // strictly sequential to keep "the first row wins" unchanged.
+  const keys = rows.map((row) => row.source_detail)
+  const width = new Set(keys).size === keys.length ? ACTION_CONCURRENCY : 1
+  const outcomes = await mapWithConcurrency(rows, width, async (row) => {
     const { data, error } = await supabase.from('corrective_actions').insert(row).select(COLS).single()
     if (error) {
       // 23505 = the V496 uniqueness guard did its job; that is a skip, not a failure.
-      if (error.code === '23505') skipped += 1
-      else failed.push({ key: row.source_detail, error: toUserMessage(error) })
-      continue
+      if (error.code === '23505') return { kind: 'skipped' }
+      return { kind: 'failed', entry: { key: row.source_detail, error: toUserMessage(error) } }
     }
-    created.push(data)
+    const out = { kind: 'created', data }
     // The Action Center is where the assignee is told and where the work is
     // tracked. A failure here must not undo the action that was raised.
     const plan = plans[row.source_detail]
@@ -212,11 +223,19 @@ export async function raiseActionsForInspection(inspection, defects = [], { plan
           due_date: row.due_date,
           impact: row.description.split('\n')[0],
         })
-        notified.push(plan.assignee.name)
+        out.notified = plan.assignee.name
       } catch (e) {
-        notifyFailed.push({ key: row.source_detail, error: toUserMessage(e) })
+        out.notifyFailed = { key: row.source_detail, error: toUserMessage(e) }
       }
     }
+    return out
+  })
+  for (const o of outcomes) {
+    if (o.kind === 'skipped') { skipped += 1; continue }
+    if (o.kind === 'failed') { failed.push(o.entry); continue }
+    created.push(o.data)
+    if (o.notified !== undefined) notified.push(o.notified)
+    if (o.notifyFailed) notifyFailed.push(o.notifyFailed)
   }
   return { created, skipped, failed, notified, notifyFailed }
 }

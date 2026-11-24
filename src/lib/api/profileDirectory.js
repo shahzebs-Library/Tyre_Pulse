@@ -1,4 +1,5 @@
 import { supabase } from './_client'
+import { mapWithConcurrency, mapSettled, settledValue, chunkArray } from '../concurrency'
 
 // The PII-free staff directory. Every reader that needs OTHER people's names
 // goes through the SECURITY DEFINER function `list_profile_directory`, never a
@@ -13,6 +14,8 @@ import { supabase } from './_client'
 const RPC = 'list_profile_directory'
 const PAGE = 1000 // the function's own per-call ceiling
 const CHUNK = 200
+/** Directory chunks in flight at once; results are folded in chunk order. */
+const CHUNK_CONCURRENCY = 4
 
 /**
  * Directory rows for a set of ids. Throws on a failed read (callers that treat
@@ -24,9 +27,12 @@ export async function fetchDirectoryByIds(ids) {
   const uniq = [...new Set((Array.isArray(ids) ? ids : [])
     .filter((id) => typeof id === 'string' && id.trim() !== ''))]
   const out = []
-  for (let i = 0; i < uniq.length; i += CHUNK) {
-    const chunk = uniq.slice(i, i + CHUNK)
-    const { data, error } = await supabase.rpc(RPC, { p_ids: chunk, p_limit: CHUNK })
+  const results = await mapSettled(chunkArray(uniq, CHUNK), CHUNK_CONCURRENCY,
+    (chunk) => supabase.rpc(RPC, { p_ids: chunk, p_limit: CHUNK }))
+  // Folded in chunk order: same rows, and the first failing chunk's error, as
+  // the one-at-a-time loop.
+  for (const entry of results) {
+    const { data, error } = settledValue(entry)
     if (error) throw error
     for (const row of (data || [])) out.push(row)
   }
@@ -97,14 +103,16 @@ export async function getSignerProfiles(ids) {
   const uniq = [...new Set((Array.isArray(ids) ? ids : [])
     .filter((id) => typeof id === 'string' && id.trim() !== ''))]
   if (uniq.length === 0) return map
-  for (let i = 0; i < uniq.length; i += CHUNK) {
-    const chunk = uniq.slice(i, i + CHUNK)
+  const results = await mapWithConcurrency(chunkArray(uniq, CHUNK), CHUNK_CONCURRENCY, async (chunk) => {
     try {
       const { data } = await supabase.rpc(RPC, { p_ids: chunk, p_limit: CHUNK })
-      for (const p of (data || [])) {
-        if (p && p.id != null) map.set(String(p.id), p)
-      }
-    } catch { /* best effort: a failed chunk leaves those ids unresolved */ }
+      return data || []
+    } catch { return [] /* best effort: a failed chunk leaves those ids unresolved */ }
+  })
+  for (const rows of results) {
+    for (const p of rows) {
+      if (p && p.id != null) map.set(String(p.id), p)
+    }
   }
   return map
 }

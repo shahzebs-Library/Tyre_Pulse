@@ -15,6 +15,7 @@
  * `.limit()` under the PostgREST cap. Row security decides what each user sees.
  */
 import { supabase, toServiceError, fetchAllPages, applyCountry, isNotProvisioned } from './_client'
+import { mapSettled, settledValue } from '../concurrency'
 import {
   buildUnmatchedReview, reconcileStock, foldLedger, stockLineCode, parseTyreSize, sizeSearchPattern,
 } from '../inventory/stockReconcile'
@@ -22,6 +23,8 @@ import {
 const STOCK_COLS = 'id, organisation_id, country, site, description, brand, tyre_size, item_id, qty_on_hand, stock_qty, qty_reserved, valued_qty, unvalued_qty, custom_data'
 const READ_MAX = 20000
 const CHUNK = 200
+/** Chunked reads in flight at once; results are always folded in chunk order. */
+const CHUNK_CONCURRENCY = 4
 
 const chunks = (arr, n = CHUNK) => {
   const out = []
@@ -64,8 +67,13 @@ async function readLedger(scope) {
 /** Material Master ids that carry a catalogue link, for the given item ids. */
 async function readCatalogueLinked(itemIds) {
   const set = new Set()
-  for (const ids of chunks(itemIds)) {
-    const { data, error } = await supabase.from('material_canonical_items').select('item_id').in('item_id', ids).limit(CHUNK)
+  // Read the chunks together, then apply the SAME rules in chunk order as the
+  // old one-at-a-time loop: the first failing chunk decides (not provisioned
+  // -> null, anything else -> error), so the outcome is unchanged.
+  const results = await mapSettled(chunks(itemIds), CHUNK_CONCURRENCY, (ids) =>
+    supabase.from('material_canonical_items').select('item_id').in('item_id', ids).limit(CHUNK))
+  for (const entry of results) {
+    const { data, error } = settledValue(entry)
     if (error) {
       if (isNotProvisioned(error)) return null
       throw toServiceError(error, 'Could not read catalogue links.')
@@ -105,11 +113,13 @@ export async function loadStockReconcile(scope = {}) {
 async function readItemsByCode(codes) {
   const out = []
   const variants = [...new Set(codes.flatMap((c) => [c, c.toLowerCase()]))]
-  for (const part of chunks(variants)) {
-    const { data, error } = await supabase.from('material_master')
+  const results = await mapSettled(chunks(variants), CHUNK_CONCURRENCY, (part) =>
+    supabase.from('material_master')
       .select('id, organisation_id, country, item_code, item_name, brand')
       .in('item_code', part)
-      .limit(500)
+      .limit(500))
+  for (const entry of results) {
+    const { data, error } = settledValue(entry)
     if (error) throw toServiceError(error, 'Could not read Material Master.')
     out.push(...(data || []))
   }

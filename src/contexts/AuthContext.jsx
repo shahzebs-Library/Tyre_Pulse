@@ -4,7 +4,8 @@ import { queryClient } from '../lib/queryClient'
 import { setMonitoringUser, clearMonitoringUser } from '../lib/monitoring'
 import { identifyUser, resetAnalyticsUser } from '../lib/analytics'
 import { audit } from '../lib/auditLogger'
-import { getPermissionOverrides, resolveCapability, resolvePermissions, baseRoleAllows, defaultViewAccess, NEW_FEATURES_ADMIN_ONLY_KEY } from '../lib/permissionMatrix'
+import { getPermissionOverrides, resolveCapability, resolvePermissions, baseRoleAllows, defaultViewAccess, NEW_FEATURES_ADMIN_ONLY_KEY, PERMISSION_OVERRIDES_KEY } from '../lib/permissionMatrix'
+import { invalidateConfiguration } from '../lib/configurationStore'
 import { resolveExportAllowed, registerExportGate } from '../lib/exportCapability'
 import { resolveAccess, overrideToFlags } from '../lib/accessResolver'
 import { hasUnmetMfa } from '../lib/authAssurance'
@@ -67,12 +68,20 @@ const ROLE_DEFAULTS = {
   'Data Monitor Officer': k => ['accidents'].includes(k),
 }
 
+// A tab refocus within this window of the last access read does not re-read.
+const REFOCUS_MIN_GAP_MS = 30000
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const profileChannelRef  = useRef(null)
   const refreshAccessRef   = useRef(null)
+  // When access was last read (login or refresh), plus a single-flight guard so
+  // a burst of realtime events (an admin saving many permission rows at once)
+  // runs ONE refresh, then one more if events arrived meanwhile, instead of
+  // four RPCs per event. Each RPC is a full round trip to the database region.
+  const accessRefreshRef   = useRef({ running: null, again: false, lastAt: 0 })
   const currentUserIdRef   = useRef(null)
   const lastActivityRef    = useRef(Date.now())
   // True while signIn() is running its own approval/lock check, so the auth
@@ -304,6 +313,7 @@ export function AuthProvider({ children }) {
       // makes hasPermission deny by default rather than crash.
       setModulePerms({})
     } finally {
+      accessRefreshRef.current.lastAt = Date.now()
       // THE reason this is a finally: setLoading(false) used to sit after five
       // awaits, so any one of them rejecting stranded `loading` at true forever
       // and ProtectedRoute rendered a bare spinner for the rest of the session.
@@ -392,6 +402,9 @@ export function AuthProvider({ children }) {
   // SECURITY DEFINER and fail-safe, so a transient error never wipes access.
   const refreshAccess = useCallback(async () => {
     try {
+      // A refresh exists to pick up a change made elsewhere, so the role
+      // overrides must not be served from the 60 s configuration cache.
+      invalidateConfiguration('app_settings', PERMISSION_OVERRIDES_KEY)
       const [permsRes, grantsRes, capsRes, roleCapsRes] = await Promise.all([
         supabase.rpc('get_user_module_permissions'),
         supabase.rpc('get_my_access_grants').then(r => r, () => ({ data: null, error: true })),
@@ -417,11 +430,28 @@ export function AuthProvider({ children }) {
       // Refresh module lifecycle statuses too (best-effort, {}-safe).
       listModuleStatuses().then(setModuleStatuses)
     } catch { /* keep current access on a transient failure */ }
+    finally { accessRefreshRef.current.lastAt = Date.now() }
   }, [profile?.role, modulePerms])
   // Expose the latest refreshAccess to the profile realtime handler (which is a
   // plain function created before this callback) so a live role change can
   // re-pull the role-keyed module map immediately.
   refreshAccessRef.current = refreshAccess
+
+  // Coalesced refresh for realtime events: concurrent requests share one run,
+  // and a request that arrives mid-run triggers exactly one follow-up so the
+  // final state is never older than the last event.
+  const scheduleAccessRefresh = useCallback(() => {
+    const state = accessRefreshRef.current
+    if (state.running) { state.again = true; return state.running }
+    const run = (async () => {
+      do {
+        state.again = false
+        await refreshAccessRef.current?.()
+      } while (state.again)
+    })()
+    state.running = run.finally(() => { state.running = null })
+    return state.running
+  }, [])
 
   // Re-pull THIS user's own profile row (role / site / country / approval), so a
   // role change an admin just made is reflected without a re-login. Paired with
@@ -452,20 +482,26 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!user?.id) return undefined
     const onVisible = () => {
-      if (document.visibilityState === 'visible') { refreshProfile(user.id); refreshAccess() }
+      if (document.visibilityState !== 'visible') return
+      // Switching tabs back and forth should not re-read profile + access each
+      // time. Realtime still delivers real changes immediately; this only skips
+      // a refocus that follows a read made under REFOCUS_MIN_GAP_MS ago.
+      if (Date.now() - accessRefreshRef.current.lastAt < REFOCUS_MIN_GAP_MS) return
+      refreshProfile(user.id)
+      scheduleAccessRefresh()
     }
     document.addEventListener('visibilitychange', onVisible)
     const ch = supabase
       .channel(`access-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_access_grants', filter: `user_id=eq.${user.id}` }, () => refreshAccess())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'module_permissions' }, () => refreshAccess())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings', filter: 'key=eq.permission_overrides' }, () => refreshAccess())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_access_grants', filter: `user_id=eq.${user.id}` }, () => scheduleAccessRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'module_permissions' }, () => scheduleAccessRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings', filter: 'key=eq.permission_overrides' }, () => scheduleAccessRefresh())
       .subscribe()
     return () => {
       document.removeEventListener('visibilitychange', onVisible)
       supabase.removeChannel(ch)
     }
-  }, [user?.id, refreshAccess, refreshProfile])
+  }, [user?.id, scheduleAccessRefresh, refreshProfile])
 
   const isSuperAdmin = profile?.is_super_admin === true
 

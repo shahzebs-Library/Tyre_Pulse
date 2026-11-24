@@ -14,6 +14,7 @@ import {
   VIEWS, listLocations, listAssignablePeople, dispatchTransfer, receiveTransfer, issueStock,
 } from './inventory'
 import { sanitizeSearchTerm, escapeLike } from '../searchFilter'
+import { mapWithConcurrency, chunkArray } from '../concurrency'
 import {
   putawaySourceIds, putawayReceiveLines, buildPickList, jobCardVariants, summariseHandover,
 } from '../inventory/floorWorkflow'
@@ -22,6 +23,7 @@ const notProvisioned = (err) => isNotProvisioned(err) || isMissingColumn(err)
 const BALANCE_COLS = 'id, item_id, item_code, description, site, country, location_id, location_code, condition, ownership, qty_on_hand, qty_reserved, uom, updated_at'
 const MAX_PAGE = 200
 const ID_CHUNK = 150
+const ID_CONCURRENCY = 4
 /** Upper bound of reservation / movement rows read for one job card. */
 export const JOB_CARD_ROW_LIMIT = 500
 
@@ -33,14 +35,14 @@ function fail(err) {
 /** Read rows of `table` whose `col` is in `ids`, in chunks. Bounded by ids.length. */
 async function readByIds(table, cols, col, ids) {
   const unique = [...new Set((ids || []).filter(Boolean))]
-  const out = []
-  for (let i = 0; i < unique.length; i += ID_CHUNK) {
-    const chunk = unique.slice(i, i + ID_CHUNK)
+  // Up to ID_CONCURRENCY chunks in flight, joined in chunk order (same rows and
+  // same first error as the sequential loop, a quarter of the waiting).
+  const pages = await mapWithConcurrency(chunkArray(unique, ID_CHUNK), ID_CONCURRENCY, async (chunk) => {
     const { data, error } = await supabase.from(table).select(cols).in(col, chunk).order('id', { ascending: true }).limit(ID_CHUNK * 4)
     if (error) throw error
-    out.push(...(data || []))
-  }
-  return out
+    return data || []
+  })
+  return pages.flat()
 }
 
 // ── Put-away ────────────────────────────────────────────────────────────────

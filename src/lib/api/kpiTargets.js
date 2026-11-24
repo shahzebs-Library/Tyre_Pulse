@@ -11,6 +11,7 @@
  */
 import { supabase, unwrap, fetchAllPages, ServiceError } from './_client'
 import { expectRows } from './writeGuard'
+import { mapSettled, settledValue } from '../concurrency'
 
 // Least-privilege column set for kpi_targets. Live columns:
 // id,metric,target_value,year,month,site,region,created_by,updated_at,country,
@@ -78,9 +79,14 @@ export async function saveKpiTargets(rows) {
   try {
     const years = [...new Set(list.map((r) => Number(r.year)).filter(Number.isFinite))]
     const stored = []
-    for (const year of years) {
-      stored.push(...(unwrap(await supabase.from('kpi_targets')
-        .select('id,metric,year,month,site,country').eq('year', year)) || []))
+    // One read per year, all independent: they go out together and are folded
+    // in year order (same rows, same first error as the old loop). The writes
+    // below stay one at a time: a later row may match a row inserted earlier
+    // in this same save.
+    const perYear = await mapSettled(years, 4, (year) => supabase.from('kpi_targets')
+      .select('id,metric,year,month,site,country').eq('year', year))
+    for (const entry of perYear) {
+      stored.push(...(unwrap(settledValue(entry)) || []))
     }
     for (const row of list) {
       const matches = stored.filter((s) => sameTargetScope(s, row))

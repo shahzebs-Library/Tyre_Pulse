@@ -275,13 +275,18 @@ function StockRegisterView({ embedded = false }) {
     setLoading(true)
     setLoadError('')
     try {
+      // The two reads are independent, so they go out together: each is a full
+      // round trip to the database region, and awaiting them one after the
+      // other doubled the wait. Velocity from tyre issues over the last 3
+      // months stays best-effort: a failed velocity read leaves cover as N/A
+      // instead of failing the stock register, exactly as before.
+      const velocityRead = Promise.resolve()
+        .then(() => stock.listTyreIssuesSince(velocitySince(new Date(), 3)))
+        .then((rows) => rows ?? [], () => null)
       const stockRecords = await stock.listStockRecords({ country: activeCountry }) ?? []
       if (stale()) return
       setRecords(stockRecords)
-      // Velocity from tyre issues over the last 3 months. Best-effort: a failed
-      // velocity read leaves cover as N/A instead of failing the stock register.
-      let velData = []
-      try { velData = await stock.listTyreIssuesSince(velocitySince(new Date(), 3)) ?? [] } catch { velData = null }
+      const velData = await velocityRead
       if (stale()) return
       const countsBySite = stockRecords.reduce((out, row) => { out[row.site] = (out[row.site] || 0) + 1; return out }, {})
       const legacyAggregates = stockRecords.filter(row => !row.custom_data?.stock_item && countsBySite[row.site] === 1)

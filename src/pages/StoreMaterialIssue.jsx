@@ -45,13 +45,15 @@ import {
   listSlipsFromConsumption, getSlipLines, getIssueSummary, getMaterialIssueCoverage,
   materialIssuesProvisioned, listMaterialIssues, createMaterialIssue,
   listIssuableJobCards, DEFAULT_LINE_MAX,
+  issueSlipPostingAvailable, postMaterialIssueSlip, listSlipStockLines,
 } from '../lib/api/materialIssue'
+import { slipStockOptions, pickSlipStockLine } from '../lib/inventory/stockFlowRules'
 import { listMaterials } from '../lib/api/materialMaster'
 import {
   summarizeIssues, filterSlips, slipFilterOptions, monthlyIssueTrend,
   docTypeLabel, isReturn, DOC_TYPE_KEYS,
   SLIP_EXPORT_COLUMNS, slipExportRows, LINE_EXPORT_COLUMNS, lineExportRows,
-  validateDraftIssue, draftLineValue, issueStatusLabel,
+  validateDraftIssue, draftLineValue, issueStatusLabel, slipPostingSummary,
 } from '../lib/materialIssue'
 import { currencyForCountry, MIXED_CURRENCY } from '../lib/governedCost'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
@@ -162,6 +164,10 @@ export default function StoreMaterialIssue() {
   // hid the form from someone the server would accept.
   const canWrite = isSuperAdmin || WRITE_ROLES.has(profile?.role)
     || (typeof hasCapability === 'function' && !!hasCapability('stock', 'edit'))
+  // WP5 also lets the people who issue stock raise a slip (stock:issue). Only
+  // offered once the posting function exists, because the same migration widens
+  // the write policy; before it the server would refuse the save.
+  const canIssue = typeof hasCapability === 'function' && !!hasCapability('stock', 'issue')
   // Recorded on the slip so a paper document names who issued it. `issued_by`
   // is stamped server-side from auth.uid(); this is the readable name beside it.
   const profileName = profile?.full_name || profile?.username || ''
@@ -506,7 +512,7 @@ export default function StoreMaterialIssue() {
       )}
 
       {tab === 'raise' && (
-        <RaiseTab canWrite={canWrite} activeCountry={activeCountry} profileName={profileName} onSaved={load} />
+        <RaiseTab canWrite={canWrite} canIssue={canIssue} activeCountry={activeCountry} profileName={profileName} onSaved={load} />
       )}
 
       {tab === 'analytics' && (
@@ -867,11 +873,19 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
 // shared by every row is the defect that made three signature fields overwrite
 // each other elsewhere in this app: typing in row 2 would blank row 1.
 const EMPTY_LINE = {
-  item_code: '', item_description: '', qty: '', uom: '', unit_cost: '', category: '', query: '',
+  item_code: '', item_description: '', qty: '', uom: '', unit_cost: '', category: '', query: '', stock_id: '',
 }
 
-function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
+function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, profileName, onSaved }) {
   const [provisioned, setProvisioned] = useState(null) // null = checking
+  // null = not known yet; true once inv_issue_slip exists (WP5). Until then a slip
+  // is a document only and the page says so.
+  const [postingOn, setPostingOn] = useState(null)
+  const [postResult, setPostResult] = useState(null)
+  const [posting, setPosting] = useState(false)
+  // { [lineIndex]: { loading, rows, error } } - the stock lines a line can come from
+  const [stockFor, setStockFor] = useState({})
+  const canWrite = canWriteBase || (postingOn === true && canIssue)
   const [checking, setChecking] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -909,6 +923,8 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
       if (!alive) return
       setProvisioned(ok)
       if (ok) {
+        const canPost = await issueSlipPostingAvailable()
+        if (alive) setPostingOn(canPost)
         try {
           const res = await listMaterialIssues({ country: activeCountry, limit: 50 })
           if (alive) { setRecent(res.rows); setRecentError('') }
@@ -948,7 +964,7 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
    * master's reviewed item codes are the real catalog here.
    */
   const searchItems = useCallback((idx, term) => {
-    setLine(idx, { query: term, item_code: '', item_description: '' })
+    setLine(idx, { query: term, item_code: '', item_description: '', stock_id: '' })
     setItemsFor(idx)
     if (itemTimer.current) clearTimeout(itemTimer.current)
     setItemsError('')
@@ -970,7 +986,56 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
   const addLine = () => setLines((ls) => [...ls, { ...EMPTY_LINE }])
   const removeLine = (i) => setLines((ls) => (ls.length === 1 ? [{ ...EMPTY_LINE }] : ls.filter((_, k) => k !== i)))
 
-  const check = useMemo(() => validateDraftIssue(header, lines), [header, lines])
+  const check = useMemo(
+    () => validateDraftIssue(header, lines, { posting: postingOn === true }),
+    [header, lines, postingOn],
+  )
+
+  // Posting mode: load the stock lines each item can come from (slip site, item
+  // code) and pre-select the obvious one. Re-runs when the site, document type
+  // or an item changes; quantities change the pick but not the read.
+  const stockKey = postingOn === true
+    ? `${header.country}|${header.site}|${lines.map((l) => l.item_code || '').join(',')}`
+    : ''
+  useEffect(() => {
+    if (!stockKey) return undefined
+    let alive = true
+    lines.forEach((l, i) => {
+      if (!l.item_code) return
+      setStockFor((m) => ({ ...m, [i]: { loading: true, rows: m[i]?.rows || [], error: '' } }))
+      listSlipStockLines({ country: header.country, site: header.site, itemCode: l.item_code })
+        .then((rows) => {
+          if (!alive) return
+          setStockFor((m) => ({ ...m, [i]: { loading: false, rows, error: '' } }))
+          setLines((ls) => ls.map((x, k) => {
+            if (k !== i || x.item_code !== l.item_code) return x
+            const still = x.stock_id && rows.some((r) => r.id === x.stock_id)
+            if (still) return x
+            const pick = pickSlipStockLine(rows, { site: header.site, itemCode: x.item_code, qty: x.qty, docType: header.doc_type })
+            return { ...x, stock_id: pick ? pick.id : '' }
+          }))
+        })
+        .catch((err) => {
+          if (!alive) return
+          setStockFor((m) => ({ ...m, [i]: { loading: false, rows: [], error: toUserMessage(err, 'Could not read the stock lines for this item.') } }))
+        })
+    })
+    return () => { alive = false }
+    // lines is read through stockKey on purpose: typing a quantity must not re-read stock
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockKey, header.doc_type])
+
+  const postSlip = async (slipId) => {
+    setPosting(true)
+    try {
+      const res = await postMaterialIssueSlip(slipId)
+      if (res.reason === 'not_available') setPostingOn(false)
+      setPostResult({ ...slipPostingSummary(res), slipId, ok: res.ok })
+      return res
+    } finally {
+      setPosting(false)
+    }
+  }
   const currency = currencyForCountry(header.country)
 
   const save = async () => {
@@ -997,7 +1062,12 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
         return
       }
       setSaved(res.issue_number || 'Saved')
+      setPostResult(null)
+      // Saving and posting are two calls; a refused posting leaves a saved slip
+      // that can be posted again once corrected (the post is idempotent).
+      if (postingOn === true && res.id) await postSlip(res.id)
       setLines([{ ...EMPTY_LINE }])
+      setStockFor({})
       setHeader((h) => ({ ...h, work_order_no: '', asset_no: '', notes: '' }))
       if (onSaved) onSaved()
       try {
@@ -1041,7 +1111,7 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
   if (!canWrite) {
     return (
       <Notice tone="info" icon={Ban} title="You can read the register but not raise a slip.">
-        <p>Raising a material issue needs Admin, Manager or Director, or the stock edit permission.</p>
+        <p>Raising a material issue needs Admin, Manager or Director, or the stock edit permission{postingOn === true ? ' or the stock issue permission' : ''}.</p>
         <p>To take stock off the shelf against a job card, use Stock, Receiving, Issue stock.</p>
       </Notice>
     )
@@ -1054,6 +1124,20 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
           <p>Slip <span className="font-mono">{txt(saved)}</span> has been recorded.</p>
         </Notice>
       )}
+      {postResult && (
+        <Notice
+          tone={postResult.tone}
+          icon={postResult.tone === 'info' ? Check : AlertTriangle}
+          title={postResult.title}
+          action={!postResult.ok && postResult.slipId && postingOn === true ? (
+            <button type="button" className={btnCls} disabled={posting} onClick={() => postSlip(postResult.slipId)}>
+              {posting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Post again
+            </button>
+          ) : null}
+        >
+          <p>{postResult.detail}</p>
+        </Notice>
+      )}
       {saveError && (
         <Notice tone="error" icon={AlertTriangle} title="Could not save that slip.">
           <p>{saveError}</p>
@@ -1064,7 +1148,12 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
           real in-flow results list inside this card, and the country/document
           controls are native <select>, so nothing here wants cropping. */}
       <Card>
-        <CardHeader title="Slip details" description="Records the slip only: it does not take stock off the shelf. Issue stock in Stock, Receiving." />
+        <CardHeader
+          title="Slip details"
+          description={postingOn === true
+            ? 'Saving posts the slip to stock: an issue (MIS) takes the items off the chosen stock lines, a return (MRT) puts them back against the same job card.'
+            : 'Records the slip only: it does not take stock off the shelf. Issue stock in Stock, Receiving.'}
+        />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
             <span>Document type</span>
@@ -1228,6 +1317,7 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
                               uom: m.uom || '',
                               category: m.category || '',
                               query: '',
+                              stock_id: '',
                             })
                             setItemsFor(null)
                           }}
@@ -1242,6 +1332,34 @@ function RaiseTab({ canWrite, activeCountry, profileName, onSaved }) {
                   {l.item_description && (
                     <p className="text-[11px] text-[var(--text-muted)] truncate">{l.item_description}</p>
                   )}
+                  {postingOn === true && l.item_code && (() => {
+                    const st = stockFor[i] || { loading: true, rows: [], error: '' }
+                    const opts = slipStockOptions(st.rows, { site: header.site, itemCode: l.item_code })
+                    if (st.error) return <p role="alert" className="text-[11px] text-red-400">{st.error}</p>
+                    if (st.loading && opts.length === 0) return <p className="text-[11px] text-[var(--text-muted)]">Reading stock lines...</p>
+                    if (opts.length === 0) {
+                      return (
+                        <p className="text-[11px] text-amber-300">
+                          No stock line for this item{header.site ? ` at ${header.site}` : ''}. Pick the site, or receive the item first.
+                        </p>
+                      )
+                    }
+                    return (
+                      <select
+                        aria-label={`Stock line for item ${i + 1}`}
+                        value={l.stock_id || ''}
+                        onChange={(e) => setLine(i, { stock_id: e.target.value })}
+                        className={inputCls}
+                      >
+                        <option value="">Choose the stock line</option>
+                        {opts.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {txt(o.location_code)} - {txt(o.condition)} - {o.available == null ? 'N/A' : nOr(o.available)} free
+                          </option>
+                        ))}
+                      </select>
+                    )
+                  })()}
                 </div>
                 <input
                   className={`${inputCls} sm:col-span-2`}

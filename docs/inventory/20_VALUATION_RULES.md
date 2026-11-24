@@ -122,7 +122,7 @@ known cost). A receipt, opening line or adjustment without cost goes to `unvalue
 | `opening` | + | at line cost; no cost -> unvalued | Only from an approved opening-balance batch (owner rule 2) |
 | `receipt` | + | `qty x unit_cost`, blends WAC | Unpriced receipt -> unvalued |
 | `issue` | - | certainly valued part at the current avg; certainly unvalued part -> reconciliation; undecided part -> pending allocation, no value | Consignment issue also returns an informational consumption record (section 6) |
-| `issue_return` | + | at the cost it was issued at; else current avg; else unvalued | |
+| `issue_return` | + | at the cost it was issued at (server: from the source issues on the same stock line and document, only when every one was fully valued); else unvalued. Never the current average, never a client-supplied cost | Must name the source document; bounded by issued minus already returned (20261124091000) |
 | `transfer_out` / `transfer_in` | -/+ | certainly valued value travels with the units | `transfer()` does both legs; unvalued units stay unvalued; undecided units arrive as pending allocation; refused across currencies |
 | `supplier_return` | - | out at current avg | `creditUnitCost` gives a **purchase price variance** reported separately, never added to stock |
 | `supplier_credit` | 0 | reduces valued value | Cannot make value negative; excess = variance `supplier_credit_exceeds_stock_value` |

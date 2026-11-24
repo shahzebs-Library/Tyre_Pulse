@@ -16,7 +16,7 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   positiveQty, issueDocFields, availableQty, issueShortfall, receivableLines, overReceived,
-  seesAllSites, crossSiteOutOfScope,
+  seesAllSites, crossSiteOutOfScope, returnNeedsDocument, slipStockOptions, pickSlipStockLine,
 } from '../lib/inventory/stockFlowRules'
 import {
   releaseReservation, returnIssuedStock, returnTransferRemaining, receiveTransfer,
@@ -113,6 +113,55 @@ describe('ledger postings send the right payload', () => {
     await expect(returnIssuedStock({ stockId: 's', qty: 0, reason: 'x' }, 'k')).rejects.toMatchObject({ code: 'INV_BAD_QTY' })
   })
 
+  it('returnIssuedStock requires the job card and never sends a unit cost (WP5: bounded, valued at issued cost)', async () => {
+    const before = state.calls.length
+    await expect(returnIssuedStock({ stockId: 's', qty: 1, reason: 'x' }, 'k')).rejects.toMatchObject({ code: 'INV_NO_SOURCE_DOC' })
+    await expect(returnIssuedStock({ stockId: 's', qty: 1, reason: 'x', sourceDocId: '  ' }, 'k')).rejects.toMatchObject({ code: 'INV_NO_SOURCE_DOC' })
+    expect(state.calls.length).toBe(before)
+    await returnIssuedStock({ stockId: 's', qty: 1, reason: 'x', sourceDocId: ' JC1 ' }, 'k')
+    const payload = lastRpc()[2].p_payload
+    expect(payload).toMatchObject({ source_doc_type: 'job_card', source_doc_id: 'JC1' })
+    expect(payload).not.toHaveProperty('unit_cost')
+  })
+
+  it('returnNeedsDocument is true only when no job card is typed', () => {
+    expect(returnNeedsDocument('')).toBe(true)
+    expect(returnNeedsDocument('   ')).toBe(true)
+    expect(returnNeedsDocument('GCKR/JC/1')).toBe(false)
+  })
+
+  it('crossSiteOutOfScope stops warning once the transit leg is exempt (WP5 applied)', () => {
+    const from = { site: 'DEMO YARD' }; const to = { site: 'NHC' }
+    expect(crossSiteOutOfScope(from, to, { sites: ['DEMO YARD'] })).toBe(true)
+    expect(crossSiteOutOfScope(from, to, { sites: ['DEMO YARD'], transitExempt: true })).toBe(false)
+  })
+
+  it('slipStockOptions keeps the slip site and item, most free stock first', () => {
+    const rows = [
+      { id: 'a', item_code: 'X-1', site: 'NHC', location_code: 'B', qty_on_hand: 5, qty_reserved: 4 },
+      { id: 'b', item_code: 'x-1', site: 'nhc', location_code: 'A', qty_on_hand: 9, qty_reserved: 0 },
+      { id: 'c', item_code: 'X-1', site: 'RIY', location_code: 'A', qty_on_hand: 50 },
+      { id: 'd', item_code: 'Y-2', site: 'NHC', location_code: 'A', qty_on_hand: 50 },
+      null,
+    ]
+    const opts = slipStockOptions(rows, { site: 'NHC', itemCode: 'X-1' })
+    expect(opts.map((o) => o.id)).toEqual(['b', 'a'])
+    expect(opts[0].available).toBe(9)
+    expect(opts[1].available).toBe(1)
+  })
+
+  it('pickSlipStockLine covers the quantity for an issue and never guesses a return', () => {
+    const rows = [
+      { id: 'a', item_code: 'X-1', site: 'NHC', qty_on_hand: 2 },
+      { id: 'b', item_code: 'X-1', site: 'NHC', qty_on_hand: 9 },
+    ]
+    expect(pickSlipStockLine(rows, { site: 'NHC', itemCode: 'X-1', qty: 3 }).id).toBe('b')
+    expect(pickSlipStockLine(rows, { site: 'NHC', itemCode: 'X-1', qty: 30 })).toBeNull()
+    expect(pickSlipStockLine(rows, { site: 'NHC', itemCode: 'X-1', qty: 1, docType: 'MRT' })).toBeNull()
+    expect(pickSlipStockLine([rows[0]], { site: 'NHC', itemCode: 'X-1', qty: 1, docType: 'mrt' }).id).toBe('a')
+    expect(pickSlipStockLine([], { site: 'NHC', itemCode: 'X-1', qty: 1 })).toBeNull()
+  })
+
   it('returnTransferRemaining requires a reason and returns everything by default', async () => {
     await returnTransferRemaining({ transferId: 't', reason: ' wrong site ' }, 'k')
     expect(lastRpc()[1]).toBe('inv_transfer_return_remaining')
@@ -124,7 +173,7 @@ describe('ledger postings send the right payload', () => {
 
   it('a server refusal reaches the screen as written', async () => {
     state.rpc = { data: null, error: { code: '42501', message: 'This stock is outside your country or site scope.' } }
-    const err = await returnIssuedStock({ stockId: 's', qty: 1, reason: 'x' }, 'k').catch((e) => e)
+    const err = await returnIssuedStock({ stockId: 's', qty: 1, reason: 'x', sourceDocId: 'JC1' }, 'k').catch((e) => e)
     expect(err).toBeTruthy()
     expect(String(err.message)).toMatch(/scope/i)
   })

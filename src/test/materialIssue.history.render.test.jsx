@@ -5,7 +5,7 @@ vi.mock('../contexts/SettingsContext',()=>({useSettings:()=>({activeCountry:'KSA
 vi.mock('../contexts/AuthContext',()=>({useAuth:()=>({profile:{role:'Manager'}})}))
 vi.mock('../components/charts/EChart',()=>({default:()=>null}))
 vi.mock('../components/ui/EnterpriseTable',()=>({default:({data})=><div>{data.length} visible rows</div>}))
-vi.mock('../lib/api/materialIssue',()=>({listSlipsFromConsumption:h.list,getMaterialIssueCoverage:h.coverage,getIssueSummary:h.summary,DEFAULT_LINE_MAX:60000,getSlipLines:vi.fn(),materialIssuesProvisioned:vi.fn(),listMaterialIssues:vi.fn(),createMaterialIssue:vi.fn(),listIssuableJobCards:vi.fn()}))
+vi.mock('../lib/api/materialIssue',()=>({listSlipsFromConsumption:h.list,getMaterialIssueCoverage:h.coverage,getIssueSummary:h.summary,DEFAULT_LINE_MAX:60000,getSlipLines:vi.fn(),materialIssuesProvisioned:vi.fn(),listMaterialIssues:vi.fn(),createMaterialIssue:vi.fn(),listIssuableJobCards:vi.fn(),issueSlipPostingAvailable:vi.fn(async()=>false),postMaterialIssueSlip:vi.fn(),listSlipStockLines:vi.fn(async()=>[])}))
 import { MemoryRouter } from 'react-router-dom'
 import StoreMaterialIssue from '../pages/StoreMaterialIssue'
 beforeEach(()=>{h.list.mockReset().mockResolvedValue({slips:[],truncated:false,unslipped:0});h.coverage.mockReset().mockResolvedValue({first:'2018-09-22',last:'2026-10-17'});h.summary.mockReset().mockResolvedValue({ok:false})})

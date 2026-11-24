@@ -82,22 +82,71 @@ export function seesAllSites(sites) {
 }
 
 /**
- * The server keeps in-transit stock at the DESTINATION site, and every leg is
- * checked against the poster's site scope. So a person scoped to some sites
- * cannot dispatch to a site outside that scope (the in-transit leg is refused,
- * nothing posts), nor return such a transfer to its source. Warn before sending.
+ * The server keeps in-transit stock at the DESTINATION site, and (before WP5,
+ * migration 20261124091000) every leg is checked against the poster's site scope.
+ * So a person scoped to some sites cannot dispatch to a site outside that scope
+ * (the in-transit leg is refused, nothing posts). Warn before sending.
+ *
+ * Once WP5 is applied the dispatch is allowed (only the source must be in scope,
+ * the receiver needs the destination, a return needs the source); pass
+ * `transitExempt: true` then and this returns false.
  *
  * @param {{site?:string}} from  source location
  * @param {{site?:string}} to    destination location
- * @param {{sites?:string[], isAdmin?:boolean}} who
+ * @param {{sites?:string[], isAdmin?:boolean, transitExempt?:boolean}} who
  * @returns {boolean} true when the server is expected to refuse
  */
-export function crossSiteOutOfScope(from, to, { sites, isAdmin = false } = {}) {
-  if (isAdmin || !from || !to) return false
+export function crossSiteOutOfScope(from, to, { sites, isAdmin = false, transitExempt = false } = {}) {
+  if (isAdmin || transitExempt || !from || !to) return false
   const a = norm(from.site)
   const b = norm(to.site)
   if (!a || !b || a === b) return false
   if (seesAllSites(sites)) return false
   const scope = new Set((sites || []).map(norm))
   return !scope.has(b)
+}
+
+/**
+ * A return to stock must name the job card (or document) the material was issued
+ * against: the server bounds a return by what that document took from the stock
+ * line, and values it at the issued cost (never a guess). True when the form has
+ * nothing to send.
+ */
+export function returnNeedsDocument(doc) {
+  return !issueDocFields(doc).sourceDocId
+}
+
+/**
+ * The balance lines a material issue slip line can come from: the slip's site
+ * and the line's item code, most available first. Rows come from v_inv_balances.
+ *
+ * @param {Array<object>} balances
+ * @param {{site?:string, itemCode?:string}} where
+ */
+export function slipStockOptions(balances = [], { site, itemCode } = {}) {
+  const s = norm(site)
+  const c = norm(itemCode)
+  return (Array.isArray(balances) ? balances : [])
+    .filter((b) => b && b.id && (!c || norm(b.item_code) === c) && (!s || norm(b.site) === s))
+    .map((b) => ({ ...b, available: availableQty(b) }))
+    .sort((a, b) => ((b.available ?? -1) - (a.available ?? -1))
+      || String(a.location_code ?? '').localeCompare(String(b.location_code ?? '')))
+}
+
+/**
+ * Pre-select the stock line for a slip line, or null when the choice is not
+ * obvious. An issue takes the line with the most free stock that covers the
+ * quantity. A return goes back to the line it was issued from, so it is picked
+ * only when there is exactly one candidate; otherwise the person chooses (the
+ * server refuses a return the line never issued).
+ *
+ * @returns {object|null}
+ */
+export function pickSlipStockLine(balances, { site, itemCode, qty, docType = 'MIS' } = {}) {
+  const opts = slipStockOptions(balances, { site, itemCode })
+  if (opts.length === 0) return null
+  if (String(docType || '').toUpperCase() === 'MRT') return opts.length === 1 ? opts[0] : null
+  const q = positiveQty(qty)
+  const fit = opts.filter((o) => q === null || (o.available ?? 0) >= q)
+  return fit[0] || null
 }

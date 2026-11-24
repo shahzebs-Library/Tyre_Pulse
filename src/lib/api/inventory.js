@@ -1117,16 +1117,24 @@ export function releaseReservation({ reservationId, qty }, key) {
 
 /**
  * Return issued stock to the shelf (movement_type issue_return) through
- * inv_post_movement. Linked to the job card it came back from. A return carries
- * no assumed cost: without a unit cost the units come back at unknown cost and
- * open a cost reconciliation, never a guessed value.
+ * inv_post_movement, linked to the job card it came back from.
+ *
+ * The job card is REQUIRED: the server (WP5, migration 20261124091000) bounds a
+ * return by what that job card took from this stock line, minus what already
+ * came back, and values it at the cost it was issued at. A return never takes a
+ * unit cost from the client and never takes the current average: when the issue
+ * was not fully valued the units come back unvalued and open a cost
+ * reconciliation. No unit_cost is sent.
  */
 export function returnIssuedStock({ stockId, qty, reason, sourceDocType, sourceDocId, referenceNo }, key) {
   if (!stockId || !qtyOk(qty)) return Promise.reject(new ServiceError('Choose a stock line and a quantity above zero.', 'INV_BAD_QTY'))
   if (!String(reason || '').trim()) return Promise.reject(new ServiceError('Give a reason for the return.', 'INV_NO_REASON'))
+  if (!String(sourceDocId || '').trim()) {
+    return Promise.reject(new ServiceError('Name the job card the material was issued against.', 'INV_NO_SOURCE_DOC'))
+  }
   return rpcWrite('inv_post_movement', {
     stock_id: stockId, movement_type: 'issue_return', qty_change: Number(qty), reason: String(reason).trim(),
-    reference_no: referenceNo || null, source_doc_type: sourceDocType || 'issue_return', source_doc_id: sourceDocId || null,
+    reference_no: referenceNo || null, source_doc_type: sourceDocType || 'job_card', source_doc_id: String(sourceDocId).trim(),
   }, key)
 }
 

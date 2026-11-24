@@ -1,170 +1,119 @@
 # WP5: issue, return and transfer: database changes proposed (NOT applied)
 
 Measured on the live database (project jhssdmeruxtrlqnwfksc), read-only, 2026-11-23.
-Nothing below has been run. Each item states the evidence, then the exact SQL.
+Nothing below is applied. The SQL lives in the migration file named in section 0.
 Apply only on the owner's yes, inside a transaction, with the verify step.
+
+---
+
+## 0. Status
+
+All of sections 1, 2 and 2b are written as ONE reviewed migration:
+`supabase/migrations/20261124091000_wms_wp5_transfer_scope_issue_slip.sql`. **Not applied** (the owner has not
+approved it). It was proven on the live database on 2026-11-24 inside transactions forced to roll back (a `DO`
+block that ends with `raise exception`, plus a trailing `select 1/0`); afterwards none of its objects existed and
+every balance was unchanged. The file header carries the verify query and the undo SQL. The client already
+detects the posting function and keeps today's "document only" behaviour until it exists.
 
 ---
 
 ## 1. Site-scoped people cannot dispatch to, or return from, another site
 
-**Evidence.** `_inv_transfer_dispatch` posts two legs: `transfer_out` from the source balance and `transfer_in`
-into an `IN-TRANSIT` location that `_inv_transit_location(org, to.country, to.site)` creates **at the destination
-site**. Every leg goes through `_inv_post`, which always runs
-`if not public._inv_scope_ok(v_rec.country, v_rec.site) then raise 'This stock is outside your country or site scope.'`
-(regardless of `p_check_cap`). So a Store Keeper scoped to `DEMO YARD, DEMO PLANT` (two such live profiles) who
-dispatches to `NHC` is refused on the in-transit leg; the whole transaction rolls back, nothing posts. The same
-person cannot return a transfer to their own site either: `_inv_transfer_move(…, 'return')` posts `transfer_out`
-from the in-transit balance at the destination site. Only `receive` is explicitly scope-checked against the
-destination, which is correct.
+**Evidence.** `_inv_transfer_dispatch` posts `transfer_out` from the source and `transfer_in` into an
+`IN-TRANSIT` location that `_inv_transit_location` creates **at the destination site**. Every leg goes through
+`_inv_post`, which always checks `_inv_scope_ok(country, site)`. Measured before the change: Demo Store Keeper B
+(sites DEMO YARD, DEMO PLANT) dispatching to another site -> `42501 This stock is outside your country or site scope.`
+Return-to-source had no source-scope check at all.
 
-The client now warns before dispatching (`crossSiteOutOfScope` in `src/lib/inventory/stockFlowRules.js`); the
-server stays the authority.
+**Design (no session flag).** The first proposal (a `inv.transfer_leg` setting checked inside `_inv_post`) was
+replaced. A client cannot run `set_config` through PostgREST today, but a security boundary should not depend on
+that. The exemption is now a function **argument**:
 
-**Proposed fix.** Let the two internal transit legs through the scope check, and nothing else. The caller's scope
-is still enforced on the side they act on: dispatch already checks the source location
-(`_inv_scope_ok(v_from.country, v_from.site)`), receive checks the destination. Return needs a source check added.
+- `_inv_post(p, p_check_cap, p_transit_leg)` holds the ledger body (built from the live body by anchored
+  replacement). `p_transit_leg` skips the scope check only when the balance / location is an `IN-TRANSIT`
+  location (`code = 'IN-TRANSIT'`, `location_type = 'in_transit'`) of the caller's organisation, and only for
+  `transfer_in`, `transfer_out` and `release`.
+- `_inv_post(p, p_check_cap)` is a wrapper passing `false`, so the ~20 existing callers keep the full check.
+- Both forms are SECURITY DEFINER and **not executable by anon or authenticated**. Only the transfer functions pass
+  `true`, and they pick the balance themselves (transit location, transfer line), never from the payload.
+- Dispatch: only the in-transit leg is exempt; the caller must still be in scope for the SOURCE.
+- Receive: unchanged; the receiver must be in scope for the DESTINATION.
+- Return: new check, the caller must be in scope for the SOURCE (in `_inv_transfer_move` and, before anything
+  posts, in `_inv_transfer_return_remaining`); only the out-of-transit leg and the reservation release on the
+  transit balance are exempt.
 
-```sql
-begin;
+## 2. A material issue slip now moves stock (`inv_issue_slip`)
 
--- 1a. _inv_post: skip the scope check only for a leg on an IN-TRANSIT location posted by a transfer RPC.
---     Anchored replace on the live body; aborts unless the anchor occurs exactly once.
-do $$
-declare v_def text; v_old text; v_new text; v_n int;
-begin
-  v_def := pg_get_functiondef('public._inv_post(jsonb,boolean)'::regprocedure);
-  v_old := 'if not public._inv_scope_ok(v_rec.country, v_rec.site) then';
-  v_new := 'if not public._inv_scope_ok(v_rec.country, v_rec.site)'
-        || ' and not (coalesce(current_setting(''inv.transfer_leg'', true), '''') = ''on'''
-        || ' and exists (select 1 from public.inventory_locations tl where tl.id = v_rec.location_id and tl.code = ''IN-TRANSIT'')) then';
-  v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
-  if v_n <> 1 then raise exception 'anchor found % times in _inv_post, expected 1', v_n; end if;
-  execute replace(v_def, v_old, v_new);
-end $$;
+- `material_issue_lines.stock_id` (chosen by the user) and `movement_id` (written only by the server: excluded from
+  the column grants of `authenticated`, insert and update).
+- `inv_issue_slip({ issue_id })`: posts every unposted line of an **issued** slip in one transaction. MIS through
+  `_inv_issue`, MRT as `issue_return` through `_inv_post` with the `issue` capability. Checks, server-side: approved
+  user, `stock:issue`, slip in the caller's org, slip country/site in the caller's scope, each line's stock in the
+  same org, country and site as the slip, line code = stock item code. Identity comes from `auth.uid()`; nothing
+  from the client except the slip id.
+- **Idempotent**: a line with a movement is skipped; the header row lock serialises two concurrent posts. The keys
+  `slip:` / `iss:slip:` are reserved (refused from `inv_issue` / `inv_post_movement`).
+- **No negative stock**: a shortage raises `23514 Line N: not enough stock (A available, B asked).` and the whole
+  slip rolls back (nothing posts, the line keeps no movement).
+- Source document: the job card when the slip names one (`source_doc_type = 'job_card'`, same as Stock > Issue),
+  else `material_issue` / slip id. An MRT must name the job card.
+- Posted lines and slips are frozen by triggers: no edit of qty / stock / code, no delete, no cancel, no change of
+  type, site, job card or number.
+- The write policies also admit `app_user_can('stock','issue')`, so Store Keepers (issue, no edit) can raise a
+  slip. The RESTRICTIVE org / country / site write policies are unchanged.
 
--- 1b. _inv_transfer_dispatch: set the flag around the in-transit leg only.
-do $$
-declare v_def text; v_old text; v_n int;
-begin
-  v_def := pg_get_functiondef('public._inv_transfer_dispatch(jsonb)'::regprocedure);
-  v_old := '    v_in := public._inv_post(jsonb_build_object(''idempotency_key'', ''trf:'' || v_key || '':'' || v_n || '':transit''';
-  v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
-  if v_n <> 1 then raise exception 'dispatch anchor found % times', v_n; end if;
-  v_def := replace(v_def, v_old, '    perform set_config(''inv.transfer_leg'', ''on'', true);' || chr(10) || v_old);
-  v_old := '    insert into public.stock_transfer_lines(';
-  v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
-  if v_n <> 1 then raise exception 'dispatch line anchor found % times', v_n; end if;
-  v_def := replace(v_def, v_old, '    perform set_config(''inv.transfer_leg'', '''', true);' || chr(10) || v_old);
-  execute v_def;
-end $$;
+## 2b. Defects from the live acceptance test (folded into the same migration)
 
--- 1c. _inv_transfer_move: return must be checked against the SOURCE; flag the transit leg.
-do $$
-declare v_def text; v_old text; v_n int;
-begin
-  v_def := pg_get_functiondef('public._inv_transfer_move(jsonb,text)'::regprocedure);
-  v_old := '  if p_mode = ''receive'' and not public._inv_scope_ok(v_t.country, v_t.to_site) then';
-  v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
-  if v_n <> 1 then raise exception 'move scope anchor found % times', v_n; end if;
-  v_def := replace(v_def, v_old,
-    '  if p_mode = ''return'' and not public._inv_scope_ok(v_t.country, v_t.site) then' || chr(10)
-    || '    raise exception ''The source is outside your scope.'' using errcode = ''42501'';' || chr(10)
-    || '  end if;' || chr(10) || v_old);
-  v_old := '    v_out := public._inv_post(jsonb_build_object(''idempotency_key'', ''trf:'' || v_key || '':'' || ln.id || '':out''';
-  v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
-  if v_n <> 1 then raise exception 'move out anchor found % times', v_n; end if;
-  v_def := replace(v_def, v_old, '    perform set_config(''inv.transfer_leg'', ''on'', true);' || chr(10) || v_old);
-  v_old := '    v_in := public._inv_post(jsonb_build_object(''idempotency_key'', ''trf:'' || v_key || '':'' || ln.id || '':in''';
-  v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
-  if v_n <> 1 then raise exception 'move in anchor found % times', v_n; end if;
-  v_def := replace(v_def, v_old, '    perform set_config(''inv.transfer_leg'', '''', true);' || chr(10) || v_old);
-  execute v_def;
-end $$;
+| Ref | Defect (measured) | Fix |
+|---|---|---|
+| D3 | `inv_post_movement` accepted a bare `receipt` (+7, no GRN/PO/supplier) from a Store Keeper | `receipt` / `consignment_receipt` refused unless `app_is_org_admin()`; goods arrive through `inv_receive_goods` |
+| D3+ | `post_stock_movement` (legacy, every approved user) checked **no capability**: a Reporter issued 1 and received +9 | receipt as D3; every other type needs `_inv_cap_for(type)`, except `adjustment_up/down` (phone count screens; owner decision) |
+| D4 | `issue_return` unbounded (+50 against 3 issued); `return` type the same | a return must name its source document; bounded per stock line by issued minus already returned (reversals excluded) |
+| D4 value | a return without cost took the current average | value = issued cost when every matching issue was fully valued, else **unvalued**; the client's `unit_cost` is ignored (docs/inventory/20, valuation.js and `returnIssuedStock` now agree) |
+| D6 | retry of a reservation-backed issue -> "key already used for a different posting" | `_inv_issue` answers from the ledger first; a different stock or qty on the same key is still refused |
+| D7 | slip lines accepted any code and qty | a line needs a material-master code of the slip's org and country, or a stock line (its code is stamped in); qty > 0 |
 
-commit;
-```
+## Proof (rolled back, 2026-11-24)
 
-**Verify (rolled back).** Impersonate `d3c61ee2-…` (Store Keeper, `DEMO YARD, DEMO PLANT`): dispatch DEMO YARD to
-another site posts both legs; receiving at that other site is refused (`The destination is outside your scope.`);
-returning it posts both legs; a direct `inv_post_movement` on any IN-TRANSIT balance is still refused (flag unset).
-Also check `_inv_transfer_return_remaining`'s reservation-release loop: its `_inv_post` 'release' call on the transit
-balance needs the same flag (wrap it with `set_config('inv.transfer_leg','on',true)` / `''`).
+Users: Demo Store Keeper B `d3c61ee2…` (DEMO YARD, DEMO PLANT), Demo Store Keeper A `31362945…` narrowed inside the
+transaction to `DEMO OTHER`, owner super admin `d2d43a5f…`, Store Keeper MD JAHID `69faeb71…` (KSA, all sites),
+Reporter `33e40d9c…`. A test location `DEMO-OTH-WH` at site `DEMO OTHER` was created inside the transaction.
 
-Rollback: re-run `create or replace` from the three bodies saved with `pg_get_functiondef` before applying.
+| Case | Result |
+|---|---|
+| B dispatches 2 DEMO YARD -> DEMO OTHER | allowed; source 17 -> 15, transit 2 at DEMO OTHER |
+| B `set_config('inv.transfer_leg'/'inv.posting'/'inv.owner_override','on')` then `inv_post_movement` transfer_out / issue on that transit balance | refused 42501 scope |
+| B calls `_inv_post(p,false,true)`, `_inv_transfer_move`, `_inv_issue_slip` directly | refused 42501 permission denied |
+| B receives at DEMO OTHER | refused 42501 destination |
+| B ordinary in-scope issue (2-argument path) | allowed (regression check) |
+| A (DEMO OTHER only): return to source / dispatch from DEMO YARD / receive 1 | refused / refused / allowed |
+| B returns the remaining 1 | allowed; source 16, transit 0, transfer completed |
+| B raises an MIS slip (issue, no edit) and posts 3 | allowed; stock 10 -> 7 |
+| Same slip posted again | posted 0, already 1, stock 7 |
+| B inserts a line with `movement_id`, or rewrites it | refused 42501 (column grant) |
+| B edits / deletes a posted line, cancels / deletes the slip | refused 42501 (triggers) |
+| Shortage: MIS 50 on 7 | refused 23514, stock 7 |
+| MIS 3 on a job card, MRT 2 on it | stock 7 -> 4 -> 6; return valued at the issued cost (90.00 = 2 x 45) |
+| MRT 5 with 1 still out / MRT without job card | refused 23514 / 22023 |
+| Line stock at another site than the slip; slip at an out-of-scope site | refused 22023 / 42501 |
+| D3 bare receipt (both RPCs) as B; owner receipt | refused 42501; owner allowed |
+| D4 return 50 vs 3; return 2 with `unit_cost 999`; 2 more; no document; `return` type on a never-issued card | refused; allowed at 45.00 each; refused; refused; refused |
+| D6 retry of a reservation issue; same key other qty | replayed, qty unchanged; refused 23505 |
+| D7 unknown code qty 99999; qty 0; description only; code differs from stock line; stock line with blank code | refused; refused; refused; refused; allowed, code stamped |
+| Reporter posts a slip / issues via `post_stock_movement` | refused 42501 |
+| Owner and MD JAHID post MIS at AMAALA | allowed (5 -> 3 -> 2) |
 
----
+Afterwards: `_inv_post(jsonb,boolean,boolean)` and `inv_issue_slip` absent, backup table absent, no test location,
+Keeper A's sites unchanged, balances unchanged. Only the slip-number sequence advanced (sequences do not roll back).
 
-## 2. An in-app material issue slip never moves stock
+## Open (owner decisions)
 
-**Evidence.** `material_issues` / `material_issue_lines` carry only the mint-number, doc-type and site triggers.
-No trigger and no RPC posts a slip line to `stock_movements`; lines carry `item_code`, not a balance. Saving an MIS
-does not take stock off the shelf and an MRT does not put it back. The page now says so in one sentence and points to
-Stock > Receiving (Issue stock / Return to stock), which post through `inv_issue` / `inv_post_movement`.
-
-Also: the write policy is `app_is_elevated() OR app_user_can('stock','edit')`. Store Keeper has `issue`, `transfer`,
-`receive` but **not** `edit` (tested by impersonation), so the people who issue parts cannot raise the slip.
-
-**Proposed fix.** Give each slip line an optional balance and its posting, and one RPC that posts a slip's lines
-atomically through the existing `_inv_issue` / `_inv_post`.
-
-```sql
-begin;
-
-alter table public.material_issue_lines
-  add column if not exists stock_id uuid references public.stock_records(id),
-  add column if not exists movement_id uuid references public.stock_movements(id);
-
-create or replace function public.inv_issue_slip(p_payload jsonb)
-returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
-declare v_org uuid := public.app_current_org(); v_key text := nullif(btrim(p_payload->>'idempotency_key'), '');
-  v_h public.material_issues%rowtype; ln public.material_issue_lines%rowtype; v_post jsonb; v_n int := 0;
-begin
-  if not public.is_approved_and_unlocked() or not public.inv_can('issue') then
-    raise exception 'Stock permission "issue" is required.' using errcode = '42501';
-  end if;
-  if v_key is null then raise exception 'An idempotency_key is required.' using errcode = '22023'; end if;
-  select * into v_h from public.material_issues where id = (p_payload->>'issue_id')::uuid and organisation_id = v_org for update;
-  if not found then raise exception 'Slip not found.' using errcode = 'P0002'; end if;
-  if v_h.status <> 'issued' then raise exception 'Only an issued slip posts stock (this one is %).', v_h.status using errcode = '22023'; end if;
-  for ln in select * from public.material_issue_lines where issue_id = v_h.id and stock_id is not null and movement_id is null
-            order by line_no for update loop
-    v_n := v_n + 1;
-    if v_h.doc_type = 'MIS' then
-      v_post := public._inv_issue(jsonb_build_object('idempotency_key', v_key || ':' || ln.id, 'stock_id', ln.stock_id,
-        'qty', ln.qty, 'reference_no', v_h.issue_number, 'source_doc_type', 'material_issue', 'source_doc_id', v_h.id::text,
-        'reason', coalesce(v_h.work_order_no, v_h.notes)));
-    else
-      v_post := public._inv_post(jsonb_build_object('idempotency_key', 'mrt:' || v_key || ':' || ln.id, 'stock_id', ln.stock_id,
-        'movement_type', 'issue_return', 'qty_change', ln.qty, 'reference_no', v_h.issue_number,
-        'source_doc_type', 'material_issue', 'source_doc_id', v_h.id::text, 'reason', coalesce(v_h.work_order_no, v_h.notes)), true);
-    end if;
-    if v_post->>'status' = 'refused_shortage' then
-      raise exception 'Line %: not enough stock to issue.', ln.line_no using errcode = '23514';
-    end if;
-    update public.material_issue_lines set movement_id = (v_post->>'movement_id')::uuid where id = ln.id;
-  end loop;
-  return jsonb_build_object('issue_id', v_h.id, 'posted_lines', v_n);
-end $$;
-
-revoke all on function public.inv_issue_slip(jsonb) from public, anon;
-grant execute on function public.inv_issue_slip(jsonb) to authenticated, service_role;
-
--- Let the people who issue stock raise the slip (country/site write policies stay as they are).
-drop policy if exists material_issues_write on public.material_issues;
-create policy material_issues_write on public.material_issues for all to public
-  using (app_is_elevated() or app_user_can('stock','edit') or app_user_can('stock','issue'))
-  with check (app_is_elevated() or app_user_can('stock','edit') or app_user_can('stock','issue'));
-drop policy if exists material_issue_lines_write on public.material_issue_lines;
-create policy material_issue_lines_write on public.material_issue_lines for all to public
-  using (app_is_elevated() or app_user_can('stock','edit') or app_user_can('stock','issue'))
-  with check (app_is_elevated() or app_user_can('stock','edit') or app_user_can('stock','issue'));
-
-commit;
-```
-
-Then the client (`createMaterialIssue`) adds a balance picker per line and calls `inv_issue_slip` after saving.
-Not done in code yet because the column and RPC do not exist.
+- `post_stock_movement` `adjustment_up` / `adjustment_down` still need no capability (the Expo and Flutter count
+  screens use them): any approved user in scope can adjust a balance.
+- Stock quick entry (`save_stock_entry`, "New delivery") still posts a receipt without a GRN (needs stock edit or
+  create and a reference).
+- A return goes back to the stock line it was issued from; returning to another condition / location is refused.
+- After applying, `crossSiteOutOfScope(..., { transitExempt: true })` stops the client warning on dispatch.
 
 ---
 

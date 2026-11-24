@@ -155,7 +155,7 @@
     "loading": "Loading...",
     "emptyHistory": "No movement history yet",
     "documentedOnly": "Receipts, transfers, supplier returns, scrap and returns need their own document. Use one of these instead:",
-    "noAdjustRight": "Only an issue can be logged here. Stock adjustments need the adjustment approval right.",
+    "noAdjustRight": "Only an issue can be logged here. Stock adjustments are posted only by an Admin or the super admin.",
     "refused": "You do not have permission to post this movement. Use the matching workflow instead.",
     "links": {
       "receive": "Receive goods",

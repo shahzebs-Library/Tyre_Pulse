@@ -4,7 +4,7 @@ import StockMovementsPanel from '../components/stock/StockMovementsPanel'
 import ReorderLevelsPanel from '../components/stock/ReorderLevelsPanel'
 import { useSearchParams } from 'react-router-dom'
 import InventoryHub from '../components/inventory/InventoryHub'
-import { resolveSection, makeCan } from '../lib/inventory/hubSections'
+import { resolveSection } from '../lib/inventory/hubSections'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { stock } from '../lib/api'
 import { listSites } from '../lib/api/sites'
@@ -200,9 +200,11 @@ export default function StockManagement() {
 /** The stock register (formerly the whole /stock page). */
 function StockRegisterView({ embedded = false }) {
   const { t } = useLanguage()
-  const { profile, hasCapability } = useAuth()
+  const { profile, isSuperAdmin, hasCapability } = useAuth()
   const [, setHubParams] = useSearchParams()
-  const canAdjust = useMemo(() => makeCan({ hasCapability })('adjustment_approve'), [hasCapability])
+  // Owner decision 2026-11-24: count adjustments are posted only by the super
+  // admin or an Admin (enforced in the database too); the capability alone is not enough.
+  const canAdjust = !!isSuperAdmin || String(profile?.role || '').toLowerCase() === 'admin'
   const movementTypes = useMemo(() => allowedMovementTypes(canAdjust), [canAdjust])
   const goToWorkflow = useCallback((link) => {
     setHubParams((prev) => {

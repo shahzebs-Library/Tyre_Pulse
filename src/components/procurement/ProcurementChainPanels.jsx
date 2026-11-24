@@ -23,7 +23,7 @@ import {
   searchItems, newIdempotencyKey, SUPPLIER_STATUSES,
 } from '../../lib/api/procurementChain'
 import {
-  requisitionPoDraft, receiptPlan, outstandingQty, currencyForCountry, scopedCountry,
+  requisitionPoDraft, requisitionMaterial, receiptPlan, outstandingQty, currencyForCountry, scopedCountry,
 } from '../../lib/procurementChain'
 
 const fmtNum = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString())
@@ -138,7 +138,7 @@ export function SupplierPicker({ value, onPick, country, id = 'proc-supplier' })
 /** Approved requisition -> PO header + catalogued line, then link the requisition. */
 export function RaisePoModal({ requisition, onClose, onDone }) {
   const [supplier, setSupplier] = useState(null)
-  const [material, setMaterial] = useState(null)
+  const [material, setMaterial] = useState(() => requisitionMaterial(requisition))
   const [unitPrice, setUnitPrice] = useState(requisition?.est_cost ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')

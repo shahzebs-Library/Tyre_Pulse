@@ -36,6 +36,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { decideRequisition } from '../lib/api/procurementChain'
 import {
   requisitionStatusOptions, canEditRequisition, canDecideRequisition, canRaisePo, currencyScope, scopedCountry,
+  requisitionMaterial,
 } from '../lib/procurementChain'
 import { useProcurementCaps, MaterialPicker, RaisePoModal } from '../components/procurement/ProcurementChainPanels'
 
@@ -90,7 +91,7 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
         status: initial.status || 'draft',
         notes: initial.notes || '',
       } : EMPTY_FORM)
-      setMaterial(null)
+      setMaterial(initial ? requisitionMaterial(initial) : null)
       setError('')
     }
   }, [open, initial])
@@ -109,16 +110,18 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
     if (!statusOptions.includes(form.status)) { setError('You cannot set this status.'); return }
     setBusy(true)
     try {
-      if (initial?.id) await updateRequisition(initial.id, form)
+      // item_id links the request to the Material Master (WP4); the service drops it
+      // silently when the database does not have the column yet.
+      if (initial?.id) await updateRequisition(initial.id, { ...form, item_id: material?.id || null })
       // A new request belongs to the country being worked in, never "All".
-      else await createRequisition({ ...form, country: scopedCountry(country) })
+      else await createRequisition({ ...form, item_id: material?.id || null, country: scopedCountry(country) })
       onSaved?.()
     } catch (err) {
       setError(toUserMessage(err, 'Could not save the requisition.'))
     } finally {
       setBusy(false)
     }
-  }, [form, initial, onSaved, statusOptions, country])
+  }, [form, initial, onSaved, statusOptions, country, material])
 
   if (!open) return null
 
@@ -465,7 +468,7 @@ export default function Requisitions() {
       id: 'actions', header: '', enableSorting: false, enableHiding: false, meta: { export: false },
       cell: ({ row }) => (
         <div className="flex items-center justify-end gap-1">
-          {canDecideRequisition(row.original, { canProcure: caps.procure }) && (
+          {canDecideRequisition(row.original, { canProcure: caps.procure, userId: user?.id || null }) && (
             <>
               <button type="button" onClick={(e) => { e.stopPropagation(); decide(row.original, 'approved') }} className="btn-secondary text-xs min-h-[44px]">Approve</button>
               <button type="button" onClick={(e) => { e.stopPropagation(); decide(row.original, 'rejected') }} className="btn-secondary text-xs min-h-[44px]">Reject</button>
@@ -479,7 +482,7 @@ export default function Requisitions() {
         </div>
       ),
     },
-  ], [fmtMoney, now, openEdit, caps.procure, caps.adminDelete, decide])
+  ], [fmtMoney, now, openEdit, caps.procure, caps.adminDelete, decide, user?.id])
 
   const capped = loaded && rows.length >= READ_CAP
 

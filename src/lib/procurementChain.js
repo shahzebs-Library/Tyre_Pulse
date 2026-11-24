@@ -98,9 +98,29 @@ export function canEditRequisition(row, { canProcure = false, userId = null } = 
   return !!userId && row.created_by === userId && row.status === 'draft'
 }
 
-/** Approve / reject is offered only to procurement, and only on a submitted request. */
-export function canDecideRequisition(row, { canProcure = false } = {}) {
-  return !!canProcure && row?.status === 'submitted'
+/**
+ * Approve / reject is offered only to procurement, only on a submitted request,
+ * and never to the person who raised it (WP4: the database refuses a
+ * self-decision for everyone, super admins included).
+ */
+export function canDecideRequisition(row, { canProcure = false, userId = null } = {}) {
+  if (!canProcure || row?.status !== 'submitted') return false
+  return !(userId && row?.created_by && row.created_by === userId)
+}
+
+/**
+ * The Material Master item a requisition already points at (requisitions.item_id,
+ * WP4), shaped like a MaterialPicker value so Raise PO does not ask again.
+ * The display text was saved as "CODE name" by the requisition form.
+ * Returns null when the requisition has no item_id (or the column is absent).
+ */
+export function requisitionMaterial(req) {
+  if (!req?.item_id) return null
+  const text = String(req.item || '').trim()
+  const cut = text.indexOf(' ')
+  const code = cut > 0 ? text.slice(0, cut) : text
+  const name = cut > 0 ? text.slice(cut + 1).trim() : ''
+  return { id: req.item_id, item_code: code || null, item_name: name || text || null }
 }
 
 /** A purchase order can be raised from an approved requisition that has none yet. */

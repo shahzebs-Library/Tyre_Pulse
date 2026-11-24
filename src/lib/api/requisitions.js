@@ -7,11 +7,58 @@
  * `listRequisitions` degrades gracefully when the table is absent so the page can
  * prompt for the migration instead of erroring.
  */
-import { supabase, unwrap, applyCountry, toServiceError } from './_client'
+import { supabase, unwrap, applyCountry, toServiceError, isMissingColumn } from './_client'
 
 export const COLS =
   'id,organisation_id,country,requisition_no,requester,item,category,quantity,est_cost,' +
   'needed_by,site,status,notes,created_by,created_at,updated_at,priority,approved_by,decided_at,po_ref'
+
+/**
+ * Columns added by migration 20261124090000 (WMS WP4): the Material Master link,
+ * the server-stamped approver id and the server-derived currency. Read when the
+ * database has them; the service falls back to COLS when PostgREST reports a
+ * missing column, so the page works before and after the migration.
+ */
+export const WP4_COLS = `${COLS},item_id,approved_by_id,currency`
+
+// null = not yet known, true/false = learned from the first read or write.
+let wp4Available = null
+/** Test hook: forget what was learned about the WP4 columns. */
+export function _resetRequisitionColumnProbe() { wp4Available = null }
+
+async function selectWithFallback(build) {
+  if (wp4Available !== false) {
+    const res = await build(WP4_COLS)
+    if (!res.error) { wp4Available = true; return res }
+    if (!isMissingColumn(res.error)) return res
+    wp4Available = false
+  }
+  return build(COLS)
+}
+
+// Columns only the server writes (WP4 triggers); never sent by the client.
+const SERVER_OWNED = ['approved_by', 'approved_by_id', 'decided_at', 'currency']
+
+async function writeWithFallback(payload, run) {
+  const hasItemId = Object.prototype.hasOwnProperty.call(payload, 'item_id')
+  if (wp4Available === false && hasItemId) {
+    const { item_id: _drop, ...rest } = payload
+    return run(rest, COLS)
+  }
+  const res = await run(payload, wp4Available === false ? COLS : WP4_COLS)
+  if (res.error && isMissingColumn(res.error)) {
+    wp4Available = false
+    const { item_id: _drop, ...rest } = payload
+    return run(rest, COLS)
+  }
+  if (!res.error && wp4Available === null) wp4Available = true
+  return res
+}
+
+function uuidOrNull(v) {
+  const t = v == null ? '' : String(v).trim()
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t) ? t : null
+}
 
 export const REQUISITION_STATUSES = ['draft', 'submitted', 'approved', 'rejected', 'ordered']
 export const REQUISITION_CATEGORIES = [
@@ -43,13 +90,15 @@ export function isMissingRequisitionsTable(error) {
  * @param {{ country?:string, status?:string, limit?:number }} [opts]
  */
 export async function listRequisitions({ country, status, limit = 500 } = {}) {
-  let q = supabase.from('requisitions').select(COLS)
-  if (status) q = q.eq('status', status)
-  q = applyCountry(q, country)
-  const { data, error } = await q
-    .order('needed_by', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(limit)
+  const { data, error } = await selectWithFallback((cols) => {
+    let q = supabase.from('requisitions').select(cols)
+    if (status) q = q.eq('status', status)
+    q = applyCountry(q, country)
+    return q
+      .order('needed_by', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(limit)
+  })
   if (error) {
     if (isMissingRequisitionsTable(error)) return []
     throw toServiceError(error)
@@ -58,7 +107,7 @@ export async function listRequisitions({ country, status, limit = 500 } = {}) {
 }
 
 export async function getRequisition(id) {
-  return unwrap(await supabase.from('requisitions').select(COLS).eq('id', id).maybeSingle())
+  return unwrap(await selectWithFallback((cols) => supabase.from('requisitions').select(cols).eq('id', id).maybeSingle()))
 }
 
 const clampText = (v, n) => (v ? String(v).slice(0, n) : null)
@@ -90,7 +139,10 @@ export async function createRequisition(values = {}) {
     notes: clampText(values.notes, 8000),
     country: values.country ?? null,
   }
-  return unwrap(await supabase.from('requisitions').insert(payload).select(COLS).single())
+  const itemId = uuidOrNull(values.item_id)
+  if (itemId) payload.item_id = itemId
+  return unwrap(await writeWithFallback(payload,
+    (body, cols) => supabase.from('requisitions').insert(body).select(cols).single()))
 }
 
 /** Patch a requisition. Strips immutable columns; clamps and coerces provided fields. */
@@ -102,8 +154,8 @@ export async function updateRequisition(id, patch = {}) {
   delete clean.created_at
   delete clean.updated_at
   // Set only by the approval step / PO link, never from the edit form.
-  delete clean.approved_by
-  delete clean.decided_at
+  // approver, decision time and currency are stamped by the server (WP4).
+  for (const k of SERVER_OWNED) delete clean[k]
   delete clean.po_ref
   delete clean.priority
 
@@ -121,8 +173,10 @@ export async function updateRequisition(id, patch = {}) {
   if ('est_cost' in clean) clean.est_cost = numOrNull(clean.est_cost)
   if ('needed_by' in clean) clean.needed_by = clean.needed_by || null
   if ('status' in clean && !REQUISITION_STATUSES.includes(clean.status)) delete clean.status
+  if ('item_id' in clean) clean.item_id = uuidOrNull(clean.item_id)
 
-  return unwrap(await supabase.from('requisitions').update(clean).eq('id', id).select(COLS).single())
+  return unwrap(await writeWithFallback(clean,
+    (body, cols) => supabase.from('requisitions').update(body).eq('id', id).select(cols).single()))
 }
 
 export async function deleteRequisition(id) {

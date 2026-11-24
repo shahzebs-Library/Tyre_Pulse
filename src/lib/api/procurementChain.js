@@ -189,19 +189,32 @@ export async function listGrnLineTotals(grnIds = []) {
 
 // ── Requisition decisions ────────────────────────────────────────────────────
 
-/** Approve or reject a submitted requisition (needs inv_can('procure')). */
+/**
+ * Approve or reject a submitted requisition (needs inv_can('procure')).
+ * Once migration 20261124090000 is applied the database ignores approverName:
+ * it stamps approved_by / approved_by_id from auth.uid() and refuses a decision
+ * on the caller's own requisition (42501). Before it, the name is what is stored.
+ */
 export async function decideRequisition(id, decision, { approverName } = {}) {
   if (!['approved', 'rejected'].includes(decision)) throw new ServiceError('Unknown decision.', 'PROC_BAD_DECISION')
-  return unwrap(await supabase.from('requisitions')
+  const row = unwrap(await supabase.from('requisitions')
     .update({ status: decision, approved_by: approverName ? String(approverName).slice(0, 200) : null })
     .eq('id', id).eq('status', 'submitted')
-    .select('id,status,approved_by,decided_at').single())
+    .select('id,status,approved_by,decided_at').maybeSingle())
+  // RLS refuses an update silently (0 rows): say so instead of doing nothing.
+  if (!row) throw new ServiceError(NO_ROW_DECISION, 'PROC_DECISION_REFUSED')
+  return row
 }
+
+export const NO_ROW_DECISION =
+  'You do not have permission to decide this requisition, or it is no longer waiting for a decision.'
 
 /** Mark an approved requisition as ordered and link it to its PO number. */
 export async function linkRequisitionToPo(id, poNumber) {
-  return unwrap(await supabase.from('requisitions')
+  const row = unwrap(await supabase.from('requisitions')
     .update({ status: 'ordered', po_ref: poNumber })
     .eq('id', id).eq('status', 'approved')
-    .select('id,status,po_ref').single())
+    .select('id,status,po_ref').maybeSingle())
+  if (!row) throw new ServiceError('The requisition could not be linked: it is not approved, or you do not have permission.', 'PROC_LINK_REFUSED')
+  return row
 }

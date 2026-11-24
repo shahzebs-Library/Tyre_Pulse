@@ -485,8 +485,13 @@ export default function Procurement() {
     if (viewPO?.id === po.id && poLocked) { alert('Locked, in approval'); return }
     const patch = { status: newStatus }
     if (newStatus === 'Delivered') patch.actual_delivery = new Date().toISOString().slice(0, 10)
-    const { error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
+    const { data: changed, error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
     if (err) { alert(t('procurement.alerts.updateFailed', { message: toUserMessage(err) })); return }
+    // RLS refuses silently (0 rows): tell the person instead of doing nothing.
+    if (Array.isArray(changed) && changed.length === 0) {
+      alert(t('procurement.alerts.updateFailed', { message: 'You do not have permission to change this purchase order.' }))
+      return
+    }
     await load()
     if (viewPO?.id === po.id) setViewPO(v => ({ ...v, ...patch }))
   }
@@ -1001,7 +1006,8 @@ export default function Procurement() {
                     <select id="po-field-5" value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
                       className="input">
                       {/* Partial Delivery / Delivered come from goods receipts, not from this form. */}
-                      {STATUSES.filter(s => !['Partial Delivery', 'Delivered'].includes(s) || s === formData.status).map(s => <option key={s}>{s}</option>)}
+                      {/* A new PO starts as Draft or Submitted; approval is someone else's step. */}
+                      {STATUSES.filter(s => (editPO ? !['Partial Delivery', 'Delivered'].includes(s) : ['Draft', 'Submitted'].includes(s)) || s === formData.status).map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1180,7 +1186,11 @@ export default function Procurement() {
                   }
                   // Receipts against real PO lines set Partial Delivery / Delivered themselves.
                   const hasLines = (poLines || []).length > 0
-                  const next = (nextMap[viewPO.status] || []).filter((ns) => !(hasLines && ['Partial Delivery', 'Delivered'].includes(ns)))
+                  // Separation of duties: the creator of a PO never approves it (the database refuses it too).
+                  const ownPo = !!user?.id && viewPO.created_by === user.id
+                  const next = (nextMap[viewPO.status] || [])
+                    .filter((ns) => !(hasLines && ['Partial Delivery', 'Delivered'].includes(ns)))
+                    .filter((ns) => !(ownPo && ns === 'Approved'))
                   if (!caps.procure) return null
                   return next.length > 0 ? (
                     <div>

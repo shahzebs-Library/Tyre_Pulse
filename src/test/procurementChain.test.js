@@ -1,10 +1,40 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   currencyForCountry, scopedCountry, currencyScope, sumByCurrency,
   requisitionStatusOptions, canEditRequisition, canDecideRequisition, canRaisePo, requisitionPoDraft,
   poLinePayloads, outstandingQty, receiptPlan, summarizeGrnLines, withLineTotals,
-  RECEIVABLE_PO_STATUSES, LINE_EDITABLE_PO_STATUSES,
+  RECEIVABLE_PO_STATUSES, LINE_EDITABLE_PO_STATUSES, requisitionMaterial,
 } from '../lib/procurementChain'
+import {
+  listRequisitions, createRequisition, updateRequisition, _resetRequisitionColumnProbe, WP4_COLS, COLS,
+} from '../lib/api/requisitions'
+import { decideRequisition, NO_ROW_DECISION } from '../lib/api/procurementChain'
+
+// A scripted PostgREST stand-in: each awaited query takes the next scripted result.
+const calls = []
+const script = []
+function builder(op) {
+  const call = { op, select: null, body: null }
+  calls.push(call)
+  const b = {
+    select(cols) { call.select = cols; return b },
+    insert(body) { call.body = body; return b },
+    update(body) { call.body = body; return b },
+    eq() { return b }, or() { return b }, order() { return b }, limit() { return b },
+    single() { return b }, maybeSingle() { return b },
+    then(res, rej) { return Promise.resolve(script.shift() ?? { data: [], error: null }).then(res, rej) },
+  }
+  return b
+}
+vi.mock('../lib/api/_client', async () => {
+  const actual = await vi.importActual('../lib/api/_client')
+  return {
+    ...actual,
+    supabase: { from: () => ({ select: (c) => builder('select').select(c), insert: (b) => builder('insert').insert(b), update: (b) => builder('update').update(b) }) },
+    applyCountry: (q) => q,
+  }
+})
+
 
 describe('currency rules', () => {
   it('maps each country to its own currency, case-insensitively', () => {
@@ -164,5 +194,71 @@ describe('GRN line totals', () => {
     const [r, other] = withLineTotals([{ id: 'g1', item: null, qty_received: null }, { id: 'g2', item: 'X', qty_received: 3 }], sum)
     expect(r).toMatchObject({ item: 'A, B +1 more', qty_received: 8, qty_rejected: 1, line_count: 3, posted_to_stock: true })
     expect(other).toEqual({ id: 'g2', item: 'X', qty_received: 3 })
+  })
+})
+
+describe('WP4: self-approval and the Material Master link', () => {
+  it('never offers approve / reject on the requester\'s own requisition', () => {
+    const own = { status: 'submitted', created_by: 'u1' }
+    expect(canDecideRequisition(own, { canProcure: true, userId: 'u1' })).toBe(false)
+    expect(canDecideRequisition(own, { canProcure: true, userId: 'u2' })).toBe(true)
+    expect(canDecideRequisition({ status: 'submitted' }, { canProcure: true, userId: 'u1' })).toBe(true)
+  })
+
+  it('turns a stored item_id back into a picker value without asking again', () => {
+    expect(requisitionMaterial({ item: 'Tyre' })).toBeNull()
+    expect(requisitionMaterial({ item_id: 'm1', item: '140089-O OIL FILTER' }))
+      .toEqual({ id: 'm1', item_code: '140089-O', item_name: 'OIL FILTER' })
+    expect(requisitionMaterial({ item_id: 'm1', item: 'ABC' })).toEqual({ id: 'm1', item_code: 'ABC', item_name: 'ABC' })
+  })
+})
+
+describe('WP4: requisitions service works before and after the migration', () => {
+  const UUID = '0b7e5f19-4ef4-490c-a807-60a437b955fd'
+  const missing = { data: null, error: { code: '42703', message: 'column requisitions.item_id does not exist' } }
+  beforeEach(() => { calls.length = 0; script.length = 0; _resetRequisitionColumnProbe() })
+
+  it('reads the WP4 columns when they exist', async () => {
+    script.push({ data: [{ id: 'r1', item_id: UUID }], error: null })
+    const rows = await listRequisitions()
+    expect(rows[0].item_id).toBe(UUID)
+    expect(calls[0].select).toBe(WP4_COLS)
+  })
+
+  it('falls back to the base columns when the migration is not applied, and remembers it', async () => {
+    script.push(missing, { data: [{ id: 'r1' }], error: null })
+    expect(await listRequisitions()).toEqual([{ id: 'r1' }])
+    expect(calls.map((c) => c.select)).toEqual([WP4_COLS, COLS])
+    script.push({ data: { id: 'r2' }, error: null })
+    await createRequisition({ item: 'Tyre', item_id: UUID })
+    expect(calls[2].body).not.toHaveProperty('item_id')
+    expect(calls[2].select).toBe(COLS)
+  })
+
+  it('retries a create without item_id when the column is missing', async () => {
+    script.push(missing, { data: { id: 'r3' }, error: null })
+    const row = await createRequisition({ item: 'Tyre', item_id: UUID, approved_by: 'Forged' })
+    expect(row).toEqual({ id: 'r3' })
+    expect(calls[0].body.item_id).toBe(UUID)
+    expect(calls[0].body).not.toHaveProperty('approved_by')
+    expect(calls[1].body).not.toHaveProperty('item_id')
+  })
+
+  it('never sends server-owned approval or currency fields on update, and drops a non-uuid item_id', async () => {
+    script.push({ data: { id: 'r1' }, error: null })
+    await updateRequisition('r1', { item: 'Tyre', approved_by: 'X', approved_by_id: UUID, decided_at: 'now', currency: 'AED', item_id: 'nope' })
+    expect(calls[0].body).toEqual({ item: 'Tyre', item_id: null })
+  })
+})
+
+describe('WP4: a refused decision is reported, not swallowed', () => {
+  beforeEach(() => { calls.length = 0; script.length = 0 })
+  it('turns an RLS-refused approval (0 rows, no error) into a plain message', async () => {
+    script.push({ data: null, error: null })
+    await expect(decideRequisition('r1', 'approved')).rejects.toThrow(NO_ROW_DECISION)
+  })
+  it('returns the row when the decision was recorded', async () => {
+    script.push({ data: { id: 'r1', status: 'approved' }, error: null })
+    await expect(decideRequisition('r1', 'approved')).resolves.toMatchObject({ status: 'approved' })
   })
 })

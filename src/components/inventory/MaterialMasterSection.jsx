@@ -33,6 +33,7 @@ import {
 import { toUserMessage } from '../../lib/inventory/errorText'
 import CodeScanCamera, { codeScanSupported } from './CodeScanCamera'
 import OemCrossRefPanel from './OemCrossRefPanel'
+import OemFitmentPanel from './OemFitmentPanel'
 import { CorrectionRows, CorrectionDetail } from './PhysicalInventoryReview'
 import { KitTable, Pager } from '../commandCenter/kit'
 import { useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, StatusPill, fmtDateTime } from './InvUi'
@@ -537,6 +538,7 @@ export default function MaterialMasterSection({ scope, userId, onNavigate, seedQ
               </>
             )}
       <OemCrossRefPanel scope={scope} userId={userId} />
+      <OemFitmentPanel scope={scope} />
       {scan && <CodeScanCamera open={scan} t={t} onClose={() => setScan(false)} onCode={(code) => { setScan(false); setTerm(code); setQuery(code); setPage(0) }} />}
     </div>
   )

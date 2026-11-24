@@ -31,7 +31,7 @@ const REF_COLS = 'id,country,oem_part_no,item_id,oem_entry_id,status,source,prop
 
 const notProvisioned = (err) => isNotProvisioned(err) || isMissingColumn(err)
 
-async function readAll(table, cols, build, label) {
+export async function readAll(table, cols, build, label) {
   const { data, error, truncated } = await fetchAllPages(
     (from, to) => {
       let q = supabase.from(table).select(cols)
@@ -89,6 +89,9 @@ export async function loadOemCrossRef({ country } = {}) {
     proposals,
     truncated,
     counts: { entries: entries.rows.length, aliases: aliases.rows.length, variants: variants.rows.length, canonicals: canonicals.rows.length, references: references.rows.length },
+    // The raw reads, so the OEM depth panel (fitment, stock, unmatched rows) can
+    // reuse them instead of reading the same tables a second time.
+    raw: { entries: entries.rows, aliases: aliases.rows, variants: variants.rows, canonicals: canonicals.rows, references: references.rows, erpItems: erp.rows },
   }
 }
 

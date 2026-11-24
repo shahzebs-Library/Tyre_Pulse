@@ -1,4 +1,5 @@
 import { supabase } from './_client'
+import { fetchAllPages } from '../fetchAll'
 import { requireCatalogAdmin } from './oemCatalogAdmin'
 
 const MANUAL_COLUMNS = 'id,country,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,source_file_name,source_sha256,storage_path,page_count,item_count,extraction_status,import_summary,created_at'
@@ -194,16 +195,22 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
  * part number with no approved link returns nothing ("not linked to stock").
  * Read errors return {} so the basket still opens; nothing is invented.
  */
+const MAX_LOOKUP_ITEMS = 200
+
 export async function lookupStockByPartNumbers(partNos) {
   const keys = [...new Set(partNos.filter(Boolean).map(normalizePartNumberKey).filter(Boolean))].slice(0, 200)
   if (!keys.length) return {}
   const { data: refs, error } = await supabase.from('oem_part_references')
     .select('oem_part_no,oem_part_no_normalized,item_id').eq('status', 'approved').in('oem_part_no_normalized', keys).limit(1000)
   if (error || !refs?.length) return {}
-  const itemIds = [...new Set(refs.map((r) => r.item_id).filter(Boolean))].slice(0, 200)
+  const itemIds = [...new Set(refs.map((r) => r.item_id).filter(Boolean))].slice(0, MAX_LOOKUP_ITEMS)
+  // At most 200 ids, so one bounded read for the names. Balances are one row per
+  // stock line and can pass the server's 1,000-row cap, so they are paged: a cut-off
+  // read would silently understate stock.
   const [{ data: items }, { data: bal }] = await Promise.all([
-    supabase.from('material_master').select('id,item_code,item_name').in('id', itemIds).limit(1000),
-    supabase.from('v_inv_balances').select('item_id,qty_on_hand,qty_reserved,uom').in('item_id', itemIds).limit(1000),
+    supabase.from('material_master').select('id,item_code,item_name').in('id', itemIds).limit(MAX_LOOKUP_ITEMS),
+    fetchAllPages((from, to) => supabase.from('v_inv_balances').select('id,item_id,qty_on_hand,qty_reserved,uom')
+      .in('item_id', itemIds).order('id').range(from, to), { max: 20000 }),
   ])
   const itemById = new Map((items || []).map((i) => [i.id, i]))
   const out = {}

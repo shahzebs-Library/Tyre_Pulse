@@ -69,8 +69,9 @@
 --   drop function if exists public.inv_confirm_installation(jsonb);
 --   drop table if exists public.job_material_installations;
 --   do $u$ declare r record; begin
---     for r in select def from _bak.wms_jobmat_fn_backup_20261124 loop execute r.def; end loop;
---   end $u$;   -- restores the WP5 _inv_issue_slip and material_issue_line_post_guard bodies
+--     for r in select distinct on (fn) def from _bak.wms_jobmat_fn_backup_20261124 order by fn, id desc loop
+--       execute r.def; end loop;
+--   end $u$;   -- restores the WP5 _inv_issue_slip and material_issue_line_post_guard bodies (newest copy)
 --   alter table public.material_issue_lines drop column if exists reservation_id;
 --   alter table public.requisitions drop column if exists job_card_no;
 --   commit;
@@ -108,6 +109,16 @@
 -- balance (10 / reserved 0) unchanged. Change made AFTER the run, not re-run: the
 -- signature column is signature_image and also accepts a PNG data URL (the web pad
 -- produces PNG); the run used an SVG string.
+-- REVIEW FIXES + ROLLED-BACK PROOF, ROUND 2 (2026-11-24). All 8 files applied in order (090000, 091000, 130000,
+-- 131000, 132000, 133000, 120000, 135000; the 135000 work_orders index build left out of the run because of its
+-- SHARE lock) in ONE implicit transaction through the Supabase CLI, then a test block as real users (claims + role
+-- authenticated) ending in RAISE EXCEPTION, so everything rolled back; re-checked afterwards: purchase_orders 0,
+-- test suppliers 0, test grants 0, procurement_rfqs and _inv_job_card_resolve absent, purchase_orders.updated_by
+-- absent. Users: super admin d2d43a5f (SA), Store Keeper 69faeb71 (SK), Managers 34793423 (M1) / ecdcdb9e (M2);
+-- extra stock / fleet grants were given INSIDE the transaction. Script: scratchpad review_round2_proof.sql.
+--   Changes here: backup table fn is TEXT and versioned, patches skip when already applied (A14); installation
+--   takes the per-key lock before the key lookup (A17, checked: lock precedes the lookup in the body) and re-checks
+--   the job card through _inv_job_card_resolve (A10). The slip / installation cases above were not re-run in round 2.
 -- =============================================================================
 
 begin;
@@ -121,14 +132,17 @@ begin
 end $pre$;
 
 create schema if not exists _bak;
+-- Versioned rollback copies (review A14): fn is TEXT (a regprocedure column would break once the function is
+-- dropped); one row per apply, written only while the body is still UNPATCHED, so the newest row per function is the
+-- body that was live just before the latest real apply. The undo restores the newest row per function.
 create table if not exists _bak.wms_jobmat_fn_backup_20261124 (
-  fn regprocedure primary key, def text not null, saved_at timestamptz not null default now()
+  id bigserial primary key, fn text not null, def text not null, saved_at timestamptz not null default now()
 );
 insert into _bak.wms_jobmat_fn_backup_20261124(fn, def)
-select f, pg_get_functiondef(f)
+select f::text, pg_get_functiondef(f)
   from unnest(array['public._inv_issue_slip(jsonb)'::regprocedure,
                     'public.material_issue_line_post_guard()'::regprocedure]) f
-on conflict (fn) do nothing;
+ where position('reservation_id' in pg_get_functiondef(f)) = 0;
 revoke all on _bak.wms_jobmat_fn_backup_20261124 from public, anon, authenticated;
 
 -- =====================================================================
@@ -144,6 +158,7 @@ do $mig$
 declare v_def text; v_old text; v_n int;
 begin
   v_def := pg_get_functiondef('public._inv_issue_slip(jsonb)'::regprocedure);
+  if position('reservation_id' in v_def) > 0 then raise notice '131000: _inv_issue_slip already patched'; return; end if;
 
   v_old := '    if v_h.doc_type = ''MIS'' then';
   v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
@@ -175,6 +190,7 @@ do $mig$
 declare v_def text; v_old text; v_n int;
 begin
   v_def := pg_get_functiondef('public.material_issue_line_post_guard()'::regprocedure);
+  if position('reservation_id' in v_def) > 0 then raise notice '131000: post guard already patched'; return; end if;
   v_old := 'or new.doc_type is distinct from old.doc_type or new.item_code is distinct from old.item_code then';
   v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
   if v_n <> 1 then raise exception 'material_issue_line_post_guard anchor found % times', v_n; end if;
@@ -292,6 +308,8 @@ begin
     raise exception 'Enter an installed quantity above zero.' using errcode = '22023';
   end if;
 
+  -- (review A17) serialise the same key BEFORE looking it up, so two concurrent retries cannot both insert.
+  perform pg_advisory_xact_lock(hashtextextended(v_org::text || ':jmi:' || v_key, 0));
   -- A retry answers from the first confirmation; the same key cannot mean something else.
   select * into v_prev from public.job_material_installations
    where organisation_id = v_org and idempotency_key = v_key;
@@ -345,6 +363,8 @@ begin
     raise exception 'The signature must be a drawn signature image.' using errcode = '22023';
   end if;
 
+  -- (review A10) the job card must still be a real one of this company in the caller's scope (canonical number)
+  perform public._inv_job_card_resolve(v_org, v_m.source_doc_id, v_m.country);
   select w.id, w.asset_no into v_wo_id, v_asset from public.work_orders w
    where w.organisation_id = v_org and w.work_order_no = v_m.source_doc_id
    order by w.id limit 1;

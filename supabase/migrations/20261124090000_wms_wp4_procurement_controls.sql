@@ -100,6 +100,25 @@
 --   T8  manual Delivered on a PO with lines                           -> 22023 refused
 --   Side effect: sequences are not transactional, so the proof consumed po_seq values (last_value 4). Gap only.
 --
+-- REVIEW FIXES + ROLLED-BACK PROOF, ROUND 2 (2026-11-24). All 8 files applied in order (090000, 091000, 130000,
+-- 131000, 132000, 133000, 120000, 135000; the 135000 work_orders index build left out of the run because of its
+-- SHARE lock) in ONE implicit transaction through the Supabase CLI, then a test block as real users (claims + role
+-- authenticated) ending in RAISE EXCEPTION, so everything rolled back; re-checked afterwards: purchase_orders 0,
+-- test suppliers 0, test grants 0, procurement_rfqs and _inv_job_card_resolve absent, purchase_orders.updated_by
+-- absent. Users: super admin d2d43a5f (SA), Store Keeper 69faeb71 (SK), Managers 34793423 (M1) / ecdcdb9e (M2);
+-- extra stock / fleet grants were given INSIDE the transaction. Script: scratchpad review_round2_proof.sql.
+--   Changes here: wrapped in begin/commit; _bak.inv_receive_goods_wp4 is versioned (A14); new server-stamped
+--   requisitions.updated_by, purchase_orders.updated_by, purchase_order_lines.created_by (trg_stamp_po_line_creator);
+--   a submitted requisition's item / qty / item_id / site / country / est_cost / category / job card are frozen and
+--   its last editor cannot decide it (A12); a PO out of Draft/Submitted cannot change supplier, names, currency,
+--   country, site, totals (A3); the PO creator, last header editor and anyone who added a line cannot approve (A3).
+--   A12.1 M1 edits item of a submitted requisition            -> 22023 refused
+--   A12.2 M2 edits its quantity                               -> 22023 refused
+--   A12.3 M2 edits notes, then approves                       -> 42501 "You made the last change ..."
+--   A12.4 SA approves                                         -> approved, approved_by_id = SA
+--   A3.1  M2 adds a PO line, then approves                    -> 42501 "You added a line ..."
+--   A3.2  M2 edits PO notes, then approves                    -> 42501 "You made the last change ..."
+--   A3.5/6 total / supplier name of an Approved PO changed     -> 22023 refused;  A3.7 notes -> 1 row updated
 -- VERIFY AFTER APPLY
 --   select column_name from information_schema.columns where table_schema='public' and table_name='requisitions'
 --    and column_name in ('item_id','approved_by_id','currency');                                       -- 3 rows
@@ -119,7 +138,7 @@
 --     lpad(nextval('po_seq')::text, 5, '0'); end; $f$;                -- (CREATE OR REPLACE resets SECURITY DEFINER)
 --   grant execute on function public.generate_po_number() to public;
 --   -- _inv_receive_goods: restore from _bak.inv_receive_goods_wp4 (saved below):
---   --   do $u$ begin execute (select def from _bak.inv_receive_goods_wp4); end $u$;
+--   --   do $u$ begin execute (select def from _bak.inv_receive_goods_wp4 order by id desc limit 1); end $u$;
 --   drop trigger if exists trg_guard_po_rules on public.purchase_orders;
 --   drop function if exists public.guard_po_rules();
 --   drop trigger if exists trg_guard_po_delivery_status on public.purchase_orders;
@@ -136,15 +155,25 @@
 --   create trigger trg_stamp_requisition_decision before insert or update of status on public.requisitions
 --     for each row execute function public.stamp_requisition_decision();
 --   alter table public.requisitions drop column if exists currency, drop column if exists approved_by_id,
---     drop column if exists item_id;          -- drops requisitions_item_id_idx with it
+--     drop column if exists item_id, drop column if exists updated_by;   -- drops requisitions_item_id_idx with it
+--   drop trigger if exists trg_stamp_po_line_creator on public.purchase_order_lines;
+--   drop function if exists public.stamp_po_line_creator();
+--   alter table public.purchase_orders drop column if exists updated_by;
+--   alter table public.purchase_order_lines drop column if exists created_by;
 -- =====================================================================================================================
 
+begin;
+
 -- ── Rollback copy of the live receipt engine (parts 5 + 6 patch it) ──────────────────────────────────────────────
+-- Versioned: one row per apply, taken only while the function is still UNPATCHED, so the newest row is always the
+-- body that was live just before the latest real apply (an earlier apply + undo + re-apply cannot leave a stale copy).
 create schema if not exists _bak;
-create table if not exists _bak.inv_receive_goods_wp4 (saved_at timestamptz default now(), def text not null);
+revoke all on schema _bak from public, anon, authenticated;
+create table if not exists _bak.inv_receive_goods_wp4 (id bigserial primary key, saved_at timestamptz default now(), def text not null);
+alter table _bak.inv_receive_goods_wp4 add column if not exists id bigserial;
 insert into _bak.inv_receive_goods_wp4(def)
-  select pg_get_functiondef('public._inv_receive_goods(jsonb)'::regprocedure)
-   where not exists (select 1 from _bak.inv_receive_goods_wp4);
+  select d from (select pg_get_functiondef('public._inv_receive_goods(jsonb)'::regprocedure) as d) x
+   where position('app.inv_receiving' in x.d) = 0;
 
 -- ── 1, 3, 4. Columns ────────────────────────────────────────────────────────────────────────────────────────────
 alter table public.requisitions
@@ -152,6 +181,14 @@ alter table public.requisitions
   add column if not exists approved_by_id uuid references auth.users(id) on delete set null,
   add column if not exists currency text;
 create index if not exists requisitions_item_id_idx on public.requisitions(item_id);
+-- Review A3 / A12: who last edited a requisition / PO header and who added each PO line, stamped server side from
+-- auth.uid() (never client written), so the approval checks below can refuse that person.
+alter table public.requisitions add column if not exists updated_by uuid references auth.users(id) on delete set null;
+alter table public.purchase_orders add column if not exists updated_by uuid references auth.users(id) on delete set null;
+alter table public.purchase_order_lines add column if not exists created_by uuid references auth.users(id) on delete set null;
+comment on column public.requisitions.updated_by is 'Last person who edited the requisition. Stamped from auth.uid(); that person cannot approve it.';
+comment on column public.purchase_orders.updated_by is 'Last person who edited the PO header. Stamped from auth.uid(); that person cannot approve it.';
+comment on column public.purchase_order_lines.created_by is 'Who added the line. Stamped from auth.uid(); that person cannot approve the PO.';
 comment on column public.requisitions.item_id is 'Material Master item requested; item stays the display text.';
 comment on column public.requisitions.approved_by_id is 'Who approved/rejected. Stamped from auth.uid() by trg_stamp_requisition_decision; never client written.';
 comment on column public.requisitions.currency is 'Derived from country by trg_stamp_requisition_decision (currency_for_country).';
@@ -175,20 +212,44 @@ begin
     end if;
   end if;
 
-  if tg_op = 'UPDATE' and v_uid is not null then
+  if tg_op = 'INSERT' then
+    if v_uid is not null then new.updated_by := v_uid; end if;
+    return new;
+  end if;
+
+  if v_uid is not null then
     -- b. the requester is fixed once raised (a super admin may still correct it)
     if old.created_by is not null and new.created_by is distinct from old.created_by and not v_super then
       raise exception 'The requester of a requisition cannot be changed.' using errcode = '42501';
+    end if;
+    -- e. (review A12) once submitted, what is asked for is frozen. Return it to draft first (in its own update).
+    if coalesce(old.status, 'draft') <> 'draft'
+       and ((new.item, new.quantity, new.item_id, new.site, new.country, new.est_cost, new.category,
+             to_jsonb(new)->>'job_card_no')
+            is distinct from
+            (old.item, old.quantity, old.item_id, old.site, old.country, old.est_cost, old.category,
+             to_jsonb(old)->>'job_card_no')) then
+      raise exception 'A submitted requisition cannot be edited. Return it to draft first, then submit it again.'
+        using errcode = '22023';
     end if;
     -- a. no self-approval / self-rejection
     if new.status in ('approved', 'rejected') and old.status is distinct from new.status
        and old.created_by = v_uid then
       raise exception 'You cannot approve or reject your own requisition.' using errcode = '42501';
     end if;
+    -- a2. (review A12) the last person who edited it cannot decide it either
+    if new.status in ('approved', 'rejected') and old.status is distinct from new.status
+       and old.updated_by = v_uid then
+      raise exception 'You made the last change to this requisition; another person must approve or reject it.'
+        using errcode = '42501';
+    end if;
     -- c. ordering needs an approval first
     if new.status = 'ordered' and old.status is distinct from 'ordered' and old.status <> 'approved' then
       raise exception 'Only an approved requisition can be marked ordered.' using errcode = '22023';
     end if;
+    new.updated_by := v_uid;                               -- server stamp, never client written
+  else
+    new.updated_by := old.updated_by;
   end if;
   return new;
 end $$;
@@ -311,6 +372,7 @@ begin
   if v_uid is null then return new; end if;              -- service role / cron / receipt-engine internals
   if tg_op = 'INSERT' then
     new.created_by := v_uid;                              -- purchase_orders.created_by has no default; never trust it
+    new.updated_by := v_uid;
     if coalesce(new.status, 'Draft') not in ('Draft', 'Submitted') then
       raise exception 'A new purchase order starts as Draft or Submitted.' using errcode = '42501';
     end if;
@@ -320,10 +382,28 @@ begin
   if old.created_by is not null and new.created_by is distinct from old.created_by and not v_super then
     raise exception 'The creator of a purchase order cannot be changed.' using errcode = '42501';
   end if;
+  -- (review A3) once a PO leaves Draft / Submitted its supplier, money, currency and place are frozen; the
+  -- workflow may still move its status and add notes.
+  if old.status not in ('Draft', 'Submitted')
+     and ((new.supplier_id, new.supplier_name, new.vendor_name, new.currency, new.country, new.site,
+           new.total_amount, new.subtotal, new.tax_amount, new.organisation_id)
+          is distinct from
+          (old.supplier_id, old.supplier_name, old.vendor_name, old.currency, old.country, old.site,
+           old.total_amount, old.subtotal, old.tax_amount, old.organisation_id)) then
+    raise exception 'This purchase order is approved or placed: its supplier, currency, site and value can no longer change. Cancel it and raise a new one.'
+      using errcode = '22023';
+  end if;
   if new.status is distinct from old.status then
     if new.status = 'Approved' then
       if old.created_by = v_uid then
         raise exception 'You cannot approve a purchase order you created.' using errcode = '42501';
+      end if;
+      -- (review A3) nor one you last edited, nor one you added a line to
+      if old.updated_by = v_uid then
+        raise exception 'You made the last change to this purchase order; another person must approve it.' using errcode = '42501';
+      end if;
+      if exists (select 1 from public.purchase_order_lines l where l.po_id = old.id and l.created_by = v_uid) then
+        raise exception 'You added a line to this purchase order; another person must approve it.' using errcode = '42501';
       end if;
       if old.status not in ('Draft', 'Submitted') then
         raise exception 'Only a Draft or Submitted purchase order can be approved.' using errcode = '22023';
@@ -331,18 +411,37 @@ begin
       select coalesce(nullif(btrim(p.full_name), ''), nullif(btrim(p.username), ''))
         into v_name from public.profiles p where p.id = v_uid;
       new.approved_by := left(coalesce(v_name, left(v_uid::text, 8)), 100);
+      new.updated_by := v_uid;
       return new;
     elsif new.status = 'Ordered' and old.status <> 'Approved' then
       raise exception 'Only an approved purchase order can be marked ordered.' using errcode = '22023';
     end if;
   end if;
   new.approved_by := old.approved_by;                     -- the approver is stamped, never typed
+  new.updated_by := v_uid;                                -- (review A3) last editor, server stamped
   return new;
 end $$;
 revoke execute on function public.guard_po_rules() from public, anon, authenticated;
 create or replace trigger trg_guard_po_rules
   before insert or update on public.purchase_orders
   for each row execute function public.guard_po_rules();
+
+-- (review A3) who added each PO line, server stamped (lines are written only by SECURITY DEFINER functions, which
+-- run with the caller's auth.uid(), so the stamp is the real person).
+create or replace function public.stamp_po_line_creator()
+returns trigger language plpgsql set search_path = public, pg_temp as $$
+begin
+  if tg_op = 'INSERT' then
+    new.created_by := coalesce(auth.uid(), new.created_by);
+  else
+    new.created_by := old.created_by;
+  end if;
+  return new;
+end $$;
+revoke execute on function public.stamp_po_line_creator() from public, anon, authenticated;
+create or replace trigger trg_stamp_po_line_creator
+  before insert or update on public.purchase_order_lines
+  for each row execute function public.stamp_po_line_creator();
 
 -- ── 7. PO numbers ───────────────────────────────────────────────────────────────────────────────────────────────
 create or replace function public.generate_po_number()
@@ -358,3 +457,5 @@ grant execute on function public.generate_po_number() to authenticated, service_
 
 -- ── 8. PO read policy aligned with its siblings ─────────────────────────────────────────────────────────────────
 alter policy po_select_authenticated on public.purchase_orders using ((select public.app_is_active()) is true);
+
+commit;

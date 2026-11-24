@@ -123,14 +123,41 @@
 --   L3  Admin removes both limits (active false)                      -> 0 active rows (no threshold again)
 --   N1  normal PO sent with stray emergency fields                    -> fields cleared
 --
+-- REVIEW FIXES + ROLLED-BACK PROOF, ROUND 2 (2026-11-24). All 8 files applied in order (090000, 091000, 130000,
+-- 131000, 132000, 133000, 120000, 135000; the 135000 work_orders index build left out of the run because of its
+-- SHARE lock) in ONE implicit transaction through the Supabase CLI, then a test block as real users (claims + role
+-- authenticated) ending in RAISE EXCEPTION, so everything rolled back; re-checked afterwards: purchase_orders 0,
+-- test suppliers 0, test grants 0, procurement_rfqs and _inv_job_card_resolve absent, purchase_orders.updated_by
+-- absent. Users: super admin d2d43a5f (SA), Store Keeper 69faeb71 (SK), Managers 34793423 (M1) / ecdcdb9e (M2);
+-- extra stock / fleet grants were given INSIDE the transaction. Script: scratchpad review_round2_proof.sql.
+--   Changes here: begin/commit; versioned _bak.wms_proc_130000_v (A14); A3 approved supplier needed for Submitted /
+--   Approved, limit checked on the NEW row (_po_limit_block(purchase_orders)); A4 approver role required, Admin /
+--   super admin not locked out by limits; A16 guard_po_controls is SECURITY DEFINER and the limit / emergency helpers
+--   are no longer executable by clients, scope checked first; A13 no invoice create / match / PO close while an
+--   emergency PO is unapproved, post-approval over the estimate +10% needs a written reason
+--   (emergency_overrun_reason); A11 supplier approval cleared when name, code or tax / bank / payment custom_data
+--   keys change; B6 expired quotes cannot be awarded (and do not count as lowest); A15 child-table parent scope.
+--   A11.1 code change -> approved false;  A11.2 notes change -> stays true;  A11.3 bank_iban change -> false
+--   A3.s1 Submitted PO with an unapproved supplier              -> 22023
+--   A4.1  Store Keeper (procure granted) approves               -> 42501 "Your role (Store Keeper) cannot approve ..."
+--   A3.3  M2 approves while raising total 100 -> 9000 (limit SAR 500) -> 42501 "Order value SAR 9000.00 is above ..."
+--   A3.4  M2 approves at 100 -> Approved;  A4.2 SA approves SAR 901 with limits but no SA row -> Approved
+--   A13.1 invoice on unapproved emergency PO -> 22023;  A13.2 close it -> 22023
+--   A13.3 post-approve 500 vs estimate 100, no reason -> 22023;  A13.4 with reason -> approved, reason stored
+--   A13.5 invoice after approval -> created;  A16 authenticated EXECUTE on _po_limit_block / _po_emergency_link /
+--         _po_emergency_normalise / _inv_job_card_resolve -> false/false/false/false
+--   B6.1  award a quote valid until yesterday                   -> 22023 "This quote expired on 2026-11-23 ..."
+--   A15.1 M1 reads KSA RFQ lines/invites/quote lines -> 1/1/1;  A15.2 same RFQ moved to UAE -> 0/0/0/0
 -- UNDO (one transaction)
 --   drop view if exists public.v_supplier_delivery_performance, public.v_po_backorders;
---   do $u$ begin execute (select def from _bak.wms_proc_130000 where obj = '_inv_supplier_invoice_match'); end $u$;
---   do $u$ begin execute (select def from _bak.wms_proc_130000 where obj = 'guard_po_rules'); end $u$;
---   do $u$ begin execute (select def from _bak.wms_proc_130000 where obj = 'inv_approver_roles'); end $u$;
+--   do $u$ declare r record; begin
+--     for r in select distinct on (obj) def from _bak.wms_proc_130000_v order by obj, id desc loop execute r.def; end loop;
+--   end $u$;   -- _inv_supplier_invoice_match, guard_po_rules, inv_approver_roles (newest copy)
+--   drop trigger if exists trg_guard_invoice_emergency_po on public.supplier_invoices;
+--   drop function if exists public.guard_invoice_emergency_po();
 --   drop function if exists public.inv_supplier_return(jsonb), public.inv_po_emergency_approve(jsonb),
 --     public.inv_rfq_create(jsonb), public.inv_rfq_quote_record(jsonb), public.inv_rfq_award(jsonb),
---     public.inv_rfq_cancel(jsonb), public.inv_supplier_set_approval(jsonb), public._po_limit_block(uuid);
+--     public.inv_rfq_cancel(jsonb), public.inv_supplier_set_approval(jsonb), public._po_limit_block(public.purchase_orders);
 --   drop function if exists public._po_emergency_normalise(public.purchase_orders),
 --     public._po_emergency_clear(public.purchase_orders), public._po_emergency_link(uuid, text, text, text, uuid);
 --   drop trigger if exists trg_po_controls on public.purchase_orders; drop function if exists public.guard_po_controls();
@@ -152,10 +179,12 @@
 --     drop column if exists emergency_job_card_no, drop column if exists emergency_downtime_hours,
 --     drop column if exists emergency_impact, drop column if exists emergency_est_value,
 --     drop column if exists emergency_est_currency, drop column if exists emergency_attachment_path,
---     drop column if exists emergency_requested_by_name;
+--     drop column if exists emergency_requested_by_name, drop column if exists emergency_overrun_reason;
 --   alter table public.suppliers drop column if exists approved_for_purchasing, drop column if exists approval_note,
 --     drop column if exists approved_by_id, drop column if exists approved_at;
 -- =====================================================================================================================
+
+begin;
 
 do $pre$ begin
   if to_regprocedure('public.guard_po_rules()') is null or to_regprocedure('public._inv_po_add_line(uuid, jsonb)') is null then
@@ -163,14 +192,21 @@ do $pre$ begin
   end if;
 end $pre$;
 
+-- Versioned rollback copies (review A14): one row per apply, written only while the object is still UNPATCHED,
+-- so the newest row per object is the body that was live just before the latest real apply. The undo restores
+-- the newest row per object.
 create schema if not exists _bak;
-create table if not exists _bak.wms_proc_130000 (obj text primary key, def text not null, saved_at timestamptz default now());
-revoke all on _bak.wms_proc_130000 from public;
-insert into _bak.wms_proc_130000(obj, def) values
-  ('_inv_supplier_invoice_match', pg_get_functiondef('public._inv_supplier_invoice_match(uuid)'::regprocedure)),
-  ('guard_po_rules', pg_get_functiondef('public.guard_po_rules()'::regprocedure)),
-  ('inv_approver_roles', pg_get_functiondef('public.inv_approver_roles(text)'::regprocedure))
-on conflict (obj) do nothing;
+revoke all on schema _bak from public, anon, authenticated;
+create table if not exists _bak.wms_proc_130000_v (id bigserial primary key, obj text not null, def text not null,
+  saved_at timestamptz default now());
+revoke all on _bak.wms_proc_130000_v from public, anon, authenticated;
+insert into _bak.wms_proc_130000_v(obj, def)
+select obj, def from (values
+  ('_inv_supplier_invoice_match', pg_get_functiondef('public._inv_supplier_invoice_match(uuid)'::regprocedure), 'supplier_return_lines'),
+  ('guard_po_rules', pg_get_functiondef('public.guard_po_rules()'::regprocedure), 'new.is_emergency'),
+  ('inv_approver_roles', pg_get_functiondef('public.inv_approver_roles(text)'::regprocedure), '''purchase_order''')
+) x(obj, def, marker)
+where position(x.marker in x.def) = 0;
 
 -- ── 1. Approved supplier list ───────────────────────────────────────────────────────────────────────────────────
 alter table public.suppliers
@@ -183,9 +219,26 @@ comment on column public.suppliers.approved_for_purchasing is
 
 create or replace function public.guard_supplier_approval()
 returns trigger language plpgsql set search_path = public, pg_temp as $$
-declare v_uid uuid := auth.uid();
+declare v_uid uuid := auth.uid(); v_sensitive boolean := false;
 begin
-  if v_uid is null then return new; end if;                       -- service role / imports
+  -- (review A11) a change to who is paid (name, code, tax, bank or payment terms) takes the supplier off the
+  -- approved list again, for every writer (imports included); a second person must re-approve it.
+  if tg_op = 'UPDATE' then
+    v_sensitive := (new.supplier_name, new.supplier_code) is distinct from (old.supplier_name, old.supplier_code)
+      or (select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb) from jsonb_each(coalesce(new.custom_data, '{}'::jsonb)) e
+           where e.key ~* '(tax|vat|trn|bank|iban|swift|bic|account|payment|pay_|remit)')
+         is distinct from
+         (select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb) from jsonb_each(coalesce(old.custom_data, '{}'::jsonb)) e
+           where e.key ~* '(tax|vat|trn|bank|iban|swift|bic|account|payment|pay_|remit)');
+  end if;
+  if v_uid is null then                                            -- service role / imports
+    if v_sensitive and current_setting('app.inv_supplier_approval', true) is distinct from 'on'
+       and old.approved_for_purchasing then
+      new.approved_for_purchasing := false; new.approved_by_id := null; new.approved_at := null;
+      new.approval_note := 'Approval cleared: supplier name, code, tax, bank or payment details changed.';
+    end if;
+    return new;
+  end if;
   if tg_op = 'INSERT' then
     new.created_by := v_uid;                                       -- had no default and was client written
   elsif old.created_by is not null and new.created_by is distinct from old.created_by
@@ -195,6 +248,9 @@ begin
   if current_setting('app.inv_supplier_approval', true) = 'on' then return new; end if;
   if tg_op = 'INSERT' then
     new.approved_for_purchasing := false; new.approval_note := null; new.approved_by_id := null; new.approved_at := null;
+  elsif v_sensitive and old.approved_for_purchasing then
+    new.approved_for_purchasing := false; new.approved_by_id := null; new.approved_at := null;
+    new.approval_note := 'Approval cleared: supplier name, code, tax, bank or payment details changed.';
   else
     new.approved_for_purchasing := old.approved_for_purchasing; new.approval_note := old.approval_note;
     new.approved_by_id := old.approved_by_id; new.approved_at := old.approved_at;
@@ -421,18 +477,23 @@ begin
   if not public._inv_scope_ok(q.country, q.site) then raise exception 'Outside your country or site scope.' using errcode = '42501'; end if;
   select * into v_qt from public.procurement_quotes where id = nullif(p_payload->>'quote_id', '')::uuid and rfq_id = q.id;
   if not found or v_qt.status <> 'received' then raise exception 'Choose a received quote on this request.' using errcode = '22023'; end if;
+  -- (review B6) an expired quote cannot be awarded
+  if v_qt.valid_until is not null and v_qt.valid_until < current_date then
+    raise exception 'This quote expired on %. Ask the supplier to confirm or renew it first.', v_qt.valid_until using errcode = '22023';
+  end if;
   select * into s from public.suppliers where id = v_qt.supplier_id;
   if not s.approved_for_purchasing then raise exception 'The supplier is no longer on the approved list.' using errcode = '22023'; end if;
   -- lowest = cheapest among quotes that price EVERY line, in the same currency. Never compared across currencies.
   select count(*) into v_nlines from public.procurement_rfq_lines where rfq_id = q.id;
-  select count(distinct currency) into v_currencies from public.procurement_quotes where rfq_id = q.id and status = 'received';
+  select count(distinct currency) into v_currencies from public.procurement_quotes where rfq_id = q.id and status = 'received'
+     and (valid_until is null or valid_until >= current_date);
   with t as (
     select pq.id, pq.currency, count(ql.unit_price) as priced,
            sum(ql.unit_price * coalesce(ql.qty_offered, rl.qty)) as total
       from public.procurement_quotes pq
       join public.procurement_quote_lines ql on ql.quote_id = pq.id
       join public.procurement_rfq_lines rl on rl.id = ql.rfq_line_id
-     where pq.rfq_id = q.id and pq.status = 'received'
+     where pq.rfq_id = q.id and pq.status = 'received' and (pq.valid_until is null or pq.valid_until >= current_date)
      group by pq.id, pq.currency)
   select coalesce((select t.priced = v_nlines from t where t.id = v_qt.id), false)
      and not exists (select 1 from t o, t me where me.id = v_qt.id and o.currency = me.currency and o.priced = v_nlines
@@ -538,7 +599,8 @@ alter table public.purchase_orders
   add column if not exists emergency_est_value numeric check (emergency_est_value is null or emergency_est_value > 0),
   add column if not exists emergency_est_currency text check (emergency_est_currency is null or emergency_est_currency ~ '^[A-Z]{3}$'),
   add column if not exists emergency_attachment_path text,
-  add column if not exists emergency_requested_by_name text;
+  add column if not exists emergency_requested_by_name text,
+  add column if not exists emergency_overrun_reason text check (emergency_overrun_reason is null or length(emergency_overrun_reason) <= 1000);
 comment on column public.purchase_orders.is_emergency is
   'Emergency purchase: may be ordered before approval, must then be approved after the fact (inv_po_emergency_approve).';
 comment on column public.purchase_orders.emergency_reason is
@@ -561,6 +623,10 @@ begin
   end if;
   if v_country = '' then
     return jsonb_build_object('ok', false, 'error', 'Choose the country of an emergency purchase.');
+  end if;
+  -- (review A16) say nothing about another country's fleet or job cards
+  if auth.uid() is not null and not coalesce(public.app_write_country_ok(p_country), false) then
+    return jsonb_build_object('ok', false, 'error', format('%s is outside your country scope.', p_country));
   end if;
   if v_asset is null and v_jc is null and p_wo is null then
     return jsonb_build_object('ok', false, 'error', 'Name the affected asset number or job card for an emergency purchase.');
@@ -586,8 +652,9 @@ begin
   end if;
   return jsonb_build_object('ok', true, 'asset_no', v_asset, 'work_order_id', v_wo_id, 'job_card_no', v_wo_no);
 end $fn$;
-revoke all on function public._po_emergency_link(uuid, text, text, text, uuid) from public, anon;
-grant execute on function public._po_emergency_link(uuid, text, text, text, uuid) to authenticated, service_role;
+-- internal: reached only through the SECURITY DEFINER trigger guard_po_controls (review A16)
+revoke all on function public._po_emergency_link(uuid, text, text, text, uuid) from public, anon, authenticated;
+grant execute on function public._po_emergency_link(uuid, text, text, text, uuid) to service_role;
 
 -- Check a complete emergency justification and return the row with the resolved asset / job card and stamps.
 -- Raises 22023 with a plain-English message when anything required is missing.
@@ -638,8 +705,8 @@ begin
   p.emergency_declared_at := now();
   return p;
 end $fn$;
-revoke all on function public._po_emergency_normalise(public.purchase_orders) from public, anon;
-grant execute on function public._po_emergency_normalise(public.purchase_orders) to authenticated, service_role;
+revoke all on function public._po_emergency_normalise(public.purchase_orders) from public, anon, authenticated;
+grant execute on function public._po_emergency_normalise(public.purchase_orders) to service_role;
 
 -- clears every emergency field on a row that is not (or no longer) an emergency purchase
 create or replace function public._po_emergency_clear(p public.purchase_orders)
@@ -649,45 +716,62 @@ begin
   p.emergency_category := null; p.emergency_category_note := null; p.emergency_asset_no := null;
   p.emergency_work_order_id := null; p.emergency_job_card_no := null; p.emergency_downtime_hours := null;
   p.emergency_impact := null; p.emergency_est_value := null; p.emergency_est_currency := null;
-  p.emergency_attachment_path := null; p.emergency_requested_by_name := null;
+  p.emergency_attachment_path := null; p.emergency_requested_by_name := null; p.emergency_overrun_reason := null;
   return p;
 end $fn$;
-revoke all on function public._po_emergency_clear(public.purchase_orders) from public, anon;
-grant execute on function public._po_emergency_clear(public.purchase_orders) to authenticated, service_role;
+revoke all on function public._po_emergency_clear(public.purchase_orders) from public, anon, authenticated;
+grant execute on function public._po_emergency_clear(public.purchase_orders) to service_role;
 
 -- NULL = the signed-in approver may approve this PO; otherwise the plain-English reason.
-create or replace function public._po_limit_block(p_po uuid)
+-- Review fixes: A3 the check reads the NEW row the approval writes (value, currency, country, site passed in, never a
+-- re-read of the stored row); A4 the approver must hold a purchase-order approver role (inv_approver_roles) even when
+-- no limit row exists, and a super admin or Admin is never locked out by limits (no row = no upper limit for them);
+-- A16 the caller's company and country/site scope are checked before anything about the order or a limit is said.
+-- Internal: called only from the SECURITY DEFINER trigger guard_po_controls and inv_po_emergency_approve.
+create or replace function public._po_limit_block(p public.purchase_orders)
 returns text language plpgsql stable security definer set search_path = public, pg_temp as $fn$
-declare po public.purchase_orders%rowtype; v_raw text := coalesce(public.get_my_role(), '');
+declare v_raw text := coalesce(public.get_my_role(), '');
   v_role text := lower(regexp_replace(btrim(coalesce(public.get_my_role(), '')), '\s+', '_', 'g'));
+  v_super boolean := coalesce(public.is_super_admin(), false);
+  v_admin boolean := coalesce(public.is_super_admin(), false) or v_role = 'admin';
   l public.inventory_approval_limits%rowtype; v_val numeric; v_qty numeric; v_cur text; v_unpriced int; v_curs int;
 begin
-  select * into po from public.purchase_orders where id = p_po and organisation_id = public.app_current_org();
-  if not found then return 'Purchase order not found.'; end if;
-  if not exists (select 1 from public.inventory_approval_limits x where x.organisation_id = po.organisation_id
+  if p.id is null or (p.organisation_id is distinct from public.app_current_org() and not v_super) then
+    return 'Purchase order not found.';
+  end if;
+  if auth.uid() is not null and not public._inv_scope_ok(p.country, p.site) then
+    return 'This purchase order is outside your country or site scope.';
+  end if;
+  if not v_admin and not exists (select 1 from unnest(public.inv_approver_roles('purchase_order')) r
+                                  where lower(regexp_replace(btrim(r), '\s+', '_', 'g')) = v_role) then
+    return 'Your role (' || coalesce(nullif(v_raw, ''), 'no role') || ') cannot approve purchase orders.';
+  end if;
+  if not exists (select 1 from public.inventory_approval_limits x where x.organisation_id = p.organisation_id
                   and x.entity_type = 'purchase_order' and x.active) then
     return null;                                                    -- no limits set: no threshold (today)
   end if;
   select * into l from public.inventory_approval_limits x
-   where x.organisation_id = po.organisation_id and x.entity_type = 'purchase_order' and x.active
+   where x.organisation_id = p.organisation_id and x.entity_type = 'purchase_order' and x.active
      and lower(regexp_replace(btrim(x.approver_role), '\s+', '_', 'g')) = v_role
-     and (x.country is null or upper(btrim(x.country)) = upper(btrim(coalesce(po.country, '')))
-          or (po.country is null and upper(btrim(coalesce(x.currency, ''))) = upper(btrim(coalesce(po.currency, '')))))
-     and (x.site is null or upper(btrim(x.site)) = upper(btrim(coalesce(po.site, ''))))
+     and (x.country is null or upper(btrim(x.country)) = upper(btrim(coalesce(p.country, '')))
+          or (p.country is null and upper(btrim(coalesce(x.currency, ''))) = upper(btrim(coalesce(p.currency, '')))))
+     and (x.site is null or upper(btrim(x.site)) = upper(btrim(coalesce(p.site, ''))))
    order by (x.site is not null) desc, (x.country is not null) desc, x.created_at limit 1;
   if not found then
+    if v_admin then return null; end if;                            -- Admin / super admin: no row = no upper limit
     return 'No purchase approval limit is set for your role (' || coalesce(nullif(v_raw, ''), 'no role') || '). Ask an approver with a limit.';
   end if;
-  if exists (select 1 from public.purchase_order_lines where po_id = po.id) then
+  if exists (select 1 from public.purchase_order_lines where po_id = p.id) then
     select sum(qty_ordered), sum(qty_ordered * unit_price), count(*) filter (where unit_price is null),
-           count(distinct upper(coalesce(currency, po.currency))), upper(min(coalesce(currency, po.currency)))
+           count(distinct upper(coalesce(currency, p.currency))), upper(min(coalesce(currency, p.currency)))
       into v_qty, v_val, v_unpriced, v_curs, v_cur
-      from public.purchase_order_lines where po_id = po.id and status <> 'cancelled';
+      from public.purchase_order_lines where po_id = p.id and status <> 'cancelled';
     if v_unpriced > 0 or v_curs > 1 then v_val := null; end if;
+    if v_cur is not null and p.currency is not null and v_cur <> upper(btrim(p.currency)) then v_val := null; end if;
   else
-    v_qty := null; v_val := nullif(po.total_amount, 0); v_cur := upper(po.currency);
+    v_qty := null; v_val := nullif(p.total_amount, 0); v_cur := upper(p.currency);
   end if;
-  v_cur := coalesce(v_cur, upper(po.currency), upper(public.currency_for_country(po.country)));
+  v_cur := coalesce(v_cur, upper(p.currency), upper(public.currency_for_country(p.country)));
   if l.max_qty is not null and coalesce(v_qty, 0) > l.max_qty then
     return format('Quantity %s is above your approval limit of %s. Escalate to a higher approver.', v_qty, l.max_qty);
   end if;
@@ -704,22 +788,29 @@ begin
   end if;
   return null;
 end $fn$;
-revoke all on function public._po_limit_block(uuid) from public, anon;
--- called by the invoker-rights trigger guard_po_controls as the signed-in user; reads only the caller's company
-grant execute on function public._po_limit_block(uuid) to authenticated, service_role;
+revoke all on function public._po_limit_block(public.purchase_orders) from public, anon, authenticated;
+grant execute on function public._po_limit_block(public.purchase_orders) to service_role;
 
+-- SECURITY DEFINER (review A16): the limit and emergency helpers it calls are no longer executable by clients.
+-- auth.uid() / get_my_role() still describe the signed-in person (they read the request claims).
 create or replace function public.guard_po_controls()
-returns trigger language plpgsql set search_path = public, pg_temp as $$
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_uid uuid := auth.uid(); v_post boolean := current_setting('app.inv_po_post_approval', true) = 'on'; v_block text;
   v_changed boolean;
 begin
   if tg_op = 'INSERT' then
     new.approved_by_id := null; new.approved_at := null;
     new.emergency_approved_by_id := null; new.emergency_approved_by := null; new.emergency_approved_at := null;
+    new.emergency_overrun_reason := null;
     if coalesce(new.is_emergency, false) then
       new := public._po_emergency_normalise(new);                    -- refuses an incomplete justification
     else
       new := public._po_emergency_clear(new);
+    end if;
+    -- (review A3) a PO raised straight as Submitted needs an approved supplier
+    if v_uid is not null and new.supplier_id is not null and coalesce(new.status, 'Draft') = 'Submitted'
+       and not exists (select 1 from public.suppliers s where s.id = new.supplier_id and s.approved_for_purchasing) then
+      raise exception 'The supplier is not on the approved supplier list. Ask a buyer to approve the supplier first.' using errcode = '22023';
     end if;
     return new;
   end if;
@@ -729,6 +820,7 @@ begin
     new.emergency_approved_at := old.emergency_approved_at;
     new.emergency_declared_by := old.emergency_declared_by; new.emergency_declared_at := old.emergency_declared_at;
     new.emergency_requested_by_name := old.emergency_requested_by_name;
+    new.emergency_overrun_reason := old.emergency_overrun_reason;
   end if;
   v_changed := (new.is_emergency, new.emergency_reason, new.emergency_category, new.emergency_category_note,
                 new.emergency_asset_no, new.emergency_work_order_id, new.emergency_job_card_no, new.emergency_downtime_hours,
@@ -755,15 +847,23 @@ begin
   end if;
   if v_uid is null then return new; end if;                          -- service role / cron
   if new.status is distinct from old.status then
+    -- (review A3) Submitted / Approved need a supplier on the approved list
+    if new.status in ('Submitted', 'Approved') and new.supplier_id is not null
+       and not exists (select 1 from public.suppliers s where s.id = new.supplier_id and s.approved_for_purchasing) then
+      raise exception 'The supplier is not on the approved supplier list. Ask a buyer to approve the supplier first.' using errcode = '22023';
+    end if;
     if new.status = 'Approved' then
       if old.created_by = v_uid or (old.is_emergency and old.emergency_declared_by = v_uid) then
         raise exception 'You cannot approve a purchase order you created.' using errcode = '42501';
       end if;
-      v_block := public._po_limit_block(new.id);
+      v_block := public._po_limit_block(new);                       -- (review A3) the NEW value, currency, country, site
       if v_block is not null then raise exception '%', v_block using errcode = '42501'; end if;
       new.approved_by_id := v_uid; new.approved_at := now();
     elsif new.status = 'Ordered' and old.status in ('Draft', 'Submitted') and not coalesce(new.is_emergency, false) then
       raise exception 'Only an approved purchase order can be placed. Flag it as an emergency purchase to order first and approve after.' using errcode = '22023';
+    elsif new.status = 'Closed' and coalesce(old.is_emergency, false) and old.emergency_approved_at is null then
+      -- (review A13) an emergency purchase is approved after the fact before it can be closed
+      raise exception 'This emergency purchase is not approved yet. Approve it after the fact before closing it.' using errcode = '22023';
     end if;
   end if;
   return new;
@@ -789,7 +889,8 @@ end $p$;
 create or replace function public.inv_po_emergency_approve(p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
 declare r jsonb; v_uid uuid := auth.uid(); v_org uuid := public.app_current_org(); po public.purchase_orders%rowtype;
-  v_block text; v_name text;
+  v_block text; v_name text; v_total numeric; v_unpriced int; v_curs int;
+  v_overrun text := nullif(btrim(coalesce(p_payload->>'overrun_reason', p_payload->>'reason', '')), '');
 begin
   r := public._inv_req_begin('inv_po_emergency_approve', p_payload); if r is not null then return r; end if;
   if not public.inv_can('procure') then raise exception 'Stock permission "procure" is required.' using errcode = '42501'; end if;
@@ -804,16 +905,55 @@ begin
   if po.created_by = v_uid or po.emergency_declared_by = v_uid then
     raise exception 'You cannot approve a purchase order you created.' using errcode = '42501';
   end if;
-  v_block := public._po_limit_block(po.id);
+  -- (review A3) nor one you last edited or added a line to
+  if po.updated_by = v_uid then
+    raise exception 'You made the last change to this purchase order; another person must approve it.' using errcode = '42501';
+  end if;
+  if exists (select 1 from public.purchase_order_lines l where l.po_id = po.id and l.created_by = v_uid) then
+    raise exception 'You added a line to this purchase order; another person must approve it.' using errcode = '42501';
+  end if;
+  v_block := public._po_limit_block(po);
   if v_block is not null then raise exception '%', v_block using errcode = '42501'; end if;
+  -- (review A13) the order may not cost more than 10% above the estimate given when it was declared, unless the
+  -- approver writes why (an unpriced or mixed-currency order counts as over: its value is not known)
+  select sum(qty_ordered * unit_price), count(*) filter (where unit_price is null),
+         count(distinct upper(coalesce(currency, po.currency)))
+    into v_total, v_unpriced, v_curs
+    from public.purchase_order_lines where po_id = po.id and status <> 'cancelled';
+  if (v_unpriced > 0 or v_curs > 1 or v_total is null or v_total > po.emergency_est_value * 1.10)
+     and (v_overrun is null or length(v_overrun) < 10) then
+    raise exception 'The order value (% %) is more than 10%% above the emergency estimate (% %) or is not known. Write why (at least 10 characters) to approve it.',
+      coalesce(round(v_total, 2)::text, 'unknown'), coalesce(po.currency, ''), po.emergency_est_value, coalesce(po.emergency_est_currency, '')
+      using errcode = '22023';
+  end if;
   select coalesce(nullif(btrim(p.full_name), ''), nullif(btrim(p.username), ''), left(v_uid::text, 8)) into v_name
     from public.profiles p where p.id = v_uid;
   perform set_config('app.inv_po_post_approval', 'on', true);
   update public.purchase_orders set emergency_approved_by_id = v_uid, emergency_approved_by = left(v_name, 100),
-    emergency_approved_at = now(), approved_by_id = v_uid, approved_at = now(), updated_at = now() where id = po.id;
+    emergency_approved_at = now(), approved_by_id = v_uid, approved_at = now(), updated_at = now(),
+    emergency_overrun_reason = case when v_unpriced > 0 or v_curs > 1 or v_total is null
+                                         or v_total > po.emergency_est_value * 1.10 then left(v_overrun, 1000) end
+   where id = po.id;
   perform set_config('app.inv_po_post_approval', 'off', true);
   return public._inv_req_end('inv_po_emergency_approve', p_payload, jsonb_build_object('po_id', po.id, 'approved_by', v_name));
 end $fn$;
+
+-- (review A13) no supplier invoice against an emergency purchase until it is approved after the fact.
+create or replace function public.guard_invoice_emergency_po()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if new.po_id is not null and (tg_op = 'INSERT' or new.po_id is distinct from old.po_id)
+     and exists (select 1 from public.purchase_orders po where po.id = new.po_id
+                  and po.is_emergency and po.emergency_approved_at is null) then
+    raise exception 'This emergency purchase is not approved yet. It must be approved after the fact before an invoice is recorded against it.'
+      using errcode = '22023';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.guard_invoice_emergency_po() from public, anon, authenticated;
+create or replace trigger trg_guard_invoice_emergency_po
+  before insert or update of po_id on public.supplier_invoices
+  for each row execute function public.guard_invoice_emergency_po();
 
 -- ── 5. Receipt rejection reasons ────────────────────────────────────────────────────────────────────────────────
 alter table public.goods_receipt_lines
@@ -959,7 +1099,8 @@ begin
   return jsonb_build_object('return_id', v_ret.id, 'return_no', v_ret.return_no, 'lines', v_n);
 end $fn$;
 
--- ── 6b. Three-way match nets supplier returns out of the accepted quantity (anchored) ───────────────────────────
+-- ── 6b. Three-way match nets supplier returns out of the accepted quantity, and refuses an invoice of an emergency
+--        purchase that is not yet approved after the fact (review A13). Anchored; aborts unless each anchor occurs once.
 do $p$
 declare src text := replace(pg_get_functiondef('public._inv_supplier_invoice_match(uuid)'::regprocedure), chr(13), '');
   a text := $a$coalesce((select sum(g.qty_accepted) from public.goods_receipt_lines g where g.po_line_id = pl.id), 0) as grn_qty$a$;
@@ -967,12 +1108,20 @@ declare src text := replace(pg_get_functiondef('public._inv_supplier_invoice_mat
            - coalesce((select sum(rl.qty) from public.supplier_return_lines rl
                           join public.goods_receipt_lines g2 on g2.id = rl.grn_line_id
                          where g2.po_line_id = pl.id and rl.source = 'accepted'), 0) as grn_qty$a$;
+  a2 text := $a$if not found then raise exception 'Invoice not found.' using errcode = 'P0002'; end if;$a$;
+  b2 text := $a$if not found then raise exception 'Invoice not found.' using errcode = 'P0002'; end if;
+  if v.po_id is not null and exists (select 1 from public.purchase_orders po where po.id = v.po_id
+                                      and po.is_emergency and po.emergency_approved_at is null) then
+    raise exception 'This emergency purchase is not approved yet. Approve it after the fact before matching its invoice.' using errcode = '22023';
+  end if;$a$;
   n int;
 begin
-  if position('supplier_return_lines' in src) > 0 then raise notice '130000: invoice match already nets returns'; return; end if;
+  if position('supplier_return_lines' in src) > 0 then raise notice '130000: invoice match already patched'; return; end if;
   n := (length(src) - length(replace(src, a, ''))) / length(a);
   if n <> 1 then raise exception '130000: invoice match anchor matched % times (expected 1)', n; end if;
-  execute replace(src, a, b);
+  n := (length(src) - length(replace(src, a2, ''))) / length(a2);
+  if n <> 1 then raise exception '130000: invoice match anchor 2 matched % times (expected 1)', n; end if;
+  execute replace(replace(src, a, b), a2, b2);
 end $p$;
 
 -- ── 7. Read views (security_invoker: RLS of the base tables applies) ────────────────────────────────────────────
@@ -1045,6 +1194,26 @@ select s.id as supplier_id, s.organisation_id, s.supplier_name, s.country, s.sta
 revoke all on public.v_supplier_delivery_performance from anon;
 grant select on public.v_supplier_delivery_performance to authenticated;
 
+
+-- ── 8. Child tables read their parent's country / site scope (review A15) ───────────────────────────────────────
+-- The parent rows are themselves filtered by their country and site policies, so "the parent is visible" is exactly
+-- the parent's scope; a child row of an out-of-scope request / quote / return is hidden.
+drop policy if exists procurement_rfq_lines_parent_scope on public.procurement_rfq_lines;
+create policy procurement_rfq_lines_parent_scope on public.procurement_rfq_lines as restrictive for select to authenticated
+  using (exists (select 1 from public.procurement_rfqs r where r.id = rfq_id));
+drop policy if exists procurement_rfq_invites_parent_scope on public.procurement_rfq_invites;
+create policy procurement_rfq_invites_parent_scope on public.procurement_rfq_invites as restrictive for select to authenticated
+  using (exists (select 1 from public.procurement_rfqs r where r.id = rfq_id));
+drop policy if exists procurement_quotes_parent_scope on public.procurement_quotes;
+create policy procurement_quotes_parent_scope on public.procurement_quotes as restrictive for select to authenticated
+  using (exists (select 1 from public.procurement_rfqs r where r.id = rfq_id));
+drop policy if exists procurement_quote_lines_parent_scope on public.procurement_quote_lines;
+create policy procurement_quote_lines_parent_scope on public.procurement_quote_lines as restrictive for select to authenticated
+  using (exists (select 1 from public.procurement_quotes q where q.id = quote_id));
+drop policy if exists supplier_return_lines_parent_scope on public.supplier_return_lines;
+create policy supplier_return_lines_parent_scope on public.supplier_return_lines as restrictive for select to authenticated
+  using (exists (select 1 from public.supplier_returns r where r.id = return_id));
+
 -- ── Grants ──────────────────────────────────────────────────────────────────────────────────────────────────────
 revoke all on function public.inv_supplier_set_approval(jsonb), public.inv_rfq_create(jsonb), public.inv_rfq_quote_record(jsonb),
   public.inv_rfq_award(jsonb), public.inv_rfq_cancel(jsonb), public.inv_po_emergency_approve(jsonb),
@@ -1058,3 +1227,5 @@ do $$ begin
     perform anum_integration.apply_reader_policies();
   end if;
 end $$;
+
+commit;

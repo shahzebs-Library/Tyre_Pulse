@@ -25,13 +25,28 @@
 --
 -- Client: the web register works with OR without these columns. Until this is
 -- applied the server filter (buildPriorityFilter) derives the priority from
--- vehicle_type + asset_no. After apply, a stored override will show on the row
--- badge but the filter still derives; switch applyFleetPriority to
--- .in('maintenance_priority', set) once this is live.
+-- vehicle_type + asset_no; once the column exists the filter also ORs on the
+-- stored maintenance_priority, so a manual override is found by the filter too.
+--
+-- Review fix (2026-11-24): the asset-prefix extraction used pg_catalog.substring(x FROM y), which does not parse
+-- (the FROM form cannot be schema-qualified); it is now pg_catalog.substring(x, y), the same POSIX-regex match.
+-- Review A25 (2026-11-24): setting, changing or removing an override needs
+-- stock:engineering_approve, an Admin / Manager role or the super admin (checked in
+-- the trigger, 42501). Backend writers (no auth.uid()) are not blocked.
 --
 -- Cost note: the backfill UPDATE touches ~1,6xx vehicle_fleet rows and fires
 -- that table's existing triggers (audit, sync) once per row.
 --
+-- REVIEW FIXES + ROLLED-BACK PROOF, ROUND 2 (2026-11-24). All 8 files applied in order (090000, 091000, 130000,
+-- 131000, 132000, 133000, 120000, 135000; the 135000 work_orders index build left out of the run because of its
+-- SHARE lock) in ONE implicit transaction through the Supabase CLI, then a test block as real users (claims + role
+-- authenticated) ending in RAISE EXCEPTION, so everything rolled back; re-checked afterwards: purchase_orders 0,
+-- test suppliers 0, test grants 0, procurement_rfqs and _inv_job_card_resolve absent, purchase_orders.updated_by
+-- absent. Users: super admin d2d43a5f (SA), Store Keeper 69faeb71 (SK), Managers 34793423 (M1) / ecdcdb9e (M2);
+-- extra stock / fleet grants were given INSIDE the transaction. Script: scratchpad review_round2_proof.sql.
+--   A25.0 SA sets an override -> 1 row, P2;  A25.1 SK (fleet_master edit granted, no engineering_approve) changes it
+--   -> 42501;  A25.2 M1 Manager (fleet_master edit granted) -> 1 row, P1. The file did not parse before this round
+--   (pg_catalog.substring ... FROM ...); it now compiles and the backfill ran inside the rolled-back run.
 -- PARITY CHECK (run after apply; expect 0 rows):
 --   select f.id, f.vehicle_type, f.asset_no, f.maintenance_priority,
 --          public.fleet_priority_for(f.vehicle_type, f.asset_no) as derived
@@ -91,7 +106,7 @@ as $$
   with n as (
     select
       pg_catalog.btrim(pg_catalog.regexp_replace(pg_catalog.upper(coalesce(p_vehicle_type, '')), '[[:space:]_-]+', ' ', 'g')) as ty,
-      coalesce(pg_catalog.substring(pg_catalog.upper(pg_catalog.btrim(coalesce(p_asset_no, ''), E' \t\r\n')) from '^[A-Z]+'), '') as pre
+      coalesce(pg_catalog.substring(pg_catalog.upper(pg_catalog.btrim(coalesce(p_asset_no, ''), E' \t\r\n')), '^[A-Z]+'), '') as pre
   )
   select (case
     -- 1. vehicle type
@@ -122,6 +137,23 @@ language plpgsql
 set search_path = ''
 as $$
 begin
+  -- (review A25) setting, changing or removing a manual override is an engineering decision: it needs
+  -- stock:engineering_approve, or an Admin / Manager role, or the super admin. Backend writers (no auth.uid(),
+  -- e.g. this migration's backfill or an import) are not blocked.
+  if auth.uid() is not null
+     and (case when tg_op = 'INSERT'
+               then nullif(pg_catalog.btrim(coalesce(new.priority_override_reason, '')), '') is not null
+               else (nullif(pg_catalog.btrim(coalesce(new.priority_override_reason, '')), '')
+                       is distinct from nullif(pg_catalog.btrim(coalesce(old.priority_override_reason, '')), ''))
+                    or (nullif(pg_catalog.btrim(coalesce(new.priority_override_reason, '')), '') is not null
+                        and new.maintenance_priority is distinct from old.maintenance_priority)
+          end)
+     and not (coalesce(public.is_super_admin(), false)
+              or pg_catalog.lower(coalesce(public.get_my_role(), '')) in ('admin', 'manager')
+              or coalesce(public.inv_can('engineering_approve'), false)) then
+    raise exception 'Overriding a maintenance priority needs engineering approval rights or an Admin or Manager role.'
+      using errcode = '42501';
+  end if;
   if nullif(pg_catalog.btrim(coalesce(new.priority_override_reason, '')), '') is null then
     new.priority_override_reason := null;
     new.priority_overridden_by := null;

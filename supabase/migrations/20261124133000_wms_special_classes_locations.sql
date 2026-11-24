@@ -79,6 +79,25 @@
 --     return ok (state in_store, vendor carried); reinstall on TM586 ok.
 --   Checked afterwards: no new table, location, tool, supplier or stock change persisted.
 --
+-- REVIEW FIXES + ROLLED-BACK PROOF, ROUND 2 (2026-11-24). All 8 files applied in order (090000, 091000, 130000,
+-- 131000, 132000, 133000, 120000, 135000; the 135000 work_orders index build left out of the run because of its
+-- SHARE lock) in ONE implicit transaction through the Supabase CLI, then a test block as real users (claims + role
+-- authenticated) ending in RAISE EXCEPTION, so everything rolled back; re-checked afterwards: purchase_orders 0,
+-- test suppliers 0, test grants 0, procurement_rfqs and _inv_job_card_resolve absent, purchase_orders.updated_by
+-- absent. Users: super admin d2d43a5f (SA), Store Keeper 69faeb71 (SK), Managers 34793423 (M1) / ecdcdb9e (M2);
+-- extra stock / fleet grants were given INSIDE the transaction. Script: scratchpad review_round2_proof.sql.
+--   Changes here: versioned backup of _inv_location_upsert, skip when patched (A14); inv_scrap_post RAISES on a
+--   shortage (A5); an approval expires after 30 days, the proposer cannot record the disposal (also a CHECK), an
+--   expired approval may be cancelled (A18); inv_unit_event_record takes country / site from the fleet asset when no
+--   stock line is named (A19); pct_used NULL unless every stocked line is in the capacity unit (A21);
+--   v_inv_lubricant_consumption gains zero_cost_qty, value stays NULL when nothing is valued (A20); the lubricant
+--   dispense job card goes through _inv_job_card_resolve (A10).
+--   A5.1  post a scrap of 2 with 1 free                       -> 23514 raised;  A5.2 exception rows left = 0
+--   A2.3  post a scrap of 1 (second person)                   -> posted
+--   A18.1 proposer SK (financial_post granted) records disposal -> 42501;  A18.2 M2 -> disposed
+--   A18.3 post an approval decided 31 days ago                -> 22023;  A18.4 SK cancels it -> cancelled
+--   A19.1 install on GN187 with no stock line / no country     -> stored KSA / DIRIYAH-G2 (fleet register)
+--   A19.2 same with country UAE (GN187 is also a UAE machine)   -> 42501 outside scope for a KSA user
 -- ROLLBACK
 --   drop view if exists public.v_inv_location_utilisation, public.v_inv_lubricant_consumption,
 --     public.v_inv_unit_latest;
@@ -89,6 +108,8 @@
 --     public.inv_scrap_decide(jsonb), public.inv_scrap_post(jsonb), public.inv_scrap_dispose(jsonb);
 --   drop table if exists public.inventory_scrap_requests, public.inventory_unit_events,
 --     public.inventory_lubricant_dispenses, public.equipment_calibrations, public.equipment_custody;
+--   do $u$ begin execute (select def from _bak.wms_special_fn_backup_20261124
+--     where fn = 'public._inv_location_upsert(jsonb)' order by id desc limit 1); end $u$;
 --   drop trigger if exists trg_inv_location_class_guard on public.inventory_locations;
 --   drop function if exists public.inv_location_class_guard();
 --   drop function if exists public._inv_scrap_lock(uuid);
@@ -149,10 +170,23 @@ drop trigger if exists trg_inv_location_class_guard on public.inventory_location
 create trigger trg_inv_location_class_guard before insert or update on public.inventory_locations
   for each row execute function public.inv_location_class_guard();
 
+-- (review A14) versioned rollback copy of _inv_location_upsert: one row per apply, written only while the body is
+-- still UNPATCHED, so the newest row is what was live just before the latest real apply.
+create schema if not exists _bak;
+revoke all on schema _bak from public, anon, authenticated;
+create table if not exists _bak.wms_special_fn_backup_20261124 (
+  id bigserial primary key, fn text not null, def text not null, saved_at timestamptz not null default now());
+revoke all on _bak.wms_special_fn_backup_20261124 from public, anon, authenticated;
+insert into _bak.wms_special_fn_backup_20261124(fn, def)
+select 'public._inv_location_upsert(jsonb)', d
+  from (select pg_get_functiondef('public._inv_location_upsert(jsonb)'::regprocedure) d) x
+ where position('van_asset_no' in x.d) = 0;
+
 do $$
 declare v_def text; v_n int;
 begin
   v_def := pg_get_functiondef('public._inv_location_upsert(jsonb)'::regprocedure);
+  if position('van_asset_no' in v_def) > 0 then raise notice '133000: _inv_location_upsert already patched'; return; end if;
   v_n := (length(v_def) - length(replace(v_def, 'responsible_user_id, active)', ''))) / length('responsible_user_id, active)');
   if v_n <> 1 then raise exception '_inv_location_upsert insert-column anchor found % times', v_n; end if;
   v_n := (length(v_def) - length(replace(v_def, 'coalesce((p->>''active'')::boolean, true))', ''))) / length('coalesce((p->>''active'')::boolean, true))');
@@ -175,11 +209,15 @@ begin
 end $$;
 
 create or replace view public.v_inv_location_utilisation with (security_invoker = on) as
+-- (review A21) pct_used only when every stocked line is measured in the capacity unit; mixed units give NULL
+-- (a percentage of litres against a capacity in pallets would be meaningless).
 select l.id as location_id, l.organisation_id, l.country, l.site, l.code, l.name, l.location_type,
        l.capacity_qty, l.capacity_uom, l.restriction, l.restriction_note, l.responsible_user_id, l.van_asset_no,
        coalesce(sum(s.qty_on_hand), 0) as qty_on_hand,
        count(s.id) filter (where s.qty_on_hand > 0) as stock_lines,
        case when l.capacity_qty is null then null
+            when bool_and(upper(btrim(coalesce(nullif(s.uom, ''), m.base_uom, m.uom, ''))) = l.capacity_uom)
+                   filter (where s.qty_on_hand > 0) is false then null
             else round(coalesce(sum(s.qty_on_hand), 0) / l.capacity_qty * 100, 1) end as pct_used,
        count(s.id) filter (where s.qty_on_hand > 0 and (
             (l.restriction = 'tyres_only' and not coalesce(m.is_tyre, false))
@@ -442,6 +480,8 @@ begin
     raise exception 'Choose a fleet asset of your company in this country.' using errcode = '22023';
   end if;
   if v_jc is not null then
+    -- (review A10) canonical job card of this company, the stock's country and the caller's scope
+    v_jc := public._inv_job_card_resolve(v_org, v_jc, v_rec.country);
     select * into v_wo from public.work_orders w where w.organisation_id = v_org and w.work_order_no = v_jc limit 1;
     if v_wo.id is null then raise exception 'Job card % not found.', v_jc using errcode = '22023'; end if;
     if upper(btrim(coalesce(v_wo.asset_no, ''))) <> v_asset then
@@ -465,13 +505,16 @@ begin
 end $$;
 
 create or replace view public.v_inv_lubricant_consumption with (security_invoker = on) as
+-- (review A20) three kinds of quantity are kept apart: valued (value), zero_cost_qty (a line priced at 0, e.g.
+-- free or warranty) and unvalued_qty (no cost known; never treated as 0). value is NULL when no line is valued.
 select 'app'::text as source, d.organisation_id, d.country, d.site, d.asset_no,
        date_trunc('month', d.dispensed_at)::date as month, m.item_code, m.item_name, m.lubricant_grade,
        mv.currency, d.uom,
        sum(d.qty) as qty,
        case when public.inv_can('view_value') then sum(-mv.value_change) filter (where mv.value_change is not null) end as value,
        sum(-coalesce(mv.unvalued_qty_change, 0)) as unvalued_qty,
-       count(*) as lines
+       count(*) as lines,
+       coalesce(sum(d.qty) filter (where mv.value_change = 0 and coalesce(mv.unvalued_qty_change, 0) = 0), 0) as zero_cost_qty
   from public.inventory_lubricant_dispenses d
   join public.stock_movements mv on mv.id = d.movement_id
   left join public.material_master m on m.id = d.item_id
@@ -484,7 +527,8 @@ select 'erp'::text, pc.organisation_id, pc.country, pc.site, upper(btrim(pc.asse
        sum(pc.qty_n),
        case when public.inv_can('view_value') then sum(pc.line_cost) end,
        sum(pc.qty_n) filter (where pc.line_cost is null),
-       count(*)
+       count(*),
+       coalesce(sum(pc.qty_n) filter (where pc.line_cost = 0), 0)
   from public.parts_consumption pc
  where pc.cost_category = 'oil' and nullif(btrim(pc.asset_code), '') is not null
  group by pc.organisation_id, pc.country, pc.site, upper(btrim(pc.asset_code)), date_trunc('month', pc.event_date),
@@ -550,6 +594,17 @@ begin
       raise exception 'The stock line does not match this item.' using errcode = '22023';
     end if;
     v_country := v_rec.country; v_site := v_rec.site;
+  elsif v_asset is not null then
+    -- (review A19) no stock line: the unit is where the asset is (fleet register), never where the payload says
+    select v.country, nullif(upper(btrim(v.site)), '') into v_country, v_site
+      from public.vehicle_fleet v
+     where v.organisation_id = v_org and upper(btrim(v.asset_no)) = v_asset
+     order by (lower(coalesce(v.country, '')) = lower(coalesce(nullif(p->>'country', ''), v_item.country, ''))) desc, v.id
+     limit 1;
+    if not found then
+      raise exception 'Choose a fleet asset of your company in this country.' using errcode = '22023';
+    end if;
+    v_country := coalesce(v_country, v_item.country);
   else
     v_country := coalesce(nullif(p->>'country', ''), v_item.country); v_site := nullif(upper(btrim(p->>'site')), '');
   end if;
@@ -648,7 +703,8 @@ create table if not exists public.inventory_scrap_requests (
   constraint inventory_scrap_requests_recovery_chk check (recovery_value is null or recovery_currency is not null),
   constraint inventory_scrap_requests_sod_eval check (evaluated_by is null or evaluated_by <> proposed_by),
   constraint inventory_scrap_requests_sod_decide check (decided_by is null or decided_by <> proposed_by),
-  constraint inventory_scrap_requests_sod_post check (posted_by is null or posted_by <> proposed_by)
+  constraint inventory_scrap_requests_sod_post check (posted_by is null or posted_by <> proposed_by),
+  constraint inventory_scrap_requests_sod_dispose check (disposed_by is null or disposed_by <> proposed_by)
 );
 create index if not exists inventory_scrap_requests_status on public.inventory_scrap_requests (organisation_id, status, proposed_at desc);
 select public._inv_secure_table('inventory_scrap_requests', true, true);
@@ -704,7 +760,10 @@ begin
   if v.proposed_by <> auth.uid() and not public.app_is_elevated() then
     raise exception 'Only the proposer or a manager can cancel.' using errcode = '42501';
   end if;
-  if v.status not in ('proposed', 'evaluated') then raise exception 'A % request cannot be cancelled.', v.status using errcode = '22023'; end if;
+  if v.status not in ('proposed', 'evaluated')
+     and not (v.status = 'approved' and v.decided_at < now() - interval '30 days') then
+    raise exception 'A % request cannot be cancelled.', v.status using errcode = '22023';
+  end if;
   update public.inventory_scrap_requests set status = 'cancelled', decision_note = nullif(btrim(p_payload->>'note'), '') where id = v.id;
   return jsonb_build_object('status', 'cancelled', 'id', v.id);
 end $$;
@@ -761,10 +820,18 @@ begin
   end if;
   if v.status <> 'approved' then raise exception 'Only an approved request can be posted (this one is %).', v.status using errcode = '22023'; end if;
   if v.proposed_by = auth.uid() then raise exception 'The proposer cannot post their own scrap.' using errcode = '42501'; end if;
+  -- (review A18) an approval is good for 30 days; after that the request must be cancelled and proposed again
+  if v.decided_at < now() - interval '30 days' then
+    raise exception 'This scrap approval is older than 30 days. Cancel the request and propose it again.' using errcode = '22023';
+  end if;
   v_post := public._inv_post(jsonb_build_object('idempotency_key', 'scrapreq:' || v.id, 'stock_id', v.stock_id,
     'movement_type', 'scrap', 'qty_change', -v.qty, 'reason', v.reason, 'approval_ref', v.id::text,
     'source_doc_type', 'scrap_request', 'source_doc_id', v.id::text, 'reference_no', 'SCRAP-' || left(v.id::text, 8)), false);
-  if v_post->>'status' = 'refused_shortage' then return v_post || jsonb_build_object('id', v.id); end if;
+  if v_post->>'status' = 'refused_shortage' then
+    -- (review A5) raise, so the shortage exception row written by _inv_post rolls back with this call
+    raise exception 'Not enough free stock to scrap % (only % available). Nothing was posted.', v.qty,
+      coalesce(v_post->>'qty_available', '0') using errcode = '23514';
+  end if;
   update public.inventory_scrap_requests set status = 'posted', movement_id = (v_post->>'movement_id')::uuid,
     posted_by = auth.uid(), posted_at = now() where id = v.id;
   return v_post || jsonb_build_object('id', v.id, 'request_status', 'posted');
@@ -780,6 +847,10 @@ begin
   end if;
   v := public._inv_scrap_lock(nullif(p_payload->>'request_id', '')::uuid);
   if v.status <> 'posted' then raise exception 'Only a posted scrap can be disposed (this one is %).', v.status using errcode = '22023'; end if;
+  -- (review A18) the person who proposed the scrap does not record what was recovered from it
+  if v.proposed_by = auth.uid() then
+    raise exception 'The proposer cannot record the disposal of their own scrap.' using errcode = '42501';
+  end if;
   if v_method is null or v_method not in ('sold_as_scrap','returned_to_supplier','destroyed','recycled','other') then
     raise exception 'Choose how it was disposed.' using errcode = '22023';
   end if;

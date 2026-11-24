@@ -83,17 +83,49 @@
 --     inv_material_link_candidates ............. UAE 777 (726 exact code, 534 same description,
 --                                                51 OEM only), Egypt 30 (all OEM)
 --
+-- REVIEW FIXES + ROLLED-BACK PROOF, ROUND 2 (2026-11-24). All 8 files applied in order (090000, 091000, 130000,
+-- 131000, 132000, 133000, 120000, 135000; the 135000 work_orders index build left out of the run because of its
+-- SHARE lock) in ONE implicit transaction through the Supabase CLI, then a test block as real users (claims + role
+-- authenticated) ending in RAISE EXCEPTION, so everything rolled back; re-checked afterwards: purchase_orders 0,
+-- test suppliers 0, test grants 0, procurement_rfqs and _inv_job_card_resolve absent, purchase_orders.updated_by
+-- absent. Users: super admin d2d43a5f (SA), Store Keeper 69faeb71 (SK), Managers 34793423 (M1) / ecdcdb9e (M2);
+-- extra stock / fleet grants were given INSIDE the transaction. Script: scratchpad review_round2_proof.sql.
+--   Changes here: versioned backup of _inv_compat_propose / _inv_compat_decide and skip when already patched (A14);
+--   pg_temp added to the search_path of _inv_norm_part / _inv_item_shares_oem (A23: proconfig = public, pg_temp).
+--   Backup rows written in the run: 2. The OEM / link cases above were not re-run in round 2.
 -- ROLLBACK
 --   drop function if exists public.inv_material_link_health();
 --   drop function if exists public.inv_material_link_candidates(text, integer, integer);
 --   drop function if exists public.inv_material_link_decide(jsonb);
 --   drop function if exists public.inv_material_link_propose(jsonb);
 --   drop table if exists public.material_link_proposals;
---   -- A and B: re-run the bodies of _inv_compat_propose / _inv_compat_decide from
---   -- 20261120106000_inv_oem_fitments.sql (or pg_get_functiondef captured before apply).
+--   drop function if exists public._inv_item_shares_oem(uuid, uuid);
+--   drop function if exists public._inv_norm_part(text);
+--   -- A and B: restore the newest saved body of each patched function:
+--   do $u$ declare r record; begin
+--     for r in select distinct on (fn) def from _bak.wms_oem_link_fn_backup_20261124 order by fn, id desc loop
+--       execute r.def; end loop;
+--   end $u$;
 -- =============================================================================
 
 begin;
+
+-- ---------------------------------------------------------------------------
+-- 0. (review A14) Versioned rollback copies of the two bodies patched below: one
+--    row per apply, written only while the body is still UNPATCHED, so the newest
+--    row per function is what was live just before the latest real apply.
+-- ---------------------------------------------------------------------------
+create schema if not exists _bak;
+revoke all on schema _bak from public, anon, authenticated;
+create table if not exists _bak.wms_oem_link_fn_backup_20261124 (
+  id bigserial primary key, fn text not null, def text not null, saved_at timestamptz not null default now());
+revoke all on _bak.wms_oem_link_fn_backup_20261124 from public, anon, authenticated;
+insert into _bak.wms_oem_link_fn_backup_20261124(fn, def)
+select x.fn, x.def from (values
+  ('public._inv_compat_propose(jsonb)', pg_get_functiondef('public._inv_compat_propose(jsonb)'::regprocedure), 'same country as its item'),
+  ('public._inv_compat_decide(text,uuid,text,text)', pg_get_functiondef('public._inv_compat_decide(text,uuid,text,text)'::regprocedure), 'already decided')
+) x(fn, def, marker)
+where position(x.marker in x.def) = 0;
 
 -- ---------------------------------------------------------------------------
 -- A. _inv_compat_propose: country of the link = country of the item; write scope.
@@ -102,6 +134,7 @@ do $patch$
 declare d text; a text; n int;
 begin
   d := pg_get_functiondef('public._inv_compat_propose(jsonb)'::regprocedure);
+  if position('same country as its item' in d) > 0 then raise notice '132000: _inv_compat_propose already patched'; return; end if;
 
   a := $a$if nullif(btrim(p->>'source'), '') is null or jsonb_array_length$a$;
   n := (length(d) - length(replace(d, a, ''))) / length(a);
@@ -131,6 +164,7 @@ do $patch$
 declare d text; a text; n int;
 begin
   d := pg_get_functiondef('public._inv_compat_decide(text, uuid, text, text)'::regprocedure);
+  if position('already decided' in d) > 0 then raise notice '132000: _inv_compat_decide already patched'; return; end if;
   a := $a$if v_by is null then raise exception 'Record not found.' using errcode = 'P0002'; end if;$a$;
   n := (length(d) - length(replace(d, a, ''))) / length(a);
   if n <> 1 then raise exception '_inv_compat_decide anchor matched % times', n; end if;
@@ -199,14 +233,14 @@ revoke insert, update, delete, truncate on public.material_link_proposals from a
 grant select on public.material_link_proposals to authenticated;
 
 create or replace function public._inv_norm_part(p text)
-returns text language sql immutable set search_path = public as $$
+returns text language sql immutable set search_path = public, pg_temp as $$
   select nullif(upper(regexp_replace(coalesce(p, ''), '[^A-Za-z0-9]', '', 'g')), '')
 $$;
 
 -- True when a part-number-looking token of the item's code or name equals, after
 -- normalisation, an OEM alias recorded on the catalogue item. Exact only.
 create or replace function public._inv_item_shares_oem(p_item uuid, p_canonical uuid)
-returns boolean language sql stable security definer set search_path = public as $$
+returns boolean language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
     select 1
     from public.material_master m

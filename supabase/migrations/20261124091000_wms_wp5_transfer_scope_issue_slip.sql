@@ -93,6 +93,29 @@
 --          refused. Issue numbers are minted by a sequence, which does not roll back.
 --   D3/D4/D6/D7 each refused or replayed as described above.
 --
+-- REVIEW FIXES + ROLLED-BACK PROOF, ROUND 2 (2026-11-24). All 8 files applied in order (090000, 091000, 130000,
+-- 131000, 132000, 133000, 120000, 135000; the 135000 work_orders index build left out of the run because of its
+-- SHARE lock) in ONE implicit transaction through the Supabase CLI, then a test block as real users (claims + role
+-- authenticated) ending in RAISE EXCEPTION, so everything rolled back; re-checked afterwards: purchase_orders 0,
+-- test suppliers 0, test grants 0, procurement_rfqs and _inv_job_card_resolve absent, purchase_orders.updated_by
+-- absent. Users: super admin d2d43a5f (SA), Store Keeper 69faeb71 (SK), Managers 34793423 (M1) / ecdcdb9e (M2);
+-- extra stock / fleet grants were given INSIDE the transaction. Script: scratchpad review_round2_proof.sql.
+--   Changes here: A1/A2 generic movements (inv_post_movement, post_stock_movement) refuse scrap for everyone and,
+--   for non org admins, everything except issue / issue_return / return / reserve / release / count adjustments;
+--   A9 reserved key prefixes scrapreq: sret: grn: trf: lub: legacy-psm: slip: iss: (inv_post_movement, inv_issue);
+--   A10 _inv_job_card_resolve + job card canonicalised in _inv_post (issue / returns), on slip headers
+--   (trg_zzx_material_issues_job_card) and at slip posting; A6 a stored refusal is replayed only for the same stock
+--   line, type and quantity; A14 backup table versioned; A24 stale C2 comment corrected.
+--   A1.1-A1.5 SK bare receipt / transfer_in / transfer_out / supplier_return / consignment_receipt -> 42501, each
+--             naming its workflow;  A2.1/A2.2 bare scrap by SK and by SA -> 42501;  A1.6 SA bare receipt -> posted
+--   A1.7  SK adjustment_up (no adjustment_approve)            -> 42501
+--   A1.8-11 SK post_stock_movement receipt / scrap / transfer_out / adjustment_up -> 42501;  A1.12 issue 1 -> posted
+--   A9.1  SK inv_post_movement key 'grn:x1' -> 22023;  A9.2 SK inv_issue key 'lub:x1' -> 22023
+--   A10.1 SK issue to ' gckr/jc/1332/0526 '                    -> posted, stored GCKR/JC/1332/0526
+--   A10.2 unknown job card -> 22023;  A10.3 KSA stock to UAE job card RM/RMJC/0145/1123 -> 22023 "belongs to UAE"
+--   A10.4 return 1 against 'gckr/jc/1332/0526'                 -> posted (bounded by the canonical issue)
+--   A6.1  issue 50 (shortage) -> refused_shortage;  A6.2 same key same qty -> replayed;
+--   A6.3  same key qty 40 -> 23505;  A6.4 same key other stock line -> 23505
 -- VERIFY (expect: t, t, f, f, t, f, f, 3)
 --   select to_regprocedure('public._inv_post(jsonb,boolean,boolean)') is not null,
 --          to_regprocedure('public.inv_issue_slip(jsonb)') is not null,
@@ -110,9 +133,14 @@
 -- UNDO (one transaction)
 --   begin;
 --   do $u$ declare r record; begin
---     for r in select def from _bak.wms_wp5_fn_backup_20261124 loop execute r.def; end loop;
---   end $u$;   -- restores _inv_post(jsonb,boolean) body, the transfer functions,
---              -- _inv_post_movement, post_stock_movement, _inv_issue, inv_issue
+--     for r in select distinct on (fn) def from _bak.wms_wp5_fn_backup_20261124 order by fn, id desc loop
+--       execute r.def; end loop;
+--   end $u$;   -- restores (newest copy) _inv_post(jsonb,boolean) body, the transfer functions,
+--              -- _inv_post_movement, post_stock_movement, _inv_issue, inv_issue, set_stock_count
+--   drop trigger if exists trg_zzx_material_issues_job_card on public.material_issues;
+--   drop function if exists public.material_issue_job_card_canon();
+--   drop function if exists public._inv_bare_movement_refusal(text);
+--   drop function if exists public._inv_job_card_resolve(uuid, text, text);
 --   drop function if exists public.inv_issue_slip(jsonb);
 --   drop function if exists public._inv_issue_slip(jsonb);
 --   drop function if exists public._inv_post(jsonb, boolean, boolean);
@@ -149,8 +177,11 @@ begin;
 -- =====================================================================
 create schema if not exists _bak;
 revoke all on schema _bak from public, anon, authenticated;
+-- Versioned (one row per apply). This migration aborts when it was already applied (A1 below), so the rows written
+-- by an apply are always the bodies that were live just before it; the undo restores the newest row per function.
 create table if not exists _bak.wms_wp5_fn_backup_20261124 (
-  fn text primary key, def text not null, saved_at timestamptz not null default now());
+  id bigserial primary key, fn text not null, def text not null, saved_at timestamptz not null default now());
+revoke all on _bak.wms_wp5_fn_backup_20261124 from public, anon, authenticated;
 insert into _bak.wms_wp5_fn_backup_20261124(fn, def)
 select p.oid::regprocedure::text, pg_get_functiondef(p.oid)
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -163,8 +194,52 @@ select p.oid::regprocedure::text, pg_get_functiondef(p.oid)
                  'public.post_stock_movement(uuid,text,numeric,text,text)'::regprocedure,
                  'public._inv_issue(jsonb)'::regprocedure,
                  'public.inv_issue(jsonb)'::regprocedure,
-                 'public.set_stock_count(uuid,numeric,text)'::regprocedure)
-on conflict (fn) do nothing;
+                 'public.set_stock_count(uuid,numeric,text)'::regprocedure);
+
+-- =====================================================================
+-- 0b. (review A10) One resolver for job cards. A job card named on an issue,
+--     return, slip, lubricant dispense or installation must be a real
+--     work_orders.work_order_no of the caller's company, in a country the caller
+--     may write, and (when the stock's country is known) of that country. The
+--     canonical number is stored, so the return bound, the installation
+--     reconciliation and the job card screens all key on one spelling.
+--     Measured 2026-11-24: work_order_no is unique per organisation and every
+--     stored value is upper case with no spaces, so the exact lookup on the
+--     upper-cased, space-stripped input is the index path; the normalised scan is
+--     only a fallback for a value that misses (and is refused anyway when absent).
+--     Site is NOT checked: a job card's site is the worksite (gate, plant), the
+--     stock's site is the store that serves it, so a store keeper scoped to a
+--     store issues to job cards of other worksites by design.
+-- =====================================================================
+create or replace function public._inv_job_card_resolve(p_org uuid, p_job_card text, p_country text)
+returns text language plpgsql stable security definer set search_path = public, pg_temp as $fn$
+declare v_key text := upper(regexp_replace(coalesce(p_job_card, ''), '\s+', '', 'g')); v_no text; v_country text; v_n int;
+begin
+  if v_key = '' then
+    raise exception 'Name the job card.' using errcode = '22023';
+  end if;
+  select wo.work_order_no, wo.country into v_no, v_country
+    from public.work_orders wo where wo.organisation_id = p_org and wo.work_order_no = v_key;
+  if v_no is null then
+    select count(*), min(wo.work_order_no), min(wo.country) into v_n, v_no, v_country
+      from public.work_orders wo
+     where wo.organisation_id = p_org and upper(regexp_replace(wo.work_order_no, '\s+', '', 'g')) = v_key;
+    if v_n = 0 then
+      raise exception 'Job card % was not found in your company.', btrim(p_job_card) using errcode = '22023';
+    elsif v_n > 1 then
+      raise exception 'Job card % matches more than one job card; use the exact number.', btrim(p_job_card) using errcode = '22023';
+    end if;
+  end if;
+  if nullif(btrim(p_country), '') is not null and nullif(btrim(v_country), '') is not null
+     and lower(btrim(v_country)) <> lower(btrim(p_country)) then
+    raise exception 'Job card % belongs to %, not %.', v_no, v_country, p_country using errcode = '22023';
+  end if;
+  if auth.uid() is not null and not coalesce(public.app_write_country_ok(v_country), false) then
+    raise exception 'Job card % is outside your country scope.', v_no using errcode = '42501';
+  end if;
+  return v_no;
+end $fn$;
+revoke all on function public._inv_job_card_resolve(uuid, text, text) from public, anon, authenticated;
 
 -- =====================================================================
 -- A1. _inv_post(p, p_check_cap, p_transit_leg): the ledger body with ONE
@@ -224,7 +299,14 @@ begin
   v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
   if v_n <> 1 then raise exception '_inv_post currency anchor found % times', v_n; end if;
   v_def := replace(v_def, v_old,
-       '  if v_type in (''issue_return'', ''return'') then' || chr(10)
+       '  -- (review A10) a job card is resolved to its canonical number in the caller''s company and scope' || chr(10)
+    || '  if v_type in (''issue'', ''issue_return'', ''return'')' || chr(10)
+    || '     and lower(btrim(coalesce(p->>''source_doc_type'', ''''))) = ''job_card'' then' || chr(10)
+    || '    p := jsonb_set(p, ''{source_doc_type}'', to_jsonb(''job_card''::text));' || chr(10)
+    || '    p := jsonb_set(p, ''{source_doc_id}'', to_jsonb(public._inv_job_card_resolve(v_org, p->>''source_doc_id'',' || chr(10)
+    || '           coalesce(v_rec.country, v_loc_country))));' || chr(10)
+    || '  end if;' || chr(10)
+    || '  if v_type in (''issue_return'', ''return'') then' || chr(10)
     || '    if v_rec.id is null then' || chr(10)
     || '      raise exception ''A return must name the stock line the material was issued from.'' using errcode = ''22023'';' || chr(10)
     || '    end if;' || chr(10)
@@ -490,7 +572,11 @@ begin
   -- The job card is the source document when the slip names one, so a slip issue and a
   -- Stock > Issue against the same job card share one history (and one return bound).
   v_src_type := case when nullif(btrim(v_h.work_order_no), '') is not null then 'job_card' else 'material_issue' end;
-  v_src_id := coalesce(nullif(btrim(v_h.work_order_no), ''), v_h.id::text);
+  -- (review A10) the job card must be a real one of this company and the caller's scope; the header already
+  -- holds the canonical number (trg_zzx_material_issues_job_card), this re-checks it at posting time.
+  v_src_id := case when v_src_type = 'job_card'
+                   then public._inv_job_card_resolve(v_org, v_h.work_order_no, v_h.country)
+                   else v_h.id::text end;
   if v_h.doc_type = 'MRT' and v_src_type <> 'job_card' then
     raise exception 'A return slip (MRT) must name the job card the material comes back from.' using errcode = '22023';
   end if;
@@ -578,10 +664,31 @@ alter policy material_issue_lines_write on public.material_issue_lines
   using (app_is_elevated() or app_user_can('stock','edit') or app_user_can('stock','issue'))
   with check (app_is_elevated() or app_user_can('stock','edit') or app_user_can('stock','issue'));
 
+-- One wording for a refused bare movement (used by inv_post_movement and post_stock_movement).
+create or replace function public._inv_bare_movement_refusal(p_type text)
+returns text language sql immutable set search_path = public, pg_temp as $fn$
+  select case lower(btrim(coalesce(p_type, '')))
+    when 'receipt' then 'Goods are received through a goods receipt (Receive goods), not as a bare movement.'
+    when 'consignment_receipt' then 'Consignment goods are received through a goods receipt (Receive goods), not as a bare movement.'
+    when 'transfer_in' then 'Stock moves between locations through a transfer (dispatch, then receive), not as a bare movement.'
+    when 'transfer_out' then 'Stock moves between locations through a transfer (dispatch, then receive), not as a bare movement.'
+    when 'supplier_return' then 'Goods go back to a supplier through a supplier return (Supplier returns), not as a bare movement.'
+    when 'scrap' then 'Scrap goes through a scrap request (inv_scrap_request), evaluated and approved by other people, not a bare movement.'
+    else 'This movement type is posted only by its own workflow (goods receipt, transfer, supplier return, scrap request or physical count).'
+  end
+$fn$;
+revoke all on function public._inv_bare_movement_refusal(text) from public, anon, authenticated;
+
 -- =====================================================================
--- C1 (D3 + key namespace). inv_post_movement: no bare receipts for
---     non-admins (goods arrive through inv_receive_goods), and the key
---     prefixes the server uses for slips cannot be chosen by a client.
+-- C1 (D3 + key namespace; review A1 / A2 / A9). inv_post_movement is the
+--     generic client path. A bare movement must never create or remove stock
+--     that has its own document: scrap is refused for EVERYONE (scrap request,
+--     evaluated and approved by other people); for everyone except an org admin
+--     only issue, issue_return / return (bounded by the issue, see D4), reserve,
+--     release and the count adjustments (adjustment_up / adjustment_down /
+--     stocktake, which need adjustment_approve through _inv_cap_for) are
+--     accepted. Receipts, transfers and supplier returns are refused with the
+--     workflow to use. The key prefixes the server uses are reserved.
 -- =====================================================================
 do $mig$
 declare v_def text; v_old text; v_n int;
@@ -591,21 +698,29 @@ begin
   v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
   if v_n <> 1 then raise exception '_inv_post_movement anchor found % times', v_n; end if;
   v_def := replace(v_def, v_old,
-       '  if lower(btrim(coalesce(p->>''movement_type'', ''''))) in (''receipt'', ''consignment_receipt'')' || chr(10)
-    || '     and not public.app_is_org_admin() then' || chr(10)
-    || '    raise exception ''Goods are received through a goods receipt (inv_receive_goods), not as a bare movement.'' using errcode = ''42501'';' || chr(10)
-    || '  end if;' || chr(10)
-    || '  if lower(btrim(coalesce(p->>''idempotency_key'', ''''))) ~ ''^(iss:)?slip:'' then' || chr(10)
+       '  if lower(btrim(coalesce(p->>''idempotency_key'', ''''))) ~ ''^(scrapreq|sret|grn|trf|lub|legacy-psm|slip|iss):'' then' || chr(10)
     || '    raise exception ''That idempotency_key prefix is reserved.'' using errcode = ''22023'';' || chr(10)
+    || '  end if;' || chr(10)
+    || '  if lower(btrim(coalesce(p->>''movement_type'', ''''))) = ''scrap'' then' || chr(10)
+    || '    raise exception ''%'', public._inv_bare_movement_refusal(''scrap'') using errcode = ''42501'';' || chr(10)
+    || '  end if;' || chr(10)
+    || '  if not public.app_is_org_admin() and lower(btrim(coalesce(p->>''movement_type'', ''''))) not in' || chr(10)
+    || '       (''issue'', ''issue_return'', ''return'', ''reserve'', ''release'', ''adjustment_up'', ''adjustment_down'', ''stocktake'',' || chr(10)
+    || '        ''reversal'', ''opening'', ''cost_assignment'', ''cost_allocation'') then' || chr(10)
+    || '    raise exception ''%'', public._inv_bare_movement_refusal(p->>''movement_type'') using errcode = ''42501'';' || chr(10)
     || '  end if;' || chr(10) || v_old);
   execute v_def;
 end $mig$;
 revoke all on function public._inv_post_movement(jsonb) from public, anon, authenticated;
 
 -- C2. post_stock_movement (legacy, callable by every approved user): it posted
---     receipt / issue / scrap / returns with NO capability check. Now: receipts
---     admin-only (as C1), every other type needs its stock capability, except the
---     two count adjustments the phone apps use today (kept; owner decision, see header).
+--     receipt / issue / scrap / returns with NO capability check. Now (review A1 /
+--     A2): scrap refused for everyone; for everyone except an org admin only issue,
+--     issue_return / return (bounded by D4, so they need a source document this
+--     legacy call cannot send) and the two count adjustments are accepted; every
+--     type needs its stock capability (_inv_cap_for), and adjustment_up /
+--     adjustment_down need adjustment_approve (owner decision 2026-11-24: count
+--     differences need approval; the phone apps record a physical count instead).
 do $mig$
 declare v_def text; v_old text; v_n int;
 begin
@@ -614,8 +729,9 @@ begin
   v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
   if v_n <> 1 then raise exception 'post_stock_movement anchor found % times', v_n; end if;
   v_def := replace(v_def, v_old,
-       '  if v_type = ''receipt'' and not public.app_is_org_admin() then' || chr(10)
-    || '    raise exception ''Goods are received through a goods receipt (inv_receive_goods), not as a bare movement.'' using errcode = ''42501'';' || chr(10)
+       '  if v_type = ''scrap'' or (not public.app_is_org_admin()' || chr(10)
+    || '       and v_type not in (''issue'', ''issue_return'', ''return'', ''adjustment_up'', ''adjustment_down'')) then' || chr(10)
+    || '    raise exception ''%'', public._inv_bare_movement_refusal(v_type) using errcode = ''42501'';' || chr(10)
     || '  end if;' || chr(10)
     || '  if v_type in (''adjustment_up'', ''adjustment_down'') and not public.inv_can(''adjustment_approve'') then' || chr(10)
     || '    raise exception ''A count difference needs approval. Record it as a physical count; an approver posts the adjustment.'' using errcode = ''42501'';' || chr(10)
@@ -664,13 +780,21 @@ begin
     || '  perform pg_advisory_xact_lock(hashtextextended(v_org::text || '':inv:'' || ''iss:'' || v_key, 0));' || chr(10)
     || '  select * into v_prev from public.stock_movements where organisation_id = v_org and idempotency_key = ''iss:'' || v_key;' || chr(10)
     || '  if found then' || chr(10)
-    || '    if v_prev.stock_id is distinct from nullif(p->>''stock_id'', '''')::uuid or v_prev.qty_change <> -v_qty then' || chr(10)
+    || '    if v_prev.stock_id is distinct from nullif(p->>''stock_id'', '''')::uuid or v_prev.qty_change <> -v_qty' || chr(10)
+    || '       or v_prev.movement_type <> ''issue'' then' || chr(10)
     || '      raise exception ''This idempotency_key was already used for a different posting.'' using errcode = ''23505'';' || chr(10)
     || '    end if;' || chr(10)
     || '    return public._inv_movement_json(v_prev) || jsonb_build_object(''replayed'', true);' || chr(10)
     || '  end if;' || chr(10)
     || '  select * into v_prev_x from public.stock_exceptions where organisation_id = v_org and idempotency_key = ''iss:'' || v_key;' || chr(10)
     || '  if found then' || chr(10)
+    || '    -- (review A6) replay a stored refusal ONLY for the same request: same stock line, an issue and the same' || chr(10)
+    || '    -- quantity (qty_requested also counts a consumed reservation, at most the qty again, only when one is named).' || chr(10)
+    || '    if v_prev_x.stock_id is distinct from nullif(p->>''stock_id'', '''')::uuid or v_prev_x.movement_type is distinct from ''issue''' || chr(10)
+    || '       or v_prev_x.qty_requested < v_qty or v_prev_x.qty_requested > 2 * v_qty' || chr(10)
+    || '       or (v_prev_x.qty_requested <> v_qty and nullif(p->>''reservation_id'', '''') is null) then' || chr(10)
+    || '      raise exception ''This idempotency_key was used for a refused request with another stock line or quantity. Send the new request with a new key.'' using errcode = ''23505'';' || chr(10)
+    || '    end if;' || chr(10)
     || '    return jsonb_build_object(''status'',''refused_shortage'',''exception_id'',v_prev_x.id,''stock_id'',v_prev_x.stock_id,' || chr(10)
     || '      ''qty_available'',v_prev_x.qty_available,''qty_requested'',v_prev_x.qty_requested,''replayed'',true);' || chr(10)
     || '  end if;' || chr(10) || v_old);
@@ -681,7 +805,8 @@ revoke all on function public._inv_issue(jsonb) from public, anon, authenticated
 create or replace function public.inv_issue(p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $fn$
 begin
-  if lower(btrim(coalesce(p_payload->>'idempotency_key', ''))) ~ '^slip:' then
+  -- (review A9) keys the server builds for its own postings cannot be chosen by a client
+  if lower(btrim(coalesce(p_payload->>'idempotency_key', ''))) ~ '^(scrapreq|sret|grn|trf|lub|legacy-psm|slip|iss):' then
     raise exception 'That idempotency_key prefix is reserved.' using errcode = '22023';
   end if;
   return public._inv_issue(p_payload);
@@ -689,6 +814,24 @@ end $fn$;
 revoke all on function public.inv_issue(jsonb) from public;
 revoke all on function public.inv_issue(jsonb) from anon;
 grant execute on function public.inv_issue(jsonb) to authenticated, service_role;
+
+-- =====================================================================
+-- B5 (review A10). A slip's job card is stored canonical (or refused).
+-- =====================================================================
+create or replace function public.material_issue_job_card_canon()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $fn$
+begin
+  if nullif(btrim(new.work_order_no), '') is not null
+     and (tg_op = 'INSERT' or new.work_order_no is distinct from old.work_order_no
+          or new.country is distinct from old.country or new.organisation_id is distinct from old.organisation_id) then
+    new.work_order_no := public._inv_job_card_resolve(new.organisation_id, new.work_order_no, new.country);
+  end if;
+  return new;
+end $fn$;
+revoke all on function public.material_issue_job_card_canon() from public, anon, authenticated;
+create or replace trigger trg_zzx_material_issues_job_card
+  before insert or update of work_order_no, country, organisation_id on public.material_issues
+  for each row execute function public.material_issue_job_card_canon();
 
 -- =====================================================================
 -- C4 (D7). A slip line names a real item: a material-master code of the

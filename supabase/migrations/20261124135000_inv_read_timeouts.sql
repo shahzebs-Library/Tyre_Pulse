@@ -25,6 +25,24 @@
 --   v_inv_valuation: definition unchanged (index only).
 --   inv_erp_reconciliation_page rows + total equal the view page and its count.
 --
+-- Review A20 (2026-11-24), a DELIBERATE semantics change, documented here:
+--   * an ERP line with no cost (parts_consumption.line_cost NULL, or a slip line with neither a line cost nor a
+--     unit cost) was counted as 0 and made the row look "matched" or "value_diff"; it is now UNVALUED:
+--     erp_value is NULL when every ERP line of the row is unvalued (0 only when the row has no ERP line at all),
+--     value_difference is NULL when any ERP line is unvalued, and status reads 'unvalued' for such a row;
+--   * new column erp_unvalued_lines (appended at the end, so existing column positions are unchanged).
+--   The earlier "identical md5" statement below refers to the speed rewrite before this change.
+--
+-- REVIEW FIXES + ROLLED-BACK PROOF, ROUND 2 (2026-11-24). All 8 files applied in order (090000, 091000, 130000,
+-- 131000, 132000, 133000, 120000, 135000; the 135000 work_orders index build left out of the run because of its
+-- SHARE lock) in ONE implicit transaction through the Supabase CLI, then a test block as real users (claims + role
+-- authenticated) ending in RAISE EXCEPTION, so everything rolled back; re-checked afterwards: purchase_orders 0,
+-- test suppliers 0, test grants 0, procurement_rfqs and _inv_job_card_resolve absent, purchase_orders.updated_by
+-- absent. Users: super admin d2d43a5f (SA), Store Keeper 69faeb71 (SK), Managers 34793423 (M1) / ecdcdb9e (M2);
+-- extra stock / fleet grants were given INSIDE the transaction. Script: scratchpad review_round2_proof.sql.
+--   A20 in the run: rows with an unvalued ERP line / erp_value NULL / status 'unvalued' = 0 / 0 / 0 today (no ERP
+--   oil or parts line is currently stored without a cost), so today's numbers do not move; the work_orders partial
+--   index statement was left out of this run (SHARE lock) and is unchanged from the earlier proof.
 -- Not changed: get_asset_master warms at ~230 ms; the one failure was a cold read
 -- under load (2,533 blocks read). Extra covering indexes were measured and gave no
 -- gain, so none are added.
@@ -163,7 +181,7 @@ with inv as (
          upper(btrim(p.item_code)) as item_code,
          upper(coalesce(p.currency, public.currency_for_country(p.country))) as currency,
          coalesce(p.qty_n, 0) as qty,
-         coalesce(p.line_cost, 0) as value
+         p.line_cost as value                       -- (review A20) NULL = unvalued, never 0
     from public.parts_consumption p
    where p.event_date is not null and nullif(btrim(p.item_code), '') is not null
 ), mi as (
@@ -173,7 +191,7 @@ with inv as (
          upper(btrim(l.item_code)) as item_code,
          upper(public.currency_for_country(h.country)) as currency,
          coalesce(l.qty, 0) as qty,
-         coalesce(l.line_cost, coalesce(l.qty, 0) * l.unit_cost, 0) as value
+         coalesce(l.line_cost, l.qty * l.unit_cost) as value     -- (review A20) NULL = unvalued, never 0
     from public.material_issues h
     join public.material_issue_lines l on l.issue_id = h.id
    where h.issued_at is not null and nullif(btrim(l.item_code), '') is not null
@@ -182,7 +200,8 @@ with inv as (
                       where p.organisation_id = h.organisation_id and p.issue_number = h.issue_number)
 ), erp as (
   select x.organisation_id, x.country, x.site, x.month, x.item_code, x.currency,
-         sum(x.qty) as erp_qty, sum(x.value) as erp_value, count(*) as erp_lines
+         sum(x.qty) as erp_qty, sum(x.value) as erp_value, count(*) as erp_lines,
+         count(*) filter (where x.value is null) as erp_unvalued_lines
     from (select * from pc union all select * from mi) x
    group by 1, 2, 3, 4, 5, 6
 ), j as (
@@ -194,16 +213,18 @@ with inv as (
   select u.organisation_id, u.country, u.site, u.month, u.item_code, u.currency,
          sum(u.inv_qty) as inv_qty, sum(u.inv_value) as inv_value,
          sum(u.inv_unvalued_qty) as inv_unvalued_qty, sum(u.inv_movements) as inv_movements,
-         sum(u.erp_qty) as erp_qty, sum(u.erp_value) as erp_value, sum(u.erp_lines) as erp_lines
+         sum(u.erp_qty) as erp_qty, sum(u.erp_value) as erp_value, sum(u.erp_lines) as erp_lines,
+         sum(u.erp_unvalued_lines) as erp_unvalued_lines
     from (
       select i.organisation_id, i.country, i.site, i.month, i.item_code, i.currency,
              i.inv_qty, i.inv_value, i.inv_unvalued_qty, i.inv_movements,
-             null::numeric as erp_qty, null::numeric as erp_value, null::bigint as erp_lines
+             null::numeric as erp_qty, null::numeric as erp_value, null::bigint as erp_lines,
+             null::bigint as erp_unvalued_lines
         from inv i
       union all
       select e.organisation_id, e.country, e.site, e.month, e.item_code, e.currency,
              null::numeric, null::numeric, null::numeric, null::bigint,
-             e.erp_qty, e.erp_value, e.erp_lines
+             e.erp_qty, e.erp_value, e.erp_lines, e.erp_unvalued_lines
         from erp e
     ) u
    group by 1, 2, 3, 4, 5, 6
@@ -214,18 +235,21 @@ select organisation_id, country, nullif(site, '') as site, month, item_code, cur
        coalesce(inv_unvalued_qty, 0) as inventory_unvalued_qty,
        coalesce(inv_movements, 0)::integer as inventory_movements,
        coalesce(erp_qty, 0) as erp_qty,
-       round(coalesce(erp_value, 0), 2) as erp_value,
+       -- (review A20) no ERP line = a true 0; ERP lines that are all unvalued = NULL (unknown), never 0
+       case when erp_lines is null then 0::numeric else round(erp_value, 2) end as erp_value,
        coalesce(erp_lines, 0)::integer as erp_lines,
        coalesce(inv_qty, 0) - coalesce(erp_qty, 0) as qty_difference,
-       case when (select public.inv_can('view_value')) then round(coalesce(inv_value, 0) - coalesce(erp_value, 0), 2) else null::numeric end as value_difference,
+       case when (select public.inv_can('view_value')) and coalesce(erp_unvalued_lines, 0) = 0
+            then round(coalesce(inv_value, 0) - coalesce(erp_value, 0), 2) else null::numeric end as value_difference,
        case
          when inv_movements is null then 'erp_only'
          when erp_lines is null then 'inventory_only'
-         when coalesce(inv_unvalued_qty, 0) > 0 then 'unvalued'
+         when coalesce(inv_unvalued_qty, 0) > 0 or coalesce(erp_unvalued_lines, 0) > 0 then 'unvalued'
          when abs(coalesce(inv_qty, 0) - coalesce(erp_qty, 0)) > 0.0001 then 'qty_diff'
          when abs(coalesce(inv_value, 0) - coalesce(erp_value, 0)) > 0.01 then 'value_diff'
          else 'matched'
-       end as status
+       end as status,
+       coalesce(erp_unvalued_lines, 0)::integer as erp_unvalued_lines   -- (review A20) appended: ERP lines with no cost
   from j;
 
 -- 4. One page plus its total in ONE aggregation (the client sent two requests,

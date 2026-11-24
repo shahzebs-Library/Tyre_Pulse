@@ -498,7 +498,7 @@ export default function ReportSharing() {
                     <li><Info size={14} className="rs-muted" aria-hidden="true" /><span>Password protection</span><b className="rs-muted">Set at creation, not shown</b></li>
                     <li><input type="checkbox" className="rs-check" checked={false} readOnly disabled aria-label="IP restriction" /><span>IP restriction</span><b className="rs-muted">Not supported</b></li>
                     <li><input type="checkbox" className="rs-check" checked={false} readOnly disabled aria-label="Watermark reports" /><span>Watermark reports</span><b className="rs-muted">Not supported</b></li>
-                    <li><input type="checkbox" className="rs-check" checked readOnly disabled aria-label="Disable download" /><span>Disable download</span><b className="rs-muted">Boards have no download</b></li>
+                    <li><input type="checkbox" className="rs-check" checked readOnly disabled aria-label="Disable download" /><span>Disable download</span><b className="rs-muted">No server-side download restriction; browser export or screenshots may be possible</b></li>
                   </ul>
                   <p className="rs-note"><Info size={12} aria-hidden="true" /> To change the password or expiry, revoke this link and create a new one.</p>
                 </div>

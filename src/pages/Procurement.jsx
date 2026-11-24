@@ -40,9 +40,9 @@ import {
 import TableNotInUse from '../components/ui/TableNotInUse'
 import { safeJsonToSheet } from '../lib/csvSafe.js'
 import { useProcurementCaps, MaterialPicker, SupplierPicker } from '../components/procurement/ProcurementChainPanels'
-import { createPurchaseOrderWithLines, addPurchaseOrderLines, listPurchaseOrderLines } from '../lib/api/procurementChain'
+import { createPurchaseOrderWithLines, addPurchaseOrderLines, listPurchaseOrderLines, newIdempotencyKey } from '../lib/api/procurementChain'
 import {
-  poLinePayloads, currencyForCountry, currencyScope, scopedCountry, LINE_EDITABLE_PO_STATUSES, outstandingQty,
+  poLinePayloads, currencyForCountry, currencyScope, scopedCountry, LINE_EDITABLE_PO_STATUSES, outstandingQty, poStatusOptions,
 } from '../lib/procurementChain'
 import { EmergencyJustificationFields, EmergencyJustificationView } from '../components/procurement/EmergencyJustification'
 import { EMPTY_EMERGENCY, validateEmergency, emergencyColumns, emergencyExportValues } from '../lib/procurement/emergencyJustification'
@@ -383,6 +383,9 @@ export default function Procurement() {
     setFormData(f => ({ ...f, items: [...f.items, {
       ...itemRow, brand, size, item_id: materialPick?.id || null, item_code: materialPick?.item_code || null,
       description: materialPick?.item_name || null, pending_line: !!materialPick,
+      // One idempotency key per pending line, kept with the line so a retry or a
+      // later edit replays it instead of adding the line twice.
+      ...(materialPick ? { line_key: newIdempotencyKey() } : {}),
       quantity: parseInt(itemRow.quantity) || 1, unit_price: Number.isFinite(price) ? price : null, received_qty: 0,
     }] }))
     setItemRow({ ...EMPTY_ITEM })
@@ -1047,7 +1050,13 @@ export default function Procurement() {
                       className="input">
                       {/* Partial Delivery / Delivered come from goods receipts, not from this form. */}
                       {/* A new PO starts as Draft or Submitted; approval is someone else's step. */}
-                      {STATUSES.filter(s => (editPO ? !['Partial Delivery', 'Delivered'].includes(s) : ['Draft', 'Submitted'].includes(s)) || s === formData.status).map(s => <option key={s}>{s}</option>)}
+                      {/* Only the moves allowed from the saved status are offered. */}
+                      {poStatusOptions(editPO ? editPO.status : formData.status, {
+                        isNew: !editPO,
+                        isEmergency: !!editPO?.is_emergency,
+                        hasLines: true,
+                        ownPo: !!editPO && !!user?.id && editPO.created_by === user.id,
+                      }).map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1225,23 +1234,12 @@ export default function Procurement() {
 
                 {/* Quick status transitions */}
                 {!['Delivered','Closed','Cancelled'].includes(viewPO.status) && (() => {
-                  const nextMap = {
-                    'Draft':            ['Submitted','Cancelled'],
-                    'Submitted':        ['Approved','Cancelled'],
-                    'Approved':         ['Ordered','Cancelled'],
-                    'Ordered':          ['Partial Delivery','Delivered','Cancelled'],
-                    'Partial Delivery': ['Delivered','Cancelled'],
-                  }
                   // Receipts against real PO lines set Partial Delivery / Delivered themselves.
                   const hasLines = (poLines || []).length > 0
                   // Separation of duties: the creator of a PO never approves it (the database refuses it too).
                   const ownPo = !!user?.id && viewPO.created_by === user.id
                   // An emergency purchase may be ordered before approval (approved after the fact).
-                  const base = viewPO.is_emergency && ['Draft', 'Submitted'].includes(viewPO.status)
-                    ? [...(nextMap[viewPO.status] || []), 'Ordered'] : (nextMap[viewPO.status] || [])
-                  const next = base
-                    .filter((ns) => !(hasLines && ['Partial Delivery', 'Delivered'].includes(ns)))
-                    .filter((ns) => !(ownPo && ns === 'Approved'))
+                  const next = poStatusOptions(viewPO.status, { isEmergency: !!viewPO.is_emergency, hasLines, ownPo }).slice(1)
                   if (!caps.procure) return null
                   return next.length > 0 ? (
                     <div>

@@ -116,19 +116,28 @@ export async function createPurchaseOrderWithLines(header, lines = []) {
   return { po, ...res }
 }
 
-/** Add lines to an existing Draft / Submitted PO, one RPC call per line. */
+/**
+ * Add lines to an existing Draft / Submitted PO, one RPC call per line.
+ * Each pending line carries its own idempotency key, minted by the form when
+ * the line was added (newIdempotencyKey()) and kept with the line, so every
+ * retry or later edit of the same PO replays that line instead of adding it
+ * twice. A key built from the line's index would replay an earlier line when a
+ * later call adds a different line at the same index. Lines saved before keys
+ * were kept with the line have none; they keep the old index-based key so a
+ * re-edit of an old PO does not duplicate them.
+ */
 export async function addPurchaseOrderLines(poId, lines = []) {
   const lineIds = []
   const failedLines = []
   for (const [i, l] of (lines || []).entries()) {
     const { data, error } = await supabase.rpc('inv_po_add_line', {
       p_payload: {
-        po_id: poId, idempotency_key: `po:${poId}:line:${i}:${l.item_id}`,
+        po_id: poId, idempotency_key: l.idempotency_key || `po:${poId}:line:${i}:${l.item_id}`,
         item_id: l.item_id, description: l.description || null, qty_ordered: l.qty_ordered,
         unit_price: l.unit_price ?? null, currency: l.currency || null,
       },
     })
-    if (error) failedLines.push({ index: i, message: toServiceError(error, 'Line not saved.').message })
+    if (error) failedLines.push({ index: i, key: l.idempotency_key || null, message: toServiceError(error, 'Line not saved.').message })
     else lineIds.push(data)
   }
   return { lineIds, failedLines }

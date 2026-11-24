@@ -209,19 +209,52 @@ export async function listRegisterCatalog() {
   return { canonical: unwrap(canonical), variants: unwrap(variants), aliases: unwrap(aliases) }
 }
 
+// Item codes per parts_consumption request: about 200 values once the upper and
+// lower spellings are added, which keeps the query string well under URL limits.
+export const CONSUMPTION_CODE_CHUNK = 100
+const CONSUMPTION_ALL_MAX = 150000
+const CONSUMPTION_CHUNK_MAX = 50000
+
+/** Upper and lower spellings of each code: ERP codes are stored in either case. */
+export function consumptionCodeVariants(codes = []) {
+  const out = new Set()
+  for (const c of codes || []) {
+    const v = String(c ?? '').trim()
+    if (!v) continue
+    out.add(v); out.add(v.toUpperCase()); out.add(v.toLowerCase())
+  }
+  return [...out]
+}
+
 /**
  * ERP issue lines (parts_consumption) since a date: item code, issuing site and
  * quantity only. This is where real consumption lives; stock_movements carries
  * almost none. Country scoped; bounded.
+ *
+ * With `itemCodes` (the register's own item codes) only those items are read,
+ * in chunks, instead of every issue line in the country: the register only
+ * shows usage for items it holds. An empty list reads nothing. Codes are
+ * matched in their stored, upper and lower spelling; a code stored in mixed
+ * case (a few Egypt lines, such as 'ol-GE-0047') is not matched.
  */
-export async function listConsumptionSince(sinceIso, { country } = {}) {
-  const res = await fetchAllPages((from, to) => {
-    let q = supabase.from('parts_consumption').select('id,item_code,site,country,qty_n,qty')
-      .gte('event_date', sinceIso).not('item_code', 'is', null)
-      .order('id').range(from, to)
-    if (country && country !== 'All') q = q.eq('country', country)
-    return q
-  }, { max: 150000 })
+export async function listConsumptionSince(sinceIso, { country, itemCodes } = {}) {
+  const scoped = (q) => (country && country !== 'All' ? q.eq('country', country) : q)
+  const base = () => supabase.from('parts_consumption').select('id,item_code,site,country,qty_n,qty')
+    .gte('event_date', sinceIso)
+  if (Array.isArray(itemCodes)) {
+    const variants = consumptionCodeVariants(itemCodes)
+    const out = []
+    for (let i = 0; i < variants.length; i += CONSUMPTION_CODE_CHUNK) {
+      const chunk = variants.slice(i, i + CONSUMPTION_CODE_CHUNK)
+      const res = await fetchAllPages((from, to) => scoped(base().in('item_code', chunk))
+        .order('id').range(from, to), { max: CONSUMPTION_CHUNK_MAX })
+      if (res?.truncated) throw new ServiceError('Too many issue lines to measure usage for this scope. Pick one country.', 'TRUNCATED')
+      out.push(...(unwrap(res) || []))
+    }
+    return out
+  }
+  const res = await fetchAllPages((from, to) => scoped(base().not('item_code', 'is', null))
+    .order('id').range(from, to), { max: CONSUMPTION_ALL_MAX })
   // A capped read would understate usage and make items look unused; refuse it
   // so the register shows usage as unavailable instead of wrong.
   if (res?.truncated) throw new ServiceError('Too many issue lines to measure usage for this scope. Pick one country.', 'TRUNCATED')

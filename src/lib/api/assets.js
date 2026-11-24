@@ -195,9 +195,30 @@ function applyFleetFlag(query, flag) {
  * priority view covers the whole fleet, not the loaded page. `priority` is one
  * level (1 to 6) or an array of levels.
  */
-function applyFleetPriority(query, priority) {
-  const filter = buildPriorityFilter(priority)
+function applyFleetPriority(query, priority, storedColumn = false) {
+  const filter = buildPriorityFilter(priority, { storedColumn })
   return filter ? query.or(filter) : query
+}
+
+// Whether vehicle_fleet carries the stored maintenance_priority column
+// (migration 20261124120000). Probed once per session; any error (missing
+// column 42703 / PGRST204, network) falls back to the derived-only filter.
+let storedPriorityProbe = null
+async function hasStoredPriority() {
+  if (storedPriorityProbe === null) {
+    storedPriorityProbe = (async () => {
+      try {
+        const { error } = await supabase
+          .from('vehicle_fleet')
+          .select('maintenance_priority')
+          .limit(1)
+        return !error
+      } catch {
+        return false
+      }
+    })()
+  }
+  return storedPriorityProbe
 }
 
 // Quoted, literal case-insensitive substring search. imatch avoids PostgREST's
@@ -213,6 +234,7 @@ function applyFleetSearch(query, search) {
 }
 
 export async function listFleetRecords({ page, pageSize, search, site, status, type, flag, priority, country } = {}) {
+  const stored = priority ? await hasStoredPriority() : false
   let q = supabase
     .from('vehicle_fleet')
     .select('*', { count: 'exact' })
@@ -228,7 +250,7 @@ export async function listFleetRecords({ page, pageSize, search, site, status, t
   if (status) q = q.eq('status', status)
   if (type) q = q.eq('vehicle_type', type)
   if (flag) q = applyFleetFlag(q, flag)
-  if (priority) q = applyFleetPriority(q, priority)
+  if (priority) q = applyFleetPriority(q, priority, stored)
   q = applyCountry(q, country)
 
   const { data, count, error } = await q
@@ -334,6 +356,7 @@ export async function deleteFleetRecords(ids) {
 }
 
 export async function fetchAllFleetRecords({ search, site, status, type, flag, priority, country } = {}) {
+  const stored = priority ? await hasStoredPriority() : false
   const { data, error } = await fetchAllPages((from, to) => {
     let q = supabase
       .from('vehicle_fleet')
@@ -346,7 +369,7 @@ export async function fetchAllFleetRecords({ search, site, status, type, flag, p
     if (status) q = q.eq('status', status)
     if (type) q = q.eq('vehicle_type', type)
     if (flag) q = applyFleetFlag(q, flag)
-    if (priority) q = applyFleetPriority(q, priority)
+    if (priority) q = applyFleetPriority(q, priority, stored)
     q = applyCountry(q, country)
     return q
   }, { max: MAX_ASSET_ROWS })
@@ -360,13 +383,14 @@ export async function fetchAllFleetRecords({ search, site, status, type, flag, p
  * quick filters are held out, like getFleetSummary). Never pages the fleet.
  */
 export async function countFleetByPriority({ priority, search, site, type, country } = {}) {
+  const stored = await hasStoredPriority()
   let q = supabase
     .from('vehicle_fleet')
     .select('id', { count: 'exact', head: true })
   if (search) q = applyFleetSearch(q, search)
   if (site) q = q.eq('site', site)
   if (type) q = q.eq('vehicle_type', type)
-  q = applyFleetPriority(q, priority)
+  q = applyFleetPriority(q, priority, stored)
   q = applyCountry(q, country)
   const { count, error } = await q
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)

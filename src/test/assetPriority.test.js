@@ -178,6 +178,20 @@ describe('buildPriorityFilter', () => {
     expect(buildPriorityFilter(undefined)).toBeNull()
     expect(buildPriorityFilter([1, 2, 3, 4, 5, 6])).toBeNull()
   })
+  it('with the stored column, a stored priority wins and blanks fall back to the derived rule', () => {
+    const f = buildPriorityFilter([3, 1], { storedColumn: true })
+    expect(f.startsWith('maintenance_priority.in.(1,3),and(maintenance_priority.is.null,or(')).toBe(true)
+    expect(f).toContain(buildPriorityFilter([1, 3]))
+    expect(f.endsWith('))')).toBe(true)
+    const six = buildPriorityFilter(6, { storedColumn: true })
+    expect(six).toContain('maintenance_priority.in.(6)')
+    expect(six).toContain(buildPriorityFilter(6))
+  })
+  it('without the stored column the filter never names it', () => {
+    expect(buildPriorityFilter(2)).not.toContain('maintenance_priority')
+    expect(buildPriorityFilter(2, { storedColumn: false })).toBe(buildPriorityFilter(2))
+    expect(buildPriorityFilter([1, 2, 3, 4, 5, 6], { storedColumn: true })).toBeNull()
+  })
   it('prioritySetFor accepts only offered values', () => {
     expect(prioritySetFor('1')).toEqual([1])
     expect(prioritySetFor('1-3')).toEqual([1, 2, 3])

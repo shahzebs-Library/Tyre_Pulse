@@ -139,10 +139,14 @@ export default function LubricantsPanel({ scope, can = () => false }) {
 
 function DispenseModal({ line, onClose, onDone }) {
   const [form, setForm] = useState({ qty: '', asset_no: '', job_card_no: '', meter_reading: '', meter_type: 'km', note: '' })
-  const [key] = useState(() => newIdempotencyKey())
+  // One key per request: an identical retry after a network error reuses it, so
+  // the dispense is never posted twice. A changed form, or a refusal for lack of
+  // stock, makes the next press a new request with a new key; reusing the old
+  // key would only replay the stored refusal.
+  const [key, setKey] = useState(() => newIdempotencyKey())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const set = (k) => (e) => { setKey(newIdempotencyKey()); setForm((f) => ({ ...f, [k]: e.target.value })) }
   const unit = line.uom || line.item?.base_uom || line.item?.uom || 'units as stocked'
 
   async function submit() {
@@ -156,7 +160,7 @@ function DispenseModal({ line, onClose, onDone }) {
         meter_reading: form.meter_reading === '' ? null : Number(form.meter_reading),
         meter_type: form.meter_reading === '' ? null : form.meter_type, note: form.note.trim() || null,
       }, key)
-      if (r?.status === 'refused_shortage') { setError('Not enough free stock on this line.'); return }
+      if (r?.status === 'refused_shortage') { setKey(newIdempotencyKey()); setError('Not enough free stock on this line.'); return }
       onDone()
     } catch (err) {
       setError(toUserMessage(err, 'The dispense could not be saved.'))

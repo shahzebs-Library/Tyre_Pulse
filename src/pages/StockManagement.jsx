@@ -4,7 +4,7 @@ import StockMovementsPanel from '../components/stock/StockMovementsPanel'
 import ReorderLevelsPanel from '../components/stock/ReorderLevelsPanel'
 import { useSearchParams } from 'react-router-dom'
 import InventoryHub from '../components/inventory/InventoryHub'
-import { resolveSection } from '../lib/inventory/hubSections'
+import { resolveSection, makeCan } from '../lib/inventory/hubSections'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { stock } from '../lib/api'
 import { listSites } from '../lib/api/sites'
@@ -42,7 +42,7 @@ import {
   todayStr, offsetDate, firstOfMonth, velocitySince, localDay, summarizeTyreStock, summarizeTyreStockBySite, tyreChangeSummary,
 } from '../lib/stockManagementAnalytics'
 import {
-  buildCatalogIndex, buildUsageIndex, buildErpVelocityMap, catalogFor, registerCoverage, USAGE_MONTHS,
+  buildCatalogIndex, buildUsageIndex, buildErpVelocityMap, catalogFor, registerCoverage, registerItemCode, USAGE_MONTHS,
 } from '../lib/stockRegisterDetail'
 
 // exportUtils pulls the PDF/Excel report engines that most sessions never
@@ -66,8 +66,32 @@ const EMPTY_FORM = {
   site: '', description: '', stock_qty: 0, min_level: 5, critical_level: 3, management_action: '',
 }
 
-// Canonical ledger movement types (the server RPC derives +/- direction from these).
-const MOVEMENT_TYPES = ['receipt', 'return', 'transfer_in', 'adjustment_up', 'issue', 'transfer_out', 'scrap', 'adjustment_down']
+// Movements the generic dialog may still post (the server RPC derives +/-
+// direction from the type). Receipts, transfers, supplier returns, scrap and
+// returns need their own document, so they are posted through their workflows
+// (goods receipt, transfer dispatch/receive, supplier return, scrap request,
+// job card materials) and are never offered here. Adjustments need the
+// adjustment approval right; the database refuses everyone else anyway.
+const ISSUE_TYPES = ['issue']
+const ADJUSTMENT_TYPES = ['adjustment_up', 'adjustment_down']
+function allowedMovementTypes(canAdjust) {
+  return canAdjust ? [...ISSUE_TYPES, ...ADJUSTMENT_TYPES] : ISSUE_TYPES
+}
+
+// Where each documented movement lives in the Inventory Control Center.
+const WORKFLOW_LINKS = [
+  { key: 'receive', section: 'receiving' },
+  { key: 'transfers', section: 'movements', tab: 'transfers' },
+  { key: 'supplierReturns', section: 'purchasing', tab: 'returns' },
+  { key: 'scrap', section: 'custody', tab: 'warranty' },
+  { key: 'jobMaterials', section: 'floor', tab: 'jobmaterials' },
+  { key: 'physical', section: 'physical' },
+]
+
+const isPermissionDenied = (err) => {
+  const code = String(err?.code || err?.cause?.code || '')
+  return code === '42501' || code === 'PGRST301' || err?.status === 403
+}
 
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-bright,#22c55e)]'
 // Filter controls use the app's shared `.input` style (same as every other register).
@@ -177,6 +201,18 @@ export default function StockManagement() {
 function StockRegisterView({ embedded = false }) {
   const { t } = useLanguage()
   const { profile, hasCapability } = useAuth()
+  const [, setHubParams] = useSearchParams()
+  const canAdjust = useMemo(() => makeCan({ hasCapability })('adjustment_approve'), [hasCapability])
+  const movementTypes = useMemo(() => allowedMovementTypes(canAdjust), [canAdjust])
+  const goToWorkflow = useCallback((link) => {
+    setHubParams((prev) => {
+      const p = new URLSearchParams(prev)
+      p.set('section', link.section)
+      if (link.tab) p.set('tab', link.tab)
+      else p.delete('tab')
+      return p
+    }, { replace: false })
+  }, [setHubParams])
   const { appSettings, activeCountry, workingContext } = useSettings()
   const { branding } = useTenant()
   const stockScope = `${activeCountry}|${profile?.organisation_id || profile?.org_id}|${profile?.id}`
@@ -198,10 +234,6 @@ function StockRegisterView({ embedded = false }) {
   // the open record while its workflow is active (pending/in_review/returned) or
   // locked (approved). Reset whenever a different record's history is opened.
   const [wfLocked, setWfLocked]     = useState(false)
-  // Approval-engine gate for a Tyre Return ledger post (movement_type === 'return')
-  // in the history/adjust modal. Independent of the general stock_issue lock so a
-  // return-specific workflow can block only the return post it authorises.
-  const [returnWfLocked, setReturnWfLocked] = useState(false)
 
   // Velocity state
   const [velocityMap, setVelocityMap] = useState({})
@@ -235,7 +267,7 @@ function StockRegisterView({ embedded = false }) {
 
   // Reset the approval lock whenever a different record (or none) is opened in the
   // history modal; EntityApprovalPanel re-reports the true state via onStateChange.
-  useEffect(() => { setWfLocked(false); setReturnWfLocked(false) }, [historyFor?.id])
+  useEffect(() => { setWfLocked(false) }, [historyFor?.id])
 
   const [loadError, setLoadError] = useState('')
   const [search, setSearch]           = useState('')
@@ -303,14 +335,28 @@ function StockRegisterView({ embedded = false }) {
 
   useEffect(() => { load() }, [load, stockScope])
 
+  // Usage is read only for the item codes the register holds, not for every
+  // issue line in the country (up to 150k rows per country change).
+  const registerCodesKey = useMemo(() => {
+    const codes = new Set()
+    for (const r of records) {
+      const code = registerItemCode(r)
+      if (code) codes.add(code)
+      if (r?.item?.item_code) codes.add(String(r.item.item_code).trim())
+    }
+    return [...codes].sort().join('\n')
+  }, [records])
+
   useEffect(() => {
     let cancelled = false
     setDetailState('loading')
     setUsageIdx(null)
+    if (loading) return () => { cancelled = true }
     const since = offsetDate(-Math.round(USAGE_MONTHS * 30.4))
+    const itemCodes = registerCodesKey ? registerCodesKey.split('\n') : []
     Promise.allSettled([
       catalogIdx ? Promise.resolve(null) : stock.listRegisterCatalog(),
-      stock.listConsumptionSince(since, { country: activeCountry }),
+      stock.listConsumptionSince(since, { country: activeCountry, itemCodes }),
     ]).then(([cat, use]) => {
       if (cancelled) return
       if (cat.status === 'fulfilled' && cat.value) {
@@ -322,7 +368,7 @@ function StockRegisterView({ embedded = false }) {
     return () => { cancelled = true }
   // catalogIdx is read once; re-reading it on every load would refetch 6k rows.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCountry, stockScope])
+  }, [activeCountry, stockScope, registerCodesKey, loading])
 
   useEffect(() => {
     if (activeTab !== 'by-site') return undefined
@@ -382,8 +428,11 @@ function StockRegisterView({ embedded = false }) {
     // Block the ledger post while the record's approval workflow is active/locked.
     // A Tyre Return post is additionally gated by its own return-authorization lock.
     if (wfLocked) return
-    if (adjForm?.movement_type === 'return' && returnWfLocked) return
     if (!adjForm || !adjForm.qty_change) return
+    if (!movementTypes.includes(adjForm.movement_type)) {
+      setError(t('stock.historyModal.refused'))
+      return
+    }
     const rec = historyFor
     setSaving(true); setError('')
     // Atomic, guarded, audited ledger post. The server computes qty_before/after
@@ -397,7 +446,11 @@ function StockRegisterView({ embedded = false }) {
         reason:    adjForm.reason,
         reference: adjForm.reference_no,
       })
-    } catch (aErr) { setError(toUserMessage(aErr)); setSaving(false); return }
+    } catch (aErr) {
+      setError(isPermissionDenied(aErr) ? t('stock.historyModal.refused') : toUserMessage(aErr))
+      setSaving(false)
+      return
+    }
     const newQty = data?.qty_after ?? rec.stock_qty
     setAdjForm(null)
     await load()
@@ -666,7 +719,7 @@ function StockRegisterView({ embedded = false }) {
 
   // Tabs: show Transfer only if >= 2 sites
   const tabs = useMemo(() => {
-    const reorder = ['reorder', 'Reorder levels']
+    const reorder = ['reorder', t('stock.tabs.reorder')]
     const base = [['stock', t('stock.tabs.stock')], ['movements', t('stock.tabs.movements')], ['by-site', t('stock.tabs.bySite')], reorder, ['timeline', t('stock.tabs.timeline')]]
     if (sites.length >= 2) return [['stock', t('stock.tabs.stock')], ['movements', t('stock.tabs.movements')], ['by-site', t('stock.tabs.bySite')], ['transfer', t('stock.tabs.transfer')], reorder, ['timeline', t('stock.tabs.timeline')]]
     return base
@@ -680,7 +733,7 @@ function StockRegisterView({ embedded = false }) {
   const stockColumns = useMemo(() => [
     { id: 'site', header: t('stock.table.columns.site'), sort: r => r.site, size: 130, firstDir: 'asc',
       cell: r => <span className="font-medium text-[var(--text-primary)]">{r.site || 'N/A'}</span> },
-    { id: 'description', header: 'Item', sort: r => r.item?.item_code || r.description, size: 320, firstDir: 'asc',
+    { id: 'description', header: t('stock.table.columns.item'), sort: r => r.item?.item_code || r.description, size: 320, firstDir: 'asc',
       cell: r => {
         const code = r.item?.item_code || stockItem(r).code
         const name = r.cat?.name || r.item?.item_name
@@ -699,18 +752,18 @@ function StockRegisterView({ embedded = false }) {
           </div>
         )
       } },
-    { id: 'brand', header: 'Brand', sort: r => r.cat?.brand || r.brand, size: 130, firstDir: 'asc',
+    { id: 'brand', header: t('stock.table.columns.brand'), sort: r => r.cat?.brand || r.brand, size: 130, firstDir: 'asc',
       cell: r => <span className="text-xs text-[var(--text-secondary)]">{r.cat?.brand || r.brand || <span className="text-[var(--text-dim)]">N/A</span>}</span> },
-    { id: 'partType', header: 'Genuine / aftermarket', sort: r => r.cat?.partType, size: 120,
+    { id: 'partType', header: t('stock.table.columns.partType'), sort: r => r.cat?.partType, size: 120,
       cell: r => {
         const pt = r.cat?.partType
         if (!pt || pt === 'not_stated') return <span className="text-xs text-[var(--text-dim)]">{r.cat ? 'Not stated' : 'N/A'}</span>
         const tone = pt === 'genuine' || pt === 'oes' ? 'border-green-500/40 text-green-500' : 'border-amber-500/40 text-amber-500'
         return <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${tone}`}>{pt === 'oes' ? 'OES' : pt}</span>
       } },
-    { id: 'category', header: 'Category', sort: r => r.cat?.category || r.item?.category, size: 130, firstDir: 'asc',
+    { id: 'category', header: t('stock.table.columns.category'), sort: r => r.cat?.category || r.item?.category, size: 130, firstDir: 'asc',
       cell: r => <span className="text-xs text-[var(--text-secondary)]">{r.cat?.category || r.item?.category || <span className="text-[var(--text-dim)]">N/A</span>}</span> },
-    { id: 'oem', header: 'OEM number', sort: r => (r.cat?.oem || [])[0], size: 130,
+    { id: 'oem', header: t('stock.table.columns.oem'), sort: r => (r.cat?.oem || [])[0], size: 130,
       cell: r => (r.cat?.oem?.length
         ? <span className="font-mono text-xs text-[var(--text-secondary)]" dir="ltr" title={r.cat.oem.join(', ')}>{r.cat.oem[0]}{r.cat.oem.length > 1 ? ` +${r.cat.oem.length - 1}` : ''}</span>
         : <span className="text-xs text-[var(--text-dim)]">N/A</span>) },
@@ -1430,32 +1483,6 @@ function StockRegisterView({ embedded = false }) {
                   <Lock size={12} /> Locked, in approval
                 </div>
               )}
-
-              {/* Tyre Return Authorization — shown only when the pending movement is a
-                  return. Gates the return ledger-post via returnWfLocked, keyed on the
-                  same stock record so it is independent of the stock_issue panel. */}
-              {adjForm?.movement_type === 'return' && (
-                <div className="mt-3">
-                  <EntityApprovalPanel
-                    entityType="tyre_return"
-                    entityId={historyFor.id}
-                    entityLabel={historyFor.description || historyFor.site || historyFor.id}
-                    context={{
-                      qty: Number(adjForm?.qty_change) || 0,
-                      site: historyFor.site,
-                      country: activeCountry,
-                      description: historyFor.description || null,
-                    }}
-                    onStateChange={({ isActive, isLocked }) => setReturnWfLocked(!!(isActive || isLocked))}
-                    title="Tyre Return Authorization"
-                  />
-                  {returnWfLocked && (
-                    <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] mt-2">
-                      <Lock size={12} /> Return locked, in approval
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Quick adjustment form */}
@@ -1468,7 +1495,7 @@ function StockRegisterView({ embedded = false }) {
                     <select className="input text-xs py-1.5"
                       value={adjForm.movement_type}
                       onChange={e => setAdjForm(f => ({ ...f, movement_type: e.target.value }))}>
-                      {MOVEMENT_TYPES.map(mt => <option key={mt} value={mt}>{t(`stock.movementTypes.${mt}`)}</option>)}
+                      {movementTypes.map(mt => <option key={mt} value={mt}>{t(`stock.movementTypes.${mt}`)}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1494,16 +1521,31 @@ function StockRegisterView({ embedded = false }) {
                 <div className="flex gap-2 mt-2">
                   <button
                     onClick={saveAdjustment}
-                    disabled={saving || adjForm.qty_change === 0 || wfLocked || (adjForm.movement_type === 'return' && returnWfLocked)}
-                    title={wfLocked || (adjForm.movement_type === 'return' && returnWfLocked) ? 'Locked, in approval' : undefined}
+                    disabled={saving || adjForm.qty_change === 0 || wfLocked}
+                    title={wfLocked ? 'Locked, in approval' : undefined}
                     className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    {(wfLocked || (adjForm.movement_type === 'return' && returnWfLocked)) && <Lock size={12} />}
+                    {wfLocked && <Lock size={12} />}
                     {saving ? t('stock.historyModal.saving') : t('stock.historyModal.logMovementBtn')}
                   </button>
                   <span className="text-xs text-[var(--text-muted)] self-center">
                     {t('stock.historyModal.newQty', { qty: historyFor.stock_qty + (adjForm.qty_change || 0) })}
                   </span>
+                </div>
+                {!canAdjust && (
+                  <p className="text-xs text-[var(--text-muted)] mt-3">{t('stock.historyModal.noAdjustRight')}</p>
+                )}
+                <div className="mt-3">
+                  <p className="text-xs text-[var(--text-muted)] mb-2">{t('stock.historyModal.documentedOnly')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {WORKFLOW_LINKS.map(link => (
+                      <button key={link.key} type="button"
+                        onClick={() => { closeHistory(); goToWorkflow(link) }}
+                        className={`btn-secondary min-h-[44px] text-xs px-3 ${FOCUS}`}>
+                        {t(`stock.historyModal.links.${link.key}`)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

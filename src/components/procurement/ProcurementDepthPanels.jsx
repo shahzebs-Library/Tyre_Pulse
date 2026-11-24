@@ -163,9 +163,13 @@ function NewRfqForm({ scope, onCreated }) {
   const [lines, setLines] = useState([{ item: null, description: '', qty: '' }])
   const [title, setTitle] = useState(''); const [neededBy, setNeededBy] = useState('')
   const [picked, setPicked] = useState([]); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState({})
+  // One key per request: minted when the form opens, reused by every retry of
+  // the same request, renewed after a success or when the request changes.
+  const [key, setKey] = useState(() => newIdempotencyKey())
   const sup = useLoad(() => listSuppliersForApproval({ country: scope.country }), [scope.country])
   const approved = sup.rows.filter((s) => s.approved_for_purchasing && String(s.status).toLowerCase() === 'active')
   const setLine = (i, patch) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)))
+  useEffect(() => { setKey(newIdempotencyKey()) }, [lines, title, neededBy, picked])
   const submit = async () => {
     setMsg({})
     if (!scope.country) { setMsg({ error: 'Choose one country at the top of the page first.' }); return }
@@ -177,7 +181,7 @@ function NewRfqForm({ scope, onCreated }) {
       const r = await createRfq({
         country: scope.country, site: scope.site, title, neededBy, supplierIds: picked,
         lines: clean.map((l) => ({ item_id: l.item?.id || null, description: l.item ? `${l.item.item_code} ${l.item.item_name || ''}`.trim() : l.description, qty: l.qty })),
-      }, newIdempotencyKey())
+      }, key)
       setMsg({ ok: `Quotation request ${r?.rfq_no || ''} created.` })
       setLines([{ item: null, description: '', qty: '' }]); setPicked([]); setTitle(''); setNeededBy('')
       onCreated?.()
@@ -514,6 +518,14 @@ function NewInvoiceForm({ scope, onSaved }) {
   const pos = useLoad(() => listInvoiceablePurchaseOrders({ country: scope.country }), [scope.country])
   const [poId, setPoId] = useState(''); const [invoiceNo, setInvoiceNo] = useState(''); const [invoiceDate, setInvoiceDate] = useState('')
   const [tol, setTol] = useState('2'); const [entries, setEntries] = useState({}); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState({})
+  // Keys minted when the form opens and reused by retries, so a retry after a
+  // lost response replays the same invoice instead of creating a second one.
+  // A saved invoice id is kept so a failed match retries only the match.
+  const [keys, setKeys] = useState(() => ({ create: newIdempotencyKey(), match: newIdempotencyKey() }))
+  const [savedId, setSavedId] = useState(null)
+  const renew = () => { setKeys({ create: newIdempotencyKey(), match: newIdempotencyKey() }); setSavedId(null) }
+  // Changing what the invoice says makes it a new request, so it gets a new key.
+  useEffect(() => { if (!savedId) setKeys((k) => ({ ...k, create: newIdempotencyKey() })) }, [invoiceDate, tol, entries, savedId])
   const po = pos.rows.find((p) => p.id === poId) || null
   const lines = useLoad(() => listPoLinesForInvoice(poId), [poId])
   const save = async () => {
@@ -521,25 +533,29 @@ function NewInvoiceForm({ scope, onSaved }) {
     if (!po || !invoiceNo.trim()) { setMsg({ error: 'Choose a PO and enter the supplier invoice number.' }); return }
     setBusy(true)
     try {
-      const r = await createSupplierInvoice({
-        country: po.country, supplierId: po.supplier_id, invoiceNo, invoiceDate, currency: po.currency, poId: po.id, tolerancePct: tol,
-        lines: lines.rows.map((l) => ({ po_line_id: l.po_line_id, item_id: l.item_id, qty: entries[l.po_line_id]?.qty, unit_price: entries[l.po_line_id]?.price })),
-      }, newIdempotencyKey())
-      const id = r?.id || r
-      const m = await matchSupplierInvoice(id, newIdempotencyKey())
+      let id = savedId
+      if (!id) {
+        const r = await createSupplierInvoice({
+          country: po.country, supplierId: po.supplier_id, invoiceNo, invoiceDate, currency: po.currency, poId: po.id, tolerancePct: tol,
+          lines: lines.rows.map((l) => ({ po_line_id: l.po_line_id, item_id: l.item_id, qty: entries[l.po_line_id]?.qty, unit_price: entries[l.po_line_id]?.price })),
+        }, keys.create)
+        id = r?.id || r
+        setSavedId(id)
+      }
+      const m = await matchSupplierInvoice(id, keys.match)
       setMsg({ ok: `Invoice saved. Match result: ${MATCH_STATUS[m?.match_status]?.label || m?.match_status || 'checked'}.` })
-      setEntries({}); setInvoiceNo(''); onSaved?.()
+      setEntries({}); setInvoiceNo(''); renew(); onSaved?.()
     } catch (e) { setMsg({ error: toUserMessage(e, 'Could not save the invoice.') }) } finally { setBusy(false) }
   }
   return (
     <div className="rounded-lg border border-[var(--hairline)] p-3 space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
         <div className="sm:col-span-2"><label className="label" htmlFor="inv-po">Purchase order</label>
-          <select id="inv-po" className="input w-full min-h-[44px]" value={poId} onChange={(e) => { setPoId(e.target.value); setEntries({}) }}>
+          <select id="inv-po" className="input w-full min-h-[44px]" value={poId} disabled={!!savedId} onChange={(e) => { setPoId(e.target.value); setEntries({}); renew() }}>
             <option value="">{pos.loading ? 'Loading' : pos.rows.length ? 'Choose a PO' : 'No ordered POs with a supplier'}</option>
             {pos.rows.map((p) => <option key={p.id} value={p.id}>{p.po_number} | {p.supplier_name} | {p.currency || 'No currency'}</option>)}
           </select></div>
-        <div><label className="label" htmlFor="inv-no">Invoice number</label><input id="inv-no" className="input w-full min-h-[44px]" maxLength={60} value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} /></div>
+        <div><label className="label" htmlFor="inv-no">Invoice number</label><input id="inv-no" className="input w-full min-h-[44px]" maxLength={60} value={invoiceNo} disabled={!!savedId} onChange={(e) => { setInvoiceNo(e.target.value); renew() }} /></div>
         <div><label className="label" htmlFor="inv-date">Invoice date</label><input id="inv-date" type="date" className="input w-full min-h-[44px]" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} /></div>
       </div>
       <div className="max-w-[200px]"><label className="label" htmlFor="inv-tol">Price tolerance (%)</label><input id="inv-tol" type="number" min="0" step="any" className="input w-full min-h-[44px]" value={tol} onChange={(e) => setTol(e.target.value)} /></div>
@@ -652,11 +668,15 @@ export function SupplierPerformancePanel({ scope = {} }) {
 export function EmergencyPurchasesPanel({ scope = {}, can, userId }) {
   const st = useLoad(() => listEmergencyPurchases({ country: scope.country, site: scope.site }), [scope.country, scope.site])
   const [busy, setBusy] = useState(''); const [msg, setMsg] = useState({})
+  // One key per purchase order for the life of this panel, so a retry after a
+  // lost response replays the same approval instead of posting a second one.
+  const [approveKeys] = useState(() => new Map())
+  const keyFor = (id) => { if (!approveKeys.has(id)) approveKeys.set(id, newIdempotencyKey()); return approveKeys.get(id) }
   const allowed = canDo(can, 'procure')
   const waiting = st.rows.filter((r) => !r.emergency_approved_at)
   const approve = async (po) => {
     setBusy(po.id); setMsg({})
-    try { await approveEmergencyPurchase(po.id, newIdempotencyKey()); setMsg({ ok: `${po.po_number} approved after the fact.` }); st.reload() }
+    try { await approveEmergencyPurchase(po.id, keyFor(po.id)); setMsg({ ok: `${po.po_number} approved after the fact.` }); st.reload() }
     catch (e) { setMsg({ error: toUserMessage(e, 'Could not approve.') }) } finally { setBusy('') }
   }
   const age = (d) => (d ? Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 3600000)) : null)

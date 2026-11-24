@@ -3,7 +3,7 @@ import {
   currencyForCountry, scopedCountry, currencyScope, sumByCurrency,
   requisitionStatusOptions, canEditRequisition, canDecideRequisition, canRaisePo, requisitionPoDraft,
   poLinePayloads, outstandingQty, receiptPlan, summarizeGrnLines, withLineTotals,
-  RECEIVABLE_PO_STATUSES, LINE_EDITABLE_PO_STATUSES, requisitionMaterial,
+  RECEIVABLE_PO_STATUSES, LINE_EDITABLE_PO_STATUSES, requisitionMaterial, poStatusOptions,
 } from '../lib/procurementChain'
 import {
   listRequisitions, createRequisition, updateRequisition, _resetRequisitionColumnProbe, WP4_COLS, COLS,
@@ -144,6 +144,28 @@ describe('PO lines', () => {
     expect(outstandingQty({ qty_ordered: 10, qty_accepted: 4 })).toBe(6)
     expect(outstandingQty({ qty_ordered: 10, qty_accepted: 12 })).toBe(0)
     expect(outstandingQty({ qty_ordered: null })).toBeNull()
+  })
+
+  it('keeps the line key minted in the form with the line payload', () => {
+    const { lines } = poLinePayloads([
+      { item_id: 'm1', quantity: 1, line_key: 'k-1' },
+      { item_id: 'm2', quantity: 1 },
+    ])
+    expect(lines[0].idempotency_key).toBe('k-1')
+    expect(lines[1]).not.toHaveProperty('idempotency_key')
+  })
+
+  it('offers only the status moves allowed from the current status', () => {
+    expect(poStatusOptions('Draft', { isNew: true })).toEqual(['Draft', 'Submitted'])
+    expect(poStatusOptions('Draft')).toEqual(['Draft', 'Submitted', 'Cancelled'])
+    expect(poStatusOptions('Submitted')).toEqual(['Submitted', 'Approved', 'Cancelled'])
+    expect(poStatusOptions('Submitted', { ownPo: true })).toEqual(['Submitted', 'Cancelled'])
+    expect(poStatusOptions('Approved')).toEqual(['Approved', 'Ordered', 'Cancelled'])
+    expect(poStatusOptions('Ordered', { hasLines: true })).toEqual(['Ordered', 'Cancelled'])
+    expect(poStatusOptions('Ordered')).toEqual(['Ordered', 'Partial Delivery', 'Delivered', 'Cancelled'])
+    expect(poStatusOptions('Draft', { isEmergency: true })).toContain('Ordered')
+    expect(poStatusOptions('Delivered')).toEqual(['Delivered'])
+    expect(poStatusOptions('Closed')).toEqual(['Closed'])
   })
 
   it('exposes the PO statuses the server accepts lines and receipts on', () => {

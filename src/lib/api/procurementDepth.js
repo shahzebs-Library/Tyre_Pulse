@@ -9,7 +9,7 @@
  * Until the migration is applied each read answers { status: 'not_provisioned' }
  * and each write throws the shared "not set up" message.
  */
-import { supabase, applyCountry, toServiceError, isNotProvisioned, ServiceError } from './_client'
+import { supabase, applyCountry, toServiceError, isNotProvisioned, isMissingColumn, ServiceError } from './_client'
 import { newIdempotencyKey } from './inventory'
 
 export { newIdempotencyKey }
@@ -28,7 +28,9 @@ async function rpc(fn, payload, key) {
 async function read(query, what) {
   const { data, error } = await query
   if (error) {
-    if (isNotProvisioned(error)) return { status: 'not_provisioned', rows: [] }
+    // A missing column (42703 / PGRST204) means the procurement migration that
+    // adds it is not applied yet: same honest "not set up" state, not an error.
+    if (isNotProvisioned(error) || isMissingColumn(error)) return { status: 'not_provisioned', rows: [] }
     throw toServiceError(error, `Could not load ${what}.`)
   }
   return { status: 'ok', rows: data || [] }
@@ -72,7 +74,33 @@ export function listRfqs({ country, site, status } = {}) {
   }))
 }
 
-export function createRfq({ country, site, title, neededBy, requisitionId, lines, supplierIds }, key) {
+/**
+ * The open quotation request raised from a requisition, or null. A missing
+ * table (procurement migration not applied) answers null: nothing to block.
+ */
+export async function findOpenRfqForRequisition(requisitionId) {
+  if (!requisitionId) return null
+  const { data, error } = await supabase.from('procurement_rfqs').select('id,rfq_no,status')
+    .eq('requisition_id', requisitionId).eq('status', 'open').order('created_at').limit(1)
+  if (error) {
+    if (isNotProvisioned(error) || isMissingColumn(error)) return null
+    throw toServiceError(error, 'Could not check for an open quotation request.')
+  }
+  return data?.[0] || null
+}
+
+export const RFQ_BLOCKED_BY_PO =
+  'This requisition already has a purchase order. Raise a quotation request only for a requisition that has no purchase order.'
+
+export async function createRfq({ country, site, title, neededBy, requisitionId, lines, supplierIds }, key) {
+  // A requisition is bought one way: by a quotation request OR a direct PO.
+  if (requisitionId) {
+    const { data, error } = await supabase.from('requisitions').select('id,status,po_ref').eq('id', requisitionId).maybeSingle()
+    if (error) throw toServiceError(error, 'Could not check the requisition.')
+    if (data && (data.po_ref || String(data.status).toLowerCase() === 'ordered')) {
+      throw new ServiceError(RFQ_BLOCKED_BY_PO, 'PROC_REQ_HAS_PO')
+    }
+  }
   return rpc('inv_rfq_create', {
     country: country || null, site: site || null, title: title || null, needed_by: neededBy || null,
     requisition_id: requisitionId || null, supplier_ids: supplierIds || [],

@@ -187,6 +187,33 @@ export const RECEIVABLE_PO_STATUSES = Object.freeze(['Approved', 'Ordered', 'Par
 export const LINE_EDITABLE_PO_STATUSES = Object.freeze(['Draft', 'Submitted'])
 
 /**
+ * Status moves a person may make by hand from each PO status. Partial Delivery
+ * and Delivered on a PO with lines come from goods receipts, never by hand.
+ */
+export const PO_NEXT_STATUSES = Object.freeze({
+  Draft: ['Submitted', 'Cancelled'],
+  Submitted: ['Approved', 'Cancelled'],
+  Approved: ['Ordered', 'Cancelled'],
+  Ordered: ['Partial Delivery', 'Delivered', 'Cancelled'],
+  'Partial Delivery': ['Delivered', 'Cancelled'],
+})
+
+/**
+ * Statuses to offer in a PO status picker: the current status plus the moves
+ * allowed from it. A new PO starts as Draft or Submitted. An emergency PO may
+ * be Ordered before approval. The creator never approves their own PO.
+ */
+export function poStatusOptions(current, { isNew = false, isEmergency = false, hasLines = false, ownPo = false } = {}) {
+  if (isNew) return ['Draft', 'Submitted']
+  const cur = current || 'Draft'
+  let next = [...(PO_NEXT_STATUSES[cur] || [])]
+  if (isEmergency && (cur === 'Draft' || cur === 'Submitted') && !next.includes('Ordered')) next.push('Ordered')
+  if (hasLines) next = next.filter((s) => s !== 'Partial Delivery' && s !== 'Delivered')
+  if (ownPo) next = next.filter((s) => s !== 'Approved')
+  return [cur, ...next.filter((s) => s !== cur)]
+}
+
+/**
  * Turn PO form items into inv_po_add_line payloads. An item without a Material
  * Master id is reported, not silently dropped, because the GRN can only post
  * stock for a catalogued item.
@@ -201,6 +228,9 @@ export function poLinePayloads(items = [], { currency } = {}) {
     const price = it.unit_price === '' || it.unit_price === null || it.unit_price === undefined ? null : Number(it.unit_price)
     lines.push({
       item_id: it.item_id,
+      // The key minted when the line was added to the form (kept with the item),
+      // so a retry replays this line instead of adding a second one.
+      ...(it.line_key ? { idempotency_key: String(it.line_key) } : {}),
       description: it.description || [it.brand, it.size].filter(Boolean).join(' ') || null,
       qty_ordered: qty,
       unit_price: Number.isFinite(price) ? price : null,

@@ -18,15 +18,24 @@ describe('stock register detail', () => {
     expect(registerItemCode({ description: 'loose text' })).toBeNull()
   })
 
-  it('indexes Material Master facts by SKU, brand falling back to variants', () => {
+  it('indexes Material Master facts by country and SKU, brand falling back to variants', () => {
     const idx = buildCatalogIndex(canonical, variants, aliases)
-    expect(idx.get('310371-O').brand).toBe('Double Coin')
-    const f = idx.get('050019-O')
+    expect(idx.get('KSA|310371-O').brand).toBe('Double Coin')
+    const f = idx.get('KSA|050019-O')
     expect(f.brand).toBe('Fleetguard')
     expect(f.partType).toBe('genuine')
     expect(f.oem).toContain('LF9009')
-    expect(catalogFor({ item: { item_code: '050019-O' } }, idx).name).toBe('Oil filter')
-    expect(catalogFor({ item: { item_code: 'NOPE' } }, idx)).toBeNull()
+    expect(catalogFor({ item: { item_code: '050019-O' }, country: 'KSA' }, idx).name).toBe('Oil filter')
+    expect(catalogFor({ item: { item_code: 'NOPE' }, country: 'KSA' }, idx)).toBeNull()
+  })
+
+  it('never lends a KSA catalogue entry to another country sharing the code', () => {
+    const idx = buildCatalogIndex(canonical, variants, aliases)
+    expect(catalogFor({ item: { item_code: '310371-O' }, country: 'UAE' }, idx)).toBeNull()
+    expect(catalogFor({ item: { item_code: '310371-O' }, country: 'ksa' }, idx).brand).toBe('Double Coin')
+    const uae = buildCatalogIndex([{ id: 'u1', company_sku: '310371-O', description: 'UAE item', country: 'UAE' }], [], [])
+    expect(catalogFor({ item: { item_code: '310371-O' }, country: 'UAE' }, uae).name).toBe('UAE item')
+    expect(catalogFor({ item: { item_code: '310371-O' }, country: 'KSA' }, uae)).toBeNull()
   })
 
   it('states days of cover only for a site rate', () => {
@@ -61,7 +70,8 @@ describe('stock register detail', () => {
     const usage = buildUsageIndex([{ item_code: '310371-O', site: 'NHC', country: 'KSA', qty_n: 1 }])
     expect(registerCoverage([
       { item: { item_code: '310371-O' }, country: 'KSA' }, { item: { item_code: 'ZZ' }, country: 'KSA' }, { description: 'none' },
-    ], idx, usage)).toEqual({ total: 3, noCode: 1, catalogued: 1, withUsage: 1 })
+      { item: { item_code: '310371-O' }, country: 'UAE' },
+    ], idx, usage)).toEqual({ total: 4, noCode: 1, catalogued: 1, withUsage: 1 })
   })
 })
 
@@ -71,6 +81,30 @@ describe('consumption read', () => {
     vi.doMock('../lib/api/_client', async (orig) => ({ ...(await orig()), fetchAllPages: async () => ({ data: [{ id: 1 }], error: null, truncated: true }) }))
     const { listConsumptionSince } = await import('../lib/api/stock')
     await expect(listConsumptionSince('2025-11-23', { country: 'All' })).rejects.toThrow(/Too many issue lines/)
+    vi.doUnmock('../lib/api/_client')
+  })
+
+  it('reads only the register item codes, in chunks, in both spellings', async () => {
+    vi.resetModules()
+    const calls = []
+    vi.doMock('../lib/api/_client', async (orig) => ({
+      ...(await orig()),
+      fetchAllPages: async (build) => {
+        build(0, 999)
+        return { data: [{ id: calls.length }], error: null, truncated: false }
+      },
+      supabase: { from: () => ({ select: () => ({ gte: () => ({ in: (col, vals) => { calls.push(vals); const c = { eq: () => c, order: () => c, range: () => c }; return c } }) }) }) },
+    }))
+    const { listConsumptionSince, consumptionCodeVariants, CONSUMPTION_CODE_CHUNK } = await import('../lib/api/stock')
+    expect(consumptionCodeVariants(['050019-o', ' ', null])).toEqual(['050019-o', '050019-O'])
+    expect(await listConsumptionSince('2025-11-23', { country: 'KSA', itemCodes: [] })).toEqual([])
+    expect(calls).toHaveLength(0)
+    const codes = Array.from({ length: CONSUMPTION_CODE_CHUNK }, (_, i) => `C${i}`)
+    const rows = await listConsumptionSince('2025-11-23', { country: 'KSA', itemCodes: codes })
+    // 100 codes become 200 spellings: two requests, never the whole country.
+    expect(calls).toHaveLength(2)
+    expect(calls.every((v) => v.length <= CONSUMPTION_CODE_CHUNK)).toBe(true)
+    expect(rows).toHaveLength(2)
     vi.doUnmock('../lib/api/_client')
   })
 })

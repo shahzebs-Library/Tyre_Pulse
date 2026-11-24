@@ -31,8 +31,22 @@ export function registerItemCode(r) {
   return skuKey(r?.item?.item_code) || skuKey(r?.custom_data?.stock_item?.code) || null
 }
 
-/** Map of company SKU -> catalogue facts for the register. */
-export function buildCatalogIndex(canonical = [], variants = [], aliases = []) {
+/**
+ * The company catalogue (material_canonical) is KSA only today and carries no
+ * country column. An item code can mean a different item in another country,
+ * so the catalogue is keyed by country + SKU: a UAE or Egypt stock row never
+ * borrows a KSA catalogue entry that happens to share its code.
+ */
+export const CATALOG_DEFAULT_COUNTRY = 'KSA'
+
+/** Index key for one country + SKU. */
+export const catalogKey = (country, sku) => `${countryKey(country)}|${skuKey(sku)}`
+
+/**
+ * Map of country|company SKU -> catalogue facts for the register. A catalogue
+ * row's own `country`, when it has one, wins over `defaultCountry`.
+ */
+export function buildCatalogIndex(canonical = [], variants = [], aliases = [], { defaultCountry = CATALOG_DEFAULT_COUNTRY } = {}) {
   const vBy = new Map()
   for (const v of variants || []) {
     if (!v?.canonical_id) continue
@@ -50,7 +64,7 @@ export function buildCatalogIndex(canonical = [], variants = [], aliases = []) {
     const sku = skuKey(m?.company_sku)
     if (!sku) continue
     const vs = vBy.get(m.id) || []
-    out.set(sku, {
+    out.set(catalogKey(m.country || defaultCountry, sku), {
       canonicalId: m.id,
       name: m.description || null,
       category: m.category || null,
@@ -123,11 +137,11 @@ export function buildErpVelocityMap(records = [], usage, months = USAGE_MONTHS) 
   return out
 }
 
-/** Catalogue facts for one register row (null when the code is not catalogued). */
+/** Catalogue facts for one register row (null when the code is not catalogued in its country). */
 export function catalogFor(r, index) {
   const code = registerItemCode(r)
   if (!code || !index) return null
-  return index.get(code) || null
+  return index.get(catalogKey(r?.country, code)) || null
 }
 
 /** Counts for the honesty line above the register. */
@@ -136,7 +150,7 @@ export function registerCoverage(records = [], index, usage) {
   for (const r of records || []) {
     const code = registerItemCode(r)
     if (!code) { noCode += 1; continue }
-    if (index?.has(code)) catalogued += 1
+    if (index?.has(catalogKey(r.country, code))) catalogued += 1
     if (usage?.byCode.has(`${countryKey(r.country)}|${code}`)) withUsage += 1
   }
   return { total: (records || []).length, noCode, catalogued, withUsage }

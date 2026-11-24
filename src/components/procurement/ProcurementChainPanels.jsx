@@ -5,7 +5,7 @@
  *   useProcurementCaps   the server's own answer to "may I procure / receive / delete"
  *   MaterialPicker       type-ahead over the Material Master (material_master)
  *   SupplierPicker       type-ahead over the supplier master (suppliers)
- *   RaisePoModal         approved requisition -> purchase order with a real line
+ *   RaisePoModal         approved requisition -> purchase order with a real line (retry-safe)
  *   ReceiveAgainstPoPanel  PO lines -> inv_receive_goods (GRN + ledger movement)
  *   SupplierRegister     the supplier master list with add / edit
  *
@@ -18,7 +18,7 @@ import Modal from '../ui/Modal'
 import { toUserMessage } from '../../lib/safeError'
 import { listLocations } from '../../lib/api/inventory'
 import {
-  getProcurementCaps, listSuppliers, createSupplier, updateSupplier, createPurchaseOrderWithLines,
+  getProcurementCaps, listSuppliers, createSupplier, updateSupplier, createPurchaseOrderWithLines, addPurchaseOrderLines,
   listPurchaseOrderLines, listReceivablePurchaseOrders, receiveAgainstPo, linkRequisitionToPo,
   searchItems, newIdempotencyKey, SUPPLIER_STATUSES,
 } from '../../lib/api/procurementChain'
@@ -26,6 +26,7 @@ import {
   requisitionPoDraft, requisitionMaterial, receiptPlan, outstandingQty, currencyForCountry, scopedCountry,
 } from '../../lib/procurementChain'
 import { REJECTION_CODES, rejectionReasonText } from '../../lib/procurement/procurementDepth'
+import { findOpenRfqForRequisition } from '../../lib/api/procurementDepth'
 
 const fmtNum = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString())
 const fmtMoney = (v, cur) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))
@@ -136,7 +137,15 @@ export function SupplierPicker({ value, onPick, country, id = 'proc-supplier' })
   )
 }
 
-/** Approved requisition -> PO header + catalogued line, then link the requisition. */
+/**
+ * Approved requisition -> PO header, then link the requisition, then add the
+ * catalogued line. Each step remembers its result, so a retry after a failure
+ * reuses the PO already created and never raises a second PO for the same
+ * requisition; only the step that failed runs again. The line keeps one
+ * idempotency key (renewed only when the item or price changes), so retrying a
+ * line replays it instead of adding it twice. A requisition that already has a
+ * PO, or an open quotation request, cannot be raised here.
+ */
 export function RaisePoModal({ requisition, onClose, onDone }) {
   const [supplier, setSupplier] = useState(null)
   const [material, setMaterial] = useState(() => requisitionMaterial(requisition))
@@ -144,24 +153,59 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [warning, setWarning] = useState('')
+  const [createdPo, setCreatedPo] = useState(null)
+  const [linked, setLinked] = useState(false)
+  const [lineKey, setLineKey] = useState(() => newIdempotencyKey())
+  const [block, setBlock] = useState({ state: 'checking', reason: '' })
+  // The line content decides the key: a changed item or price is a new line.
+  useEffect(() => { setLineKey(newIdempotencyKey()) }, [material?.id, unitPrice])
+  useEffect(() => {
+    let alive = true
+    if (!requisition) return undefined
+    if (requisition.po_ref) {
+      setBlock({ state: 'blocked', reason: `This requisition already has purchase order ${requisition.po_ref}.` })
+      return undefined
+    }
+    findOpenRfqForRequisition(requisition.id)
+      .then((rfq) => {
+        if (!alive) return
+        setBlock(rfq
+          ? { state: 'blocked', reason: `Quotation request ${rfq.rfq_no || ''} is open for this requisition. Award or cancel it instead of raising a PO directly.` }
+          : { state: 'ok', reason: '' })
+      })
+      .catch((e) => { if (alive) setBlock({ state: 'error', reason: toUserMessage(e, 'Could not check for an open quotation request.') }) })
+    return () => { alive = false }
+  }, [requisition])
   if (!requisition) return null
   const currency = currencyForCountry(requisition.country)
   const draft = requisitionPoDraft(requisition, { supplier, material, unitPrice, country: requisition.country })
   const submit = async () => {
     setError(''); setWarning('')
+    if (block.state !== 'ok') { setError(block.reason || 'This requisition cannot be raised as a PO right now.'); return }
     if (draft.errors.length) { setError(draft.errors.join(' ')); return }
     setBusy(true)
+    let po = createdPo
     try {
-      const { po, failedLines } = await createPurchaseOrderWithLines(draft.header, [draft.line])
-      await linkRequisitionToPo(requisition.id, po.po_number)
-      if (failedLines.length) setWarning(`PO ${po.po_number} was created but its line did not save: ${failedLines[0].message}`)
+      if (!po) {
+        const res = await createPurchaseOrderWithLines(draft.header, [])
+        po = res.po
+        setCreatedPo(po)
+      }
+      if (!linked) {
+        await linkRequisitionToPo(requisition.id, po.po_number)
+        setLinked(true)
+      }
+      const { failedLines } = await addPurchaseOrderLines(po.id, [{ ...draft.line, idempotency_key: lineKey }])
+      if (failedLines.length) setWarning(`PO ${po.po_number} is created and linked, but its line did not save: ${failedLines[0].message} Press Retry line to try again.`)
       else onDone?.(po)
     } catch (e) {
-      setError(toUserMessage(e, 'Could not raise the purchase order.'))
+      const why = toUserMessage(e, 'Could not raise the purchase order.')
+      setError(po ? `PO ${po.po_number} was created. ${why} Press the button again to finish: the same PO is reused.` : why)
     } finally { setBusy(false) }
   }
+  const started = !!createdPo
   return (
-    <Modal open onClose={busy ? undefined : onClose} size="md" title={(
+    <Modal open onClose={busy ? undefined : (started ? () => onDone?.(createdPo) : onClose)} size="md" title={(
       <span className="inline-flex items-center gap-2"><ShoppingCart size={18} aria-hidden="true" /> Raise purchase order</span>
     )}>
       <div className="space-y-4">
@@ -169,7 +213,13 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
           From requisition <span className="font-mono">{requisition.requisition_no || 'without a number'}</span>: {requisition.item}, quantity {fmtNum(requisition.quantity)}.
           {!requisition.country && ' This requisition has no country, so the PO currency cannot be set.'}
         </p>
-        <SupplierPicker value={supplier} onPick={setSupplier} country={requisition.country} />
+        {block.state === 'checking' && <p role="status" className="text-sm text-[var(--text-muted)] inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Checking for an open quotation request</p>}
+        {(block.state === 'blocked' || block.state === 'error') && (
+          <div role="alert" className="flex items-start gap-2 text-sm text-amber-300"><AlertTriangle size={15} className="mt-0.5 shrink-0" />{block.reason}</div>
+        )}
+        {started && <p role="status" className="text-sm text-[var(--text-secondary)]">Purchase order <span className="font-mono">{createdPo.po_number}</span> {linked ? 'is linked to this requisition.' : 'is created. The requisition is not linked yet.'}</p>}
+        {/* The supplier is on the PO header, which already exists once created. */}
+        {!started && <SupplierPicker value={supplier} onPick={setSupplier} country={requisition.country} />}
         <MaterialPicker value={material} onPick={setMaterial} country={requisition.country} />
         <div>
           <label className="label" htmlFor="raise-po-price">Unit price {currency ? `(${currency})` : ''}</label>
@@ -179,12 +229,11 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
         {error && <div role="alert" className="flex items-start gap-2 text-sm text-red-300"><AlertTriangle size={15} className="mt-0.5 shrink-0" />{error}</div>}
         {warning && <div role="status" className="text-sm text-amber-300">{warning}</div>}
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={warning ? () => onDone?.() : onClose} disabled={busy}>{warning ? 'Close' : 'Cancel'}</button>
-          {!warning && (
-            <button type="button" className="btn-primary text-sm inline-flex items-center gap-2 min-h-[44px]" onClick={submit} disabled={busy}>
-              {busy ? <Loader2 size={15} className="animate-spin" /> : <ShoppingCart size={15} />} Create PO
-            </button>
-          )}
+          <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={started ? () => onDone?.(createdPo) : onClose} disabled={busy}>{started ? 'Close' : 'Cancel'}</button>
+          <button type="button" className="btn-primary text-sm inline-flex items-center gap-2 min-h-[44px]" onClick={submit}
+            disabled={busy || block.state !== 'ok'}>
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <ShoppingCart size={15} />} {warning ? 'Retry line' : started ? 'Finish' : 'Create PO'}
+          </button>
         </div>
       </div>
     </Modal>

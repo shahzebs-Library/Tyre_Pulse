@@ -196,20 +196,31 @@ const prefixRegex = (prefixes) => quote(`^(${prefixes.join('|')})([^A-Z]|$)`)
 /**
  * PostgREST `.or()` filter for one priority (1 to 6) or a set of them.
  * Returns null when the set covers every priority (no filter needed) or is
- * empty/invalid. Mirrors priorityFor()'s derivation (stored overrides are not
- * read: the column does not exist on the live fleet yet).
+ * empty/invalid. Mirrors priorityFor(): a stored maintenance_priority wins.
+ *
+ * `storedColumn` says whether vehicle_fleet has the maintenance_priority
+ * column (migration 20261124120000). When it does, a row matches when its
+ * stored priority is in the set, OR it has no stored priority and the derived
+ * rule puts it in the set. When it does not (or the caller cannot tell), only
+ * the derived rule is used, because naming a missing column fails the read.
  */
-export function buildPriorityFilter(input) {
+export function buildPriorityFilter(input, { storedColumn = false } = {}) {
   const set = [...new Set((Array.isArray(input) ? input : [input]).map(Number))]
     .filter((p) => PRIORITY_LEVELS.includes(p))
   if (!set.length || set.length === 6) return null
+  const derived = derivedPriorityFilter(set)
+  if (!storedColumn) return derived
+  return `maintenance_priority.in.(${[...set].sort().join(',')}),and(maintenance_priority.is.null,or(${derived}))`
+}
+
+function derivedPriorityFilter(set) {
   const positive = (ps) => {
     const types = ps.flatMap(priorityTypes)
     const prefixes = ps.flatMap(priorityPrefixes)
     return { types, prefixes }
   }
   if (!set.includes(6)) {
-    const { types, prefixes } = positive(set.sort())
+    const { types, prefixes } = positive([...set].sort())
     return `vehicle_type.in.(${types.map(quote).join(',')}),and(${BLANK_TYPE},asset_no.imatch.${prefixRegex(prefixes)})`
   }
   // 6 is in the set: rows NOT in the listed priorities among 1..5.

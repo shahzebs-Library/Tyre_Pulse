@@ -348,52 +348,25 @@ function StockRegisterView({ embedded = false }) {
     setError('')
   }
 
+  // Edits item details and levels only. Quantities move through the ledger (Add
+  // Stock, receipts, issues, counts); stock_records balances cannot be written
+  // directly (inv_balance_guard), so this form never sends a quantity and never
+  // writes a movement. The old create/movement branch here was refused by the
+  // ledger and its error was swallowed; new stock goes through Add Stock.
   async function save(e) {
     e.preventDefault()
+    if (!editId) { setError('Use Add Stock to record new stock.'); return }
     setSaving(true)
     setError('')
 
-    const prevRecord = editId ? records.find(r => r.id === editId) : null
-    const prevQty    = prevRecord?.stock_qty ?? 0
-    const newQty     = +form.stock_qty
-    const status     = deriveStatus(form)
-
-    const payload = {
-      ...form,
-      stock_qty: newQty,
-      stock_status: status,
-      updated_by: profile?.id,
-      updated_at: new Date().toISOString(),
-    }
-
-    let stockId = editId
+    const { stock_qty: _qty, ...details } = form
     try {
-      if (editId) {
-        const { stock_qty: _qty, stock_status: _status, ...details } = payload
-        await stock.updateStockRecord(editId, details)
-      } else {
-        const ins = await stock.insertStockRecord(payload)
-        stockId = ins.id
-      }
+      await stock.updateStockRecord(editId, {
+        ...details,
+        updated_by: profile?.id,
+        updated_at: new Date().toISOString(),
+      })
     } catch (err) { setError(toUserMessage(err)); setSaving(false); return }
-
-    const qtyChange = editId ? 0 : newQty
-    if (qtyChange !== 0 || !editId) {
-      // Best-effort audit movement - original ignored insert errors here.
-      try {
-        await stock.insertStockMovement({
-          stock_id:      stockId,
-          site:          form.site,
-          description:   form.description || null,
-          movement_type: editId ? (qtyChange > 0 ? 'In' : 'Out') : 'Initial',
-          qty_before:    editId ? prevQty : 0,
-          qty_change:    qtyChange,
-          qty_after:     newQty,
-          reason:        editId ? 'Manual edit' : 'Initial stock entry',
-          created_by:    profile?.id ?? null,
-        })
-      } catch { /* audit is best-effort; do not block the save */ }
-    }
 
     setShowForm(false)
     load()

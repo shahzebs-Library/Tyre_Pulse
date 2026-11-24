@@ -6,12 +6,13 @@
   "sectionsLabel": "Sections in this area",
   "groups": { "operate": "Stock", "control": "Audit & control", "supply": "Supply", "assets": "Tyres & identification", "insight": "Value & reports" },
   "sections": {
-    "materials": "Material Master", "corrections": "Corrections",
+    "floor": "Warehouse floor", "custody": "Tools & repairables", "finance": "Finance check", "materials": "Material Master", "corrections": "Corrections",
     "overview": "Overview", "register": "Stock register", "locations": "Locations", "movements": "Movements",
     "audits": "Physical audits", "discrepancies": "Discrepancies", "controls": "Controls", "procurement": "Procurement",
     "receiving": "Receiving & issue", "supplier": "Supplier stock", "tyres": "Tyre inventory", "identification": "Identification",
     "valuation": "Valuation", "planning": "Planning & simulation", "kpis": "Inventory KPIs", "classification": "Stock classification", "reports": "Reports", "physical": "Physical inventory"
   },
+  "warehouse": { "floor": { "putaway": "Put-away", "picking": "Picking", "handover": "Workshop handover" }, "custody": { "tools": "Tool custody", "repairables": "Repairables", "warranty": "Warranty & scrap" } },
   "scope": {
     "country": "Country", "allCountries": "All countries", "countryHint": "Change the country from the working context at the top of the app.",
     "site": "Site", "allSites": "All sites"

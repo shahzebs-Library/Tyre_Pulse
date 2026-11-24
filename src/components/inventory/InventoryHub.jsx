@@ -46,6 +46,9 @@ const SECTION_COMPONENTS = {
   classification: lazy(() => import('./ClassificationSection')),
   planning: lazy(() => import('./InsightSections').then((m) => ({ default: m.PlanningSection }))),
   reports: lazy(() => import('./ReportsSection')),
+  floor: lazy(() => import('./WarehouseFloorSections').then((m) => ({ default: m.FloorSection }))),
+  custody: lazy(() => import('./WarehouseFloorSections').then((m) => ({ default: m.CustodySection }))),
+  finance: lazy(() => import('./WarehouseFloorSections').then((m) => ({ default: m.FinanceSection }))),
 }
 
 /** Sections that show the four inventory headline tiles above them. */

@@ -47,14 +47,16 @@ function makeQueryBuilder(rows) {
     // country scope from applyCountry - so a last-write-wins recorder silently
     // loses the search and makes a passing search look like a missing one.
     _filters: { eq: {}, or: null, ors: [], range: null },
-    select() { return q },
+    // A head-only count (the Critical & High tile) is not the register read,
+    // so it must not overwrite what the register asked the server for.
+    select(_cols, opts) { q._head = Boolean(opts?.head); return q },
     order() { return q },
     not() { return q },
     range(from, to) { q._filters.range = [from, to]; return q },
     eq(col, val) { q._filters.eq[col] = val; return q },
     or(expr) { q._filters.or = expr; q._filters.ors.push(expr); return q },
     then(resolve) {
-      lastQuery = q._filters
+      if (!q._head) lastQuery = q._filters
       return Promise.resolve(resolve({ data: rows, count: rows.length, error: null }))
     },
   }
@@ -81,6 +83,7 @@ vi.mock('../contexts/LanguageContext', () => ({
 vi.mock('../lib/exportUtils', () => ({ exportToExcel: vi.fn() }))
 
 import FleetMaster from '../pages/FleetMaster'
+import { buildPriorityFilter } from '../lib/assetPriority'
 
 function renderFleet(initialUrl = '/fleet-master') {
   return render(
@@ -132,6 +135,19 @@ describe('Fleet Master keeps its filters in the URL', () => {
       expect(lastQuery.eq.status).toBe('Inactive')
       expect(lastQuery.eq.site).toBe('NHC')
     })
+  })
+
+  it('applies a maintenance priority that arrives in the URL, server-side', async () => {
+    renderFleet('/fleet-master?priority=1-3')
+    await waitFor(() => expect(lastQuery?.ors).toContain(buildPriorityFilter([1, 2, 3])))
+    // The asset code prefix gives the blank-type rows their badge (TM = P5).
+    await waitFor(() => expect(screen.getAllByText('P5 Medium').length).toBeGreaterThan(0))
+  })
+
+  it('ignores a priority value the select does not offer', async () => {
+    renderFleet('/fleet-master?priority=9')
+    await waitFor(() => expect(lastQuery).not.toBeNull())
+    expect(lastQuery.ors).toEqual(['country.eq.KSA,country.is.null'])
   })
 
   it('restores a page beyond the first without the search debounce resetting it', async () => {

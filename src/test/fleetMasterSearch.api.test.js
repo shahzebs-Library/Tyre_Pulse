@@ -20,7 +20,8 @@ vi.mock('../lib/api/_client', async () => {
     } },
   }
 })
-import { listFleetRecords, getFleetSummary, fetchAllFleetRecords } from '../lib/api/assets'
+import { listFleetRecords, getFleetSummary, fetchAllFleetRecords, countFleetByPriority } from '../lib/api/assets'
+import { buildPriorityFilter } from '../lib/assetPriority'
 beforeEach(() => { h.calls.length = 0 })
 
 it.each([['list', listFleetRecords], ['summary', getFleetSummary], ['export', fetchAllFleetRecords]])('%s treats punctuation and wildcards literally in all four search fields', async (_name, read) => {
@@ -43,4 +44,18 @@ it.each([['list', listFleetRecords], ['summary', getFleetSummary], ['export', fe
 it('uses a unique tiebreaker when paginating duplicated asset numbers', async () => {
   await listFleetRecords({ page: 1, pageSize: 25 })
   expect(h.calls[0].order).toEqual(['asset_no', 'id'])
+})
+
+it.each([['list', listFleetRecords], ['export', fetchAllFleetRecords]])('%s applies the priority filter server-side alongside the others', async (_name, read) => {
+  await read({ priority: [1], search: 'TM', site: 'NHC', country: 'KSA', page: 0, pageSize: 25 })
+  expect(h.calls[0].or).toContain(buildPriorityFilter([1]))
+  expect(h.calls[0].or).toHaveLength(2)
+  expect(h.calls[0].eq).toContainEqual(['site', 'NHC'])
+})
+
+it('countFleetByPriority asks for P1 to P3 with a head-only count', async () => {
+  const n = await countFleetByPriority({ priority: [1, 2, 3], country: 'KSA' })
+  expect(n).toBe(0)
+  expect(h.calls[0].or).toEqual([buildPriorityFilter([1, 2, 3])])
+  expect(h.calls[0].eq).toContainEqual(['country', 'KSA'])
 })

@@ -6,6 +6,7 @@ import { supabase, unwrap, applyCountry, ServiceError, fetchAllPages, fetchAllRp
 import { toUserMessage } from '../safeError'
 import { growthPct } from '../commandCenter'
 import { firstForCallerCompany } from './companyScope'
+import { buildPriorityFilter } from '../assetPriority'
 
 // Fleet Master extras (type list, bulk edit, last service, PM due, utilisation)
 // live in their own module and are re-exported so the page reaches them
@@ -189,6 +190,16 @@ function applyFleetFlag(query, flag) {
   }
 }
 
+/**
+ * Maintenance priority filter (lib/assetPriority), answered by the server so a
+ * priority view covers the whole fleet, not the loaded page. `priority` is one
+ * level (1 to 6) or an array of levels.
+ */
+function applyFleetPriority(query, priority) {
+  const filter = buildPriorityFilter(priority)
+  return filter ? query.or(filter) : query
+}
+
 // Quoted, literal case-insensitive substring search. imatch avoids PostgREST's
 // special '*' alias for LIKE wildcards; escaping regex metacharacters keeps
 // typed asset numbers and make/model punctuation literal too.
@@ -201,7 +212,7 @@ function applyFleetSearch(query, search) {
     .map(column => `${column}.imatch.${quoted}`).join(','))
 }
 
-export async function listFleetRecords({ page, pageSize, search, site, status, type, flag, country } = {}) {
+export async function listFleetRecords({ page, pageSize, search, site, status, type, flag, priority, country } = {}) {
   let q = supabase
     .from('vehicle_fleet')
     .select('*', { count: 'exact' })
@@ -217,6 +228,7 @@ export async function listFleetRecords({ page, pageSize, search, site, status, t
   if (status) q = q.eq('status', status)
   if (type) q = q.eq('vehicle_type', type)
   if (flag) q = applyFleetFlag(q, flag)
+  if (priority) q = applyFleetPriority(q, priority)
   q = applyCountry(q, country)
 
   const { data, count, error } = await q
@@ -321,7 +333,7 @@ export async function deleteFleetRecords(ids) {
   return deleted
 }
 
-export async function fetchAllFleetRecords({ search, site, status, type, flag, country } = {}) {
+export async function fetchAllFleetRecords({ search, site, status, type, flag, priority, country } = {}) {
   const { data, error } = await fetchAllPages((from, to) => {
     let q = supabase
       .from('vehicle_fleet')
@@ -334,9 +346,29 @@ export async function fetchAllFleetRecords({ search, site, status, type, flag, c
     if (status) q = q.eq('status', status)
     if (type) q = q.eq('vehicle_type', type)
     if (flag) q = applyFleetFlag(q, flag)
+    if (priority) q = applyFleetPriority(q, priority)
     q = applyCountry(q, country)
     return q
   }, { max: MAX_ASSET_ROWS })
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return data ?? []
+}
+
+/**
+ * Head-only count of vehicles in the given priority level(s), under the same
+ * country, search, site and type filters the summary tiles use (status and the
+ * quick filters are held out, like getFleetSummary). Never pages the fleet.
+ */
+export async function countFleetByPriority({ priority, search, site, type, country } = {}) {
+  let q = supabase
+    .from('vehicle_fleet')
+    .select('id', { count: 'exact', head: true })
+  if (search) q = applyFleetSearch(q, search)
+  if (site) q = q.eq('site', site)
+  if (type) q = q.eq('vehicle_type', type)
+  q = applyFleetPriority(q, priority)
+  q = applyCountry(q, country)
+  const { count, error } = await q
+  if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  return count ?? 0
 }

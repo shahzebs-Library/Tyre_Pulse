@@ -9,19 +9,19 @@ transaction that was then undone, and a follow-up query confirmed nothing persis
 | Item | Value |
 |---|---|
 | GitHub `main` | `5d59ac7c` (#609) |
-| PR #608 branch `claude/wms-wp0-register` | local tip `cbc1e637`, 41 commits ahead of main; merges cleanly with latest main (`git merge-tree` clean) |
-| PR #608 merge | NOT merged (needs owner approval) |
+| PR #608 branch `claude/wms-wp0-register` | tip after the independent-review fix rounds (see section 11); merged to main on owner instruction 2026-11-24 |
+| PR #608 merge | Owner said merge (2026-11-24). Migrations below are still NOT applied |
 | Vercel previews for this branch | switched off in `vercel.json` (pushes cost no build) |
 
 ## 2. Test evidence (full run on the branch tip)
 
 | Check | Result |
 |---|---|
-| ESLint (whole `src/`) | 0 errors, 1 warning |
-| Vitest | 1,439 files: 16,947 passed, 1 failed, 14 skipped |
+| ESLint (whole `src/`) | 0 errors, 1 warning (after review fixes) |
+| Vitest | 1,441 files: 16,957 passed, 1 failed, 14 skipped (after review fixes) |
 | The 1 failure | `checklistIcons.test.js` reads `mobile/node_modules/...Ionicons.json`, not installed in this checkout (known environmental; passes in CI) |
 | Production build (`vite build`) | passes |
-| Flutter (`flutter analyze`, stock_count + inventory tests) | clean; 275 + 126 tests passed. NOT run on a real device |
+| Flutter (`flutter analyze`, stock_count + inventory tests) | clean; 131 passed, 4 skipped after review fixes. NOT run on a real device |
 
 ## 3. Live database: applied vs pending
 
@@ -87,6 +87,9 @@ Ledger gap found: PR #606's `profiles_ui_preferences` and `inv_owner_override` a
 1-2 done; 3 OK (suggest + approve); 4 brand merges approved and applied; 5 tyre codes later; 6 genuine/aftermarket at
 audits; 7 Store Keeper sites unchanged (Console later); PO limit amounts later via the admin screen; emergency purchases
 allowed only with the full justification form; installation confirmed by a supervisor/manager, never the issuer.
+2026-11-24 (after review): no Expo changes or OTA ever, Flutter only; count differences posted only by an Admin or
+the super admin; plain Admins may still post a bare stock movement (kept, pending revisit); stock can only be issued
+to a job card already loaded from the ERP Excel.
 
 ## 8. Open questions for the owner
 - Emergency purchase: should "customer commitment" be allowed without an asset/job card?
@@ -103,3 +106,25 @@ allowed only with the full justification form; installation confirmed by a super
 ## 10. Not verified
 Real devices; screens behind login in production; Frankfurt latency; costs of a region move; behaviour after the
 pending migrations are applied for real (only rolled-back proofs so far).
+
+## 11. Independent review rounds (2026-11-24)
+
+Two reviewers on a different model read the code (not our summary). Every agreed finding was fixed and re-checked.
+
+| Area | Commits | Proof |
+|---|---|---|
+| Database (8 unapplied migrations) | `6103617b`, `3d113149` | One rolled-back run of all 8 files in apply order as real users: 95 of 95 cases as expected; live DB re-checked unchanged (movements 5,619, stock lines 5,583, no new objects) |
+| Web | `25df4040`, `2ccedc94`, `0f0078d1`, `7f354648` | Lint 0 errors, 16,957 tests passed, production build passes |
+| Flutter | `3c874903` | Analyze clean, 131 tests passed |
+
+What the migrations change once applied (all need the owner's "apply WP4 and WP5" first):
+- Receipts, transfers, supplier returns and scrap only through their own documents; the generic movement form issues only.
+- Count differences only by an Admin or the super admin; others record counts for them.
+- A PO needs an approved, active supplier from the supplier list to be submitted or approved; once approved its
+  supplier, currency, site and totals are frozen; whoever created it, last edited it or added a line cannot approve it.
+- A requisition is decided only after it is submitted, and its content is frozen once submitted.
+- Emergency purchases: no invoice, match or close until approved after the fact; more than 10% over the estimate needs a reason.
+- Job cards are matched to the loaded work orders (case and spaces ignored) and must be in the user's country.
+
+Known gaps left honest: usage figures miss about 69 ERP lines with mixed-case item codes (mostly Egypt); stock lines with
+no country get no catalogue details; Add stock double-tap guard checked by analyze only (no widget test harness).

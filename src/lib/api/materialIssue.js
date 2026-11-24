@@ -403,6 +403,10 @@ export async function createMaterialIssue(header = {}, lines = []) {
       // Only sent when the caller chose a balance (posting mode, WP5 applied):
       // before WP5 the column does not exist and the insert would be refused.
       stock_id: l.stock_id,
+      // The job card reservation this line consumes (migration 20261124131000):
+      // the server checks it is an open reservation of the slip's job card on
+      // the same stock line. Only sent when chosen.
+      reservation_id: l.reservation_id,
     }))
 
   if (body.length) {

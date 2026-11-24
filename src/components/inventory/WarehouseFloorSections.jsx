@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { Tabs } from '../commandCenter/kit'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useAuth } from '../../contexts/AuthContext'
 import { useHubTab } from './InvUi'
 import PutawayPanel from './PutawayPanel'
 import PickingPanel from './PickingPanel'
@@ -19,6 +20,7 @@ import FinanceReconcilePanel from './FinanceReconcilePanel'
 import JobCardMaterialsPanel from '../workshopStock/JobCardMaterialsPanel'
 import AssetMaterialCostPanel from '../workshopStock/AssetMaterialCostPanel'
 import LubricantsPanel from '../warehouseClasses/LubricantsPanel'
+import PurchaseApprovalLimitsPanel from '../procurement/PurchaseApprovalLimitsPanel'
 import { RfqPanel, BackorderPanel, SupplierReturnsPanel, ThreeWayMatchPanel, SupplierApprovalPanel, SupplierPerformancePanel, EmergencyPurchasesPanel } from '../procurement/ProcurementDepthPanels'
 import MaterialLinkHealthCard from '../oem/MaterialLinkHealthCard'
 import MaterialLinkQueuePanel from '../oem/MaterialLinkQueuePanel'
@@ -68,12 +70,15 @@ export function FinanceSection(props) {
   return <div className="inv-hub"><FinanceReconcilePanel {...props} /></div>
 }
 
-const PURCHASING_TABS = ['quotations', 'backorders', 'returns', 'approved', 'performance', 'emergency', 'invoicematch']
+const PURCHASING_TABS = ['quotations', 'backorders', 'returns', 'approved', 'performance', 'emergency', 'invoicematch', 'limits']
 
 export function PurchasingSection(props) {
   const { t } = useLanguage()
   const canMatch = props.can?.('procure') || props.can?.('financial_post')
-  const tabs = PURCHASING_TABS.filter((k) => k !== 'invoicematch' || canMatch)
+  // Limits are set by administrators only; the database refuses anyone else anyway.
+  const { profile, isSuperAdmin } = useAuth() || {}
+  const isAdmin = !!isSuperAdmin || profile?.role === 'Admin'
+  const tabs = PURCHASING_TABS.filter((k) => (k !== 'invoicematch' || canMatch) && (k !== 'limits' || isAdmin))
   const [tab, setTab] = useHubTab(props.tab, props.onTab, tabs, 'quotations')
   return (
     <div className="inv-hub">
@@ -86,6 +91,7 @@ export function PurchasingSection(props) {
       {tab === 'performance' && <SupplierPerformancePanel {...props} />}
       {tab === 'emergency' && <EmergencyPurchasesPanel {...props} />}
       {tab === 'invoicematch' && canMatch && <ThreeWayMatchPanel {...props} />}
+      {tab === 'limits' && isAdmin && <PurchaseApprovalLimitsPanel {...props} />}
     </div>
   )
 }

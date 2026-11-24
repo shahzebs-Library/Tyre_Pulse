@@ -30,6 +30,8 @@ import {
 import {
   compareQuotes, awardNeedsReason, summariseBackorders, rateSupplier, returnableQty, MATCH_STATUS, REJECTION_CODES, formatMoneyIn,
 } from '../../lib/procurement/procurementDepth'
+import { EMERGENCY_EXPORT_HEADERS, emergencyExportValues, categoryLabel, impactText, estimateText } from '../../lib/procurement/emergencyJustification'
+import { EmergencyJustificationView } from './EmergencyJustification'
 
 const fmtNum = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString('en-US'))
 const fmtDate = (v) => {
@@ -658,8 +660,30 @@ export function EmergencyPurchasesPanel({ scope = {}, can, userId }) {
     catch (e) { setMsg({ error: toUserMessage(e, 'Could not approve.') }) } finally { setBusy('') }
   }
   const age = (d) => (d ? Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 3600000)) : null)
+  const [open, setOpen] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const exportRows = async () => {
+    setExporting(true); setMsg({})
+    try {
+      const { exportToExcel } = await import('../../lib/exportUtils')
+      const head = ['PO', 'Supplier', 'Country', 'Site', 'Status', 'Order value', 'Currency']
+      const rows = st.rows.map((p) => ({
+        'PO': p.po_number, 'Supplier': p.supplier_name || p.vendor_name || '', 'Country': p.country || '', 'Site': p.site || '',
+        'Status': p.status, 'Order value': Number(p.total_amount) > 0 ? formatMoneyIn(p.total_amount, p.currency) : '', 'Currency': p.currency || '',
+        ...emergencyExportValues(p),
+      }))
+      const cols = [...head, ...EMERGENCY_EXPORT_HEADERS]
+      await exportToExcel(rows, cols, cols, 'Emergency purchases', 'Emergency purchases')
+    } catch (e) { setMsg({ error: toUserMessage(e, 'Could not export.') }) } finally { setExporting(false) }
+  }
   return (
-    <Frame icon={Siren} title="Emergency purchases" action={<Reload onClick={st.reload} />}
+    <Frame icon={Siren} title="Emergency purchases"
+      action={<div className="flex flex-wrap gap-2">
+        <button type="button" className="cc-btn-ghost min-h-[44px]" disabled={!st.rows.length || exporting} onClick={exportRows}>
+          {exporting ? <Loader2 size={14} className="animate-spin" /> : 'Export Excel'}
+        </button>
+        <Reload onClick={st.reload} />
+      </div>}
       sub="An emergency order may be placed before approval, but it must be approved afterwards by someone other than the buyer, within the same approval limits.">
       {!st.loading && !st.notSetUp && !st.error && (
         <p className="text-xs"><Pill tone={waiting.length ? 'bad' : 'good'}>{waiting.length} waiting for approval</Pill></p>
@@ -667,7 +691,7 @@ export function EmergencyPurchasesPanel({ scope = {}, can, userId }) {
       <Msg {...msg} />
       <States st={st} empty="No emergency purchases.">
         <Table>
-          <thead><tr><Th>PO</Th><Th>Supplier</Th><Th>Status</Th><Th right>Value</Th><Th>Reason</Th><Th>Approval</Th></tr></thead>
+          <thead><tr><Th>PO</Th><Th>Supplier</Th><Th>Status</Th><Th right>Value</Th><Th>Justification</Th><Th>Approval</Th></tr></thead>
           <tbody>{st.rows.map((p) => {
             const own = userId && (p.created_by === userId || p.emergency_declared_by === userId)
             const hrs = age(p.emergency_declared_at)
@@ -676,7 +700,13 @@ export function EmergencyPurchasesPanel({ scope = {}, can, userId }) {
                 <Td mono>{p.po_number}<span className="block text-[var(--text-muted)]">{fmtDate(p.emergency_declared_at)}</span></Td>
                 <Td>{p.supplier_name || p.vendor_name || 'N/A'}</Td><Td>{p.status}</Td>
                 <Td right>{formatMoneyIn(Number(p.total_amount) > 0 ? p.total_amount : null, p.currency)}</Td>
-                <Td>{p.emergency_reason}</Td>
+                <Td>
+                  <span className="block">{categoryLabel(p.emergency_category)}{p.emergency_asset_no ? `, ${p.emergency_asset_no}` : ''}{p.emergency_job_card_no ? `, ${p.emergency_job_card_no}` : ''}</span>
+                  <span className="block text-xs text-[var(--text-muted)]">{impactText(p)}. Estimate {estimateText(p)}.</span>
+                  <button type="button" className="underline text-xs min-h-[44px]" aria-expanded={open === p.id}
+                    onClick={() => setOpen(open === p.id ? '' : p.id)}>{open === p.id ? 'Hide full justification' : 'Show full justification'}</button>
+                  {open === p.id && <div className="mt-1 max-w-[420px]"><EmergencyJustificationView po={p} compact /></div>}
+                </Td>
                 <Td>{p.emergency_approved_at ? <Pill tone="good"><CheckCircle2 size={12} aria-hidden="true" /> {p.emergency_approved_by} {fmtDate(p.emergency_approved_at)}</Pill>
                   : ['Draft', 'Submitted'].includes(p.status) ? <span className="text-xs text-[var(--text-muted)]">Use the normal approval</span>
                     : !allowed ? <Pill tone="bad">Waiting {hrs != null ? `${hrs} h` : ''}</Pill>

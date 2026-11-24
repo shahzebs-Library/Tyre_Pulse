@@ -44,6 +44,8 @@ import { createPurchaseOrderWithLines, addPurchaseOrderLines, listPurchaseOrderL
 import {
   poLinePayloads, currencyForCountry, currencyScope, scopedCountry, LINE_EDITABLE_PO_STATUSES, outstandingQty,
 } from '../lib/procurementChain'
+import { EmergencyJustificationFields, EmergencyJustificationView } from '../components/procurement/EmergencyJustification'
+import { EMPTY_EMERGENCY, validateEmergency, emergencyColumns, emergencyExportValues } from '../lib/procurement/emergencyJustification'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -92,7 +94,7 @@ const EMPTY_FORM = {
   expected_delivery: '', priority: 'Normal', site: '', country: '',
   budget_code: '', requested_by: '', approved_by: '', notes: '',
   status: 'Draft', items: [],
-  is_emergency: false, emergency_reason: '',
+  is_emergency: false, emergency: { ...EMPTY_EMERGENCY },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -189,6 +191,7 @@ export default function Procurement() {
     )
   }, [])
   const [formData, setFormData]     = useState(EMPTY_FORM)
+  const [emergencyTouched, setEmergencyTouched] = useState(false)
   const [itemRow, setItemRow]       = useState({ ...EMPTY_ITEM })
   const [taxPct, setTaxPct]         = useState(15)
   // Procurement budget - stored in the shared settings table (V62 sweep) so
@@ -339,6 +342,7 @@ export default function Procurement() {
     setEditPO(null)
     setSupplierPick(null); setMaterialPick(null); setSaveNotice('')
     setFormData({ ...EMPTY_FORM, country: scopedCountry(activeCountry) || '', order_date: new Date().toISOString().slice(0, 10) })
+    setEmergencyTouched(false)
     setItemRow({ ...EMPTY_ITEM })
     setTaxPct(15)
     setShowForm(true)
@@ -412,8 +416,11 @@ export default function Procurement() {
     const vendorName = (supplierPick?.supplier_name || formData.vendor_name || '').trim()
     if (!vendorName) { alert(t('procurement.alerts.vendorRequired')); return }
     if (formData.items.length === 0)  { alert(t('procurement.alerts.lineItemRequired')); return }
-    if (!editPO && formData.is_emergency && (formData.emergency_reason || '').trim().length < 10) {
-      alert('An emergency purchase needs a reason of at least 10 characters.'); return
+    if (!editPO && formData.is_emergency) {
+      const check = validateEmergency(formData.emergency, {
+        currency: currencyForCountry(formData.country?.trim()), supplier: vendorName, country: formData.country?.trim(),
+      })
+      if (!check.ok) { setEmergencyTouched(true); alert(`Emergency purchase: ${check.first}`); return }
     }
     setSaving(true)
     try {
@@ -442,8 +449,11 @@ export default function Procurement() {
         notes:             formData.notes?.trim() || null,
         created_by:        user?.id || null,
         // Emergency purchase (20261124130000): may be ordered before approval, approved after the fact.
-        // Only sent when ticked so a normal PO never names columns an older database lacks.
-        ...(!editPO && formData.is_emergency ? { is_emergency: true, emergency_reason: formData.emergency_reason.trim() } : {}),
+        // The structured justification is checked again by the database trigger. Only sent when ticked so a
+        // normal PO never names columns an older database lacks.
+        ...(!editPO && formData.is_emergency
+          ? emergencyColumns(formData.emergency, { currency: currencyForCountry(formData.country?.trim()) })
+          : {}),
       }
 
       // Catalogued items become real purchase_order_lines (inv_po_add_line), which
@@ -584,7 +594,8 @@ export default function Procurement() {
   // ── Excel export ───────────────────────────────────────────────────────────
   async function exportExcel() {
     const XLSX = await import('xlsx')
-    const rows = orderExportRows(filtered)
+    // every PO row carries its emergency justification (blank when it is not an emergency purchase)
+    const rows = orderExportRows(filtered).map((r, i) => ({ ...r, ...emergencyExportValues(filtered[i]) }))
     const ws = safeJsonToSheet(XLSX, rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Purchase Orders')
@@ -1003,11 +1014,16 @@ export default function Procurement() {
                       <span>Emergency purchase: may be ordered before approval. Another buyer must approve it afterwards, and it is reported until they do.</span>
                     </label>
                     {formData.is_emergency && (
-                      <div>
-                        <label htmlFor="po-emergency-reason" className="text-[var(--text-secondary)] text-xs mb-1 block">Why it cannot wait for approval</label>
-                        <input id="po-emergency-reason" className="input w-full" maxLength={300} value={formData.emergency_reason}
-                          onChange={e => setFormData(f => ({ ...f, emergency_reason: e.target.value }))} />
-                      </div>
+                      <EmergencyJustificationFields
+                        value={formData.emergency}
+                        onChange={(next) => setFormData(f => ({ ...f, emergency: next }))}
+                        currency={currencyForCountry(formData.country?.trim())}
+                        showErrors={emergencyTouched}
+                        errors={validateEmergency(formData.emergency, {
+                          currency: currencyForCountry(formData.country?.trim()),
+                          supplier: supplierPick?.supplier_name || formData.vendor_name, country: formData.country?.trim(),
+                        }).errors}
+                      />
                     )}
                   </div>
                 )}
@@ -1165,6 +1181,14 @@ export default function Procurement() {
       >
         {viewPO && (
           <>
+                {viewPO.is_emergency && (
+                  <div className="rounded-lg border border-amber-700/60 p-3 space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-amber-300">
+                      Emergency purchase{viewPO.emergency_approved_at ? `, approved after the fact by ${viewPO.emergency_approved_by || 'N/A'}` : ', waiting for after-the-fact approval'}
+                    </p>
+                    <EmergencyJustificationView po={viewPO} />
+                  </div>
+                )}
 
                 {/* Status timeline */}
                 <div>

@@ -34,7 +34,16 @@
 --      (status -> Approved) when limits exist for the company and the approver's role has none, or the PO value is
 --      above it, in another currency, or unknown (an unpriced line). No limit rows = no threshold (today).
 --      approved_by_id / approved_at are stamped from auth.uid() and are not client editable.
---   4. Emergency purchase: purchase_orders.is_emergency + emergency_reason (>= 10 chars) + declared/approved stamps.
+--      Admin screen (owner decision A, 2026-11-24): limits are set per role + currency through the EXISTING admin RPC
+--      inv_approval_limit_upsert (super admin / Admin only, checked in the database). SAR, AED and EGP are separate rows
+--      (country KSA / UAE / Egypt); "remove" = active false. When a PO has no country, a row in the PO's currency applies.
+--   4. Emergency purchase (owner decision C, 2026-11-24): purchase_orders.is_emergency + a STRUCTURED justification
+--      checked by the trigger (_po_emergency_normalise): category (breakdown / safety / production_stoppage /
+--      customer_commitment / other + note), affected asset and/or job card (resolved and checked against vehicle_fleet /
+--      work_orders in the PO's company and country by _po_emergency_link; a job card for another asset is refused),
+--      impact of waiting (downtime hours or text), why the normal route could not be used (emergency_reason, >= 30 chars),
+--      estimated value + currency (same currency as the PO, never converted), supplier, optional attachment path;
+--      requested-by is stamped server side (emergency_declared_by + emergency_requested_by_name).
 --      An emergency PO may go Draft/Submitted -> Ordered before approval (WP4 guard_po_rules patched by one anchored
 --      replacement); it is then received normally and MUST be approved after the fact with inv_po_emergency_approve
 --      (a second person, same limits). The flag cannot change after the PO leaves Draft/Submitted.
@@ -82,14 +91,37 @@
 --   B2  backorder after the return                                   -> accepted 3, rejected 3, returned 1, outstanding 7
 --   M1  invoice 4 @ 95 vs PO 90 (2% tolerance), 3 accepted net        -> qty_and_price_mismatch (variance detected)
 --   M2  invoice 3 @ 90.5 (first invoice rejected)                     -> matched
---   E0  emergency PO with a 6-character reason                       -> 22023 refused
---   E1  normal Draft PO straight to Ordered                          -> 22023 refused (WP4 rule kept)
---   E2  emergency Draft PO -> Ordered                                -> allowed, emergency_declared_by = M1
---   E3  unflag the emergency after ordering                          -> 22023 refused
---   E4  creator post-approves own emergency PO                       -> 42501 refused
---   E5  M2 post-approves                                             -> emergency_approved_by_id = M2, name stamped
+--   E0..E5 above are SUPERSEDED by the structured-justification proof below.
 --   P1  v_supplier_delivery_performance (S2)                         -> 1 order, on_time_pct null (not complete), received 6,
 --                                                                       rejected 2, reject_pct 33.33, returned 3
+--
+-- PROOF 2 (2026-11-24, structured emergency justification + purchase limit admin; live project via the CLI, ONE
+-- transaction: begin; WP4 20261124090000; this file; test block ending in RAISE EXCEPTION. Re-checked afterwards:
+-- purchase_orders 0, inventory_approval_limits 0, test grants 0, _po_emergency_link absent, guard_po_rules absent,
+-- purchase_orders emergency_* columns absent. Admin = d2d43a5f (super admin, aal2), M1 / M2 as above, Store Keeper 69faeb71.)
+--   L0  Manager M1 calls inv_approval_limit_upsert (purchase_order)   -> 42501 "Only an administrator sets approval limits."
+--   L0b Store Keeper calls it                                         -> 42501 same
+--   L1  Admin sets Manager KSA SAR 100, Manager UAE AED 2000          -> ok, 2 rows (one per currency)
+--   L1c Admin sets a Store Keeper PO limit                            -> 22023 role cannot approve purchase_order
+--   E0  emergency PO with only a reason (no category)                 -> 22023 "Choose why this is an emergency ..."
+--   E0b asset NOPE999                                                 -> 22023 "Asset NOPE999 was not found in the KSA asset register."
+--   E0c job card GCKR/JC/1324/0526 with asset TM999                    -> 22023 "Job card ... is for asset TM514, not TM999."
+--   E0d route reason under 30 characters                              -> 22023 refused
+--   E0e no downtime hours and impact text under 10 characters          -> 22023 refused
+--   E0f estimate in AED on a SAR order                                -> 22023 "Currencies are not converted."
+--   E0g no estimated value                                            -> 22023 refused
+--   E0h category other without a note                                 -> 22023 refused
+--   E1  complete justification (job card only, forged declared_by=M2,
+--       forged requester name)                                        -> accepted; asset TM514 resolved from the job card,
+--                                                                        work order id linked, declared_by = M1, name stamped
+--   E2  emergency Draft -> Ordered                                    -> Ordered
+--   E3  edit downtime hours after ordering                            -> 22023 refused
+--   E4  creator M1 post-approves                                      -> 42501 refused
+--   E5a M2 post-approves with a Manager SAR 100 limit (PO SAR 900)     -> 42501 "Order value SAR 900.00 is above your approval limit of 100."
+--   L2  Admin raises Manager KSA SAR to 5000 (same row updated)        -> ok, still 2 rows
+--   E5  M2 post-approves                                              -> ok, emergency_approved_by_id = M2, name stamped
+--   L3  Admin removes both limits (active false)                      -> 0 active rows (no threshold again)
+--   N1  normal PO sent with stray emergency fields                    -> fields cleared
 --
 -- UNDO (one transaction)
 --   drop view if exists public.v_supplier_delivery_performance, public.v_po_backorders;
@@ -99,6 +131,8 @@
 --   drop function if exists public.inv_supplier_return(jsonb), public.inv_po_emergency_approve(jsonb),
 --     public.inv_rfq_create(jsonb), public.inv_rfq_quote_record(jsonb), public.inv_rfq_award(jsonb),
 --     public.inv_rfq_cancel(jsonb), public.inv_supplier_set_approval(jsonb), public._po_limit_block(uuid);
+--   drop function if exists public._po_emergency_normalise(public.purchase_orders),
+--     public._po_emergency_clear(public.purchase_orders), public._po_emergency_link(uuid, text, text, text, uuid);
 --   drop trigger if exists trg_po_controls on public.purchase_orders; drop function if exists public.guard_po_controls();
 --   drop trigger if exists trg_grn_line_rejection on public.goods_receipt_lines; drop function if exists public.guard_grn_line_rejection();
 --   drop trigger if exists trg_guard_supplier_approval on public.suppliers; drop function if exists public.guard_supplier_approval();
@@ -112,7 +146,13 @@
 --   alter table public.purchase_orders drop column if exists approved_by_id, drop column if exists approved_at,
 --     drop column if exists is_emergency, drop column if exists emergency_reason, drop column if exists emergency_declared_by,
 --     drop column if exists emergency_declared_at, drop column if exists emergency_approved_by_id,
---     drop column if exists emergency_approved_by, drop column if exists emergency_approved_at;
+--     drop column if exists emergency_approved_by, drop column if exists emergency_approved_at,
+--     drop column if exists emergency_category, drop column if exists emergency_category_note,
+--     drop column if exists emergency_asset_no, drop column if exists emergency_work_order_id,
+--     drop column if exists emergency_job_card_no, drop column if exists emergency_downtime_hours,
+--     drop column if exists emergency_impact, drop column if exists emergency_est_value,
+--     drop column if exists emergency_est_currency, drop column if exists emergency_attachment_path,
+--     drop column if exists emergency_requested_by_name;
 --   alter table public.suppliers drop column if exists approved_for_purchasing, drop column if exists approval_note,
 --     drop column if exists approved_by_id, drop column if exists approved_at;
 -- =====================================================================================================================
@@ -485,11 +525,135 @@ alter table public.purchase_orders
   add column if not exists emergency_declared_at timestamptz,
   add column if not exists emergency_approved_by_id uuid references auth.users(id) on delete set null,
   add column if not exists emergency_approved_by text,
-  add column if not exists emergency_approved_at timestamptz;
+  add column if not exists emergency_approved_at timestamptz,
+  -- structured emergency justification (owner decision 2026-11-24): stored on the PO, checked by the trigger
+  add column if not exists emergency_category text
+    check (emergency_category is null or emergency_category in ('breakdown','safety','production_stoppage','customer_commitment','other')),
+  add column if not exists emergency_category_note text,
+  add column if not exists emergency_asset_no text,
+  add column if not exists emergency_work_order_id uuid references public.work_orders(id) on delete set null,
+  add column if not exists emergency_job_card_no text,
+  add column if not exists emergency_downtime_hours numeric check (emergency_downtime_hours is null or emergency_downtime_hours >= 0),
+  add column if not exists emergency_impact text,
+  add column if not exists emergency_est_value numeric check (emergency_est_value is null or emergency_est_value > 0),
+  add column if not exists emergency_est_currency text check (emergency_est_currency is null or emergency_est_currency ~ '^[A-Z]{3}$'),
+  add column if not exists emergency_attachment_path text,
+  add column if not exists emergency_requested_by_name text;
 comment on column public.purchase_orders.is_emergency is
   'Emergency purchase: may be ordered before approval, must then be approved after the fact (inv_po_emergency_approve).';
+comment on column public.purchase_orders.emergency_reason is
+  'Why the normal approval route could not be used (at least 30 characters).';
+comment on column public.purchase_orders.emergency_category is
+  'Emergency reason category: breakdown / safety / production_stoppage / customer_commitment / other.';
 create index if not exists purchase_orders_emergency_open_idx on public.purchase_orders (organisation_id)
   where is_emergency and emergency_approved_at is null;
+
+-- Resolve and check the affected asset / job card of an emergency purchase in the PO's company and country.
+-- Returns {ok, error, asset_no, work_order_id, job_card_no}. SECURITY DEFINER so a site-scoped buyer can still name a
+-- fleet asset; it only answers for the caller's own company and reveals nothing but "found / not found".
+create or replace function public._po_emergency_link(p_org uuid, p_country text, p_asset text, p_job_card text, p_wo uuid)
+returns jsonb language plpgsql stable security definer set search_path = public, pg_temp as $fn$
+declare v_asset text := nullif(upper(regexp_replace(btrim(coalesce(p_asset, '')), '\s+', '', 'g')), '');
+  v_jc text := nullif(btrim(coalesce(p_job_card, '')), ''); w record; v_wo_id uuid; v_wo_no text; v_country text := upper(btrim(coalesce(p_country, '')));
+begin
+  if auth.uid() is not null and p_org is distinct from public.app_current_org() and not coalesce(public.is_super_admin(), false) then
+    return jsonb_build_object('ok', false, 'error', 'This purchase order is not in your company.');
+  end if;
+  if v_country = '' then
+    return jsonb_build_object('ok', false, 'error', 'Choose the country of an emergency purchase.');
+  end if;
+  if v_asset is null and v_jc is null and p_wo is null then
+    return jsonb_build_object('ok', false, 'error', 'Name the affected asset number or job card for an emergency purchase.');
+  end if;
+  if v_jc is not null or p_wo is not null then
+    select wo.id, wo.work_order_no, upper(regexp_replace(btrim(coalesce(wo.asset_no, '')), '\s+', '', 'g')) as asset_no into w
+      from public.work_orders wo
+     where wo.organisation_id = p_org and upper(btrim(coalesce(wo.country, ''))) = v_country
+       and (wo.id = p_wo or (p_wo is null and wo.work_order_no = v_jc))
+     limit 1;
+    if not found then
+      return jsonb_build_object('ok', false, 'error', format('Job card %s was not found in %s.', coalesce(v_jc, 'given'), p_country));
+    end if;
+    if v_asset is not null and nullif(w.asset_no, '') is not null and w.asset_no <> v_asset then
+      return jsonb_build_object('ok', false, 'error', format('Job card %s is for asset %s, not %s.', w.work_order_no, w.asset_no, v_asset));
+    end if;
+    v_asset := coalesce(v_asset, nullif(w.asset_no, '')); v_wo_id := w.id; v_wo_no := w.work_order_no;
+  end if;
+  if v_asset is not null and not exists (select 1 from public.vehicle_fleet f
+       where f.organisation_id = p_org and upper(btrim(coalesce(f.country, ''))) = v_country
+         and upper(regexp_replace(btrim(coalesce(f.asset_no, '')), '\s+', '', 'g')) = v_asset) then
+    return jsonb_build_object('ok', false, 'error', format('Asset %s was not found in the %s asset register.', v_asset, p_country));
+  end if;
+  return jsonb_build_object('ok', true, 'asset_no', v_asset, 'work_order_id', v_wo_id, 'job_card_no', v_wo_no);
+end $fn$;
+revoke all on function public._po_emergency_link(uuid, text, text, text, uuid) from public, anon;
+grant execute on function public._po_emergency_link(uuid, text, text, text, uuid) to authenticated, service_role;
+
+-- Check a complete emergency justification and return the row with the resolved asset / job card and stamps.
+-- Raises 22023 with a plain-English message when anything required is missing.
+create or replace function public._po_emergency_normalise(p public.purchase_orders)
+returns public.purchase_orders language plpgsql set search_path = public, pg_temp as $fn$
+declare v jsonb; v_uid uuid := auth.uid(); v_name text;
+begin
+  if p.emergency_category is null then
+    raise exception 'Choose why this is an emergency (breakdown, safety, production stoppage, customer commitment or other).' using errcode = '22023';
+  end if;
+  if p.emergency_category = 'other' and length(btrim(coalesce(p.emergency_category_note, ''))) < 10 then
+    raise exception 'Describe the "other" emergency in at least 10 characters.' using errcode = '22023';
+  end if;
+  v := public._po_emergency_link(p.organisation_id, p.country, p.emergency_asset_no, p.emergency_job_card_no, p.emergency_work_order_id);
+  if not coalesce((v->>'ok')::boolean, false) then raise exception '%', v->>'error' using errcode = '22023'; end if;
+  p.emergency_asset_no := v->>'asset_no';
+  p.emergency_work_order_id := nullif(v->>'work_order_id', '')::uuid;
+  p.emergency_job_card_no := v->>'job_card_no';
+  if p.emergency_downtime_hours is null and length(btrim(coalesce(p.emergency_impact, ''))) < 10 then
+    raise exception 'State the impact of waiting: downtime hours, or a description of at least 10 characters.' using errcode = '22023';
+  end if;
+  if length(btrim(coalesce(p.emergency_reason, ''))) < 30 then
+    raise exception 'Explain why the normal approval route could not be used, in at least 30 characters.' using errcode = '22023';
+  end if;
+  if p.emergency_est_value is null or p.emergency_est_value <= 0 then
+    raise exception 'Enter the estimated value of the emergency purchase.' using errcode = '22023';
+  end if;
+  p.emergency_est_currency := upper(btrim(coalesce(p.emergency_est_currency, p.currency, '')));
+  if p.emergency_est_currency !~ '^[A-Z]{3}$' then
+    raise exception 'Choose the currency of the estimated value.' using errcode = '22023';
+  end if;
+  if p.currency is not null and upper(btrim(p.currency)) <> p.emergency_est_currency then
+    raise exception 'The estimated value is in % but the order is in %. Currencies are not converted.', p.emergency_est_currency, upper(p.currency) using errcode = '22023';
+  end if;
+  if p.supplier_id is null and nullif(btrim(coalesce(p.supplier_name, p.vendor_name, '')), '') is null then
+    raise exception 'Name the supplier of the emergency purchase.' using errcode = '22023';
+  end if;
+  p.emergency_reason := btrim(p.emergency_reason);
+  p.emergency_impact := nullif(btrim(coalesce(p.emergency_impact, '')), '');
+  p.emergency_category_note := nullif(btrim(coalesce(p.emergency_category_note, '')), '');
+  p.emergency_attachment_path := nullif(left(btrim(coalesce(p.emergency_attachment_path, '')), 500), '');
+  if v_uid is not null then
+    select coalesce(nullif(btrim(pr.full_name), ''), nullif(btrim(pr.username), ''), left(v_uid::text, 8)) into v_name
+      from public.profiles pr where pr.id = v_uid;
+    p.emergency_declared_by := v_uid;
+    p.emergency_requested_by_name := left(coalesce(v_name, left(v_uid::text, 8)), 100);
+  end if;
+  p.emergency_declared_at := now();
+  return p;
+end $fn$;
+revoke all on function public._po_emergency_normalise(public.purchase_orders) from public, anon;
+grant execute on function public._po_emergency_normalise(public.purchase_orders) to authenticated, service_role;
+
+-- clears every emergency field on a row that is not (or no longer) an emergency purchase
+create or replace function public._po_emergency_clear(p public.purchase_orders)
+returns public.purchase_orders language plpgsql immutable set search_path = public, pg_temp as $fn$
+begin
+  p.is_emergency := false; p.emergency_reason := null; p.emergency_declared_by := null; p.emergency_declared_at := null;
+  p.emergency_category := null; p.emergency_category_note := null; p.emergency_asset_no := null;
+  p.emergency_work_order_id := null; p.emergency_job_card_no := null; p.emergency_downtime_hours := null;
+  p.emergency_impact := null; p.emergency_est_value := null; p.emergency_est_currency := null;
+  p.emergency_attachment_path := null; p.emergency_requested_by_name := null;
+  return p;
+end $fn$;
+revoke all on function public._po_emergency_clear(public.purchase_orders) from public, anon;
+grant execute on function public._po_emergency_clear(public.purchase_orders) to authenticated, service_role;
 
 -- NULL = the signed-in approver may approve this PO; otherwise the plain-English reason.
 create or replace function public._po_limit_block(p_po uuid)
@@ -507,7 +671,8 @@ begin
   select * into l from public.inventory_approval_limits x
    where x.organisation_id = po.organisation_id and x.entity_type = 'purchase_order' and x.active
      and lower(regexp_replace(btrim(x.approver_role), '\s+', '_', 'g')) = v_role
-     and (x.country is null or upper(btrim(x.country)) = upper(btrim(coalesce(po.country, ''))))
+     and (x.country is null or upper(btrim(x.country)) = upper(btrim(coalesce(po.country, '')))
+          or (po.country is null and upper(btrim(coalesce(x.currency, ''))) = upper(btrim(coalesce(po.currency, '')))))
      and (x.site is null or upper(btrim(x.site)) = upper(btrim(coalesce(po.site, ''))))
    order by (x.site is not null) desc, (x.country is not null) desc, x.created_at limit 1;
   if not found then
@@ -546,17 +711,15 @@ grant execute on function public._po_limit_block(uuid) to authenticated, service
 create or replace function public.guard_po_controls()
 returns trigger language plpgsql set search_path = public, pg_temp as $$
 declare v_uid uuid := auth.uid(); v_post boolean := current_setting('app.inv_po_post_approval', true) = 'on'; v_block text;
+  v_changed boolean;
 begin
   if tg_op = 'INSERT' then
     new.approved_by_id := null; new.approved_at := null;
     new.emergency_approved_by_id := null; new.emergency_approved_by := null; new.emergency_approved_at := null;
     if coalesce(new.is_emergency, false) then
-      if length(btrim(coalesce(new.emergency_reason, ''))) < 10 then
-        raise exception 'An emergency purchase needs a reason of at least 10 characters.' using errcode = '22023';
-      end if;
-      new.emergency_declared_by := v_uid; new.emergency_declared_at := now();
+      new := public._po_emergency_normalise(new);                    -- refuses an incomplete justification
     else
-      new.is_emergency := false; new.emergency_reason := null; new.emergency_declared_by := null; new.emergency_declared_at := null;
+      new := public._po_emergency_clear(new);
     end if;
     return new;
   end if;
@@ -565,19 +728,30 @@ begin
     new.emergency_approved_by_id := old.emergency_approved_by_id; new.emergency_approved_by := old.emergency_approved_by;
     new.emergency_approved_at := old.emergency_approved_at;
     new.emergency_declared_by := old.emergency_declared_by; new.emergency_declared_at := old.emergency_declared_at;
+    new.emergency_requested_by_name := old.emergency_requested_by_name;
   end if;
-  if new.is_emergency is distinct from old.is_emergency or new.emergency_reason is distinct from old.emergency_reason then
+  v_changed := (new.is_emergency, new.emergency_reason, new.emergency_category, new.emergency_category_note,
+                new.emergency_asset_no, new.emergency_work_order_id, new.emergency_job_card_no, new.emergency_downtime_hours,
+                new.emergency_impact, new.emergency_est_value, new.emergency_est_currency, new.emergency_attachment_path)
+    is distinct from
+               (old.is_emergency, old.emergency_reason, old.emergency_category, old.emergency_category_note,
+                old.emergency_asset_no, old.emergency_work_order_id, old.emergency_job_card_no, old.emergency_downtime_hours,
+                old.emergency_impact, old.emergency_est_value, old.emergency_est_currency, old.emergency_attachment_path);
+  if v_changed then
     if old.status not in ('Draft', 'Submitted') then
-      raise exception 'The emergency flag and reason cannot change after the order is approved or placed.' using errcode = '22023';
+      raise exception 'The emergency flag and its justification cannot change after the order is approved or placed.' using errcode = '22023';
     end if;
     if coalesce(new.is_emergency, false) then
-      if length(btrim(coalesce(new.emergency_reason, ''))) < 10 then
-        raise exception 'An emergency purchase needs a reason of at least 10 characters.' using errcode = '22023';
-      end if;
-      new.emergency_declared_by := coalesce(v_uid, old.emergency_declared_by); new.emergency_declared_at := now();
+      new := public._po_emergency_normalise(new);
+      if v_uid is null then new.emergency_declared_by := old.emergency_declared_by; end if;
     else
-      new.is_emergency := false; new.emergency_reason := null; new.emergency_declared_by := null; new.emergency_declared_at := null;
+      new := public._po_emergency_clear(new);
     end if;
+  elsif coalesce(new.is_emergency, false) and (new.country, new.currency) is distinct from (old.country, old.currency)
+        and old.status in ('Draft', 'Submitted') then
+    new := public._po_emergency_normalise(new);                      -- the asset and currency checks depend on these
+    new.emergency_declared_by := old.emergency_declared_by; new.emergency_declared_at := old.emergency_declared_at;
+    new.emergency_requested_by_name := old.emergency_requested_by_name;
   end if;
   if v_uid is null then return new; end if;                          -- service role / cron
   if new.status is distinct from old.status then

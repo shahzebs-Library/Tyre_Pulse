@@ -12,7 +12,7 @@
     "receiving": "الاستلام والصرف", "supplier": "مخزون الموردين", "tyres": "مخزون الإطارات", "identification": "التعريف",
     "valuation": "التقييم", "planning": "التخطيط والمحاكاة", "kpis": "مؤشرات المخزون", "classification": "تصنيف المخزون", "reports": "التقارير", "physical": "الجرد الفعلي"
   },
-  "warehouse": {"floor": {"putaway": "التخزين", "picking": "التجهيز", "handover": "التسليم للورشة", "jobmaterials": "مواد بطاقة العمل", "assetcost": "تكلفة المواد لكل أصل"}, "custody": {"tools": "عهدة العدد", "repairables": "القطع القابلة للإصلاح", "warranty": "الضمان والإتلاف", "lubricants": "الزيوت"}, "purchasing": {"quotations": "عروض الأسعار", "backorders": "الطلبات المتأخرة", "returns": "المرتجعات للموردين", "approved": "الموردون المعتمدون", "performance": "أداء الموردين", "emergency": "مشتريات طارئة", "invoicematch": "مطابقة الفواتير"}, "matching": {"links": "ربط الأصناف", "oemparts": "قطع الشركة المصنعة المعتمدة"}},
+  "warehouse": {"floor": {"putaway": "التخزين", "picking": "التجهيز", "handover": "التسليم للورشة", "jobmaterials": "مواد بطاقة العمل", "assetcost": "تكلفة المواد لكل أصل"}, "custody": {"tools": "عهدة العدد", "repairables": "القطع القابلة للإصلاح", "warranty": "الضمان والإتلاف", "lubricants": "الزيوت"}, "purchasing": {"quotations": "عروض الأسعار", "backorders": "الطلبات المتأخرة", "returns": "المرتجعات للموردين", "approved": "الموردون المعتمدون", "performance": "أداء الموردين", "emergency": "مشتريات طارئة", "invoicematch": "مطابقة الفواتير", "limits": "حدود الاعتماد"}, "matching": {"links": "ربط الأصناف", "oemparts": "قطع الشركة المصنعة المعتمدة"}},
   "scope": {
     "country": "الدولة", "allCountries": "كل الدول", "countryHint": "غيّر الدولة من سياق العمل أعلى التطبيق.",
     "site": "الموقع", "allSites": "كل المواقع"

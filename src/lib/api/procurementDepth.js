@@ -112,7 +112,10 @@ export function listBackorders({ country, site, onlyOpen = true } = {}) {
 export function listEmergencyPurchases({ country, site } = {}) {
   let q = supabase.from('purchase_orders')
     .select('id,po_number,supplier_name,vendor_name,country,site,status,currency,total_amount,order_date,created_by,' +
-      'is_emergency,emergency_reason,emergency_declared_by,emergency_declared_at,emergency_approved_by,emergency_approved_at')
+      'is_emergency,emergency_reason,emergency_declared_by,emergency_declared_at,emergency_approved_by,emergency_approved_at,' +
+      'emergency_category,emergency_category_note,emergency_asset_no,emergency_job_card_no,emergency_work_order_id,' +
+      'emergency_downtime_hours,emergency_impact,emergency_est_value,emergency_est_currency,emergency_attachment_path,' +
+      'emergency_requested_by_name')
     .eq('is_emergency', true)
   q = withSite(applyCountry(q, country), site)
   return read(q.order('emergency_declared_at', { ascending: false }).order('id').limit(200), 'emergency purchases')
@@ -120,6 +123,36 @@ export function listEmergencyPurchases({ country, site } = {}) {
 
 export function approveEmergencyPurchase(poId, key) {
   return rpc('inv_po_emergency_approve', { po_id: poId }, key)
+}
+
+// ── Purchase order approval limits (admin) ──────────────────────────────────
+// Rows of inventory_approval_limits with entity_type 'purchase_order'. Writes
+// go through inv_approval_limit_upsert, which refuses anyone but a super admin
+// or Admin in the database. Removing a limit sets active = false.
+
+export function listPurchaseApprovalLimits() {
+  return read(supabase.from('inventory_approval_limits')
+    .select('id,approver_role,country,site,currency,max_value,active,updated_at,created_at')
+    .eq('entity_type', 'purchase_order')
+    .order('approver_role').order('id').limit(500), 'purchase approval limits')
+}
+
+/** Roles the database accepts for a purchase order limit (inv_approver_roles). */
+export async function listPurchaseApproverRoles() {
+  const { data, error } = await supabase.rpc('inv_approver_roles', { p_entity_type: 'purchase_order' })
+  if (error) {
+    if (isNotProvisioned(error)) return { status: 'not_provisioned', rows: [] }
+    throw toServiceError(error, 'Could not load the approver roles.')
+  }
+  return { status: 'ok', rows: Array.isArray(data) ? data : [] }
+}
+
+/** payload from purchaseLimits.limitPayload(). */
+export function savePurchaseApprovalLimit(payload, key) {
+  if (!payload?.approver_role || !payload?.currency) {
+    return Promise.reject(new ServiceError('Choose a role and a currency.', 'PROC_LIMIT_INCOMPLETE'))
+  }
+  return rpc('inv_approval_limit_upsert', { ...payload, entity_type: 'purchase_order' }, key)
 }
 
 // ── Supplier returns ────────────────────────────────────────────────────────

@@ -672,11 +672,14 @@ export function EmergencyPurchasesPanel({ scope = {}, can, userId }) {
   // lost response replays the same approval instead of posting a second one.
   const [approveKeys] = useState(() => new Map())
   const keyFor = (id) => { if (!approveKeys.has(id)) approveKeys.set(id, newIdempotencyKey()); return approveKeys.get(id) }
+  // Overrun reason per PO; a changed reason is a new request, so it gets a new key.
+  const [reasons, setReasons] = useState({})
+  const setReason = (id, v) => { setReasons((r) => ({ ...r, [id]: v })); approveKeys.delete(id) }
   const allowed = canDo(can, 'procure')
   const waiting = st.rows.filter((r) => !r.emergency_approved_at)
   const approve = async (po) => {
     setBusy(po.id); setMsg({})
-    try { await approveEmergencyPurchase(po.id, keyFor(po.id)); setMsg({ ok: `${po.po_number} approved after the fact.` }); st.reload() }
+    try { await approveEmergencyPurchase(po.id, keyFor(po.id), reasons[po.id]); setMsg({ ok: `${po.po_number} approved after the fact.` }); st.reload() }
     catch (e) { setMsg({ error: toUserMessage(e, 'Could not approve.') }) } finally { setBusy('') }
   }
   const age = (d) => (d ? Math.max(0, Math.round((Date.now() - new Date(d).getTime()) / 3600000)) : null)
@@ -731,7 +734,12 @@ export function EmergencyPurchasesPanel({ scope = {}, can, userId }) {
                   : ['Draft', 'Submitted'].includes(p.status) ? <span className="text-xs text-[var(--text-muted)]">Use the normal approval</span>
                     : !allowed ? <Pill tone="bad">Waiting {hrs != null ? `${hrs} h` : ''}</Pill>
                       : own ? <span className="text-xs text-[var(--text-muted)]">Waiting {hrs != null ? `${hrs} h` : ''}; another buyer approves</span>
-                        : <button type="button" className="cc-btn min-h-[44px]" disabled={busy === p.id} onClick={() => approve(p)}>{busy === p.id ? <Loader2 size={14} className="animate-spin" /> : 'Approve now'}</button>}</Td>
+                        : <div className="flex flex-col gap-1 min-w-[200px]">
+                          <label className="text-xs text-[var(--text-muted)]" htmlFor={`overrun-${p.id}`}>Reason if more than 10% over the estimate</label>
+                          <textarea id={`overrun-${p.id}`} rows={2} maxLength={1000} className="cc-input text-sm"
+                            value={reasons[p.id] || ''} onChange={(e) => setReason(p.id, e.target.value)} />
+                          <button type="button" className="cc-btn min-h-[44px]" disabled={busy === p.id} onClick={() => approve(p)}>{busy === p.id ? <Loader2 size={14} className="animate-spin" /> : 'Approve now'}</button>
+                        </div>}</Td>
               </tr>
             )
           })}</tbody>

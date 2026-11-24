@@ -149,8 +149,11 @@ export function listEmergencyPurchases({ country, site } = {}) {
   return read(q.order('emergency_declared_at', { ascending: false }).order('id').limit(200), 'emergency purchases')
 }
 
-export function approveEmergencyPurchase(poId, key) {
-  return rpc('inv_po_emergency_approve', { po_id: poId }, key)
+// `overrunReason` is required by the database when the PO lines exceed the
+// emergency estimate by more than 10% (or are unpriced / mixed currency).
+export function approveEmergencyPurchase(poId, key, overrunReason) {
+  const reason = String(overrunReason ?? '').trim()
+  return rpc('inv_po_emergency_approve', reason ? { po_id: poId, overrun_reason: reason } : { po_id: poId }, key)
 }
 
 // ── Purchase order approval limits (admin) ──────────────────────────────────

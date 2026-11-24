@@ -45,7 +45,7 @@ function isBackendMissing(err) {
   return isNotProvisioned(err) || m.includes('does not exist') || m.includes('could not find') || m.includes('schema cache') || m === '42p01' || m === 'pgrst202'
 }
 
-const COLS = 'id, name, token, pages, layout, rotate_seconds, refresh_seconds, active, expires_at, created_at, last_viewed_at, view_count'
+const COLS = 'id, name, token, pages, layout, rotate_seconds, refresh_seconds, active, expires_at, created_at, last_viewed_at, view_count, allowed_country, allowed_site'
 
 /** List this org's report shares (elevated RLS). [] when not provisioned. */
 export async function listReportShares() {
@@ -60,13 +60,15 @@ export async function listReportShares() {
  * @param {{name:string, pages?:string[], rotate?:number, refresh?:number, password?:string, expires?:string}} o
  */
 export async function createReportShare(o = {}) {
-  const { data, error } = await supabase.rpc('create_report_share', {
+  const { data, error } = await supabase.rpc('create_report_share_scoped', {
     p_name: o.name || 'Shared report',
     p_pages: (o.pages && o.pages.length) ? o.pages : DEFAULT_PAGES,
     p_rotate: o.rotate ?? 30,
     p_refresh: o.refresh ?? 300,
     p_password: o.password || null,
     p_expires: o.expires || null,
+    p_allowed_country: o.allowedCountry || null,
+    p_allowed_site: o.allowedSite || null,
   })
   if (error) throw toServiceError(error)
   return data

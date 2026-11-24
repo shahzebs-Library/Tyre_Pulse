@@ -464,7 +464,9 @@ export default function ReportSharing() {
                 <dl className="rs-dl">
                   <div><dt>Audience</dt><dd>Anyone with the link <span className="cc-pill info">External</span></dd></div>
                   <div><dt>Access</dt><dd><Eye size={13} aria-hidden="true" /> View only<small>The board is read only.</small></dd></div>
-                  <div><dt>Sharing mode</dt><dd><ChannelCell row={selected} /><small>No login required</small></dd></div>
+                  <div><dt>Sharing mode</dt><dd><ChannelCell row={selected} /><small>Token access; password may be required</small></dd></div>
+                  <div><dt>Allowed country</dt><dd>{selected.allowed_country || 'All countries (legacy/unrestricted)'}</dd></div>
+                  <div><dt>Allowed site</dt><dd>{selected.allowed_site || 'All sites within allowed country'}</dd></div>
                   <div><dt>Link URL</dt><dd className="rs-url">{shareUrl ? <a href={safeHref(shareUrl)} target="_blank" rel="noopener noreferrer">{shareUrl}</a> : <span className="cc-na">Not available</span>}</dd></div>
                   <div><dt>Status</dt><dd><StatusPill status={selected.status} /></dd></div>
                   <div><dt>Created by</dt><dd className="rs-muted">Not shown on this page</dd></div>
@@ -498,7 +500,7 @@ export default function ReportSharing() {
                     <li><Info size={14} className="rs-muted" aria-hidden="true" /><span>Password protection</span><b className="rs-muted">Set at creation, not shown</b></li>
                     <li><input type="checkbox" className="rs-check" checked={false} readOnly disabled aria-label="IP restriction" /><span>IP restriction</span><b className="rs-muted">Not supported</b></li>
                     <li><input type="checkbox" className="rs-check" checked={false} readOnly disabled aria-label="Watermark reports" /><span>Watermark reports</span><b className="rs-muted">Not supported</b></li>
-                    <li><input type="checkbox" className="rs-check" checked readOnly disabled aria-label="Disable download" /><span>Disable download</span><b className="rs-muted">Boards have no download</b></li>
+                    <li><input type="checkbox" className="rs-check" checked readOnly disabled aria-label="Disable download" /><span>Disable download</span><b className="rs-muted">No server-side download restriction; browser export or screenshots may be possible</b></li>
                   </ul>
                   <p className="rs-note"><Info size={12} aria-hidden="true" /> To change the password or expiry, revoke this link and create a new one.</p>
                 </div>

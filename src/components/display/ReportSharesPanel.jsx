@@ -45,6 +45,8 @@ const EMPTY_FORM = {
   refreshMinutes: 5,
   password: '',
   expires: '',
+  allowedCountry: '',
+  allowedSite: '',
 }
 
 function clamp(n, lo, hi, fallback) {
@@ -146,6 +148,8 @@ export default function ReportSharesPanel() {
       refreshMinutes: Math.round((row.refresh_seconds ?? 300) / 60) || 5,
       password: '',
       expires: '',
+      allowedCountry: row.allowed_country || '',
+      allowedSite: row.allowed_site || '',
     })
     setShowForm(true)
     setMsg(null); setCreated(null)
@@ -165,6 +169,8 @@ export default function ReportSharesPanel() {
     const name = form.name.trim()
     if (!name) { setMsg({ type: 'err', text: 'A report link name is required.' }); return }
     if (form.pages.length === 0) { setMsg({ type: 'err', text: 'Select at least one report page.' }); return }
+    if (!editingId && form.allowedSite.trim() && !form.allowedCountry.trim()) { setMsg({ type: 'err', text: 'A site restriction also needs a country.' }); return }
+    if (!editingId && !form.allowedCountry.trim() && !form.password.trim()) { setMsg({ type: 'err', text: 'A report across all countries must have a password.' }); return }
 
     setCreating(true); setMsg(null); setCreated(null)
     try {
@@ -187,6 +193,8 @@ export default function ReportSharesPanel() {
         refresh,
         password: form.password.trim() || null,
         expires: endOfDayIso(form.expires),
+        allowedCountry: form.allowedCountry.trim() || null,
+        allowedSite: form.allowedSite.trim() || null,
       })
       if (res?.token) {
         setCreated({ url: buildShareUrl(res.token) })
@@ -338,6 +346,11 @@ export default function ReportSharesPanel() {
             )}
           </div>
 
+          {!editingId && <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1">Allowed country</label><input value={form.allowedCountry} onChange={(e) => setF("allowedCountry", e.target.value)} placeholder="KSA, UAE or Egypt" className="w-full text-sm px-2.5 py-2 rounded-md bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-primary)]" /></div>
+            <div><label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1">Allowed site (optional)</label><input value={form.allowedSite} onChange={(e) => setF("allowedSite", e.target.value)} placeholder="Exact site name" className="w-full text-sm px-2.5 py-2 rounded-md bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-primary)]" /></div>
+            <p className="col-span-2 text-[11px] text-[var(--text-muted)]">The server enforces this scope. All-country links require a password. New links expire after 30 days unless a date is set.</p>
+          </div>}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1 flex items-center gap-1">
@@ -369,7 +382,7 @@ export default function ReportSharesPanel() {
                 <label className="text-xs font-semibold text-[var(--text-secondary)] block mb-1 flex items-center gap-1">
                   <Lock size={11} /> Password <span className="text-[var(--text-muted)] font-normal">(optional)</span>
                 </label>
-                <input type="text" value={form.password} onChange={(e) => setF('password', e.target.value)} placeholder="None"
+                <input type="password" autoComplete="new-password" value={form.password} onChange={(e) => setF('password', e.target.value)} placeholder="None"
                   className="w-full text-sm px-2.5 py-2 rounded-md bg-[var(--card-bg)] border border-[var(--input-border)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]" />
                 <p className="text-[10px] text-[var(--text-muted)] mt-1">Leave blank for no password.</p>
               </div>

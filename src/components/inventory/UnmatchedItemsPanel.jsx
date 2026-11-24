@@ -5,18 +5,23 @@
  *   - a line with no code: catalogue items of the same tyre size, ranked by
  *     brand. These are suggestions only and are never applied automatically.
  *
- * Confirming a link needs a server writer that sets the stock line's item and
- * records who confirmed it. None exists yet (stock lines cannot be written
- * directly), so the confirm step is shown as not yet available and the exact
- * database change is written up in docs/warehouse/07_UNMATCHED_LINK_DB_CHANGES.md.
+ * Linking is two-person (migration 20261124132000, inv_material_link_propose /
+ * inv_material_link_decide): one person proposes the item for the line, a
+ * SECOND person approves. The database refuses the proposer, a different
+ * country, a line that changed since, and stamps who approved. A suggestion
+ * needs a note in the proposer's own words. Until the migration is applied the
+ * buttons report "not set up" and the proposals can still be exported.
  */
 import { useMemo, useState } from 'react'
-import { Link2, Link2Off, Search, FlaskConical, Download, RefreshCw, CheckCircle2, Lock } from 'lucide-react'
+import { Link2, Link2Off, Search, FlaskConical, Download, RefreshCw, CheckCircle2, Send, Check, X, Undo2 } from 'lucide-react'
 import { KitTable, Kpi } from '../commandCenter/kit'
 import { loadUnmatchedReview } from '../../lib/api/stockReconcile'
 import { UNMATCHED_KINDS, unmatchedExportRows } from '../../lib/inventory/stockReconcile'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { useInvQuery, ErrorNote, NotSetUp, Note, StatusPill, SectionCard, alignNumeric, fmtDateTime } from './InvUi'
+import { proposeStockLink, decideLink, loadStockLinkProposals } from '../../lib/api/materialLinks'
+import { newIdempotencyKey } from '../../lib/api/inventory'
+import { toUserMessage } from '../../lib/inventory/errorText'
 
 const KIND_TONE = { code_exact: 'good', code_ambiguous: 'warning', code_missing: 'bad', no_code_suggest: 'info', no_code_none: 'muted' }
 const SOURCE_LABEL = { material_master: 'ERP item (Material Master)', material_canonical: 'Catalogue item' }
@@ -28,8 +33,58 @@ const FILTERS = [
   { key: 'all', label: 'All' },
 ]
 
-function Candidates({ row, canLink }) {
+function Candidates({ row, canPropose, canDecide, userId, proposals, onDone }) {
+  const [busy, setBusy] = useState(null)
+  const [error, setError] = useState(null)
+  const [note, setNote] = useState('')
+  const [rejectNote, setRejectNote] = useState('')
   const list = row.candidates || []
+  const exact = row.kind === 'code_exact'
+  const open = (proposals || []).find((p) => p.status === 'proposed') || null
+  const last = (proposals || []).find((p) => p.status !== 'proposed') || null
+
+  const act = async (key, fn) => {
+    setBusy(key); setError(null)
+    try { await fn(newIdempotencyKey()); setNote(''); setRejectNote(''); onDone() } catch (err) { setError(toUserMessage(err)) } finally { setBusy(null) }
+  }
+
+  if (open) {
+    const own = userId && open.proposed_by === userId
+    const item = list.find((c) => (c.item_id || c.id) === open.item_id)
+    return (
+      <div>
+        <Note tone="warn" title="A link is awaiting approval">
+          {`Proposed item: ${item ? `${item.code || item.item_code} ${item.name || item.item_name || ''}` : open.item_id}. Basis: ${open.basis === 'exact_code' ? 'same item code' : 'confirmed suggestion'}.`}
+          {open.note ? ` Note: ${open.note}` : ''}
+        </Note>
+        {error && <ErrorNote error={error} />}
+        <div className="inv-actions">
+          {own ? (
+            <>
+              <span className="cc-card-sub">Another person must approve it.</span>
+              <button type="button" className="cc-btn-ghost" disabled={!!busy}
+                onClick={() => act('w', (k) => decideLink({ id: open.id, decision: 'withdraw' }, k))}>
+                <Undo2 size={13} aria-hidden="true" /> Withdraw
+              </button>
+            </>
+          ) : canDecide ? (
+            <>
+              <button type="button" className="inv-btn-accent" disabled={!!busy}
+                onClick={() => act('a', (k) => decideLink({ id: open.id, decision: 'approve' }, k))}>
+                <Check size={13} aria-hidden="true" /> Approve link
+              </button>
+              <input className="inv-input" value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder="Reason to reject" aria-label="Reason to reject" />
+              <button type="button" className="inv-btn-outline" disabled={!!busy || !rejectNote.trim()}
+                onClick={() => act('r', (k) => decideLink({ id: open.id, decision: 'reject', note: rejectNote }, k))}>
+                <X size={13} aria-hidden="true" /> Reject
+              </button>
+            </>
+          ) : <span className="cc-card-sub">Needs an approver with the master-data right.</span>}
+        </div>
+      </div>
+    )
+  }
+
   if (!list.length) {
     return (
       <Note tone="warn">
@@ -39,9 +94,16 @@ function Candidates({ row, canLink }) {
       </Note>
     )
   }
-  const exact = row.kind === 'code_exact'
   return (
     <div className="inv-scroll">
+      {last && <Note tone={last.status === 'rejected' ? 'warn' : 'info'}>{`The last proposal was ${last.status}${last.decision_note ? `: ${last.decision_note}` : '.'}`}</Note>}
+      {error && <ErrorNote error={error} />}
+      {!exact && canPropose && (
+        <label className="cc-field" style={{ maxWidth: 420 }}>
+          <span>Why is this the right item? (needed for a suggestion)</span>
+          <input className="inv-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="For example: brand and size checked on the shelf" />
+        </label>
+      )}
       <KitTable compact rows={list} columns={alignNumeric([
         { key: 'code', header: 'Code', cell: (c) => c.code || c.item_code || <span className="cc-na">N/A</span> },
         { key: 'name', header: 'Name', cell: (c) => c.name || c.item_name || <span className="cc-na">N/A</span> },
@@ -50,26 +112,33 @@ function Candidates({ row, canLink }) {
           ? <StatusPill value="yes" tone="good" label="Linked" />
           : c.linked === false ? <StatusPill value="no" tone="warning" label="Not linked" /> : <span className="cc-na">N/A</span>) },
         { key: 'reasons', header: exact ? 'Basis' : 'Why suggested', cell: (c) => (c.reasons || []).join('. ') },
-        { key: 'confirm', header: '', cell: () => (
-          <button type="button" className="cc-btn-ghost" disabled
-            title={canLink
-              ? 'Linking needs a database change that is not installed yet.'
-              : 'You do not have permission to link stock items.'}>
-            <Lock size={13} aria-hidden="true" /> Confirm link
-          </button>
-        ) },
+        { key: 'confirm', header: '', cell: (c) => {
+          if (c.source === 'material_canonical') {
+            return <span className="cc-card-sub">Catalogue only. Link it to an ERP item first.</span>
+          }
+          const key = c.id || c.item_id
+          return (
+            <button type="button" className="inv-btn-outline" disabled={!canPropose || !!busy || (!exact && !note.trim())}
+              title={!canPropose ? 'You do not have permission to propose links.' : (!exact && !note.trim()) ? 'Write why this item is right first.' : undefined}
+              onClick={() => act(key, (k) => proposeStockLink(row, c, note, k))}>
+              <Send size={13} aria-hidden="true" /> Propose link
+            </button>
+          )
+        } },
       ])} />
-      {!exact && (
-        <p className="cc-muted" style={{ margin: '6px 0 0' }}>
-          Suggestions only. They are ranked by tyre size and brand and are never applied automatically.
-        </p>
-      )}
+      <p className="cc-muted" style={{ margin: '6px 0 0' }}>
+        {exact
+          ? 'The server checks the code again. A second person approves before the line is linked.'
+          : 'Suggestions only. They are ranked by tyre size and brand and are never applied automatically. A second person approves.'}
+      </p>
     </div>
   )
 }
 
-export default function UnmatchedItemsPanel({ scope, can }) {
+export default function UnmatchedItemsPanel({ scope, can, userId }) {
   const q = useInvQuery(() => loadUnmatchedReview(scope), [scope?.country, scope?.site])
+  const ids = (q.data?.rows || []).map((r) => r.id).join(',')
+  const pq = useInvQuery(() => (ids ? loadStockLinkProposals(ids.split(',')) : Promise.resolve([])), [ids])
   const [filter, setFilter] = useState('real')
   const [openId, setOpenId] = useState(null)
   const [exporting, setExporting] = useState(false)
@@ -77,7 +146,9 @@ export default function UnmatchedItemsPanel({ scope, can }) {
   const canExport = typeof can === 'function' ? can('export') : false
   // Linking an item is a master-data decision: the same right that approves
   // engineering / adjustment changes (mirrors _inv_pi_can_master server-side).
-  const canLink = typeof can === 'function' ? (can('adjustment_approve') || can('discrepancy_review')) : false
+  const canDecide = typeof can === 'function' ? (can('engineering_approve') || can('adjustment_approve') || can('discrepancy_review')) : false
+  // Proposing is open to stock users; the server decides (procure / engineering / elevated).
+  const canPropose = typeof can === 'function' ? (can('view') || canDecide) : false
 
   const rows = useMemo(() => {
     const all = q.data?.rows || []
@@ -132,9 +203,9 @@ export default function UnmatchedItemsPanel({ scope, can }) {
         Lines with a code are matched exactly. Lines without a code get suggestions by tyre size and brand that a
         person must confirm; nothing is linked automatically.
       </Note>
-      <Note tone="warn" icon={Lock} title="Confirming a link is not available yet">
-        Stock lines can only be changed by an approved server action, and none exists yet that links a stock line to
-        an item. The proposals below can be reviewed and exported now; the confirm step waits for that database change.
+      <Note title="Two people link a line">
+        One person proposes the item for a stock line; a second person approves it. Nothing is linked automatically.
+        Demo lines are test data and should not be linked.
       </Note>
       {q.data?.truncated && <Note tone="warn">Not every line was read. Narrow the country or site to see the rest.</Note>}
       <div className="inv-kpis">
@@ -177,7 +248,11 @@ export default function UnmatchedItemsPanel({ scope, can }) {
       {open && (
         <SectionCard title={`Proposals for ${open.description || 'this line'}`}
           sub={`${open.site || 'No site'}, ${open.country || 'no country'}. On hand ${formatQty(open.qty_on_hand)}.${open.brands?.length ? ` Brand read from the line: ${open.brands.join(', ')}.` : ''}`}>
-          <Candidates row={open} canLink={canLink} />
+          <Candidates key={open.id} row={open} canPropose={canPropose} canDecide={canDecide} userId={userId}
+            proposals={(pq.data || []).filter((p) => p.stock_id === open.id)}
+            onDone={() => { q.retry(); pq.retry() }} />
+          {pq.error && <ErrorNote error={pq.error} onRetry={pq.retry} />}
+          {!pq.loading && !pq.error && pq.data === null && <Note tone="warn">Linking is not set up yet in the database. The proposals can be reviewed and exported.</Note>}
         </SectionCard>
       )}
     </div>

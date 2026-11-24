@@ -187,17 +187,38 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
 }
 
 /**
- * Stock from the EXISTING internal parts catalog, matched only on an identical part number.
- * That is a lead, not a verified OEM-to-item link (no crosswalk exists yet), and the UI says so.
- * Reservations are not tracked by parts_catalog, so no reserved quantity is returned.
+ * Stock for OEM part numbers through APPROVED OEM links only
+ * (oem_part_references.status = 'approved', decided by a second person) to the
+ * ERP item, then the posted balances (v_inv_balances) summed across the stores
+ * the user can see. An identical number alone is never treated as a link. A
+ * part number with no approved link returns nothing ("not linked to stock").
+ * Read errors return {} so the basket still opens; nothing is invented.
  */
 export async function lookupStockByPartNumbers(partNos) {
-  const list = [...new Set(partNos.filter(Boolean))].slice(0, 200)
-  if (!list.length) return {}
-  const { data, error } = await supabase.from('parts_catalog').select('part_no,name,on_hand_qty,uom').in('part_no', list)
-  if (error) return {}
+  const keys = [...new Set(partNos.filter(Boolean).map(normalizePartNumberKey).filter(Boolean))].slice(0, 200)
+  if (!keys.length) return {}
+  const { data: refs, error } = await supabase.from('oem_part_references')
+    .select('oem_part_no,oem_part_no_normalized,item_id').eq('status', 'approved').in('oem_part_no_normalized', keys).limit(1000)
+  if (error || !refs?.length) return {}
+  const itemIds = [...new Set(refs.map((r) => r.item_id).filter(Boolean))].slice(0, 200)
+  const [{ data: items }, { data: bal }] = await Promise.all([
+    supabase.from('material_master').select('id,item_code,item_name').in('id', itemIds).limit(1000),
+    supabase.from('v_inv_balances').select('item_id,qty_on_hand,qty_reserved,uom').in('item_id', itemIds).limit(1000),
+  ])
+  const itemById = new Map((items || []).map((i) => [i.id, i]))
   const out = {}
-  for (const r of data || []) out[normalizePartNumberKey(r.part_no)] = { part_no: r.part_no, name: r.name, on_hand_qty: r.on_hand_qty, uom: r.uom }
+  for (const r of refs) {
+    const k = normalizePartNumberKey(r.oem_part_no_normalized || r.oem_part_no)
+    const prev = out[k] || { part_no: r.oem_part_no, name: null, on_hand_qty: 0, reserved_qty: 0, uom: null, linked: true }
+    const it = itemById.get(r.item_id)
+    if (it && !prev.name) prev.name = [it.item_code, it.item_name].filter(Boolean).join(' ')
+    for (const b of (bal || []).filter((x) => x.item_id === r.item_id)) {
+      prev.on_hand_qty += Number(b.qty_on_hand) || 0
+      prev.reserved_qty += Number(b.qty_reserved) || 0
+      prev.uom = prev.uom || b.uom || null
+    }
+    out[k] = prev
+  }
   return out
 }
 const normalizePartNumberKey = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '')

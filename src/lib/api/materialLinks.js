@@ -57,7 +57,10 @@ export async function loadLinkCandidates({ country, page = 0, pageSize = CANDIDA
     p_limit: pageSize,
     p_offset: page * pageSize,
   })
-  if (error) throw readFailure(error, 'the link review queue')
+  if (error) {
+    if (isNotProvisioned(error)) return { status: 'not_provisioned', rows: [], total: 0 }
+    throw readFailure(error, 'the link review queue')
+  }
   const rows = data || []
   return { status: 'ok', rows, total: rows.length ? Number(rows[0].total_count) : 0 }
 }
@@ -65,7 +68,10 @@ export async function loadLinkCandidates({ country, page = 0, pageSize = CANDIDA
 /** Duplicate / cross-country checks and the unlinked counts. */
 export async function loadLinkHealth() {
   const { data, error } = await supabase.rpc('inv_material_link_health')
-  if (error) throw readFailure(error, 'the link health check')
+  if (error) {
+    if (isNotProvisioned(error)) return { status: 'not_provisioned', health: {} }
+    throw readFailure(error, 'the link health check')
+  }
   return { status: 'ok', health: data || {} }
 }
 

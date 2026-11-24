@@ -107,6 +107,18 @@ describe('reads use the web-named views', () => {
     expect(state.calls.filter((c) => c[0] === 'order').map((c) => c[2])).toEqual(['requested_at', 'id'])
     expect(state.calls).toContainEqual(['eq', 'entity_type', 'stock_adjustment'])
     state.calls = []
+    // One page and its total from one server pass when the function is installed.
+    state.rpc = { data: { total: 3, rows: [{ item_code: 'TY-1' }] }, error: null }
+    const viaRpc = await listErpReconciliation({ country: 'KSA', site: 'all', status: 'differences', search: 'TY-1', page: 2, pageSize: 10 })
+    expect(viaRpc).toEqual({ status: 'ok', rows: [{ item_code: 'TY-1' }], total: 3 })
+    expect(lastRpc()).toEqual(['rpc', 'inv_erp_reconciliation_page', {
+      p_country: 'KSA', p_site: null, p_status: 'differences', p_month: null, p_month_from: null,
+      p_item_like: '%TY-1%', p_offset: 20, p_limit: 10,
+    }])
+    expect(selects()).toEqual([])
+    // Not installed yet: the view read, same filters and total order as before.
+    state.calls = []
+    state.rpc = { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }
     await listErpReconciliation({ status: 'differences', search: 'TY-1' })
     expect(selects()).toEqual(['v_inv_erp_reconciliation'])
     expect(state.calls.filter((c) => c[0] === 'order').map((c) => c[2])).toEqual(['month', 'country', 'site', 'item_code', 'currency'])

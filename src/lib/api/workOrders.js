@@ -114,6 +114,10 @@ function updatedRow(result) {
  * @param {{country?:string, from:number, to:number, openedFrom?:string, openedTo?:string}} opts
  */
 // Raw status spellings that always mean closed (mirror of workOrderStatus.js).
+// The partial index work_orders_open_opened_idx (migration 20261124135000) is
+// written with EXACTLY this list in this order; the planner only uses it when the
+// query's filter matches. Change the list and the index together, or the open
+// job card list goes back to walking every closed card (7.6 s measured).
 const CLOSED_STATUS_TOKENS = ['closed', 'completed', 'complete', 'done', 'finished', 'cancelled', 'canceled', 'void', 'voided']
 
 export function listWorkOrdersPage({ country, countries, from, to, openedFrom, openedTo, lean = false, openOnly = false } = {}) {

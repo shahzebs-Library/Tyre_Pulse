@@ -21,7 +21,7 @@
 import { supabase, fetchAllPages, applyCountry, toServiceError, isNotProvisioned, isMissingColumn, ServiceError } from './_client'
 import { listAllEquipment } from './equipment'
 import { createWarrantyClaim } from './warranty'
-import { loadValuation, listLocations, inventoryRefusalText, NOT_SET_UP_MESSAGE, NOT_SET_UP_CODE } from './inventory'
+import { loadValuation, listLocations, inventoryRefusalText, NOT_SET_UP_MESSAGE, NOT_SET_UP_CODE, loadErpReconciliationRpcRows } from './inventory'
 import { STOCK_WARRANTY_SOURCE, stockWarrantyDraft } from '../inventory/warehouseAssets'
 
 export const CUSTODY_TABLE = 'equipment_custody'
@@ -33,9 +33,9 @@ export const CLAIM_MAX = 2000
 const applySite = (q, site) => (site && site !== 'all' ? q.eq('site', site) : q)
 
 /** Run a bounded paged read; a missing relation answers not_provisioned. */
-async function bounded(pageFn, max) {
+async function bounded(pageFn, max, concurrency) {
   try {
-    const { data, error, truncated } = await fetchAllPages(pageFn, { max })
+    const { data, error, truncated } = await fetchAllPages(pageFn, concurrency ? { max, concurrency } : { max })
     if (error) {
       if (isNotProvisioned(error)) return { status: 'not_provisioned', rows: [], truncated: false }
       throw toServiceError(error)
@@ -133,8 +133,18 @@ export function listScrapMovements({ country, site } = {}) {
 
 const ERP_COLS = 'country, site, month, item_code, currency, inventory_qty, inventory_value, inventory_unvalued_qty, inventory_movements, erp_qty, erp_value, erp_lines'
 
-/** v_inv_erp_reconciliation rows from `fromMonth` (YYYY-MM-01). The view has no id. */
-export function loadErpIssueRows({ country, site, fromMonth } = {}) {
+/**
+ * v_inv_erp_reconciliation rows from `fromMonth` (YYYY-MM-01). Read through the
+ * one-pass server function when it is installed (sequential pages); the view
+ * read below is the fallback. The view has no id.
+ */
+export async function loadErpIssueRows({ country, site, fromMonth } = {}) {
+  try {
+    const viaRpc = await loadErpReconciliationRpcRows({ country, site, monthFrom: fromMonth }, RECON_MAX)
+    if (viaRpc) return viaRpc
+  } catch (err) {
+    if (!isNotProvisioned(err)) throw toServiceError(err)
+  }
   return bounded((from, to) => {
     let q = supabase.from('v_inv_erp_reconciliation').select(ERP_COLS)
     q = applySite(applyCountry(q, country), site)
@@ -143,7 +153,7 @@ export function loadErpIssueRows({ country, site, fromMonth } = {}) {
       .order('country', { ascending: true }).order('site', { ascending: true })
       .order('item_code', { ascending: true }).order('currency', { ascending: true })
       .range(from, to)
-  }, RECON_MAX)
+  }, RECON_MAX, 1)
 }
 
 /** Receipt movements from `fromMonth`. */
@@ -158,13 +168,17 @@ export function loadReceiptMovements({ country, site, fromMonth } = {}) {
   }, MOVEMENT_MAX)
 }
 
-/** Everything the finance reconciliation needs, read in parallel. */
+/**
+ * Everything the finance reconciliation needs. The two heavy reads (ERP
+ * aggregation and valuation) run one after the other: started together with the
+ * valuation's own pages they were the burst that hit the 8 s timeout.
+ */
 export async function loadFinanceRecon({ country, site, fromMonth } = {}) {
-  const [erp, receipts, valuation] = await Promise.all([
+  const [erp, receipts] = await Promise.all([
     loadErpIssueRows({ country, site, fromMonth }),
     loadReceiptMovements({ country, site, fromMonth }),
-    loadValuation({ country, site }),
   ])
+  const valuation = await loadValuation({ country, site })
   if (erp.status === 'not_provisioned' && valuation.status === 'not_provisioned') {
     return { status: 'not_provisioned', erpRows: [], receipts: [], valuation: [], truncated: {} }
   }

@@ -914,7 +914,9 @@ export async function loadValuation({ country, site } = {}) {
       let q = supabase.from(VIEWS.valuation).select('*')
       q = applySite(applyCountry(q, country), site)
       return q.order('stock_id', { ascending: true }).range(from, to)
-    }, { max: 5000 })
+    // Sequential pages: each page of this view also counts open reconciliations per
+    // balance, and pages fetched four at a time were what ran into the 8 s timeout.
+    }, { max: 5000, concurrency: 1 })
     if (error) {
       if (notProvisioned(error)) return { status: 'not_provisioned', rows: [], truncated: false }
       throw toServiceError(error)
@@ -968,7 +970,64 @@ function erpFilters(q, { country, site, status, search, month }) {
   return or ? q.or(or) : q
 }
 
-export function listErpReconciliation({ page, pageSize, ...filters } = {}) {
+/**
+ * The server function that returns ONE page and its total from a single pass over
+ * the view (migration 20261124135000). Reading the view directly needs two passes
+ * (the exact count and the page), and every pass aggregates every ERP line, which
+ * is what ran into the 8 s timeout. Filters mean exactly what `erpFilters` means.
+ */
+const ERP_PAGE_RPC = 'inv_erp_reconciliation_page'
+const ERP_RPC_MAX_LIMIT = 5000
+
+function erpRpcArgs({ country, site, status, search, month, monthFrom } = {}) {
+  const s = sanitizeSearchTerm(search)
+  return {
+    p_country: country && country !== 'All' ? country : null,
+    p_site: site && site !== 'all' ? site : null,
+    p_status: status && status !== 'all' ? status : null,
+    p_month: month || null,
+    p_month_from: monthFrom || null,
+    p_item_like: s ? `%${escapeLike(s)}%` : null,
+  }
+}
+
+/** One RPC page, or `null` when the function is not installed yet (use the view). */
+async function erpRpcPage(filters, offset, limit) {
+  const { data, error } = await supabase.rpc(ERP_PAGE_RPC, { ...erpRpcArgs(filters), p_offset: offset, p_limit: limit })
+  if (error) {
+    if (notProvisioned(error)) return null
+    throw toServiceError(error)
+  }
+  return { rows: Array.isArray(data?.rows) ? data.rows : [], total: Number(data?.total) || 0 }
+}
+
+/**
+ * Every matching row up to `max`, read in sequential pages of 5,000 through the
+ * server function. `null` when the function is not installed (caller falls back).
+ */
+export async function loadErpReconciliationRpcRows(filters = {}, max = SNAPSHOT_MAX) {
+  const rows = []
+  let total = 0
+  for (let offset = 0; offset < max; offset += ERP_RPC_MAX_LIMIT) {
+    const limit = Math.min(ERP_RPC_MAX_LIMIT, max - offset)
+    const page = await erpRpcPage(filters, offset, limit)
+    if (!page) return null
+    total = page.total
+    rows.push(...page.rows)
+    if (page.rows.length < limit || rows.length >= total) break
+  }
+  return { status: 'ok', rows, truncated: total > rows.length }
+}
+
+export async function listErpReconciliation({ page, pageSize, ...filters } = {}) {
+  try {
+    const p = clampPage(page)
+    const size = clampSize(pageSize)
+    const res = await erpRpcPage(filters, p * size, size)
+    if (res) return { status: 'ok', rows: res.rows, total: res.total }
+  } catch (err) {
+    if (!notProvisioned(err)) throw toServiceError(err)
+  }
   return pagedRead(VIEWS.erpReconciliation, '*', {
     page, pageSize, order: 'month', ascending: false, tiebreak: ERP_KEY, build: (q) => erpFilters(q, filters),
   })
@@ -977,11 +1036,13 @@ export function listErpReconciliation({ page, pageSize, ...filters } = {}) {
 /** Bounded full read for the ERP reconciliation export (same filters as the screen). */
 export async function loadErpReconciliationRows(filters = {}) {
   try {
+    const viaRpc = await loadErpReconciliationRpcRows(filters, SNAPSHOT_MAX)
+    if (viaRpc) return viaRpc
     const { data, error, truncated } = await fetchAllPages((from, to) => {
       let q = erpFilters(supabase.from(VIEWS.erpReconciliation).select('*'), filters).order('month', { ascending: false })
       for (const col of ERP_KEY) q = q.order(col, { ascending: true })
       return q.range(from, to)
-    }, { max: SNAPSHOT_MAX })
+    }, { max: SNAPSHOT_MAX, concurrency: 1 })
     if (error) {
       if (notProvisioned(error)) return { status: 'not_provisioned', rows: [], truncated: false }
       throw toServiceError(error)

@@ -1,0 +1,29 @@
+%% src: /Users/anum/Documents/wt-inv-layout/src /Users/anum/Documents/wt-inv-layout/supabase/migrations /Users/anum/Documents/wt-inv-layout/tyre_pulse_flutter/lib
+%% legend: green=IMPLEMENTED (live in DB + wired in code); yellow=PARTIAL (built, unused or degraded); red=BROKEN (evidence in doc); purple=PROPOSED (migration file, NOT APPLIED); -.->=text join or proposed link
+flowchart LR
+title Current vs proposed corrected stock write path
+  subgraph NOW [Current]
+    W1["Web StockFlows / GRN / issue"]:::green
+    F1["main: Flutter Add stock<br/>stock_records insert"]:::red
+    F2["Flutter +/- adjust<br/>post_stock_movement"]:::green
+    P1["Procurement tables<br/>0 POs, 0 suppliers"]:::yellow
+    O1["oem_part_references 0"]:::yellow
+    R1["parts_requests -> parts_catalog 0"]:::red
+  end
+  subgraph FIX [Proposed]
+    G["Single writer<br/>inv_post_movement / inv_issue_slip"]:::purple
+    W4["WP4 + RFQ limits<br/>20261124090000, 130000"]:::purple
+    W5["WP5 issue slip<br/>20261124091000"]:::purple
+    OL["material_link_proposals<br/>20261124132000"]:::purple
+    JM["job_material_installations<br/>20261124131000"]:::purple
+  end
+  LED[("stock_movements -> stock_records")]:::green
+  W1 --> LED
+  F2 --> LED
+  F1 -.->|"refused"| LED
+  F1 -.->|"should become"| G
+  G -.-> LED
+  P1 -.-> W4
+  W5 -.-> G
+  O1 -.-> OL
+  R1 -.->|"repoint to material_master"| JM

@@ -1,0 +1,38 @@
+%% src: /Users/anum/Documents/wt-inv-layout/src /Users/anum/Documents/wt-inv-layout/supabase/functions
+%% legend: green=IMPLEMENTED (live in DB + wired in code); yellow=PARTIAL (built, unused or degraded); red=BROKEN (evidence in doc); purple=PROPOSED (migration file, NOT APPLIED); -.->=text join or proposed link
+flowchart TD
+title Analytics and reporting data flows
+  subgraph SRC [Source tables]
+    PC[("parts_consumption")]:::green
+    TR[("tyre_records")]:::green
+    WO[("work_orders")]:::green
+    PL[("production_logs 212,567")]:::green
+    LED[("stock_movements")]:::green
+  end
+  subgraph RPC [Server aggregates]
+    CPM["get_cost_per_m3"]:::green
+    CPK["get_fleet_cpk"]:::green
+    PES["get_parts_expense_snapshot"]:::green
+    MSN["get_maintenance_snapshot"]:::green
+    SNAP["get_report_snapshot<br/>anon share token"]:::green
+    VAL["inv_valuation_summary"]:::green
+  end
+  subgraph UI [Surfaces]
+    CS["costSummary.js loadCostSplit"]:::green
+    PAGES["CostPerM3, CpkIntelligence,<br/>ExpenseReport, BoardOverview"]:::green
+    SHARE["ReportShare.jsx /report/:token"]:::green
+    EMAIL["send-scheduled-reports<br/>edge fn"]:::green
+  end
+  PC --> CPM
+  PL --> CPM
+  TR --> CPK
+  PC --> PES
+  WO --> MSN
+  PC --> SNAP
+  LED --> VAL
+  PES --> CS
+  CS --> PAGES
+  CPM --> PAGES
+  CPK --> PAGES
+  SNAP --> SHARE
+  WO --> EMAIL

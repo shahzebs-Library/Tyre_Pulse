@@ -464,7 +464,9 @@ export default function ReportSharing() {
                 <dl className="rs-dl">
                   <div><dt>Audience</dt><dd>Anyone with the link <span className="cc-pill info">External</span></dd></div>
                   <div><dt>Access</dt><dd><Eye size={13} aria-hidden="true" /> View only<small>The board is read only.</small></dd></div>
-                  <div><dt>Sharing mode</dt><dd><ChannelCell row={selected} /><small>No login required</small></dd></div>
+                  <div><dt>Sharing mode</dt><dd><ChannelCell row={selected} /><small>Token access; password may be required</small></dd></div>
+                  <div><dt>Allowed country</dt><dd>{selected.allowed_country || 'All countries (legacy/unrestricted)'}</dd></div>
+                  <div><dt>Allowed site</dt><dd>{selected.allowed_site || 'All sites within allowed country'}</dd></div>
                   <div><dt>Link URL</dt><dd className="rs-url">{shareUrl ? <a href={safeHref(shareUrl)} target="_blank" rel="noopener noreferrer">{shareUrl}</a> : <span className="cc-na">Not available</span>}</dd></div>
                   <div><dt>Status</dt><dd><StatusPill status={selected.status} /></dd></div>
                   <div><dt>Created by</dt><dd className="rs-muted">Not shown on this page</dd></div>

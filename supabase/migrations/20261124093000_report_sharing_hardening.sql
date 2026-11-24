@@ -121,7 +121,7 @@ BEGIN
     'rotate_seconds', t.rotate_seconds, 'refresh_seconds', t.refresh_seconds, 'pages', t.pages,
     'layout', t.layout,
     'filters', jsonb_build_object('site', v_site, 'country', v_country, 'from', v_from, 'to', v_to),
-    'sites', (SELECT COALESCE(jsonb_agg(s ORDER BY s),'[]'::jsonb) FROM (SELECT DISTINCT nullif(btrim(site),'') s FROM public.tyre_records WHERE organisation_id=v_org AND site IS NOT NULL UNION SELECT DISTINCT nullif(btrim(site),'') FROM public.accidents WHERE organisation_id=v_org AND site IS NOT NULL) u WHERE s IS NOT NULL AND (t.allowed_site IS NULL OR s=t.allowed_site) LIMIT 60),
+    'sites', (SELECT COALESCE(jsonb_agg(s ORDER BY s),'[]'::jsonb) FROM (SELECT DISTINCT nullif(btrim(site),'') s FROM public.tyre_records WHERE organisation_id=v_org AND site IS NOT NULL AND (v_country IS NULL OR country=v_country) UNION SELECT DISTINCT nullif(btrim(site),'') FROM public.accidents WHERE organisation_id=v_org AND site IS NOT NULL AND (v_country IS NULL OR country=v_country)) u WHERE s IS NOT NULL AND (t.allowed_site IS NULL OR s=t.allowed_site) LIMIT 60),
     'countries', (SELECT COALESCE(jsonb_agg(c ORDER BY c),'[]'::jsonb) FROM (SELECT DISTINCT nullif(btrim(country),'') c FROM public.tyre_records WHERE organisation_id=v_org AND country IS NOT NULL) u WHERE c IS NOT NULL AND (t.allowed_country IS NULL OR c=t.allowed_country) LIMIT 30),
     'labels', to_jsonb((SELECT array_agg(to_char(to_date(k,'YYYY-MM'),'Mon YY') ORDER BY k) FROM unnest(v_months) k)),
     'kpis', jsonb_build_object(

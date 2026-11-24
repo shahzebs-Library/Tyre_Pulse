@@ -165,7 +165,7 @@ BEGIN
 
   UPDATE public.report_shares SET last_viewed_at = now(), view_count = view_count + 1 WHERE id = t.id;
   RETURN result;
-END; $function$
+END; $function$;
 
 CREATE OR REPLACE FUNCTION public.get_report_tyre_maintenance(p_token text, p_password text DEFAULT NULL::text, p_site text DEFAULT NULL::text, p_country text DEFAULT NULL::text, p_from text DEFAULT NULL::text, p_to text DEFAULT NULL::text)
  RETURNS jsonb
@@ -271,7 +271,7 @@ BEGIN
   UPDATE public.report_shares SET view_count = COALESCE(view_count,0)+1, last_viewed_at = now() WHERE id = t.id;
   RETURN result;
 END;
-$function$
+$function$;
 
 CREATE OR REPLACE FUNCTION public.get_workshop_snapshot(p_token text, p_password text DEFAULT NULL::text)
  RETURNS jsonb
@@ -460,5 +460,5 @@ BEGIN
 
   UPDATE public.report_shares SET last_viewed_at = now(), view_count = view_count + 1 WHERE id = t.id;
   RETURN result;
-END; $function$
+END; $function$;
 

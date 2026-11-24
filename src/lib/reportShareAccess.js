@@ -5,5 +5,5 @@
  */
 export function mustClearShareSnapshot(result) {
   if (result?.ok) return false
-  return ['revoked', 'expired', 'invalid'].includes(result?.reason)
+  return ['revoked', 'expired', 'invalid', 'forbidden'].includes(result?.reason)
 }

@@ -661,6 +661,7 @@ function CenterShell({ children }) {
 
 const REASON_COPY = {
   invalid: { title: 'This report link is not available.', body: 'The link may be incorrect. Please request a new share link.' },
+  forbidden: { title: 'This selection is not available.', body: 'The report owner has restricted the accessible country or site.' },
   revoked: { title: 'This report link is not available.', body: 'Sharing for this report has been turned off.' },
   expired: { title: 'This report link has expired.', body: 'Please request a new share link to continue viewing.' },
   unavailable: { title: 'Report sharing is not available right now.', body: 'Please try again in a few minutes.' },

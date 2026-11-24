@@ -134,7 +134,7 @@
 --   (Dropping movement_id loses the slip-to-movement link; the movements themselves stay.)
 --
 -- OWNER DECISIONS (2026-11-24)
---   * Count adjustments require approval (adjustment_approve), see C2. The Expo and
+--   * Count adjustments require approval (adjustment_approve), see C2 and C2b. The Expo and
 --     Flutter direct count screens will be refused for users without it; they must
 --     use the physical count flow (follow-up in the phone apps).
 --   * Quick-entry receipts without a GRN stay allowed (save_stock_entry 'receipt';
@@ -162,7 +162,8 @@ select p.oid::regprocedure::text, pg_get_functiondef(p.oid)
                  'public._inv_post_movement(jsonb)'::regprocedure,
                  'public.post_stock_movement(uuid,text,numeric,text,text)'::regprocedure,
                  'public._inv_issue(jsonb)'::regprocedure,
-                 'public.inv_issue(jsonb)'::regprocedure)
+                 'public.inv_issue(jsonb)'::regprocedure,
+                 'public.set_stock_count(uuid,numeric,text)'::regprocedure)
 on conflict (fn) do nothing;
 
 -- =====================================================================
@@ -622,6 +623,23 @@ begin
     || '  if v_type not in (''adjustment_up'', ''adjustment_down'') and not public.inv_can(public._inv_cap_for(v_type)) then' || chr(10)
     || '    raise exception ''Stock permission "%" is required.'', public._inv_cap_for(v_type) using errcode = ''42501'';' || chr(10)
     || '  end if;' || chr(10) || v_old);
+  execute v_def;
+end $mig$;
+
+-- C2b. set_stock_count (absolute count from the phone apps) posted the difference
+--      straight to the ledger for anyone with the "count" right. Owner decision:
+--      a count difference needs approval, so it now needs adjustment_approve too.
+do $mig$
+declare v_def text; v_old text; v_n int;
+begin
+  v_def := pg_get_functiondef('public.set_stock_count(uuid,numeric,text)'::regprocedure);
+  v_old := 'if not (public.app_is_elevated() or public.inv_can(''count'')) then';
+  v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
+  if v_n <> 1 then raise exception 'set_stock_count anchor found % times', v_n; end if;
+  v_def := replace(v_def, v_old,
+       'if not public.inv_can(''adjustment_approve'') then' || chr(10)
+    || '    raise exception ''A count difference needs approval. Record it as a physical count; an approver posts the adjustment.'' using errcode = ''42501'';' || chr(10)
+    || '  end if;' || chr(10) || '  ' || v_old);
   execute v_def;
 end $mig$;
 

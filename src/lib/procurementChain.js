@@ -238,6 +238,8 @@ export function receiptPlan(poLines = [], entries = {}) {
     if (!Number.isFinite(rec) || rec < 0) { errors.push(`${label}: received quantity must be a number above zero.`); continue }
     if (!Number.isFinite(rej) || rej < 0) { errors.push(`${label}: rejected quantity must be zero or more.`); continue }
     if (rej > rec) { errors.push(`${label}: rejected cannot be more than received.`); continue }
+    // The database refuses a rejected quantity with no reason (20261124130000); say so before posting.
+    if (rej > 0 && !String(e.rejection_reason || '').trim()) { errors.push(`${label}: give a reason for the rejected quantity (damaged, wrong part, quality, expired).`); continue }
     const out = outstandingQty(pl)
     if (out !== null && rec - rej > out) { errors.push(`${label}: accepting ${rec - rej} exceeds the ${out} still outstanding.`); continue }
     if (!pl.item_id) { errors.push(`${label}: this PO line has no Material Master item, so it cannot be received into stock.`); continue }

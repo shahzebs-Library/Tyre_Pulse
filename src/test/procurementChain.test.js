@@ -159,12 +159,18 @@ describe('receipt plan (mirrors _inv_receive_goods)', () => {
   ]
 
   it('builds a payload for a valid line, carrying the PO price', () => {
-    const p = receiptPlan(lines, { l1: { qty_received: '5', qty_rejected: '1', location_id: 'loc1' } })
+    const p = receiptPlan(lines, { l1: { qty_received: '5', qty_rejected: '1', rejection_reason: 'damaged: crushed', location_id: 'loc1' } })
     expect(p.errors).toEqual([])
     expect(p.lines).toEqual([{
       item_id: 'm1', po_line_id: 'l1', location_id: 'loc1', qty_received: 5, qty_rejected: 1,
-      rejection_reason: null, unit_cost: 5, currency: 'SAR', condition: 'new',
+      rejection_reason: 'damaged: crushed', unit_cost: 5, currency: 'SAR', condition: 'new',
     }])
+  })
+
+  it('needs a reason for a rejected quantity (the database refuses one without)', () => {
+    const p = receiptPlan(lines, { l1: { qty_received: '5', qty_rejected: '1', location_id: 'loc1' } })
+    expect(p.lines).toEqual([])
+    expect(p.errors[0]).toMatch(/give a reason for the rejected quantity/)
   })
 
   it('refuses accepting more than is outstanding', () => {

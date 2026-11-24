@@ -92,6 +92,7 @@ const EMPTY_FORM = {
   expected_delivery: '', priority: 'Normal', site: '', country: '',
   budget_code: '', requested_by: '', approved_by: '', notes: '',
   status: 'Draft', items: [],
+  is_emergency: false, emergency_reason: '',
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -411,6 +412,9 @@ export default function Procurement() {
     const vendorName = (supplierPick?.supplier_name || formData.vendor_name || '').trim()
     if (!vendorName) { alert(t('procurement.alerts.vendorRequired')); return }
     if (formData.items.length === 0)  { alert(t('procurement.alerts.lineItemRequired')); return }
+    if (!editPO && formData.is_emergency && (formData.emergency_reason || '').trim().length < 10) {
+      alert('An emergency purchase needs a reason of at least 10 characters.'); return
+    }
     setSaving(true)
     try {
       const subtotal    = calcSubtotal(formData.items)
@@ -437,6 +441,9 @@ export default function Procurement() {
         approved_by:       formData.approved_by?.trim() || null,
         notes:             formData.notes?.trim() || null,
         created_by:        user?.id || null,
+        // Emergency purchase (20261124130000): may be ordered before approval, approved after the fact.
+        // Only sent when ticked so a normal PO never names columns an older database lacks.
+        ...(!editPO && formData.is_emergency ? { is_emergency: true, emergency_reason: formData.emergency_reason.trim() } : {}),
       }
 
       // Catalogued items become real purchase_order_lines (inv_po_add_line), which
@@ -988,6 +995,23 @@ export default function Procurement() {
                   </div>
                 </div>
 
+                {!editPO && (
+                  <div className="rounded-lg border border-[var(--hairline)] p-3 space-y-2">
+                    <label className="flex items-start gap-2 text-sm text-[var(--text-secondary)] min-h-[44px]">
+                      <input type="checkbox" className="mt-1" checked={!!formData.is_emergency}
+                        onChange={e => setFormData(f => ({ ...f, is_emergency: e.target.checked }))} />
+                      <span>Emergency purchase: may be ordered before approval. Another buyer must approve it afterwards, and it is reported until they do.</span>
+                    </label>
+                    {formData.is_emergency && (
+                      <div>
+                        <label htmlFor="po-emergency-reason" className="text-[var(--text-secondary)] text-xs mb-1 block">Why it cannot wait for approval</label>
+                        <input id="po-emergency-reason" className="input w-full" maxLength={300} value={formData.emergency_reason}
+                          onChange={e => setFormData(f => ({ ...f, emergency_reason: e.target.value }))} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Row 2: Expected Del + Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
@@ -1188,7 +1212,10 @@ export default function Procurement() {
                   const hasLines = (poLines || []).length > 0
                   // Separation of duties: the creator of a PO never approves it (the database refuses it too).
                   const ownPo = !!user?.id && viewPO.created_by === user.id
-                  const next = (nextMap[viewPO.status] || [])
+                  // An emergency purchase may be ordered before approval (approved after the fact).
+                  const base = viewPO.is_emergency && ['Draft', 'Submitted'].includes(viewPO.status)
+                    ? [...(nextMap[viewPO.status] || []), 'Ordered'] : (nextMap[viewPO.status] || [])
+                  const next = base
                     .filter((ns) => !(hasLines && ['Partial Delivery', 'Delivered'].includes(ns)))
                     .filter((ns) => !(ownPo && ns === 'Approved'))
                   if (!caps.procure) return null

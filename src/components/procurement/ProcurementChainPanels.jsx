@@ -25,6 +25,7 @@ import {
 import {
   requisitionPoDraft, requisitionMaterial, receiptPlan, outstandingQty, currencyForCountry, scopedCountry,
 } from '../../lib/procurementChain'
+import { REJECTION_CODES, rejectionReasonText } from '../../lib/procurement/procurementDepth'
 
 const fmtNum = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString())
 const fmtMoney = (v, cur) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))
@@ -201,6 +202,7 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
   const [locs, setLocs] = useState([])
   const [site, setSite] = useState('')
   const [grnNo, setGrnNo] = useState('')
+  const [supplierOwned, setSupplierOwned] = useState(false)
   const [entries, setEntries] = useState({})
   const [key, setKey] = useState(() => newIdempotencyKey())
   const [busy, setBusy] = useState(false)
@@ -238,12 +240,17 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
   const submit = async () => {
     setError('')
     if (!site) { setError('Choose the receiving site.'); return }
-    const plan = receiptPlan(lines || [], entries)
+    if (supplierOwned && !po?.supplier_id) { setError('Supplier-owned stock needs a PO linked to a supplier record.'); return }
+    const withReasons = Object.fromEntries(Object.entries(entries).map(([id, e]) => [id, {
+      ...e, rejection_reason: Number(e.qty_rejected) > 0 && e.rejection_code ? rejectionReasonText(e.rejection_code, e.rejection_note) : null,
+    }]))
+    const plan = receiptPlan(lines || [], withReasons)
     if (plan.errors.length) { setError(plan.errors.join(' ')); return }
+    if (supplierOwned) plan.lines = plan.lines.map((l) => ({ ...l, ownership: 'consignment', owner_supplier_id: po.supplier_id }))
     setBusy(true)
     try {
       const res = await receiveAgainstPo({ po, site, grnNo: grnNo || null, lines: plan.lines }, key)
-      setDone(res); setKey(newIdempotencyKey()); setEntries({}); setGrnNo('')
+      setDone(res); setKey(newIdempotencyKey()); setEntries({}); setGrnNo(''); setSupplierOwned(false)
       const fresh = await listPurchaseOrderLines(po.id).catch(() => null)
       if (fresh) setLines(fresh)
       onReceived?.(res)
@@ -258,7 +265,7 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
         <h2 className="text-sm font-semibold text-[var(--text-primary)]">Receive against a purchase order</h2>
       </div>
       <p className="text-xs text-[var(--text-muted)]">
-        Posts the receipt to stock through the movement ledger. Rejected quantity never enters stock, and a line cannot receive more than is still outstanding.
+        Posts the receipt to stock through the movement ledger. Rejected quantity never enters stock and needs a reason; it can be sent back from Supplier returns. A line cannot receive more than is still outstanding.
       </p>
       {poErr && <p role="alert" className="text-xs text-red-300">{poErr} <button type="button" className="underline" onClick={loadPos}>Retry</button></p>}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -281,6 +288,12 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
           <input id="rcv-grn" className="input w-full min-h-[44px]" maxLength={60} value={grnNo} onChange={(e) => setGrnNo(e.target.value)} disabled={!po} />
         </div>
       </div>
+      {po && (
+        <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+          <input type="checkbox" className="mt-0.5" checked={supplierOwned} onChange={(e) => setSupplierOwned(e.target.checked)} />
+          <span>Supplier-owned (consignment) stock. It is counted on hand but not in our stock value, and needs an active consignment agreement with this supplier.</span>
+        </label>
+      )}
       {po && lines === null && <p className="text-xs text-[var(--text-muted)]">Loading PO lines</p>}
       {linesErr && <p role="alert" className="text-xs text-red-300">{linesErr}</p>}
       {po && lines && lines.length === 0 && !linesErr && (
@@ -306,7 +319,18 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
                     <td className="pr-2 text-right tabular-nums">{fmtNum(l.qty_ordered)}</td>
                     <td className="pr-2 text-right tabular-nums">{fmtNum(out)}</td>
                     <td className="pr-2"><input aria-label={`Received ${l.item_code || ''}`} className="input w-24 min-h-[40px]" type="number" min="0" step="any" disabled={!out} value={e.qty_received ?? ''} onChange={(ev) => setEntry(l.id, { qty_received: ev.target.value })} /></td>
-                    <td className="pr-2"><input aria-label={`Rejected ${l.item_code || ''}`} className="input w-24 min-h-[40px]" type="number" min="0" step="any" disabled={!out} value={e.qty_rejected ?? ''} onChange={(ev) => setEntry(l.id, { qty_rejected: ev.target.value })} /></td>
+                    <td className="pr-2">
+                      <input aria-label={`Rejected ${l.item_code || ''}`} className="input w-24 min-h-[40px]" type="number" min="0" step="any" disabled={!out} value={e.qty_rejected ?? ''} onChange={(ev) => setEntry(l.id, { qty_rejected: ev.target.value })} />
+                      {Number(e.qty_rejected) > 0 && (
+                        <div className="mt-1 grid gap-1">
+                          <select aria-label={`Rejection reason ${l.item_code || ''}`} className="input min-h-[40px]" value={e.rejection_code || ''} onChange={(ev) => setEntry(l.id, { rejection_code: ev.target.value })}>
+                            <option value="">Why rejected?</option>
+                            {REJECTION_CODES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                          </select>
+                          <input aria-label={`Rejection note ${l.item_code || ''}`} className="input min-h-[40px]" maxLength={200} placeholder="Note (optional)" value={e.rejection_note || ''} onChange={(ev) => setEntry(l.id, { rejection_note: ev.target.value })} />
+                        </div>
+                      )}
+                    </td>
                     <td className="pr-2">
                       <select aria-label={`Location ${l.item_code || ''}`} className="input min-h-[40px]" disabled={!out} value={e.location_id || ''} onChange={(ev) => setEntry(l.id, { location_id: ev.target.value })}>
                         <option value="">Choose</option>

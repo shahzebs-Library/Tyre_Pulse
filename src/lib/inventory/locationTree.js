@@ -12,11 +12,14 @@
 export const LOCATION_TYPES = [
   'warehouse', 'zone', 'rack', 'shelf', 'bin', 'in_transit', 'quarantine', 'damaged', 'scrap',
   'warranty', 'repairable', 'supplier_custody', 'vehicle_custody', 'consignment',
+  // 20261124133000 (NOT APPLIED): saving these fails on the old CHECK until it is.
+  'receiving', 'inspection', 'service_van', 'workshop_store', 'bulk_tank',
 ]
 
 /** Types that hold stock that is NOT available to issue. */
 export const NON_AVAILABLE_TYPES = new Set([
   'in_transit', 'quarantine', 'damaged', 'scrap', 'warranty', 'repairable', 'supplier_custody', 'vehicle_custody',
+  'receiving', 'inspection',
 ])
 
 export const LABEL_PREFIX = 'TP:LOC:'

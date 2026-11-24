@@ -17,7 +17,7 @@ import { Plus, Pencil, Printer, FileDown, MapPin, Layers, Box } from 'lucide-rea
 import Modal from '../ui/Modal'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
-import { listLocations, saveLocation, newIdempotencyKey } from '../../lib/api/inventory'
+import { listLocations, newIdempotencyKey } from '../../lib/api/inventory'
 import { listSites } from '../../lib/api/sites'
 import {
   buildTree, flattenTree, filterTree, labelCode, validateLocationDraft, LOCATION_TYPES, NON_AVAILABLE_TYPES,
@@ -29,6 +29,16 @@ import { reportFileName } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, ErrorNote, NotSetUp, Note, Field, SearchBox, SectionCard, StatusPill } from './InvUi'
 import LocationBulkSetup from './LocationBulkSetup'
+import { LocationRulesFields, LocationRulesSection } from '../warehouseClasses/LocationRules'
+import { saveLocationWithRules, listLocationUtilisation } from '../../lib/api/warehouseAssets'
+import { LOCATION_TYPE_LABELS, validateLocationClass } from '../../lib/warehouseClasses/specialClasses'
+
+/** Locale label, or the English name for a type the locale does not carry yet. */
+const typeLabel = (t, ty) => {
+  const k = `inventory.locationTypes.${ty}`
+  const v = t(k)
+  return v && v !== k ? v : (LOCATION_TYPE_LABELS[ty] || ty)
+}
 
 const EMPTY = { id: null, code: '', name: '', location_type: 'warehouse', parent_id: '', site: '', country: '', responsible_user_id: '', active: true }
 const FONT = { sm: [7, 5], md: [9, 6.5], lg: [10.5, 7.5] }
@@ -65,12 +75,12 @@ function LocationForm({ draft, setDraft, errors, rows, stores, t }) {
       <Field label={t('inventory.locations.parent')} error={err('parent_id')} full>
         <select className="cc-select" value={draft.parent_id || ''} onChange={set('parent_id')} disabled={!draft.site}>
           <option value="">{t('inventory.locations.noParent')}</option>
-          {parents.map((p) => <option key={p.id} value={p.id}>{p.path || p.code} ({t(`inventory.locationTypes.${p.location_type}`)})</option>)}
+          {parents.map((p) => <option key={p.id} value={p.id}>{p.path || p.code} ({typeLabel(t, p.location_type)})</option>)}
         </select>
       </Field>
       <Field label={t('inventory.locations.type')} error={err('location_type')}>
         <select className="cc-select" value={draft.location_type} onChange={set('location_type')}>
-          {LOCATION_TYPES.map((ty) => <option key={ty} value={ty}>{t(`inventory.locationTypes.${ty}`)}</option>)}
+          {LOCATION_TYPES.map((ty) => <option key={ty} value={ty}>{typeLabel(t, ty)}</option>)}
         </select>
       </Field>
       <Field label={t('inventory.locations.code')} error={err('code')}>
@@ -82,6 +92,7 @@ function LocationForm({ draft, setDraft, errors, rows, stores, t }) {
       <label className="inv-check inv-full">
         <input type="checkbox" checked={draft.active !== false} onChange={set('active')} /> {t('inventory.locations.active')}
       </label>
+      <div className="inv-full"><LocationRulesFields draft={draft} setDraft={setDraft} errors={errors} /></div>
     </div>
   )
 }
@@ -127,21 +138,31 @@ export default function LocationsSection({ scope }) {
   const defaultSite = scope.site !== 'all'
     ? (stores.find((s) => s.name.toUpperCase() === String(scope.site).toUpperCase())?.name || '') : ''
 
-  const open = (row) => {
+  const open = async (row) => {
     setErrors({}); setSaveErr('')
+    let extra = {}
+    if (row) {
+      try {
+        const u = await listLocationUtilisation({ country: scope.country, site: row.site })
+        const hit = (u.rows || []).find((r) => r.location_id === row.id)
+        if (hit) extra = { capacity_qty: hit.capacity_qty ?? '', capacity_uom: hit.capacity_uom || '', restriction: hit.restriction || '', restriction_note: hit.restriction_note || '', van_asset_no: hit.van_asset_no || '', responsible_user_id: hit.responsible_user_id || row.responsible_user_id || '' }
+      } catch { /* rules not set up: edit the base fields only */ }
+    }
     const base = row
-      ? { ...EMPTY, ...row, parent_id: row.parent_id || '' }
+      ? { ...EMPTY, ...row, ...extra, parent_id: row.parent_id || '' }
       : { ...EMPTY, site: defaultSite, country: stores.find((s) => s.name === defaultSite)?.country || '' }
     setEditing({ draft: base, key: newIdempotencyKey() })
   }
 
   const submit = async () => {
     const v = validateLocationDraft({ ...editing.draft, site: String(editing.draft.site || '').toUpperCase() }, rows)
-    setErrors(v.errors)
-    if (!v.ok) return
+    const c = validateLocationClass(editing.draft)
+    const all = { ...v.errors, ...Object.fromEntries(Object.entries(c.errors).map(([k, m]) => [k, m])) }
+    setErrors(all)
+    if (!v.ok || !c.ok) return
     setBusy(true); setSaveErr('')
     try {
-      await saveLocation({ ...editing.draft, country: editing.draft.country || scope.country }, editing.key)
+      await saveLocationWithRules({ ...editing.draft, country: editing.draft.country || scope.country }, editing.key)
       setEditing(null)
       q.retry()
     } catch (err) {
@@ -246,7 +267,7 @@ export default function LocationsSection({ scope }) {
               <li key={n.id} className="inv-tree-row" style={{ paddingInlineStart: 8 + (n.depth || 0) * 20 }}>
                 <MapPin size={14} aria-hidden="true" style={{ color: 'var(--cc-ink-3)' }} />
                 <span className="inv-tree-name"><b>{n.code}</b> {n.name}<br /><code>{n.label_code || labelCode(n.id)}</code></span>
-                <StatusPill value={n.location_type} tone={NON_AVAILABLE_TYPES.has(n.location_type) ? 'warning' : 'info'} label={t(`inventory.locationTypes.${n.location_type}`)} />
+                <StatusPill value={n.location_type} tone={NON_AVAILABLE_TYPES.has(n.location_type) ? 'warning' : 'info'} label={typeLabel(t, n.location_type)} />
                 {n.active === false && <StatusPill value="inactive" tone="muted" label={t('inventory.locations.inactive')} />}
                 <span className="cc-card-sub">{n.site}</span>
                 <button type="button" className="cc-icon-btn" aria-label={t('inventory.locations.printOne', { code: n.code })} onClick={() => buildLabels([n])}>
@@ -262,6 +283,8 @@ export default function LocationsSection({ scope }) {
           </ul>
         )}
       </SectionCard>
+
+      <LocationRulesSection scope={scope} />
 
       <Modal className="cc inv-panel" open={!!editing} onClose={() => !busy && setEditing(null)} size="md"
         title={editing?.draft?.id ? t('inventory.locations.editTitle') : t('inventory.locations.addTitle')}

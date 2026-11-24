@@ -6,7 +6,8 @@
  * type of the location it sits in), so it can never disagree with the stock
  * register. Sending a part to a vendor is a stock transfer to a vendor-custody
  * location (Movements); bringing it back is the receiving end of that transfer.
- * Nothing on this screen posts stock.
+ * Nothing on this screen posts stock. Per-serial installation and repair
+ * history is recorded in UnitEventsSection (inventory_unit_events).
  */
 import { useMemo, useState } from 'react'
 import { Truck, Wrench, ShieldCheck, ShieldAlert, AlertOctagon, Trash2 } from 'lucide-react'
@@ -15,6 +16,7 @@ import { useInvQuery, ErrorNote, Note, NotSetUp, SectionCard, StatusPill, alignN
 import { loadStockWithLocations } from '../../lib/api/warehouseAssets'
 import { repairableRows, summarizeRepairables, repairLocationCoverage, REPAIR_STATES } from '../../lib/inventory/warehouseAssets'
 import { formatMoney, formatQty, formatTotals } from '../../lib/inventory/inventoryMoney'
+import UnitEventsSection from '../warehouseClasses/UnitEventsSection'
 
 const ICONS = { at_vendor: Truck, awaiting_repair: Wrench, under_warranty: ShieldCheck, quarantine: ShieldAlert, damaged: AlertOctagon, scrap_pending: Trash2 }
 const TONES = { at_vendor: 't-blue', awaiting_repair: 't-orange', under_warranty: 't-purple', quarantine: 't-amber', damaged: 't-red', scrap_pending: 't-red' }
@@ -89,6 +91,8 @@ export default function RepairablesPanel({ scope, can, onNavigate }) {
           <li className="inv-tree-row"><span className="inv-tree-name">Cannot be repaired: propose scrap with a reason; it posts only after approval (Warranty and scrap).</span></li>
         </ul>
       </SectionCard>
+
+      <UnitEventsSection scope={scope} can={can} />
     </div>
   )
 }

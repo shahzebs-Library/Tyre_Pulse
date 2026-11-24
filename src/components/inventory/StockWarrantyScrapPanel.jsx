@@ -7,11 +7,13 @@
  * starts as Submitted with no credit amount; the credit is recorded on the
  * Warranty page when the supplier decides.
  *
- * Scrap: never a direct stock write. There is no approval-gated scrap request
- * for non-tyre stock yet (proposed in docs/warehouse/10_ASSETS_FINANCE_DB_CHANGES.md).
- * Until then the governed route is a stock audit: the count difference becomes
- * an adjustment that posts only after a second person approves it. Tyres keep
- * their own scrap marks (Scrap Management).
+ * Scrap: never a direct stock write. A scrap request (migration 20261124133000,
+ * NOT APPLIED) is proposed, evaluated by engineering, approved by a second
+ * person, posted through the ledger and then disposed with its recovery value.
+ * Until the migration is applied the governed route stays a stock audit
+ * adjustment. Tyres keep their own scrap marks (Scrap Management).
+ * A warranty replacement is received as a normal receipt with the claim number
+ * as the reference.
  */
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -23,16 +25,21 @@ import { loadStockWithLocations, listStockWarrantyClaims, listScrapMovements, ra
 import { repairableRows, claimsByStock, stockWarrantyDraft, REPAIR_STATES, STOCK_FAILURE_TYPES } from '../../lib/inventory/warehouseAssets'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
+import { ScrapRequestsSection, ScrapProposeModal } from '../warehouseClasses/ScrapRequests'
 
 const CLAIM_TONE = { Submitted: 'info', 'Under Review': 'warn', Approved: 'good', Rejected: 'bad', 'Credit Issued': 'good', Closed: 'muted' }
 const MATCH_LIMIT = 25
 
-export default function StockWarrantyScrapPanel({ scope, can, onNavigate }) {
+export default function StockWarrantyScrapPanel({ scope, can, userId, onNavigate }) {
   const stock = useInvQuery(() => loadStockWithLocations(scope), [scope.country, scope.site])
   const claims = useInvQuery(() => listStockWarrantyClaims({ country: scope.country }), [scope.country])
   const scraps = useInvQuery(() => listScrapMovements(scope), [scope.country, scope.site])
   const [term, setTerm] = useState('')
   const [claimFor, setClaimFor] = useState(null)
+  const [scrapFor, setScrapFor] = useState(null)
+  const [scrapReload, setScrapReload] = useState(0)
+  const stockById = useMemo(() => new Map((stock.data?.valuation || []).map((r) => [r.stock_id, r])), [stock.data])
+  const canScrap = can('issue') || can('count')
 
   const flagged = useMemo(() => repairableRows(stock.data?.valuation, stock.data?.locations), [stock.data])
   const byStock = useMemo(() => claimsByStock(claims.data?.rows), [claims.data])
@@ -62,9 +69,12 @@ export default function StockWarrantyScrapPanel({ scope, can, onNavigate }) {
       const c = byStock.get(r.stock_id)?.[0]
       return c ? <StatusPill value={c.claim_status} tone={CLAIM_TONE[c.claim_status]} label={`${c.claim_no || 'Claim'}: ${c.claim_status}`} /> : <span className="cc-na">None</span>
     } },
-    { key: 'act', header: '', sortable: false, cell: (r) => (canClaim
-      ? <button type="button" className="cc-btn-ghost" onClick={() => setClaimFor(r)}>Raise claim</button>
-      : null) },
+    { key: 'act', header: '', sortable: false, cell: (r) => (
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {canClaim && <button type="button" className="cc-btn-ghost" onClick={() => setClaimFor(r)}>Raise claim</button>}
+        {canScrap && <button type="button" className="cc-btn-ghost" onClick={() => setScrapFor(r)}>Propose scrap</button>}
+      </div>
+    ) },
   ])
 
   return (
@@ -111,11 +121,12 @@ export default function StockWarrantyScrapPanel({ scope, can, onNavigate }) {
         </div>
       </SectionCard>
 
-      <SectionCard title="Scrap" sub="Scrap reduces stock, so it always needs a reason and a second person's approval.">
-        <Note tone="info" title="How to scrap non-tyre stock today">
-          Count the line in a stock audit and record what is left. The difference becomes an adjustment with your reason, and
-          it posts only after another person approves it. A direct scrap request with its own approval is proposed in
-          docs/warehouse/10_ASSETS_FINANCE_DB_CHANGES.md. Tyres are scrapped in Scrap Management.
+      <ScrapRequestsSection scope={scope} can={can} userId={userId} stockById={stockById} reloadKey={scrapReload} />
+
+      <SectionCard title="Scrap movements posted" sub="Scrap reduces stock, so it always needs a reason and a second person's approval.">
+        <Note tone="info" title="Other routes">
+          A count difference found in a stock audit becomes an adjustment that a second person approves. Tyres are scrapped in
+          Scrap Management. A warranty replacement is received as a normal receipt with the claim number as its reference.
           {onNavigate && <><br /><button type="button" className="cc-btn-ghost" onClick={() => onNavigate('audits')}>Open stock audits</button></>}
         </Note>
         {scraps.error ? <ErrorNote error={scraps.error} onRetry={scraps.retry} /> : (
@@ -133,6 +144,8 @@ export default function StockWarrantyScrapPanel({ scope, can, onNavigate }) {
         )}
       </SectionCard>
 
+      {scrapFor && <ScrapProposeModal stock={scrapFor} onClose={() => setScrapFor(null)}
+        onDone={() => { setScrapFor(null); setScrapReload((n) => n + 1) }} />}
       <ClaimModal key={claimFor?.stock_id || 'none'} stock={claimFor} onClose={() => setClaimFor(null)} onSaved={() => { setClaimFor(null); claims.retry() }} />
     </div>
   )

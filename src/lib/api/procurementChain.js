@@ -224,6 +224,11 @@ export async function linkRequisitionToPo(id, poNumber) {
     .update({ status: 'ordered', po_ref: poNumber })
     .eq('id', id).eq('status', 'approved')
     .select('id,status,po_ref').maybeSingle())
+  if (!row) {
+    // A retry after a lost response: the first call may already have linked it.
+    const cur = unwrap(await supabase.from('requisitions').select('id,status,po_ref').eq('id', id).maybeSingle())
+    if (cur && cur.po_ref === poNumber) return cur
+  }
   if (!row) throw new ServiceError('The requisition could not be linked: it is not approved, or you do not have permission.', 'PROC_LINK_REFUSED')
   return row
 }

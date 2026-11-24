@@ -203,22 +203,22 @@ function applyFleetPriority(query, priority, storedColumn = false) {
 // Whether vehicle_fleet carries the stored maintenance_priority column
 // (migration 20261124120000). Probed once per session; any error (missing
 // column 42703 / PGRST204, network) falls back to the derived-only filter.
-let storedPriorityProbe = null
+let storedPriorityKnown = null
 async function hasStoredPriority() {
-  if (storedPriorityProbe === null) {
-    storedPriorityProbe = (async () => {
-      try {
-        const { error } = await supabase
-          .from('vehicle_fleet')
-          .select('maintenance_priority')
-          .limit(1)
-        return !error
-      } catch {
-        return false
-      }
-    })()
+  if (storedPriorityKnown !== null) return storedPriorityKnown
+  try {
+    const { error } = await supabase
+      .from('vehicle_fleet')
+      .select('maintenance_priority')
+      .limit(1)
+    if (!error) { storedPriorityKnown = true; return true }
+    // Only a definite missing column is remembered; a transient error is
+    // answered derived-only this time and probed again on the next read.
+    if (error.code === '42703' || error.code === 'PGRST204') storedPriorityKnown = false
+    return false
+  } catch {
+    return false
   }
-  return storedPriorityProbe
 }
 
 // Quoted, literal case-insensitive substring search. imatch avoids PostgREST's

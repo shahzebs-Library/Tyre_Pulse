@@ -556,9 +556,9 @@ function NewInvoiceForm({ scope, onSaved }) {
             {pos.rows.map((p) => <option key={p.id} value={p.id}>{p.po_number} | {p.supplier_name} | {p.currency || 'No currency'}</option>)}
           </select></div>
         <div><label className="label" htmlFor="inv-no">Invoice number</label><input id="inv-no" className="input w-full min-h-[44px]" maxLength={60} value={invoiceNo} disabled={!!savedId} onChange={(e) => { setInvoiceNo(e.target.value); renew() }} /></div>
-        <div><label className="label" htmlFor="inv-date">Invoice date</label><input id="inv-date" type="date" className="input w-full min-h-[44px]" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} /></div>
+        <div><label className="label" htmlFor="inv-date">Invoice date</label><input id="inv-date" type="date" className="input w-full min-h-[44px]" value={invoiceDate} disabled={!!savedId} onChange={(e) => setInvoiceDate(e.target.value)} /></div>
       </div>
-      <div className="max-w-[200px]"><label className="label" htmlFor="inv-tol">Price tolerance (%)</label><input id="inv-tol" type="number" min="0" step="any" className="input w-full min-h-[44px]" value={tol} onChange={(e) => setTol(e.target.value)} /></div>
+      <div className="max-w-[200px]"><label className="label" htmlFor="inv-tol">Price tolerance (%)</label><input id="inv-tol" type="number" min="0" step="any" className="input w-full min-h-[44px]" value={tol} disabled={!!savedId} onChange={(e) => setTol(e.target.value)} /></div>
       {po && !po.currency && <p className="text-xs text-amber-300">This PO has no currency, so an invoice cannot be matched against it.</p>}
       {po && (lines.loading ? <p className="text-xs text-[var(--text-muted)]">Loading PO lines</p> : (
         <Table>
@@ -567,12 +567,13 @@ function NewInvoiceForm({ scope, onSaved }) {
             <tr key={l.po_line_id} className="border-t border-[var(--hairline)]">
               <Td>{l.item_code && <span className="font-mono text-xs">{l.item_code} </span>}{l.item_name}</Td>
               <Td right>{fmtNum(l.qty_ordered)}</Td><Td right>{fmtNum(l.qty_accepted)}</Td><Td right>{formatMoneyIn(l.unit_price, l.currency)}</Td>
-              <Td><input aria-label="Invoiced quantity" type="number" min="0" step="any" className="input w-24 min-h-[40px]" value={entries[l.po_line_id]?.qty ?? ''} onChange={(e) => setEntries((x) => ({ ...x, [l.po_line_id]: { ...x[l.po_line_id], qty: e.target.value } }))} /></Td>
-              <Td><input aria-label="Invoice unit price" type="number" min="0" step="any" className="input w-28 min-h-[40px]" value={entries[l.po_line_id]?.price ?? ''} onChange={(e) => setEntries((x) => ({ ...x, [l.po_line_id]: { ...x[l.po_line_id], price: e.target.value } }))} /></Td>
+              <Td><input aria-label="Invoiced quantity" type="number" min="0" step="any" className="input w-24 min-h-[40px]" value={entries[l.po_line_id]?.qty ?? ''} disabled={!!savedId} onChange={(e) => setEntries((x) => ({ ...x, [l.po_line_id]: { ...x[l.po_line_id], qty: e.target.value } }))} /></Td>
+              <Td><input aria-label="Invoice unit price" type="number" min="0" step="any" className="input w-28 min-h-[40px]" value={entries[l.po_line_id]?.price ?? ''} disabled={!!savedId} onChange={(e) => setEntries((x) => ({ ...x, [l.po_line_id]: { ...x[l.po_line_id], price: e.target.value } }))} /></Td>
             </tr>
           ))}</tbody>
         </Table>
       ))}
+      {savedId && <p role="status" className="text-xs text-[var(--text-secondary)]">The invoice is saved with the values shown; only the match check is retried. To correct a value, record the invoice again from the invoice list once this one is matched or cancelled.</p>}
       <Msg {...msg} />
       <div className="flex justify-end"><button type="button" className="btn-primary min-h-[44px]" disabled={busy || !po?.currency} onClick={save}>{busy ? <Loader2 size={14} className="animate-spin" /> : 'Save and check match'}</button></div>
     </div>

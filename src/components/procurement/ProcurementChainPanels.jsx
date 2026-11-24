@@ -155,10 +155,12 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
   const [warning, setWarning] = useState('')
   const [createdPo, setCreatedPo] = useState(null)
   const [linked, setLinked] = useState(false)
-  const [lineKey, setLineKey] = useState(() => newIdempotencyKey())
+  // One line key for the modal. Item and price lock after the first line
+  // attempt, so a retry after a lost response replays that line instead of
+  // adding a second one under a new key.
+  const [lineKey] = useState(() => newIdempotencyKey())
+  const [lineTried, setLineTried] = useState(false)
   const [block, setBlock] = useState({ state: 'checking', reason: '' })
-  // The line content decides the key: a changed item or price is a new line.
-  useEffect(() => { setLineKey(newIdempotencyKey()) }, [material?.id, unitPrice])
   useEffect(() => {
     let alive = true
     if (!requisition) return undefined
@@ -181,7 +183,8 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
   const draft = requisitionPoDraft(requisition, { supplier, material, unitPrice, country: requisition.country })
   const submit = async () => {
     setError(''); setWarning('')
-    if (block.state !== 'ok') { setError(block.reason || 'This requisition cannot be raised as a PO right now.'); return }
+    // Once this modal created the PO, its own link sets po_ref; do not block the retry on it.
+    if (!createdPo && block.state !== 'ok') { setError(block.reason || 'This requisition cannot be raised as a PO right now.'); return }
     if (draft.errors.length) { setError(draft.errors.join(' ')); return }
     setBusy(true)
     let po = createdPo
@@ -195,6 +198,7 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
         await linkRequisitionToPo(requisition.id, po.po_number)
         setLinked(true)
       }
+      setLineTried(true)
       const { failedLines } = await addPurchaseOrderLines(po.id, [{ ...draft.line, idempotency_key: lineKey }])
       if (failedLines.length) setWarning(`PO ${po.po_number} is created and linked, but its line did not save: ${failedLines[0].message} Press Retry line to try again.`)
       else onDone?.(po)
@@ -220,18 +224,25 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
         {started && <p role="status" className="text-sm text-[var(--text-secondary)]">Purchase order <span className="font-mono">{createdPo.po_number}</span> {linked ? 'is linked to this requisition.' : 'is created. The requisition is not linked yet.'}</p>}
         {/* The supplier is on the PO header, which already exists once created. */}
         {!started && <SupplierPicker value={supplier} onPick={setSupplier} country={requisition.country} />}
+        {lineTried ? (
+          <p className="text-sm text-[var(--text-secondary)]">
+            Line: {[material?.item_code, material?.item_name].filter(Boolean).join(' ') || requisition.item}, unit price {unitPrice === '' ? 'not set' : unitPrice} {currency || ''}.
+            Locked so a retry cannot add a second line.
+          </p>
+        ) : <>
         <MaterialPicker value={material} onPick={setMaterial} country={requisition.country} />
         <div>
           <label className="label" htmlFor="raise-po-price">Unit price {currency ? `(${currency})` : ''}</label>
           <input id="raise-po-price" className="input w-full" type="number" min="0" step="0.01" placeholder="Leave blank if not agreed yet"
             value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
         </div>
+        </>}
         {error && <div role="alert" className="flex items-start gap-2 text-sm text-red-300"><AlertTriangle size={15} className="mt-0.5 shrink-0" />{error}</div>}
         {warning && <div role="status" className="text-sm text-amber-300">{warning}</div>}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={started ? () => onDone?.(createdPo) : onClose} disabled={busy}>{started ? 'Close' : 'Cancel'}</button>
           <button type="button" className="btn-primary text-sm inline-flex items-center gap-2 min-h-[44px]" onClick={submit}
-            disabled={busy || block.state !== 'ok'}>
+            disabled={busy || (!started && block.state !== 'ok')}>
             {busy ? <Loader2 size={15} className="animate-spin" /> : <ShoppingCart size={15} />} {warning ? 'Retry line' : started ? 'Finish' : 'Create PO'}
           </button>
         </div>

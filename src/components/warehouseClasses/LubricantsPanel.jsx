@@ -146,7 +146,11 @@ function DispenseModal({ line, onClose, onDone }) {
   const [key, setKey] = useState(() => newIdempotencyKey())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const set = (k) => (e) => { setKey(newIdempotencyKey()); setForm((f) => ({ ...f, [k]: e.target.value })) }
+  // After an error whose outcome is unknown (a lost response), the form is held:
+  // the retry must send the same request under the same key, or a changed form
+  // under a new key could post a second dispense.
+  const [held, setHeld] = useState(false)
+  const set = (k) => (e) => { if (held) return; setKey(newIdempotencyKey()); setForm((f) => ({ ...f, [k]: e.target.value })) }
   const unit = line.uom || line.item?.base_uom || line.item?.uom || 'units as stocked'
 
   async function submit() {
@@ -163,7 +167,8 @@ function DispenseModal({ line, onClose, onDone }) {
       if (r?.status === 'refused_shortage') { setKey(newIdempotencyKey()); setError('Not enough free stock on this line.'); return }
       onDone()
     } catch (err) {
-      setError(toUserMessage(err, 'The dispense could not be saved.'))
+      setHeld(true)
+      setError(`${toUserMessage(err, 'The dispense could not be saved.')} Press Dispense again to retry the same request; the form is held so it is never posted twice.`)
     } finally { setBusy(false) }
   }
 

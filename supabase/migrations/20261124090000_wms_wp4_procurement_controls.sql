@@ -119,6 +119,14 @@
 --   A3.1  M2 adds a PO line, then approves                    -> 42501 "You added a line ..."
 --   A3.2  M2 edits PO notes, then approves                    -> 42501 "You made the last change ..."
 --   A3.5/6 total / supplier name of an Approved PO changed     -> 22023 refused;  A3.7 notes -> 1 row updated
+-- ROUND 3 (2026-11-24, same rolled-back full-chain run, every earlier case re-run unchanged; script
+-- scratchpad review_round3_proof.sql):
+--   item 2: approved / rejected only from submitted (22023); a signed-in user inserts only draft / submitted (22023)
+--   item 4: PO freeze uses coalesce(old.status, '');  item 7: live stamp_requisition_decision() + its trigger saved to
+--   versioned _bak.wms_wp4_obj_backup_20261124 while unpatched; the undo runs the newest rows.
+--   R3.3b draft requisition edited and set approved in one update -> 22023 "Only a submitted requisition ..."
+--   R3.4  requisition inserted as approved                        -> 22023 "A new requisition starts as draft or submitted."
+--   R3.9  backup rows: function stamp_requisition_decision, trigger trg_stamp_requisition_decision
 -- VERIFY AFTER APPLY
 --   select column_name from information_schema.columns where table_schema='public' and table_name='requisitions'
 --    and column_name in ('item_id','approved_by_id','currency');                                       -- 3 rows
@@ -146,14 +154,11 @@
 --   drop trigger if exists trg_guard_requisition_rules on public.requisitions;
 --   drop function if exists public.guard_requisition_rules();
 --   drop trigger if exists trg_stamp_requisition_decision on public.requisitions;
---   create or replace function public.stamp_requisition_decision() returns trigger language plpgsql
---     set search_path = public as $f$ begin
---       if new.status in ('approved','rejected') then
---         if tg_op = 'INSERT' or old.status is distinct from new.status then new.decided_at := now(); end if;
---       elsif new.status in ('draft','submitted') then new.decided_at := null; end if;
---       return new; end $f$;
---   create trigger trg_stamp_requisition_decision before insert or update of status on public.requisitions
---     for each row execute function public.stamp_requisition_decision();
+--   do $u$ declare r record; begin      -- newest saved function body, then its trigger (round 3, item 7)
+--     for r in select x.def from (select distinct on (obj) obj, def from _bak.wms_wp4_obj_backup_20261124
+--                                  order by obj, id desc) x order by (x.obj like 'trigger%') loop
+--       execute r.def; end loop;
+--   end $u$;
 --   alter table public.requisitions drop column if exists currency, drop column if exists approved_by_id,
 --     drop column if exists item_id, drop column if exists updated_by;   -- drops requisitions_item_id_idx with it
 --   drop trigger if exists trg_stamp_po_line_creator on public.purchase_order_lines;
@@ -174,6 +179,23 @@ alter table _bak.inv_receive_goods_wp4 add column if not exists id bigserial;
 insert into _bak.inv_receive_goods_wp4(def)
   select d from (select pg_get_functiondef('public._inv_receive_goods(jsonb)'::regprocedure) as d) x
    where position('app.inv_receiving' in x.d) = 0;
+
+-- (round 3, item 7) Versioned rollback copy of the live stamp_requisition_decision() and its trigger, taken only
+-- while the function is still the short live version (no approved_by_id), so the newest rows are what was live just
+-- before the latest real apply. The undo runs the newest saved rows (function first, then the trigger).
+create table if not exists _bak.wms_wp4_obj_backup_20261124 (
+  id bigserial primary key, obj text not null, def text not null, saved_at timestamptz not null default now());
+revoke all on _bak.wms_wp4_obj_backup_20261124 from public, anon, authenticated;
+insert into _bak.wms_wp4_obj_backup_20261124(obj, def)
+select x.obj, x.def from (
+  select 'function stamp_requisition_decision' as obj, 1 as ord,
+         pg_get_functiondef('public.stamp_requisition_decision()'::regprocedure) as def
+  union all
+  select 'trigger trg_stamp_requisition_decision', 2, pg_get_triggerdef(t.oid) || ';'
+    from pg_trigger t where t.tgrelid = 'public.requisitions'::regclass and t.tgname = 'trg_stamp_requisition_decision'
+) x
+where position('approved_by_id' in pg_get_functiondef('public.stamp_requisition_decision()'::regprocedure)) = 0
+order by x.ord;
 
 -- ── 1, 3, 4. Columns ────────────────────────────────────────────────────────────────────────────────────────────
 alter table public.requisitions
@@ -213,7 +235,13 @@ begin
   end if;
 
   if tg_op = 'INSERT' then
-    if v_uid is not null then new.updated_by := v_uid; end if;
+    if v_uid is not null then
+      -- (round 3, item 2) a signed-in user raises a requisition only as draft or submitted
+      if coalesce(new.status, 'draft') not in ('draft', 'submitted') then
+        raise exception 'A new requisition starts as draft or submitted.' using errcode = '22023';
+      end if;
+      new.updated_by := v_uid;
+    end if;
     return new;
   end if;
 
@@ -231,6 +259,11 @@ begin
              to_jsonb(old)->>'job_card_no')) then
       raise exception 'A submitted requisition cannot be edited. Return it to draft first, then submit it again.'
         using errcode = '22023';
+    end if;
+    -- a0. (round 3, item 2) a decision is taken only on a submitted requisition
+    if new.status in ('approved', 'rejected') and old.status is distinct from new.status
+       and coalesce(old.status, '') <> 'submitted' then
+      raise exception 'Only a submitted requisition can be approved or rejected.' using errcode = '22023';
     end if;
     -- a. no self-approval / self-rejection
     if new.status in ('approved', 'rejected') and old.status is distinct from new.status
@@ -384,7 +417,7 @@ begin
   end if;
   -- (review A3) once a PO leaves Draft / Submitted its supplier, money, currency and place are frozen; the
   -- workflow may still move its status and add notes.
-  if old.status not in ('Draft', 'Submitted')
+  if coalesce(old.status, '') not in ('Draft', 'Submitted')
      and ((new.supplier_id, new.supplier_name, new.vendor_name, new.currency, new.country, new.site,
            new.total_amount, new.subtotal, new.tax_amount, new.organisation_id)
           is distinct from

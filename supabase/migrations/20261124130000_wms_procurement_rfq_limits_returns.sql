@@ -148,6 +148,19 @@
 --         _po_emergency_normalise / _inv_job_card_resolve -> false/false/false/false
 --   B6.1  award a quote valid until yesterday                   -> 22023 "This quote expired on 2026-11-23 ..."
 --   A15.1 M1 reads KSA RFQ lines/invites/quote lines -> 1/1/1;  A15.2 same RFQ moved to UAE -> 0/0/0/0
+-- ROUND 3 (2026-11-24, same rolled-back full-chain run, every earlier case re-run unchanged; script
+-- scratchpad review_round3_proof.sql):
+--   item 1: Submitted (insert or move) and Approved need a supplier_id that is approved AND active (typed name alone
+--   refused; emergency Draft -> Ordered unchecked); item 5: sensitive keys matched whole
+--   (^(iban|swift|bic|bank.*|account_?(no|num|number)|tax.*|vat.*|trn.*|payment.*|remit.*)$) and a move to inactive /
+--   blocked / suspended clears approval; item 6: trg_guard_invoice_line_emergency_po on supplier_invoice_lines, and the
+--   match refuses when the header PO OR any line's PO is an unapproved emergency PO.
+--   R3.1  Submitted PO with only a typed supplier name            -> 22023
+--   R3.2  Submitted -> Approved on such a PO (inserted by backend) -> 22023
+--   R3.5a custom_data account_manager change -> approval kept (true); A11.3 bank_iban -> cleared; R3.5c status
+--         blocked -> cleared (false)
+--   R3.7  invoice with no header PO, line on unapproved emergency PO -> 22023 at create
+--   R3.8  same kind of invoice created while approved, approval then withdrawn (setup), match -> 22023
 -- UNDO (one transaction)
 --   drop view if exists public.v_supplier_delivery_performance, public.v_po_backorders;
 --   do $u$ declare r record; begin
@@ -155,6 +168,8 @@
 --   end $u$;   -- _inv_supplier_invoice_match, guard_po_rules, inv_approver_roles (newest copy)
 --   drop trigger if exists trg_guard_invoice_emergency_po on public.supplier_invoices;
 --   drop function if exists public.guard_invoice_emergency_po();
+--   drop trigger if exists trg_guard_invoice_line_emergency_po on public.supplier_invoice_lines;
+--   drop function if exists public.guard_invoice_line_emergency_po();
 --   drop function if exists public.inv_supplier_return(jsonb), public.inv_po_emergency_approve(jsonb),
 --     public.inv_rfq_create(jsonb), public.inv_rfq_quote_record(jsonb), public.inv_rfq_award(jsonb),
 --     public.inv_rfq_cancel(jsonb), public.inv_supplier_set_approval(jsonb), public._po_limit_block(public.purchase_orders);
@@ -224,18 +239,22 @@ begin
   -- (review A11) a change to who is paid (name, code, tax, bank or payment terms) takes the supplier off the
   -- approved list again, for every writer (imports included); a second person must re-approve it.
   if tg_op = 'UPDATE' then
+    -- (round 3, item 5) keys matched whole (account_manager is not a bank field); a move to inactive / blocked /
+    -- suspended also takes the supplier off the approved list
     v_sensitive := (new.supplier_name, new.supplier_code) is distinct from (old.supplier_name, old.supplier_code)
+      or (lower(coalesce(new.status, '')) in ('inactive', 'blocked', 'suspended')
+          and lower(coalesce(old.status, '')) is distinct from lower(coalesce(new.status, '')))
       or (select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb) from jsonb_each(coalesce(new.custom_data, '{}'::jsonb)) e
-           where e.key ~* '(tax|vat|trn|bank|iban|swift|bic|account|payment|pay_|remit)')
+           where e.key ~* '^(iban|swift|bic|bank.*|account_?(no|num|number)|tax.*|vat.*|trn.*|payment.*|remit.*)$')
          is distinct from
          (select coalesce(jsonb_object_agg(e.key, e.value), '{}'::jsonb) from jsonb_each(coalesce(old.custom_data, '{}'::jsonb)) e
-           where e.key ~* '(tax|vat|trn|bank|iban|swift|bic|account|payment|pay_|remit)');
+           where e.key ~* '^(iban|swift|bic|bank.*|account_?(no|num|number)|tax.*|vat.*|trn.*|payment.*|remit.*)$');
   end if;
   if v_uid is null then                                            -- service role / imports
     if v_sensitive and current_setting('app.inv_supplier_approval', true) is distinct from 'on'
        and old.approved_for_purchasing then
       new.approved_for_purchasing := false; new.approved_by_id := null; new.approved_at := null;
-      new.approval_note := 'Approval cleared: supplier name, code, tax, bank or payment details changed.';
+      new.approval_note := 'Approval cleared: supplier name, code, status, tax, bank or payment details changed.';
     end if;
     return new;
   end if;
@@ -250,7 +269,7 @@ begin
     new.approved_for_purchasing := false; new.approval_note := null; new.approved_by_id := null; new.approved_at := null;
   elsif v_sensitive and old.approved_for_purchasing then
     new.approved_for_purchasing := false; new.approved_by_id := null; new.approved_at := null;
-    new.approval_note := 'Approval cleared: supplier name, code, tax, bank or payment details changed.';
+    new.approval_note := 'Approval cleared: supplier name, code, status, tax, bank or payment details changed.';
   else
     new.approved_for_purchasing := old.approved_for_purchasing; new.approval_note := old.approval_note;
     new.approved_by_id := old.approved_by_id; new.approved_at := old.approved_at;
@@ -808,9 +827,12 @@ begin
       new := public._po_emergency_clear(new);
     end if;
     -- (review A3) a PO raised straight as Submitted needs an approved supplier
-    if v_uid is not null and new.supplier_id is not null and coalesce(new.status, 'Draft') = 'Submitted'
-       and not exists (select 1 from public.suppliers s where s.id = new.supplier_id and s.approved_for_purchasing) then
-      raise exception 'The supplier is not on the approved supplier list. Ask a buyer to approve the supplier first.' using errcode = '22023';
+    -- (round 3, item 1) a typed supplier name alone is not enough: the supplier record must be approved and active
+    if v_uid is not null and coalesce(new.status, 'Draft') = 'Submitted'
+       and (new.supplier_id is null
+            or not exists (select 1 from public.suppliers s where s.id = new.supplier_id and s.approved_for_purchasing
+                            and lower(coalesce(s.status, '')) = 'active')) then
+      raise exception 'Choose a supplier from the approved supplier list (active and approved for purchasing).' using errcode = '22023';
     end if;
     return new;
   end if;
@@ -848,9 +870,12 @@ begin
   if v_uid is null then return new; end if;                          -- service role / cron
   if new.status is distinct from old.status then
     -- (review A3) Submitted / Approved need a supplier on the approved list
-    if new.status in ('Submitted', 'Approved') and new.supplier_id is not null
-       and not exists (select 1 from public.suppliers s where s.id = new.supplier_id and s.approved_for_purchasing) then
-      raise exception 'The supplier is not on the approved supplier list. Ask a buyer to approve the supplier first.' using errcode = '22023';
+    -- (round 3, item 1) a typed supplier name alone is not enough; emergency Draft -> Ordered stays unchecked
+    if new.status in ('Submitted', 'Approved')
+       and (new.supplier_id is null
+            or not exists (select 1 from public.suppliers s where s.id = new.supplier_id and s.approved_for_purchasing
+                            and lower(coalesce(s.status, '')) = 'active')) then
+      raise exception 'Choose a supplier from the approved supplier list (active and approved for purchasing).' using errcode = '22023';
     end if;
     if new.status = 'Approved' then
       if old.created_by = v_uid or (old.is_emergency and old.emergency_declared_by = v_uid) then
@@ -1099,6 +1124,24 @@ begin
   return jsonb_build_object('return_id', v_ret.id, 'return_no', v_ret.return_no, 'lines', v_n);
 end $fn$;
 
+-- (round 3, item 6) the same rule per invoice LINE: an invoice with no header PO cannot carry a line of an
+-- emergency PO that is not yet approved after the fact (supplier_invoice_lines.po_line_id -> purchase_order_lines).
+create or replace function public.guard_invoice_line_emergency_po()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if new.po_line_id is not null and (tg_op = 'INSERT' or new.po_line_id is distinct from old.po_line_id)
+     and exists (select 1 from public.purchase_order_lines pl join public.purchase_orders po on po.id = pl.po_id
+                  where pl.id = new.po_line_id and po.is_emergency and po.emergency_approved_at is null) then
+    raise exception 'This invoice line is for an emergency purchase that is not approved yet. It must be approved after the fact first.'
+      using errcode = '22023';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.guard_invoice_line_emergency_po() from public, anon, authenticated;
+create or replace trigger trg_guard_invoice_line_emergency_po
+  before insert or update of po_line_id on public.supplier_invoice_lines
+  for each row execute function public.guard_invoice_line_emergency_po();
+
 -- ── 6b. Three-way match nets supplier returns out of the accepted quantity, and refuses an invoice of an emergency
 --        purchase that is not yet approved after the fact (review A13). Anchored; aborts unless each anchor occurs once.
 do $p$
@@ -1110,8 +1153,12 @@ declare src text := replace(pg_get_functiondef('public._inv_supplier_invoice_mat
                          where g2.po_line_id = pl.id and rl.source = 'accepted'), 0) as grn_qty$a$;
   a2 text := $a$if not found then raise exception 'Invoice not found.' using errcode = 'P0002'; end if;$a$;
   b2 text := $a$if not found then raise exception 'Invoice not found.' using errcode = 'P0002'; end if;
-  if v.po_id is not null and exists (select 1 from public.purchase_orders po where po.id = v.po_id
-                                      and po.is_emergency and po.emergency_approved_at is null) then
+  if exists (select 1 from public.purchase_orders po
+              where po.is_emergency and po.emergency_approved_at is null
+                and (po.id = v.po_id
+                     or po.id in (select pl.po_id from public.supplier_invoice_lines il
+                                    join public.purchase_order_lines pl on pl.id = il.po_line_id
+                                   where il.invoice_id = v.id))) then
     raise exception 'This emergency purchase is not approved yet. Approve it after the fact before matching its invoice.' using errcode = '22023';
   end if;$a$;
   n int;

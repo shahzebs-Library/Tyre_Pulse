@@ -119,6 +119,11 @@
 --   Changes here: backup table fn is TEXT and versioned, patches skip when already applied (A14); installation
 --   takes the per-key lock before the key lookup (A17, checked: lock precedes the lookup in the body) and re-checks
 --   the job card through _inv_job_card_resolve (A10). The slip / installation cases above were not re-run in round 2.
+-- ROUND 3 (2026-11-24, same rolled-back full-chain run, every earlier case re-run unchanged; script
+-- scratchpad review_round3_proof.sql):
+--   item 3: inv_confirm_installation stores and returns the resolver's canonical job card (v_jc) and looks the work
+--   order up by it.  R3.6 issue typed 'gckr/jc/1332/0526', installation confirmed by a Manager -> stored
+--   GCKR/JC/1332/0526, returned GCKR/JC/1332/0526.
 -- =============================================================================
 
 begin;
@@ -286,7 +291,7 @@ declare
   v_uid uuid := auth.uid(); v_org uuid := public.app_current_org();
   v_key text; v_qty numeric; v_mid uuid; v_m public.stock_movements%rowtype;
   v_prev public.job_material_installations%rowtype; v_c record; v_on_move numeric;
-  v_wo_id uuid; v_asset text; v_id uuid; v_photo text; v_sig text; v_note text; v_left numeric;
+  v_wo_id uuid; v_asset text; v_id uuid; v_photo text; v_sig text; v_note text; v_left numeric; v_jc text;
 begin
   if v_uid is null or v_org is null or not public.is_approved_and_unlocked() then
     raise exception 'Not authorised.' using errcode = '42501';
@@ -364,18 +369,18 @@ begin
   end if;
 
   -- (review A10) the job card must still be a real one of this company in the caller's scope (canonical number)
-  perform public._inv_job_card_resolve(v_org, v_m.source_doc_id, v_m.country);
+  v_jc := public._inv_job_card_resolve(v_org, v_m.source_doc_id, v_m.country);   -- (round 3, item 3) canonical
   select w.id, w.asset_no into v_wo_id, v_asset from public.work_orders w
-   where w.organisation_id = v_org and w.work_order_no = v_m.source_doc_id
+   where w.organisation_id = v_org and w.work_order_no = v_jc
    order by w.id limit 1;
 
   insert into public.job_material_installations(organisation_id, country, site, job_card_no, work_order_id, asset_no,
     movement_id, stock_id, item_id, qty, installed_by, note, photo_path, signature_image, idempotency_key)
-  values (v_org, v_m.country, v_m.site, v_m.source_doc_id, v_wo_id, v_asset,
+  values (v_org, v_m.country, v_m.site, v_jc, v_wo_id, v_asset,
     v_m.id, v_m.stock_id, v_m.item_id, v_qty, v_uid, v_note, v_photo, v_sig, v_key)
   returning id into v_id;
 
-  return jsonb_build_object('id', v_id, 'replayed', false, 'job_card_no', v_m.source_doc_id,
+  return jsonb_build_object('id', v_id, 'replayed', false, 'job_card_no', v_jc,
     'stock_id', v_m.stock_id, 'qty', v_qty, 'unreconciled', v_left - v_qty);
 end $fn$;
 revoke all on function public.inv_confirm_installation(jsonb) from public;

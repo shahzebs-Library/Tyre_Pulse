@@ -162,7 +162,19 @@
 --   (Dropping movement_id loses the slip-to-movement link; the movements themselves stay.)
 --
 -- OWNER DECISIONS (2026-11-24)
---   * Count adjustments require approval (adjustment_approve), see C2 and C2b. The Expo and
+--   * SUPERSEDED (owner, 2026-11-24, round 3): a count difference (adjustment_up / adjustment_down /
+--     stocktake / adjustment) is posted ONLY by an Admin or the super admin (app_is_org_admin);
+--     adjustment_approve alone is no longer enough. Enforced in inv_post_movement (C1),
+--     post_stock_movement (C2), set_stock_count (C2b), the physical-count adjustment approval
+--     _inv_adjustment_approve (approve branch) and the quick count entry save_stock_entry
+--     (mode count with a difference) (C2c). Rejecting an adjustment is unchanged.
+--     Round 3 proof (same rolled-back run as the round 2 cases, all re-run and unchanged):
+--       Store Keeper / Manager GIVEN adjustment_approve: inv_post_movement adjustment_up / adjustment_down /
+--       stocktake, post_stock_movement adjustment_up / adjustment_down, set_stock_count, save_stock_entry count
+--       difference -> all 42501 "Only an Admin can post a count difference ...";
+--       super admin: inv_post_movement adjustment_up posted, post_stock_movement adjustment_down posted,
+--       set_stock_count -> counted (qty_after 9). _inv_adjustment_approve guard present (body checked).
+--   * (earlier text) Count adjustments require approval (adjustment_approve), see C2 and C2b. The Expo and
 --     Flutter direct count screens will be refused for users without it; they must
 --     use the physical count flow (follow-up in the phone apps).
 --   * Quick-entry receipts without a GRN stay allowed (save_stock_entry 'receipt';
@@ -194,7 +206,9 @@ select p.oid::regprocedure::text, pg_get_functiondef(p.oid)
                  'public.post_stock_movement(uuid,text,numeric,text,text)'::regprocedure,
                  'public._inv_issue(jsonb)'::regprocedure,
                  'public.inv_issue(jsonb)'::regprocedure,
-                 'public.set_stock_count(uuid,numeric,text)'::regprocedure);
+                 'public.set_stock_count(uuid,numeric,text)'::regprocedure,
+                 'public._inv_adjustment_approve(uuid,text,text)'::regprocedure,
+                 'public.save_stock_entry(uuid,text,text,text,text,text,jsonb)'::regprocedure);
 
 -- =====================================================================
 -- 0b. (review A10) One resolver for job cards. A job card named on an issue,
@@ -708,6 +722,11 @@ begin
     || '       (''issue'', ''issue_return'', ''return'', ''reserve'', ''release'', ''adjustment_up'', ''adjustment_down'', ''stocktake'',' || chr(10)
     || '        ''reversal'', ''opening'', ''cost_assignment'', ''cost_allocation'') then' || chr(10)
     || '    raise exception ''%'', public._inv_bare_movement_refusal(p->>''movement_type'') using errcode = ''42501'';' || chr(10)
+    || '  end if;' || chr(10)
+    || '  -- owner decision 2026-11-24: a count difference is posted only by an Admin or the super admin' || chr(10)
+    || '  if lower(btrim(coalesce(p->>''movement_type'', ''''))) in (''adjustment_up'', ''adjustment_down'', ''stocktake'', ''adjustment'')' || chr(10)
+    || '     and not public.app_is_org_admin() then' || chr(10)
+    || '    raise exception ''Only an Admin can post a count difference. Record it as a physical count for an Admin to post.'' using errcode = ''42501'';' || chr(10)
     || '  end if;' || chr(10) || v_old);
   execute v_def;
 end $mig$;
@@ -733,8 +752,8 @@ begin
     || '       and v_type not in (''issue'', ''issue_return'', ''return'', ''adjustment_up'', ''adjustment_down'')) then' || chr(10)
     || '    raise exception ''%'', public._inv_bare_movement_refusal(v_type) using errcode = ''42501'';' || chr(10)
     || '  end if;' || chr(10)
-    || '  if v_type in (''adjustment_up'', ''adjustment_down'') and not public.inv_can(''adjustment_approve'') then' || chr(10)
-    || '    raise exception ''A count difference needs approval. Record it as a physical count; an approver posts the adjustment.'' using errcode = ''42501'';' || chr(10)
+    || '  if v_type in (''adjustment_up'', ''adjustment_down'') and not public.app_is_org_admin() then' || chr(10)
+    || '    raise exception ''Only an Admin can post a count difference. Record it as a physical count for an Admin to post.'' using errcode = ''42501'';' || chr(10)
     || '  end if;' || chr(10)
     || '  if v_type not in (''adjustment_up'', ''adjustment_down'') and not public.inv_can(public._inv_cap_for(v_type)) then' || chr(10)
     || '    raise exception ''Stock permission "%" is required.'', public._inv_cap_for(v_type) using errcode = ''42501'';' || chr(10)
@@ -753,11 +772,41 @@ begin
   v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
   if v_n <> 1 then raise exception 'set_stock_count anchor found % times', v_n; end if;
   v_def := replace(v_def, v_old,
-       'if not public.inv_can(''adjustment_approve'') then' || chr(10)
-    || '    raise exception ''A count difference needs approval. Record it as a physical count; an approver posts the adjustment.'' using errcode = ''42501'';' || chr(10)
+       'if not public.app_is_org_admin() then' || chr(10)
+    || '    raise exception ''Only an Admin can post a count difference. Record it as a physical count for an Admin to post.'' using errcode = ''42501'';' || chr(10)
     || '  end if;' || chr(10) || '  ' || v_old);
   execute v_def;
 end $mig$;
+
+-- C2c. (owner decision 2026-11-24) The other two paths that post a count difference: the
+--      physical-count adjustment approval (_inv_adjustment_approve, approve branch) and the
+--      quick count entry (save_stock_entry, mode count). Both now post a difference only for
+--      an Admin or the super admin (app_is_org_admin). Rejecting an adjustment and a count that
+--      matches the balance are unchanged.
+do $mig$
+declare v_def text; v_old text; v_n int;
+begin
+  v_def := pg_get_functiondef('public._inv_adjustment_approve(uuid,text,text)'::regprocedure);
+  v_old := '  v_r := public._inv_post(jsonb_strip_nulls(jsonb_build_object(''idempotency_key'', ''adjustment:'' || a.id::text,';
+  v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
+  if v_n <> 1 then raise exception '_inv_adjustment_approve anchor found % times', v_n; end if;
+  v_def := replace(v_def, v_old,
+       '  if not public.app_is_org_admin() then' || chr(10)
+    || '    raise exception ''Only an Admin can post a count difference.'' using errcode = ''42501'';' || chr(10)
+    || '  end if;' || chr(10) || v_old);
+  execute v_def;
+
+  v_def := pg_get_functiondef('public.save_stock_entry(uuid,text,text,text,text,text,jsonb)'::regprocedure);
+  v_old := 'IF change_qty<>0 THEN';
+  v_n := (length(v_def) - length(replace(v_def, v_old, ''))) / length(v_old);
+  if v_n <> 1 then raise exception 'save_stock_entry anchor found % times', v_n; end if;
+  v_def := replace(v_def, v_old,
+       'IF change_qty<>0 AND p_mode=''count'' AND NOT public.app_is_org_admin() THEN' || chr(10)
+    || '  RAISE EXCEPTION ''Only an Admin can post a count difference. Record it as a physical count for an Admin to post.'' USING ERRCODE=''42501'';' || chr(10)
+    || 'END IF; ' || v_old);
+  execute v_def;
+end $mig$;
+revoke all on function public._inv_adjustment_approve(uuid, text, text) from public, anon, authenticated;
 
 -- =====================================================================
 -- C3 (D6). _inv_issue answers a retry from the ledger BEFORE re-deriving the

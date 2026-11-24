@@ -14,7 +14,12 @@ export function navEmojiFor(path) {
   if (MAP[p]) return MAP[p]
   const bare = p.split('#')[0]
   if (MAP[bare]) return MAP[bare]
-  const noQuery = bare.split('?')[0]
+  const [noQuery, query = ''] = bare.split('?')
+  // A page link carries one key param (/stock?section=x); extra params such as
+  // &tab=y still resolve to that page's icon.
+  for (const pair of query.split('&')) {
+    if (pair && MAP[`${noQuery}?${pair}`]) return MAP[`${noQuery}?${pair}`]
+  }
   return MAP[noQuery] || null
 }
 

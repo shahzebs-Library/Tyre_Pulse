@@ -179,6 +179,7 @@
  "/stock?section=locations": "file-cabinet",
  "/stock?section=materials": "card-index-dividers",
  "/stock?section=movements": "left-right-arrow",
+ "/stock?section=overview": "bar-chart",
  "/stock?section=physical": "input-numbers",
  "/stock?section=planning": "chart-increasing",
  "/stock?section=procurement": "shopping-bags",

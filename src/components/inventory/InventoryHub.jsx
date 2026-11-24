@@ -87,7 +87,7 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
 
   return (
     <div className="cc inv-hub inv-pmv">
-      <PageHeader title={t(`inventory.sections.${headingKey}`)} subtitle={t('inventory.lead')} icon={Warehouse} />
+      <PageHeader title={t(`inventory.sections.${headingKey}`)} subtitle={t('inventory.lead')} icon={Warehouse} emojiPath={`/stock?section=${headingKey}`} />
 
       {denied ? <Denied capLabel={t(`inventory.sections.${denied}`)} /> : (
         <div className="inv-main">

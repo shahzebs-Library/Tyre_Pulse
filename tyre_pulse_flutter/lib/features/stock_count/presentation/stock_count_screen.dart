@@ -12,10 +12,14 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/inventory/domain/job_card_issue.dart';
+import 'package:tyre_pulse/features/inventory/inventory_providers.dart';
 import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
+import 'package:tyre_pulse/features/inventory/presentation/job_card_issue_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/my_audits_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/physical_inventory_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/transfers_screen.dart';
+import 'package:tyre_pulse/features/stock_count/data/stock_count_recorder.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/stock_count_copy.dart';
 import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
@@ -52,16 +56,30 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
           SnackBar(content: Text(copy('offlineSaved'))),
         );
       }
-    } on Object {
+    } on Object catch (e) {
       ref.invalidate(stockItemsProvider);
       if (mounted) {
+        // A count difference needs an approver (WP5): a +/- by someone
+        // without adjustment_approve is refused by the server. Say so, and
+        // point to the count, which is recorded for review instead.
+        final String text = e is SupabaseFailure && e.isPermissionDenied
+            ? copy('needsApproval')
+            : copy('saveFailed');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(copy('saveFailed'))),
+          SnackBar(content: Text(text)),
         );
       }
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
+  }
+
+  /// Issue this stock to a job card, or take it back from one.
+  Future<void> _move(StockItem item, JobCardMove move) async {
+    final bool? posted = await Navigator.of(context).push<bool>(
+      JobCardIssueScreen.route(item: item, move: move),
+    );
+    if (posted == true) ref.invalidate(stockItemsProvider);
   }
 
   /// Add a stock row for a tyre size at a site (Expo `openAdd`/`submitAdd`).
@@ -402,6 +420,8 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                 onCount: () => unawaited(_count(item, copy)),
                 busy: _busyId == item.id,
                 onAdjust: (int delta) => unawaited(_adjust(item, delta, copy)),
+                onMove: (JobCardMove move) => unawaited(_move(item, move)),
+                inventoryCopy: InventoryCopy.of(context),
               ),
               const SizedBox(height: TpSpace.sm),
             ],
@@ -411,11 +431,12 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
   }
 
   Future<void> _count(StockItem item, StockCountCopy copy) async {
-    final TextEditingController quantity =
-        TextEditingController(text: '${item.quantity}');
+    // Empty on purpose: the counter types what is on the shelf, not what
+    // the system says.
+    final TextEditingController quantity = TextEditingController();
     final TextEditingController reason = TextEditingController();
     bool saving = false;
-    final bool? saved = await showDialog<bool>(
+    await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setDialogState) =>
@@ -425,6 +446,12 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Text(item.description ?? copy('stockItem')),
+              const SizedBox(height: TpSpace.sm),
+              Text(
+                copy('countNote'),
+                key: const Key('stock.countNote'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               const SizedBox(height: TpSpace.md),
               TextField(
                 key: const Key('stock.quantity'),
@@ -459,30 +486,17 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                         return;
                       }
                       setDialogState(() => saving = true);
-                      try {
-                        final workspace = ref.read(workspaceContextProvider);
-                        if (workspace == null) throw StateError('workspace');
-                        final bool queued = await ref
-                            .read(stockCountRepositoryProvider)
-                            .setCount(
-                              item: item,
-                              count: value,
-                              reason: reason.text,
-                              workspace: workspace,
-                            );
-                        if (context.mounted) Navigator.pop(context, true);
-                        if (queued && mounted) {
-                          ScaffoldMessenger.of(this.context).showSnackBar(
-                            SnackBar(content: Text(copy('offlineSaved'))),
-                          );
-                        }
-                      } on Object {
-                        setDialogState(() => saving = false);
-                        if (mounted) {
-                          ScaffoldMessenger.of(this.context).showSnackBar(
-                            SnackBar(content: Text(copy('saveFailed'))),
-                          );
-                        }
+                      final String text = await _record(
+                        item: item,
+                        count: value,
+                        reason: reason.text,
+                        copy: copy,
+                      );
+                      if (context.mounted) Navigator.pop(context, true);
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(content: Text(text)),
+                        );
                       }
                     },
               child: Text(copy('save')),
@@ -493,7 +507,57 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     );
     quantity.dispose();
     reason.dispose();
-    if (saved == true) ref.invalidate(stockItemsProvider);
+    // The balance does not change from a count; nothing to reload.
+  }
+
+  /// Records the count as physical count evidence and returns the sentence
+  /// to show. Never throws: every outcome is a message, and the count is kept
+  /// on the phone whenever it could be saved at all.
+  Future<String> _record({
+    required StockItem item,
+    required num count,
+    required String reason,
+    required StockCountCopy copy,
+  }) async {
+    final workspace = ref.read(workspaceContextProvider);
+    if (workspace == null) return copy('saveFailed');
+    String? device;
+    try {
+      device = await ref.read(inventoryDeviceIdProvider.future);
+    } on Object {
+      device = null;
+    }
+    try {
+      final StockCountRecordResult r =
+          await ref.read(stockCountRecorderProvider).record(
+                item: item,
+                count: count,
+                reason: reason,
+                userId: workspace.userId,
+                // app_current_org() reads profiles.org_id; the server checks
+                // photo paths against it.
+                orgId: workspace.tenantId ?? workspace.companyId,
+                fallbackCountry: workspace.activeCountry,
+                deviceId: device,
+              );
+      return switch (r) {
+        StockCountRecordResult.sent => copy('countRecorded'),
+        StockCountRecordResult.savedOnPhone => copy('countSavedOnPhone'),
+      };
+    } on StockCountRecordFailure catch (f) {
+      return switch (f.problem) {
+        StockCountRecordProblem.noPlace => copy('countNoPlace'),
+        StockCountRecordProblem.needsConnectionForSession =>
+          copy('countNeedsConnection'),
+        StockCountRecordProblem.storage => copy('saveFailed'),
+      };
+    } on StockCountRefused catch (r) {
+      return '${copy('countRefused')} ${r.message}';
+    } on SupabaseFailure catch (f) {
+      return f.error.message;
+    } on Object {
+      return copy('saveFailed');
+    }
   }
 }
 
@@ -520,12 +584,16 @@ class _StockCard extends StatelessWidget {
     required this.copy,
     required this.onCount,
     required this.onAdjust,
+    required this.onMove,
+    required this.inventoryCopy,
     required this.busy,
   });
   final StockItem item;
   final StockCountCopy copy;
+  final InventoryCopy inventoryCopy;
   final VoidCallback onCount;
   final ValueChanged<int> onAdjust;
+  final ValueChanged<JobCardMove> onMove;
   final bool busy;
 
   @override
@@ -606,7 +674,32 @@ class _StockCard extends StatelessWidget {
                 ],
               ),
               Text(copy('onHand')),
-              TextButton(onPressed: onCount, child: Text(copy('count'))),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TextButton(onPressed: onCount, child: Text(copy('count'))),
+                  PopupMenuButton<JobCardMove>(
+                    key: Key('stock.moves.${item.id}'),
+                    tooltip: inventoryCopy('jc_menu'),
+                    enabled: !busy,
+                    onSelected: onMove,
+                    icon: const Icon(Icons.more_vert_rounded),
+                    itemBuilder: (BuildContext context) =>
+                        <PopupMenuEntry<JobCardMove>>[
+                      PopupMenuItem<JobCardMove>(
+                        key: Key('stock.issue.${item.id}'),
+                        value: JobCardMove.issue,
+                        child: Text(inventoryCopy('jc_issueTitle')),
+                      ),
+                      PopupMenuItem<JobCardMove>(
+                        key: Key('stock.return.${item.id}'),
+                        value: JobCardMove.issueReturn,
+                        child: Text(inventoryCopy('jc_returnTitle')),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ],
           ),
         ],

@@ -39,12 +39,10 @@ Future<List<Map<String, dynamic>>> fetchStockPages(
 abstract interface class StockCountRepository {
   Future<List<StockItem>> list({String? country});
 
-  Future<bool> setCount({
-    required StockItem item,
-    required num count,
-    required String? reason,
-    required WorkspaceContext workspace,
-  });
+  // A physical count is recorded as evidence through the physical
+  // inventory outbox (`StockCountRecorder`), never posted from here: a count
+  // difference needs an approver (WP5, migration 20261124091000), so the old
+  // absolute `set_stock_count` path is no longer called by the phone.
 
   /// Quick +/- adjustment by a signed [delta] (Expo `adjustStock`,
   /// `mobile/lib/stock.ts`): the audited `post_stock_movement` RPC
@@ -109,7 +107,8 @@ final class DefaultStockCountRepository
         (int from, int to) {
           var query = _client.from(SupabaseTables.stockRecords).select(
                 'id,site,description,stock_qty,min_level,critical_level,'
-                'stock_status,updated_at',
+                'stock_status,updated_at,country,item_id,location_id,'
+                'qty_reserved,condition,ownership',
               );
           if (scope.isNotEmpty && scope != 'All') {
             query = query.or('country.eq.$scope,country.is.null');
@@ -124,30 +123,6 @@ final class DefaultStockCountRepository
           .where((StockItem item) => item.id.isNotEmpty)
           .toList(growable: false);
     });
-  }
-
-  @override
-  Future<bool> setCount({
-    required StockItem item,
-    required num count,
-    required String? reason,
-    required WorkspaceContext workspace,
-  }) async {
-    final num whole = count.floor();
-    await guard<Object?>(
-      () => _client.rpc<Object?>(
-        SupabaseRpcs.setStockCount,
-        params: <String, Object?>{
-          'p_stock_id': item.id,
-          'p_count': whole,
-          'p_reason': _text(reason),
-        },
-      ),
-    );
-    // STOCK_ADJUST is retired: nothing is queued offline (an absolute
-    // quantity replayed later would bypass the movement ledger). A lost
-    // connection is thrown for the screen to report.
-    return false;
   }
 
   @override
@@ -253,6 +228,13 @@ StockItem _fromRow(Map<String, dynamic> row) => StockItem(
       critical: _number(row['critical_level']),
       status: _text(row['stock_status']),
       updatedAt: DateTime.tryParse(_text(row['updated_at']) ?? ''),
+      country: _text(row['country']),
+      itemId: _text(row['item_id']),
+      locationId: _text(row['location_id']),
+      reserved:
+          row['qty_reserved'] == null ? null : _number(row['qty_reserved']),
+      condition: _text(row['condition']),
+      ownership: _text(row['ownership']),
     );
 
 String? _text(Object? value) {

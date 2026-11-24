@@ -27,6 +27,7 @@ import {
   ChevronLeft, ChevronRight, RotateCw, Filter, Globe, Building2, Grid, Percent,
 } from 'lucide-react'
 import { getReportSnapshot, getReportTyreMaintenance, REPORT_PAGES } from '../lib/api/reportShares'
+import { mustClearShareSnapshot } from '../lib/reportShareAccess'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import { safeImageSrc } from '../lib/safeUrl'
 import { normalizeLayout, hasCustomLayout } from '../lib/reportShareLayout'
@@ -799,8 +800,25 @@ export default function ReportShare() {
         setLastRefresh(new Date())
         if (resetPage) setPageIndex(0)
         fetchTm(pwRef.current, res)
+      } else if (mustClearShareSnapshot(res)) {
+        // Revoked, expired and invalid shares must not remain visible on an
+        // already-open TV. Only transient transport failures preserve the
+        // last known data; the server remains the access authority.
+        setSnapshot(null)
+        setTm(null)
+        pwRef.current = null
+        loadedRef.current = false
+        setReason(res.reason)
+        setStatus('error')
+      } else if (res?.reason === 'password') {
+        setSnapshot(null)
+        setTm(null)
+        pwRef.current = null
+        loadedRef.current = false
+        setReason('password')
+        setStatus('password')
       }
-    } catch { /* keep showing the last good snapshot */ }
+    } catch { /* a transport failure preserves the last good snapshot */ }
   }, [token, fetchTm])
 
   // Manual, on-demand refresh (button) with a brief busy indicator + timer reset.

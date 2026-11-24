@@ -1,0 +1,34 @@
+%% src: /Users/anum/Documents/wt-inv-layout/tyre_pulse_flutter/lib
+%% legend: green=IMPLEMENTED (live in DB + wired in code); yellow=PARTIAL (fixed on branch, not merged); red=BROKEN (evidence in doc); -.->=network call
+flowchart TD
+title Flutter offline queue and sync
+  subgraph DEV [On the phone, Drift SQLite]
+    UI["Feature screens<br/>inspections, checklists, meter_logs"]:::green
+    DRAFT[("InspectionDrafts, ChecklistDrafts<br/>draft_tables.dart")]:::green
+    Q[("PendingCommands, PendingMediaUploads<br/>queue_tables.dart")]:::green
+    FAIL[("SyncFailures")]:::green
+  end
+  subgraph RUN [Sync runtime]
+    BG["background_sync.dart<br/>Workmanager + connectivity_plus"]:::green
+    ENG["SyncEngine, command_registry.dart"]:::green
+    PUSH["SupabaseCommandPusher<br/>insert / update by id"]:::green
+    INVP["InventoryCountCommandPusher<br/>inv_count_submit"]:::green
+  end
+  subgraph STK [Stock screens]
+    PIO["physical_capture_outbox.dart<br/>inv_pi_capture"]:::green
+    SCM["main: Add stock<br/>stock_records insert"]:::red
+    SCB["branch 89cf96c3: recordNew<br/>proposed_new capture"]:::yellow
+  end
+  DB[("Supabase Postgres")]:::green
+  UI --> DRAFT
+  UI --> Q
+  BG --> ENG
+  ENG --> Q
+  ENG --> FAIL
+  ENG --> PUSH
+  ENG --> INVP
+  PUSH -.->|PostgREST| DB
+  INVP -.->|RPC| DB
+  PIO -.->|RPC| DB
+  SCB --> PIO
+  SCM -.->|"refused 42501"| DB

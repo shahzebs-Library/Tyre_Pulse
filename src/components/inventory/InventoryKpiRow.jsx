@@ -38,16 +38,16 @@ export default function InventoryKpiRow({ scope, onNavigate }) {
 
   return (
     <div className="inv-kpis" role="group" aria-label={t('inventory.ui.kpi.label')}>
-      <Kpi icon={CheckCircle2} tone="t-green" loading={loading} value={k.identified}
+      <Kpi icon={CheckCircle2} emoji="check-mark-button" tone="t-green" loading={loading} value={k.identified}
         label={<Label text={t('inventory.ui.kpi.identified')} sub={k.captures !== null ? t('inventory.ui.kpi.ofCaptured', { n: k.captures }) : null} />}
         onClick={() => onNavigate('physical', 'dashboard')} />
-      <Kpi icon={HelpCircle} tone="t-amber" loading={loading} value={k.unidentified}
+      <Kpi icon={HelpCircle} emoji="detective" tone="t-amber" loading={loading} value={k.unidentified}
         label={<Label text={t('inventory.ui.kpi.unidentified')} sub={t('inventory.ui.kpi.awaitingReview')} />}
         onClick={() => onNavigate('physical', 'review')} />
-      <Kpi icon={FileWarning} tone="t-red" loading={loading} value={k.pendingCorrections}
+      <Kpi icon={FileWarning} emoji="memo" tone="t-red" loading={loading} value={k.pendingCorrections}
         label={<Label text={t('inventory.ui.kpi.pendingCorrections')} sub={t('inventory.ui.kpi.needDecision')} />}
         onClick={() => onNavigate('corrections')} />
-      <Kpi icon={ClipboardCheck} tone="t-blue" loading={audits.loading && !audits.data} display={auditPct}
+      <Kpi icon={ClipboardCheck} emoji="clipboard" tone="t-blue" loading={audits.loading && !audits.data} display={auditPct}
         label={<Label text={t('inventory.ui.kpi.auditCompletion')} sub={sitesLine} />}
         onClick={() => onNavigate('audits')} />
     </div>

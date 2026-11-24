@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { toUserMessage } from '../../lib/safeError'
 import EnterpriseTable from '../ui/EnterpriseTable'
+import { EmojiGlyph, RouteEmoji } from '../ui/NavEmoji'
 import { vehiclePhoto, vehicleKind } from '../../lib/vehiclePhoto'
 import './commandCenter.css'
 
@@ -94,11 +95,14 @@ export function Trend({ value, goodWhenUp = true, title = 'Change over the last 
   )
 }
 
-/** KPI tile. `display` overrides the formatted value (e.g. "82" or "76%"). */
-export function Kpi({ icon: Icon, tone, value, display, label, to, onClick, trend, goodWhenUp, loading, danger, title }) {
+/**
+ * KPI tile. `display` overrides the formatted value (e.g. "82" or "76%").
+ * `emoji` (a Fluent emoji name from the nav sprite) replaces the line icon.
+ */
+export function Kpi({ icon: Icon, emoji, tone, value, display, label, to, onClick, trend, goodWhenUp, loading, danger, title }) {
   const body = (
     <>
-      <span className={`cc-kpi-icon ${tone}`}><Icon size={21} aria-hidden="true" /></span>
+      <span className={`cc-kpi-icon ${tone}`}>{emoji ? <EmojiGlyph name={emoji} size={24} /> : <Icon size={21} aria-hidden="true" />}</span>
       <div className="cc-kpi-body">
         <div className="cc-kpi-val" style={danger ? { color: 'var(--cc-red)' } : undefined}>{loading ? '...' : (display ?? fmtInt(value))}</div>
         <div className="cc-kpi-label">{label}</div>
@@ -120,7 +124,7 @@ export function PageHero({ hello, title, lead, imgLight, imgDark, stat, icon: Ic
     <div className="cc-hero">
       {imgDark && <div className="cc-hero-img cc-hero-dark" style={{ backgroundImage: `url(${imgDark})` }} aria-hidden="true" />}
       {imgLight && <div className="cc-hero-img cc-hero-light" style={{ backgroundImage: `url(${imgLight})` }} aria-hidden="true" />}
-      {Icon && <span className="cc-hero-icon" aria-hidden="true"><Icon size={26} strokeWidth={2} /></span>}
+      {Icon && <span className="cc-hero-icon" aria-hidden="true"><RouteEmoji fallback={<Icon size={26} strokeWidth={2} />} /></span>}
       <div className="cc-hero-copy">
         {hello && <p className="cc-hero-hello">{hello}</p>}
         <h1>{title}</h1>

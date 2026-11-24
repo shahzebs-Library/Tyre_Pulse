@@ -2134,3 +2134,8 @@ html.light .tp-approvals button:disabled {
   opacity: 1 !important; cursor: not-allowed;
   background-color: #f1f5f9 !important; color: #64748b !important; border-color: #cbd5e1 !important;
 }
+
+/* Page emoji (sidebar + Ctrl+K): a soft tile so dark emoji (tyres, gauges) stay
+   readable on the charcoal sidebar. Approved in docs/icon-preview-fluent-emoji.html. */
+.nav-emoji { background: #e4e8ec; }
+html.light .nav-emoji { background: #f1f4f3; }

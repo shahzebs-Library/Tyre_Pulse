@@ -36,6 +36,7 @@ import {
 import { sanitizeSearchTerm, escapeLike } from '../searchFilter'
 import { sanitizeCounterLines } from '../inventory/auditView'
 import { CUSTODY_STATES } from '../inventory/tyreInventoryView'
+import { receivableLines } from '../inventory/stockFlowRules'
 
 export const NOT_SET_UP_CODE = 'INV_NOT_PROVISIONED'
 export const NOT_SET_UP_MESSAGE = 'This part of inventory is not set up yet.'
@@ -913,7 +914,9 @@ export async function loadValuation({ country, site } = {}) {
       let q = supabase.from(VIEWS.valuation).select('*')
       q = applySite(applyCountry(q, country), site)
       return q.order('stock_id', { ascending: true }).range(from, to)
-    }, { max: 5000 })
+    // Sequential pages: each page of this view also counts open reconciliations per
+    // balance, and pages fetched four at a time were what ran into the 8 s timeout.
+    }, { max: 5000, concurrency: 1 })
     if (error) {
       if (notProvisioned(error)) return { status: 'not_provisioned', rows: [], truncated: false }
       throw toServiceError(error)
@@ -967,7 +970,64 @@ function erpFilters(q, { country, site, status, search, month }) {
   return or ? q.or(or) : q
 }
 
-export function listErpReconciliation({ page, pageSize, ...filters } = {}) {
+/**
+ * The server function that returns ONE page and its total from a single pass over
+ * the view (migration 20261124135000). Reading the view directly needs two passes
+ * (the exact count and the page), and every pass aggregates every ERP line, which
+ * is what ran into the 8 s timeout. Filters mean exactly what `erpFilters` means.
+ */
+const ERP_PAGE_RPC = 'inv_erp_reconciliation_page'
+const ERP_RPC_MAX_LIMIT = 5000
+
+function erpRpcArgs({ country, site, status, search, month, monthFrom } = {}) {
+  const s = sanitizeSearchTerm(search)
+  return {
+    p_country: country && country !== 'All' ? country : null,
+    p_site: site && site !== 'all' ? site : null,
+    p_status: status && status !== 'all' ? status : null,
+    p_month: month || null,
+    p_month_from: monthFrom || null,
+    p_item_like: s ? `%${escapeLike(s)}%` : null,
+  }
+}
+
+/** One RPC page, or `null` when the function is not installed yet (use the view). */
+async function erpRpcPage(filters, offset, limit) {
+  const { data, error } = await supabase.rpc(ERP_PAGE_RPC, { ...erpRpcArgs(filters), p_offset: offset, p_limit: limit })
+  if (error) {
+    if (notProvisioned(error)) return null
+    throw toServiceError(error)
+  }
+  return { rows: Array.isArray(data?.rows) ? data.rows : [], total: Number(data?.total) || 0 }
+}
+
+/**
+ * Every matching row up to `max`, read in sequential pages of 5,000 through the
+ * server function. `null` when the function is not installed (caller falls back).
+ */
+export async function loadErpReconciliationRpcRows(filters = {}, max = SNAPSHOT_MAX) {
+  const rows = []
+  let total = 0
+  for (let offset = 0; offset < max; offset += ERP_RPC_MAX_LIMIT) {
+    const limit = Math.min(ERP_RPC_MAX_LIMIT, max - offset)
+    const page = await erpRpcPage(filters, offset, limit)
+    if (!page) return null
+    total = page.total
+    rows.push(...page.rows)
+    if (page.rows.length < limit || rows.length >= total) break
+  }
+  return { status: 'ok', rows, truncated: total > rows.length }
+}
+
+export async function listErpReconciliation({ page, pageSize, ...filters } = {}) {
+  try {
+    const p = clampPage(page)
+    const size = clampSize(pageSize)
+    const res = await erpRpcPage(filters, p * size, size)
+    if (res) return { status: 'ok', rows: res.rows, total: res.total }
+  } catch (err) {
+    if (!notProvisioned(err)) throw toServiceError(err)
+  }
   return pagedRead(VIEWS.erpReconciliation, '*', {
     page, pageSize, order: 'month', ascending: false, tiebreak: ERP_KEY, build: (q) => erpFilters(q, filters),
   })
@@ -976,11 +1036,13 @@ export function listErpReconciliation({ page, pageSize, ...filters } = {}) {
 /** Bounded full read for the ERP reconciliation export (same filters as the screen). */
 export async function loadErpReconciliationRows(filters = {}) {
   try {
+    const viaRpc = await loadErpReconciliationRpcRows(filters, SNAPSHOT_MAX)
+    if (viaRpc) return viaRpc
     const { data, error, truncated } = await fetchAllPages((from, to) => {
       let q = erpFilters(supabase.from(VIEWS.erpReconciliation).select('*'), filters).order('month', { ascending: false })
       for (const col of ERP_KEY) q = q.order(col, { ascending: true })
       return q.range(from, to)
-    }, { max: SNAPSHOT_MAX })
+    }, { max: SNAPSHOT_MAX, concurrency: 1 })
     if (error) {
       if (notProvisioned(error)) return { status: 'not_provisioned', rows: [], truncated: false }
       throw toServiceError(error)
@@ -1082,11 +1144,58 @@ export function dispatchTransfer({ fromLocationId, toLocationId, lines, remarks 
 
 /** inv_transfer_receive: received qty per line (a short receipt stays in transit). */
 export function receiveTransfer({ transferId, lines }, key) {
-  const clean = (lines || []).filter((l) => l.line_id && l.received_qty !== '' && l.received_qty != null && Number(l.received_qty) >= 0)
+  // Only lines with a quantity above zero are sent. The server refuses a zero on
+  // any line, so sending a not-yet-arrived line at 0 used to fail the whole
+  // receipt. A line left out simply stays in transit.
+  const clean = receivableLines(lines)
   if (!transferId || !clean.length) return Promise.reject(new ServiceError('Enter the received quantity for at least one line.', 'INV_NO_LINES'))
   return rpcWrite('inv_transfer_receive', {
     transfer_id: transferId,
     lines: clean.map((l) => ({ line_id: l.line_id, received_qty: Number(l.received_qty), condition: l.condition || 'good', remarks: l.remarks || null })),
+  }, key)
+}
+
+/**
+ * inv_transfer_return_remaining: send what is still in transit back to the
+ * source location (both legs posted: out of transit, into the source). With no
+ * lines, every remaining quantity returns. A reason is required by the server.
+ */
+export function returnTransferRemaining({ transferId, reason, lines }, key) {
+  if (!transferId) return Promise.reject(new ServiceError('Choose a transfer.', 'INV_NO_TRANSFER'))
+  if (!String(reason || '').trim()) return Promise.reject(new ServiceError('Give a reason for returning the transfer.', 'INV_NO_REASON'))
+  const picked = Array.isArray(lines) ? lines.filter((l) => l.line_id && qtyOk(l.qty)).map((l) => ({ line_id: l.line_id, qty: Number(l.qty) })) : []
+  return rpcWrite('inv_transfer_return_remaining', {
+    transfer_id: transferId, reason: String(reason).trim(), ...(picked.length ? { lines: picked } : {}),
+  }, key)
+}
+
+/** inv_release: give back reserved stock (all of what is left when qty is blank). */
+export function releaseReservation({ reservationId, qty }, key) {
+  if (!reservationId) return Promise.reject(new ServiceError('There is no reservation to release.', 'INV_NO_RESERVATION'))
+  if (qty !== '' && qty != null && !qtyOk(qty)) return Promise.reject(new ServiceError('Choose a quantity above zero.', 'INV_BAD_QTY'))
+  return rpcWrite('inv_release', { reservation_id: reservationId, qty: qtyOk(qty) ? Number(qty) : null }, key)
+}
+
+/**
+ * Return issued stock to the shelf (movement_type issue_return) through
+ * inv_post_movement, linked to the job card it came back from.
+ *
+ * The job card is REQUIRED: the server (WP5, migration 20261124091000) bounds a
+ * return by what that job card took from this stock line, minus what already
+ * came back, and values it at the cost it was issued at. A return never takes a
+ * unit cost from the client and never takes the current average: when the issue
+ * was not fully valued the units come back unvalued and open a cost
+ * reconciliation. No unit_cost is sent.
+ */
+export function returnIssuedStock({ stockId, qty, reason, sourceDocType, sourceDocId, referenceNo }, key) {
+  if (!stockId || !qtyOk(qty)) return Promise.reject(new ServiceError('Choose a stock line and a quantity above zero.', 'INV_BAD_QTY'))
+  if (!String(reason || '').trim()) return Promise.reject(new ServiceError('Give a reason for the return.', 'INV_NO_REASON'))
+  if (!String(sourceDocId || '').trim()) {
+    return Promise.reject(new ServiceError('Name the job card the material was issued against.', 'INV_NO_SOURCE_DOC'))
+  }
+  return rpcWrite('inv_post_movement', {
+    stock_id: stockId, movement_type: 'issue_return', qty_change: Number(qty), reason: String(reason).trim(),
+    reference_no: referenceNo || null, source_doc_type: sourceDocType || 'job_card', source_doc_id: String(sourceDocId).trim(),
   }, key)
 }
 

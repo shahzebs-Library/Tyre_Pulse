@@ -1,0 +1,23 @@
+%% src: /Users/anum/Documents/wt-inv-layout/src /Users/anum/Documents/wt-inv-layout/supabase/migrations /Users/anum/Documents/wt-inv-layout/tyre_pulse_flutter/lib
+%% legend: green=IMPLEMENTED (live in DB + wired in code); yellow=PARTIAL (built, unused or degraded); red=BROKEN (evidence in doc); purple=PROPOSED (migration file, NOT APPLIED); -.->=text join or proposed link
+flowchart LR
+title Tyre lifecycle
+  IN["ERP monthly tyre file<br/>stg_monthly_tyres"]:::green
+  INSP["inspections 2,870<br/>Flutter inspection wizard"]:::green
+  TR[("tyre_records 11,274<br/>fitment + removal rows")]:::green
+  TSE["tyre_service_events 0<br/>rotation / repair"]:::yellow
+  SCR["tyre_status_marks 954<br/>scrap_tyre_by_serial"]:::green
+  TI[("tyre_items 8,641<br/>inv_tyre_item_sync")]:::green
+  TSH["tyre_store_holdings 4<br/>inv_tyre_store_holding"]:::yellow
+  CON["tyre_custody_conflicts<br/>inv_tyre_conflict_decide"]:::green
+  PRICE["cost_per_tyre backfill<br/>tyre_price_backfill"]:::green
+  CPK["get_tyre_running_life<br/>get_fleet_cpk"]:::green
+  IN --> TR
+  INSP -.->|"tyre_conditions, flags"| TR
+  TR --> TSE
+  TR --> SCR
+  TR -->|"serial sync"| TI
+  TI --> TSH
+  TI --> CON
+  PRICE --> TR
+  TR --> CPK

@@ -1094,52 +1094,13 @@ export default function UploadData() {
     const batchId = crypto.randomUUID()
 
     if (uploadType === 'stock') {
-      const finalRows = buildRows(headers, rows, mapping)
-      const stockRows = finalRows.map(row => ({
-        item_code:   row.item_code   || null,
-        description: row.description || null,
-        brand:       row.brand       || null,
-        category:    row.category    || null,
-        qty:         parseFloat(row.qty)         || 0,
-        unit_cost:   parseFloat(row.unit_cost)   || 0,
-        site:        row.site     || uploadCountry || null,
-        country:     uploadCountry,
-        location:    row.location || null,
-        min_level:   parseFloat(row.min_level)   || 0,
-        reorder_qty: parseFloat(row.reorder_qty) || 0,
-        supplier:    row.supplier || null,
-        notes:       row.notes    || null,
-      }))
-      if (!isAdminUploader) {
-        const { error: pErr } = await submitForApproval({ batchId, country: uploadCountry, uploadType: 'stock', targetTable: 'stock_records', rows: stockRows })
-        if (pErr) { setError(t('uploaddata.errors.approvalError', { message: toUserMessage(pErr, 'unknown error') })); setStep('preview'); return }
-        setResult({ pending: true, sourceRows: rows.length, submitted: stockRows.length, added: 0, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipped: 0, skipLog: [] })
-        setStep('done')
-        return
-      }
-      const CHUNK = 500
-      let added = 0, stockSkipped = 0
-      const stockSkipLog = []
-      for (let i = 0; i < stockRows.length; i += CHUNK) {
-        const chunk = stockRows.slice(i, i + CHUNK)
-        const { error: err } = await uploads.insertStockRecords(chunk)
-        if (!err) { added += chunk.length }
-        else {
-          // Retry row-by-row so one bad row never silently drops the whole chunk.
-          for (let j = 0; j < chunk.length; j++) {
-            const { error: rowErr } = await uploads.insertStockRecords(chunk[j])
-            if (rowErr) { stockSkipped += 1; stockSkipLog.push({ row: i + j + 1, description: chunk[j].description ?? null, error: rowErr.message }) }
-            else added += 1
-          }
-        }
-        setProgress({ done: Math.min(i + CHUNK, stockRows.length), total: stockRows.length })
-      }
-      await logAuditEvent({ action: 'upload_stock', table_name: 'stock_records', record_count: added, details: { file: fileName, batch_id: batchId } })
-      setResult({ sourceRows: rows.length, attempted: stockRows.length, added, autoClassifiedCount: 0, needsReviewCount: 0, dupesSkipped: 0, skipped: stockSkipped, skipLog: stockSkipLog })
-      setStep('done')
+      // stock_records accepts no direct inserts (signed-in users hold no INSERT
+      // grant; balances move only through the ledger), so this path refused every
+      // row. Opening balances are the import route: validated, approved, posted.
+      setError(t('uploaddata.errors.stockUseOpening'))
+      setStep('preview')
       return
     }
-
     await saveColumnMapping(fingerprintHeaders(headers))
 
     // Trim strings and enforce field length caps to match DB constraints

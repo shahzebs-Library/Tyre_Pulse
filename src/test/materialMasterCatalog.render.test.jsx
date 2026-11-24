@@ -47,10 +47,12 @@ describe('MaterialMasterSection catalogue', () => {
     expect(await screen.findByText('WEDGE HOLDER')).toBeTruthy()
     expect(screen.getAllByText(/Not stated/).length).toBeGreaterThan(0)
     expect(screen.getAllByText('Genuine').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Pending opening 4').length).toBeGreaterThan(0)
-    expect(screen.getByText('Opening stock waiting for approval')).toBeTruthy()
-    expect(screen.getByText(/Not yet approved/)).toBeTruthy()
-    expect(screen.getByText('No posted stock of this item code in the stores you can see.')).toBeTruthy()
+    // The stock panel loads after the list; wait for it rather than reading it immediately (slow CI runners).
+    const wait = { timeout: 10000 }
+    expect((await screen.findAllByText('Pending opening 4', {}, wait)).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Opening stock waiting for approval', {}, wait)).toBeTruthy()
+    expect(await screen.findByText(/Not yet approved/, {}, wait)).toBeTruthy()
+    expect(await screen.findByText('No posted stock of this item code in the stores you can see.', {}, wait)).toBeTruthy()
   })
 
   it('sends filters to the server and resets to the first page', async () => {

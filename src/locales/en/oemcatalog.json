@@ -330,9 +330,9 @@
   },
   "basket": {
     "onHand": "On hand: {qty}",
-    "sameNumber": "Identical part number in the internal parts catalog; not a verified link",
-    "noStock": "Not linked to stock",
-    "reservedNote": "Reserved quantity is not tracked",
+    "sameNumber": "Through an approved OEM link (checked by a second person)",
+    "noStock": "No approved OEM link to stock",
+    "reservedNote": "Reserved: {qty}",
     "unit": "Unit",
     "clear": "Clear list",
     "clearTitle": "Clear the selection?",

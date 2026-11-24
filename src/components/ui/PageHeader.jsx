@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { RefreshCw, Clock, ArrowLeft } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '../../lib/cn'
+import { RouteEmoji } from './NavEmoji'
 import { useLanguage } from '../../contexts/LanguageContext'
 
 // "Updated 2 minutes ago" style relative time (compact, dependency-free).
@@ -30,6 +31,9 @@ function relativeTime(ts) {
  *   control for every page, so PageHeader no longer shows its own by default;
  *   this avoids two back buttons. Kept as an opt-in for backward compatibility.
  * @param {Function} onBack     - optional override; called instead of navigate(-1)
+ * @param {string}   emojiPath  - route whose Fluent emoji fills the icon tile
+ *   (defaults to the current location). The line icon is the fallback when
+ *   the route has no emoji, so the header matches the sidebar entry.
  */
 export default function PageHeader({
   title,
@@ -43,6 +47,7 @@ export default function PageHeader({
   className,
   showBack = false,
   onBack,
+  emojiPath,
 }) {
   const { t } = useLanguage()
   const navigate = useNavigate()
@@ -78,7 +83,7 @@ export default function PageHeader({
         )}
         {Icon && (
           <div className="w-10 h-10 rounded-xl bg-brand-subtle border border-[rgba(22,163,74,0.2)] flex items-center justify-center shrink-0">
-            <Icon className="w-5 h-5 text-brand-bright" />
+            <RouteEmoji path={emojiPath} fallback={<Icon className="w-5 h-5 text-brand-bright" />} />
           </div>
         )}
         <div>

@@ -1,0 +1,23 @@
+%% src: /Users/anum/Documents/wt-inv-layout/supabase/migrations
+erDiagram
+title Procurement and workshop ER (live FKs only)
+  suppliers ||--o{ purchase_orders : "purchase_orders_supplier_id_fkey"
+  purchase_orders ||--o{ purchase_order_lines : "po_id_fkey"
+  material_master ||--o{ purchase_order_lines : "item_id_fkey"
+  purchase_orders ||--o{ goods_receipts : "goods_receipts_po_id_fkey"
+  goods_receipts ||--o{ goods_receipt_lines : "grn_id_fkey"
+  purchase_order_lines ||--o{ goods_receipt_lines : "po_line_id_fkey"
+  stock_movements ||--o{ goods_receipt_lines : "movement_id_fkey"
+  purchase_orders ||--o{ supplier_invoices : "supplier_invoices_po_id_fkey"
+  suppliers ||--o{ supplier_agreements : "supplier_id_fkey"
+  material_issues ||--o{ material_issue_lines : "issue_id_fkey"
+  work_orders ||--o{ wo_tasks : "wo_tasks_job_id_fkey"
+  work_orders ||--o{ wo_assignments : "wo_assignments_job_id_fkey"
+  wo_tasks ||--o{ wo_assignments : "task_id_fkey"
+  work_orders ||--o{ tech_activity_events : "job_id_fkey"
+  work_orders ||--o{ work_order_stock_reservations : "work_order_id_fkey"
+  work_orders ||--o{ approval_execution_requests : "work_order_id_fkey"
+  vehicle_fleet ||--o{ approval_execution_requests : "vehicle_id_fkey"
+  work_orders ||--o{ parts_requests : "parts_requests_job_id_fkey"
+  parts_catalog ||--o{ parts_requests : "parts_requests_part_id_fkey"
+  pm_programs ||--o{ pm_service_records : "pm_program_id_fkey"

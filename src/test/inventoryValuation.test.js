@@ -255,13 +255,14 @@ describe('issue allocation (the ambiguous part is decided by a person, never ass
 })
 
 describe('returns, credits, landed cost, scrap, adjustments', () => {
-  it('issue return comes back at the cost carried, else at current average, else unvalued', () => {
+  it('issue return comes back at the issued cost, else unvalued (never at the current average)', () => {
     let r = step(SAR(), { type: 'receipt', qty: 10, unitCost: 10 })
     r = step(r.balance, { type: 'issue_return', qty: 2, unitCost: 13 })
     expect(r.valueChange).toBe(26)
+    // no issued cost known: unvalued, even though the balance has an average
     r = step(r.balance, { type: 'issue_return', qty: 1 })
-    expect(r.unitCostApplied).toBe(10.5)
-    expect(r.valueChange).toBe(10.5)
+    expect(r.valueChange).toBe(null)
+    expect(r.balance.unvaluedQty).toBe(1)
     const empty = step(SAR(), { type: 'issue_return', qty: 1 })
     expect(empty.valueChange).toBe(null)
   })

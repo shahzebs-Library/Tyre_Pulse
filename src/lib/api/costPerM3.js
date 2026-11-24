@@ -11,6 +11,7 @@
  */
 import { supabase, fetchAllPages, isMissingRelation, isNotProvisioned, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { mapWithConcurrency } from '../concurrency'
 
 /**
  * Insert many rows fast and reliably: batches of CHUNK, a small concurrency pool,
@@ -664,6 +665,8 @@ export async function deleteProduction(id) {
 
 // ---- Sites (region map) ----------------------------------------------------
 
+/** Site UPDATEs in flight at once during a sites import. */
+const SITE_UPDATE_CONCURRENCY = 4
 const SITE_COLS = 'id, country, name, site_code, region, city, site_type, active, notes, created_at'
 
 export async function listSites({ country, limit = 2000 } = {}) {
@@ -712,17 +715,26 @@ export async function importSites(rows = []) {
   let inserted = 0; let updated = 0; let failed = 0
   const errors = []
   const toInsert = []
+  const toUpdate = []
   for (const r of clean) {
     const id = existing[key(r.country, r.name)]
-    if (id) {
-      try {
-        const patch = { region: r.region, city: r.city, site_code: r.site_code, site_type: r.site_type, active: r.active, notes: r.notes }
-        const { error } = await supabase.from('sites').update(patch).eq('id', id)
-        if (error) { failed += 1; if (errors.length < 5) errors.push(toUserMessage(error)) } else updated += 1
-      } catch (e) { failed += 1; if (errors.length < 5) errors.push(toUserMessage(e)) }
-    } else {
-      toInsert.push(r)
-    }
+    if (id) toUpdate.push({ id, r })
+    else toInsert.push(r)
+  }
+  // Each UPDATE targets its own site row by id, so they are independent: up to
+  // SITE_UPDATE_CONCURRENCY run together (each is a full round trip to the
+  // database region). Outcomes are folded in file order so the counts and the
+  // first five error messages are the same as the one-at-a-time loop.
+  const outcomes = await mapWithConcurrency(toUpdate, SITE_UPDATE_CONCURRENCY, async ({ id, r }) => {
+    try {
+      const patch = { region: r.region, city: r.city, site_code: r.site_code, site_type: r.site_type, active: r.active, notes: r.notes }
+      const { error } = await supabase.from('sites').update(patch).eq('id', id)
+      return error ? { error } : { ok: true }
+    } catch (e) { return { error: e } }
+  })
+  for (const o of outcomes) {
+    if (o.ok) updated += 1
+    else { failed += 1; if (errors.length < 5) errors.push(toUserMessage(o.error)) }
   }
   if (toInsert.length) {
     const res = await chunkedInsert('sites', toInsert)

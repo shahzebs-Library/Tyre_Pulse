@@ -26,7 +26,7 @@
  *
  * @module api/materialIssue
  */
-import { supabase, fetchAllPages, isMissingRelation, isNotProvisioned, ServiceError, toServiceError } from './_client'
+import { supabase, fetchAllPages, isMissingRelation, isNotProvisioned, isMissingColumn, ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { groupLinesIntoSlips } from '../materialIssue'
 
@@ -63,8 +63,14 @@ const ISSUE_COLS = 'id, issue_number, doc_type, work_order_no, asset_no, site, '
   + 'country, client_uuid, created_at'
 
 /** Line columns for a slip raised in app (V609). */
-const ISSUE_LINE_COLS = 'id, issue_id, line_no, item_code, item_description, qty, '
+const ISSUE_LINE_BASE_COLS = 'id, issue_id, line_no, item_code, item_description, qty, '
   + 'uom, unit_cost, line_cost, category'
+/** WP5 (20261124091000) adds the balance a line comes from and its posting. */
+const ISSUE_LINE_COLS = `${ISSUE_LINE_BASE_COLS}, stock_id, movement_id`
+
+/** Balance lines offered per slip line (v_inv_balances is RLS-scoped). */
+const SLIP_STOCK_COLS = 'id, item_code, description, site, country, location_code, condition, qty_on_hand, qty_reserved, uom'
+const SLIP_STOCK_LIMIT = 50
 
 /** Strip the characters that would change the meaning of a PostgREST `or` filter. */
 function sanitizeSearch(term) {
@@ -285,12 +291,16 @@ export async function listMaterialIssues(opts = {}) {
 export async function listMaterialIssueLines(issueId) {
   if (!issueId) return []
   try {
-    const { data, error } = await supabase
+    const read = (cols) => supabase
       .from('material_issue_lines')
-      .select(ISSUE_LINE_COLS)
+      .select(cols)
       .eq('issue_id', issueId)
       .order('line_no', { ascending: true })
       .limit(SLIP_LINE_LIMIT)
+    let { data, error } = await read(ISSUE_LINE_COLS)
+    // Before WP5 the stock_id / movement_id columns do not exist; PostgREST fails
+    // the whole read on an unknown column, so retry with the base list.
+    if (error && isMissingColumn(error)) ({ data, error } = await read(ISSUE_LINE_BASE_COLS))
     if (error) {
       if (isNotProvisioned(error)) return []
       throw toServiceError(error, 'Could not read the lines of this slip.')
@@ -390,6 +400,13 @@ export async function createMaterialIssue(header = {}, lines = []) {
       uom: l.uom,
       unit_cost: l.unit_cost === '' || l.unit_cost == null ? undefined : Number(l.unit_cost),
       category: l.category,
+      // Only sent when the caller chose a balance (posting mode, WP5 applied):
+      // before WP5 the column does not exist and the insert would be refused.
+      stock_id: l.stock_id,
+      // The job card reservation this line consumes (migration 20261124131000):
+      // the server checks it is an open reservation of the slip's job card on
+      // the same stock line. Only sent when chosen.
+      reservation_id: l.reservation_id,
     }))
 
   if (body.length) {
@@ -488,4 +505,112 @@ export async function listIssuableJobCards({ country, search } = {}) {
     // A failed read must not render as "No job card matches that".
     throw toServiceError(err, 'Could not load job cards.')
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * 5. Posting a slip to stock (WP5, migration 20261124091000)          *
+ * ------------------------------------------------------------------ */
+
+let postingAvailableCache = null
+
+/** Sentences raised by inv_issue_slip / _inv_post that are safe to show verbatim. */
+const SLIP_SERVER_SENTENCE = /^(Line [0-9?]+: |Only \d|Only an issued slip|This slip |A return |Stock permission "issue"|Slip not found|Not authorised)/
+
+/**
+ * Does `inv_issue_slip` exist on this database? Asked once per session.
+ *
+ * Probed with an empty payload: an existing function answers with its own
+ * refusal (issue_id is required, or no "issue" permission), a missing one with
+ * PGRST202 / 42883. Only the missing-function codes mean "not available"; any
+ * other answer proves the function is there, and the server still decides
+ * whether this person may post.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function issueSlipPostingAvailable({ refresh = false } = {}) {
+  if (postingAvailableCache !== null && !refresh) return postingAvailableCache
+  try {
+    const { error } = await supabase.rpc('inv_issue_slip', { p_payload: {} })
+    postingAvailableCache = !(error && isNotProvisioned(error))
+  } catch (err) {
+    postingAvailableCache = !isNotProvisioned(err)
+  }
+  return postingAvailableCache
+}
+
+/** Test hook: forget the cached probe. */
+export function resetIssueSlipPostingProbe() { postingAvailableCache = null }
+
+/**
+ * Post every unposted line of one ISSUED slip to the stock ledger, atomically.
+ * MIS takes stock off the shelf, MRT puts it back (bounded by what the job card
+ * took from that stock line). Posting the same slip twice moves nothing twice.
+ *
+ * Never throws for a business refusal: returns `{ ok:false, reason }` so the page
+ * can say the slip is saved but stock did not move.
+ *
+ * @param {string} issueId
+ * @returns {Promise<{ok:boolean, reason?:string, message?:string, posted?:number, already?:number, lines?:Array}>}
+ */
+export async function postMaterialIssueSlip(issueId) {
+  if (!issueId) return { ok: false, reason: 'no_id', message: 'No slip to post.' }
+  let data
+  let error
+  try {
+    ({ data, error } = await supabase.rpc('inv_issue_slip', { p_payload: { issue_id: issueId } }))
+  } catch (err) {
+    error = err
+  }
+  if (error) {
+    if (isNotProvisioned(error)) {
+      postingAvailableCache = false
+      return { ok: false, reason: 'not_available' }
+    }
+    const code = String(error.code || error.cause?.code || '')
+    // The posting function raises plain sentences written for the storekeeper
+    // (which line, which quantity, which rule). Those are shown as they are; any
+    // other text goes through the sanitiser so no database internals leak.
+    const raw = String(error.message || '')
+    const message = SLIP_SERVER_SENTENCE.test(raw) && raw.length < 300
+      ? raw
+      : toUserMessage(error, 'Could not post that slip to stock.')
+    return { ok: false, reason: code === '23514' ? 'shortage' : code === '42501' ? 'forbidden' : 'refused', message, code }
+  }
+  return {
+    ok: true,
+    posted: Number(data?.posted_lines) || 0,
+    already: Number(data?.already_posted) || 0,
+    lines: Array.isArray(data?.lines) ? data.lines : [],
+    issueNumber: data?.issue_number || null,
+  }
+}
+
+/**
+ * The stock lines one slip line can be posted against: same country, the slip's
+ * site and the item code. Bounded (a picker, not a register). RLS scopes the
+ * view to the reader's countries and sites.
+ *
+ * @param {{country?:string, site?:string, itemCode?:string}} opts
+ * @returns {Promise<Array<object>>} throws a sanitised error when unreadable
+ */
+export async function listSlipStockLines({ country, site, itemCode } = {}) {
+  const code = String(itemCode || '').trim()
+  if (!code) return []
+  let q = supabase
+    .from('v_inv_balances')
+    .select(SLIP_STOCK_COLS)
+    .eq('item_code', code)
+    .order('qty_on_hand', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(SLIP_STOCK_LIMIT)
+  if (country && country !== 'All') q = q.eq('country', country)
+  const s = String(site || '').trim()
+  if (s) q = q.eq('site', s.toUpperCase())
+  const { data, error } = await q
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    // A failed read must not read as "no stock for this item".
+    throw toServiceError(error, 'Could not read the stock lines for this item.')
+  }
+  return Array.isArray(data) ? data : []
 }

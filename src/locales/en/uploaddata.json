@@ -214,6 +214,7 @@
     "uploadAnother": "Upload Another File"
   },
   "errors": {
+    "stockUseOpening": "Stock quantities can only enter through the stock ledger. Use Stock > Controls > Opening balances to import stock; it checks each line and posts it with an approval.",
     "approvalError": "Could not submit for approval: {message}"
   }
 }

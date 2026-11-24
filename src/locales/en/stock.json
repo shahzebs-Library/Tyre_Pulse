@@ -20,7 +20,8 @@
     "bySite": "Tyres by Site & Size",
     "transfer": "Transfer",
     "timeline": "Timeline",
-    "movements": "Movements"
+    "movements": "Movements",
+    "reorder": "Reorder levels"
   },
   "tyreBySite": {
     "title": "Tyre stock by site and size",
@@ -66,6 +67,11 @@
     "columns": {
       "site": "Site",
       "description": "Description",
+      "item": "Item",
+      "brand": "Brand",
+      "partType": "Genuine or aftermarket",
+      "category": "Category",
+      "oem": "OEM number",
       "stock": "Stock",
       "min": "Min",
       "critical": "Critical",
@@ -148,6 +154,17 @@
     "newQty": "New qty: {qty}",
     "loading": "Loading...",
     "emptyHistory": "No movement history yet",
+    "documentedOnly": "Receipts, transfers, supplier returns, scrap and returns need their own document. Use one of these instead:",
+    "noAdjustRight": "Only an issue can be logged here. Stock adjustments are posted only by an Admin or the super admin.",
+    "refused": "You do not have permission to post this movement. Use the matching workflow instead.",
+    "links": {
+      "receive": "Receive goods",
+      "transfers": "Transfers",
+      "supplierReturns": "Supplier returns",
+      "scrap": "Scrap request",
+      "jobMaterials": "Job card materials",
+      "physical": "Physical count"
+    },
     "columns": {
       "date": "Date",
       "type": "Type",

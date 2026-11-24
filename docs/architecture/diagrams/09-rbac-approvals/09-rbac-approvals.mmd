@@ -1,0 +1,35 @@
+%% src: /Users/anum/Documents/wt-inv-layout/src /Users/anum/Documents/wt-inv-layout/supabase/migrations
+%% legend: green=IMPLEMENTED (live in DB + wired in code); yellow=PARTIAL (built, unused or degraded); red=BROKEN (evidence in doc); purple=PROPOSED (migration file, NOT APPLIED); -.->=text join or proposed link; blue=actor or external system; gray=retired
+flowchart TD
+title Role-based access and approvals
+  USR(["Signed-in user<br/>profiles.role, country, sites"])
+  subgraph RLS [Row-level security helpers]
+    ORG["app_current_org"]:::green
+    CTY["app_can_see_country"]:::green
+    SITE["app_can_see_site"]:::green
+    SUP["is_super_admin"]:::green
+  end
+  subgraph CAP [Capabilities]
+    MP[("module_permissions 1,416")]:::green
+    UAG[("user_access_grants 132")]:::green
+    AUC["app_user_can(module, cap)"]:::green
+    INVC["inv_can(cap) = stock module"]:::green
+  end
+  subgraph APR [Approval flows]
+    IAR["inventory_approval_requests<br/>inv_request_approval / inv_approval_decide"]:::green
+    LIM["inventory_approval_limits 0<br/>inv_approver_roles"]:::yellow
+    AM["approval_matrix 0 rows<br/>resolve_approvers"]:::yellow
+    AER["approval_execution_requests<br/>work + tyre execution guards"]:::yellow
+    DOC["decide_inspection_approval<br/>decide_checklist_approval"]:::green
+  end
+  USR --> ORG
+  USR --> CTY
+  USR --> SITE
+  USR --> AUC
+  MP --> AUC
+  UAG --> AUC
+  AUC --> INVC
+  INVC --> IAR
+  LIM --> IAR
+  AM -.-> AER
+  USR --> DOC

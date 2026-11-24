@@ -1,0 +1,31 @@
+%% src: /Users/anum/Documents/wt-inv-layout/src /Users/anum/Documents/wt-inv-layout/supabase/migrations
+%% legend: green=IMPLEMENTED (live in DB + wired in code); yellow=PARTIAL (built, unused or degraded); red=BROKEN (evidence in doc); purple=PROPOSED (migration file, NOT APPLIED); -.->=text join or proposed link
+flowchart LR
+title Workshop and asset maintenance
+  VF[("vehicle_fleet 1,623")]:::green
+  STG["stg_job_cards / Data Intake<br/>process_stg_job_cards"]:::green
+  WO[("work_orders 97,479<br/>wo_write_guard")]:::green
+  WOLI[("work_order_line_items 184,025")]:::green
+  TASK["wo_tasks 0, wo_assignments<br/>workshopLive.js"]:::yellow
+  TAE["tech_activity_events 37<br/>Flutter workshop + WorkshopLive"]:::yellow
+  PM["pm_programs 3<br/>record_pm_service"]:::yellow
+  APX["approval_execution_requests<br/>z_approval_work_start"]:::yellow
+  RES["work_order_stock_reservations<br/>floorWorkflow.js"]:::yellow
+  ISS["material_issues<br/>inv_issue to job card"]:::yellow
+  JMI["job_material_installations<br/>inv_confirm_installation"]:::purple
+  PRI["fleet_maintenance_priority<br/>fleet_priority_for"]:::purple
+  PRQ["parts_requests -> parts_catalog<br/>empty catalogue"]:::red
+  PC[("parts_consumption<br/>ERP cost per job card")]:::green
+  STG --> WO
+  WO -.->|"asset_no text"| VF
+  WOLI -.->|"work_order_no text"| WO
+  TASK -->|job_id| WO
+  TAE -->|job_id| WO
+  APX -->|work_order_id| WO
+  PM -.->|"optional WO"| WO
+  RES -->|work_order_id| WO
+  ISS -.->|"job card no text"| WO
+  JMI -.-> ISS
+  PRI -.-> WO
+  PRQ -->|job_id| WO
+  PC -.->|"work_order_no text"| WO

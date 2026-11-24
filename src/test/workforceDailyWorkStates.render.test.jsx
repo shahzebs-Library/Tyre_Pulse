@@ -1,8 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, cleanup, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('react-chartjs-2', () => ({ Bar: () => null }))
+// The page subscribes to a Supabase realtime channel on mount. The real client
+// opens a WebSocket that can outlive the jsdom environment and surface as an
+// unhandled "WebSocket not available" error after the file finishes, so the
+// channel is replaced with an inert stub. Every other client method is real.
+vi.mock('../lib/supabase', async importOriginal => {
+  const mod = await importOriginal()
+  const channel = { on: () => channel, subscribe: () => channel }
+  mod.supabase.channel = () => channel
+  mod.supabase.removeChannel = vi.fn(() => Promise.resolve('ok'))
+  return mod
+})
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ profile: { id: 'm1', role: 'Manager' } }),
 }))
@@ -39,6 +50,9 @@ const rows = [
   { id: 'a2', title: 'Wash fleet', site: 'RIY', status: 'blocked', priority: 'low', assigned_to: 'u2' },
 ]
 
+// Unmount after the last test too, so no load() or debounce timer outlives the file.
+afterEach(() => cleanup())
+
 beforeEach(() => {
   cleanup()
   api.getMyDailyReport.mockResolvedValue({ report: null, entries: [] })
@@ -54,7 +68,7 @@ beforeEach(() => {
 
 async function openAssignments() {
   render(<LanguageProvider><MemoryRouter><WorkforceDailyWork /></MemoryRouter></LanguageProvider>)
-  fireEvent.click(await screen.findByRole('button', { name: /^(Team Board|My Work)$/ }))
+  fireEvent.click(await screen.findByRole('button', { name: /^(Team Board|My Work)$/ }, { timeout: 10000 }))
 }
 
 describe('WorkforceDailyWork states', () => {

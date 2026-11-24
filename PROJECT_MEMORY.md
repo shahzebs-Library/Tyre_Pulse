@@ -5,6 +5,55 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-23 (night) — WMS SPEC: AUDIT DONE, WP0 (REGISTER = MATERIAL MASTER DETAIL + REAL USAGE) + PAGE EMOJI. Branch claude/wms-wp0-register. No migration, no production write.
+- **OWNER WMS SPEC RULES (standing):** no merge / deploy / production change without the owner's explicit OK per item; no automatic
+  fuzzy match that changes production; never widen Store Keeper site access for testing; never replace a missing cost with 0; keep
+  SAR/AED/EGP separate; enforce permissions in the database. Deliverables live in `docs/warehouse/` (00_FIRST_RESPONSE.md = the
+  10-point audit with every number measured live).
+- **THE STRUCTURAL GAP:** `stock_records.item_id` -> `material_master` (23,274 per-country ERP codes) while Material Master page =
+  `material_canonical` (3,508 company SKUs from Book2). The link table `material_canonical_items` holds **0 rows**; the two meet only
+  by text (`item_code = company_sku`, 3,507/3,508). Proposed WP1 (needs owner OK, production write): fill the link from the exact matches.
+- **"Stock not showing in Material Master" = STALE BROWSER BUILD, not data.** Edge logs over 24h held NO request with the Material
+  Master stock select; the owner's account reads the rows (25 materials -> 39 positive stock rows). Reload the app.
+- **REGISTER "None recorded" cause:** usage was read from `stock_movements` (1 consumption movement of 5,619; 5,533 are `opening`).
+  Real consumption = `parts_consumption` ERP issue lines (KSA 32,651 in 12 months). Reorder levels are 0 on 5,568/5,583 rows;
+  management_action empty on all. 43 stock rows have no item code (the "Doublecoin" / "Double coin" spellings are among them).
+- **WP0 (code only):** register rows now carry the linked ERP item (`item:material_master(item_code,item_name,category)` embed) and
+  show item code, Material Master name, brand, genuine/aftermarket, category, OEM number (`src/lib/stockRegisterDetail.js`, loaders
+  `stock.listRegisterCatalog` / `stock.listConsumptionSince`). Usage = 12 months of ERP issues: per SITE when that site issued it
+  (days of cover stated), else per COUNTRY labelled "(country)" with days of cover N/A. reorderSuggestion no longer emits a
+  "Reorder 0" when no levels are set (uses 2 months of measured usage instead). Store Keeper RLS verified to read every new table.
+- **PAGE EMOJI (owner-approved Fluent Emoji Flat):** ONE route->emoji map `src/lib/navEmojiMap.json` (226 routes, 151 emoji) read by
+  BOTH the sidebar and Ctrl+K via `src/components/ui/NavEmoji.jsx`; art in one cached sprite `public/nav-emoji.svg` (170 KB, 58 KB gz),
+  rebuilt by `scripts/build-nav-emoji.cjs <icons.json>`. Soft tile `.nav-emoji` in index.css. `src/test/navEmoji.test.js` fails if a
+  sidebar page has no emoji or a name is missing from the sprite. Mobile bottom tabs keep line icons.
+- **WP2 review queues (same PR, proposals only, nothing auto-applied):** (a) OEM cross-reference panel at the foot of Material Master
+  (`src/lib/inventory/oemCrossRef.js`, exact normalised part-number match; Accept -> `inv_compat_propose`, second person ->
+  `inv_compat_decide`). Live: 7 of 1,652 manual rows match. DB gap: `inv_compat_propose` never fills `oem_part_no_normalized`, so the
+  live unique index cannot stop duplicate links. (b) Classification tab "Brand and part type" (`src/lib/inventory/variantClassify.js`;
+  Send -> `inv_correction_request` / `inv_material_variant_propose`). Live: 12 brand proposals, 0 part-type (all 12 ORIGINAL items
+  already have a pending genuine variant). OEM# is a part-number label, NOT genuine. "local" cannot be stored (CHECK allows
+  genuine/oes/aftermarket/unknown). TYRE_BRANDS carries misspellings (Westlike, Ericle) -> brand_aliases rows would correct them.
+- **WP1 APPLIED LIVE (owner OK 2026-11-23), migration 20261123200000_wms_wp1_links_oem_norm_brand_aliases.sql:** 3,508 KSA links
+  material_canonical -> material_master in `material_canonical_items` (exact item code; UAE's 726 shared codes deliberately NOT linked,
+  same code = different item per country); 5,533 stock rows now reach Material Master through the link. Trigger
+  `trg_oem_ref_normalize` fills `oem_part_references.oem_part_no_normalized` (upper, letters+digits only = oem_parts_entries rule),
+  so the live unique index now blocks duplicate OEM links (verified rolled back). brand_aliases += westlike->Westlake, ericle->Eracle.
+  Undo SQL is in the migration header. OWNER RULING: part type stays 'unknown' when not stated; NO 'local' value / no CHECK widening.
+- **WP3/WP4/WP5 (code only, same PR, no DB writes):** WP3 "Reorder levels" tab in the register (`src/lib/inventory/reorderLevels.js`;
+  site usage only, lead time = material_master.lead_time_days else 30 days (filled on 0 items today); Apply = same stock edit path,
+  needs stock:edit; live 1,735 suggestions). WP4 procurement chain (`src/lib/procurementChain.js`, `api/procurementChain.js`,
+  `components/procurement/`): supplier register, requisition approve -> raise PO, real PO lines via `inv_po_add_line`, receive
+  against PO via `inv_receive_goods`; procure/receive rights are effectively Admin or explicit grant. NOT yet run end to end live.
+  WP5 (`src/lib/inventory/stockFlowRules.js`, StockFlows.jsx): issue/reserve/return linked to job card, release, return issued
+  stock, return transfer to source, partial transfer receipt fixed (a 0 line failed the whole receipt). Material issue slips are
+  documents only (no ledger posting) until DB item 2 in docs/warehouse/05 is approved. Store Keeper site scope IS enforced
+  server-side (_inv_post -> _inv_scope_ok); gap: in-transit stock sits at the destination, so a site-scoped keeper cannot dispatch
+  across sites. Proposed DB SQL (NOT applied): docs/warehouse/04_PROCUREMENT_DB_CHANGES.md, 05_ISSUE_TRANSFER_DB_CHANGES.md.
+- Flaky CI fix: two workforce page tests opened a real realtime WebSocket in jsdom; now stub channel/removeChannel + afterEach cleanup.
+- OPEN decisions (docs/warehouse/00 item 10): single master + link fill; reorder-level policy; brand alias merges; codes for the 43
+  rows; source for genuine/local/aftermarket on 1,313 unknown variants; Store Keeper site scopes.
+
 # ⚑ 2026-11-23 (later) — BOOK2 LOADED LIVE VIA OWNER OVERRIDE, MATERIAL MASTER, SAVED THEMES, FLUTTER GREY SURFACES. PRs #606 (web) + #607 (Flutter).
 - **Book2.xlsx IS LOADED (supersedes "NOT LOADED YET" below):** 11 opening-balance batches approved, 5,533 lines posted,
   3,508 materials active. Stock by site: NHC 40,270 / DIRIYAH 20,170 / RIY-MET 17,581 / RED SEA 16,816 / DHAHBAN 15,701 /

@@ -1,0 +1,34 @@
+%% src: /Users/anum/Documents/wt-inv-layout/supabase/migrations /Users/anum/Documents/wt-inv-layout/src/lib/api
+%% legend: green=IMPLEMENTED (live in DB + wired in code); yellow=PARTIAL (built, unused or degraded); red=BROKEN (evidence in doc); purple=PROPOSED (migration file, NOT APPLIED); -.->=text join or proposed link
+flowchart LR
+title Material Master and OEM relationships
+  subgraph ERP [ERP item master]
+    MM[("material_master<br/>23,274 rows")]:::green
+    PC[("parts_consumption<br/>219,918 ERP issue lines")]:::green
+  end
+  subgraph CAT [Governed catalogue]
+    MC[("material_canonical<br/>3,508")]:::green
+    MCI[("material_canonical_items<br/>3,508 links")]:::green
+    MV[("material_variants<br/>1,335")]:::green
+    MA[("material_aliases<br/>5,198")]:::green
+  end
+  subgraph OEM [OEM manuals]
+    OPM[("oem_parts_manuals<br/>4")]:::green
+    OPE[("oem_parts_entries<br/>1,652")]:::green
+    OPR[("oem_part_references<br/>0 rows")]:::yellow
+    MLP[("material_link_proposals")]:::purple
+  end
+  SR[("stock_records<br/>5,583")]:::green
+  PCAT[("parts_catalog<br/>0 rows, legacy")]:::red
+  PRQ[("parts_requests<br/>2 rows, part_id null")]:::red
+  MCI -->|item_id| MM
+  MCI -->|canonical_id| MC
+  MCI -->|variant_id| MV
+  MV -->|canonical_id| MC
+  MA -->|"canonical_id / item_id"| MC
+  SR -->|item_id| MM
+  PC -.->|"item_code text, no FK"| MM
+  OPE -->|manual_id| OPM
+  OPR -->|item_id| MM
+  MLP -.->|"proposed, 20261124132000"| OPR
+  PRQ -->|part_id| PCAT

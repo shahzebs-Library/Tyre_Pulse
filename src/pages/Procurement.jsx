@@ -39,6 +39,13 @@ import {
 } from '../lib/procurementAnalytics'
 import TableNotInUse from '../components/ui/TableNotInUse'
 import { safeJsonToSheet } from '../lib/csvSafe.js'
+import { useProcurementCaps, MaterialPicker, SupplierPicker } from '../components/procurement/ProcurementChainPanels'
+import { createPurchaseOrderWithLines, addPurchaseOrderLines, listPurchaseOrderLines, newIdempotencyKey } from '../lib/api/procurementChain'
+import {
+  poLinePayloads, currencyForCountry, currencyScope, scopedCountry, LINE_EDITABLE_PO_STATUSES, outstandingQty, poStatusOptions,
+} from '../lib/procurementChain'
+import { EmergencyJustificationFields, EmergencyJustificationView } from '../components/procurement/EmergencyJustification'
+import { EMPTY_EMERGENCY, validateEmergency, emergencyColumns, emergencyExportValues } from '../lib/procurement/emergencyJustification'
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, PointElement, LineElement,
@@ -87,6 +94,7 @@ const EMPTY_FORM = {
   expected_delivery: '', priority: 'Normal', site: '', country: '',
   budget_code: '', requested_by: '', approved_by: '', notes: '',
   status: 'Draft', items: [],
+  is_emergency: false, emergency: { ...EMPTY_EMERGENCY },
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -121,9 +129,22 @@ export default function Procurement() {
   const { user, profile } = useAuth()
   const { branding } = useTenant()
   const company = branding?.legal_name || branding?.display_name || appSettings?.company_name || 'TyrePulse'
-  const fmtCur = (v) => _fmtCurrencyBase(v, activeCurrency)
+  const caps = useProcurementCaps()
+  const [orders, setOrders] = useState([])
+  // Each PO reads in its own currency (its currency column, else its country's).
+  // On a mixed view SAR, AED and EGP are never added into one labelled total.
+  const money = useMemo(() => currencyScope(orders), [orders])
+  const fmtCur = (v, cur) => {
+    if (v == null) return 'N/A'
+    if (!cur && money.mixed) return 'Mixed currencies'
+    return _fmtCurrencyBase(v, cur || money.currency || activeCurrency)
+  }
+  const poCur = (po) => po?.currency || currencyForCountry(po?.country) || null
 
-  const [orders, setOrders]         = useState([])
+  const [supplierPick, setSupplierPick] = useState(null)
+  const [materialPick, setMaterialPick] = useState(null)
+  const [saveNotice, setSaveNotice] = useState('')
+  const [poLines, setPoLines] = useState(null)
   const [loading, setLoading]       = useState(true)
   const [saving, setSaving]         = useState(false)
   const [error, setError]           = useState(null)
@@ -170,6 +191,7 @@ export default function Procurement() {
     )
   }, [])
   const [formData, setFormData]     = useState(EMPTY_FORM)
+  const [emergencyTouched, setEmergencyTouched] = useState(false)
   const [itemRow, setItemRow]       = useState({ ...EMPTY_ITEM })
   const [taxPct, setTaxPct]         = useState(15)
   // Procurement budget - stored in the shared settings table (V62 sweep) so
@@ -306,16 +328,29 @@ export default function Procurement() {
     }
   }, [orders, budget, t])
 
+  // Real PO lines (purchase_order_lines) for the open PO: what goods are received against.
+  useEffect(() => {
+    setPoLines(null)
+    if (!viewPO?.id) return undefined
+    let live = true
+    listPurchaseOrderLines(viewPO.id).then((r) => { if (live) setPoLines(r) }).catch(() => { if (live) setPoLines([]) })
+    return () => { live = false }
+  }, [viewPO?.id])
+
   // ── Form helpers ───────────────────────────────────────────────────────────
   function openNew() {
     setEditPO(null)
-    setFormData({ ...EMPTY_FORM, order_date: new Date().toISOString().slice(0, 10) })
+    setSupplierPick(null); setMaterialPick(null); setSaveNotice('')
+    setFormData({ ...EMPTY_FORM, country: scopedCountry(activeCountry) || '', order_date: new Date().toISOString().slice(0, 10) })
+    setEmergencyTouched(false)
     setItemRow({ ...EMPTY_ITEM })
     setTaxPct(15)
     setShowForm(true)
   }
   function openEdit(po) {
     setEditPO(po)
+    setMaterialPick(null); setSaveNotice('')
+    setSupplierPick(po.supplier_id || po.supplier_name ? { id: po.supplier_id || null, supplier_name: po.supplier_name || po.vendor_name } : null)
     setFormData({
       vendor_name: po.vendor_name || '',
       order_date: po.order_date || new Date().toISOString().slice(0, 10),
@@ -339,9 +374,22 @@ export default function Procurement() {
 
   // ── Line item management ───────────────────────────────────────────────────
   function addItem() {
-    if (!itemRow.brand.trim() || !itemRow.size.trim()) return
-    setFormData(f => ({ ...f, items: [...f.items, { ...itemRow, quantity: parseInt(itemRow.quantity) || 1, unit_price: parseFloat(itemRow.unit_price) || 0, received_qty: 0 }] }))
+    // A Material Master item is what lets the line be received into stock later;
+    // free text is still accepted for legacy POs, but it stays outside stock.
+    const brand = materialPick ? materialPick.item_code : itemRow.brand.trim()
+    const size = materialPick ? (materialPick.item_name || '') : itemRow.size.trim()
+    if (!materialPick && (!brand || !size)) return
+    const price = itemRow.unit_price === '' ? null : parseFloat(itemRow.unit_price)
+    setFormData(f => ({ ...f, items: [...f.items, {
+      ...itemRow, brand, size, item_id: materialPick?.id || null, item_code: materialPick?.item_code || null,
+      description: materialPick?.item_name || null, pending_line: !!materialPick,
+      // One idempotency key per pending line, kept with the line so a retry or a
+      // later edit replays it instead of adding the line twice.
+      ...(materialPick ? { line_key: newIdempotencyKey() } : {}),
+      quantity: parseInt(itemRow.quantity) || 1, unit_price: Number.isFinite(price) ? price : null, received_qty: 0,
+    }] }))
     setItemRow({ ...EMPTY_ITEM })
+    setMaterialPick(null)
   }
   function removeItem(idx) {
     setFormData(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))
@@ -361,14 +409,22 @@ export default function Procurement() {
   const formSubtotal = useMemo(() => calcSubtotal(formData.items), [formData.items])
   const formTax      = useMemo(() => formSubtotal * (taxPct / 100), [formSubtotal, taxPct])
   const formTotal    = useMemo(() => formSubtotal + formTax, [formSubtotal, formTax])
+  const formCur      = currencyForCountry(formData.country) || editPO?.currency || money.currency || activeCurrency
 
   // ── Save ───────────────────────────────────────────────────────────────────
   async function handleSave() {
     // Approval-locked records are immutable — the server RPCs are the real
     // boundary, this is the UI guard mirroring it.
     if (editPO && poLocked) { alert('Locked, in approval'); return }
-    if (!formData.vendor_name.trim()) { alert(t('procurement.alerts.vendorRequired')); return }
+    const vendorName = (supplierPick?.supplier_name || formData.vendor_name || '').trim()
+    if (!vendorName) { alert(t('procurement.alerts.vendorRequired')); return }
     if (formData.items.length === 0)  { alert(t('procurement.alerts.lineItemRequired')); return }
+    if (!editPO && formData.is_emergency) {
+      const check = validateEmergency(formData.emergency, {
+        currency: currencyForCountry(formData.country?.trim()), supplier: vendorName, country: formData.country?.trim(),
+      })
+      if (!check.ok) { setEmergencyTouched(true); alert(`Emergency purchase: ${check.first}`); return }
+    }
     setSaving(true)
     try {
       const subtotal    = calcSubtotal(formData.items)
@@ -376,7 +432,9 @@ export default function Procurement() {
       const total_amount = subtotal + tax_amount
 
       const payload = {
-        vendor_name:       formData.vendor_name.trim(),
+        vendor_name:       vendorName,
+        supplier_name:     supplierPick?.supplier_name || vendorName,
+        supplier_id:       supplierPick?.id || null,
         order_date:        formData.order_date || new Date().toISOString().slice(0, 10),
         expected_delivery: formData.expected_delivery || null,
         priority:          formData.priority,
@@ -387,25 +445,51 @@ export default function Procurement() {
         total_amount,
         site:              formData.site?.trim() || null,
         country:           formData.country?.trim() || null,
+        currency:          currencyForCountry(formData.country?.trim()) || editPO?.currency || null,
         budget_code:       formData.budget_code?.trim() || null,
         requested_by:      formData.requested_by?.trim() || null,
         approved_by:       formData.approved_by?.trim() || null,
         notes:             formData.notes?.trim() || null,
         created_by:        user?.id || null,
+        // Emergency purchase (20261124130000): may be ordered before approval, approved after the fact.
+        // The structured justification is checked again by the database trigger. Only sent when ticked so a
+        // normal PO never names columns an older database lacks.
+        ...(!editPO && formData.is_emergency
+          ? emergencyColumns(formData.emergency, { currency: currencyForCountry(formData.country?.trim()) })
+          : {}),
       }
 
+      // Catalogued items become real purchase_order_lines (inv_po_add_line), which
+      // the server only accepts while the PO is Draft or Submitted.
+      const fresh = formData.items.filter((it) => it.pending_line)
+      const { lines, uncatalogued } = poLinePayloads(fresh, { currency: payload.currency })
+      const notes = []
       if (editPO) {
-        const { error: err } = await procurementApi.updatePurchaseOrder(editPO.id, payload)
+        const { error: err } = await procurementApi.updatePurchaseOrder(editPO.id, { ...payload, created_by: editPO.created_by ?? payload.created_by })
         if (err) throw err
+        if (lines.length) {
+          if (!LINE_EDITABLE_PO_STATUSES.includes(editPO.status)) notes.push(`Lines can only be added while a PO is Draft or Submitted; ${lines.length} item(s) were kept on the PO but not as receivable lines.`)
+          else {
+            const res = await addPurchaseOrderLines(editPO.id, lines)
+            if (res.failedLines.length) notes.push(`${res.failedLines.length} line(s) did not save: ${res.failedLines[0].message}`)
+          }
+        }
       } else {
-        const { data: poNo, error: rpcErr } = await procurementApi.generatePoNumber()
-        if (rpcErr) payload.po_number = `PO-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
-        else payload.po_number = poNo
-        const { error: err } = await procurementApi.insertPurchaseOrder(payload)
-        if (err) throw err
+        // Create as Draft so the lines can be added, then move to the chosen status.
+        const wanted = payload.status
+        const header = { ...payload, status: LINE_EDITABLE_PO_STATUSES.includes(wanted) ? wanted : 'Draft' }
+        const { po, failedLines } = await createPurchaseOrderWithLines(header, lines)
+        if (failedLines.length) notes.push(`${failedLines.length} line(s) did not save: ${failedLines[0].message}`)
+        if (wanted !== header.status) {
+          const { error: err } = await procurementApi.updatePurchaseOrder(po.id, { status: wanted })
+          if (err) notes.push(`PO ${po.po_number} was saved as Draft; the status could not be set to ${wanted}.`)
+        }
       }
+      if (formData.items.some((it) => !it.item_id)) notes.push('Free-text items are not Material Master items, so they cannot be received into stock.')
+      if (uncatalogued.length) notes.push(`${uncatalogued.length} item(s) without a Material Master code were not added as lines.`)
 
       await load()
+      setSaveNotice(notes.join(' '))
       setShowForm(false)
     } catch (e) {
       alert(t('procurement.alerts.saveFailed', { message: toUserMessage(e) }))
@@ -421,8 +505,13 @@ export default function Procurement() {
     if (viewPO?.id === po.id && poLocked) { alert('Locked, in approval'); return }
     const patch = { status: newStatus }
     if (newStatus === 'Delivered') patch.actual_delivery = new Date().toISOString().slice(0, 10)
-    const { error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
+    const { data: changed, error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
     if (err) { alert(t('procurement.alerts.updateFailed', { message: toUserMessage(err) })); return }
+    // RLS refuses silently (0 rows): tell the person instead of doing nothing.
+    if (Array.isArray(changed) && changed.length === 0) {
+      alert(t('procurement.alerts.updateFailed', { message: 'You do not have permission to change this purchase order.' }))
+      return
+    }
     await load()
     if (viewPO?.id === po.id) setViewPO(v => ({ ...v, ...patch }))
   }
@@ -446,6 +535,7 @@ export default function Procurement() {
 
   // ── PDF export ─────────────────────────────────────────────────────────────
   async function exportPDF(po) {
+    const pc = poCur(po)
     const { default: jsPDF } = await import('jspdf')
     const autoTable = await loadAutoTable()
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -476,14 +566,14 @@ export default function Procurement() {
         body: (po.items || []).map(it => [
           it.brand, it.size,
           it.quantity,
-          fmtCur(it.unit_price),
-          fmtCur(calcItemTotal(it)),
+          fmtCur(it.unit_price, pc),
+          fmtCur(calcItemTotal(it), pc),
           it.received_qty ?? 0,
         ]),
         foot: [
-          ['', '', '', 'Subtotal', fmtCur(po.subtotal), ''],
-          ['', '', '', `Tax (${Math.round(po.tax_amount / Math.max(po.subtotal, 0.01) * 100)}%)`, fmtCur(po.tax_amount), ''],
-          ['', '', '', 'TOTAL', fmtCur(po.total_amount), ''],
+          ['', '', '', 'Subtotal', fmtCur(po.subtotal, pc), ''],
+          ['', '', '', `Tax (${Math.round(po.tax_amount / Math.max(po.subtotal, 0.01) * 100)}%)`, fmtCur(po.tax_amount, pc), ''],
+          ['', '', '', 'TOTAL', fmtCur(po.total_amount, pc), ''],
         ],
         footStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold' },
         margin: { left: 14, right: 14 },
@@ -507,7 +597,8 @@ export default function Procurement() {
   // ── Excel export ───────────────────────────────────────────────────────────
   async function exportExcel() {
     const XLSX = await import('xlsx')
-    const rows = orderExportRows(filtered)
+    // every PO row carries its emergency justification (blank when it is not an emergency purchase)
+    const rows = orderExportRows(filtered).map((r, i) => ({ ...r, ...emergencyExportValues(filtered[i]) }))
     const ws = safeJsonToSheet(XLSX, rows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Purchase Orders')
@@ -536,7 +627,7 @@ export default function Procurement() {
         return <span title={r.pct == null ? undefined : `${Math.round(r.pct)}% received`}>{(row.original.items || []).length}</span>
       },
     },
-    { accessorKey: 'total_amount', header: `${t('procurement.table.columns.total')} (${activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue }) => <span className="text-green-400 font-medium whitespace-nowrap">{getValue() == null ? 'N/A' : fmtCur(getValue())}</span> },
+    { accessorKey: 'total_amount', header: money.mixed ? t('procurement.table.columns.total') : `${t('procurement.table.columns.total')} (${money.currency || activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue, row }) => <span className="text-green-400 font-medium whitespace-nowrap">{getValue() == null ? 'N/A' : fmtCur(getValue(), poCur(row.original))}</span> },
     { accessorKey: 'site', header: t('procurement.table.columns.site'), cell: ({ getValue }) => getValue() || 'N/A' },
     {
       id: 'actions', header: t('procurement.table.columns.actions'), enableSorting: false, meta: { export: false },
@@ -545,7 +636,7 @@ export default function Procurement() {
         return (
           <div className="flex items-center gap-1">
             <button type="button" onClick={(e) => { e.stopPropagation(); setViewPO(po) }} className={iconBtn} aria-label={`${t('procurement.table.viewTooltip')} ${po.po_number || ''}`.trim()}><Eye size={14} /></button>
-            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(po) }} className={iconBtn} aria-label={`${t('procurement.table.editTooltip')} ${po.po_number || ''}`.trim()}><Edit2 size={14} /></button>
+            {caps.procure && <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(po) }} className={iconBtn} aria-label={`${t('procurement.table.editTooltip')} ${po.po_number || ''}`.trim()}><Edit2 size={14} /></button>}
             <button type="button" onClick={(e) => { e.stopPropagation(); exportPDF(po) }} className={iconBtn} aria-label={`${t('procurement.table.pdfTooltip')} ${po.po_number || ''}`.trim()}><FileText size={14} /></button>
           </div>
         )
@@ -557,8 +648,8 @@ export default function Procurement() {
     { accessorKey: 'brand', header: t('procurement.modal.columns.brand') },
     { accessorKey: 'size', header: t('procurement.modal.columns.size') },
     { accessorKey: 'quantity', header: t('procurement.modal.columns.qty'), meta: { align: 'right' } },
-    { accessorKey: 'unit_price', header: t('procurement.modal.columns.unitPrice'), meta: { align: 'right' }, cell: ({ getValue }) => fmtCur(getValue()) },
-    { id: 'line_total', header: t('procurement.modal.columns.lineTotal'), accessorFn: (it) => calcItemTotal(it), meta: { align: 'right' }, cell: ({ getValue }) => <span className="text-green-400 font-medium">{fmtCur(getValue())}</span> },
+    { accessorKey: 'unit_price', header: t('procurement.modal.columns.unitPrice'), meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'No price' : fmtCur(getValue(), formCur)) },
+    { id: 'line_total', header: t('procurement.modal.columns.lineTotal'), accessorFn: (it) => (it.unit_price == null || it.unit_price === '' ? null : calcItemTotal(it)), meta: { align: 'right' }, cell: ({ getValue }) => <span className="text-green-400 font-medium">{getValue() == null ? 'No price' : fmtCur(getValue(), formCur)}</span> },
     {
       id: 'remove', header: '', enableSorting: false, meta: { export: false },
       cell: ({ row }) => (
@@ -594,15 +685,28 @@ export default function Procurement() {
             <button onClick={exportExcel} className="flex items-center gap-2 px-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors">
               <FileSpreadsheet size={16} />{t('procurement.actions.excel')}
             </button>
-            <button onClick={openNew} className="btn-primary">
-              <Plus size={16} />{t('procurement.actions.newPo')}
-            </button>
+            {caps.procure && (
+              <button onClick={openNew} className="btn-primary">
+                <Plus size={16} />{t('procurement.actions.newPo')}
+              </button>
+            )}
           </div>
         }
       />
       <TableNotInUse table="purchase_orders" label="purchase orders" hint="Records appear once a purchase order is raised." />
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
+      {saveNotice && (
+        <div role="status" className="card border border-amber-800/50 text-sm text-amber-300 flex items-start justify-between gap-3">
+          <span>{saveNotice}</span>
+          <button type="button" className="text-xs underline" onClick={() => setSaveNotice('')}>Dismiss</button>
+        </div>
+      )}
+      {money.mixed && (
+        <p role="status" className="text-xs text-amber-300">
+          These purchase orders are in {money.currencies.join(', ')}. Totals are not added across currencies; pick a country to see one total.
+        </p>
+      )}
       {error && (
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">
           <AlertTriangle size={18} />
@@ -850,7 +954,7 @@ export default function Procurement() {
         emptyMessage={orders.length === 0 ? t('procurement.table.emptyTitle') : 'No purchase orders match these filters.'}
         onRowClick={(po) => setViewPO(po)}
         viewKey="procurement-orders"
-        toolbarExtras={orders.length === 0 ? (
+        toolbarExtras={orders.length === 0 && caps.procure ? (
           <button type="button" onClick={openNew} className="min-h-[44px] px-3 text-green-400 hover:text-green-300 text-sm">{t('procurement.table.createFirst')}</button>
         ) : null}
       />
@@ -871,7 +975,7 @@ export default function Procurement() {
         footer={(
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <div className="text-[var(--text-secondary)] text-sm">
-              {t('procurement.modal.totalLabel')} <span className="text-green-400 font-bold text-base">{fmtCur(formTotal)}</span>
+              {t('procurement.modal.totalLabel')} <span className="text-green-400 font-bold text-base">{fmtCur(formTotal, formCur)}</span>
               {formData.items.length > 0 && <span className="text-[var(--text-muted)] ml-2">{t('procurement.modal.itemsCount', { count: formData.items.length })}</span>}
             </div>
             <div className="flex gap-3">
@@ -893,14 +997,39 @@ export default function Procurement() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="po-field" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.vendorName')}</label>
-                    <input id="po-field" value={formData.vendor_name} onChange={e => setFormData(f => ({ ...f, vendor_name: e.target.value }))}
-                      placeholder={t('procurement.modal.vendorNamePlaceholder')} className="input" />
+                    <SupplierPicker id="po-supplier" value={supplierPick} onPick={setSupplierPick} country={formData.country || activeCountry} />
+                    {!supplierPick && (
+                      <input id="po-field" value={formData.vendor_name} onChange={e => setFormData(f => ({ ...f, vendor_name: e.target.value }))}
+                        placeholder={t('procurement.modal.vendorNamePlaceholder')} aria-label={t('procurement.modal.vendorName')} className="input mt-2" />
+                    )}
                   </div>
                   <div>
                     <label htmlFor="po-field-2" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.orderDate')}</label>
                     <DateField id="po-field-2" ariaLabel={t('procurement.modal.orderDate')} value={formData.order_date} onChange={v => setFormData(f => ({ ...f, order_date: v }))} />
                   </div>
                 </div>
+
+                {!editPO && (
+                  <div className="rounded-lg border border-[var(--hairline)] p-3 space-y-2">
+                    <label className="flex items-start gap-2 text-sm text-[var(--text-secondary)] min-h-[44px]">
+                      <input type="checkbox" className="mt-1" checked={!!formData.is_emergency}
+                        onChange={e => setFormData(f => ({ ...f, is_emergency: e.target.checked }))} />
+                      <span>Emergency purchase: may be ordered before approval. Another buyer must approve it afterwards, and it is reported until they do.</span>
+                    </label>
+                    {formData.is_emergency && (
+                      <EmergencyJustificationFields
+                        value={formData.emergency}
+                        onChange={(next) => setFormData(f => ({ ...f, emergency: next }))}
+                        currency={currencyForCountry(formData.country?.trim())}
+                        showErrors={emergencyTouched}
+                        errors={validateEmergency(formData.emergency, {
+                          currency: currencyForCountry(formData.country?.trim()),
+                          supplier: supplierPick?.supplier_name || formData.vendor_name, country: formData.country?.trim(),
+                        }).errors}
+                      />
+                    )}
+                  </div>
+                )}
 
                 {/* Row 2: Expected Del + Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -919,7 +1048,15 @@ export default function Procurement() {
                     <label htmlFor="po-field-5" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.status')}</label>
                     <select id="po-field-5" value={formData.status} onChange={e => setFormData(f => ({ ...f, status: e.target.value }))}
                       className="input">
-                      {STATUSES.map(s => <option key={s}>{s}</option>)}
+                      {/* Partial Delivery / Delivered come from goods receipts, not from this form. */}
+                      {/* A new PO starts as Draft or Submitted; approval is someone else's step. */}
+                      {/* Only the moves allowed from the saved status are offered. */}
+                      {poStatusOptions(editPO ? editPO.status : formData.status, {
+                        isNew: !editPO,
+                        isEmergency: !!editPO?.is_emergency,
+                        hasLines: true,
+                        ownPo: !!editPO && !!user?.id && editPO.created_by === user.id,
+                      }).map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
                 </div>
@@ -979,11 +1116,15 @@ export default function Procurement() {
                     </div>
                   )}
 
-                  {/* Add item row */}
+                  {/* Add item row: pick from the Material Master so the line can be received into stock */}
+                  <div className="mb-2">
+                    <MaterialPicker id="po-material" value={materialPick} onPick={setMaterialPick} country={formData.country || activeCountry} />
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Material Master items become receivable PO lines. Brand and size free text stays on the PO only.</p>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
-                    <input value={itemRow.brand} onChange={e => setItemRow(r => ({ ...r, brand: e.target.value }))}
+                    <input disabled={!!materialPick} value={materialPick ? materialPick.item_code : itemRow.brand} onChange={e => setItemRow(r => ({ ...r, brand: e.target.value }))}
                       placeholder={t('procurement.modal.brandPlaceholder')} aria-label={t('procurement.modal.brandPlaceholder')} className="input" />
-                    <input value={itemRow.size} onChange={e => setItemRow(r => ({ ...r, size: e.target.value }))}
+                    <input disabled={!!materialPick} value={materialPick ? (materialPick.item_name || '') : itemRow.size} onChange={e => setItemRow(r => ({ ...r, size: e.target.value }))}
                       placeholder={t('procurement.modal.sizePlaceholder')} aria-label={t('procurement.modal.sizePlaceholder')} className="input" />
                     <input type="number" min="1" value={itemRow.quantity} onChange={e => setItemRow(r => ({ ...r, quantity: e.target.value }))}
                       placeholder={t('procurement.modal.qtyPlaceholder')} aria-label={t('procurement.modal.qtyPlaceholder')} className="input" />
@@ -1000,7 +1141,7 @@ export default function Procurement() {
                     <div className="mt-3 bg-[var(--surface-2)] rounded-lg p-3 space-y-1.5">
                       <div className="flex justify-between text-sm">
                         <span className="text-[var(--text-secondary)]">{t('procurement.modal.subtotal')}</span>
-                        <span className="text-[var(--text-primary)]">{fmtCur(formSubtotal)}</span>
+                        <span className="text-[var(--text-primary)]">{fmtCur(formSubtotal, formCur)}</span>
                       </div>
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-[var(--text-secondary)] flex items-center gap-2">
@@ -1009,11 +1150,11 @@ export default function Procurement() {
                             className="w-14 px-2 py-0.5 bg-[var(--surface-3)] border border-[var(--border-bright)] rounded text-[var(--text-primary)] text-xs focus:outline-none" />
                           %
                         </span>
-                        <span className="text-[var(--text-primary)]">{fmtCur(formTax)}</span>
+                        <span className="text-[var(--text-primary)]">{fmtCur(formTax, formCur)}</span>
                       </div>
                       <div className="flex justify-between text-base font-semibold border-t border-[var(--border-bright)] pt-1.5 mt-1.5">
                         <span className="text-[var(--text-primary)]">{t('procurement.modal.total')}</span>
-                        <span className="text-green-400">{fmtCur(formTotal)}</span>
+                        <span className="text-green-400">{fmtCur(formTotal, formCur)}</span>
                       </div>
                     </div>
                   )}
@@ -1049,6 +1190,14 @@ export default function Procurement() {
       >
         {viewPO && (
           <>
+                {viewPO.is_emergency && (
+                  <div className="rounded-lg border border-amber-700/60 p-3 space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-amber-300">
+                      Emergency purchase{viewPO.emergency_approved_at ? `, approved after the fact by ${viewPO.emergency_approved_by || 'N/A'}` : ', waiting for after-the-fact approval'}
+                    </p>
+                    <EmergencyJustificationView po={viewPO} />
+                  </div>
+                )}
 
                 {/* Status timeline */}
                 <div>
@@ -1085,14 +1234,13 @@ export default function Procurement() {
 
                 {/* Quick status transitions */}
                 {!['Delivered','Closed','Cancelled'].includes(viewPO.status) && (() => {
-                  const nextMap = {
-                    'Draft':            ['Submitted','Cancelled'],
-                    'Submitted':        ['Approved','Cancelled'],
-                    'Approved':         ['Ordered','Cancelled'],
-                    'Ordered':          ['Partial Delivery','Delivered','Cancelled'],
-                    'Partial Delivery': ['Delivered','Cancelled'],
-                  }
-                  const next = nextMap[viewPO.status] || []
+                  // Receipts against real PO lines set Partial Delivery / Delivered themselves.
+                  const hasLines = (poLines || []).length > 0
+                  // Separation of duties: the creator of a PO never approves it (the database refuses it too).
+                  const ownPo = !!user?.id && viewPO.created_by === user.id
+                  // An emergency purchase may be ordered before approval (approved after the fact).
+                  const next = poStatusOptions(viewPO.status, { isEmergency: !!viewPO.is_emergency, hasLines, ownPo }).slice(1)
+                  if (!caps.procure) return null
                   return next.length > 0 ? (
                     <div>
                       <p className="text-[var(--text-secondary)] text-xs mb-2">{t('procurement.drawer.quickActions')}</p>
@@ -1148,10 +1296,10 @@ export default function Procurement() {
                           <div key={idx} className="bg-[var(--surface-2)] rounded-xl p-3">
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-[var(--text-primary)] text-sm font-medium">{it.brand} - {it.size}</span>
-                              <span className="text-green-400 text-sm font-semibold">{fmtCur(calcItemTotal(it))}</span>
+                              <span className="text-green-400 text-sm font-semibold">{fmtCur(calcItemTotal(it), poCur(viewPO))}</span>
                             </div>
                             <div className="flex items-center justify-between text-xs text-[var(--text-secondary)] mb-2">
-                              <span>{t('procurement.drawer.unitsAtPrice', { qty: it.quantity, price: fmtCur(it.unit_price) })}</span>
+                              <span>{t('procurement.drawer.unitsAtPrice', { qty: it.quantity, price: fmtCur(it.unit_price, poCur(viewPO)) })}</span>
                               <span className={received >= it.quantity ? 'text-green-400' : 'text-orange-400'}>
                                 {t('procurement.drawer.receivedOf', { received, qty: it.quantity })}
                               </span>
@@ -1160,7 +1308,7 @@ export default function Procurement() {
                               <div className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : 'bg-orange-500'}`}
                                 style={{ width: `${pct}%` }} />
                             </div>
-                            {['Ordered','Partial Delivery'].includes(viewPO.status) && (
+                            {['Ordered','Partial Delivery'].includes(viewPO.status) && !(poLines || []).length && caps.procure && (
                               <div className="flex items-center gap-2">
                                 <input type="number" min="0" max={it.quantity} defaultValue={received}
                                   disabled={poLocked}
@@ -1177,20 +1325,42 @@ export default function Procurement() {
                   </div>
                 )}
 
+                {/* Receivable lines (purchase_order_lines) */}
+                <div>
+                  <p className="text-[var(--text-secondary)] text-xs mb-2 uppercase tracking-wide font-medium">Receivable lines</p>
+                  {poLines === null ? (
+                    <p className="text-xs text-[var(--text-muted)]">Loading lines</p>
+                  ) : poLines.length === 0 ? (
+                    <p className="text-xs text-amber-300">No Material Master lines on this PO, so goods cannot be received into stock against it.</p>
+                  ) : (
+                    <ul className="space-y-1 text-sm">
+                      {poLines.map((l) => (
+                        <li key={l.id} className="flex justify-between gap-2 border-b border-[var(--border-dim)] py-1">
+                          <span><span className="font-mono text-xs">{l.item_code || 'N/A'}</span> {l.item_name || l.description}</span>
+                          <span className="tabular-nums text-[var(--text-secondary)]">{Number(l.qty_accepted || 0)} of {Number(l.qty_ordered)} received, {outstandingQty(l)} outstanding</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {poLines && poLines.length > 0 && ['Approved', 'Ordered', 'Partial Delivery'].includes(viewPO.status) && (
+                    <p className="text-xs text-[var(--text-muted)] mt-2">Receive these on Goods Receipt, Receive against a purchase order. That posts the stock movement.</p>
+                  )}
+                </div>
+
                 {/* Cost summary */}
                 <div className="bg-[var(--surface-2)] rounded-xl p-4 space-y-2">
                   <p className="text-[var(--text-secondary)] text-xs mb-2 uppercase tracking-wide font-medium">{t('procurement.drawer.costSummary')}</p>
                   <div className="flex justify-between text-sm">
                     <span className="text-[var(--text-secondary)]">{t('procurement.drawer.subtotal')}</span>
-                    <span className="text-[var(--text-primary)]">{fmtCur(viewPO.subtotal)}</span>
+                    <span className="text-[var(--text-primary)]">{fmtCur(viewPO.subtotal, poCur(viewPO))}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-[var(--text-secondary)]">{t('procurement.drawer.tax')}</span>
-                    <span className="text-[var(--text-primary)]">{fmtCur(viewPO.tax_amount)}</span>
+                    <span className="text-[var(--text-primary)]">{fmtCur(viewPO.tax_amount, poCur(viewPO))}</span>
                   </div>
                   <div className="flex justify-between text-base font-semibold border-t border-[var(--border-bright)] pt-2 mt-2">
                     <span className="text-[var(--text-primary)]">{t('procurement.drawer.total')}</span>
-                    <span className="text-green-400 text-xl">{fmtCur(viewPO.total_amount)}</span>
+                    <span className="text-green-400 text-xl">{fmtCur(viewPO.total_amount, poCur(viewPO))}</span>
                   </div>
                 </div>
 
@@ -1254,12 +1424,12 @@ export default function Procurement() {
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-2">
-                  <button onClick={() => { if (poLocked) return; const po = viewPO; setViewPO(null); openEdit(po) }}
+                  {caps.procure && <button onClick={() => { if (poLocked) return; const po = viewPO; setViewPO(null); openEdit(po) }}
                     disabled={poLocked}
                     title={poLocked ? 'Locked, in approval' : undefined}
                     className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed">
                     <Edit2 size={15} />{t('procurement.drawer.editPo')}
-                  </button>
+                  </button>}
                   <button onClick={() => exportPDF(viewPO)}
                     className="btn-secondary flex-1">
                     <FileText size={15} />{t('procurement.drawer.exportPdf')}

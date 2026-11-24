@@ -1,7 +1,7 @@
 /**
  * Inventory Control Center - section catalogue (pure, no I/O).
  *
- * ONE hub (`/stock`, src/pages/StockManagement.jsx) with twenty sections
+ * ONE hub (`/stock`, src/pages/StockManagement.jsx) with twenty-five sections
  * grouped into five tabs. The section lives in the URL (`?section=`), so a
  * link to "Physical audits" survives a refresh and can be shared.
  *
@@ -31,16 +31,21 @@ export const SECTIONS = [
   { key: 'materials', group: 'operate', icon: 'Package', cap: 'view' },
   { key: 'physical', group: 'operate', icon: 'ScanLine', cap: 'view' },
   { key: 'movements', group: 'operate', icon: 'ArrowLeftRight', cap: 'view' },
+  { key: 'floor', group: 'operate', icon: 'Forklift', cap: 'view' },
   { key: 'audits', group: 'control', icon: 'ClipboardCheck', cap: 'view' },
   { key: 'discrepancies', group: 'control', icon: 'AlertTriangle', cap: 'view' },
   { key: 'corrections', group: 'control', icon: 'FileWarning', cap: 'view' },
   { key: 'controls', group: 'control', icon: 'ShieldCheck', cap: 'view' },
+  { key: 'matching', group: 'control', icon: 'Link', cap: 'view' },
   { key: 'procurement', group: 'supply', icon: 'ShoppingCart', cap: 'view' },
+  { key: 'purchasing', group: 'supply', icon: 'FileText', cap: 'view' },
   { key: 'receiving', group: 'supply', icon: 'PackageCheck', cap: 'view' },
   { key: 'supplier', group: 'supply', icon: 'Truck', cap: 'view' },
   { key: 'tyres', group: 'assets', icon: 'CircleDot', cap: 'view' },
   { key: 'identification', group: 'assets', icon: 'ScanLine', cap: 'view' },
+  { key: 'custody', group: 'assets', icon: 'Wrench', cap: 'view' },
   { key: 'valuation', group: 'insight', icon: 'Coins', cap: 'view_value' },
+  { key: 'finance', group: 'insight', icon: 'Scale', cap: 'view_value' },
   { key: 'kpis', group: 'insight', icon: 'Gauge', cap: 'view' },
   { key: 'classification', group: 'insight', icon: 'Layers', cap: 'view' },
   { key: 'planning', group: 'insight', icon: 'LineChart', cap: 'view' },

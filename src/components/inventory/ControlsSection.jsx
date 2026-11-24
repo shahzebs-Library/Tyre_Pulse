@@ -12,6 +12,8 @@ import { INVENTORY_CAPABILITIES } from '../../lib/inventory/hubSections'
 import { useInvQuery, useHubTab, PagedTable, Note, StatusPill, SectionCard, fmtDateTime } from './InvUi'
 import OpeningBalancePanel from './OpeningBalancePanel'
 import ApprovalsPanel from './ApprovalsPanel'
+import UnmatchedItemsPanel from './UnmatchedItemsPanel'
+import StockReconcilePanel from './StockReconcilePanel'
 
 function Permissions({ can }) {
   const { t } = useLanguage()
@@ -57,7 +59,7 @@ function MasterReviews() {
   )
 }
 
-const CONTROL_TABS = ['approvals', 'permissions', 'opening', 'master']
+const CONTROL_TABS = ['approvals', 'permissions', 'opening', 'master', 'unmatched', 'reconcile']
 
 export default function ControlsSection(props) {
   const { t } = useLanguage()
@@ -69,11 +71,16 @@ export default function ControlsSection(props) {
         { key: 'permissions', label: t('inventory.controls.tabs.permissions') },
         { key: 'opening', label: t('inventory.controls.tabs.opening') },
         { key: 'master', label: t('inventory.controls.tabs.master') },
+        // Plain English for now; the Arabic labels follow with the locale pass.
+        { key: 'unmatched', label: 'Unmatched items' },
+        { key: 'reconcile', label: 'Stock reconciliation' },
       ]} />
       {tab === 'approvals' && <ApprovalsPanel {...props} />}
       {tab === 'permissions' && <Permissions can={props.can} />}
       {tab === 'opening' && <OpeningBalancePanel {...props} />}
       {tab === 'master' && <MasterReviews />}
+      {tab === 'unmatched' && <UnmatchedItemsPanel {...props} />}
+      {tab === 'reconcile' && <StockReconcilePanel {...props} />}
     </div>
   )
 }

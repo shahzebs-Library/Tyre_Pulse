@@ -95,8 +95,10 @@ void main() {
       // + submitQueued (background sync) + 68 physical inventory keys
       // (pi_*, docs/inventory/102; +7 store picker / bin label keys)
       // + 21 capture-mockup keys (connection pill, location bar, photo
-      // slots, classification claim).
-      expect(c.length, 225, reason: lang);
+      // slots, classification claim) + 36 issue / return against a job
+      // card keys (jc_*, incl. 4 reservation lines).
+      expect(c.length, 261, reason: lang);
+      expect(c.keys.where((String k) => k.startsWith('jc_')).length, 36);
       expect(c.keys.where((String k) => k.startsWith('pi_')).length, 89);
       expect(c['submitQueued'], contains('%n'), reason: lang);
       expect(

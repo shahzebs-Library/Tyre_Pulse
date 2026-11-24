@@ -292,7 +292,10 @@ export function applyMovement(balance, movement) {
 
   if (spec.qty > 0) {
     let unitCost = num(m.unitCost)
-    if (type === 'issue_return' && unitCost === null) unitCost = averageCost(b)
+    // issue_return: the caller passes the cost the units were ISSUED at (server:
+    // derived from the source issue movements). Without it the units come back
+    // unvalued; the current average is never substituted (owner rule: never
+    // replace a missing cost). Mirrors _inv_post since 20261124091000.
     if (type === 'adjustment_up' && unitCost === null) unitCost = averageCost(b)
     const { next, valueIn } = putIn(b, qty, unitCost, m.at)
     return done(next, {

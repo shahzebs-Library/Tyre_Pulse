@@ -76,7 +76,12 @@ export function reorderSuggestion(r, vel) {
   if (days === null || days >= 30) return null
   const configured = num(r.reorder_qty)
   if (configured && configured > 0) return configured
-  return Math.max(0, (num(r.min_level) || 0) * 2 - (num(r.stock_qty) || 0))
+  const min = num(r.min_level) || 0
+  // No levels set: suggest two months of cover at the measured rate, never a 0
+  // that reads as "order nothing".
+  const target = min > 0 ? min * 2 : Math.ceil((num(vel?.avgPerMonth) || 0) * 2)
+  const need = target - (num(r.stock_qty) || 0)
+  return need > 0 ? need : null
 }
 
 /** Cover band for colour + text, never colour alone. */
@@ -96,6 +101,7 @@ export function enrichStock(records = [], velocityMap = {}) {
       status: deriveStatus(r),
       avgPerMonth: vel ? vel.avgPerMonth : null,
       daysRemaining: vel ? vel.daysRemaining : null,
+      usageScope: vel?.scope || null,
       suggestion: reorderSuggestion(r, vel),
     }
   })
@@ -107,7 +113,8 @@ export function filterStock(rows = [], { search = '', site = 'all', status = 'al
     if (site !== 'all' && r.site !== site) return false
     if (status !== 'all' && r.status !== status) return false
     if (q) {
-      const hay = [r.site, r.description, r.management_action, r.brand, r.tyre_size, r.custom_data?.stock_item?.code].filter(Boolean).join(' ').toLowerCase()
+      const hay = [r.site, r.description, r.management_action, r.brand, r.tyre_size, r.custom_data?.stock_item?.code,
+        r.item?.item_code, r.item?.item_name, r.cat?.name, r.cat?.brand, r.cat?.category, ...(r.cat?.oem || [])].filter(Boolean).join(' ').toLowerCase()
       if (!hay.includes(q)) return false
     }
     return true
@@ -309,19 +316,25 @@ export function tyreChangeSummary(records = [], now = new Date(), monthCount = 6
   }
 }
 
-export const STOCK_EXPORT_COLS = ['site', 'description', 'stock_qty', 'min_level', 'critical_level', 'reorder_qty', 'status', 'velocity', 'days_left', 'suggestion', 'action']
-export const STOCK_EXPORT_HEADERS = ['Site', 'Description', 'Stock Qty', 'Min Level', 'Critical Level', 'Reorder Qty', 'Status', 'Velocity (per month)', 'Days Left', 'Suggested Reorder', 'Action']
+export const STOCK_EXPORT_COLS = ['site', 'item_code', 'item_name', 'brand', 'part_type', 'category', 'oem', 'description', 'stock_qty', 'min_level', 'critical_level', 'reorder_qty', 'status', 'velocity', 'days_left', 'suggestion', 'action']
+export const STOCK_EXPORT_HEADERS = ['Site', 'Item Code', 'Material Master Name', 'Brand', 'Genuine / Aftermarket', 'Category', 'OEM Number', 'Description', 'Stock Qty', 'Min Level', 'Critical Level', 'Reorder Qty', 'Status', 'Velocity (per month)', 'Days Left', 'Suggested Reorder', 'Action']
 
 export function stockExportRows(rows = []) {
   return rows.map(r => ({
     site: r.site || '',
+    item_code: r.item?.item_code || r.custom_data?.stock_item?.code || '',
+    item_name: r.cat?.name || r.item?.item_name || '',
+    brand: r.cat?.brand || r.brand || '',
+    part_type: r.cat?.partType && r.cat.partType !== 'not_stated' ? r.cat.partType : '',
+    category: r.cat?.category || r.item?.category || '',
+    oem: (r.cat?.oem || []).join(', '),
     description: r.description || '',
     stock_qty: r.stock_qty ?? '',
     min_level: r.min_level ?? '',
     critical_level: r.critical_level ?? '',
     reorder_qty: r.reorder_qty ?? '',
     status: r.status,
-    velocity: r.avgPerMonth === null ? 'N/A' : r.avgPerMonth,
+    velocity: r.avgPerMonth === null ? 'N/A' : r.usageScope === 'country' ? `${r.avgPerMonth} (country)` : r.avgPerMonth,
     days_left: r.daysRemaining === null ? 'N/A' : r.daysRemaining,
     suggestion: r.suggestion === null ? '' : r.suggestion,
     action: r.management_action || '',

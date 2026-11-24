@@ -149,6 +149,7 @@ final class PendingCapture {
     required this.capturedAt,
     this.canonicalId,
     this.variantId,
+    this.itemId,
     this.label,
     this.refs = const <String, String>{},
     this.scannedCode,
@@ -173,6 +174,7 @@ final class PendingCapture {
         capturedAt: DateTime.tryParse('${j['captured_at']}') ?? DateTime.now(),
         canonicalId: j['canonical_id'] as String?,
         variantId: j['variant_id'] as String?,
+        itemId: j['item_id'] as String?,
         label: j['label'] as String?,
         refs: <String, String>{
           for (final MapEntry<Object?, Object?> e
@@ -203,6 +205,10 @@ final class PendingCapture {
   final DateTime capturedAt;
   final String? canonicalId;
   final String? variantId;
+
+  /// The country ERP item (`material_master.id`) when the count was taken on
+  /// a known stock line (Stock Count). Null for a discovery capture.
+  final String? itemId;
   final String? label;
   final Map<String, String> refs;
   final String? scannedCode;
@@ -240,6 +246,7 @@ final class PendingCapture {
         capturedAt: capturedAt,
         canonicalId: canonicalId,
         variantId: variantId,
+        itemId: itemId,
         label: label,
         refs: refs,
         scannedCode: scannedCode,
@@ -263,6 +270,7 @@ final class PendingCapture {
         'kind': kind,
         'canonical_id': canonicalId,
         'variant_id': variantId,
+        'item_id': itemId,
         'refs': refs,
         'scanned_code': scannedCode,
         'quantity': quantity,
@@ -285,6 +293,7 @@ final class PendingCapture {
         'captured_at': capturedAt.toIso8601String(),
         'canonical_id': canonicalId,
         'variant_id': variantId,
+        'item_id': itemId,
         'label': label,
         'refs': refs,
         'scanned_code': scannedCode,

@@ -12,6 +12,11 @@ vi.mock('../lib/api/inventory', () => ({
   saveLocation: (...a) => api.save(...a),
   bulkCreateLocations: (...a) => api.bulk(...a),
   newIdempotencyKey: () => `k-${Math.random()}`,
+  listAssignablePeople: () => Promise.resolve([]),
+}))
+vi.mock('../lib/api/warehouseAssets', () => ({
+  saveLocationWithRules: (...a) => api.save(...a),
+  listLocationUtilisation: () => Promise.resolve({ status: 'not_provisioned', rows: [], truncated: false }),
 }))
 vi.mock('../lib/api/sites', () => ({ listSites: () => Promise.resolve([{ name: 'NHC', country: 'KSA' }, { name: 'DIRIYAH', country: 'KSA' }]) }))
 const auth = { profile: { id: 'u1', role: 'Manager' }, isSuperAdmin: false }

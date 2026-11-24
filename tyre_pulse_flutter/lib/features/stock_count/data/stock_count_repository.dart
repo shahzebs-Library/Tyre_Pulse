@@ -39,12 +39,10 @@ Future<List<Map<String, dynamic>>> fetchStockPages(
 abstract interface class StockCountRepository {
   Future<List<StockItem>> list({String? country});
 
-  Future<bool> setCount({
-    required StockItem item,
-    required num count,
-    required String? reason,
-    required WorkspaceContext workspace,
-  });
+  // A physical count is recorded as evidence through the physical
+  // inventory outbox (`StockCountRecorder`), never posted from here: a count
+  // difference needs an approver (WP5, migration 20261124091000), so the old
+  // absolute `set_stock_count` path is no longer called by the phone.
 
   /// Quick +/- adjustment by a signed [delta] (Expo `adjustStock`,
   /// `mobile/lib/stock.ts`): the audited `post_stock_movement` RPC
@@ -58,22 +56,12 @@ abstract interface class StockCountRepository {
     required WorkspaceContext workspace,
   });
 
-  /// Creates a new stock row for a tyre size at a site (Expo
-  /// `createStockRecord`). The size is prefixed into `description` because
-  /// `stock_records` has no size column. Thresholds are written only when
-  /// [minLevel]/[criticalLevel] are supplied (admin callers); otherwise the
-  /// server defaults govern. Online only: there is no row to reconcile a
-  /// queued insert against, so a failure is thrown for the caller.
-  Future<void> create({
-    required String size,
-    required String? description,
-    required String site,
-    required int quantity,
-    required WorkspaceContext workspace,
-    int? minLevel,
-    int? criticalLevel,
-    bool writeThresholds = false,
-  });
+  // There is no create here. A new stock line cannot be inserted from a
+  // client: the ledger guard (inv_balance_guard) refuses a non-zero balance
+  // and stock_movements is append-only through the inv_* RPCs. "Add stock"
+  // records a proposed_new physical inventory capture instead
+  // (`StockCountRecorder.recordNew`); a reviewer identifies the item and an
+  // approver posts the quantity.
 }
 
 /// Mirror of Expo `composeStockDescription`: the size leads the description
@@ -109,7 +97,8 @@ final class DefaultStockCountRepository
         (int from, int to) {
           var query = _client.from(SupabaseTables.stockRecords).select(
                 'id,site,description,stock_qty,min_level,critical_level,'
-                'stock_status,updated_at',
+                'stock_status,updated_at,country,item_id,location_id,'
+                'qty_reserved,condition,ownership',
               );
           if (scope.isNotEmpty && scope != 'All') {
             query = query.or('country.eq.$scope,country.is.null');
@@ -124,30 +113,6 @@ final class DefaultStockCountRepository
           .where((StockItem item) => item.id.isNotEmpty)
           .toList(growable: false);
     });
-  }
-
-  @override
-  Future<bool> setCount({
-    required StockItem item,
-    required num count,
-    required String? reason,
-    required WorkspaceContext workspace,
-  }) async {
-    final num whole = count.floor();
-    await guard<Object?>(
-      () => _client.rpc<Object?>(
-        SupabaseRpcs.setStockCount,
-        params: <String, Object?>{
-          'p_stock_id': item.id,
-          'p_count': whole,
-          'p_reason': _text(reason),
-        },
-      ),
-    );
-    // STOCK_ADJUST is retired: nothing is queued offline (an absolute
-    // quantity replayed later would bypass the movement ledger). A lost
-    // connection is thrown for the screen to report.
-    return false;
   }
 
   @override
@@ -174,74 +139,6 @@ final class DefaultStockCountRepository
     // connection is thrown for the screen to report.
     return false;
   }
-
-  @override
-  Future<void> create({
-    required String size,
-    required String? description,
-    required String site,
-    required int quantity,
-    required WorkspaceContext workspace,
-    int? minLevel,
-    int? criticalLevel,
-    bool writeThresholds = false,
-  }) async {
-    final int qty = quantity < 0 ? 0 : quantity;
-    final String text = composeStockDescription(size, description);
-    final String siteName = site.trim();
-    final Map<String, Object?> row = <String, Object?>{
-      'site': siteName,
-      'description': text,
-      'stock_qty': qty,
-      'stock_status': stockStatusFor(
-        qty,
-        writeThresholds ? minLevel : null,
-        writeThresholds ? criticalLevel : null,
-      ),
-      'country': _scopeCountry(workspace),
-      'updated_by': workspace.userId,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-      if (writeThresholds) 'min_level': minLevel,
-      if (writeThresholds) 'critical_level': criticalLevel,
-    };
-    final Map<String, dynamic> created = await guard<Map<String, dynamic>>(
-      () => _client
-          .from(SupabaseTables.stockRecords)
-          .insert(row)
-          .select('id')
-          .single(),
-    );
-    final String? id = _text(created['id']);
-    if (id == null) return;
-    // Best-effort audit movement (Initial), exactly as Expo: never blocks
-    // the create that already succeeded.
-    try {
-      await guard<Object?>(
-        () => _client.from(SupabaseTables.stockMovements).insert(
-          <String, Object?>{
-            'stock_id': id,
-            'site': siteName,
-            'description': text,
-            'movement_type': 'Initial',
-            'qty_before': 0,
-            'qty_change': qty,
-            'qty_after': qty,
-            'reason': 'Initial stock entry (mobile)',
-            'created_by': workspace.userId,
-          },
-        ),
-      );
-    } on Object {
-      // Audit is best-effort.
-    }
-  }
-}
-
-extension _StockWrites on DefaultStockCountRepository {
-  String? _scopeCountry(WorkspaceContext workspace) {
-    final String scope = workspace.activeCountry?.trim() ?? '';
-    return scope.isEmpty || scope == 'All' ? null : scope;
-  }
 }
 
 StockItem _fromRow(Map<String, dynamic> row) => StockItem(
@@ -253,6 +150,13 @@ StockItem _fromRow(Map<String, dynamic> row) => StockItem(
       critical: _number(row['critical_level']),
       status: _text(row['stock_status']),
       updatedAt: DateTime.tryParse(_text(row['updated_at']) ?? ''),
+      country: _text(row['country']),
+      itemId: _text(row['item_id']),
+      locationId: _text(row['location_id']),
+      reserved:
+          row['qty_reserved'] == null ? null : _number(row['qty_reserved']),
+      condition: _text(row['condition']),
+      ownership: _text(row['ownership']),
     );
 
 String? _text(Object? value) {

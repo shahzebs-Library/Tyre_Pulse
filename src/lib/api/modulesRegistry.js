@@ -17,6 +17,20 @@
  */
 import { supabase, unwrap } from './_client'
 import { MODULE_GROUPS } from '../moduleCatalog'
+import { createRequestCache } from '../requestCache'
+import { configurationScope, isCacheableScope, subscribeConfigurationScope } from '../configurationStore'
+
+// Module statuses are read on sign-in and on every access refresh. They change
+// only when an administrator flips a module, so concurrent readers share one
+// request and a settled answer is reused for 30 s (per signed-in identity).
+// Every writer in this file drops the cache; so does an identity change.
+const statusCache = createRequestCache({ ttlMs: 30000 })
+subscribeConfigurationScope(() => statusCache.clear())
+
+/** Forget the cached module statuses (call after any module status write). */
+export function invalidateModuleStatuses() {
+  statusCache.clear()
+}
 
 /** The lifecycle states a module row may carry. */
 export const MODULE_STATUSES = ['live', 'maintenance', 'disabled', 'beta']
@@ -85,6 +99,17 @@ export async function listModules() {
  * @returns {Promise<Record<string,{status:string,until:(string|null),note:(string|null)}>>}
  */
 export async function listModuleStatuses() {
+  const scope = configurationScope()
+  if (!isCacheableScope(scope)) return readModuleStatuses()
+  const map = await statusCache.get(`${scope}|statuses`, readModuleStatuses, {
+    // An empty map is also what a failed read returns; never keep it.
+    cacheIf: (m) => m && Object.keys(m).length > 0,
+  })
+  // Callers own their copy, so one consumer cannot change another's map.
+  return Object.fromEntries(Object.entries(map).map(([k, v]) => [k, { ...v }]))
+}
+
+async function readModuleStatuses() {
   try {
     const rows = unwrap(
       await supabase.from('modules').select('module_id,status,maintenance_until,maintenance_note'),
@@ -132,6 +157,7 @@ export async function upsertModule({
 } = {}) {
   const id = moduleId == null ? '' : String(moduleId).trim()
   if (!id) throw new Error('moduleId is required')
+  invalidateModuleStatuses()
   const payload = {
     module_id: id,
     name: name == null ? id : String(name),
@@ -167,6 +193,7 @@ export async function upsertModule({
  * @returns {Promise<object|null>}
  */
 export async function setModuleStatus(moduleId, status, { until, note } = {}) {
+  invalidateModuleStatuses()
   const maintenance = status === 'maintenance'
   let untilIso = null
   if (maintenance && until) {
@@ -201,6 +228,7 @@ export async function setModuleStatus(moduleId, status, { until, note } = {}) {
 export async function bulkSetStatus(moduleIds, status) {
   const ids = Array.isArray(moduleIds) ? moduleIds.filter(Boolean) : []
   if (ids.length === 0) return []
+  invalidateModuleStatuses()
   // A bulk change carries no per-module window, so any prior ETA/note is cleared
   // (mirrors setModuleStatus clearing the window when not in maintenance).
   return unwrap(
@@ -266,6 +294,7 @@ export async function seedFromCatalog(catalog) {
       })
     }
     if (missing.length === 0) return 0
+    invalidateModuleStatuses()
     const { error } = await supabase.from('modules')
       .upsert(missing, { onConflict: 'module_id' })
     if (error) return 0

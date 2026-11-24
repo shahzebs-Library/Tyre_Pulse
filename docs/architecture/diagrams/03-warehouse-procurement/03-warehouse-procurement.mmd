@@ -1,0 +1,34 @@
+%% src: /Users/anum/Documents/wt-inv-layout/src/lib/api /Users/anum/Documents/wt-inv-layout/supabase/migrations
+%% legend: green=IMPLEMENTED (live in DB + wired in code); yellow=PARTIAL (built, unused or degraded); red=BROKEN (evidence in doc); purple=PROPOSED (migration file, NOT APPLIED); -.->=text join or proposed link
+flowchart TD
+title Warehouse and procurement workflow
+  REQ["requisitions 0 rows<br/>procurementChain.js"]:::yellow
+  RFQ["procurement_rfqs + quotes<br/>inv_rfq_create / award"]:::purple
+  PO["purchase_orders 0 rows<br/>generate_po_number, inv_po_add_line"]:::yellow
+  CTRL["PO controls, limits<br/>guard_po_rules / guard_po_controls"]:::purple
+  GRN["goods_receipts 1 row<br/>inv_receive_goods"]:::yellow
+  INV["supplier_invoices 0<br/>inv_supplier_invoice_match"]:::yellow
+  RET["supplier_returns<br/>inv_supplier_return"]:::purple
+  LED[("stock_movements ledger<br/>inv_post_movement")]:::green
+  BAL[("stock_records via v_inv_balances<br/>inv_balance_guard")]:::green
+  OPEN["opening_balance_lines 5,533<br/>inv_opening_batch_approve"]:::green
+  PI["physical_inventory_sessions<br/>inv_pi_capture"]:::green
+  AUD["inventory_audits 4<br/>inv_count_submit, inv_audit_reconcile"]:::green
+  TRF["stock_transfers 1<br/>inv_transfer_dispatch / receive"]:::green
+  ISS["material_issues 0<br/>inv_issue / inv_issue_slip"]:::yellow
+  SPC["scrap, lubricant, calibration<br/>inv_scrap_request etc."]:::purple
+  REQ --> RFQ
+  RFQ --> PO
+  REQ -->|"direct today"| PO
+  CTRL -.-> PO
+  PO --> GRN
+  GRN -->|"posts receipt"| LED
+  GRN --> INV
+  GRN -.-> RET
+  OPEN -->|"posts opening"| LED
+  PI -->|inv_pi_to_opening_batch| OPEN
+  AUD -->|"adjustment after approval"| LED
+  TRF -->|"dispatch + receive"| LED
+  ISS -->|"issue to job card"| LED
+  SPC -.-> LED
+  LED -->|"only writer of qty"| BAL

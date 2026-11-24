@@ -1,0 +1,124 @@
+<mxfile host="app.diagrams.net" agent="code-to-diagram">
+  <diagram id="c2d-8e34f9182515" name="Page-1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1413" pageHeight="777" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="IN" value="ERP monthly tyre file&lt;br&gt;stg_monthly_tyres" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="54" y="80" width="177" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="INSP" value="inspections 2,870&lt;br&gt;Flutter inspection wizard" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="178" width="205" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="TR" value="tyre_records 11,274&lt;br&gt;fitment + removal rows" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="434.20" y="168" width="186" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="TSE" value="tyre_service_events 0&lt;br&gt;rotation / repair" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="809.40" y="285.08" width="177" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="SCR" value="tyre_status_marks 954&lt;br&gt;scrap_tyre_by_serial" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="809.40" y="383.08" width="177" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="TI" value="tyre_items 8,641&lt;br&gt;inv_tyre_item_sync" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="818.90" y="168" width="158" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="TSH" value="tyre_store_holdings 4&lt;br&gt;inv_tyre_store_holding" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1182.60" y="176.98" width="184" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="CON" value="tyre_custody_conflicts&lt;br&gt;inv_tyre_conflict_decide" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1175.60" y="274.98" width="198" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="PRICE" value="cost_per_tyre backfill&lt;br&gt;tyre_price_backfill" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="50.50" y="276" width="184" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="CPK" value="get_tyre_running_life&lt;br&gt;get_fleet_cpk" style="rounded=1;whiteSpace=wrap;html=1;arcSize=12;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="809.40" y="481.08" width="177" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;exitX=1.0000;exitY=0.8621;exitDx=0;exitDy=0;entryX=0.0000;entryY=0.2564;entryDx=0;entryDy=0;" edge="1" parent="1" source="IN" target="TR">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="332.60" y="130" />
+              <mxPoint x="332.60" y="188" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11" value="tyre_conditions, flags" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;dashed=1;exitX=1.0000;exitY=0.5000;exitDx=0;exitDy=0;entryX=0.0000;entryY=0.5000;entryDx=0;entryDy=0;" edge="1" parent="1" source="INSP" target="TR">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;exitX=1.0000;exitY=0.7436;exitDx=0;exitDy=0;entryX=0.0000;entryY=0.1379;entryDx=0;entryDy=0;" edge="1" parent="1" source="TR" target="TSE">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="714.80" y="226" />
+              <mxPoint x="714.80" y="293.08" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;exitX=1.0000;exitY=0.7436;exitDx=0;exitDy=0;entryX=0.0000;entryY=0.1379;entryDx=0;entryDy=0;" edge="1" parent="1" source="TR" target="SCR">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="714.80" y="226" />
+              <mxPoint x="714.80" y="391.08" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e14" value="serial sync" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;exitX=1.0000;exitY=0.5000;exitDx=0;exitDy=0;entryX=0.0000;entryY=0.5000;entryDx=0;entryDy=0;" edge="1" parent="1" source="TR" target="TI">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;exitX=1.0000;exitY=0.5000;exitDx=0;exitDy=0;entryX=0.0000;entryY=0.5176;entryDx=0;entryDy=0;" edge="1" parent="1" source="TI" target="TSH">
+          <mxGeometry as="geometry" relative="1" />
+        </mxCell>
+        <mxCell id="e16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;exitX=1.0000;exitY=0.7436;exitDx=0;exitDy=0;entryX=0.0000;entryY=0.1379;entryDx=0;entryDy=0;" edge="1" parent="1" source="TI" target="CON">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="1076.25" y="226" />
+              <mxPoint x="1076.25" y="282.98" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e17" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;exitX=1.0000;exitY=0.1379;exitDx=0;exitDy=0;entryX=0.0000;entryY=0.7436;entryDx=0;entryDy=0;" edge="1" parent="1" source="PRICE" target="TR">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="334.35" y="284" />
+              <mxPoint x="334.35" y="226" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e18" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;exitX=1.0000;exitY=0.7436;exitDx=0;exitDy=0;entryX=0.0000;entryY=0.1379;entryDx=0;entryDy=0;" edge="1" parent="1" source="TR" target="CPK">
+          <mxGeometry as="geometry" relative="1">
+            <Array as="points">
+              <mxPoint x="714.80" y="226" />
+              <mxPoint x="714.80" y="489.08" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="title" value="&lt;b&gt;Tyre lifecycle&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=16;align=left;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="153" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="Legend" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;" vertex="1" parent="1">
+          <mxGeometry x="40" y="579.08" width="294" height="158" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-r0" value="IMPLEMENTED (live in DB + wired in code)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=8;fontSize=11;whiteSpace=nowrap;overflow=hidden;fillColor=#d5e8d4;strokeColor=#82b366;rotatable=0;portConstraint=eastwest;" vertex="1" parent="legend">
+          <mxGeometry y="28" width="294" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-r1" value="PARTIAL (built, unused or degraded)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=8;fontSize=11;whiteSpace=nowrap;overflow=hidden;fillColor=#fff2cc;strokeColor=#d6b656;rotatable=0;portConstraint=eastwest;" vertex="1" parent="legend">
+          <mxGeometry y="54" width="294" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-r2" value="BROKEN (evidence in doc)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=8;fontSize=11;whiteSpace=nowrap;overflow=hidden;fillColor=#f8cecc;strokeColor=#b85450;rotatable=0;portConstraint=eastwest;" vertex="1" parent="legend">
+          <mxGeometry y="80" width="294" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-r3" value="PROPOSED (migration file, NOT APPLIED)" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=8;fontSize=11;whiteSpace=nowrap;overflow=hidden;fillColor=#e1d5e7;strokeColor=#9673a6;rotatable=0;portConstraint=eastwest;" vertex="1" parent="legend">
+          <mxGeometry y="106" width="294" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-r4" value="text join or proposed link" style="text;html=1;align=left;verticalAlign=middle;spacingLeft=44;fontSize=11;whiteSpace=nowrap;overflow=hidden;fillColor=none;strokeColor=none;rotatable=0;portConstraint=eastwest;" vertex="1" parent="legend">
+          <mxGeometry y="132" width="294" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-s4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#333333;fontSize=11;labelBackgroundColor=#ffffff;endArrow=classic;dashed=1;" edge="1" parent="legend">
+          <mxGeometry as="geometry" relative="1">
+            <mxPoint x="8" y="145" as="sourcePoint" />
+            <mxPoint x="36" y="145" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

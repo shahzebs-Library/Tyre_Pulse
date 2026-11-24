@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { contractFormSchema } from '../lib/validation/schemas'
 import { FormField, FormDate, FormActions } from '../components/forms'
 import * as supplierApi from '../lib/api/supplierManagementApi'
+import { SupplierRegister } from '../components/procurement/ProcurementChainPanels'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -938,6 +939,10 @@ export default function SupplierManagement() {
         )}
         <span className="text-xs text-[var(--text-dim)] ml-auto">{t('suppliers.suppliersCount', { count: filteredSuppliers.length })}</span>
       </div>
+
+      {/* The supplier master (suppliers table) that purchase orders and goods
+          receipts link to. The tabs below analyse tyre brands from tyre_records. */}
+      <SupplierRegister country={activeCountry} />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-full overflow-x-auto">

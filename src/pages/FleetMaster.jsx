@@ -18,13 +18,16 @@ import {
   CheckCircle2, Wrench, AlertCircle, FileText, CircleSlash, MapPin, Activity, Layers,
   Bookmark, Columns, Download, ChevronDown, MoreHorizontal, Upload, BarChart3,
   CalendarClock, ShieldCheck, Gauge, ChevronRight, Eye, Copy, Circle,
-  Bus, Car, Construction, Container, Factory, ListChecks,
+  Bus, Car, Construction, Container, Factory, ListChecks, Siren, ArrowUpDown, Info,
 } from 'lucide-react'
 import { vehicleKind } from '../lib/vehiclePhoto'
 import useAnchoredPopover from '../components/ui/useAnchoredPopover'
 import DialogModal from '../components/ui/Modal'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
 import { PageHero, Kpi, Card, ViewAll, Donut, Pager, VehicleThumb, KitTable, fmtInt, fmtPct } from '../components/commandCenter/kit'
+import {
+  PRIORITY_MATRIX, CRITICALITY_CRITERIA, PRIORITY_FILTER_OPTIONS, priorityFor, prioritySetFor,
+} from '../lib/assetPriority'
 import './fleetMaster.css'
 
 const DEFAULT_PAGE_SIZE = 25
@@ -90,6 +93,8 @@ const EXPORT_COLS = [
   { key: 'site',                    header: 'Site',              width: 24 },
   { key: 'operator_name',           header: 'Operator',          width: 26 },
   { key: 'status',                  header: 'Status',            width: 18 },
+  { key: 'priority_label',          header: 'Priority',          width: 14 },
+  { key: 'criticality',             header: 'Criticality',       width: 14 },
   { key: 'ops_status',              header: 'Operating State',   width: 18 },
   { key: 'expected_km_per_tyre',    header: 'Expected KM/Tyre',  width: 22 },
   { key: 'min_days_between_changes',header: 'Min Days',          width: 16 },
@@ -107,6 +112,7 @@ const TABLE_COLUMNS = [
   { key: 'site', label: 'Site' },
   { key: 'operator', label: 'Operator' },
   { key: 'status', label: 'Status' },
+  { key: 'priority', label: 'Priority' },
   { key: 'policy', label: 'Policy' },
   { key: 'service', label: 'Last Service' },
 ]
@@ -148,6 +154,15 @@ function policyPill(r) {
   if (!r?.expected_km_per_tyre && !r?.min_days_between_changes) return { tone: 'warn', label: 'No Policy', Icon: null }
   return { tone: 'good', label: 'Compliant', Icon: null }
 }
+
+/** Maintenance priority badge tone, on the existing cc-pill tones. */
+const PRIORITY_TONE = { 1: 'bad', 2: 'orange', 3: 'warn', 4: 'info', 5: 'info', 6: 'muted' }
+
+/** Export rows carry the derived priority beside the register columns. */
+const withPriority = (rows) => (rows || []).map((r) => {
+  const pr = priorityFor(r)
+  return { ...r, priority_label: `P${pr.priority}`, criticality: pr.criticality }
+})
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const fmtDate = (v) => {
@@ -312,7 +327,7 @@ function FleetRegister() {
   // opens `/vehicle/:asset_no` as a route, so without this the register would
   // remount and reset to page 1 of an unfiltered list.
   const [filters, setFilter, , , setFilters] = useFilterState({
-    search: '', site: '', status: '', type: '', flag: '', page: '1', size: String(DEFAULT_PAGE_SIZE),
+    search: '', site: '', status: '', type: '', flag: '', priority: '', page: '1', size: String(DEFAULT_PAGE_SIZE),
   })
   const search = filters.search
   const [filterCountry, setFilterCountry] = useState(activeCountry)
@@ -321,6 +336,10 @@ function FleetRegister() {
   const typeFilter = countryChanged ? '' : filters.type
   const statusFilter = filters.status
   const flagFilter = FLAG_LABELS[filters.flag] ? filters.flag : ''
+  // Only a value the Priority select offers is honoured; anything else in the
+  // URL is ignored rather than turned into a query.
+  const priorityFilter = prioritySetFor(filters.priority) ? filters.priority : ''
+  const prioritySet = useMemo(() => prioritySetFor(priorityFilter), [priorityFilter])
   // The URL carries a human-readable 1-based page; the query is 0-based.
   const requestedPage = Number(filters.page)
   const page = !countryChanged && Number.isSafeInteger(requestedPage) && requestedPage > 0
@@ -470,6 +489,7 @@ function FleetRegister() {
         status: statusFilter,
         type: typeFilter,
         flag: flagFilter,
+        priority: prioritySet || undefined,
         country: activeCountry
       })
       if (myReq !== reqIdRef.current) return   // a newer request superseded this one
@@ -484,7 +504,7 @@ function FleetRegister() {
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }
-  }, [page, pageSize, search, debouncedSearch, siteFilter, statusFilter, typeFilter, flagFilter, activeCountry])
+  }, [page, pageSize, search, debouncedSearch, siteFilter, statusFilter, typeFilter, flagFilter, prioritySet, activeCountry])
 
   const invalidateRecordRequests = useCallback(() => { reqIdRef.current++ }, [])
   useEffect(() => {
@@ -543,6 +563,24 @@ function FleetRegister() {
       }
     }
     loadSummary()
+    return () => { cancelled = true }
+  }, [activeCountry, search, debouncedSearch, siteFilter, typeFilter, records])
+
+  // ── critical and high (P1 to P3) count: one head-only query, never paged ─────
+  const [critHigh, setCritHigh] = useState({ state: 'loading', count: null })
+  useEffect(() => {
+    let cancelled = false
+    setCritHigh({ state: 'loading', count: null })
+    if (search !== debouncedSearch) return () => { cancelled = true }
+    Promise.resolve()
+      .then(() => assets.countFleetByPriority({
+        priority: [1, 2, 3], search: debouncedSearch, site: siteFilter, type: typeFilter, country: activeCountry,
+      }))
+      .then((n) => {
+        if (cancelled) return
+        setCritHigh(Number.isFinite(n) ? { state: 'ready', count: n } : { state: 'error', count: null })
+      })
+      .catch(() => { if (!cancelled) setCritHigh({ state: 'error', count: null }) })
     return () => { cancelled = true }
   }, [activeCountry, search, debouncedSearch, siteFilter, typeFilter, records])
 
@@ -805,7 +843,7 @@ function FleetRegister() {
 
   function exportRows(rows, suffix = '') {
     exportToExcel(
-      rows,
+      withPriority(rows),
       EXPORT_COLS.map(c => c.key),
       EXPORT_COLS.map(c => c.header),
       `TyrePulse_FleetMaster${suffix}_${new Date().toISOString().slice(0, 10)}`,
@@ -833,6 +871,7 @@ function FleetRegister() {
         status: statusFilter,
         type: typeFilter,
         flag: flagFilter,
+        priority: prioritySet || undefined,
         country: activeCountry
       })
     } catch (e) {
@@ -844,7 +883,7 @@ function FleetRegister() {
   function handleExport() {
     fetchAll().then(rows => {
       exportToExcel(
-        rows,
+        withPriority(rows),
         EXPORT_COLS.map(c => c.key),
         EXPORT_COLS.map(c => c.header),
         `TyrePulse_FleetMaster_${new Date().toISOString().slice(0, 10)}`,
@@ -858,13 +897,14 @@ function FleetRegister() {
   // ── filter helpers ────────────────────────────────────────────────────────────
   const applyFlag = (flag) => setFilters({ flag, status: '', page: '1' })
   const applyStatus = (status) => setFilters({ status, flag: '', page: '1' })
-  const clearAll = () => setFilters({ search: '', site: '', status: '', type: '', flag: '', page: '1' })
-  const anyFilter = Boolean(search || siteFilter || statusFilter || typeFilter || flagFilter)
+  const applyPriority = (priority) => setFilters({ priority, page: '1' })
+  const clearAll = () => setFilters({ search: '', site: '', status: '', type: '', flag: '', priority: '', page: '1' })
+  const anyFilter = Boolean(search || siteFilter || statusFilter || typeFilter || flagFilter || priorityFilter)
 
   function saveView(close) {
     const name = viewName.trim()
     if (!name) return
-    const entry = { name, filters: { search, site: siteFilter, status: statusFilter, type: typeFilter, flag: flagFilter } }
+    const entry = { name, filters: { search, site: siteFilter, status: statusFilter, type: typeFilter, flag: flagFilter, priority: priorityFilter } }
     const next = [...views.filter(v => v.name !== name), entry].slice(-20)
     setViews(next)
     writeStore(VIEWS_KEY, next)
@@ -875,7 +915,8 @@ function FleetRegister() {
     const f = v.filters || {}
     setFilters({
       search: f.search || '', site: f.site || '', status: f.status || '',
-      type: f.type || '', flag: FLAG_LABELS[f.flag] ? f.flag : '', page: '1',
+      type: f.type || '', flag: FLAG_LABELS[f.flag] ? f.flag : '',
+      priority: prioritySetFor(f.priority) ? String(f.priority) : '', page: '1',
     })
     close()
   }
@@ -906,6 +947,18 @@ function FleetRegister() {
 
   const openVehicle = (r) => navigate(`/vehicle/${encodeURIComponent(r.asset_no)}`)
   const none = selectedIds.length === 0
+
+  // ── priority sort (client side, within the loaded page only) ─────────────────
+  const [prioritySort, setPrioritySort] = useState('') // '' | 'asc' | 'desc'
+  const cyclePrioritySort = () => setPrioritySort((s) => (s === '' ? 'asc' : s === 'asc' ? 'desc' : ''))
+  const shownRecords = useMemo(() => {
+    if (!prioritySort) return records
+    const dir = prioritySort === 'asc' ? 1 : -1
+    return records
+      .map((r, i) => ({ r, i, p: priorityFor(r).priority }))
+      .sort((a, b) => (a.p - b.p) * dir || a.i - b.i)
+      .map((x) => x.r)
+  }, [records, prioritySort])
 
   // ── derived ───────────────────────────────────────────────────────────────────
   const pct = (n) => (summary && summary.total ? (n / summary.total) * 100 : null)
@@ -962,6 +1015,29 @@ function FleetRegister() {
     show('status') && {
       key: 'status', header: 'Status',
       cell: (r) => { const st = statusPill(r); return <span className={`cc-pill ${st.tone}`} title={r.ops_status_note || undefined}><st.Icon size={12} aria-hidden="true" />{st.label}</span> },
+    },
+    show('priority') && {
+      key: 'priority',
+      header: (
+        <button type="button" className="cc-link-btn fm-sort-btn" onClick={(e) => { e.stopPropagation(); cyclePrioritySort() }}
+          aria-label={`Sort this page by priority${prioritySort ? ` (now ${prioritySort === 'asc' ? 'P1 first' : 'P6 first'})` : ''}`}
+          title="Sorts the vehicles on this page only">
+          Priority <ArrowUpDown size={12} aria-hidden="true" />
+        </button>
+      ),
+      cell: (r) => {
+        const pr = priorityFor(r)
+        const why = pr.basis === 'default'
+          ? 'No vehicle type and no known asset code prefix, so the default applies'
+          : pr.basis === 'code' ? 'No vehicle type recorded; taken from the asset code prefix'
+            : pr.basis === 'override' ? 'Set by hand' : pr.basis === 'stored' ? 'Stored on the vehicle' : 'From the vehicle type'
+        return (
+          <span title={`${pr.category}. ${pr.response} ${why}.`}>
+            <span className={`cc-pill ${PRIORITY_TONE[pr.priority]}`}>{pr.label}</span>
+            {pr.basis === 'default' && <span className="cc-sub">(default)</span>}
+          </span>
+        )
+      },
     },
     show('policy') && {
       key: 'policy', header: 'Policy',
@@ -1048,6 +1124,11 @@ function FleetRegister() {
         <Kpi icon={CircleSlash} tone="t-purple" display={kpiVal(summary?.inactive)} label="Inactive"
           onClick={() => applyFlag('inactive')}
           title="Vehicles whose register status is not Active (Inactive, Retired or Transferred). Click to show them." />
+        <Kpi icon={Siren} tone="t-red"
+          display={critHigh.state === 'loading' ? '...' : critHigh.state === 'ready' ? fmtInt(critHigh.count) : 'N/A'}
+          label="Critical & High Assets"
+          onClick={() => applyPriority('1-3')}
+          title="Maintenance priority P1 to P3 (wheel loaders, plants and chillers, pumps and booms) under the current country, search, site and type. Click to show them." />
       </div>
       {!summaryPending && (debouncedSearch || siteFilter || typeFilter) && (
         <p className="fm-note">
@@ -1084,6 +1165,10 @@ function FleetRegister() {
           {typeFilter && !types.includes(typeFilter) && <option value={typeFilter}>{typeFilter}</option>}
           {types.map(s => <option key={s} value={s}>{s}</option>)}
         </SelectField>
+        <SelectField icon={Siren} label="Maintenance priority" value={priorityFilter} onChange={e => applyPriority(e.target.value)}>
+          <option value="">All Priorities</option>
+          {PRIORITY_FILTER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </SelectField>
         <Menu label="Saved views" role="dialog" width={280} trigger={<><Bookmark size={15} aria-hidden="true" /> Saved Views <ChevronDown size={14} aria-hidden="true" /></>}>
           {(close) => (
             <div className="fm-views">
@@ -1104,6 +1189,11 @@ function FleetRegister() {
         </Menu>
         {(flagFilter || anyFilter) && (
           <div className="fm-chips">
+            {priorityFilter && (
+              <button type="button" className="fm-chip" onClick={() => applyPriority('')} aria-label="Remove priority filter">
+                {PRIORITY_FILTER_OPTIONS.find(o => o.value === priorityFilter)?.label} <X size={12} aria-hidden="true" />
+              </button>
+            )}
             {flagFilter && (
               <button type="button" className="fm-chip" onClick={() => setFilters({ flag: '', page: '1' })} aria-label={`Remove filter ${FLAG_LABELS[flagFilter]}`}>
                 {FLAG_LABELS[flagFilter]} <X size={12} aria-hidden="true" />
@@ -1201,7 +1291,7 @@ function FleetRegister() {
               skeletonRows={Math.min(pageSize, 8)}
               getRowId={(r) => String(r.id)}
               onRowClick={openVehicle}
-              rows={records}
+              rows={shownRecords}
               empty={(
                 <span>
                   {loadError ? 'The register could not be loaded.' : t('fleetmaster.table.noVehicles')}
@@ -1284,6 +1374,30 @@ function FleetRegister() {
                   ? tx('fleetmaster.insights.utilFleetWideSub', 'All {count} vehicles with telematics. Search, site and type filters do not apply', { count: fmtInt(util.data.assets) })
                   : util.state === 'loading' ? 'Checking telematics...' : 'No telematics utilisation on record'} />
             </div>
+          </Card>
+
+          <Card title="Priority Matrix">
+            <details className="fm-prio-help">
+              <summary><Info size={14} aria-hidden="true" /> How maintenance priority is set</summary>
+              <p className="fm-foot">Taken from the vehicle type. When the type is blank, from the asset code prefix. Anything else is P6 and shows (default).</p>
+              <ol className="fm-prio-list">
+                {PRIORITY_MATRIX.map(m => (
+                  <li key={m.priority}>
+                    <button type="button" className="cc-link-btn" onClick={() => applyPriority(String(m.priority))} aria-label={`Show P${m.priority} vehicles`}>
+                      <span className={`cc-pill ${PRIORITY_TONE[m.priority]}`}>P{m.priority} {m.criticality}</span>
+                    </button>
+                    <b>{m.category}</b>
+                    <small>{m.impact} {m.response} PM frequency: {m.pmFrequency}.</small>
+                  </li>
+                ))}
+              </ol>
+              <p className="fm-prio-crit-title">Criticality</p>
+              <ul className="fm-prio-list">
+                {CRITICALITY_CRITERIA.map(c => (
+                  <li key={c.criticality}><b>{c.criticality}</b><small>{c.meaning} {c.action}</small></li>
+                ))}
+              </ul>
+            </details>
           </Card>
 
           <Card title="Quick Actions">

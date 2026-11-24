@@ -46,6 +46,11 @@ const SECTION_COMPONENTS = {
   classification: lazy(() => import('./ClassificationSection')),
   planning: lazy(() => import('./InsightSections').then((m) => ({ default: m.PlanningSection }))),
   reports: lazy(() => import('./ReportsSection')),
+  floor: lazy(() => import('./WarehouseFloorSections').then((m) => ({ default: m.FloorSection }))),
+  custody: lazy(() => import('./WarehouseFloorSections').then((m) => ({ default: m.CustodySection }))),
+  finance: lazy(() => import('./WarehouseFloorSections').then((m) => ({ default: m.FinanceSection }))),
+  purchasing: lazy(() => import('./WarehouseFloorSections').then((m) => ({ default: m.PurchasingSection }))),
+  matching: lazy(() => import('./WarehouseFloorSections').then((m) => ({ default: m.MatchingSection }))),
 }
 
 /** Sections that show the four inventory headline tiles above them. */
@@ -87,7 +92,7 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
 
   return (
     <div className="cc inv-hub inv-pmv">
-      <PageHeader title={t(`inventory.sections.${headingKey}`)} subtitle={t('inventory.lead')} icon={Warehouse} />
+      <PageHeader title={t(`inventory.sections.${headingKey}`)} subtitle={t('inventory.lead')} icon={Warehouse} emojiPath={`/stock?section=${headingKey}`} />
 
       {denied ? <Denied capLabel={t(`inventory.sections.${denied}`)} /> : (
         <div className="inv-main">

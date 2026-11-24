@@ -881,7 +881,7 @@ export function draftLineValue(line = {}) {
  * @param {Array<object>} lines
  * @returns {{ok:boolean, errors:string[], total:number|null, unpricedLines:number}}
  */
-export function validateDraftIssue(header = {}, lines = []) {
+export function validateDraftIssue(header = {}, lines = [], { posting = false } = {}) {
   const list = (Array.isArray(lines) ? lines : []).filter(
     (l) => str(l?.item_code) || str(l?.item_description),
   )
@@ -906,6 +906,13 @@ export function validateDraftIssue(header = {}, lines = []) {
     if (unit != null && unit < 0) {
       errors.push(`Line ${i + 1}: a unit cost cannot be negative. Use the return document type to credit a job.`)
     }
+    // POSTING MODE (inv_issue_slip exists): the slip moves stock, so every line
+    // must be a material-master item and name the stock line it comes from. The
+    // server enforces both; saying so here beats a refusal after saving.
+    if (posting) {
+      if (!str(l.item_code)) errors.push(`Line ${i + 1}: pick the item from the material master.`)
+      if (!str(l.stock_id)) errors.push(`Line ${i + 1}: choose the stock line it comes from.`)
+    }
     const v = draftLineValue(l)
     if (v == null) unpricedLines += 1
     else { total += v; priced += 1 }
@@ -921,4 +928,36 @@ export function validateDraftIssue(header = {}, lines = []) {
     unpricedLines,
     lineCount: list.length,
   }
+}
+
+/**
+ * Turn an inv_issue_slip result (from api/materialIssue.postMaterialIssueSlip)
+ * into what the page says. Never reports stock as moved unless the server said
+ * lines were posted.
+ *
+ * @param {{ok:boolean, reason?:string, message?:string, posted?:number, already?:number}} res
+ * @returns {{tone:'info'|'warn'|'error', title:string, detail:string, moved:boolean}}
+ */
+export function slipPostingSummary(res) {
+  if (!res) return { tone: 'error', title: 'Stock was not moved.', detail: 'No answer from the server.', moved: false }
+  if (res.ok) {
+    const posted = Number(res.posted) || 0
+    const already = Number(res.already) || 0
+    if (posted === 0 && already > 0) {
+      return { tone: 'info', title: 'Already posted.', detail: `All ${already} line${already === 1 ? ' was' : 's were'} already posted to stock. Nothing moved twice.`, moved: false }
+    }
+    return {
+      tone: 'info',
+      title: 'Stock updated.',
+      detail: `${posted} line${posted === 1 ? '' : 's'} posted to the stock ledger${already ? `, ${already} already posted` : ''}.`,
+      moved: posted > 0,
+    }
+  }
+  if (res.reason === 'not_available') {
+    return { tone: 'warn', title: 'Slip saved as a document only.', detail: 'Posting slips to stock is not enabled on this database yet. Issue stock in Stock, Receiving.', moved: false }
+  }
+  if (res.reason === 'shortage') {
+    return { tone: 'error', title: 'Slip saved, stock not moved.', detail: `${str(res.message) || 'Not enough stock.'} Nothing was taken off the shelf; correct the line and post again.`, moved: false }
+  }
+  return { tone: 'error', title: 'Slip saved, stock not moved.', detail: str(res.message) || 'The server refused the posting.', moved: false }
 }

@@ -2,6 +2,7 @@
 // Two result groups: COMMANDS (RBAC-filtered navigation + quick actions) and
 // RECORDS (debounced universal search across Supabase entities). Theme-aware:
 // every surface uses index.css tokens so it renders correctly in light + dark.
+import NavEmoji from './ui/NavEmoji'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -63,9 +64,11 @@ function saveRecent(item) {
   } catch { /* ignore storage errors */ }
 }
 
-function ItemIcon({ name, size = 15 }) {
+function ItemIcon({ name, path, size = 15 }) {
   const Icon = ICON_MAP[name] || Search
-  return <Icon size={size} />
+  // Same emoji as the sidebar for the same page; the line icon only when the
+  // page has none (records, actions).
+  return <NavEmoji path={path} fallback={Icon} size={18} tile={26} fallbackProps={{ size }} />
 }
 
 // ── Row ───────────────────────────────────────────────────────────────────────
@@ -97,7 +100,7 @@ function ResultRow({ item, isActive, index, onSelect, onHover }) {
           color: isActive ? 'var(--brand-bright)' : 'var(--text-muted)',
         }}
       >
-        <ItemIcon name={item.icon} />
+        <ItemIcon name={item.icon} path={item.path} />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>

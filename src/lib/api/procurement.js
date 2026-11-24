@@ -29,9 +29,12 @@ export function listPurchaseOrders({ country } = {}) {
   return q
 }
 
-/** Update a purchase order by id with the given patch. */
+/**
+ * Update a purchase order by id with the given patch. Returns the updated id(s)
+ * so a caller can tell an RLS refusal (0 rows, no error) from a real update.
+ */
 export function updatePurchaseOrder(id, patch) {
-  return supabase.from('purchase_orders').update(patch).eq('id', id)
+  return supabase.from('purchase_orders').update(patch).eq('id', id).select('id')
 }
 
 /** Generate the next PO number via the `generate_po_number` RPC. */

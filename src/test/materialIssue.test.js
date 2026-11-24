@@ -8,6 +8,7 @@ import {
   monthlyIssueTrend,
   SLIP_EXPORT_COLUMNS, slipExportRows, LINE_EXPORT_COLUMNS, lineExportRows,
   draftLineValue, validateDraftIssue, issueStatusLabel, ISSUE_STATUSES,
+  slipPostingSummary,
 } from '../lib/materialIssue'
 
 /**
@@ -605,6 +606,10 @@ vi.mock('../lib/api/materialIssue', async () => {
     setIssueStatus: vi.fn(async () => ({ ok: true })),
     countUnslippedLines: vi.fn(async () => 0),
     listIssuableJobCards: vi.fn(async () => []),
+    // WP5 posting: not available in these render tests (document-only mode)
+    issueSlipPostingAvailable: vi.fn(async () => false),
+    postMaterialIssueSlip: vi.fn(async () => ({ ok: false, reason: 'not_available' })),
+    listSlipStockLines: vi.fn(async () => []),
   }
 })
 vi.mock('../lib/api/materialMaster', () => ({ listMaterials: vi.fn(async () => []) }))
@@ -645,7 +650,7 @@ describe('StoreMaterialIssue page renders', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByText('Issue register').length).toBeGreaterThan(0))
     fireEvent.click(screen.getAllByRole('button').find((b) => b.textContent?.trim() === 'Raise an issue'))
-    await waitFor(() => expect(screen.getByText('Stock availability is not checked when recording an issue.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Records the slip only: it does not take stock off the shelf. Issue stock in Stock, Receiving.')).toBeTruthy())
     expect(screen.queryByText(/stock is recorded by site and description/i)).toBeNull()
   })
 
@@ -665,5 +670,30 @@ describe('StoreMaterialIssue page renders', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByText('Issue register').length).toBeGreaterThan(0))
     expect(document.body.textContent).not.toMatch(/[\u2013\u2014]/)
+  })
+})
+
+describe('posting a slip to stock (WP5)', () => {
+  const header = { country: 'KSA', work_order_no: 'GCKR/JC/1', doc_type: 'MIS' }
+
+  it('posting mode needs a material-master code and a stock line on every line', () => {
+    const lines = [{ item_description: 'free text', qty: 1 }, { item_code: 'X-1', qty: 2 }]
+    expect(validateDraftIssue(header, lines).ok).toBe(true)
+    const r = validateDraftIssue(header, lines, { posting: true })
+    expect(r.ok).toBe(false)
+    expect(r.errors).toContain('Line 1: pick the item from the material master.')
+    expect(r.errors).toContain('Line 1: choose the stock line it comes from.')
+    expect(r.errors).toContain('Line 2: choose the stock line it comes from.')
+    expect(validateDraftIssue(header, [{ item_code: 'X-1', qty: 2, stock_id: 's1' }], { posting: true }).ok).toBe(true)
+  })
+
+  it('slipPostingSummary never says stock moved unless the server posted lines', () => {
+    expect(slipPostingSummary({ ok: true, posted: 2, already: 0 })).toMatchObject({ tone: 'info', moved: true })
+    expect(slipPostingSummary({ ok: true, posted: 0, already: 3 })).toMatchObject({ title: 'Already posted.', moved: false })
+    const short = slipPostingSummary({ ok: false, reason: 'shortage', message: 'Line 1: not enough stock (7 available, 50 asked).' })
+    expect(short).toMatchObject({ tone: 'error', moved: false })
+    expect(short.detail).toContain('7 available')
+    expect(slipPostingSummary({ ok: false, reason: 'not_available' })).toMatchObject({ tone: 'warn', moved: false })
+    expect(slipPostingSummary(null).moved).toBe(false)
   })
 })

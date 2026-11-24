@@ -1,4 +1,5 @@
 import { WorkspaceNavigationContext } from '../contexts/WorkspaceNavigationContext'
+import NavEmoji from './ui/NavEmoji'
 import useAppShellScrollLock from '../hooks/useAppShellScrollLock'
 import { moduleAvailable } from '../lib/workspaceAccess'
 import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -1484,10 +1485,13 @@ export default function Layout({ children }) {
                                 />
                               )}
 
-                              <Icon
-                                size={13.5}
-                                strokeWidth={isActive ? 2.2 : 1.8}
-                                className={`flex-shrink-0 transition-colors duration-150 ${
+                              <NavEmoji
+                                path={to}
+                                fallback={Icon}
+                                size={15}
+                                tile={22}
+                                fallbackProps={{ size: 13.5, strokeWidth: isActive ? 2.2 : 1.8 }}
+                                className={`transition-colors duration-150 ${
                                   isActive
                                     ? 'text-[var(--accent-icon)]'
                                     : 'text-gray-600 group-hover:text-gray-300'

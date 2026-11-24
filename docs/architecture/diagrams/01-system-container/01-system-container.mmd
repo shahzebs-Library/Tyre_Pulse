@@ -1,0 +1,32 @@
+%% src: /Users/anum/Documents/wt-inv-layout/src /Users/anum/Documents/wt-inv-layout/supabase /Users/anum/Documents/wt-inv-layout/tyre_pulse_flutter/lib /Users/anum/Documents/wt-inv-layout/marketing
+%% legend: green=IMPLEMENTED (live in DB + wired in code); yellow=PARTIAL (built, unused or degraded); red=BROKEN (evidence in doc); purple=PROPOSED (migration file, NOT APPLIED); -.->=text join or proposed link; blue=actor or external system; gray=retired
+flowchart TD
+title Tyre Pulse - containers (live state 2026-11-24)
+  U([Office / workshop / store users])
+  F([Field staff on phones])
+  subgraph TP [Tyre Pulse system]
+    WEB["Web app<br/>src/App.jsx React+Vite"]:::green
+    CON["Super-admin console<br/>src/console/"]:::green
+    FLT["Flutter app<br/>tyre_pulse_flutter/lib"]:::green
+    EXPO["Expo app mobile/<br/>retired, OTA only"]:::gray
+    MKT["Marketing site<br/>marketing/ Next 16"]:::green
+    EDGE["Edge functions<br/>supabase/functions/*"]:::green
+    DB[("Postgres + RLS + RPCs<br/>project jhssdmeruxtrlqnwfksc")]:::green
+    STO[("Supabase Storage<br/>photos, PDFs")]:::green
+    PY["services/analytics<br/>Python, CI only"]:::yellow
+  end
+  ERP["ERP exports<br/>Ramco / CSV staging"]
+  EXT["Resend, Expo/FCM push,<br/>Anthropic, Stripe, Sentry"]
+  U --> WEB
+  U --> CON
+  F --> FLT
+  WEB -.->|"PostgREST + RPC, HTTPS"| DB
+  CON -.->|"super-admin RPCs"| DB
+  FLT -.->|"PostgREST + RPC, offline queue"| DB
+  WEB -.->|uploads| STO
+  FLT -.->|"photo uploads"| STO
+  WEB -.->|"functions.invoke"| EDGE
+  EDGE -.->|"service role"| DB
+  EDGE -.->|"email, push, AI, billing"| EXT
+  ERP -.->|"stg_* triggers, Data Intake"| DB
+  MKT -.->|"Login link"| WEB

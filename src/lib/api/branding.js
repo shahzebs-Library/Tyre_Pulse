@@ -6,6 +6,15 @@
  * colours/theme on the server. The browser never writes `organisations` directly.
  */
 import { supabase, unwrap } from './_client'
+import { createRequestCache } from '../requestCache'
+import { configurationScope, isCacheableScope, subscribeConfigurationScope } from '../configurationStore'
+
+// Branding is read by the tenant shell on every sign-in / token refresh and by
+// a few pages. It changes only through setOrgBranding below, so concurrent
+// readers share one request and a settled answer is reused for 60 s per
+// signed-in identity. Cleared on save and on identity change.
+const brandingCache = createRequestCache({ ttlMs: 60000 })
+subscribeConfigurationScope(() => brandingCache.clear())
 
 /** Default palette used when an org has not configured branding yet. */
 export const DEFAULT_BRANDING = Object.freeze({
@@ -39,7 +48,14 @@ export const BRANDING_FIELDS = [
  * Returns the merged branding object (may be `{}` if the caller has no org).
  */
 export async function getOrgBranding(orgId = null) {
-  return unwrap(await supabase.rpc('get_org_branding', { p_org_id: orgId }))
+  const read = async () => unwrap(await supabase.rpc('get_org_branding', { p_org_id: orgId }))
+  const scope = configurationScope()
+  if (!isCacheableScope(scope)) return read()
+  const value = await brandingCache.get(`${scope}|${orgId ?? 'self'}`, read)
+  // A shallow copy per caller (logos map included) keeps cached state private.
+  return value && typeof value === 'object'
+    ? { ...value, ...(value.logos && typeof value.logos === 'object' ? { logos: { ...value.logos } } : {}) }
+    : value
 }
 
 /**
@@ -66,7 +82,12 @@ export async function setOrgBranding(orgId, branding) {
     }
     payload.logos = logos
   }
-  return unwrap(await supabase.rpc('set_org_branding', { p_org_id: orgId, p_branding: payload }))
+  brandingCache.clear()
+  try {
+    return unwrap(await supabase.rpc('set_org_branding', { p_org_id: orgId, p_branding: payload }))
+  } finally {
+    brandingCache.clear()
+  }
 }
 
 /** Merge stored branding over the defaults so the UI always has every field. */

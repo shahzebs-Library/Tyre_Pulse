@@ -15,6 +15,7 @@ import 'package:tyre_pulse/features/inventory/data/count_photo_capture.dart';
 import 'package:tyre_pulse/features/inventory/data/count_submitter.dart';
 import 'package:tyre_pulse/features/inventory/data/inventory_audit_repository.dart';
 import 'package:tyre_pulse/features/inventory/data/inventory_transfer_repository.dart';
+import 'package:tyre_pulse/features/inventory/data/job_card_issue_repository.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_outbox_runner.dart';
 import 'package:tyre_pulse/features/inventory/domain/count_models.dart';
 import 'package:tyre_pulse/features/inventory/domain/transfer_models.dart';
@@ -46,6 +47,14 @@ final Provider<InventoryAuditRepository> inventoryAuditRepositoryProvider =
 final Provider<InventoryTransferRepository>
     inventoryTransferRepositoryProvider = Provider<InventoryTransferRepository>(
   (Ref ref) => SupabaseInventoryTransferRepository(
+    ref.watch(supabaseClientProvider),
+  ),
+);
+
+/// Issue to / return from a job card (online, ledger RPCs only).
+final Provider<JobCardIssueRepository> jobCardIssueRepositoryProvider =
+    Provider<JobCardIssueRepository>(
+  (Ref ref) => SupabaseJobCardIssueRepository(
     ref.watch(supabaseClientProvider),
   ),
 );

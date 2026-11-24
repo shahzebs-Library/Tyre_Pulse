@@ -47,9 +47,9 @@
 --         app_is_org_admin(); goods arrive through inv_receive_goods.
 --      D3+ post_stock_movement checked NO capability at all: measured, a Reporter
 --         (stock:issue = false) issued 1 and received +9 on a KSA balance. Now every
---         type needs its stock capability (_inv_cap_for), EXCEPT adjustment_up /
---         adjustment_down, which the Expo and Flutter count screens send today
---         (left open on purpose: owner decision, see OPEN below).
+--         type needs its stock capability (_inv_cap_for). adjustment_up / adjustment_down
+--         need adjustment_approve (owner decision 2026-11-24: "required approval");
+--         everyone else records a physical count and an approver posts the difference.
 --      D4 issue_return / return were unbounded (+50 against 3 issued). Now a return
 --         must name a source document and is bounded per stock line by what was
 --         issued against that document minus what already came back (reversed
@@ -133,13 +133,14 @@
 --   commit;
 --   (Dropping movement_id loses the slip-to-movement link; the movements themselves stay.)
 --
--- OPEN (owner decisions, not done here)
---   * post_stock_movement adjustment_up / adjustment_down still need no capability
---     (the phone count screens use them). Any approved user in scope can adjust.
---   * save_stock_entry 'receipt' mode (Stock quick entry, "New delivery") is still a
---     receipt without a GRN; it requires stock edit/create and a reference.
---   * MRT bound is per stock line and job card: material returned to a different
---     balance (other condition or location) than it was issued from is refused.
+-- OWNER DECISIONS (2026-11-24)
+--   * Count adjustments require approval (adjustment_approve), see C2. The Expo and
+--     Flutter direct count screens will be refused for users without it; they must
+--     use the physical count flow (follow-up in the phone apps).
+--   * Quick-entry receipts without a GRN stay allowed (save_stock_entry 'receipt';
+--     needs stock edit/create and a reference).
+--   * Returns come back into stock on the stock line they were issued from, at the
+--     issued cost (D4). A return to a different balance is refused.
 -- =============================================================================
 begin;
 
@@ -614,6 +615,9 @@ begin
   v_def := replace(v_def, v_old,
        '  if v_type = ''receipt'' and not public.app_is_org_admin() then' || chr(10)
     || '    raise exception ''Goods are received through a goods receipt (inv_receive_goods), not as a bare movement.'' using errcode = ''42501'';' || chr(10)
+    || '  end if;' || chr(10)
+    || '  if v_type in (''adjustment_up'', ''adjustment_down'') and not public.inv_can(''adjustment_approve'') then' || chr(10)
+    || '    raise exception ''A count difference needs approval. Record it as a physical count; an approver posts the adjustment.'' using errcode = ''42501'';' || chr(10)
     || '  end if;' || chr(10)
     || '  if v_type not in (''adjustment_up'', ''adjustment_down'') and not public.inv_can(public._inv_cap_for(v_type)) then' || chr(10)
     || '    raise exception ''Stock permission "%" is required.'', public._inv_cap_for(v_type) using errcode = ''42501'';' || chr(10)

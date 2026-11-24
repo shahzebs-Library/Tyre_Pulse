@@ -14,6 +14,8 @@ export default function MaterialLinkHealthCard() {
   const q = useInvQuery(() => loadLinkHealth(), [])
   const rows = healthRows(q.data?.health)
   const problems = rows.filter((r) => r.problem && Number(r.value) > 0)
+  // An all-clear needs every problem count measured; an unknown count is not a zero.
+  const unmeasured = rows.some((r) => r.problem && (r.value === null || r.value === undefined))
 
   return (
     <SectionCard
@@ -31,7 +33,9 @@ export default function MaterialLinkHealthCard() {
               <>
                 {problems.length
                   ? <Note tone="bad" icon={ShieldAlert} title="Link problems found">Each count below in red needs a correction request. Nothing is fixed automatically.</Note>
-                  : <Note tone="good" icon={ShieldCheck}>No duplicate links and no links across countries.</Note>}
+                  : unmeasured
+                    ? <Note>Some checks could not be measured, so this is not an all-clear.</Note>
+                    : <Note tone="good" icon={ShieldCheck}>No duplicate links and no links across countries.</Note>}
                 <dl className="oem-health-list">
                   {rows.map((r) => (
                     <div key={r.key} className="oem-health-row">

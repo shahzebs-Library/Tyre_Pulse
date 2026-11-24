@@ -6,13 +6,13 @@
   "sectionsLabel": "Sections in this area",
   "groups": { "operate": "Stock", "control": "Audit & control", "supply": "Supply", "assets": "Tyres & identification", "insight": "Value & reports" },
   "sections": {
-    "floor": "Warehouse floor", "custody": "Tools & repairables", "finance": "Finance check", "materials": "Material Master", "corrections": "Corrections",
+    "purchasing": "Purchasing", "matching": "Item matching", "floor": "Warehouse floor", "custody": "Tools & repairables", "finance": "Finance check", "materials": "Material Master", "corrections": "Corrections",
     "overview": "Overview", "register": "Stock register", "locations": "Locations", "movements": "Movements",
     "audits": "Physical audits", "discrepancies": "Discrepancies", "controls": "Controls", "procurement": "Procurement",
     "receiving": "Receiving & issue", "supplier": "Supplier stock", "tyres": "Tyre inventory", "identification": "Identification",
     "valuation": "Valuation", "planning": "Planning & simulation", "kpis": "Inventory KPIs", "classification": "Stock classification", "reports": "Reports", "physical": "Physical inventory"
   },
-  "warehouse": { "floor": { "putaway": "Put-away", "picking": "Picking", "handover": "Workshop handover" }, "custody": { "tools": "Tool custody", "repairables": "Repairables", "warranty": "Warranty & scrap" } },
+  "warehouse": {"floor": {"putaway": "Put-away", "picking": "Picking", "handover": "Workshop handover", "jobmaterials": "Job card materials", "assetcost": "Material cost per asset"}, "custody": {"tools": "Tool custody", "repairables": "Repairables", "warranty": "Warranty & scrap", "lubricants": "Lubricants"}, "purchasing": {"quotations": "Quotations", "backorders": "Backorders", "returns": "Supplier returns", "approved": "Approved suppliers", "performance": "Supplier performance", "emergency": "Emergency purchases", "invoicematch": "Invoice match"}, "matching": {"links": "Link items", "oemparts": "Approved OEM parts"}},
   "scope": {
     "country": "Country", "allCountries": "All countries", "countryHint": "Change the country from the working context at the top of the app.",
     "site": "Site", "allSites": "All sites"
@@ -76,7 +76,7 @@
       "site": "Choose the store.", "selfParent": "A location cannot be inside itself."
     }
   },
-  "locationTypes": {
+  "locationTypes": { "receiving": "Receiving", "inspection": "Inspection", "service_van": "Service van", "workshop_store": "Workshop store", "bulk_tank": "Bulk tank", 
     "warehouse": "Warehouse", "zone": "Zone", "rack": "Rack", "shelf": "Shelf", "bin": "Bin", "in_transit": "In transit",
     "quarantine": "Quarantine", "damaged": "Damaged", "scrap": "Scrap", "warranty": "Warranty", "repairable": "Repairable",
     "supplier_custody": "Supplier custody", "vehicle_custody": "Vehicle custody", "consignment": "Consignment"

@@ -6,13 +6,13 @@
   "sectionsLabel": "الأقسام في هذا المجال",
   "groups": { "operate": "المخزون", "control": "التدقيق والرقابة", "supply": "التوريد", "assets": "الإطارات والتعريف", "insight": "القيمة والتقارير" },
   "sections": {
-    "floor": "أرضية المستودع", "custody": "العدد والقطع القابلة للإصلاح", "finance": "مطابقة المالية", "materials": "سجل المواد", "corrections": "التصحيحات",
+    "purchasing": "المشتريات", "matching": "مطابقة الأصناف", "floor": "أرضية المستودع", "custody": "العدد والقطع القابلة للإصلاح", "finance": "مطابقة المالية", "materials": "سجل المواد", "corrections": "التصحيحات",
     "overview": "نظرة عامة", "register": "سجل المخزون", "locations": "المواقع", "movements": "الحركات",
     "audits": "الجرد الفعلي", "discrepancies": "الفروقات", "controls": "الضوابط", "procurement": "المشتريات",
     "receiving": "الاستلام والصرف", "supplier": "مخزون الموردين", "tyres": "مخزون الإطارات", "identification": "التعريف",
     "valuation": "التقييم", "planning": "التخطيط والمحاكاة", "kpis": "مؤشرات المخزون", "classification": "تصنيف المخزون", "reports": "التقارير", "physical": "الجرد الفعلي"
   },
-  "warehouse": { "floor": { "putaway": "التخزين", "picking": "التجهيز", "handover": "التسليم للورشة" }, "custody": { "tools": "عهدة العدد", "repairables": "القطع القابلة للإصلاح", "warranty": "الضمان والإتلاف" } },
+  "warehouse": {"floor": {"putaway": "التخزين", "picking": "التجهيز", "handover": "التسليم للورشة", "jobmaterials": "مواد بطاقة العمل", "assetcost": "تكلفة المواد لكل أصل"}, "custody": {"tools": "عهدة العدد", "repairables": "القطع القابلة للإصلاح", "warranty": "الضمان والإتلاف", "lubricants": "الزيوت"}, "purchasing": {"quotations": "عروض الأسعار", "backorders": "الطلبات المتأخرة", "returns": "المرتجعات للموردين", "approved": "الموردون المعتمدون", "performance": "أداء الموردين", "emergency": "مشتريات طارئة", "invoicematch": "مطابقة الفواتير"}, "matching": {"links": "ربط الأصناف", "oemparts": "قطع الشركة المصنعة المعتمدة"}},
   "scope": {
     "country": "الدولة", "allCountries": "كل الدول", "countryHint": "غيّر الدولة من سياق العمل أعلى التطبيق.",
     "site": "الموقع", "allSites": "كل المواقع"
@@ -76,7 +76,7 @@
       "site": "اختر المخزن.", "selfParent": "لا يمكن أن يكون الموقع داخل نفسه."
     }
   },
-  "locationTypes": {
+  "locationTypes": { "receiving": "الاستلام", "inspection": "الفحص", "service_van": "سيارة الخدمة", "workshop_store": "مخزن الورشة", "bulk_tank": "خزان سائب", 
     "warehouse": "مستودع", "zone": "منطقة", "rack": "رف كبير", "shelf": "رف", "bin": "خانة", "in_transit": "قيد النقل",
     "quarantine": "حجر", "damaged": "تالف", "scrap": "خردة", "warranty": "ضمان", "repairable": "قابل للإصلاح",
     "supplier_custody": "عهدة المورد", "vehicle_custody": "عهدة المركبة", "consignment": "أمانة"

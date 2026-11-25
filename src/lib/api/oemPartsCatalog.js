@@ -220,9 +220,7 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
       stored.push({ from: pack.from, to: pack.to, path })
     }
     pdfChunks = stored
-    const { error: pathError } = await supabase.from('oem_parts_manuals')
-      .update({ storage_path: stored[0]?.path || null }).eq('id', id)
-    pdfStored = !pathError && stored.length > 0
+    pdfStored = stored.length > 0
   } catch {
     pdfStored = false
   }
@@ -233,6 +231,9 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
   if (!pdfStored) {
     patch.import_summary = { ...summary, pdf_not_stored: true, pdf_size_mb: Math.round((file.size || 0) / 1048576) }
   } else {
+    // storage_path and the pack list are written in ONE update, so a reader can
+    // never see the first pack without the list (it would look like a 40-page book).
+    patch.storage_path = pdfChunks[0].path
     patch.import_summary = { ...summary, pdf_chunks: pdfChunks }
   }
   const { data, error } = await supabase.from('oem_parts_manuals')

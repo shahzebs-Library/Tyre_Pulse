@@ -350,7 +350,9 @@ export default function OemPartsCatalogPreview() {
         setTab('browse')
         return
       }
-      const country = activeCountry && activeCountry !== 'All' ? activeCountry : null
+      // A retry of an existing manual keeps its own country, so the manual and its
+      // already-saved parts stay in one scope whatever country is selected now.
+      const country = existing ? (existing.country ?? null) : (activeCountry && activeCountry !== 'All' ? activeCountry : null)
       const saved = await saveOemManual({
         id: existing?.id || crypto.randomUUID(), resume: Boolean(existing), file: pdfFile, sha256: hash, country,
         manufacturer: manualForm.manufacturer, model: manualForm.model, modelCode: manualForm.modelCode,

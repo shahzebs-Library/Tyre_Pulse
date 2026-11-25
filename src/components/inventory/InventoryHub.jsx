@@ -73,7 +73,7 @@ export default function InventoryHub({ section, tab = null, onSection, onTab, re
   useEffect(() => {
     let live = true
     listSites({ country: activeCountry, activeOnly: true })
-      .then((rows) => { if (live) setSites(rows.map((r) => r.name).filter(Boolean)) })
+      .then((rows) => { if (live) setSites([...new Set(rows.map((r) => r.name).filter(Boolean))]) })
       .catch(() => { if (live) setSites([]) })
     setSite('all')
     return () => { live = false }

@@ -10,7 +10,15 @@ const COLS =
   'id,site,description,stock_qty,min_level,critical_level,stock_status,reorder_qty,management_action,region,country,updated_by,updated_at,custom_data,brand,tyre_size,last_counted_at,' +
   // The linked ERP item (stock_records.item_id -> material_master): the item code
   // the register matches to Material Master and to ERP consumption.
-  'item_id,uom,condition,qty_reserved,item:material_master(item_code,item_name,category,lead_time_days)'
+  'item_id,uom,condition,qty_reserved,qty_on_hand,item:material_master(item_code,item_name,category,lead_time_days)'
+
+// stock_qty is an integer column, so a fractional balance (0.5 m of cable) is
+// stored truncated; qty_on_hand is the ledger balance. Show the ledger figure.
+function withLedgerQty(row) {
+  if (row?.qty_on_hand == null) return row
+  const q = Number(row.qty_on_hand)
+  return Number.isFinite(q) ? { ...row, stock_qty: q } : row
+}
 
 // Movement ledger (stock_movements). Full row - the movement-history modal
 // renders every audit field.
@@ -72,7 +80,7 @@ export async function listStockRecords({ country, countries } = {}) {
     if (list.length) q = applyCountries(q, list, { nullSafe: false })
     else if (country && country !== 'All') q = q.eq('country', country)
     return q
-  }))
+  }))?.map(withLedgerQty)
 }
 
 /** Insert a stock record; returns only the new id (page mutation). */
@@ -211,7 +219,9 @@ export async function listRegisterCatalog() {
 
 // Item codes per parts_consumption request: about 200 values once the upper and
 // lower spellings are added, which keeps the query string well under URL limits.
-export const CONSUMPTION_CODE_CHUNK = 100
+export const CONSUMPTION_CODE_CHUNK = 300
+// Parallel chunk reads; bounded so a big register does not flood the API.
+const CONSUMPTION_POOL = 6
 const CONSUMPTION_ALL_MAX = 150000
 const CONSUMPTION_CHUNK_MAX = 50000
 
@@ -243,15 +253,23 @@ export async function listConsumptionSince(sinceIso, { country, itemCodes } = {}
     .gte('event_date', sinceIso)
   if (Array.isArray(itemCodes)) {
     const variants = consumptionCodeVariants(itemCodes)
-    const out = []
-    for (let i = 0; i < variants.length; i += CONSUMPTION_CODE_CHUNK) {
-      const chunk = variants.slice(i, i + CONSUMPTION_CODE_CHUNK)
-      const res = await fetchAllPages((from, to) => scoped(base().in('item_code', chunk))
-        .order('id').range(from, to), { max: CONSUMPTION_CHUNK_MAX })
-      if (res?.truncated) throw new ServiceError('Too many issue lines to measure usage for this scope. Pick one country.', 'TRUNCATED')
-      out.push(...(unwrap(res) || []))
+    const chunks = []
+    for (let i = 0; i < variants.length; i += CONSUMPTION_CODE_CHUNK) chunks.push(variants.slice(i, i + CONSUMPTION_CODE_CHUNK))
+    // Chunks are independent, so a small pool reads them side by side instead
+    // of one round trip after another (the register waited ~a minute serially).
+    const results = new Array(chunks.length)
+    let next = 0
+    const worker = async () => {
+      while (next < chunks.length) {
+        const idx = next++
+        const res = await fetchAllPages((from, to) => scoped(base().in('item_code', chunks[idx]))
+          .order('id').range(from, to), { max: CONSUMPTION_CHUNK_MAX })
+        if (res?.truncated) throw new ServiceError('Too many issue lines to measure usage for this scope. Pick one country.', 'TRUNCATED')
+        results[idx] = unwrap(res) || []
+      }
     }
-    return out
+    await Promise.all(Array.from({ length: Math.min(CONSUMPTION_POOL, chunks.length) }, worker))
+    return results.flat()
   }
   const res = await fetchAllPages((from, to) => scoped(base().not('item_code', 'is', null))
     .order('id').range(from, to), { max: CONSUMPTION_ALL_MAX })

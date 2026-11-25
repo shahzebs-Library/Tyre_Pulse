@@ -1,7 +1,10 @@
 -- =============================================================================
 -- 20261124132000_wms_oem_material_link_reconcile.sql
 --
--- STATUS: NOT APPLIED. Authored 2026-11-24. Apply only on the owner's yes, in one
+-- STATUS: APPLIED LIVE 2026-11-24 on the owner's explicit yes, in order 090000, 091000, 130000, 131000,
+--   132000, 133000, 120000, 135000 (135000 indexes built CONCURRENTLY first). Verified live: data unchanged,
+--   Store Keeper bare receipt and count refused (42501). Recorded in supabase_migrations.
+-- Original status: NOT APPLIED. Authored 2026-11-24. Apply only on the owner's yes, in one
 -- transaction, then run the VERIFY block at the end. Proven on the live database
 -- (project jhssdmeruxtrlqnwfksc) inside a transaction that was rolled back; nothing
 -- persisted. Proof result is recorded under "ROLLED-BACK PROOF" below.

@@ -3,7 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import { Check, Loader2, Search, X } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
-import { getOemPdfSignedUrl } from '../../lib/api/oemPartsCatalog'
+import { openOemPdfDocument } from '../../lib/api/oemPartsCatalog'
 import { NOT_PROVISIONED, adjustFigureCrop, decideReviewItems, listCorrections, listReviewItems, publishApproved, saveCategoryRule, updateReviewPayload } from '../../lib/api/oemCatalogAdmin'
 import { STANDARD_CATEGORIES, headingKey } from '../../lib/oemCatalog/taxonomy'
 import OemFigure from './OemFigure'
@@ -51,7 +51,7 @@ export default function OemReviewWorkspace({ manual }) {
     setCrop(geo?.crop ? { ...geo.crop } : null)
     listCorrections(item.entry_id).then(setHistory).catch(() => setHistory([]))
     if (!pdfDoc && manual.storage_path) {
-      try { setPdfDoc(await pdfjsLib.getDocument({ url: await getOemPdfSignedUrl(manual.id) }).promise) } catch (e) { setError(toUserMessage(e, t('oemcatalog.review.pdfError'))) }
+      try { setPdfDoc(await openOemPdfDocument(manual.id, pdfjsLib)) } catch (e) { setError(toUserMessage(e, t('oemcatalog.review.pdfError'))) }
     }
   }
 

@@ -3,7 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import { Loader2 } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
-import { getOemPdfSignedUrl } from '../../lib/api/oemPartsCatalog'
+import { openOemPdfDocument } from '../../lib/api/oemPartsCatalog'
 import { NOT_PROVISIONED, listCategoryRules, listEntriesWithFigure, saveReviewItems } from '../../lib/api/oemCatalogAdmin'
 import { extractOemPartsDocument } from '../../lib/oemPartsExtractor'
 import { processExtraction } from '../../lib/oemCatalog/pipeline'
@@ -27,7 +27,7 @@ export default function OemReprocessPanel({ manual }) {
   const run = async () => {
     setBusy(true); setError(''); setNotice(''); setResult(null)
     try {
-      const doc = await pdfjsLib.getDocument({ url: await getOemPdfSignedUrl(manual.id) }).promise
+      const doc = await openOemPdfDocument(manual.id, pdfjsLib)
       const extraction = await extractOemPartsDocument(doc, setProgress, { ops: pdfjsLib.OPS })
       const rules = await listCategoryRules().catch(() => [])
       const pipeline = processExtraction(extraction, { model: manual.model, manufacturer: manual.manufacturer, corrections: rules })

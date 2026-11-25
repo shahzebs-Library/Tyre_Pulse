@@ -24,6 +24,6 @@ export async function saveStockEntry({ requestId, country, site, mode, reference
 export async function transferStockEntry({ requestId, from, to, quantity, notes }) {
   return postEntry('transfer_stock_entry', {
     p_request_id: requestId, p_from: from.id, p_to: to.id, p_qty: Number(quantity),
-    p_expected_from: from.stock_qty, p_expected_to: to.stock_qty, p_notes: notes || '',
+    p_expected_from: from.stock_qty_stored ?? from.stock_qty, p_expected_to: to.stock_qty_stored ?? to.stock_qty, p_notes: notes || '',
   })
 }

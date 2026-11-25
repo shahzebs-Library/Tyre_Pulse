@@ -17,7 +17,9 @@ const COLS =
 function withLedgerQty(row) {
   if (row?.qty_on_hand == null) return row
   const q = Number(row.qty_on_hand)
-  return Number.isFinite(q) ? { ...row, stock_qty: q } : row
+  // stock_qty_stored keeps the integer column for RPCs that compare it
+  // (transfer_stock_entry p_expected_from / p_expected_to).
+  return Number.isFinite(q) ? { ...row, stock_qty: q, stock_qty_stored: row.stock_qty } : row
 }
 
 // Movement ledger (stock_movements). Full row - the movement-history modal

@@ -341,7 +341,9 @@ export default function OemPartsCatalogPreview() {
       await requireCatalogAdmin()
       const hash = await sha256(pdfFile)
       const existing = await findOemManualByHash(hash)
+      // A manual saved without its PDF (storage refused it) may be imported again to add the PDF.
       const alreadyReady = existing && ['ready', 'needs_review'].includes(existing.extraction_status)
+        && !existing.import_summary?.pdf_not_stored
       if (alreadyReady) {
         await refreshManuals()
         setPageError(`This exact PDF is already saved as ${existing.manufacturer} ${existing.model} (${existing.item_count.toLocaleString()} rows). Search it instead of uploading again.`)
@@ -381,7 +383,10 @@ export default function OemPartsCatalogPreview() {
           : error?.code === REVIEW_PARTIAL ? ` ${error.message}` : ` ${toUserMessage(error, '')}`
       }
       await refreshManuals()
-      setSaveNotice(`${importSavedNotice(saved, counts)}${extra}`)
+      const pdfNote = saved?.pdfStored === false
+        ? ` The parts are saved and searchable, but the PDF (${saved.pdfSizeMb} MB) was refused by storage, so page pictures cannot be opened yet. An admin can raise the upload limit and import the same PDF again.`
+        : ''
+      setSaveNotice(`${importSavedNotice(saved, counts)}${extra}${pdfNote}`)
       setTab('browse')
     } catch (error) { setSaveError(toUserMessage(error, t('oemcatalog.import.errSave'))) }
     finally { setSaving(false) }

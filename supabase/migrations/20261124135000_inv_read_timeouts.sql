@@ -1,6 +1,9 @@
 -- =============================================================================
 -- 20261124135000_inv_read_timeouts.sql
--- STATUS: NOT APPLIED. Read-path speed only: no table, column, policy or data change.
+-- STATUS: APPLIED LIVE 2026-11-24 on the owner's explicit yes, in order 090000, 091000, 130000, 131000,
+--   132000, 133000, 120000, 135000 (135000 indexes built CONCURRENTLY first). Verified live: data unchanged,
+--   Store Keeper bare receipt and count refused (42501). Recorded in supabase_migrations.
+-- Original status: NOT APPLIED. Read-path speed only: no table, column, policy or data change.
 --
 -- Why: live logs (2026-11-23/24) show these reads hitting the 8 s statement timeout
 -- (HTTP 500) for real KSA users:

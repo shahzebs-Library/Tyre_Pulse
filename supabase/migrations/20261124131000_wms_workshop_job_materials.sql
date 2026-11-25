@@ -1,7 +1,10 @@
 -- =============================================================================
 -- 20261124131000_wms_workshop_job_materials.sql
 --
--- STATUS: NOT APPLIED. Authored 2026-11-24. Apply only on the owner's yes, in one
+-- STATUS: APPLIED LIVE 2026-11-24 on the owner's explicit yes, in order 090000, 091000, 130000, 131000,
+--   132000, 133000, 120000, 135000 (135000 indexes built CONCURRENTLY first). Verified live: data unchanged,
+--   Store Keeper bare receipt and count refused (42501). Recorded in supabase_migrations.
+-- Original status: NOT APPLIED. Authored 2026-11-24. Apply only on the owner's yes, in one
 -- transaction, AFTER WP4 (20261124090000) and WP5 (20261124091000). It refuses to
 -- run if WP5 is not applied (it patches the WP5 slip function by anchored
 -- replacement).

@@ -1,7 +1,10 @@
 -- =============================================================================
 -- 20261124133000_wms_special_classes_locations.sql
 --
--- STATUS: NOT APPLIED. Authored for the owner's review. Apply only on the owner's
+-- STATUS: APPLIED LIVE 2026-11-24 on the owner's explicit yes, in order 090000, 091000, 130000, 131000,
+--   132000, 133000, 120000, 135000 (135000 indexes built CONCURRENTLY first). Verified live: data unchanged,
+--   Store Keeper bare receipt and count refused (42501). Recorded in supabase_migrations.
+-- Original status: NOT APPLIED. Authored for the owner's review. Apply only on the owner's
 -- yes, in one transaction, then run the VERIFY block at the end.
 -- PROOF: see the "ROLLED-BACK PROOF" note at the end of this header (run on the
 -- live database inside a DO block that ends in raise exception, so nothing

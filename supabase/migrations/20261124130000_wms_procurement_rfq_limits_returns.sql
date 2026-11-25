@@ -2,7 +2,10 @@
 -- WMS procurement depth: approved suppliers, RFQ + quotation comparison, PO approval limits, emergency purchases,
 -- receipt rejection reasons, supplier returns, three-way match net of returns, backorder + supplier performance views
 -- =====================================================================================================================
--- STATUS: NOT APPLIED. Needs the owner's explicit yes. REQUIRES 20261124090000 (WP4 procurement controls) applied
+-- STATUS: APPLIED LIVE 2026-11-24 on the owner's explicit yes, in order 090000, 091000, 130000, 131000,
+--   132000, 133000, 120000, 135000 (135000 indexes built CONCURRENTLY first). Verified live: data unchanged,
+--   Store Keeper bare receipt and count refused (42501). Recorded in supabase_migrations.
+-- Original status: NOT APPLIED. Needs the owner's explicit yes. REQUIRES 20261124090000 (WP4 procurement controls) applied
 -- first: this file patches WP4's guard_po_rules and aborts if it is missing.
 --
 -- AUDIT FIRST (live, read-only, 2026-11-24). Already working, NOT rebuilt here:

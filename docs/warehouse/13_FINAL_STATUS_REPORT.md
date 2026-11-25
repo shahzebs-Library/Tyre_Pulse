@@ -10,7 +10,7 @@ transaction that was then undone, and a follow-up query confirmed nothing persis
 |---|---|
 | GitHub `main` | `5d59ac7c` (#609) |
 | PR #608 branch `claude/wms-wp0-register` | tip after the independent-review fix rounds (see section 11); merged to main on owner instruction 2026-11-24 |
-| PR #608 merge | Owner said merge (2026-11-24). Migrations below are still NOT applied |
+| PR #608 merge | Merged 2026-11-24 as `7c61dac8`; production READY. All 8 migrations applied live the same day |
 | Vercel previews for this branch | switched off in `vercel.json` (pushes cost no build) |
 
 ## 2. Test evidence (full run on the branch tip)
@@ -29,7 +29,7 @@ Applied live this session (owner approved):
 - `20261123185906` WP1: 3,508 KSA catalogue-to-ERP links, OEM number normalisation, 2 brand aliases.
 - `20261124080435` 22 brand spelling aliases (owner: "approve brand merge to production"). brand_aliases 38 -> 60.
 
-Written, proven rolled back, NOT applied (each needs the owner's yes; order matters):
+APPLIED LIVE 2026-11-24 on the owner's yes, in this order (data unchanged; role checks verified live):
 
 | Order | Migration | What it does |
 |---|---|---|
@@ -97,9 +97,9 @@ to a job card already loaded from the ERP Excel.
 - Region: Frankfurt read replica vs full migration vs stay (no change without approval).
 
 ## 9. Exact approvals requested
-1. "apply WP4 and WP5" (then 130000, 131000, 132000, 133000, 120000 in that order, and 135000 in a quiet window).
+1. DONE 2026-11-24: all 8 migrations applied.
 2. "record 606 migrations".
-3. "merge 608" (one production build).
+3. DONE 2026-11-24: #608 merged.
 4. Flutter release to Play closed testing (phone changes reach users only after a build).
 5. Region decision (see the performance report).
 
@@ -117,7 +117,7 @@ Two reviewers on a different model read the code (not our summary). Every agreed
 | Web | `25df4040`, `2ccedc94`, `0f0078d1`, `7f354648` | Lint 0 errors, 16,957 tests passed, production build passes |
 | Flutter | `3c874903` | Analyze clean, 131 tests passed |
 
-What the migrations change once applied (all need the owner's "apply WP4 and WP5" first):
+What the migrations changed (applied live 2026-11-24):
 - Receipts, transfers, supplier returns and scrap only through their own documents; the generic movement form issues only.
 - Count differences only by an Admin or the super admin; others record counts for them.
 - A PO needs an approved, active supplier from the supplier list to be submitted or approved; once approved its

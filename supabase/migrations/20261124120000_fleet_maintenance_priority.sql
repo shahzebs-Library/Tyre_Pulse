@@ -1,6 +1,9 @@
 -- =============================================================================
 -- Fleet maintenance priority (owner's criticality matrix, P1 to P6)
--- STATUS: NOT APPLIED. Written for review only. Do not apply without the
+-- STATUS: APPLIED LIVE 2026-11-24 on the owner's explicit yes, in order 090000, 091000, 130000, 131000,
+--   132000, 133000, 120000, 135000 (135000 indexes built CONCURRENTLY first). Verified live: data unchanged,
+--   Store Keeper bare receipt and count refused (42501). Recorded in supabase_migrations.
+-- Original status: NOT APPLIED. Written for review only. Do not apply without the
 --         owner's explicit OK.
 -- =============================================================================
 --

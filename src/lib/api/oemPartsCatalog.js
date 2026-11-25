@@ -139,18 +139,6 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
     : await supabase.from('oem_parts_manuals').insert(manual)
   raise(createError, 'Could not start saving this OEM manual.')
 
-  const storagePath = `${id}/source.pdf`
-  const { error: uploadError } = await supabase.storage.from('oem-parts-catalogs')
-    .upload(storagePath, file, { contentType: 'application/pdf', upsert: true })
-  if (uploadError) {
-    await supabase.from('oem_parts_manuals').update({ extraction_status: 'failed' }).eq('id', id)
-    raise(uploadError, 'Could not securely store the source PDF.')
-  }
-
-  const { error: pathError } = await supabase.from('oem_parts_manuals')
-    .update({ storage_path: storagePath }).eq('id', id)
-  if (pathError) raise(pathError, 'The PDF was saved, but its catalog record could not be updated.')
-
   for (let start = 0; start < rows.length; start += 100) {
     const batch = rows.slice(start, start + 100).map((row) => ({
       manual_id: id,
@@ -180,11 +168,29 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
     }
   }
 
-  const status = rows.length && !summary.reviewPages?.length && !summary.imageOnlyPages?.length && !summary.reviewQueue?.length ? 'ready' : 'needs_review'
+  // The parts are saved first, so a PDF the storage refuses (a large manual over
+  // the project upload limit) no longer loses thousands of extracted parts. The
+  // PDF is only needed to view the pages; parts search works without it.
+  const storagePath = `${id}/source.pdf`
+  const { error: uploadError } = await supabase.storage.from('oem-parts-catalogs')
+    .upload(storagePath, file, { contentType: 'application/pdf', upsert: true })
+  let pdfStored = !uploadError
+  if (pdfStored) {
+    const { error: pathError } = await supabase.from('oem_parts_manuals')
+      .update({ storage_path: storagePath }).eq('id', id)
+    if (pathError) pdfStored = false
+  }
+
+  const fullyReady = rows.length && !summary.reviewPages?.length && !summary.imageOnlyPages?.length && !summary.reviewQueue?.length
+  const status = fullyReady && pdfStored ? 'ready' : 'needs_review'
+  const patch = { extraction_status: status }
+  if (!pdfStored) {
+    patch.import_summary = { ...summary, pdf_not_stored: true, pdf_size_mb: Math.round((file.size || 0) / 1048576) }
+  }
   const { data, error } = await supabase.from('oem_parts_manuals')
-    .update({ extraction_status: status }).eq('id', id).select(MANUAL_COLUMNS).single()
+    .update(patch).eq('id', id).select(MANUAL_COLUMNS).single()
   raise(error, 'Parts were saved, but the manual status could not be finalized.')
-  return data
+  return { ...data, pdfStored, pdfSizeMb: Math.round((file.size || 0) / 1048576) }
 }
 
 /**

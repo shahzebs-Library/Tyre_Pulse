@@ -1,6 +1,7 @@
 import { supabase } from './_client'
 import { fetchAllPages } from '../fetchAll'
 import { requireCatalogAdmin } from './oemCatalogAdmin'
+import { chunkForPage, chunkPath, createChunkedDoc, splitPdf } from '../oemPdfChunks'
 
 const MANUAL_COLUMNS = 'id,country,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,source_file_name,source_sha256,storage_path,page_count,item_count,extraction_status,import_summary,created_at'
 const ENTRY_COLUMNS = 'id,manual_id,source_pdf_page,row_order,assembly_heading,printed_page,index_no,parent_index,part_no,description,remark,quantity,see_page,illustration_pdf_page,row_type,source_line,manual:oem_parts_manuals!inner(id,manufacturer,model,model_code,equipment_no,chassis_from,chassis_to,country,storage_path,page_count)'
@@ -102,15 +103,48 @@ export async function listOemManualEntries(manualId) {
   return rows
 }
 
-export async function getOemPdfSignedUrl(manualId) {
-  const { data: manual, error: manualError } = await supabase.from('oem_parts_manuals')
-    .select('storage_path').eq('id', manualId).single()
-  raise(manualError, 'Could not find the OEM manual.')
-  if (!manual?.storage_path) throw new Error('The saved manual does not have a stored PDF.')
-  const { data, error } = await supabase.storage.from('oem-parts-catalogs')
-    .createSignedUrl(manual.storage_path, 300)
+async function signedPath(path) {
+  const { data, error } = await supabase.storage.from('oem-parts-catalogs').createSignedUrl(path, 600)
   raise(error, 'Could not open the stored OEM manual.')
   return data?.signedUrl
+}
+
+async function manualPdfInfo(manualId) {
+  const { data: manual, error } = await supabase.from('oem_parts_manuals')
+    .select('storage_path,page_count,import_summary').eq('id', manualId).single()
+  raise(error, 'Could not find the OEM manual.')
+  if (!manual?.storage_path) throw new Error('The saved manual does not have a stored PDF.')
+  const chunks = Array.isArray(manual.import_summary?.pdf_chunks) ? manual.import_summary.pdf_chunks : null
+  return { manual, chunks }
+}
+
+/**
+ * Signed link to open the stored PDF in a new tab. For a manual stored as page
+ * packs this is the pack holding `page` (or the first pack), opened at that page.
+ */
+export async function getOemPdfSignedUrl(manualId, page = null) {
+  const { manual, chunks } = await manualPdfInfo(manualId)
+  if (!chunks) return signedPath(manual.storage_path)
+  const chunk = chunkForPage(chunks, page) || chunks[0]
+  const url = await signedPath(chunk.path)
+  const local = page ? Number(page) - chunk.from + 1 : 1
+  return `${url}#page=${local}`
+}
+
+/**
+ * Open a stored manual for viewing without downloading the whole book. Page
+ * packs load one pack at a time; an older single-file manual is read with
+ * range requests (pdf.js fetches only the bytes a page needs).
+ */
+export async function openOemPdfDocument(manualId, pdfjsLib) {
+  const { manual, chunks } = await manualPdfInfo(manualId)
+  const lazy = { disableAutoFetch: true, disableStream: true }
+  if (!chunks) return pdfjsLib.getDocument({ url: await signedPath(manual.storage_path), ...lazy }).promise
+  return createChunkedDoc({
+    numPages: manual.page_count,
+    chunks,
+    openChunk: async (c) => pdfjsLib.getDocument({ url: await signedPath(c.path), ...lazy }).promise,
+  })
 }
 
 /** Save the PDF once, then idempotently upsert every extracted table row in batches. */
@@ -171,14 +205,24 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
   // The parts are saved first, so a PDF the storage refuses (a large manual over
   // the project upload limit) no longer loses thousands of extracted parts. The
   // PDF is only needed to view the pages; parts search works without it.
-  const storagePath = `${id}/source.pdf`
-  const { error: uploadError } = await supabase.storage.from('oem-parts-catalogs')
-    .upload(storagePath, file, { contentType: 'application/pdf', upsert: true })
-  let pdfStored = !uploadError
-  if (pdfStored) {
-    const { error: pathError } = await supabase.from('oem_parts_manuals')
-      .update({ storage_path: storagePath }).eq('id', id)
-    if (pathError) pdfStored = false
+  // The PDF is stored as page packs (see lib/oemPdfChunks): small files stay
+  // under the storage upload limit, and the viewer opens only the pack it needs.
+  let pdfStored = false
+  let pdfChunks = null
+  try {
+    const packs = await splitPdf(await file.arrayBuffer())
+    const stored = []
+    for (const pack of packs) {
+      const path = chunkPath(id, pack)
+      const { error: upErr } = await supabase.storage.from('oem-parts-catalogs')
+        .upload(path, new Blob([pack.bytes], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: true })
+      if (upErr) throw upErr
+      stored.push({ from: pack.from, to: pack.to, path })
+    }
+    pdfChunks = stored
+    pdfStored = stored.length > 0
+  } catch {
+    pdfStored = false
   }
 
   const fullyReady = rows.length && !summary.reviewPages?.length && !summary.imageOnlyPages?.length && !summary.reviewQueue?.length
@@ -186,6 +230,11 @@ export async function saveOemManual({ id, resume = false, file, sha256, country,
   const patch = { extraction_status: status }
   if (!pdfStored) {
     patch.import_summary = { ...summary, pdf_not_stored: true, pdf_size_mb: Math.round((file.size || 0) / 1048576) }
+  } else {
+    // storage_path and the pack list are written in ONE update, so a reader can
+    // never see the first pack without the list (it would look like a 40-page book).
+    patch.storage_path = pdfChunks[0].path
+    patch.import_summary = { ...summary, pdf_chunks: pdfChunks }
   }
   const { data, error } = await supabase.from('oem_parts_manuals')
     .update(patch).eq('id', id).select(MANUAL_COLUMNS).single()
@@ -241,12 +290,14 @@ const normalizePartNumberKey = (v) => String(v || '').toUpperCase().replace(/[^A
  * manual holding admin-corrected parts, which the database protects) leaves the PDF in place.
  */
 export async function deleteOemManual(manualId) {
-  const { data: manual, error: readError } = await supabase.from('oem_parts_manuals').select('storage_path').eq('id', manualId).single()
+  const { data: manual, error: readError } = await supabase.from('oem_parts_manuals').select('storage_path,import_summary').eq('id', manualId).single()
   raise(readError, 'Could not find the OEM manual.')
   const { error } = await supabase.from('oem_parts_manuals').delete().eq('id', manualId)
   if (error) {
     if (/corrected by an administrator|42501/.test(`${error.message} ${error.code}`)) throw new Error('This manual has parts corrected by an administrator. It cannot be deleted; reprocess or edit it instead.')
     raise(error, 'Could not delete the OEM manual.')
   }
-  if (manual?.storage_path) await supabase.storage.from('oem-parts-catalogs').remove([manual.storage_path])
+  const packs = Array.isArray(manual?.import_summary?.pdf_chunks) ? manual.import_summary.pdf_chunks.map((c) => c.path) : []
+  const paths = [...new Set([manual?.storage_path, ...packs].filter(Boolean))]
+  if (paths.length) await supabase.storage.from('oem-parts-catalogs').remove(paths)
 }

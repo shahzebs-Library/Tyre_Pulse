@@ -38,6 +38,7 @@
     "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.263.1",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^4.10.38",
     "posthog-js": "^1.398.2",
     "pptxgenjs": "^3.12.0",

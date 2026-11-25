@@ -12,7 +12,7 @@ import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
 import { useLanguage } from '../contexts/LanguageContext'
 import { listAssets } from '../lib/api/assets'
-import { deleteOemManual, lookupStockByPartNumbers, findOemManualByHash, getOemPdfSignedUrl, listOemManualEntries, listOemManuals, saveOemManual, searchOemEntries } from '../lib/api/oemPartsCatalog'
+import { deleteOemManual, lookupStockByPartNumbers, findOemManualByHash, getOemPdfSignedUrl, openOemPdfDocument, listOemManualEntries, listOemManuals, saveOemManual, searchOemEntries } from '../lib/api/oemPartsCatalog'
 import { createPartsRequest, listOpenJobs } from '../lib/api/partsRequests'
 import { extractOemIdentity, extractOemPartsDocument } from '../lib/oemPartsExtractor'
 import { toUserMessage } from '../lib/safeError'
@@ -243,7 +243,7 @@ export default function OemPartsCatalogPreview() {
   const openSourcePdf = async () => {
     if (!browseManual?.id) return
     try {
-      const url = await getOemPdfSignedUrl(browseManual.id)
+      const url = await getOemPdfSignedUrl(browseManual.id, activeIllustration?.page || null)
       if (url) window.open(url, '_blank', 'noopener,noreferrer')
     } catch (error) { setBrowseError(toUserMessage(error, 'Could not open the stored OEM manual.')) }
   }
@@ -324,8 +324,7 @@ export default function OemPartsCatalogPreview() {
     if (browsePdfDoc && browsePdfManualId === sourceManual.id) return
     setBrowsePdfDoc(null)
     try {
-      const url = await getOemPdfSignedUrl(sourceManual.id)
-      const doc = await pdfjsLib.getDocument({ url }).promise
+      const doc = await openOemPdfDocument(sourceManual.id, pdfjsLib)
       setBrowsePdfDoc(doc)
       setBrowsePdfManualId(sourceManual.id)
     } catch (error) { setBrowseError(toUserMessage(error, 'Could not open the saved source PDF.')) }

@@ -1,10 +1,15 @@
 {
   "id": "driver-charge-notice",
-  "spec_version": 1,
+  "spec_version": 2,
   "title": "Driver Charge Notice",
   "description": "Complete record of one charge recoverable from a driver. Web (src/lib/driverChargePdf.js) and Flutter render this same spec from the payload returned by the driver_charge_detail RPC. Renderers must not add, drop or reorder fields.",
   "data_source": "rpc:driver_charge_detail(p_charge_id) plus generated_at (client clock, ISO 8601)",
-  "page": { "size": "A4", "orientation": "portrait", "unit": "mm", "margin": 14 },
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "unit": "mm",
+    "margin": 14
+  },
   "document_number": {
     "format": "{charge.charge_no}-V{charge.version}",
     "example": "DC-2026-00001-V7",
@@ -62,7 +67,11 @@
       "waived": "Waived",
       "cancelled_wrongly_issued": "Cancelled, wrongly issued"
     },
-    "driver_response": { "accepted": "Accepted and consented", "disputed": "Disputed", "refused": "Refused to sign" },
+    "driver_response": {
+      "accepted": "Accepted and consented",
+      "disputed": "Disputed",
+      "refused": "Refused to sign"
+    },
     "decision_stage": {
       "supervisor": "Supervisor review",
       "finance": "Finance review",
@@ -90,8 +99,15 @@
       "misused": "Misused or improper charge",
       "other": "Other"
     },
-    "instalment_status": { "scheduled": "Scheduled", "deducted": "Deducted", "cancelled": "Cancelled" },
-    "appeal_outcome": { "upheld": "Charge upheld", "allowed": "Appeal allowed" },
+    "instalment_status": {
+      "scheduled": "Scheduled",
+      "deducted": "Deducted",
+      "cancelled": "Cancelled"
+    },
+    "appeal_outcome": {
+      "upheld": "Charge upheld",
+      "allowed": "Appeal allowed"
+    },
     "action": {
       "charge_issue": "Charge issued",
       "charge_correct": "Corrected before notice",
@@ -114,6 +130,15 @@
       "driver_acceptance": "Driver written consent to deduction",
       "driver_dispute": "Driver receipt and dispute",
       "refusal_witness": "Witness to refusal"
+    },
+    "schedule_rule": {
+      "ksa_labour_law": "Saudi Labour Law (Royal Decree M/51), Articles 70, 71, 91, 92 and 93",
+      "company_setting": "Company setting (needs legal confirmation for this country)"
+    },
+    "language": {
+      "en": "English",
+      "ar": "Arabic",
+      "ur": "Urdu"
     }
   },
   "sections": [
@@ -122,11 +147,26 @@
       "title": "1. Driver and vehicle",
       "type": "fields",
       "fields": [
-        { "label": "Driver", "key": "driver.driver_name" },
-        { "label": "Employee ID", "key": "driver.driver_id" },
-        { "label": "Site", "key": "charge.site" },
-        { "label": "Country", "key": "charge.country" },
-        { "label": "Vehicle", "key": "charge.asset_no" }
+        {
+          "label": "Driver",
+          "key": "driver.driver_name"
+        },
+        {
+          "label": "Employee ID",
+          "key": "driver.driver_id"
+        },
+        {
+          "label": "Site",
+          "key": "charge.site"
+        },
+        {
+          "label": "Country",
+          "key": "charge.country"
+        },
+        {
+          "label": "Vehicle",
+          "key": "charge.asset_no"
+        }
       ]
     },
     {
@@ -134,22 +174,80 @@
       "title": "2. Charge",
       "type": "fields",
       "fields": [
-        { "label": "Charge number", "key": "charge.charge_no" },
-        { "label": "Category", "key": "charge.category", "format": "enum:category" },
-        { "label": "Amount", "key": "charge.amount", "format": "money", "currency_key": "charge.currency" },
-        { "label": "Linked record", "key": "charge.source_type", "format": "enum:source_type" },
-        { "label": "Linked record reference", "key": "charge.source_summary.label" },
-        { "label": "Link to the driver", "key": "charge.source_link_unverified", "format": "enum:link_check" },
-        { "label": "Incident date and time", "key": "charge.incident_at", "format": "datetime" },
-        { "label": "Issued by", "key": "charge.issued_by_name" },
-        { "label": "Issued at", "key": "charge.created_at", "format": "datetime" },
-        { "label": "Driver notified by", "key": "charge.notified_by_name" },
-        { "label": "Driver notified at", "key": "charge.notified_at", "format": "datetime" },
-        { "label": "Status", "key": "charge.status", "format": "enum:status" },
-        { "label": "Replaces charge", "key": "charge.supersedes_charge_id" },
-        { "label": "Replaced by charge", "key": "charge.superseded_by_charge_id" },
-        { "label": "Reversal reason", "key": "charge.reversal_code", "format": "enum:reversal_code" },
-        { "label": "Closing reason", "key": "charge.close_reason" }
+        {
+          "label": "Charge number",
+          "key": "charge.charge_no"
+        },
+        {
+          "label": "Category",
+          "key": "charge.category",
+          "format": "enum:category"
+        },
+        {
+          "label": "Amount",
+          "key": "charge.amount",
+          "format": "money",
+          "currency_key": "charge.currency"
+        },
+        {
+          "label": "Linked record",
+          "key": "charge.source_type",
+          "format": "enum:source_type"
+        },
+        {
+          "label": "Linked record reference",
+          "key": "charge.source_summary.label"
+        },
+        {
+          "label": "Link to the driver",
+          "key": "charge.source_link_unverified",
+          "format": "enum:link_check"
+        },
+        {
+          "label": "Incident date and time",
+          "key": "charge.incident_at",
+          "format": "datetime"
+        },
+        {
+          "label": "Issued by",
+          "key": "charge.issued_by_name"
+        },
+        {
+          "label": "Issued at",
+          "key": "charge.created_at",
+          "format": "datetime"
+        },
+        {
+          "label": "Driver notified by",
+          "key": "charge.notified_by_name"
+        },
+        {
+          "label": "Driver notified at",
+          "key": "charge.notified_at",
+          "format": "datetime"
+        },
+        {
+          "label": "Status",
+          "key": "charge.status",
+          "format": "enum:status"
+        },
+        {
+          "label": "Replaces charge",
+          "key": "charge.supersedes_charge_id"
+        },
+        {
+          "label": "Replaced by charge",
+          "key": "charge.superseded_by_charge_id"
+        },
+        {
+          "label": "Reversal reason",
+          "key": "charge.reversal_code",
+          "format": "enum:reversal_code"
+        },
+        {
+          "label": "Closing reason",
+          "key": "charge.close_reason"
+        }
       ]
     },
     {
@@ -165,21 +263,64 @@
       "rows": "evidence",
       "empty": "No evidence listed. The charge relies on the linked record.",
       "columns": [
-        { "label": "Type", "key": "kind" },
-        { "label": "Description", "key": "label" },
-        { "label": "Reference", "key": "ref" },
-        { "label": "Added by", "key": "added_by_name" },
-        { "label": "Added at", "key": "created_at", "format": "datetime" }
+        {
+          "label": "Type",
+          "key": "kind"
+        },
+        {
+          "label": "Description",
+          "key": "label"
+        },
+        {
+          "label": "Reference",
+          "key": "ref"
+        },
+        {
+          "label": "Added by",
+          "key": "added_by_name"
+        },
+        {
+          "label": "Added at",
+          "key": "created_at",
+          "format": "datetime"
+        }
       ]
+    },
+    {
+      "id": "photos",
+      "title": "4a. Photos shown to the driver",
+      "type": "photos",
+      "rows": "evidence",
+      "kind": "photo",
+      "image_key": "ref",
+      "caption_key": "label",
+      "empty": "No photos attached.",
+      "image_missing": "Photo could not be loaded."
     },
     {
       "id": "response",
       "title": "5. Driver response",
       "type": "fields",
       "fields": [
-        { "label": "Response", "key": "charge.driver_response", "format": "enum:driver_response" },
-        { "label": "Driver explanation or refusal circumstances", "key": "charge.response_explanation" },
-        { "label": "Receipt acknowledged at", "key": "charge.acknowledged_at", "format": "datetime" }
+        {
+          "label": "Response",
+          "key": "charge.driver_response",
+          "format": "enum:driver_response"
+        },
+        {
+          "label": "Driver explanation or refusal circumstances",
+          "key": "charge.response_explanation"
+        },
+        {
+          "label": "Receipt acknowledged at",
+          "key": "charge.acknowledged_at",
+          "format": "datetime"
+        },
+        {
+          "label": "Objection allowed until (last day)",
+          "key": "settings.objection_last_day",
+          "format": "date"
+        }
       ]
     },
     {
@@ -189,11 +330,29 @@
       "rows": "decisions",
       "empty": "No review recorded yet.",
       "columns": [
-        { "label": "When", "key": "created_at", "format": "datetime" },
-        { "label": "Stage", "key": "stage", "format": "enum:decision_stage" },
-        { "label": "Decision", "key": "decision", "format": "enum:decision" },
-        { "label": "Decided by", "key": "decided_by_name" },
-        { "label": "Reason", "key": "reason" }
+        {
+          "label": "When",
+          "key": "created_at",
+          "format": "datetime"
+        },
+        {
+          "label": "Stage",
+          "key": "stage",
+          "format": "enum:decision_stage"
+        },
+        {
+          "label": "Decision",
+          "key": "decision",
+          "format": "enum:decision"
+        },
+        {
+          "label": "Decided by",
+          "key": "decided_by_name"
+        },
+        {
+          "label": "Reason",
+          "key": "reason"
+        }
       ]
     },
     {
@@ -203,12 +362,33 @@
       "when": "appeal",
       "empty": "No appeal filed.",
       "fields": [
-        { "label": "Filed at", "key": "appeal.filed_at", "format": "datetime" },
-        { "label": "Driver grounds", "key": "appeal.reason" },
-        { "label": "Outcome", "key": "appeal.outcome", "format": "enum:appeal_outcome" },
-        { "label": "Decided by", "key": "appeal.decided_by_name" },
-        { "label": "Decided at", "key": "appeal.decided_at", "format": "datetime" },
-        { "label": "Decision reason", "key": "appeal.decision_reason" }
+        {
+          "label": "Filed at",
+          "key": "appeal.filed_at",
+          "format": "datetime"
+        },
+        {
+          "label": "Driver grounds",
+          "key": "appeal.reason"
+        },
+        {
+          "label": "Outcome",
+          "key": "appeal.outcome",
+          "format": "enum:appeal_outcome"
+        },
+        {
+          "label": "Decided by",
+          "key": "appeal.decided_by_name"
+        },
+        {
+          "label": "Decided at",
+          "key": "appeal.decided_at",
+          "format": "datetime"
+        },
+        {
+          "label": "Decision reason",
+          "key": "appeal.decision_reason"
+        }
       ]
     },
     {
@@ -218,12 +398,43 @@
       "when": "charge.scheduled_at",
       "empty": "No deduction scheduled.",
       "fields": [
-        { "label": "Monthly wage used for the limit", "key": "charge.schedule_monthly_wage", "format": "money", "currency_key": "charge.currency" },
-        { "label": "Limit per month (percent of wage)", "key": "charge.schedule_cap_pct", "format": "percent" },
-        { "label": "Limit per month (amount)", "key": "charge.schedule_cap_amount", "format": "money", "currency_key": "charge.currency" },
-        { "label": "Scheduled by", "key": "charge.scheduled_by_name" },
-        { "label": "Scheduled at", "key": "charge.scheduled_at", "format": "datetime" },
-        { "label": "Deducted so far", "key": "charge.deducted_amount", "format": "money", "currency_key": "charge.currency" }
+        {
+          "label": "Deduction rule",
+          "key": "charge.schedule_rule",
+          "format": "enum:schedule_rule"
+        },
+        {
+          "label": "Monthly wage used for the limit",
+          "key": "charge.schedule_monthly_wage",
+          "format": "money",
+          "currency_key": "charge.currency"
+        },
+        {
+          "label": "Limit per month for this charge (percent of wage)",
+          "key": "charge.schedule_cap_pct",
+          "format": "percent"
+        },
+        {
+          "label": "Limit per month for this charge (amount)",
+          "key": "charge.schedule_cap_amount",
+          "format": "money",
+          "currency_key": "charge.currency"
+        },
+        {
+          "label": "Scheduled by",
+          "key": "charge.scheduled_by_name"
+        },
+        {
+          "label": "Scheduled at",
+          "key": "charge.scheduled_at",
+          "format": "datetime"
+        },
+        {
+          "label": "Deducted so far",
+          "key": "charge.deducted_amount",
+          "format": "money",
+          "currency_key": "charge.currency"
+        }
       ]
     },
     {
@@ -233,12 +444,35 @@
       "rows": "instalments",
       "empty": "No instalments.",
       "columns": [
-        { "label": "No.", "key": "seq" },
-        { "label": "Month", "key": "due_month", "format": "month" },
-        { "label": "Amount", "key": "amount", "format": "money", "currency_key": "currency" },
-        { "label": "Status", "key": "status", "format": "enum:instalment_status" },
-        { "label": "Payroll reference", "key": "payroll_reference" },
-        { "label": "Deducted at", "key": "deducted_at", "format": "datetime" }
+        {
+          "label": "No.",
+          "key": "seq"
+        },
+        {
+          "label": "Month",
+          "key": "due_month",
+          "format": "month"
+        },
+        {
+          "label": "Amount",
+          "key": "amount",
+          "format": "money",
+          "currency_key": "currency"
+        },
+        {
+          "label": "Status",
+          "key": "status",
+          "format": "enum:instalment_status"
+        },
+        {
+          "label": "Payroll reference",
+          "key": "payroll_reference"
+        },
+        {
+          "label": "Deducted at",
+          "key": "deducted_at",
+          "format": "datetime"
+        }
       ]
     },
     {
@@ -248,10 +482,24 @@
       "rows": "events",
       "empty": "No recorded actions.",
       "columns": [
-        { "label": "When", "key": "created_at", "format": "datetime" },
-        { "label": "By", "key": "actor_name" },
-        { "label": "Action", "key": "action", "format": "enum:action" },
-        { "label": "Note", "key": "details.reason" }
+        {
+          "label": "When",
+          "key": "created_at",
+          "format": "datetime"
+        },
+        {
+          "label": "By",
+          "key": "actor_name"
+        },
+        {
+          "label": "Action",
+          "key": "action",
+          "format": "enum:action"
+        },
+        {
+          "label": "Note",
+          "key": "details.reason"
+        }
       ]
     }
   ],
@@ -267,18 +515,82 @@
       "image_key": "signature",
       "image_missing": "Signature image not shown for this access level.",
       "fields": [
-        { "label": "Signed by", "key": "signer_name" },
-        { "label": "Signed at (server time)", "key": "signed_at", "format": "datetime" },
-        { "label": "Charge version signed", "key": "charge_version" },
-        { "label": "Recorded by", "key": "recorded_by_name" }
-      ]
+        {
+          "label": "Signed by",
+          "key": "signer_name"
+        },
+        {
+          "label": "Statement language",
+          "key": "statement_language",
+          "format": "enum:language"
+        },
+        {
+          "label": "Signed at (server time)",
+          "key": "signed_at",
+          "format": "datetime"
+        },
+        {
+          "label": "Charge version signed",
+          "key": "charge_version"
+        },
+        {
+          "label": "Recorded by",
+          "key": "recorded_by_name"
+        }
+      ],
+      "statement_language_key": "statement_language"
     }
   },
   "footer": {
     "lines": [
       "Every time on this notice is set by the server when the action was recorded. Records are append-only: a wrong charge is reversed and reissued, never edited after the driver is notified.",
-      "A deduction is made only after the driver gave written consent, or after a witnessed refusal or dispute was reviewed by two different people and the appeal period ended or an appeal was decided by a third person. No monthly instalment exceeds the limit shown in section 8."
+      "A deduction is made only after the driver gave written consent, or after a witnessed refusal or dispute was reviewed by two different people and the appeal period ended or an appeal was decided by a third person. No monthly instalment exceeds the limit shown in section 8.",
+      "Charges on drivers in Saudi Arabia follow the Saudi Labour Law (Royal Decree M/51): damage or loss at most 5 days' wage a month and 15 working days to object (Article 91), a fine at most 5 days' wage (Articles 70 and 71), any other deduction only with written consent (Article 92), and all deductions together at most half the wage (Article 93)."
     ],
     "page_number": "Page {page} of {pages}"
+  },
+  "driver_notice": {
+    "rule": "Printed near the top in the driver's language: the language of the driver's latest signature, else the language the app is set to, else English. Placeholders: {amount} is the charge amount with currency, {window} is the objection window, {deadline} is the last day to object or the pending phrase.",
+    "text": {
+      "en": {
+        "dir": "ltr",
+        "title": "What this paper means for you",
+        "lines": [
+          "The company says you must pay {amount} for this charge. Read the reason in section 3 and look at the photos in section 4a.",
+          "If you agree, sign the consent. If you do not agree, sign that you received this paper and write why.",
+          "You can object within {window} after finance approves the charge. Last day: {deadline}.",
+          "Two different people must approve before anything is taken from your salary."
+        ],
+        "window_statutory": "15 working days (Sunday to Thursday)",
+        "window_days": "{days} days",
+        "deadline_pending": "set when finance approves"
+      },
+      "ar": {
+        "dir": "rtl",
+        "title": "ماذا تعني هذه الورقة بالنسبة لك",
+        "lines": [
+          "تقول الشركة إنك ملزم بدفع {amount} عن هذه المطالبة. اقرأ السبب في القسم 3 وانظر إلى الصور في القسم 4a.",
+          "إذا كنت موافقا، وقع على الموافقة. وإذا لم تكن موافقا، وقع على أنك استلمت هذه الورقة واكتب السبب.",
+          "يحق لك الاعتراض خلال {window} بعد موافقة المالية على المطالبة. آخر يوم: {deadline}.",
+          "يجب أن يوافق شخصان مختلفان قبل أن يخصم أي شيء من راتبك."
+        ],
+        "window_statutory": "15 يوم عمل (من الأحد إلى الخميس)",
+        "window_days": "{days} أيام",
+        "deadline_pending": "يحدد عند موافقة المالية"
+      },
+      "ur": {
+        "dir": "rtl",
+        "title": "یہ کاغذ آپ کے لیے کیا معنی رکھتا ہے",
+        "lines": [
+          "کمپنی کہتی ہے کہ آپ کو اس چارج کے لیے {amount} ادا کرنا ہے۔ وجہ سیکشن 3 میں پڑھیں اور تصویریں سیکشن 4a میں دیکھیں۔",
+          "اگر آپ متفق ہیں تو اجازت پر دستخط کریں۔ اگر متفق نہیں ہیں تو دستخط کریں کہ آپ کو یہ کاغذ مل گیا ہے اور وجہ لکھیں۔",
+          "آپ فنانس کی منظوری کے بعد {window} کے اندر اعتراض کر سکتے ہیں۔ آخری دن: {deadline}۔",
+          "آپ کی تنخواہ سے کچھ کاٹنے سے پہلے دو مختلف لوگوں کی منظوری ضروری ہے۔"
+        ],
+        "window_statutory": "15 کام کے دن (اتوار سے جمعرات)",
+        "window_days": "{days} دن",
+        "deadline_pending": "فنانس کی منظوری پر طے ہو گا"
+      }
+    }
   }
 }

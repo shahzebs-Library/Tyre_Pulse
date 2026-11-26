@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
+import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/driver_workspace/data/driver_charge_repository.dart';
 import 'package:tyre_pulse/features/driver_workspace/domain/driver_charge.dart';
 import 'package:tyre_pulse/features/driver_workspace/domain/driver_workspace.dart';
@@ -25,6 +26,7 @@ DriverRow _detail({List<String> actions = const <String>[]}) =>
         'deducted_amount': 0,
         'status': 'notified',
         'basis': 'Speeding fine while assigned.',
+        'country': 'KSA',
       },
       'driver': <String, Object?>{'driver_name': 'Driver A'},
       'evidence': <DriverRow>[],
@@ -34,11 +36,27 @@ DriverRow _detail({List<String> actions = const <String>[]}) =>
       'instalments': <DriverRow>[],
       'events': <DriverRow>[],
       'statements': <String, Object?>{
-        'deduction-consent-v1': 'I accept and consent.',
-        'receipt-dispute-v1': 'I received this and dispute it.',
-        'refusal-witness-v1': 'I witnessed the refusal.',
+        'deduction-consent-v2': <String, Object?>{
+          'en': 'I accept and consent.',
+          'ar': 'أوافق على الخصم.',
+          'ur': 'میں کٹوتی کی اجازت دیتا ہوں۔',
+        },
+        'receipt-dispute-v2': <String, Object?>{
+          'en': 'I received this and dispute it.',
+          'ar': 'استلمت ولا أوافق.',
+          'ur': 'مجھے ملا اور میں متفق نہیں ہوں۔',
+        },
+        'refusal-witness-v2': <String, Object?>{
+          'en': 'I witnessed the refusal.',
+          'ar': 'رأيت الرفض.',
+          'ur': 'میں نے انکار دیکھا۔',
+        },
       },
-      'settings': <String, Object?>{'cap_pct': 20, 'appeal_window_days': 7},
+      'settings': <String, Object?>{
+        'cap_pct': 20,
+        'appeal_window_days': 7,
+        'objection_last_day': '2026-12-17',
+      },
     };
 
 final class _FakeRepo implements DriverChargeRepository {
@@ -158,7 +176,7 @@ void main() {
       'charge_id': 'c1',
       'version': 3,
       'response': 'dispute',
-      'statement_version': 'receipt-dispute-v1',
+      'statement_version': 'receipt-dispute-v2',
       'statement_language': 'en',
       'acknowledged': true,
       'signature': 'data:image/png;base64,AAAA',
@@ -176,6 +194,77 @@ void main() {
         'reason': 'The vehicle was in the workshop.',
       },
     );
+  });
+
+  test('KSA labour law rules mirror the server', () {
+    expect(driverChargeCountryRule('KSA').statutory, isTrue);
+    expect(driverChargeCountryRule('UAE').needsLegalConfirmation, isTrue);
+    expect(driverChargeBucket('missing_item'), 'damage');
+    expect(driverChargeBucket('traffic_fine'), 'fine');
+    expect(driverChargeBucket('other'), 'consent');
+    expect(driverChargeNeedsPhoto('tyre_damage'), isTrue);
+    expect(driverChargeNeedsPhoto('missing_item'), isFalse);
+    expect(
+      chargeWorkingDeadline(DateTime.parse('2026-11-26T09:00:00+03:00'), 15),
+      DateTime.utc(2026, 12, 17, 21),
+    );
+    expect(defaultChargeStatementLanguage('ur'), 'ur');
+    expect(defaultChargeStatementLanguage('fr'), 'en');
+    final DriverChargeDetail detail = DriverChargeDetail(_detail());
+    expect(
+      detail.statement(chargeConsentStatement, language: 'ur'),
+      'میں کٹوتی کی اجازت دیتا ہوں۔',
+    );
+    expect(detail.statement('deduction-consent-v1'), isNull);
+    expect(detail.objectionLastDay, '2026-12-17');
+    expect(
+      chargeResponsePayload(
+        charge: detail.charge,
+        response: DriverChargeResponse.accept,
+        explanation: '',
+        signature: 'x',
+        language: 'ar',
+      )['statement_language'],
+      'ar',
+    );
+  });
+
+  testWidgets('the driver sees the photos and signs in Urdu',
+      (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final DriverRow data = _detail(actions: <String>['charge_respond']);
+    data['evidence'] = <DriverRow>[
+      <String, Object?>{
+        'id': 'e1',
+        'kind': 'photo',
+        'ref': 'tp-storage://tyre-photos/modules/driver-charge/u/1.jpg',
+        'label': 'Broken mirror',
+      },
+    ];
+    final _FakeRepo repo = _FakeRepo(data);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          driverChargeRepositoryProvider.overrideWithValue(repo),
+          privateStorageImageUrlProvider.overrideWith(
+            (Ref ref, String reference) async => throw StateError('offline'),
+          ),
+        ],
+        child: MaterialApp(
+          supportedLocales: TpLocalizations.supportedLocales,
+          localizationsDelegates: TpLocalizations.delegates,
+          home: DriverChargeResponseSheet(detail: DriverChargeDetail(data)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Broken mirror'), findsOneWidget);
+    expect(find.text('Photo could not be loaded.'), findsOneWidget);
+    expect(find.textContaining('Saudi Labour Law'), findsOneWidget);
+    await tester.tap(find.text('اردو'));
+    await tester.pumpAndSettle();
+    expect(find.text('میں کٹوتی کی اجازت دیتا ہوں۔'), findsOneWidget);
   });
 
   test('the phone only offers driver actions the server returned', () {
@@ -227,9 +316,21 @@ void main() {
     await tester.tap(find.text('Respond to this charge'));
     await tester.pumpAndSettle();
     expect(find.text('I accept and consent.'), findsOneWidget);
+    await tester.ensureVisible(find.text('Dispute'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Dispute'));
     await tester.pumpAndSettle();
     expect(find.text('I received this and dispute it.'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Sign and submit'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(DriverChargeResponseSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.tap(find.text('Sign and submit'));
     await tester.pumpAndSettle();
     expect(repo.commands, isEmpty);
@@ -316,7 +417,8 @@ void main() {
         'driver_id': 'd1',
         'charge_id': 'c1',
         'version': 3,
-        'statement_version': 'refusal-witness-v1',
+        'statement_version': 'refusal-witness-v2',
+        'statement_language': 'en',
         'acknowledged': true,
         'signature': 'data:image/png;base64,AAAA',
       },

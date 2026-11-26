@@ -50,13 +50,84 @@ const Set<String> driverChargeMobileActions = <String>{
 };
 
 /// Statement versions the server stores verbatim with each signature.
-const String chargeConsentStatement = 'deduction-consent-v1';
-const String chargeDisputeStatement = 'receipt-dispute-v1';
-const String chargeWitnessStatement = 'refusal-witness-v1';
+const String chargeConsentStatement = 'deduction-consent-v2';
+const String chargeDisputeStatement = 'receipt-dispute-v2';
+const String chargeWitnessStatement = 'refusal-witness-v2';
 
-/// The one statement language the server accepts today. Arabic and Urdu need
-/// owner-approved legal wording before the server adds a new version.
-const String chargeStatementLanguage = 'en';
+/// Languages a driver or witness may sign in. The server stores the text of
+/// the chosen language with the signature
+/// (`docs/document-specs/driver-charge-statements.json`).
+const List<String> chargeStatementLanguages = <String>['en', 'ar', 'ur'];
+
+/// The app language when the server can store a statement in it, else English.
+String defaultChargeStatementLanguage(String appLanguage) =>
+    chargeStatementLanguages.contains(appLanguage) ? appLanguage : 'en';
+
+/// Arabic and Urdu are read right to left.
+bool chargeStatementIsRtl(String language) =>
+    language == 'ar' || language == 'ur';
+
+/// Country deduction rules. Mirror of `private.driver_charge_country_rule`
+/// (and `chargeCountryRule` in `src/lib/driverCharges.js`); display only, the
+/// server enforces every limit. KSA: Saudi Labour Law (Royal Decree M/51).
+final class DriverChargeCountryRule {
+  const DriverChargeCountryRule._(this.rule, {required this.statutory});
+  final String rule;
+  final bool statutory;
+
+  /// Damage and fines: at most this many days of wage a month (wage / 30).
+  int get daysPerMonth => 5;
+
+  /// Days the driver has to object (KSA: working days, Sunday to Thursday).
+  int get objectionWorkingDays => 15;
+
+  /// All deductions together: at most this share of the wage (Art 93).
+  int get totalPercent => 50;
+
+  /// UAE and Egypt use the company setting until legally confirmed.
+  bool get needsLegalConfirmation => !statutory;
+}
+
+DriverChargeCountryRule driverChargeCountryRule(Object? country) {
+  final String c = '${country ?? ''}'.trim().toUpperCase();
+  return const <String>{'KSA', 'SA', 'SAU', 'SAUDI ARABIA'}.contains(c)
+      ? const DriverChargeCountryRule._('ksa_labour_law', statutory: true)
+      : const DriverChargeCountryRule._('company_setting', statutory: false);
+}
+
+/// `damage` (Art 91), `fine` (Art 70/71) or `consent` (Art 92).
+String driverChargeBucket(Object? category) => switch ('${category ?? ''}') {
+      'accident_damage' ||
+      'tyre_damage' ||
+      'missing_item' ||
+      'handover_damage' =>
+        'damage',
+      'traffic_fine' => 'fine',
+      _ => 'consent',
+    };
+
+/// Physical damage carries at least one photo before the driver is notified.
+bool driverChargeNeedsPhoto(Object? category) => const <String>{
+      'accident_damage',
+      'tyre_damage',
+      'handover_damage',
+    }.contains('${category ?? ''}');
+
+/// Mirror of `private.driver_charge_working_deadline`: the end of the
+/// [days]-th working day (Sunday to Thursday) after the Riyadh date of
+/// [from]. Riyadh is UTC+3 all year.
+DateTime? chargeWorkingDeadline(DateTime? from, int days) {
+  if (from == null || days < 1) return null;
+  const Duration riyadh = Duration(hours: 3);
+  final DateTime local = from.toUtc().add(riyadh);
+  DateTime d = DateTime.utc(local.year, local.month, local.day);
+  int n = 0;
+  while (n < days) {
+    d = d.add(const Duration(days: 1));
+    if (d.weekday != DateTime.friday && d.weekday != DateTime.saturday) n++;
+  }
+  return d.add(const Duration(days: 1)).subtract(riyadh);
+}
 
 enum DriverChargeResponse {
   accept('accept', chargeConsentStatement),
@@ -154,6 +225,7 @@ DriverRow chargeResponsePayload({
   required DriverChargeResponse response,
   required String explanation,
   required String signature,
+  String language = 'en',
 }) =>
     <String, Object?>{
       'driver_id': charge['driver_id'],
@@ -161,7 +233,7 @@ DriverRow chargeResponsePayload({
       'version': charge['version'],
       'response': response.key,
       'statement_version': response.statementVersion,
-      'statement_language': chargeStatementLanguage,
+      'statement_language': language,
       'acknowledged': true,
       'signature': signature,
       if (explanation.trim().isNotEmpty) 'explanation': explanation.trim(),
@@ -183,12 +255,14 @@ DriverRow chargeAppealPayload({
 DriverRow chargeWitnessPayload({
   required DriverRow charge,
   required String signature,
+  String language = 'en',
 }) =>
     <String, Object?>{
       'driver_id': charge['driver_id'],
       'charge_id': charge['id'],
       'version': charge['version'],
       'statement_version': chargeWitnessStatement,
+      'statement_language': language,
       'acknowledged': true,
       'signature': signature,
     };
@@ -232,12 +306,33 @@ final class DriverChargeDetail {
 
   bool get isViewer => data['access'] == 'viewer';
 
-  /// The exact statement text for [version], from the server.
-  String? statement(String version) {
+  /// The exact statement text for [version] in [language], from the server
+  /// (`statements[version][language]`). Null when the server did not send it:
+  /// the phone never signs words the server did not supply.
+  String? statement(String version, {String language = 'en'}) {
     final Object? statements = data['statements'];
     if (statements is! Map) return null;
-    final Object? text = statements[version];
+    final Object? byLanguage = statements[version];
+    final Object? text = byLanguage is Map ? byLanguage[language] : null;
     return text is String && text.trim().isNotEmpty ? text : null;
+  }
+
+  /// Photo evidence rows (private storage references), shown before answering.
+  List<DriverRow> get photos => <DriverRow>[
+        for (final DriverRow e in rows('evidence'))
+          if (e['kind'] == 'photo' && '${e['ref'] ?? ''}'.isNotEmpty) e,
+      ];
+
+  /// The deduction rules of the charge country.
+  DriverChargeCountryRule get countryRule =>
+      driverChargeCountryRule(charge['country']);
+
+  /// Last day the driver may object (`YYYY-MM-DD`), once finance approved.
+  String? get objectionLastDay {
+    final Object? settings = data['settings'];
+    if (settings is! Map) return null;
+    final Object? day = settings['objection_last_day'];
+    return day is String && day.isNotEmpty ? day : null;
   }
 
   int? get appealWindowDays {

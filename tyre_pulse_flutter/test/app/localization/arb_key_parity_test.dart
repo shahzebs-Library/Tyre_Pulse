@@ -677,10 +677,18 @@ void main() {
     // site required / taken from the fleet register, the "please sign
     // again" refusal for a too-short signature, the unconfirmed source link
     // and the appeal closed after deductions.
-    test('en, ar and ur each carry exactly 2681 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2681);
-      expect(_translatableKeys(ar).length, 2681);
-      expect(_translatableKeys(ur).length, 2681);
+    // 2681 - 1 + 15 = 2695: driver charge consent in English, Arabic and Urdu
+    // (driverChargeStatementConsent / Dispute / Witness, the exact words the
+    // server stores, pinned against docs/document-specs/driver-charge-
+    // statements.json by src/test/driverChargeStatementsParity.test.js), the
+    // statement language picker and the three language names, the read-aloud
+    // line (replaces driverChargeStatementEnglishOnly), the photo section
+    // (title, none, could not load, look first) and the KSA / company rule
+    // lines with the objection day.
+    test('en, ar and ur each carry exactly 2695 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2695);
+      expect(_translatableKeys(ar).length, 2695);
+      expect(_translatableKeys(ur).length, 2695);
     });
   });
 

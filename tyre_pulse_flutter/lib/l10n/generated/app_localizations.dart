@@ -15636,11 +15636,95 @@ abstract class AppLocalizations {
   /// **'Statement you are signing'**
   String get driverChargeStatementTitle;
 
-  /// No description provided for @driverChargeStatementEnglishOnly.
+  /// No description provided for @driverChargeStatementLanguage.
   ///
   /// In en, this message translates to:
-  /// **'This statement is legal wording and is shown in English only. Ask your supervisor to explain it before you sign.'**
-  String get driverChargeStatementEnglishOnly;
+  /// **'Language of the statement you sign'**
+  String get driverChargeStatementLanguage;
+
+  /// No description provided for @driverChargeStatementReadAloud.
+  ///
+  /// In en, this message translates to:
+  /// **'If you cannot read this, ask your supervisor to read it to you before you sign.'**
+  String get driverChargeStatementReadAloud;
+
+  /// No description provided for @driverChargePhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos of this charge'**
+  String get driverChargePhotosTitle;
+
+  /// No description provided for @driverChargePhotosNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No photos attached to this charge.'**
+  String get driverChargePhotosNone;
+
+  /// No description provided for @driverChargePhotoUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo could not be loaded.'**
+  String get driverChargePhotoUnavailable;
+
+  /// No description provided for @driverChargePhotosSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'Look at the photos before you answer.'**
+  String get driverChargePhotosSeen;
+
+  /// No description provided for @driverChargeKsaRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Fines: at most 5 days of wage. All deductions together: at most half the wage. You have 15 working days to object.'**
+  String get driverChargeKsaRule;
+
+  /// No description provided for @driverChargeOtherRule.
+  ///
+  /// In en, this message translates to:
+  /// **'The company limit applies to this charge. This rule still needs legal confirmation for this country.'**
+  String get driverChargeOtherRule;
+
+  /// No description provided for @driverChargeObjectionUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'You can object until {date}.'**
+  String driverChargeObjectionUntil(String date);
+
+  /// No description provided for @driverChargeLangEnglish.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get driverChargeLangEnglish;
+
+  /// No description provided for @driverChargeLangArabic.
+  ///
+  /// In en, this message translates to:
+  /// **'العربية'**
+  String get driverChargeLangArabic;
+
+  /// No description provided for @driverChargeLangUrdu.
+  ///
+  /// In en, this message translates to:
+  /// **'اردو'**
+  String get driverChargeLangUrdu;
+
+  /// No description provided for @driverChargeStatementConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'I am the driver named on this paper. I have seen this charge: the reason, the amount, and the evidence and photos shown with it. I agree that I must pay this charge. I agree that the company may take this amount from my salary, a part each month, as shown on the deduction plan. This agreement is only for this charge. I can still object within the time written on this paper.'**
+  String get driverChargeStatementConsent;
+
+  /// No description provided for @driverChargeStatementDispute.
+  ///
+  /// In en, this message translates to:
+  /// **'I am the driver named on this paper. I have received this charge and I have seen the reason, the evidence and the photos. I do not agree with this charge, for the reasons I wrote. My signature only shows that I received this paper. It does not mean that I agree. I can object within the time written on this paper.'**
+  String get driverChargeStatementDispute;
+
+  /// No description provided for @driverChargeStatementWitness.
+  ///
+  /// In en, this message translates to:
+  /// **'I saw this charge paper given to the driver named on it. The driver did not want to sign it or answer. The date and time of this record are set by the system.'**
+  String get driverChargeStatementWitness;
 
   /// No description provided for @driverChargeStatementMissing.
   ///

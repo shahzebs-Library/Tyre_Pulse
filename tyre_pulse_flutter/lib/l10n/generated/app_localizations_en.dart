@@ -8949,8 +8949,58 @@ class AppLocalizationsEn extends AppLocalizations {
   String get driverChargeStatementTitle => 'Statement you are signing';
 
   @override
-  String get driverChargeStatementEnglishOnly =>
-      'This statement is legal wording and is shown in English only. Ask your supervisor to explain it before you sign.';
+  String get driverChargeStatementLanguage =>
+      'Language of the statement you sign';
+
+  @override
+  String get driverChargeStatementReadAloud =>
+      'If you cannot read this, ask your supervisor to read it to you before you sign.';
+
+  @override
+  String get driverChargePhotosTitle => 'Photos of this charge';
+
+  @override
+  String get driverChargePhotosNone => 'No photos attached to this charge.';
+
+  @override
+  String get driverChargePhotoUnavailable => 'Photo could not be loaded.';
+
+  @override
+  String get driverChargePhotosSeen => 'Look at the photos before you answer.';
+
+  @override
+  String get driverChargeKsaRule =>
+      'Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Fines: at most 5 days of wage. All deductions together: at most half the wage. You have 15 working days to object.';
+
+  @override
+  String get driverChargeOtherRule =>
+      'The company limit applies to this charge. This rule still needs legal confirmation for this country.';
+
+  @override
+  String driverChargeObjectionUntil(String date) {
+    return 'You can object until $date.';
+  }
+
+  @override
+  String get driverChargeLangEnglish => 'English';
+
+  @override
+  String get driverChargeLangArabic => 'العربية';
+
+  @override
+  String get driverChargeLangUrdu => 'اردو';
+
+  @override
+  String get driverChargeStatementConsent =>
+      'I am the driver named on this paper. I have seen this charge: the reason, the amount, and the evidence and photos shown with it. I agree that I must pay this charge. I agree that the company may take this amount from my salary, a part each month, as shown on the deduction plan. This agreement is only for this charge. I can still object within the time written on this paper.';
+
+  @override
+  String get driverChargeStatementDispute =>
+      'I am the driver named on this paper. I have received this charge and I have seen the reason, the evidence and the photos. I do not agree with this charge, for the reasons I wrote. My signature only shows that I received this paper. It does not mean that I agree. I can object within the time written on this paper.';
+
+  @override
+  String get driverChargeStatementWitness =>
+      'I saw this charge paper given to the driver named on it. The driver did not want to sign it or answer. The date and time of this record are set by the system.';
 
   @override
   String get driverChargeStatementMissing =>

@@ -27,6 +27,12 @@ List<TyreAlert> alertsFromInspections(Iterable<Map<String, Object?>> rows) {
     final String asset = (row['asset_no'] as String? ?? '').trim();
     final String id = '${row['id'] ?? ''}';
     if (asset.isEmpty || id.isEmpty) continue;
+    // A rejected or cancelled inspection is not a finding anyone signed off; skip it so
+    // the vehicle's next inspection speaks for it instead.
+    final String approval =
+        (row['approval_status'] as String? ?? '').trim().toLowerCase();
+    final String status = (row['status'] as String? ?? '').trim().toLowerCase();
+    if (approval == 'rejected' || status == 'cancelled') continue;
     // A vehicle is (organisation, country, asset number): the same code can
     // name a different machine in another country, and one must not hide the
     // other's findings.
@@ -68,4 +74,36 @@ List<TyreAlert> alertsFromInspections(Iterable<Map<String, Object?>> rows) {
     }
   }
   return out;
+}
+
+/// One feed from register alerts and inspection alerts.
+///
+/// Acknowledged alerts are dropped, a wheel that the register already flags is
+/// not repeated from an inspection, and the list is ordered most urgent first
+/// (Critical, then newest) before it is cut to [limit], so a long feed never
+/// drops a critical finding to make room for an older warning.
+List<TyreAlert> mergeTyreAlerts({
+  required Iterable<TyreAlert> register,
+  required Iterable<TyreAlert> inspection,
+  required Set<String> acknowledged,
+  int limit = 300,
+}) {
+  String wheel(TyreAlert a) => '${(a.assetNo ?? '').trim().toUpperCase()}|'
+      '${(a.position ?? '').trim().toUpperCase()}';
+  final Set<String> registerWheels = <String>{
+    for (final TyreAlert a in register)
+      if ((a.assetNo ?? '').trim().isNotEmpty &&
+          (a.position ?? '').trim().isNotEmpty)
+        wheel(a),
+  };
+  final List<TyreAlert> all = <TyreAlert>[
+    ...register,
+    ...inspection.where((TyreAlert a) => !registerWheels.contains(wheel(a))),
+  ].where((TyreAlert a) => !acknowledged.contains(a.id)).toList();
+  all.sort((TyreAlert a, TyreAlert b) {
+    final int rank = (b.isCritical ? 1 : 0) - (a.isCritical ? 1 : 0);
+    if (rank != 0) return rank;
+    return (b.issueDate ?? '').compareTo(a.issueDate ?? '');
+  });
+  return all.take(limit).toList(growable: false);
 }

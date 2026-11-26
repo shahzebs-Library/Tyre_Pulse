@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/features/alerts/domain/inspection_alerts.dart';
+import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 
 void main() {
   test('latest inspection per asset turns bad wheels into alerts', () {
@@ -70,6 +71,72 @@ void main() {
         <String, Object?>{'asset_no': 'TM1'},
       ]),
       isEmpty,
+    );
+  });
+
+  test('a rejected inspection is skipped and the next one speaks', () {
+    final alerts = alertsFromInspections(<Map<String, Object?>>[
+      <String, Object?>{
+        'id': 'r1',
+        'asset_no': 'TM1',
+        'approval_status': 'rejected',
+        'tyre_conditions': <String, Object?>{
+          'LHF1': <String, Object?>{'condition': 'Flat', 'checked': true},
+        },
+      },
+      <String, Object?>{
+        'id': 'ok1',
+        'asset_no': 'TM1',
+        'tyre_conditions': <String, Object?>{
+          'RHF1': <String, Object?>{'condition': 'Damaged', 'checked': true},
+        },
+      },
+    ]);
+    expect(alerts.map((a) => a.id), <String>['insp:ok1:RHF1']);
+  });
+
+  test('merge drops acked and duplicate wheels, critical first, then cut', () {
+    const reg = TyreAlert(
+      id: 'rec:1',
+      riskLevel: 'High',
+      assetNo: 'TM1',
+      position: 'LHF1',
+      issueDate: '2026-11-01',
+    );
+    const dup = TyreAlert(
+      id: 'insp:a:LHF1',
+      riskLevel: 'Critical',
+      assetNo: 'tm1',
+      position: 'lhf1',
+      issueDate: '2026-11-20',
+    );
+    const crit = TyreAlert(
+      id: 'insp:a:RHF1',
+      riskLevel: 'Critical',
+      assetNo: 'TM1',
+      position: 'RHF1',
+      issueDate: '2026-11-10',
+    );
+    const acked = TyreAlert(
+      id: 'insp:b:LHF1',
+      riskLevel: 'Critical',
+      assetNo: 'TM2',
+      position: 'LHF1',
+    );
+    final merged = mergeTyreAlerts(
+      register: const <TyreAlert>[reg],
+      inspection: const <TyreAlert>[dup, crit, acked],
+      acknowledged: <String>{'insp:b:LHF1'},
+    );
+    expect(merged.map((a) => a.id), <String>['insp:a:RHF1', 'rec:1']);
+    expect(
+      mergeTyreAlerts(
+        register: const <TyreAlert>[reg],
+        inspection: const <TyreAlert>[crit],
+        acknowledged: const <String>{},
+        limit: 1,
+      ).single.id,
+      'insp:a:RHF1',
     );
   });
 }

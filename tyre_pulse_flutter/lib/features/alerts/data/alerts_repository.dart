@@ -76,14 +76,21 @@ final class SupabaseAlertsRepository
           .limit(300);
       // Already-acknowledged risk alerts (Expo parity): each ack stores the
       // tyre record id in `message` as `rec:<id>`.
-      final List<Map<String, dynamic>> acks = await _client
-          .from(SupabaseTables.alerts)
-          .select('message')
-          .eq('alert_type', 'tyre_risk')
-          .eq('resolved', true);
-      final Set<String> acked = acknowledgedTyreIds(
-        acks.map((Map<String, dynamic> row) => row['message']),
-      );
+      // Read every ack page: PostgREST caps one response at 1,000 rows, and a
+      // missed ack would bring a dismissed alert back.
+      final List<Object?> ackMessages = <Object?>[];
+      for (int page = 0; page < 20; page++) {
+        final List<Map<String, dynamic>> acks = await _client
+            .from(SupabaseTables.alerts)
+            .select('message')
+            .eq('alert_type', 'tyre_risk')
+            .eq('resolved', true)
+            .order('id')
+            .range(page * 1000, page * 1000 + 999);
+        ackMessages.addAll(acks.map((Map<String, dynamic> r) => r['message']));
+        if (acks.length < 1000) break;
+      }
+      final Set<String> acked = acknowledgedTyreIds(ackMessages);
       // What inspectors recorded in the last 30 days, latest per vehicle.
       final String since = DateTime.now()
           .subtract(const Duration(days: 30))
@@ -93,7 +100,7 @@ final class SupabaseAlertsRepository
           .from(SupabaseTables.inspections)
           .select(
             'id,organisation_id,country,asset_no,site,inspection_date,'
-            'tyre_conditions',
+            'status,approval_status,tyre_conditions',
           )
           .gte('inspection_date', since);
       if (countryFilter != null) {
@@ -103,16 +110,13 @@ final class SupabaseAlertsRepository
           .order('inspection_date', ascending: false)
           .order('created_at', ascending: false)
           .limit(1000);
-      final List<TyreAlert> all = <TyreAlert>[
-        ...rows
+      return mergeTyreAlerts(
+        register: rows
             .map(TyreAlertDto.fromRow)
             .map((TyreAlertDto dto) => dto.toDomain()),
-        ...alertsFromInspections(inspectionRows),
-      ];
-      return all
-          .where((TyreAlert alert) => !acked.contains(alert.id))
-          .take(300)
-          .toList(growable: false);
+        inspection: alertsFromInspections(inspectionRows),
+        acknowledged: acked,
+      );
     });
   }
 

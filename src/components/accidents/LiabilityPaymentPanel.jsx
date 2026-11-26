@@ -29,7 +29,7 @@ import {
   ChevronDown, ChevronRight, Paperclip, Upload, Check, X, FileText, ArrowRight, Send, Info,
 } from 'lucide-react'
 import {
-  getLiabilityAssessmentWithMeta, saveLiabilityAssessment, approveLiabilityAssessment,
+  getLiabilityAssessmentWithMeta, saveLiabilityAssessment, approveLiabilityAssessment, reopenLiabilityAssessment,
   listAuthorityReports, saveAuthorityReport, saveFieldAudit, mergeFieldAudit, stripParityFields,
 } from '../../lib/api/accidentLiability'
 import { listEvidence, addEvidence, verifyEvidence } from '../../lib/api/accidentEvidence'
@@ -305,6 +305,22 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
     }
   }
 
+  async function reopen() {
+    if (!assessment?.id || saving) return
+    setSaving(true); setErr(''); setNotice('')
+    try {
+      const saved = await reopenLiabilityAssessment(assessment.id, { reason: changeReason })
+      const { reopen: result, ...row } = saved || {}
+      setAssessment(row); setDraft(row); setChangeReason('')
+      setNotice(result?.reversed_charge_id ? 'Reopened. The driver charge opened by the approval was reversed.' : 'Reopened for changes.')
+      onChanged?.()
+    } catch (e) {
+      setErr(toUserMessage(e, 'Could not reopen the assessment.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   /** Persist a merged field_audit map (verification / recorded-by stamps). */
   async function persistAudit(nextAudit) {
     if (!parityProvisioned) { markNotProvisioned(); return }
@@ -558,7 +574,7 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
         {!locked ? (
           <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5"><FileWarning size={12} /> Provisional until authority/insurer confirmation.</p>
         ) : (
-          <p className="text-xs text-green-400 flex items-center gap-1.5"><Lock size={12} /> Approved and locked. A further edit requires a change reason.</p>
+          <p className="text-xs text-green-400 flex items-center gap-1.5"><Lock size={12} /> Approved and locked. An administrator can reopen it with a reason.</p>
         )}
 
         <div className="border-t border-[var(--input-border)] pt-3">
@@ -584,7 +600,10 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
                 ))}
               </div>
               {locked && elevated && (
-                <Field label="Change reason (required to revise a locked assessment)" value={changeReason} onChange={setChangeReason} />
+                <div className="space-y-2">
+                  <Field label="Reason to reopen (administrators only, at least 10 characters)" value={changeReason} onChange={setChangeReason} />
+                  <button className="btn-secondary text-xs" disabled={saving || changeReason.trim().length < 10} onClick={reopen}>Reopen for changes</button>
+                </div>
               )}
               {elevated && assessment?.id && !assessment.approved && (
                 <div className="space-y-2">
@@ -705,7 +724,7 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
 
       <div className="flex flex-wrap gap-2">
         {elevated && (
-          <button className="btn-primary text-xs" disabled={saving || (locked && !changeReason.trim())} onClick={save}>
+          <button className="btn-primary text-xs" disabled={saving || locked} onClick={save}>
             {saving ? <Loader2 size={13} className="animate-spin" /> : 'Save responsibility details'}
           </button>
         )}

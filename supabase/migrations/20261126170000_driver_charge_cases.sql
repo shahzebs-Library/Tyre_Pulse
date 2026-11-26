@@ -24,6 +24,15 @@
 --   * driver_expenses: only the owner may edit a pending claim; approval is a
 --     server-stamped RPC and nobody approves their own claim.
 --
+--   * an administrator can reopen an approved liability decision with an
+--     audited reason; the charge it opened is reversed, never deleted.
+--
+-- Review fixes (2026-11-26): monthly cap is per driver per month across all
+-- charges; a refusal needs the named witness to confirm with their own login;
+-- issuer, notifier and witness cannot approve at any stage; linked records
+-- must be in the driver's scope and name this driver; a charged traffic fine
+-- is locked against its own payment step; currency must match the country.
+--
 -- All touched tables had 0 rows live at authoring time: no data migration.
 -- Contract: docs/document-specs/driver-charge-contract.md
 -- ============================================================================
@@ -68,6 +77,10 @@ CREATE TABLE public.driver_charges (
   schedule_cap_amount numeric(14,2),
   scheduled_by uuid REFERENCES public.profiles(id),
   scheduled_at timestamptz,
+  schedule_wage_currency text CHECK (schedule_wage_currency IS NULL OR schedule_wage_currency = currency),
+  refusal_witness_id uuid REFERENCES public.profiles(id),
+  refusal_recorded_by uuid REFERENCES public.profiles(id),
+  refusal_recorded_at timestamptz,
   reversal_code text CHECK (reversal_code IN ('wrong_driver','duplicate','wrong_amount','wrong_vehicle','misused','other')),
   close_reason text,
   supersedes_charge_id uuid REFERENCES public.driver_charges(id) DEFERRABLE INITIALLY DEFERRED,
@@ -167,6 +180,24 @@ CREATE TABLE public.driver_charge_instalments (
 ALTER TABLE public.driver_workspace_events ADD COLUMN charge_id uuid REFERENCES public.driver_charges(id);
 CREATE INDEX driver_events_charge ON public.driver_workspace_events(charge_id, created_at, id) WHERE charge_id IS NOT NULL;
 
+-- A traffic fine recovered from the driver's wages is linked to that charge so
+-- the fine's own payment step cannot also record the same money.
+ALTER TABLE public.driver_fines ADD COLUMN recovery_charge_id uuid REFERENCES public.driver_charges(id);
+CREATE FUNCTION private.driver_fine_recovery_guard()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
+BEGIN
+  IF coalesce(current_setting('tyrepulse.charge_recovery', true),'') = 'on' THEN RETURN NEW; END IF;
+  IF NEW.recovery_charge_id IS DISTINCT FROM OLD.recovery_charge_id THEN
+    RAISE EXCEPTION 'The recovery link is set only by the driver charge workflow' USING ERRCODE='42501';
+  END IF;
+  IF OLD.recovery_charge_id IS NOT NULL AND (NEW.paid_amount, NEW.status) IS DISTINCT FROM (OLD.paid_amount, OLD.status) THEN
+    RAISE EXCEPTION 'This fine is being recovered through a driver charge. Close or reverse that charge first.' USING ERRCODE='42501';
+  END IF;
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION private.driver_fine_recovery_guard() FROM PUBLIC,anon,authenticated;
+CREATE TRIGGER driver_fine_recovery_guard BEFORE UPDATE ON public.driver_fines FOR EACH ROW EXECUTE FUNCTION private.driver_fine_recovery_guard();
+
 DO $$ DECLARE t text; BEGIN
   FOREACH t IN ARRAY ARRAY['driver_charges','driver_charge_evidence','driver_charge_signatures','driver_charge_decisions','driver_charge_appeals','driver_charge_instalments'] LOOP
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t);
@@ -175,6 +206,10 @@ DO $$ DECLARE t text; BEGIN
     EXECUTE format('CREATE POLICY driver_charge_read ON public.%I FOR SELECT TO authenticated USING (organisation_id=public.app_current_org() AND private.driver_workspace_access(driver_id)<>''none'')',t);
   END LOOP;
 END $$;
+-- Signature images are personal data: no direct table read at all. They are
+-- returned only by driver_charge_detail(), which omits them for viewers.
+DROP POLICY driver_charge_read ON public.driver_charge_signatures;
+REVOKE SELECT ON public.driver_charge_signatures FROM authenticated;
 
 -- ── Append-only and post-notification immutability (defence in depth: the
 --    tables carry SELECT grants only, so these guard definer-function bugs). ──
@@ -237,20 +272,25 @@ CREATE TRIGGER driver_charge_instalments_guard BEFORE UPDATE OR DELETE ON public
 -- path can record a second approval by the same person.
 CREATE FUNCTION private.driver_charge_decision_guard()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE c public.driver_charges%ROWTYPE;
+DECLARE c public.driver_charges%ROWTYPE; conflicted boolean;
 BEGIN
   SELECT * INTO c FROM public.driver_charges WHERE id = NEW.charge_id;
-  IF NEW.stage = 'supervisor' AND NEW.decision = 'approve' AND NEW.decided_by = c.issued_by THEN
-    RAISE EXCEPTION 'The person who issued the charge cannot also approve it' USING ERRCODE='42501';
+  -- The issuer, the person who served the notice and the refusal witness are
+  -- parties to the facts and may not approve at any stage.
+  conflicted := NEW.decided_by = c.issued_by OR NEW.decided_by IS NOT DISTINCT FROM c.notified_by
+    OR NEW.decided_by IS NOT DISTINCT FROM c.refusal_witness_id
+    OR EXISTS(SELECT 1 FROM public.driver_charge_signatures s WHERE s.charge_id = NEW.charge_id AND s.kind = 'refusal_witness' AND s.signer_id = NEW.decided_by);
+  IF NEW.stage = 'supervisor' AND NEW.decision = 'approve' AND conflicted THEN
+    RAISE EXCEPTION 'The person who issued, served or witnessed the charge cannot also approve it' USING ERRCODE='42501';
   END IF;
-  IF NEW.stage = 'finance' AND NEW.decision = 'approve' AND (NEW.decided_by = c.issued_by OR EXISTS(
+  IF NEW.stage = 'finance' AND NEW.decision = 'approve' AND (conflicted OR EXISTS(
        SELECT 1 FROM public.driver_charge_decisions x WHERE x.charge_id = NEW.charge_id AND x.stage = 'supervisor' AND x.decision = 'approve' AND x.decided_by = NEW.decided_by)) THEN
     RAISE EXCEPTION 'A different finance reviewer is required' USING ERRCODE='42501';
   END IF;
-  IF NEW.stage = 'appeal' AND (NEW.decided_by = c.issued_by
+  IF NEW.stage = 'appeal' AND (conflicted
        OR EXISTS(SELECT 1 FROM public.driver_charge_decisions x WHERE x.charge_id = NEW.charge_id AND x.stage IN ('supervisor','finance') AND x.decision = 'approve' AND x.decided_by = NEW.decided_by)
        OR EXISTS(SELECT 1 FROM public.driver_account_links l WHERE l.driver_id = c.driver_id AND l.user_id = NEW.decided_by)) THEN
-    RAISE EXCEPTION 'An appeal must be decided by a third person who did not issue or approve the charge' USING ERRCODE='42501';
+    RAISE EXCEPTION 'An appeal must be decided by a third person who did not issue, serve, witness or approve the charge' USING ERRCODE='42501';
   END IF;
   RETURN NEW;
 END $$;
@@ -267,8 +307,25 @@ BEGIN
   RETURN coalesce(nullif(raw,'')::numeric, p_default);
 EXCEPTION WHEN others THEN RETURN p_default;
 END $$;
-REVOKE ALL ON FUNCTION private.driver_charge_setting(text,numeric) FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION private.driver_charge_setting(text,numeric) TO authenticated;
+REVOKE ALL ON FUNCTION private.driver_charge_setting(text,numeric) FROM PUBLIC,anon,authenticated;
+
+CREATE FUNCTION private.driver_charge_finite(p numeric)
+RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path='' AS $$
+  SELECT p IS NOT NULL AND p::text NOT IN ('NaN','Infinity','-Infinity')
+$$;
+REVOKE ALL ON FUNCTION private.driver_charge_finite(numeric) FROM PUBLIC,anon,authenticated;
+
+-- Currency of a country from country_currency. NULL when that table is not
+-- installed; '' when installed but the country has no currency configured.
+CREATE FUNCTION private.driver_charge_country_currency(p_country text)
+RETURNS text LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE r text;
+BEGIN
+  IF to_regclass('public.country_currency') IS NULL THEN RETURN NULL; END IF;
+  EXECUTE 'SELECT upper(btrim(currency)) FROM public.country_currency WHERE upper(btrim(country)) = upper(btrim($1)) LIMIT 1' INTO r USING p_country;
+  RETURN coalesce(r, '');
+END $$;
+REVOKE ALL ON FUNCTION private.driver_charge_country_currency(text) FROM PUBLIC,anon,authenticated;
 
 -- The exact words a signer agreed to. Stored verbatim with every signature.
 CREATE FUNCTION private.driver_charge_statement(p_version text)
@@ -301,12 +358,30 @@ REVOKE ALL ON FUNCTION private.driver_charge_source_table(text) FROM PUBLIC,anon
 -- summary. Never exposes the source row's internal fields.
 CREATE FUNCTION private.driver_charge_source_summary(p_org uuid, p_type text, p_id uuid, p_driver uuid)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
-DECLARE tbl text := private.driver_charge_source_table(p_type); r jsonb;
+DECLARE tbl text := private.driver_charge_source_table(p_type); r jsonb; d public.drivers%ROWTYPE;
+  ids text[]; names text[]; src_country text; src_site text;
 BEGIN
   IF tbl IS NULL OR p_id IS NULL OR to_regclass('public.'||tbl) IS NULL THEN RETURN NULL; END IF;
+  SELECT * INTO d FROM public.drivers WHERE id = p_driver AND organisation_id = p_org;
+  IF NOT FOUND THEN RETURN NULL; END IF;
   EXECUTE format('SELECT to_jsonb(r) FROM public.%I r WHERE r.id=$1', tbl) INTO r USING p_id;
   IF r IS NULL OR (r->>'organisation_id') IS DISTINCT FROM p_org::text THEN RETURN NULL; END IF;
+  -- The record must be in the driver's country and inside the caller's own
+  -- driver-workspace scope (country and site), not just the same tenant.
+  src_country := nullif(btrim(r->>'country'), ''); src_site := nullif(btrim(r->>'site'), '');
+  IF src_country IS NOT NULL AND lower(src_country) <> lower(btrim(coalesce(d.country,''))) THEN RETURN NULL; END IF;
+  IF NOT private.driver_workspace_scope(p_org, coalesce(src_country, d.country), coalesce(src_site, d.site)) THEN RETURN NULL; END IF;
+  -- Where the record names a driver it must be this driver.
   IF p_type = 'driver_fine' AND (r->>'driver_id') IS DISTINCT FROM p_driver::text THEN RETURN NULL; END IF;
+  ids := CASE WHEN p_type IN ('driver_fine','tyre_record') THEN ARRAY[r->>'driver_id'] ELSE ARRAY[]::text[] END;
+  names := CASE p_type WHEN 'accident' THEN ARRAY[r->>'driver_name'] WHEN 'tyre_record' THEN ARRAY[r->>'driver_name']
+    WHEN 'handover_report' THEN ARRAY[r->>'from_driver', r->>'to_driver'] ELSE ARRAY[]::text[] END;
+  SELECT coalesce(array_agg(x) FILTER (WHERE nullif(btrim(x),'') IS NOT NULL), '{}') INTO ids FROM unnest(ids) x;
+  SELECT coalesce(array_agg(lower(btrim(x))) FILTER (WHERE nullif(btrim(x),'') IS NOT NULL), '{}') INTO names FROM unnest(names) x;
+  IF (cardinality(ids) > 0 OR cardinality(names) > 0)
+     AND NOT (p_driver::text = ANY(ids) OR lower(btrim(coalesce(d.driver_name,''))) = ANY(names) OR lower(btrim(coalesce(d.driver_id,''))) = ANY(names)) THEN
+    RETURN NULL;
+  END IF;
   RETURN jsonb_build_object('type', p_type, 'id', p_id,
     'label', nullif(concat_ws(' · ', r->>'reference_no', r->>'notice_reference', r->>'title', r->>'template_name', r->>'serial_no', r->>'asset_no',
       left(coalesce(r->>'incident_date', r->>'incident_at', r->>'inspection_date', r->>'submitted_at', r->>'created_at'), 10)), ''),
@@ -318,8 +393,8 @@ REVOKE ALL ON FUNCTION private.driver_charge_source_summary(uuid,text,uuid,uuid)
 -- liability approval, so both open charges by the same rules.
 CREATE FUNCTION private.driver_charge_issue(p_org uuid, p_actor uuid, p_driver_id uuid, p jsonb, p_supersedes uuid)
 RETURNS public.driver_charges LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE d public.drivers%ROWTYPE; v public.vehicle_fleet%ROWTYPE; c public.driver_charges%ROWTYPE;
-  src_type text := coalesce(nullif(p->>'source_type',''),'none'); src_id uuid := nullif(p->>'source_id','')::uuid;
+DECLARE d public.drivers%ROWTYPE; v public.vehicle_fleet%ROWTYPE; c public.driver_charges%ROWTYPE; f public.driver_fines%ROWTYPE;
+  expected_currency text; src_type text := coalesce(nullif(p->>'source_type',''),'none'); src_id uuid := nullif(p->>'source_id','')::uuid;
   summary jsonb := '{}'; item jsonb; yr text := to_char(now(),'YYYY'); next_no integer;
 BEGIN
   SELECT * INTO d FROM public.drivers WHERE id = p_driver_id AND organisation_id = p_org;
@@ -336,8 +411,22 @@ BEGIN
     END IF;
   END IF;
   IF length(btrim(coalesce(p->>'basis',''))) NOT BETWEEN 10 AND 4000 THEN RAISE EXCEPTION 'Write the basis for the charge (at least 10 characters)' USING ERRCODE='22023'; END IF;
-  IF (p->>'amount') IS NULL OR (p->>'amount')::numeric <= 0 THEN RAISE EXCEPTION 'Amount must be greater than zero' USING ERRCODE='22023'; END IF;
+  IF NOT private.driver_charge_finite(nullif(p->>'amount','')::numeric) OR (p->>'amount')::numeric <= 0 OR (p->>'amount')::numeric > 1000000 THEN RAISE EXCEPTION 'Amount must be greater than zero and at most 1,000,000' USING ERRCODE='22023'; END IF;
   IF upper(coalesce(p->>'currency','')) !~ '^[A-Z]{3}$' THEN RAISE EXCEPTION 'Currency code required' USING ERRCODE='22023'; END IF;
+  expected_currency := private.driver_charge_country_currency(d.country);
+  IF expected_currency = '' THEN RAISE EXCEPTION 'No currency is configured for the driver country %', d.country USING ERRCODE='22023'; END IF;
+  IF expected_currency IS NOT NULL AND upper(p->>'currency') <> expected_currency THEN
+    RAISE EXCEPTION 'The charge must be in % (the currency of %)', expected_currency, d.country USING ERRCODE='22023';
+  END IF;
+  IF src_type = 'driver_fine' THEN
+    SELECT * INTO f FROM public.driver_fines WHERE id = src_id AND organisation_id = p_org FOR UPDATE;
+    IF NOT FOUND OR f.status <> 'open' OR f.response_status <> 'approved' OR f.review_stage <> 'complete' OR f.paid_amount <> 0 OR f.recovery_charge_id IS NOT NULL THEN
+      RAISE EXCEPTION 'Only an approved traffic fine with no payment recorded can be recovered from the driver' USING ERRCODE='22023';
+    END IF;
+    IF upper(p->>'currency') <> f.currency OR (p->>'amount')::numeric > f.amount THEN
+      RAISE EXCEPTION 'The charge must be in the fine currency and not more than the fine amount' USING ERRCODE='22023';
+    END IF;
+  END IF;
   IF nullif(p->>'incident_at','') IS NOT NULL AND (p->>'incident_at')::timestamptz > now() THEN RAISE EXCEPTION 'Incident cannot be in the future' USING ERRCODE='22023'; END IF;
   IF nullif(p->>'vehicle_id','') IS NOT NULL THEN
     SELECT * INTO v FROM public.vehicle_fleet WHERE id = (p->>'vehicle_id')::uuid;
@@ -359,6 +448,11 @@ BEGIN
     INSERT INTO public.driver_charge_evidence(charge_id, driver_id, organisation_id, kind, ref, label, added_by)
       VALUES (c.id, d.id, p_org, item->>'kind', btrim(item->>'ref'), btrim(item->>'label'), p_actor);
   END LOOP;
+  IF src_type = 'driver_fine' THEN
+    PERFORM set_config('tyrepulse.charge_recovery','on',true);
+    UPDATE public.driver_fines SET recovery_charge_id = c.id, version = version + 1, updated_at = now() WHERE id = src_id;
+    PERFORM set_config('tyrepulse.charge_recovery','off',true);
+  END IF;
   RETURN c;
 END $$;
 REVOKE ALL ON FUNCTION private.driver_charge_issue(uuid,uuid,uuid,jsonb,uuid) FROM PUBLIC,anon,authenticated;
@@ -369,6 +463,26 @@ RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
   FROM public.driver_charges c WHERE c.id = p_charge
 $$;
 REVOKE ALL ON FUNCTION private.driver_charge_snapshot(uuid) FROM PUBLIC,anon,authenticated;
+
+-- When a charge that recovers a traffic fine closes, record what was actually
+-- deducted against the fine and release the link unless the fine is settled.
+CREATE FUNCTION private.driver_charge_close_fine(p_charge uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE c public.driver_charges%ROWTYPE; f public.driver_fines%ROWTYPE; paid numeric;
+BEGIN
+  SELECT * INTO c FROM public.driver_charges WHERE id = p_charge;
+  IF NOT FOUND OR c.source_type <> 'driver_fine' THEN RETURN; END IF;
+  SELECT * INTO f FROM public.driver_fines WHERE id = c.source_id AND recovery_charge_id = c.id FOR UPDATE;
+  IF NOT FOUND THEN RETURN; END IF;
+  paid := least(f.amount, f.paid_amount + c.deducted_amount);
+  PERFORM set_config('tyrepulse.charge_recovery','on',true);
+  UPDATE public.driver_fines SET paid_amount = paid,
+    status = CASE WHEN paid >= amount THEN 'settled' ELSE status END,
+    recovery_charge_id = CASE WHEN paid >= amount THEN c.id ELSE NULL END,
+    version = version + 1, updated_at = now() WHERE id = f.id;
+  PERFORM set_config('tyrepulse.charge_recovery','off',true);
+END $$;
+REVOKE ALL ON FUNCTION private.driver_charge_close_fine(uuid) FROM PUBLIC,anon,authenticated;
 
 -- ── The command (routed from public.driver_workspace_command) ────────────────
 CREATE FUNCTION private.driver_charge_command(p_action text, p_payload jsonb, p_request_id uuid)
@@ -399,6 +513,7 @@ BEGIN
   IF access_mode = 'none' THEN RAISE EXCEPTION 'Driver unavailable' USING ERRCODE='42501'; END IF;
   is_driver := EXISTS(SELECT 1 FROM public.driver_account_links WHERE driver_id = d.id AND user_id = actor);
   is_staff := access_mode IN ('manager','supervisor') AND NOT is_driver;
+  -- NOTE every choice below is coalesced: NULL NOT IN (...) is NULL and would pass.
   is_manager := access_mode = 'manager' AND NOT is_driver;
   is_finance := private.driver_workspace_is_finance_reviewer() AND NOT is_driver;
 
@@ -417,7 +532,9 @@ BEGIN
     IF NOT (is_manager OR (is_staff AND c.issued_by = actor)) THEN RAISE EXCEPTION 'Correction not permitted' USING ERRCODE='42501'; END IF;
     IF c.status <> 'issued' OR c.notified_at IS NOT NULL THEN RAISE EXCEPTION 'A notified charge cannot be edited. Reverse it and reissue with a reason.' USING ERRCODE='42501'; END IF;
     IF length(v_reason) < 3 THEN RAISE EXCEPTION 'Correction reason required' USING ERRCODE='22023'; END IF;
-    IF p_payload ? 'amount' AND ((p_payload->>'amount')::numeric IS NULL OR (p_payload->>'amount')::numeric <= 0) THEN RAISE EXCEPTION 'Amount must be greater than zero' USING ERRCODE='22023'; END IF;
+    IF p_payload ? 'amount' AND (NOT private.driver_charge_finite(nullif(p_payload->>'amount','')::numeric) OR (p_payload->>'amount')::numeric <= 0 OR (p_payload->>'amount')::numeric > 1000000) THEN RAISE EXCEPTION 'Amount must be greater than zero and at most 1,000,000' USING ERRCODE='22023'; END IF;
+    IF p_payload ? 'amount' AND c.source_type = 'driver_fine' AND (p_payload->>'amount')::numeric > (SELECT f.amount FROM public.driver_fines f WHERE f.id = c.source_id) THEN RAISE EXCEPTION 'The charge cannot be more than the fine amount' USING ERRCODE='22023'; END IF;
+    IF nullif(p_payload->>'incident_at','') IS NOT NULL AND (p_payload->>'incident_at')::timestamptz > now() THEN RAISE EXCEPTION 'Incident cannot be in the future' USING ERRCODE='22023'; END IF;
     IF p_payload ? 'basis' AND length(btrim(coalesce(p_payload->>'basis',''))) NOT BETWEEN 10 AND 4000 THEN RAISE EXCEPTION 'Write the basis for the charge' USING ERRCODE='22023'; END IF;
     IF nullif(p_payload->>'vehicle_id','') IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.vehicle_fleet v WHERE v.id = (p_payload->>'vehicle_id')::uuid AND v.organisation_id = org AND v.country IS NOT DISTINCT FROM d.country) THEN RAISE EXCEPTION 'Vehicle outside scope' USING ERRCODE='42501'; END IF;
     detail := jsonb_build_object('reason', v_reason, 'before', private.driver_charge_snapshot(c.id), 'changes', p_payload - 'reason' - 'driver_id' - 'charge_id' - 'version');
@@ -444,7 +561,7 @@ BEGIN
   WHEN 'charge_respond' THEN
     IF NOT is_driver THEN RAISE EXCEPTION 'Only the linked driver may respond' USING ERRCODE='42501'; END IF;
     IF c.status <> 'notified' THEN RAISE EXCEPTION 'This charge is not waiting for your response' USING ERRCODE='PT409'; END IF;
-    choice := p_payload->>'response';
+    choice := coalesce(p_payload->>'response','');
     IF choice NOT IN ('accept','dispute') THEN RAISE EXCEPTION 'Choose accept or dispute' USING ERRCODE='22023'; END IF;
     stmt_version := CASE choice WHEN 'accept' THEN 'deduction-consent-v1' ELSE 'receipt-dispute-v1' END;
     IF p_payload->>'statement_version' IS DISTINCT FROM stmt_version OR (p_payload->>'acknowledged')::boolean IS DISTINCT FROM true THEN RAISE EXCEPTION 'Read and confirm the statement before signing' USING ERRCODE='22023'; END IF;
@@ -459,30 +576,46 @@ BEGIN
     UPDATE public.driver_charges SET status = CASE choice WHEN 'accept' THEN 'accepted' ELSE 'disputed' END,
       driver_response = CASE choice WHEN 'accept' THEN 'accepted' ELSE 'disputed' END,
       response_explanation = nullif(btrim(coalesce(p_payload->>'explanation','')),''), acknowledged_at = now(),
+      refusal_witness_id = NULL, refusal_recorded_by = NULL, refusal_recorded_at = NULL,
       version = version + 1, updated_at = now() WHERE id = c.id;
 
   WHEN 'charge_record_refusal' THEN
+    -- Step 1 of 2: staff record that the driver refused and name the witness
+    -- account. Nothing counts as refused until that witness confirms it.
     IF NOT is_staff THEN RAISE EXCEPTION 'Only staff may record a refusal' USING ERRCODE='42501'; END IF;
     IF c.status <> 'notified' THEN RAISE EXCEPTION 'This charge is not waiting for the driver' USING ERRCODE='PT409'; END IF;
-    IF length(btrim(coalesce(p_payload->>'witness_name',''))) NOT BETWEEN 2 AND 160 OR NOT private.driver_charge_valid_signature(p_payload->>'witness_signature') THEN
-      RAISE EXCEPTION 'A refusal needs a witness name and the witness signature' USING ERRCODE='22023';
-    END IF;
-    IF nullif(p_payload->>'witness_user_id','') IS NOT NULL AND ((p_payload->>'witness_user_id')::uuid = actor
-       OR EXISTS(SELECT 1 FROM public.driver_account_links WHERE driver_id = d.id AND user_id = (p_payload->>'witness_user_id')::uuid)
-       OR NOT EXISTS(SELECT 1 FROM public.profiles p WHERE p.id = (p_payload->>'witness_user_id')::uuid AND p.org_id = org AND p.approved AND NOT coalesce(p.locked,false))) THEN
-      RAISE EXCEPTION 'The witness must be another person, not you or the driver' USING ERRCODE='22023';
+    IF c.refusal_witness_id IS NOT NULL THEN RAISE EXCEPTION 'A refusal is already waiting for the witness to confirm it' USING ERRCODE='PT409'; END IF;
+    target_driver := nullif(p_payload->>'witness_user_id','')::uuid;
+    IF target_driver IS NULL THEN RAISE EXCEPTION 'Choose the witness. The witness confirms the refusal from their own account.' USING ERRCODE='22023'; END IF;
+    IF target_driver = actor OR target_driver = c.issued_by OR target_driver IS NOT DISTINCT FROM c.notified_by
+       OR EXISTS(SELECT 1 FROM public.driver_account_links WHERE driver_id = d.id AND user_id = target_driver)
+       OR NOT EXISTS(SELECT 1 FROM public.profiles p WHERE p.id = target_driver AND p.org_id = org AND coalesce(p.approved,false) AND NOT coalesce(p.locked,false)) THEN
+      RAISE EXCEPTION 'The witness must be another active person: not you, the issuer, the person who served the notice or the driver' USING ERRCODE='22023';
     END IF;
     IF length(v_reason) < 3 THEN RAISE EXCEPTION 'Describe how the notice was presented' USING ERRCODE='22023'; END IF;
+    UPDATE public.driver_charges SET refusal_witness_id = target_driver, refusal_recorded_by = actor, refusal_recorded_at = now(),
+      response_explanation = v_reason, version = version + 1, updated_at = now() WHERE id = c.id;
+    INSERT INTO public.notifications(user_id, type, title, body, entity_type, entity_id)
+      VALUES (target_driver, 'driver_workspace', 'Confirm a refusal you witnessed', 'Open the driver workspace to confirm and sign the refusal you witnessed.', 'driver_workspace', d.id::text);
+    target_driver := NULL;
+
+  WHEN 'charge_witness_confirm' THEN
+    -- Step 2 of 2: only the named witness, signing in as themselves.
+    IF c.status <> 'notified' OR c.refusal_witness_id IS DISTINCT FROM actor THEN RAISE EXCEPTION 'You are not the witness named for this refusal' USING ERRCODE='42501'; END IF;
+    IF is_driver OR actor = c.issued_by OR actor IS NOT DISTINCT FROM c.notified_by OR actor IS NOT DISTINCT FROM c.refusal_recorded_by THEN RAISE EXCEPTION 'The witness must be an independent person' USING ERRCODE='42501'; END IF;
+    IF p_payload->>'statement_version' IS DISTINCT FROM 'refusal-witness-v1' OR (p_payload->>'acknowledged')::boolean IS DISTINCT FROM true THEN RAISE EXCEPTION 'Read and confirm the statement before signing' USING ERRCODE='22023'; END IF;
+    IF NOT private.driver_charge_valid_signature(p_payload->>'signature') THEN RAISE EXCEPTION 'Valid signature required' USING ERRCODE='22023'; END IF;
+    SELECT full_name INTO signer FROM public.profiles WHERE id = actor;
     INSERT INTO public.driver_charge_signatures(charge_id, driver_id, organisation_id, kind, signer_id, signer_name, statement_version, statement_text, signature, charge_version, charge_snapshot, recorded_by)
-      VALUES (c.id, d.id, org, 'refusal_witness', nullif(p_payload->>'witness_user_id','')::uuid, btrim(p_payload->>'witness_name'), 'refusal-witness-v1',
-        private.driver_charge_statement('refusal-witness-v1'), p_payload->>'witness_signature', c.version, private.driver_charge_snapshot(c.id), actor);
-    UPDATE public.driver_charges SET status = 'refused', driver_response = 'refused', response_explanation = v_reason, version = version + 1, updated_at = now() WHERE id = c.id;
+      VALUES (c.id, d.id, org, 'refusal_witness', actor, coalesce(nullif(btrim(signer),''), 'Witness'), 'refusal-witness-v1',
+        private.driver_charge_statement('refusal-witness-v1'), p_payload->>'signature', c.version, private.driver_charge_snapshot(c.id), actor);
+    UPDATE public.driver_charges SET status = 'refused', driver_response = 'refused', version = version + 1, updated_at = now() WHERE id = c.id;
 
   WHEN 'charge_supervisor_review' THEN
     IF NOT is_staff THEN RAISE EXCEPTION 'Supervisor review not permitted' USING ERRCODE='42501'; END IF;
     IF c.status NOT IN ('accepted','disputed','refused') THEN RAISE EXCEPTION 'Charge is not waiting for supervisor review' USING ERRCODE='PT409'; END IF;
     IF length(v_reason) < 3 THEN RAISE EXCEPTION 'Review reason required' USING ERRCODE='22023'; END IF;
-    choice := p_payload->>'decision';
+    choice := coalesce(p_payload->>'decision','');
     IF choice NOT IN ('approve','return') THEN RAISE EXCEPTION 'Invalid review decision' USING ERRCODE='22023'; END IF;
     INSERT INTO public.driver_charge_decisions(charge_id, driver_id, organisation_id, stage, decision, reason, decided_by, charge_version, details)
       VALUES (c.id, d.id, org, 'supervisor', choice, v_reason, actor, c.version, detail);
@@ -495,7 +628,7 @@ BEGIN
     IF NOT is_finance THEN RAISE EXCEPTION 'Finance review not permitted' USING ERRCODE='42501'; END IF;
     IF c.status <> 'supervisor_approved' THEN RAISE EXCEPTION 'Charge is not waiting for finance' USING ERRCODE='PT409'; END IF;
     IF length(v_reason) < 3 THEN RAISE EXCEPTION 'Review reason required' USING ERRCODE='22023'; END IF;
-    choice := p_payload->>'decision';
+    choice := coalesce(p_payload->>'decision','');
     IF choice NOT IN ('approve','return') THEN RAISE EXCEPTION 'Invalid review decision' USING ERRCODE='22023'; END IF;
     INSERT INTO public.driver_charge_decisions(charge_id, driver_id, organisation_id, stage, decision, reason, decided_by, charge_version, details)
       VALUES (c.id, d.id, org, 'finance', choice, v_reason, actor, c.version, detail);
@@ -513,8 +646,9 @@ BEGIN
         RAISE EXCEPTION 'The driver did not consent. A deduction can be scheduled only after the appeal period ends or an appeal is decided.' USING ERRCODE='22023';
       END IF;
     END IF;
-    wage := (p_payload->>'monthly_wage')::numeric;
-    IF wage IS NULL OR wage <= 0 THEN RAISE EXCEPTION 'Enter the driver monthly wage the limit applies to' USING ERRCODE='22023'; END IF;
+    wage := nullif(p_payload->>'monthly_wage','')::numeric;
+    IF NOT private.driver_charge_finite(wage) OR wage <= 0 OR wage > 1000000 THEN RAISE EXCEPTION 'Enter the driver monthly wage (more than 0 and at most 1,000,000)' USING ERRCODE='22023'; END IF;
+    IF upper(coalesce(p_payload->>'wage_currency','')) IS DISTINCT FROM c.currency THEN RAISE EXCEPTION 'State the wage in the charge currency (%)', c.currency USING ERRCODE='22023'; END IF;
     cap_pct := private.driver_charge_setting('driver_charge_instalment_cap_pct', 20);
     IF cap_pct <= 0 OR cap_pct > 100 THEN RAISE EXCEPTION 'Instalment limit setting is invalid' USING ERRCODE='22023'; END IF;
     cap_amount := round(wage * cap_pct / 100, 2);
@@ -527,7 +661,7 @@ BEGIN
          OR (item->>'due_month')::date < date_trunc('month', current_date)::date OR (last_month IS NOT NULL AND (item->>'due_month')::date <= last_month) THEN
         RAISE EXCEPTION 'Each instalment month must be the first of a month, from this month on, in order' USING ERRCODE='22023';
       END IF;
-      IF (item->>'amount')::numeric IS NULL OR (item->>'amount')::numeric <= 0 OR round((item->>'amount')::numeric,2) > cap_amount THEN
+      IF NOT private.driver_charge_finite(nullif(item->>'amount','')::numeric) OR (item->>'amount')::numeric <= 0 OR round((item->>'amount')::numeric,2) > cap_amount THEN
         RAISE EXCEPTION 'An instalment exceeds the monthly limit of % %', cap_amount, c.currency USING ERRCODE='22023';
       END IF;
       last_month := (item->>'due_month')::date; total := total + round((item->>'amount')::numeric,2);
@@ -535,10 +669,24 @@ BEGIN
         VALUES (c.id, d.id, org, seq, last_month, round((item->>'amount')::numeric,2), c.currency);
     END LOOP;
     IF total <> c.amount - c.deducted_amount THEN RAISE EXCEPTION 'Instalments must add up to the outstanding amount of % %', c.amount - c.deducted_amount, c.currency USING ERRCODE='22023'; END IF;
+    -- The limit is per driver per month across ALL his charges, not per charge.
+    -- The driver row is locked FOR UPDATE above, so two schedules cannot race.
+    -- Traffic fines are only recovered from wages through a charge, so they are covered here.
+    IF EXISTS(SELECT 1 FROM public.driver_charge_instalments i WHERE i.driver_id = d.id AND i.status <> 'cancelled' AND i.currency <> c.currency
+        AND i.due_month IN (SELECT n.due_month FROM public.driver_charge_instalments n WHERE n.charge_id = c.id AND n.status = 'scheduled')) THEN
+      RAISE EXCEPTION 'This driver already has deductions in another currency in one of these months' USING ERRCODE='22023';
+    END IF;
+    SELECT i.due_month, sum(i.amount) INTO last_month, total FROM public.driver_charge_instalments i
+      WHERE i.driver_id = d.id AND i.status <> 'cancelled' AND i.currency = c.currency
+        AND i.due_month IN (SELECT n.due_month FROM public.driver_charge_instalments n WHERE n.charge_id = c.id AND n.status = 'scheduled')
+      GROUP BY i.due_month HAVING sum(i.amount) > cap_amount ORDER BY i.due_month LIMIT 1;
+    IF FOUND THEN
+      RAISE EXCEPTION 'In % this driver''s deductions across all charges would be % %, above the monthly limit of % %', to_char(last_month,'YYYY-MM'), total, c.currency, cap_amount, c.currency USING ERRCODE='22023';
+    END IF;
     IF length(v_reason) < 3 THEN v_reason := 'Deduction schedule recorded'; END IF;
     INSERT INTO public.driver_charge_decisions(charge_id, driver_id, organisation_id, stage, decision, reason, decided_by, charge_version, details)
       VALUES (c.id, d.id, org, 'schedule', 'scheduled', v_reason, actor, c.version, jsonb_build_object('monthly_wage', wage, 'cap_pct', cap_pct, 'cap_amount', cap_amount, 'instalments', p_payload->'instalments'));
-    UPDATE public.driver_charges SET status = 'scheduled', schedule_monthly_wage = wage, schedule_cap_pct = cap_pct, schedule_cap_amount = cap_amount,
+    UPDATE public.driver_charges SET status = 'scheduled', schedule_monthly_wage = wage, schedule_wage_currency = c.currency, schedule_cap_pct = cap_pct, schedule_cap_amount = cap_amount,
       scheduled_by = actor, scheduled_at = now(), version = version + 1, updated_at = now() WHERE id = c.id;
     notify_driver := true;
 
@@ -556,6 +704,7 @@ BEGIN
     UPDATE public.driver_charges SET deducted_amount = deducted_amount + inst.amount,
       status = CASE WHEN deducted_amount + inst.amount >= amount THEN 'deducted' ELSE status END,
       version = version + 1, updated_at = now() WHERE id = c.id;
+    IF c.deducted_amount + inst.amount >= c.amount THEN PERFORM private.driver_charge_close_fine(c.id); END IF;
 
   WHEN 'charge_waive' THEN
     IF NOT (is_manager OR is_finance) THEN RAISE EXCEPTION 'Waiver not permitted' USING ERRCODE='42501'; END IF;
@@ -565,6 +714,7 @@ BEGIN
       VALUES (c.id, d.id, org, 'waiver', 'waive', v_reason, actor, c.version, detail);
     UPDATE public.driver_charge_instalments SET status = 'cancelled' WHERE charge_id = c.id AND status = 'scheduled';
     UPDATE public.driver_charges SET status = 'waived', close_reason = v_reason, version = version + 1, updated_at = now() WHERE id = c.id;
+    PERFORM private.driver_charge_close_fine(c.id);
     notify_driver := true;
 
   WHEN 'charge_reverse' THEN
@@ -580,6 +730,7 @@ BEGIN
     UPDATE public.driver_charge_instalments SET status = 'cancelled' WHERE charge_id = c.id AND status = 'scheduled';
     UPDATE public.driver_charges SET status = 'cancelled_wrongly_issued', reversal_code = p_payload->>'reversal_code', close_reason = v_reason,
       version = version + 1, updated_at = now() WHERE id = c.id;
+    PERFORM private.driver_charge_close_fine(c.id);
     IF reissue IS NOT NULL THEN
       target_driver := coalesce(nullif(reissue->>'driver_id','')::uuid, d.id);
       IF p_payload->>'reversal_code' = 'wrong_driver' AND target_driver = d.id THEN RAISE EXCEPTION 'Choose the correct driver for the reissued charge' USING ERRCODE='22023'; END IF;
@@ -609,7 +760,7 @@ BEGIN
   WHEN 'charge_decide_appeal' THEN
     IF NOT (is_staff OR is_finance) THEN RAISE EXCEPTION 'Appeal decision not permitted' USING ERRCODE='42501'; END IF;
     IF c.status <> 'under_appeal' THEN RAISE EXCEPTION 'No open appeal' USING ERRCODE='PT409'; END IF;
-    choice := p_payload->>'outcome';
+    choice := coalesce(p_payload->>'outcome','');
     IF choice NOT IN ('upheld','allowed') THEN RAISE EXCEPTION 'Choose upheld or allowed' USING ERRCODE='22023'; END IF;
     IF length(v_reason) < 10 THEN RAISE EXCEPTION 'Explain the appeal decision (at least 10 characters)' USING ERRCODE='22023'; END IF;
     SELECT * INTO ap FROM public.driver_charge_appeals WHERE charge_id = c.id FOR UPDATE;
@@ -619,6 +770,7 @@ BEGIN
     IF choice = 'allowed' THEN
       UPDATE public.driver_charge_instalments SET status = 'cancelled' WHERE charge_id = c.id AND status = 'scheduled';
       UPDATE public.driver_charges SET status = 'waived', close_reason = 'Appeal allowed: '||v_reason, version = version + 1, updated_at = now() WHERE id = c.id;
+      PERFORM private.driver_charge_close_fine(c.id);
     ELSE
       UPDATE public.driver_charges SET status = ap.prior_status, version = version + 1, updated_at = now() WHERE id = c.id;
     END IF;
@@ -668,8 +820,10 @@ BEGIN
   IF c.status = 'issued' AND (mgr OR (staff AND c.issued_by = auth.uid())) THEN a := a || ARRAY['charge_correct','charge_attach_evidence']; END IF;
   IF c.status = 'issued' AND staff THEN a := array_append(a, 'charge_notify'); END IF;
   IF c.status = 'notified' AND is_driver THEN a := array_append(a, 'charge_respond'); END IF;
-  IF c.status = 'notified' AND staff THEN a := array_append(a, 'charge_record_refusal'); END IF;
-  IF c.status IN ('accepted','disputed','refused') AND staff AND c.issued_by <> auth.uid() THEN a := array_append(a, 'charge_supervisor_review'); END IF;
+  IF c.status = 'notified' AND staff AND c.refusal_witness_id IS NULL THEN a := array_append(a, 'charge_record_refusal'); END IF;
+  IF c.status = 'notified' AND c.refusal_witness_id = auth.uid() AND NOT is_driver THEN a := array_append(a, 'charge_witness_confirm'); END IF;
+  IF c.status IN ('accepted','disputed','refused') AND staff AND c.issued_by <> auth.uid() AND c.notified_by IS DISTINCT FROM auth.uid()
+     AND c.refusal_witness_id IS DISTINCT FROM auth.uid() THEN a := array_append(a, 'charge_supervisor_review'); END IF;
   IF c.status = 'supervisor_approved' AND fin THEN a := array_append(a, 'charge_finance_review'); END IF;
   IF c.status = 'finance_approved' AND fin THEN a := array_append(a, 'charge_schedule'); END IF;
   IF c.status = 'scheduled' AND fin THEN a := array_append(a, 'charge_record_deduction'); END IF;
@@ -753,13 +907,34 @@ GRANT EXECUTE ON FUNCTION public.driver_charge_detail(uuid) TO authenticated;
 CREATE FUNCTION public.driver_charge_sources(p_source_type text, p_driver_id uuid, p_search text DEFAULT '', p_offset integer DEFAULT 0)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
 DECLARE org uuid := public.app_current_org(); tbl text := private.driver_charge_source_table(p_source_type); result jsonb;
+  cols text[]; search_expr text; extra text := ''; d public.drivers%ROWTYPE;
 BEGIN
   IF auth.uid() IS NULL OR org IS NULL OR NOT coalesce(public.app_is_active(),false) OR private.driver_workspace_access(p_driver_id) NOT IN ('manager','supervisor') THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501'; END IF;
   IF tbl IS NULL OR p_offset IS NULL OR p_offset < 0 OR p_offset > 1000000 OR length(coalesce(p_search,'')) > 160 THEN RAISE EXCEPTION 'Invalid search' USING ERRCODE='22023'; END IF;
   IF to_regclass('public.'||tbl) IS NULL THEN RETURN '[]'::jsonb; END IF;
-  EXECUTE format('SELECT coalesce(jsonb_agg(x),''[]'') FROM (SELECT r.id, private.driver_charge_source_summary($1,$2,r.id,$3) AS summary FROM public.%I r WHERE r.organisation_id=$1 %s AND to_jsonb(r)::text ILIKE $4 ORDER BY r.created_at DESC NULLS LAST, r.id LIMIT 101 OFFSET $5) x',
-    tbl, CASE WHEN p_source_type = 'driver_fine' THEN 'AND r.driver_id=$3' ELSE '' END)
-    INTO result USING org, p_source_type, p_driver_id, '%'||coalesce(p_search,'')||'%', p_offset;
+  SELECT * INTO d FROM public.drivers WHERE id = p_driver_id;
+  -- Search only these human-readable columns, never the whole row.
+  cols := CASE p_source_type
+    WHEN 'accident' THEN ARRAY['reference_no','asset_no','plate_number','driver_name','description']
+    WHEN 'handover_report' THEN ARRAY['asset_no','from_driver','to_driver','notes']
+    WHEN 'inspection' THEN ARRAY['title','asset_no','inspector','notes']
+    WHEN 'checklist_submission' THEN ARRAY['template_name','title','asset_no']
+    WHEN 'tyre_record' THEN ARRAY['serial_no','asset_no','job_card','driver_name','description']
+    WHEN 'driver_fine' THEN ARRAY['notice_reference','authority','description'] END;
+  SELECT coalesce(string_agg(format('r.%I::text', c.column_name), ',' ORDER BY c.ordinal_position), '') INTO search_expr
+    FROM information_schema.columns c WHERE c.table_schema = 'public' AND c.table_name = tbl AND c.column_name = ANY(cols);
+  IF search_expr = '' THEN search_expr := 'NULL::text'; END IF;
+  IF EXISTS(SELECT 1 FROM information_schema.columns c WHERE c.table_schema = 'public' AND c.table_name = tbl AND c.column_name = 'country') THEN
+    extra := ' AND (nullif(btrim(r.country),'''') IS NULL OR lower(btrim(r.country)) = lower(btrim($6)))';
+  END IF;
+  IF p_source_type = 'driver_fine' THEN
+    extra := extra || ' AND r.driver_id = $3 AND r.status = ''open'' AND r.response_status = ''approved'' AND r.review_stage = ''complete'' AND r.paid_amount = 0 AND r.recovery_charge_id IS NULL';
+  END IF;
+  EXECUTE format('SELECT coalesce(jsonb_agg(jsonb_build_object(''id'', x.id, ''summary'', x.summary) ORDER BY x.created_at DESC NULLS LAST, x.id), ''[]'') FROM ('
+    || 'SELECT y.* FROM (SELECT r.id, r.created_at, private.driver_charge_source_summary($1,$2,r.id,$3) AS summary FROM public.%I r WHERE r.organisation_id = $1 %s'
+    || ' AND ($4 = '''' OR concat_ws('' '', %s) ILIKE ''%%''||$4||''%%'')) y WHERE y.summary IS NOT NULL ORDER BY y.created_at DESC NULLS LAST, y.id LIMIT 101 OFFSET $5) x',
+    tbl, extra, search_expr)
+    INTO result USING org, p_source_type, p_driver_id, coalesce(p_search,''), p_offset, d.country;
   RETURN result;
 END $$;
 REVOKE ALL ON FUNCTION public.driver_charge_sources(text,uuid,text,integer) FROM PUBLIC,anon;
@@ -771,7 +946,7 @@ GRANT EXECUTE ON FUNCTION public.driver_charge_sources(text,uuid,text,integer) T
 CREATE TABLE public.accident_liability_approvals (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organisation_id uuid NOT NULL,
-  assessment_id uuid NOT NULL UNIQUE REFERENCES public.accident_liability_assessments(id),
+  assessment_id uuid NOT NULL REFERENCES public.accident_liability_assessments(id),
   accident_id uuid NOT NULL,
   approved_by uuid NOT NULL REFERENCES public.profiles(id),
   approved_at timestamptz NOT NULL DEFAULT now(),
@@ -785,31 +960,77 @@ GRANT SELECT ON public.accident_liability_approvals TO authenticated;
 CREATE POLICY accident_liability_approvals_read ON public.accident_liability_approvals FOR SELECT TO authenticated
   USING (organisation_id = public.app_current_org() AND coalesce(public.app_is_active(),false));
 CREATE TRIGGER accident_liability_approvals_append_only BEFORE UPDATE OR DELETE ON public.accident_liability_approvals FOR EACH ROW EXECUTE FUNCTION private.driver_charge_append_only();
+CREATE INDEX accident_liability_approvals_assessment ON public.accident_liability_approvals(assessment_id, approved_at DESC, id);
+CREATE INDEX accident_liability_approvals_accident ON public.accident_liability_approvals(accident_id);
+
+-- An approved decision can be reopened by an administrator with a reason. The
+-- row is reused (accident_id is unique on assessments), the reopen is audited
+-- and any driver charge it opened is reversed, never deleted.
+CREATE TABLE public.accident_liability_reopens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organisation_id uuid NOT NULL,
+  assessment_id uuid NOT NULL REFERENCES public.accident_liability_assessments(id),
+  accident_id uuid NOT NULL,
+  approval_id uuid REFERENCES public.accident_liability_approvals(id),
+  reversed_charge_id uuid REFERENCES public.driver_charges(id),
+  reason text NOT NULL CHECK (length(btrim(reason)) BETWEEN 10 AND 2000),
+  reopened_by uuid NOT NULL REFERENCES public.profiles(id),
+  reopened_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.accident_liability_reopens ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.accident_liability_reopens FROM PUBLIC,anon,authenticated;
+GRANT SELECT ON public.accident_liability_reopens TO authenticated;
+CREATE POLICY accident_liability_reopens_read ON public.accident_liability_reopens FOR SELECT TO authenticated
+  USING (organisation_id = public.app_current_org() AND coalesce(public.app_is_active(),false));
+CREATE TRIGGER accident_liability_reopens_append_only BEFORE UPDATE OR DELETE ON public.accident_liability_reopens FOR EACH ROW EXECUTE FUNCTION private.driver_charge_append_only();
 
 -- The client can no longer set the approval columns, and an approved row is
--- frozen. Approval flows only through approve_accident_liability(), which sets
--- a transaction-local flag this trigger checks.
+-- frozen except for field_audit (per-field source notes). Approval and reopen
+-- flow only through the definer RPCs, which set a transaction-local flag.
+-- Deleting: an approved assessment, or one with an approval history, is kept
+-- for audit. Deleting the ACCIDENT itself is blocked while an approval exists
+-- (chosen over cascading, so a money decision is never erased by a case delete);
+-- an accident whose assessment was never approved still cascades normally.
 CREATE FUNCTION private.accident_liability_guard()
-RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE approving boolean := coalesce(current_setting('tyrepulse.liability_approval', true),'') = 'on';
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    IF OLD.approved OR OLD.locked THEN RAISE EXCEPTION 'An approved liability assessment cannot be deleted' USING ERRCODE='42501'; END IF;
+    IF OLD.approved OR OLD.locked THEN RAISE EXCEPTION 'An approved liability assessment cannot be deleted. An administrator can reopen it.' USING ERRCODE='42501'; END IF;
+    IF EXISTS(SELECT 1 FROM public.accident_liability_approvals x WHERE x.assessment_id = OLD.id) THEN
+      RAISE EXCEPTION 'This liability assessment has an approval history and is kept for audit.' USING ERRCODE='42501';
+    END IF;
     RETURN OLD;
   END IF;
+  IF approving THEN RETURN NEW; END IF;
   IF TG_OP = 'INSERT' THEN
-    IF NOT approving THEN NEW.approved := false; NEW.approved_by := NULL; NEW.approved_at := NULL; NEW.locked := false; END IF;
+    NEW.approved := false; NEW.approved_by := NULL; NEW.approved_at := NULL; NEW.locked := false;
     RETURN NEW;
   END IF;
   IF OLD.locked OR OLD.approved THEN
-    RAISE EXCEPTION 'Approved liability is locked. Record a new assessment with a change reason.' USING ERRCODE='42501';
+    IF (to_jsonb(NEW) - 'field_audit' - 'updated_at') IS DISTINCT FROM (to_jsonb(OLD) - 'field_audit' - 'updated_at') THEN
+      RAISE EXCEPTION 'Approved liability is locked. An administrator can reopen it with a reason.' USING ERRCODE='42501';
+    END IF;
+    RETURN NEW;
   END IF;
-  IF NOT approving THEN NEW.approved := OLD.approved; NEW.approved_by := OLD.approved_by; NEW.approved_at := OLD.approved_at; NEW.locked := OLD.locked; END IF;
+  NEW.approved := OLD.approved; NEW.approved_by := OLD.approved_by; NEW.approved_at := OLD.approved_at; NEW.locked := OLD.locked;
   RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION private.accident_liability_guard() FROM PUBLIC,anon,authenticated;
 CREATE TRIGGER accident_liability_guard BEFORE INSERT OR UPDATE OR DELETE ON public.accident_liability_assessments
   FOR EACH ROW EXECUTE FUNCTION private.accident_liability_guard();
+
+CREATE FUNCTION private.accident_liability_delete_guard()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  IF EXISTS(SELECT 1 FROM public.accident_liability_approvals x WHERE x.accident_id = OLD.id) THEN
+    RAISE EXCEPTION 'This accident has an approved liability decision on record and cannot be deleted. Close the case instead.' USING ERRCODE='42501';
+  END IF;
+  RETURN OLD;
+END $$;
+REVOKE ALL ON FUNCTION private.accident_liability_delete_guard() FROM PUBLIC,anon,authenticated;
+CREATE TRIGGER accident_liability_delete_guard BEFORE DELETE ON public.accidents
+  FOR EACH ROW EXECUTE FUNCTION private.accident_liability_delete_guard();
 
 CREATE FUNCTION public.approve_accident_liability(p_assessment_id uuid, p_reason text, p_charge jsonb DEFAULT NULL)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
@@ -821,6 +1042,7 @@ BEGIN
   SELECT * INTO a FROM public.accident_liability_assessments WHERE id = p_assessment_id AND organisation_id = org FOR UPDATE;
   IF NOT FOUND OR NOT coalesce(public.app_can_see_country(a.country),false) OR NOT coalesce(public.app_can_see_site(a.site),false) THEN RAISE EXCEPTION 'Assessment unavailable' USING ERRCODE='42501'; END IF;
   IF a.approved OR a.locked THEN RAISE EXCEPTION 'This assessment is already approved' USING ERRCODE='PT409'; END IF;
+  IF a.created_by = actor THEN RAISE EXCEPTION 'The person who recorded the assessment cannot approve it' USING ERRCODE='42501'; END IF;
   IF length(btrim(coalesce(p_reason,''))) < 3 THEN RAISE EXCEPTION 'Approval reason required' USING ERRCODE='22023'; END IF;
   IF a.payer = 'driver_recovery' THEN
     IF p_charge IS NULL OR jsonb_typeof(p_charge) <> 'object' OR nullif(p_charge->>'driver_id','') IS NULL THEN RAISE EXCEPTION 'Choose the driver to recover from' USING ERRCODE='22023'; END IF;
@@ -852,6 +1074,48 @@ END $$;
 REVOKE ALL ON FUNCTION public.approve_accident_liability(uuid,text,jsonb) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.approve_accident_liability(uuid,text,jsonb) TO authenticated;
 
+CREATE FUNCTION public.reopen_accident_liability(p_assessment_id uuid, p_reason text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE actor uuid := auth.uid(); org uuid := public.app_current_org(); a public.accident_liability_assessments%ROWTYPE;
+  ap public.accident_liability_approvals%ROWTYPE; c public.driver_charges%ROWTYPE; reversed uuid; reopen_id uuid; why text := btrim(coalesce(p_reason,''));
+BEGIN
+  IF actor IS NULL OR org IS NULL OR NOT coalesce(public.app_is_active(),false) THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501'; END IF;
+  IF NOT (coalesce(public.is_super_admin(),false) OR coalesce(public.app_is_org_admin(),false)) THEN
+    RAISE EXCEPTION 'Only an administrator can reopen an approved liability decision' USING ERRCODE='42501';
+  END IF;
+  SELECT * INTO a FROM public.accident_liability_assessments WHERE id = p_assessment_id AND organisation_id = org FOR UPDATE;
+  IF NOT FOUND OR NOT coalesce(public.app_can_see_country(a.country),false) OR NOT coalesce(public.app_can_see_site(a.site),false) THEN RAISE EXCEPTION 'Assessment unavailable' USING ERRCODE='42501'; END IF;
+  IF NOT (a.approved OR a.locked) THEN RAISE EXCEPTION 'This assessment is not approved' USING ERRCODE='PT409'; END IF;
+  IF length(why) NOT BETWEEN 10 AND 2000 THEN RAISE EXCEPTION 'Explain why the decision is reopened (at least 10 characters)' USING ERRCODE='22023'; END IF;
+  SELECT * INTO ap FROM public.accident_liability_approvals WHERE assessment_id = a.id ORDER BY approved_at DESC, id DESC LIMIT 1;
+  IF ap.driver_charge_id IS NOT NULL THEN
+    SELECT * INTO c FROM public.driver_charges WHERE id = ap.driver_charge_id FOR UPDATE;
+    IF c.deducted_amount > 0 OR c.status = 'deducted' THEN
+      RAISE EXCEPTION 'Deductions are already recorded on driver charge %. Waive the remainder on that charge before reopening.', c.charge_no USING ERRCODE='PT409';
+    END IF;
+    IF c.status NOT IN ('waived','cancelled_wrongly_issued') THEN
+      INSERT INTO public.driver_charge_decisions(charge_id, driver_id, organisation_id, stage, decision, reason, decided_by, charge_version, details)
+        VALUES (c.id, c.driver_id, org, 'reversal', 'reverse', 'Accident liability reopened: '||why, actor, c.version,
+          jsonb_build_object('source', 'accident_liability_reopen', 'assessment_id', a.id));
+      UPDATE public.driver_charge_instalments SET status = 'cancelled' WHERE charge_id = c.id AND status = 'scheduled';
+      UPDATE public.driver_charges SET status = 'cancelled_wrongly_issued', reversal_code = 'other', close_reason = 'Accident liability reopened: '||why,
+        version = version + 1, updated_at = now() WHERE id = c.id;
+      INSERT INTO public.driver_workspace_events(organisation_id, driver_id, charge_id, actor_id, action, details)
+        VALUES (org, c.driver_id, c.id, actor, 'charge_reverse', jsonb_build_object('source', 'accident_liability_reopen', 'assessment_id', a.id, 'reason', why));
+      reversed := c.id;
+    END IF;
+  END IF;
+  PERFORM set_config('tyrepulse.liability_approval','on',true);
+  UPDATE public.accident_liability_assessments SET approved = false, approved_by = NULL, approved_at = NULL, locked = false,
+    change_reason = why, updated_at = now() WHERE id = a.id;
+  PERFORM set_config('tyrepulse.liability_approval','off',true);
+  INSERT INTO public.accident_liability_reopens(organisation_id, assessment_id, accident_id, approval_id, reversed_charge_id, reason, reopened_by)
+    VALUES (org, a.id, a.accident_id, ap.id, reversed, why, actor) RETURNING id INTO reopen_id;
+  RETURN jsonb_build_object('assessment_id', a.id, 'reopen_id', reopen_id, 'reversed_charge_id', reversed);
+END $$;
+REVOKE ALL ON FUNCTION public.reopen_accident_liability(uuid,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.reopen_accident_liability(uuid,text) TO authenticated;
+
 -- ============================================================================
 -- DRIVER EXPENSES: owner edits a pending claim; review is server stamped.
 -- ============================================================================
@@ -864,6 +1128,12 @@ CREATE FUNCTION private.driver_expense_guard()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE reviewing boolean := coalesce(current_setting('tyrepulse.expense_review', true),'') = 'on';
 BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.status <> 'pending' AND NOT coalesce(public.is_super_admin(),false) THEN
+      RAISE EXCEPTION 'A reviewed expense claim is kept for audit' USING ERRCODE='42501';
+    END IF;
+    RETURN OLD;
+  END IF;
   IF TG_OP = 'INSERT' THEN
     IF NOT reviewing THEN
       NEW.status := 'pending'; NEW.reviewed_by := NULL; NEW.reviewed_at := NULL; NEW.review_reason := NULL;
@@ -882,7 +1152,7 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION private.driver_expense_guard() FROM PUBLIC,anon,authenticated;
 DROP TRIGGER IF EXISTS driver_expense_guard ON public.driver_expenses;
-CREATE TRIGGER driver_expense_guard BEFORE INSERT OR UPDATE ON public.driver_expenses FOR EACH ROW EXECUTE FUNCTION private.driver_expense_guard();
+CREATE TRIGGER driver_expense_guard BEFORE INSERT OR UPDATE OR DELETE ON public.driver_expenses FOR EACH ROW EXECUTE FUNCTION private.driver_expense_guard();
 
 DROP POLICY IF EXISTS driver_expenses_update ON public.driver_expenses;
 DROP POLICY IF EXISTS driver_expenses_delete ON public.driver_expenses;
@@ -890,31 +1160,42 @@ CREATE POLICY driver_expenses_update ON public.driver_expenses FOR UPDATE TO aut
   USING ((created_by = auth.uid() AND status = 'pending') OR coalesce(public.app_is_elevated(),false))
   WITH CHECK ((created_by = auth.uid() AND status = 'pending') OR coalesce(public.app_is_elevated(),false));
 CREATE POLICY driver_expenses_delete ON public.driver_expenses FOR DELETE TO authenticated
-  USING ((created_by = auth.uid() AND status = 'pending') OR coalesce(public.app_is_elevated(),false));
+  USING ((status = 'pending' AND (created_by = auth.uid() OR coalesce(public.app_is_elevated(),false))) OR coalesce(public.is_super_admin(),false));
 
-CREATE FUNCTION public.review_driver_expense(p_id uuid, p_status text, p_reason text)
+-- p_expected_updated_at is the updated_at the reviewer saw (optimistic check).
+CREATE FUNCTION public.review_driver_expense(p_id uuid, p_status text, p_reason text, p_expected_updated_at timestamptz)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE e public.driver_expenses%ROWTYPE; actor uuid := auth.uid();
+DECLARE e public.driver_expenses%ROWTYPE; actor uuid := auth.uid(); v_site text;
 BEGIN
   IF actor IS NULL OR NOT coalesce(public.app_is_active(),false) OR NOT coalesce(public.app_is_elevated(),false) THEN RAISE EXCEPTION 'Expense review not permitted' USING ERRCODE='42501'; END IF;
+  IF p_expected_updated_at IS NULL THEN RAISE EXCEPTION 'Refresh the claim before reviewing it' USING ERRCODE='22023'; END IF;
   SELECT * INTO e FROM public.driver_expenses WHERE id = p_id AND organisation_id IS NOT DISTINCT FROM public.app_current_org() FOR UPDATE;
   IF NOT FOUND OR NOT (e.country IS NULL OR coalesce(public.app_can_see_country(e.country),false)) THEN RAISE EXCEPTION 'Expense unavailable' USING ERRCODE='42501'; END IF;
+  -- Site: the claim's own site when the column exists, else the vehicle's site.
+  v_site := coalesce(nullif(btrim(to_jsonb(e)->>'site'),''),
+    (SELECT v.site FROM public.vehicle_fleet v WHERE v.organisation_id = e.organisation_id AND v.asset_no = e.asset_no
+       AND (e.country IS NULL OR v.country = e.country) ORDER BY v.id LIMIT 1));
+  IF v_site IS NOT NULL AND NOT coalesce(public.app_can_see_site(v_site),false) THEN RAISE EXCEPTION 'Expense unavailable' USING ERRCODE='42501'; END IF;
+  IF e.updated_at IS DISTINCT FROM p_expected_updated_at THEN RAISE EXCEPTION 'This claim changed since you opened it. Refresh and review again.' USING ERRCODE='PT409'; END IF;
   IF e.created_by = actor THEN RAISE EXCEPTION 'You cannot review your own expense claim' USING ERRCODE='42501'; END IF;
-  IF NOT ((e.status = 'pending' AND p_status IN ('approved','rejected')) OR (e.status = 'approved' AND p_status = 'reimbursed')) THEN RAISE EXCEPTION 'Invalid expense status change' USING ERRCODE='22023'; END IF;
+  IF NOT ((e.status = 'pending' AND coalesce(p_status,'') IN ('approved','rejected')) OR (e.status = 'approved' AND coalesce(p_status,'') = 'reimbursed')) THEN RAISE EXCEPTION 'Invalid expense status change' USING ERRCODE='22023'; END IF;
   IF length(btrim(coalesce(p_reason,''))) < 3 THEN RAISE EXCEPTION 'Review reason required' USING ERRCODE='22023'; END IF;
   PERFORM set_config('tyrepulse.expense_review','on',true);
   UPDATE public.driver_expenses SET status = p_status, reviewed_by = actor, reviewed_at = now(), review_reason = btrim(p_reason), updated_at = now() WHERE id = e.id RETURNING * INTO e;
   PERFORM set_config('tyrepulse.expense_review','off',true);
   RETURN to_jsonb(e);
 END $$;
-REVOKE ALL ON FUNCTION public.review_driver_expense(uuid,text,text) FROM PUBLIC,anon;
-GRANT EXECUTE ON FUNCTION public.review_driver_expense(uuid,text,text) TO authenticated;
+REVOKE ALL ON FUNCTION public.review_driver_expense(uuid,text,text,timestamptz) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.review_driver_expense(uuid,text,text,timestamptz) TO authenticated;
 
 -- Rollback (only while every new table is still empty):
---   DROP FUNCTION public.review_driver_expense(uuid,text,text); DROP TRIGGER driver_expense_guard ON public.driver_expenses;
+--   DROP FUNCTION public.review_driver_expense(uuid,text,text,timestamptz); DROP TRIGGER driver_expense_guard ON public.driver_expenses;
 --   DROP FUNCTION private.driver_expense_guard(); (restore the V152 update/delete policies)
---   DROP FUNCTION public.approve_accident_liability(uuid,text,jsonb); DROP TRIGGER accident_liability_guard ON public.accident_liability_assessments;
---   DROP FUNCTION private.accident_liability_guard(); DROP TABLE public.accident_liability_approvals;
+--   DROP FUNCTION public.reopen_accident_liability(uuid,text), public.approve_accident_liability(uuid,text,jsonb);
+--   DROP TRIGGER accident_liability_guard ON public.accident_liability_assessments; DROP TRIGGER accident_liability_delete_guard ON public.accidents;
+--   DROP FUNCTION private.accident_liability_guard(), private.accident_liability_delete_guard();
+--   DROP TABLE public.accident_liability_reopens, public.accident_liability_approvals;
+--   DROP TRIGGER driver_fine_recovery_guard ON public.driver_fines; ALTER TABLE public.driver_fines DROP COLUMN recovery_charge_id;
 --   restore public.driver_workspace_command from 20260921134725; DROP FUNCTION public.driver_charges_list, public.driver_charge_detail, public.driver_charge_sources;
 --   ALTER TABLE public.driver_workspace_events DROP COLUMN charge_id;
 --   DROP TABLE public.driver_charge_instalments, public.driver_charge_appeals, public.driver_charge_decisions,

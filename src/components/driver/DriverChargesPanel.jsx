@@ -9,6 +9,7 @@ import {
 } from '../../lib/driverCharges'
 import { signatureImage } from '../../lib/driverWorkspace'
 import { toUserMessage } from '../../lib/safeError'
+import { currencyForCountry } from '../../lib/governedCost'
 
 const when = v => (v ? new Date(v).toLocaleString() : 'Not recorded')
 
@@ -34,16 +35,18 @@ function Field({ label, children }) {
   return <div><label className="label">{label}</label>{children}</div>
 }
 
-function initialFor(action, detail) {
+function initialFor(action, detail, driverCountry) {
   const c = detail?.charge
   switch (action) {
-    case 'charge_issue': return { category: 'missing_item', source_type: 'none', currency: 'SAR', evidence: [{ kind: 'document', ref: '', label: '' }] }
+    // Currency comes from the driver's country (the server enforces the same rule).
+    case 'charge_issue': return { category: 'missing_item', source_type: 'none', currency: currencyForCountry(driverCountry) || '', evidence: [{ kind: 'document', ref: '', label: '' }] }
     case 'charge_correct': return { amount: c?.amount ?? '', basis: c?.basis || '', reason: '' }
     case 'charge_attach_evidence': return { kind: 'document', ref: '', label: '' }
     case 'charge_respond': return { response: 'accept', explanation: '' }
     case 'charge_supervisor_review':
     case 'charge_finance_review': return { decision: 'approve', reason: '' }
-    case 'charge_schedule': return { monthly_wage: '', first_month: monthStart(new Date()), reason: '' }
+    case 'charge_schedule': return { monthly_wage: '', wage_currency: c?.currency || '', first_month: monthStart(new Date()), reason: '' }
+    case 'charge_witness_confirm': return { acknowledged: false }
     case 'charge_record_deduction': return { instalment_id: (detail?.instalments || []).find(i => i.status === 'scheduled')?.id || '', payroll_reference: '' }
     case 'charge_reverse': return { reversal_code: 'wrong_amount', reason: '', reissue: false }
     case 'charge_decide_appeal': return { outcome: 'upheld', reason: '' }
@@ -51,8 +54,8 @@ function initialFor(action, detail) {
   }
 }
 
-function ChargeActionForm({ action, driverId, detail, onClose, onSaved }) {
-  const [v, setV] = useState(() => initialFor(action, detail))
+function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, onSaved }) {
+  const [v, setV] = useState(() => initialFor(action, detail, driverCountry))
   const [error, setError] = useState(''); const [saving, setSaving] = useState(false); const [pad, setPad] = useState(null)
   const requestId = useRef(crypto.randomUUID())
   const set = (key, value) => { requestId.current = crypto.randomUUID(); setV(prev => ({ ...prev, [key]: value })) }
@@ -62,6 +65,7 @@ function ChargeActionForm({ action, driverId, detail, onClose, onSaved }) {
   const plan = useMemo(() => (action === 'charge_schedule' && cap ? buildInstalmentPlan(outstanding, cap, v.first_month) : []), [action, cap, outstanding, v.first_month])
   const loadVehicles = useCallback(s => driverWorkspaceOptions('vehicles', s, 0), [])
   const loadDrivers = useCallback(s => driverWorkspaceOptions('drivers', s, 0), [])
+  const loadUsers = useCallback(s => driverWorkspaceOptions('users', s, 0), [])
   const loadSources = useCallback(s => driverChargeSources(v.source_type, driverId, s, 0).then(rows => rows.map(r => ({ id: r.id, label: r.summary?.label || r.id }))), [v.source_type, driverId])
   const statementVersion = v.response === 'dispute' ? 'receipt-dispute-v1' : 'deduction-consent-v1'
 
@@ -78,11 +82,15 @@ function ChargeActionForm({ action, driverId, detail, onClose, onSaved }) {
       message = validateResponse(v)
       payload = { ...payload, response: v.response, explanation: v.explanation, statement_version: statementVersion, statement_language: 'en', acknowledged: !!v.acknowledged, signature: v.signature }
     } else if (action === 'charge_record_refusal') {
-      if ((v.witness_name || '').trim().length < 2 || !v.witness_signature) message = 'A refusal needs the witness name and the witness signature.'
-      payload = { ...payload, witness_name: v.witness_name, witness_signature: v.witness_signature, reason: v.reason }
+      if (!v.witness_user_id) message = 'Choose the witness. They confirm the refusal from their own account.'
+      payload = { ...payload, witness_user_id: v.witness_user_id, reason: v.reason }
+    } else if (action === 'charge_witness_confirm') {
+      if (!v.acknowledged || !v.signature) message = 'Read the statement, confirm it and sign.'
+      payload = { ...payload, statement_version: 'refusal-witness-v1', acknowledged: !!v.acknowledged, signature: v.signature }
     } else if (action === 'charge_schedule') {
       if (!plan.length) message = 'Enter the monthly wage and first month to build the schedule.'
-      payload = { ...payload, monthly_wage: Number(v.monthly_wage), instalments: plan, reason: v.reason }
+      else if (String(v.wage_currency || '').toUpperCase() !== charge?.currency) message = `State the wage in the charge currency (${charge?.currency}).`
+      payload = { ...payload, monthly_wage: Number(v.monthly_wage), wage_currency: String(v.wage_currency || '').toUpperCase(), instalments: plan, reason: v.reason }
     } else if (action === 'charge_reverse') {
       payload = { ...payload, reversal_code: v.reversal_code, reason: v.reason, ...(v.reissue ? { reissue: { driver_id: v.reissue_driver_id || null, ...(v.reissue_amount ? { amount: Number(v.reissue_amount) } : {}), ...(v.reissue_basis ? { basis: v.reissue_basis } : {}) } } : {}) }
     } else if (action === 'charge_correct') {
@@ -136,9 +144,15 @@ function ChargeActionForm({ action, driverId, detail, onClose, onSaved }) {
     </>}
     {action === 'charge_record_refusal' && <>
       <div className="rounded border border-[var(--input-border)] p-3 text-sm">{detail?.statements?.['refusal-witness-v1']}</div>
-      <Field label="Witness full name"><input aria-label="Witness full name" className="input w-full" value={v.witness_name || ''} onChange={e => set('witness_name', e.target.value)} /></Field>
-      <button type="button" className="btn-secondary" onClick={() => setPad('witness_signature')}>Witness signs</button>{v.witness_signature && <img className="max-h-32 bg-white" src={signatureImage(v.witness_signature)} alt="Witness signature" />}
+      <Field label="Witness"><Picker label="witness" load={loadUsers} value={v.witness_user_id} onChange={id => set('witness_user_id', id)} /></Field>
+      <p className="text-xs text-[var(--text-muted)]">The refusal counts only after the witness signs in and confirms it. The witness cannot be you, the issuer, the person who served the notice or the driver.</p>
       {reasonField('Where and how the notice was presented')}
+    </>}
+    {action === 'charge_witness_confirm' && <>
+      <div className="rounded border border-[var(--input-border)] p-3 text-sm">{detail?.statements?.['refusal-witness-v1'] || 'Statement unavailable. Refresh before signing.'}</div>
+      {charge?.response_explanation && <p className="text-sm"><strong>Recorded by staff:</strong> {charge.response_explanation}</p>}
+      <label className="flex gap-3"><input type="checkbox" checked={!!v.acknowledged} disabled={!detail?.statements?.['refusal-witness-v1']} onChange={e => set('acknowledged', e.target.checked)} /><span>I witnessed this and have read the statement.</span></label>
+      <button type="button" className="btn-secondary" onClick={() => setPad('signature')}>Draw signature</button>{v.signature && <img className="max-h-32 bg-white" src={signatureImage(v.signature)} alt="Your signature" />}
     </>}
     {['charge_supervisor_review', 'charge_finance_review'].includes(action) && <>
       <Field label="Decision"><select aria-label="Decision" className="input w-full" value={v.decision} onChange={e => set('decision', e.target.value)}><option value="approve">Approve</option><option value="return">Return</option></select></Field>
@@ -147,7 +161,9 @@ function ChargeActionForm({ action, driverId, detail, onClose, onSaved }) {
     </>}
     {action === 'charge_schedule' && <>
       <p className="text-sm">Outstanding: {money(outstanding, charge?.currency)}. Limit per month: {detail?.settings?.cap_pct}% of the monthly wage.</p>
-      <Field label="Driver monthly wage"><input aria-label="Driver monthly wage" type="number" step="0.01" className="input w-full" value={v.monthly_wage} onChange={e => set('monthly_wage', e.target.value)} /></Field>
+      <div className="grid grid-cols-2 gap-3"><Field label="Driver monthly wage"><input aria-label="Driver monthly wage" type="number" step="0.01" min="0" className="input w-full" value={v.monthly_wage} onChange={e => set('monthly_wage', e.target.value)} /></Field>
+        <Field label="Wage currency"><input aria-label="Wage currency" className="input w-full" maxLength={3} value={v.wage_currency || ''} onChange={e => set('wage_currency', e.target.value.toUpperCase())} /></Field></div>
+      <p className="text-xs text-[var(--text-muted)]">The limit applies to all of this driver's deductions in a month, across every charge.</p>
       <Field label="First deduction month"><input aria-label="First deduction month" type="month" className="input w-full" value={(v.first_month || '').slice(0, 7)} onChange={e => set('first_month', e.target.value ? `${e.target.value}-01` : '')} /></Field>
       {cap && <p className="text-sm">Highest instalment: {money(cap, charge?.currency)}</p>}
       {plan.length > 0 && <table className="w-full text-sm"><thead><tr><th className="text-start">Month</th><th className="text-end">Amount</th></tr></thead><tbody>{plan.map(p => <tr key={p.due_month}><td>{p.due_month.slice(0, 7)}</td><td className="text-end">{money(p.amount, charge?.currency)}</td></tr>)}</tbody></table>}
@@ -175,11 +191,11 @@ function ChargeActionForm({ action, driverId, detail, onClose, onSaved }) {
       <p className="text-xs text-[var(--text-muted)]">Only a person who did not issue or approve this charge may decide the appeal.</p>
     </>}
     {error && <p role="alert" className="text-red-500">{error}</p>}
-    {pad && <SignaturePad label={pad === 'signature' ? 'Driver signature' : 'Witness signature'} onSave={sig => { set(pad, sig); setPad(null) }} onClose={() => setPad(null)} />}
+    {pad && <SignaturePad label={action === 'charge_witness_confirm' ? 'Witness signature' : 'Driver signature'} onSave={sig => { set(pad, sig); setPad(null) }} onClose={() => setPad(null)} />}
   </form></Modal>
 }
 
-function ChargeDetail({ chargeId, driverId, onClose, onChanged }) {
+function ChargeDetail({ chargeId, driverId, driverCountry, onClose, onChanged }) {
   const [detail, setDetail] = useState(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(true)
   const [action, setAction] = useState(null); const [exporting, setExporting] = useState(false)
   const load = useCallback(async () => {
@@ -215,11 +231,11 @@ function ChargeDetail({ chargeId, driverId, onClose, onChanged }) {
       {detail.instalments.length > 0 && <div><h4 className="font-semibold">Deduction schedule</h4><p>Limit per month: {money(c.schedule_cap_amount, c.currency)} ({c.schedule_cap_pct}% of {money(c.schedule_monthly_wage, c.currency)})</p>{detail.instalments.map(i => <p key={i.id}>{i.seq}. {i.due_month.slice(0, 7)} | {money(i.amount, i.currency)} | {enumLabel('instalment_status', i.status)}{i.payroll_reference ? ` | ${i.payroll_reference}` : ''}</p>)}</div>}
       <details><summary>Full timeline ({detail.events.length})</summary>{detail.events.map(e => <p key={e.id}>{when(e.created_at)} | {e.actor_name || 'System'} | {enumLabel('action', e.action)} {e.details?.reason ? `| ${e.details.reason}` : ''}</p>)}</details>
     </div>}
-    {action && <ChargeActionForm action={action} driverId={driverId} detail={detail} onClose={() => setAction(null)} onSaved={() => { setAction(null); load(); onChanged() }} />}
+    {action && <ChargeActionForm action={action} driverId={driverId} driverCountry={driverCountry || detail?.driver?.country} detail={detail} onClose={() => setAction(null)} onSaved={() => { setAction(null); load(); onChanged() }} />}
   </Modal>
 }
 
-export default function DriverChargesPanel({ driverId, canIssue }) {
+export default function DriverChargesPanel({ driverId, driverCountry, canIssue }) {
   const [data, setData] = useState(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(true)
   const [status, setStatus] = useState(''); const [category, setCategory] = useState(''); const [search, setSearch] = useState(''); const [query, setQuery] = useState('')
   const [open, setOpen] = useState(null); const [issuing, setIssuing] = useState(false); const [offset, setOffset] = useState(0)
@@ -249,7 +265,7 @@ export default function DriverChargesPanel({ driverId, canIssue }) {
       <p>{enumLabel('status', r.status)}{r.source_label ? ` | ${r.source_label}` : ''}{r.asset_no ? ` | ${r.asset_no}` : ''}</p>
     </button>)}</div>
     <div className="flex gap-2">{offset > 0 && <button type="button" className="btn-secondary" onClick={() => setOffset(offset - 100)}>Previous</button>}{(data?.rows || []).length > 100 && <button type="button" className="btn-secondary" onClick={() => setOffset(offset + 100)}>Next</button>}</div>
-    {open && <ChargeDetail chargeId={open} driverId={driverId} onClose={() => setOpen(null)} onChanged={load} />}
-    {issuing && <ChargeActionForm action="charge_issue" driverId={driverId} detail={null} onClose={() => setIssuing(false)} onSaved={() => { setIssuing(false); load() }} />}
+    {open && <ChargeDetail chargeId={open} driverId={driverId} driverCountry={driverCountry} onClose={() => setOpen(null)} onChanged={load} />}
+    {issuing && <ChargeActionForm action="charge_issue" driverId={driverId} driverCountry={driverCountry} detail={null} onClose={() => setIssuing(false)} onSaved={() => { setIssuing(false); load() }} />}
   </section>
 }

@@ -204,3 +204,51 @@ describe('buildLedgerPlan', () => {
     expect(payload.lines.some((l) => 'delta' in l)).toBe(false)
   })
 })
+
+describe('third review round', () => {
+  const head = SHEET.slice(0, 6)
+  const line = (code, desc, qty) => [code, desc, '', 'QID-UP-ST', 'null', 'null', String(qty), '10', '', '10']
+  const tail = [['TOTAL', '', '', '', '', '', '3', '', '', ''], ['<End Of Report>']]
+
+  it('skips a repeated page header and a sub total row instead of blocking the file', () => {
+    const p = parseStoreLedger([...head, line('A-1', 'BOLT', 1), SHEET[5], ['Sub Total', '', '', '', '', '', '1', '', '', ''], line('A-2', 'NUT', 2), ...tail])
+    expect(p.rejected).toEqual([])
+    expect(p.lines.map((l) => l.code)).toEqual(['A-1', 'A-2'])
+    expect(postBlockers(p)).toEqual([])
+  })
+
+  it('follows the owner category: a code changed to tyre is held, changed away from tyre is posted', () => {
+    const lines = [{ code: 'N-1', description: 'TIRE 315/80 R22.5', qty: 4, rate: null }, { code: 'N-2', description: 'BRAKE PAD', qty: 2, rate: null }]
+    const auto = buildLedgerPlan({ lines })
+    expect(auto.held.map((h) => h.code)).toEqual(['N-1'])
+    const chosen = buildLedgerPlan({ lines, categories: { 'N-1': 'spare_part', 'N-2': 'tyre' } })
+    expect(chosen.held.map((h) => h.code)).toEqual(['N-2'])
+    expect(chosen.changes.map((c) => c.code)).toEqual(['N-1'])
+  })
+
+  it('holds a new code with no name, as the server cannot add it', () => {
+    const plan = buildLedgerPlan({ lines: [{ code: 'N-3', description: null, qty: 1, rate: null }] })
+    expect(plan.newItems).toEqual([])
+    expect(plan.held).toEqual([expect.objectContaining({ code: 'N-3', reason: 'no_item' })])
+  })
+
+  it('matches only a warehouse location', () => {
+    expect(resolveLocation('QID-UP-ST', [{ id: 'b', code: 'QID-UP-ST', location_type: 'bin', active: true }])).toBeNull()
+    expect(resolveLocation('QID-UP-ST', [{ id: 'w', code: 'QID-UP-ST', location_type: 'warehouse', active: true }])).toMatchObject({ id: 'w' })
+  })
+
+  it('blocks a file with more than 5000 item codes', () => {
+    const many = Array.from({ length: 5001 }, (_, i) => line(`C-${i}`, 'PART', 1))
+    const p = parseStoreLedger([...head, ...many, ['TOTAL', '', '', '', '', '', '5001', '', '', ''], ['<End Of Report>']])
+    expect(postBlockers(p)).toEqual([expect.stringMatching(/at most 5000/)])
+  })
+})
+
+describe('ledger refusal text', () => {
+  it('shows the upload refusals and still hides duplicate-key internals', async () => {
+    const { inventoryRefusalText } = await import('../lib/api/inventory')
+    expect(inventoryRefusalText({ code: '23505', message: 'Another upload for QID-UP-ST is not finished. Finish or cancel it first.' })).toMatch(/not finished/)
+    expect(inventoryRefusalText({ code: 'P0002', message: 'Upload not found.' })).toBe('Upload not found.')
+    expect(inventoryRefusalText({ code: '23505', message: 'duplicate key value violates unique constraint "x"' })).toBeNull()
+  })
+})

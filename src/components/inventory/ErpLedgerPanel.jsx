@@ -6,14 +6,15 @@
  * saved: the store it belongs to, new item codes (with a suggested category the
  * owner can change), names that would take the ERP wording, items still
  * unclassified, and every stock quantity that would change. Posting is owner
- * only (enforced in the database by inv_erp_ledger_post) and needs no second
- * approval, by the owner's decision of 2026-11-26.
+ * only (enforced in the database by inv_erp_ledger_begin/apply/finish) and needs
+ * no second approval, by the owner's decision of 2026-11-26.
  *
  * Rates from the file are kept with the upload record and are not written as
- * stock cost. Negative ERP quantities are held back. The same file can never be
+ * stock cost; added units follow the stock-count rule (current average cost, or
+ * unvalued). Negative ERP quantities are held back. The same file can never be
  * posted twice.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Upload, Send, FileSpreadsheet, PackagePlus, Tags, ArrowUpDown, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import Modal from '../ui/Modal'
 import SideDrawer from '../ui/SideDrawer'
@@ -57,6 +58,7 @@ const heldSummary = (held = []) => {
 function fileStatus(f) {
   if (f.reading) return { tone: 'info', label: 'Reading' }
   if (f.error) return { tone: 'bad', label: 'Could not read' }
+  if (f.stockError) return { tone: 'bad', label: 'Could not check stock' }
   if (!f.parsed?.ok) return { tone: 'bad', label: 'Not a stores ledger' }
   if (f.posted) return { tone: 'good', label: 'Posted' }
   if (f.previous?.status === 'open') return { tone: 'warning', label: 'Not finished' }
@@ -79,10 +81,14 @@ export default function ErpLedgerPanel({ scope }) {
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(10)
   const [ref, setRef] = useState({ status: 'idle', locations: [], master: [], neighbours: new Map(), truncated: false })
+  const [refNonce, setRefNonce] = useState(0)
+  const [histCancel, setHistCancel] = useState(null)
   const history = useInvQuery(() => listErpLedgerUploads({ page, pageSize, country }), [page, pageSize, country])
 
-  // Locations and the Material Master for the chosen country, read once per country.
+  // Locations and the Material Master for the chosen country, read once per country
+  // (and again after a post). Only the owner uploads, so nobody else loads them.
   useEffect(() => {
+    if (!isSuperAdmin) return undefined
     let live = true
     setRef((r) => ({ ...r, status: 'loading' }))
     Promise.all([listLocations({ country }), loadMasterForLedger(country)])
@@ -92,7 +98,7 @@ export default function ErpLedgerPanel({ scope }) {
       })
       .catch((e) => { if (live) setRef((r) => ({ ...r, status: 'error', error: toUserMessage(e) })) })
     return () => { live = false }
-  }, [country])
+  }, [country, refNonce, isSuperAdmin])
 
   const patch = (id, change) => setFiles((fs) => fs.map((f) => (f.id === id ? { ...f, ...(typeof change === 'function' ? change(f) : change) } : f)))
 
@@ -100,24 +106,34 @@ export default function ErpLedgerPanel({ scope }) {
   useEffect(() => {
     if (ref.status !== 'ok') return
     files.forEach((f) => {
-      if (!f.parsed?.ok || f.plan || f.loading || f.posted || f.location === null || f.error) return
+      if (!f.parsed?.ok || f.plan || f.loading || f.posted || f.location === null || f.error || f.stockError) return
       const location = f.location === undefined ? resolveLocation(f.parsed.meta.warehouses[0], ref.locations) : f.location
       if (!location) { patch(f.id, { location: null }); return }
       patch(f.id, { location, loading: true })
       loadStockAtLocation(location.id)
         .then((st) => {
-          const plan = buildLedgerPlan({ lines: f.parsed.lines, master: ref.master, stock: st.rows, neighbours: ref.neighbours })
-          countMovementsAfter(location.id, f.parsed.meta.to).then((n) => patch(f.id, { movesAfter: n })).catch(() => {})
+          // Re-planned after an earlier post: keep the owner's choices.
+          const base = buildLedgerPlan({ lines: f.parsed.lines, master: ref.master, stock: st.rows, neighbours: ref.neighbours })
+          const categories = { ...Object.fromEntries([...base.newItems, ...base.reclassify].map((x) => [x.code, x.category])), ...(f.categories || {}) }
+          const plan = buildLedgerPlan({ lines: f.parsed.lines, master: ref.master, stock: st.rows, neighbours: ref.neighbours, categories })
+          countMovementsAfter(location.id, f.parsed.meta.to, country).then((n) => patch(f.id, { movesAfter: n })).catch(() => {})
           patch(f.id, {
-            loading: false, plan, stockTruncated: st.truncated,
-            categories: Object.fromEntries([...plan.newItems, ...plan.reclassify].map((x) => [x.code, x.category])),
-            skipRenames: new Set(), skipReclass: new Set(), zeroMissing: false,
+            loading: false, plan, stockRows: st.rows, stockTruncated: st.truncated, categories,
+            skipRenames: f.skipRenames || new Set(), skipReclass: f.skipReclass || new Set(), zeroMissing: Boolean(f.zeroMissing),
           })
         })
-        .catch((e) => patch(f.id, { loading: false, error: toUserMessage(e) }))
+        .catch((e) => patch(f.id, { loading: false, stockError: toUserMessage(e) }))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files, ref.status])
+
+  // A changed category can change what is held (a tyre needs serials), so re-plan.
+  const setCategory = (fid, code, value) => setFiles((fs) => fs.map((g) => {
+    if (g.id !== fid) return g
+    const categories = { ...g.categories, [code]: value }
+    const plan = g.stockRows ? buildLedgerPlan({ lines: g.parsed.lines, master: ref.master, stock: g.stockRows, neighbours: ref.neighbours, categories }) : g.plan
+    return { ...g, categories, plan }
+  }))
 
   const readFiles = async (list) => {
     setErr('')
@@ -147,6 +163,9 @@ export default function ErpLedgerPanel({ scope }) {
     patch(f.id, { posted: res, progress: null, previous: null })
     setConfirm(null)
     history.retry()
+    // Codes added and stock changed: re-plan the other files against the new state.
+    setFiles((fs) => fs.map((g) => (g.id !== f.id && !g.posted && g.plan ? { ...g, plan: null, location: undefined } : g)))
+    setRefNonce((n) => n + 1)
   }
 
   // Continue an upload that stopped part way (it is safe to run again).
@@ -193,8 +212,16 @@ export default function ErpLedgerPanel({ scope }) {
   const runFromHistory = async (u, action) => {
     setBusy(true); setErr('')
     try {
-      if (action === 'cancel') await cancelErpLedger(u.id, newIdempotencyKey())
-      else await runErpLedger(u.id)
+      const same = (g) => g.previous?.id === u.id
+      if (action === 'cancel') {
+        await cancelErpLedger(u.id, newIdempotencyKey())
+        setFiles((fs) => fs.map((g) => (same(g) ? { ...g, previous: null, key: newIdempotencyKey() } : g)))
+      } else {
+        const res = await runErpLedger(u.id)
+        setFiles((fs) => fs.map((g) => (same(g) ? { ...g, previous: null, posted: res } : g)))
+        setRefNonce((n) => n + 1)
+      }
+      setHistCancel(null)
       history.retry()
     } catch (e) { setErr(toUserMessage(e)) } finally { setBusy(false) }
   }
@@ -232,10 +259,10 @@ export default function ErpLedgerPanel({ scope }) {
               {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
-          <label className="cc-btn-primary" style={{ cursor: ref.status === 'ok' ? 'pointer' : 'wait', position: 'relative' }} aria-disabled={ref.status !== 'ok'}>
+          <label className="cc-btn-primary focus-within:ring-2 focus-within:ring-offset-2" style={{ cursor: ref.status === 'ok' ? 'pointer' : 'wait', position: 'relative', opacity: ref.status === 'ok' ? 1 : 0.6 }}>
             <Upload size={14} aria-hidden="true" /> Upload ledger files
-            <input type="file" multiple accept=".xls,.xlsx,.csv" disabled={ref.status !== 'ok'}
-              style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+            <input type="file" multiple accept=".xls,.xlsx,.csv" disabled={ref.status !== 'ok'} className="sr-only"
+              aria-label="Upload ERP stores ledger files"
               onChange={(e) => { const l = [...(e.target.files || [])]; e.target.value = ''; if (l.length) readFiles(l) }} />
           </label>
           {files.length > 0 && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => setFiles([])}>Clear list</button>}
@@ -264,7 +291,7 @@ export default function ErpLedgerPanel({ scope }) {
                 <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                   <StatusPill value="open" tone="warning" label="Not finished" />
                   {isSuperAdmin && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={(e) => { e.stopPropagation(); runFromHistory(u, 'continue') }}>Continue</button>}
-                  {isSuperAdmin && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={(e) => { e.stopPropagation(); runFromHistory(u, 'cancel') }}>Cancel</button>}
+                  {isSuperAdmin && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={(e) => { e.stopPropagation(); setHistCancel(u) }}>Cancel</button>}
                 </span>
               )
               : <StatusPill value={u.status} tone="good" label="Posted" />) },
@@ -280,7 +307,7 @@ export default function ErpLedgerPanel({ scope }) {
 
       <SideDrawer className="cc inv-panel" open={!!cur} onClose={() => !busy && setOpen(null)} busy={busy} size="xl"
         title={cur ? cur.filename : ''} closeLabel="Close">
-        {cur && <FileDetail f={cur} tab={tab} setTab={setTab} patch={patch} canPost={canPost(cur)} onPost={() => setConfirm(cur.id)}
+        {cur && <FileDetail f={cur} tab={tab} setTab={setTab} patch={patch} onCategory={setCategory} canPost={canPost(cur)} onPost={() => setConfirm(cur.id)}
           isOwner={isSuperAdmin} busy={busy} onResume={() => resume(cur)} onCancelOpen={() => cancelOpen(cur)} err={err} />}
       </SideDrawer>
 
@@ -318,22 +345,33 @@ export default function ErpLedgerPanel({ scope }) {
                 </label>
               )}
               {f.progress && <p className="cc-card-sub" role="status">{f.progress}</p>}
-              <Note>Each change is logged with this file. Large stores post in parts; if it stops, open the file again and continue.</Note>
+              <Note>Each change is logged with this file. Added units take the store's current average cost when it has one, otherwise they stay unvalued; ERP rates are not used. Large stores post in parts; if it stops, open the file again and continue.</Note>
               {err && <ErrorNote error={err} />}
             </div>
           )
         })()}
       </Modal>
+
+      <Modal className="cc inv-panel" open={!!histCancel} onClose={() => !busy && setHistCancel(null)} size="sm" title="Cancel this upload?"
+        footer={(
+          <div className="inv-actions">
+            <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => setHistCancel(null)}>Keep it</button>
+            <button type="button" className="cc-btn-primary" disabled={busy} onClick={() => runFromHistory(histCancel, 'cancel')}>{busy ? 'Cancelling...' : 'Cancel upload'}</button>
+          </div>
+        )}>
+        {histCancel && <p>{histCancel.filename}: no stock has been posted from it yet. The new item codes, names and categories it saved stay.</p>}
+        {err && histCancel && <ErrorNote error={err} />}
+      </Modal>
     </div>
   )
 }
 
-function FileDetail({ f, tab, setTab, patch, canPost, onPost, isOwner, busy, onResume, onCancelOpen, err }) {
+function FileDetail({ f, tab, setTab, patch, onCategory, canPost, onPost, isOwner, busy, onResume, onCancelOpen, err }) {
   const p = f.plan
   const toggle = (field, code) => patch(f.id, (cur) => {
     const s = new Set(cur[field]); if (s.has(code)) s.delete(code); else s.add(code); return { [field]: s }
   })
-  const setCat = (code, value) => patch(f.id, (cur) => ({ categories: { ...cur.categories, [code]: value } }))
+  const setCat = (code, value) => onCategory(f.id, code, value)
   const catSelect = (r) => (
     <select className="cc-select" aria-label={`Category for ${r.code}`} value={f.categories?.[r.code] || r.category} onChange={(e) => setCat(r.code, e.target.value)}>
       {MATERIAL_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
@@ -343,6 +381,14 @@ function FileDetail({ f, tab, setTab, patch, canPost, onPost, isOwner, busy, onR
   const blockers = f.parsed?.ok ? postBlockers(f.parsed) : []
 
   if (f.error) return <ErrorNote error={f.error} />
+  if (f.stockError) {
+    return (
+      <div className="inv-hub" style={{ gap: 8 }}>
+        <ErrorNote error={`The stock at this store could not be read: ${f.stockError}`} />
+        <div className="inv-actions"><button type="button" className="cc-btn-ghost" onClick={() => patch(f.id, { stockError: null, location: undefined })}>Try again</button></div>
+      </div>
+    )
+  }
   if (!f.parsed?.ok) return <Note tone="bad">This file is not an ERP Stores Ledger (report CSOL-IMS-013-1). Export the Stores Ledger from the ERP and upload that file.</Note>
 
   return (
@@ -376,7 +422,7 @@ function FileDetail({ f, tab, setTab, patch, canPost, onPost, isOwner, busy, onR
       )}
       {f.progress && <p className="cc-card-sub" role="status">{f.progress}</p>}
       {err && !canPost && <ErrorNote error={err} />}
-      {f.location === null && <Note tone="warn">No Tyre Pulse store location has the code {meta.warehouses.join(', ')}. Add the location, or ask for the spelling to be linked, then upload again.</Note>}
+      {f.location === null && <Note tone="warn">No Tyre Pulse warehouse location has the code {meta.warehouses.join(', ')}. Add the location, or ask for the spelling to be linked, then upload again.</Note>}
       {f.posted && <Note tone="good" icon={CheckCircle2}>Posted: {f.posted.quantities_changed} quantities changed, {f.posted.set_to_zero || 0} set to zero, {f.posted.items_added} items added, {f.posted.names_updated} names updated, {f.posted.categories_set} categories set, {f.posted.held_back?.length || 0} held back{heldSummary(f.posted.held_back)}.</Note>}
 
       {p && (

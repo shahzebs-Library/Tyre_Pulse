@@ -9,14 +9,16 @@
  *   - items in the file still marked "unclassified" (a suggested category),
  *   - per item, the stock quantity that would be set at that store.
  *
- * Everything here is pure: no reads, no writes. The server function
- * inv_erp_ledger_post re-reads stock itself and computes the real change, so a
- * stale screen can never post a wrong quantity.
+ * Everything here is pure: no reads, no writes. The server (inv_erp_ledger_begin,
+ * then inv_erp_ledger_apply) re-reads stock itself and computes the real change,
+ * so a stale screen can never post a wrong quantity.
  *
  * Owner rules this follows (2026-11-26):
  *   - the file layout is the standard upload format;
  *   - the owner's own upload needs no second approval;
- *   - rates are kept with the upload only, never written as stock cost;
+ *   - rates are kept with the upload only, never written as stock cost (added
+ *     units follow the stock-count rule: the store's current average cost when
+ *     it has valued units, otherwise unvalued);
  *   - a missing rate is unvalued, never 0;
  *   - codes match exactly (upper case, trimmed), never by a fuzzy guess;
  *   - a negative ERP quantity cannot be counted and is held back.
@@ -127,6 +129,9 @@ export function parseStoreLedger(aoa, { filename = '' } = {}) {
     const first = lower(row[iCode])
     if (!row.some((c) => clean(c))) continue
     if (first === '<end of report>' || first.startsWith('<end')) { complete = true; break }
+    // A multi-page export repeats the column header; a group can carry a sub total.
+    if (first === 'item code') continue
+    if (!clean(row[iWh]) && /\b(sub ?total|grand total|group total)\b/.test(first)) continue
     const wh = normCode(row[iWh])
     // The total row carries no warehouse; it is kept to check the file is whole.
     if (first === 'total') { const t = toNumber(row[iQty]); totalQty = totalQty === null ? t : totalQty; continue }
@@ -190,6 +195,7 @@ export function postBlockers(parsed) {
   if (w.has('total_mismatch')) out.push(`The lines add up to a different total than the file shows (${parsed.meta.totalQty}).`)
   if (!parsed.meta.to) out.push('The balance date could not be read.')
   if (!parsed.meta.currency) out.push('The currency could not be read.')
+  if (parsed.lines.length > 5000) out.push(`The file has ${parsed.lines.length} item codes; one upload takes at most 5000. Split the export.`)
   return out
 }
 
@@ -203,7 +209,8 @@ export function resolveLocation(warehouse, locations = []) {
   if (!wh) return null
   const codes = [wh, WAREHOUSE_ALIASES[wh]].filter(Boolean)
   for (const c of codes) {
-    const hit = locations.find((l) => normCode(l.code) === c && l.active !== false)
+    // Only a warehouse holds one ledger balance; the server refuses any other type.
+    const hit = locations.find((l) => normCode(l.code) === c && l.active !== false && (l.location_type ?? 'warehouse') === 'warehouse')
     if (hit) return { ...hit, via: c === wh ? 'exact' : 'alias' }
   }
   return null
@@ -339,7 +346,7 @@ export function shouldRename(current, erpName) {
  * @param {Map}   [p.neighbours]   buildNeighbours(master) for the whole country
  * @returns plan
  */
-export function buildLedgerPlan({ lines = [], master = [], stock = [], neighbours } = {}) {
+export function buildLedgerPlan({ lines = [], master = [], stock = [], neighbours, categories = {} } = {}) {
   const byCode = new Map(master.map((m) => [normCode(m.item_code), m]))
   const stockByItem = new Map(stock.filter((s) => s.item_id).map((s) => [s.item_id, s]))
   const nb = neighbours || buildNeighbours(master)
@@ -356,16 +363,19 @@ export function buildLedgerPlan({ lines = [], master = [], stock = [], neighbour
     const m = byCode.get(l.code)
     let newTyre = false
     if (!m) {
+      // The server cannot add a code with no name, so its stock is held as unknown.
+      if (!l.description) { held.push({ code: l.code, description: null, qty: l.qty, reason: 'no_item' }); continue }
       const s = suggestMaterialClass(l.code, l.description, { neighbours: nb })
       newItems.push({ code: l.code, item_name: l.description, ...s })
-      newTyre = s.category === 'tyre'
+      // The owner's chosen category decides, as it does on the server.
+      newTyre = (categories[l.code] || s.category) === 'tyre'
     } else {
       if (shouldRename(m.item_name, l.description)) renames.push({ code: l.code, item_id: m.id, from: m.item_name || null, to: l.description })
       if ((m.category || 'unclassified') === 'unclassified' && !m.reviewed) {
         const s = suggestMaterialClass(l.code, l.description || m.item_name, { neighbours: nb })
         reclassify.push({ code: l.code, item_id: m.id, name: l.description || m.item_name, ...s })
         // Becoming a tyre means the server will hold its quantity for serials.
-        if (s.category === 'tyre') newTyre = true
+        if ((categories[l.code] || s.category) === 'tyre') newTyre = true
       }
     }
     if (l.qty < 0 || l.hasNegative) { held.push({ code: l.code, description: l.description, qty: l.qty, reason: 'negative_qty' }); continue }
@@ -402,7 +412,7 @@ export function buildLedgerPlan({ lines = [], master = [], stock = [], neighbour
 }
 
 /**
- * The payload for inv_erp_ledger_post. Only what the owner ticked is sent; the
+ * The payload for inv_erp_ledger_begin. Only what the owner ticked is sent; the
  * server recomputes every quantity change from live stock.
  */
 export function buildPostPayload({ meta, location, country, lines, plan, choices = {}, sha256, idempotencyKey }) {

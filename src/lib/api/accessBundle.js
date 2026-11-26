@@ -37,7 +37,7 @@ function single(client, key) {
 
 function part(bundle, name) {
   const p = bundle?.[name]
-  if (!p || typeof p !== 'object' || p.error === true || p.error === undefined) return null
+  if (!p || typeof p !== 'object' || p.error !== false) return null
   return { data: p.data ?? null, error: null }
 }
 

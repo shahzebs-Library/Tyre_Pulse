@@ -6,7 +6,7 @@ import { supabase, unwrap, ServiceError, isNotProvisioned } from './_client'
 import { matchObservationToErp } from '../erpObservationMatch'
 import { getCustomLayoutMap } from './vehicleDiagrams'
 import { toUserMessage } from '../safeError'
-import { ERP_RULES_VERSION } from '../tyrePositionService'
+import { ERP_RULES_VERSION, ERP_RULES_VERSIONS_SUPPORTED } from '../tyrePositionService'
 
 const WO_FIELDS = 'id,work_order_no,asset_no,country,site,description,notes,status,opened_at,completed_at'
 const TYRE_FIELDS = 'id,asset_no,country,serial_no,position,tyre_position,job_card,issue_date,removal_date,status'
@@ -82,13 +82,14 @@ export async function findObservationErpEvidence({ inspection, finding }) {
   }
   // The asset's OWN registered build decides the wheel layout both sides are read on
   // (tyrePositionService). Registered twice in one country: no layout is assumed.
-  const [fleet, customLayouts, layoutHistory, positionMappings] = await Promise.all([
+  const [fleet, customLayouts, layoutHistory, positionMappings, rules] = await Promise.all([
     scoped(supabase.from('vehicle_fleet').select('vehicle_type,axle_count').eq('country', country).eq('asset_no', asset)).limit(2),
     getCustomLayoutMap(),
     optionalRows(supabase.from('vehicle_diagram_config_versions')
       .select('vehicle_type,config,active,valid_from,valid_to,basis').order('valid_from', { ascending: true }).limit(500)),
     optionalRows(supabase.from('tyre_layout_position_mappings')
       .select('layout_key,erp_code,slot,active').eq('active', true).limit(500)),
+    getErpDecisionAvailability(),
   ])
   const fleetRows = unwrap(fleet) || []
   const machine = fleetRows.length === 1 ? fleetRows[0] : null
@@ -101,6 +102,9 @@ export async function findObservationErpEvidence({ inspection, finding }) {
       vehicleType: v.vehicle_type, config: v.config, active: v.active, validFrom: v.valid_from, validTo: v.valid_to, basis: v.basis,
     })),
     positionMappings,
+    // Read the evidence by the rules the DATABASE runs. Unknown -> the older, stricter
+    // version 3 rules (pump rear codes pending), never the newer ones by assumption.
+    rulesVersion: rules?.available ? rules.databaseVersion : 'position-service-3',
   }
   const candidates = matchObservationToErp({ inspection, finding, workOrders, fitments, expenses, layoutContext })
   const existingJobs = new Set(workOrders.map(w => String(w.work_order_no || '').trim().toUpperCase()))
@@ -196,7 +200,9 @@ export async function getErpDecisionAvailability() {
   if (res?.error) return none(isNotProvisioned(res.error) ? 'old_database' : 'unknown')
   const version = res?.data?.rules_version || null
   if (!version) return none('old_database')
-  if (version !== ERP_RULES_VERSION) return none('version_mismatch', version)
+  // A database still on version 3 (before 20261126181000) is supported: the evidence is then
+  // read by the version 3 rules, so the client and the database decide alike.
+  if (!ERP_RULES_VERSIONS_SUPPORTED.includes(version)) return none('version_mismatch', version)
   return {
     available: true, reason: 'ok', canReview: res.data.can_review === true,
     canRequestException: res.data.can_request_exception === true,

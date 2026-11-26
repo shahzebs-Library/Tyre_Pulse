@@ -68,6 +68,8 @@ export function layoutForObservation(inspection, layoutContext = {}) {
     customLayouts: layoutContext.customLayouts || null,
     layoutHistory: layoutContext.layoutHistory || null,
     positionMappings: layoutContext.positionMappings || null,
+    // The database's wheel-matching rules version (3 = before the shared tyre map's pump codes).
+    rulesVersion: layoutContext.rulesVersion || null,
     asOf: dateOnly(inspection?.inspection_date || inspection?.completed_date || inspection?.created_at),
   }
   const layout = resolveLayout(asset)

@@ -205,9 +205,17 @@ describe('a decision is offered only when client and database run the same rules
     h.state.rules = { data: { rules_version: ERP_RULES_VERSION, can_review: true, can_request_exception: true, can_approve_exception: true }, error: null }
     expect(await api.getErpDecisionAvailability()).toMatchObject({ available: true, reason: 'ok', canReview: true, canRequestException: true, canApproveException: true })
   })
-  it.each(['position-service-3', 'position-service-5'])('version mismatch (%s): not available, whichever side is ahead', async (v) => {
+  it.each(['position-service-2', 'position-service-5'])('version mismatch (%s): not available, whichever side is ahead', async (v) => {
     h.state.rules = { data: { rules_version: v, can_review: true, can_request_exception: true, can_approve_exception: true }, error: null }
     expect(await api.getErpDecisionAvailability()).toMatchObject({ available: false, reason: 'version_mismatch', databaseVersion: v, canReview: false })
+  })
+  it('a database still on position-service-3 stays available (the web ships before the migration)', async () => {
+    h.state.rules = { data: { rules_version: 'position-service-3', can_review: true, can_request_exception: true, can_approve_exception: false }, error: null }
+    expect(await api.getErpDecisionAvailability()).toMatchObject({ available: true, reason: 'ok', databaseVersion: 'position-service-3', canReview: true })
+  })
+  it('position-service-4 is available too', async () => {
+    h.state.rules = { data: { rules_version: 'position-service-4', can_review: true, can_request_exception: false, can_approve_exception: false }, error: null }
+    expect(await api.getErpDecisionAvailability()).toMatchObject({ available: true, reason: 'ok', databaseVersion: 'position-service-4' })
   })
   it('any other failure is not available either, never assumed', async () => {
     h.state.rules = { data: null, error: { code: '57014', message: 'timeout' } }

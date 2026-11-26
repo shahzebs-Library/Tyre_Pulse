@@ -173,6 +173,14 @@ describe('tyre position service', () => {
     expect(resolveWheel(other, 'LHR1-I', { kind: 'erp' }).status).not.toBe('resolved')
   })
 
+  it('version 3 rules ignore the shared tyre map; version 4 reads it', () => {
+    const v3 = resolveLayout({ vehicleType: 'PUMPS', rulesVersion: 'position-service-3' })
+    expect(resolveWheel(v3, 'LHRCO', { kind: 'erp' })).toMatchObject({ status: 'ambiguous', reason: 'erp_spelling_not_verified' })
+    expect(resolveWheel(v3, 'RHR1-O', { kind: 'erp' })).toMatchObject({ status: 'ambiguous', reason: 'erp_spelling_not_verified' })
+    const v4 = resolveLayout({ vehicleType: 'PUMPS', rulesVersion: 'position-service-4' })
+    expect(resolveWheel(v4, 'LHRCO', { kind: 'erp' })).toMatchObject({ status: 'resolved', reason: 'tyre_map_code', slot: 'R1Lo' })
+  })
+
   it('the generated matrix in the fixture is current (the SQL mirror replays it)', () => {
     const matrix = buildMatrix()
     if (UPDATE) {

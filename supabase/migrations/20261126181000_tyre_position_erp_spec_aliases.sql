@@ -25,6 +25,15 @@
 --     observation_erp_evaluate() (the web offers a decision only when its own version,
 --     ERP_RULES_VERSION in src/lib/tyrePositionService.js, is the same).
 --
+--   WEB COMPATIBILITY: the web may ship before this migration. It accepts BOTH versions
+--   (ERP_RULES_VERSIONS_SUPPORTED): against a database still on position-service-3 it reads the
+--   evidence by the old rules (pump rear codes pending, exactly as before); on position-service-4
+--   it reads the shared map like this migration. The client follows the version the database
+--   reports, so the two never decide differently.
+--
+--   STAGING TEST: supabase/tests/staging/observation_erp_position_tests.py already expects
+--   position-service-4, so it fails against staging until this migration is applied there.
+--
 --   COMPARISON ONLY. Nothing here writes a business row: no stored position, tyre record,
 --   job card or observation is renamed or "corrected". A pending case stays pending for a
 --   person to decide.

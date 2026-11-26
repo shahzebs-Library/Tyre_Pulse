@@ -67,6 +67,20 @@ describe('ERP to inspection evidence matcher', () => {
       positionMappings: [{ layout_key: 'Concrete pump', erp_code: 'LHR1-I', slot: 'R1Li' }] } })
     expect(verified.eligibleToConfirm).toBe(true)
   })
+  it('on a database still on position-service-3 a pump rear ERP code stays pending, as before', () => {
+    const pump = { ...inspection, vehicle_type: 'PUMPS' }
+    const args = { inspection: pump, finding: { rawPosition: 'R1Li' },
+      workOrder, fitments: [{ ...fitment, position: 'LHRCI', serial_no: 'NEW-1' }], expenses: [] }
+    const v3 = evaluateErpCandidate({ ...args, layoutContext: { rulesVersion: 'position-service-3' } })
+    expect(v3.eligibleToConfirm).toBe(false)
+    expect(v3.status).toBe('manual_review')
+    const v4 = evaluateErpCandidate({ ...args, layoutContext: { rulesVersion: 'position-service-4' } })
+    expect(v4.eligibleToConfirm).toBe(true)
+    // a verified mapping still resolves on version 3
+    const mapped = evaluateErpCandidate({ ...args, layoutContext: { rulesVersion: 'position-service-3', vehicleType: 'PUMPS',
+      positionMappings: [{ layout_key: 'Concrete pump', erp_code: 'LHRCI', slot: 'R1Li' }] } })
+    expect(mapped.eligibleToConfirm).toBe(true)
+  })
   it('a pump FRONT wheel is matched on its code', () => {
     const pump = { ...inspection, vehicle_type: 'PUMPS' }
     const result = evaluateErpCandidate({ inspection: pump, finding: { rawPosition: 'F2L' },

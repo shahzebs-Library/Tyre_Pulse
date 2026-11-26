@@ -57,6 +57,19 @@ const ERP_SCOPE = { scope: 'erp' }
  */
 export const ERP_RULES_VERSION = 'position-service-4'
 
+/**
+ * Database rules versions this client can work with. The web may ship before migration
+ * 20261126181000 is applied, so it keeps working against a database still on version 3:
+ * there the shared tyre map's pump codes are NOT read (everything behaves as before), on 4
+ * they are. Any other version is refused (getErpDecisionAvailability).
+ */
+export const ERP_RULES_VERSIONS_SUPPORTED = Object.freeze(['position-service-3', 'position-service-4'])
+
+/** True when [rulesVersion] reads the shared tyre map's ERP codes (version 4 and later). */
+export function readsTyreMapCodes(rulesVersion) {
+  return rulesVersion == null || rulesVersion !== 'position-service-3'
+}
+
 export const POSITION_STATUS = Object.freeze({
   RESOLVED: 'resolved', AMBIGUOUS: 'ambiguous', UNKNOWN: 'unknown', INCONSISTENT: 'inconsistent',
 })
@@ -117,7 +130,9 @@ const unresolvedLayout = (reason, extra = {}) => ({
  * @param {string} [a.asOf]         the date of the record being read (YYYY-MM-DD)
  */
 export function resolveLayout(a = {}) {
-  return withMappings(resolveLayoutBase(a), a.positionMappings)
+  const layout = withMappings(resolveLayoutBase(a), a.positionMappings)
+  // The database rules version the comparison must follow (null = this client's own).
+  return a.rulesVersion ? { ...layout, rulesVersion: a.rulesVersion } : layout
 }
 
 function withMappings(layout, rows) {
@@ -232,7 +247,7 @@ function readCode(layout, token, kind) {
   // The shared tyre map's own code or recorded alias for a wheel of this built-in
   // layout (the concrete pump's LHRCO / LHR1-I and its legacy LHCO / LHR2-O ...).
   // Comparison only. Two wheels named by the same spelling stay pending.
-  if (layout.source === 'builtin') {
+  if (layout.source === 'builtin' && readsTyreMapCodes(layout.rulesVersion)) {
     const named = erpSpecSlots(layout.key, token)
       .map((s) => layout.wheels.find((w) => w.slot === s)).filter(Boolean)
     if (named.length === 1) return out(POSITION_STATUS.RESOLVED, 'tyre_map_code', named[0])

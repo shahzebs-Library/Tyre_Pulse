@@ -66,7 +66,12 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
   const loadVehicles = useCallback(s => driverWorkspaceOptions('vehicles', s, 0), [])
   const loadDrivers = useCallback(s => driverWorkspaceOptions('drivers', s, 0), [])
   const loadUsers = useCallback(s => driverWorkspaceOptions('users', s, 0), [])
-  const loadSources = useCallback(s => driverChargeSources(v.source_type, driverId, s, 0).then(rows => rows.map(r => ({ id: r.id, label: r.summary?.label || r.id }))), [v.source_type, driverId])
+  const sourceInfo = useRef(new Map())
+  const loadSources = useCallback(s => driverChargeSources(v.source_type, driverId, s, 0).then(rows => rows.map(r => {
+    sourceInfo.current.set(r.id, r.summary || {})
+    return { id: r.id, label: r.summary?.label || r.id }
+  })), [v.source_type, driverId])
+  const sourceNamesNoDriver = v.source_type !== 'none' && v.source_id && sourceInfo.current.get(v.source_id)?.driver_recorded !== true
   const statementVersion = v.response === 'dispute' ? 'receipt-dispute-v1' : 'deduction-consent-v1'
 
   async function submit(e) {
@@ -76,7 +81,9 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
     if (action === 'charge_issue') {
       message = validateIssue(v)
       const evidence = (v.evidence || []).filter(x => x.ref || x.label)
+      if (!message && sourceNamesNoDriver && !v.link_unverified) message = 'This record does not name a driver. Confirm the link to continue.'
       payload = { ...payload, category: v.category, source_type: v.source_type, source_id: v.source_type === 'none' ? null : v.source_id, vehicle_id: v.vehicle_id || null,
+        ...(sourceNamesNoDriver && v.link_unverified ? { link_unverified: true } : {}),
         incident_at: v.incident_at ? new Date(v.incident_at).toISOString() : null, basis: v.basis, amount: Number(v.amount), currency: String(v.currency || '').toUpperCase(), evidence }
     } else if (action === 'charge_respond') {
       message = validateResponse(v)
@@ -111,7 +118,9 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
     {action === 'charge_issue' && <>
       <Field label="Category"><select aria-label="Category" className="input w-full" value={v.category} onChange={e => { set('category', e.target.value); if (e.target.value === 'traffic_fine') set('source_type', 'driver_fine') }}>{CATEGORIES.map(k => <option key={k} value={k}>{enumLabel('category', k)}</option>)}</select></Field>
       <Field label="Linked record type"><select aria-label="Linked record type" className="input w-full" value={v.source_type} onChange={e => { set('source_type', e.target.value); set('source_id', null) }}>{SOURCE_TYPES.map(k => <option key={k} value={k}>{enumLabel('source_type', k)}</option>)}</select></Field>
-      {v.source_type !== 'none' && <Field label="Linked record"><Picker key={v.source_type} label="linked record" load={loadSources} value={v.source_id} onChange={id => set('source_id', id)} /></Field>}
+      {v.source_type !== 'none' && <Field label="Linked record"><Picker key={v.source_type} label="linked record" load={loadSources} value={v.source_id} onChange={id => { set('source_id', id); set('link_unverified', false) }} /></Field>}
+      {['tyre_record', 'inspection', 'checklist_submission'].includes(v.source_type) && <p className="text-xs text-[var(--text-muted)]">Type at least 3 characters to search this register.</p>}
+      {sourceNamesNoDriver && <label className="flex gap-3 text-sm"><input type="checkbox" checked={!!v.link_unverified} onChange={e => set('link_unverified', e.target.checked)} /><span>This record does not name a driver. I confirm it concerns this driver. The notice will state that the link is not confirmed by the record.</span></label>}
       <Field label="Vehicle (optional)"><Picker label="vehicle" load={loadVehicles} value={v.vehicle_id} onChange={id => set('vehicle_id', id)} /></Field>
       <Field label="Incident date and time"><input aria-label="Incident date and time" type="datetime-local" className="input w-full" value={v.incident_at || ''} onChange={e => set('incident_at', e.target.value)} /></Field>
       <Field label="Written basis for the charge"><textarea aria-label="Written basis for the charge" className="input w-full" rows={4} maxLength={4000} value={v.basis || ''} onChange={e => set('basis', e.target.value)} /></Field>
@@ -218,11 +227,13 @@ function ChargeDetail({ chargeId, driverId, driverCountry, onClose, onChanged })
     {c && <div className="space-y-4 text-sm">
       <div className="grid sm:grid-cols-2 gap-2">
         <p><strong>Status:</strong> {enumLabel('status', c.status)}</p><p><strong>Amount:</strong> {money(c.amount, c.currency)} (deducted {money(c.deducted_amount, c.currency)})</p>
-        <p><strong>Linked record:</strong> {enumLabel('source_type', c.source_type)} {c.source_summary?.label || ''}</p><p><strong>Vehicle:</strong> {c.asset_no || 'Not recorded'}</p>
+        <p><strong>Linked record:</strong> {enumLabel('source_type', c.source_type)} {c.source_summary?.label || ''}{c.source_link_unverified ? ' (link to source not confirmed by record)' : ''}</p><p><strong>Vehicle:</strong> {c.asset_no || 'Not recorded'}</p>
         <p><strong>Issued:</strong> {when(c.created_at)} by {c.issued_by_name || 'Recorded user'}</p><p><strong>Notified:</strong> {when(c.notified_at)}</p>
         {c.supersedes_charge_id && <p>Replaces an earlier charge that was reversed.</p>}{c.superseded_by_charge_id && <p>Reversed and replaced by a new charge.</p>}
       </div>
       <div><h4 className="font-semibold">Written basis</h4><p className="whitespace-pre-wrap">{c.basis}</p></div>
+      {Number(c.deducted_amount) > 0 && !detail.appeal && <p className="text-xs text-[var(--text-muted)]">Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.</p>}
+      {c.refusal_witness_id && c.status === 'notified' && <p className="text-xs text-[var(--text-muted)]">A refusal was recorded and is waiting for the named witness to confirm it.</p>}
       <div className="flex flex-wrap gap-2">{(detail.actions || []).map(a => <button key={a} type="button" className={a === 'charge_respond' ? 'btn-primary' : 'btn-secondary'} onClick={() => setAction(a)}>{ACTION_LABELS[a] || a}</button>)}</div>
       <div><h4 className="font-semibold">Evidence</h4>{detail.evidence.length === 0 ? <p>No evidence listed.</p> : detail.evidence.map(e => <p key={e.id}>{e.kind}: {e.label} ({e.ref})</p>)}</div>
       <div><h4 className="font-semibold">Signatures</h4>{detail.signatures.length === 0 && <p>No signature recorded.</p>}{detail.signatures.map(s => <div key={s.id} className="rounded border border-[var(--input-border)] p-2 mb-2"><p><strong>{enumLabel('signature_kind', s.kind)}</strong> | {s.signer_name} | {when(s.signed_at)}</p><p className="text-xs">{s.statement_text}</p>{s.signature && <img className="max-h-24 bg-white" src={signatureImage(s.signature)} alt={`${s.signer_name} signature`} />}</div>)}</div>

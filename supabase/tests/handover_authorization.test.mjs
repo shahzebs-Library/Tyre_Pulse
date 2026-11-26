@@ -238,13 +238,23 @@ test('vehicle handover authorization paper', async (t) => {
       assert.equal(r1.on_behalf, false)
       await rejects(sign(db, h.id, 'receiving', { onBehalf: true }), '42501')
       await as(db, CAPTURER)
-      // One supervisor may collect both signatures only when both are on behalf.
+      // One account never collects both signatures, even both on behalf: a
+      // second on-behalf signature must come from another supervisor.
       const both = await newHandover(db)
       await as(db, TABLET_SUP)
       await sign(db, both.id, 'handing', { onBehalf: true })
+      await rejects(sign(db, both.id, 'receiving', { onBehalf: true }), '42501')
+      await as(db, INCHARGE)
       const r2 = (await sign(db, both.id, 'receiving', { onBehalf: true })).r
       assert.equal(r2.on_behalf, true)
       await as(db, CAPTURER)
+      const pair = await one(db, 'select from_signed_by, to_signed_by, from_on_behalf, to_on_behalf from handover_reports where id = $1', [both.id])
+      assert.deepEqual([pair.from_signed_by, pair.to_signed_by, pair.from_on_behalf, pair.to_on_behalf], [TABLET_SUP, INCHARGE, true, true])
+      // The table itself refuses one account against both signatures, even on a
+      // path that bypasses sign_handover.
+      await db.exec("RESET ROLE; SELECT set_config('handover.via', 'sign', false)")
+      await rejects(db.query('update handover_reports set to_signed_by = from_signed_by where id = $1', [both.id]), '23514')
+      await db.exec("SELECT set_config('handover.via', '', false); SET ROLE authenticated")
       const ev = (await db.query("select changes from handover_report_events where handover_id = $1 and action = 'signed_handing'", [both.id])).rows[0]
       assert.equal(ev.changes.from_on_behalf.new, true)
     })

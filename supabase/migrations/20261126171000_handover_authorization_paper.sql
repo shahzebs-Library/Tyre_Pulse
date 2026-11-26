@@ -61,8 +61,8 @@
 --     (driver_account_links), or a supervisor-level account signing with an
 --     explicit p_on_behalf = true, which is stored (from_on_behalf /
 --     to_on_behalf) and audited. A driver on the handover can never sign on
---     behalf of the other party, and one account collects both signatures only
---     when both are on behalf. The approver may not be either signing account
+--     behalf of the other party, and one account never collects both
+--     signatures: two on-behalf signatures come from two different accounts. The approver may not be either signing account
 --     nor the account that created the record.
 --   * Signatures must match the same strict SVG / PNG shape the driver charge
 --     module accepts (handover_valid_signature), not merely start with <svg.
@@ -190,6 +190,13 @@ begin
                   and conrelid = 'public.handover_reports'::regclass) then
     alter table public.handover_reports add constraint handover_reports_hour_meter_chk
       check (hour_meter is null or hour_meter >= 0);
+  end if;
+  -- Two signatures, two accounts (second review). Belt and braces beside the
+  -- sign_handover check, so no path can store one account against both.
+  if not exists (select 1 from pg_constraint where conname = 'handover_reports_two_signers_chk'
+                  and conrelid = 'public.handover_reports'::regclass) then
+    alter table public.handover_reports add constraint handover_reports_two_signers_chk
+      check (from_signed_by is null or to_signed_by is null or from_signed_by <> to_signed_by);
   end if;
 end
 $chk$;
@@ -508,8 +515,8 @@ create trigger trg_zz_log_handover_event
 --     p_on_behalf = true. The flag is stored on the row and in the trail.
 --   A party with no driver id (a typed name, a yard) can only be signed on
 --   behalf. An account linked to EITHER driver on this handover may not sign on
---   behalf of the other party, and one account may collect both signatures only
---   when both are on behalf.
+--   behalf of the other party, and one account never collects both signatures
+--   (from_signed_by <> to_signed_by always, second review).
 create or replace function public.sign_handover(
   p_id uuid,
   p_party text,
@@ -615,9 +622,13 @@ begin
     v_behalf := true;
   end if;
 
-  if v_party = 'receiving' and r.from_signed_by = auth.uid()
-     and not (v_behalf and coalesce(r.from_on_behalf, false)) then
-    raise exception 'The same account cannot sign for both drivers.' using errcode = '42501';
+  -- Second review: one account may NEVER collect both signatures, on behalf
+  -- or not. Otherwise one supervisor could sign for both drivers alone, with
+  -- nothing showing either driver was there, and driver charges can rest on
+  -- this paper. from_signed_by and to_signed_by are therefore always two
+  -- different accounts, and both are stored on the row and in the trail.
+  if v_party = 'receiving' and r.from_signed_by = auth.uid() then
+    raise exception 'The same account cannot sign for both drivers. The second signature must be given by the driver or by another supervisor.' using errcode = '42501';
   end if;
 
   if v_driver_id is not null then
@@ -766,5 +777,5 @@ $mig$;
 --   decide_handover_approval from 20261112130000 + 20261112143000;
 --   drop policy handover_reports_site_isolation on public.handover_reports;
 --   alter table public.handover_reports drop constraint handover_reports_location_chk,
---     drop constraint handover_reports_hour_meter_chk, drop column from_driver_id, ...;
+--     drop constraint handover_reports_hour_meter_chk, drop constraint handover_reports_two_signers_chk, drop column from_driver_id, ...;
 -- ============================================================================

@@ -522,6 +522,10 @@
   "@tyreConditionFlat": {},
   "tyreConditionMissing": "Missing",
   "@tyreConditionMissing": {},
+  "tyreConditionNotChecked": "Not checked",
+  "@tyreConditionNotChecked": {
+    "description": "Picker/legend label for a wheel nobody has checked yet (grey question mark)."
+  },
 
   "inspectionNavTitle": "New inspection",
   "@inspectionNavTitle": {

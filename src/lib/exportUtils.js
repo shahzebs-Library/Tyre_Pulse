@@ -26,7 +26,8 @@ import { bandFor, measureFor } from './tyreRunningLife'
 import { displayPositionCode, inspectionTypeHint, canonicalToSlotId, slotDisplayCode } from './tyreBay'
 import { resolveLayoutKey, resolveLayoutKeyStrict, isTyrelessEquipment, layoutForAsset } from './vehicleTyreLayout'
 import { slotForPosition } from './tyrePositionService'
-import { LAYOUT_GEOMETRY, RISK_ORDER, riskRgb } from './tyreLayoutSpec'
+import { LAYOUT_GEOMETRY, RISK_ORDER, riskRgb, kindForWheel, CONDITION_KINDS } from './tyreLayoutSpec'
+import { drawConditionBadge, drawConditionLegendRow } from './pdfConditionGlyph'
 import { serializeSvgInlined } from './svgInline'
 import { inspectionReportFileNameForRow, ordinal } from './inspectionFileName'
 import { shrinkImageForPdf } from './pdfImage'
@@ -655,6 +656,11 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
     // Hub
     doc.setFillColor(8, 10, 18)
     doc.circle(cx, cy, clamp(Math.min(tw, th) * 0.09, 0.5, 3), 'F')
+    // Condition picture straddling the top of the tyre (shared glyph).
+    {
+      const word = (typeof cond === 'object') ? cond?.condition : cond
+      drawConditionBadge(doc, kindForWheel(word, risk), cx, ty, clamp(Math.min(tw * 0.42, 8 * scale), 1.2, 4))
+    }
     // Label
     doc.setFontSize(clamp(tw < 18 ? 3 : tw < 22 ? 4 : 5, 2.5, 6))
     doc.setTextColor(210, 215, 225)
@@ -1501,7 +1507,7 @@ async function captureTyreBoard(boardEl) {
         pending: card.classList.contains('tb-pending'),
         body: rel(body),
         code: codeEl ? { text: codeEl.textContent, ...rel(codeEl), px: fontPx(codeEl) } : null,
-        dot: dot ? { ...rel(dot), glyph: dot.textContent } : null,
+        dot: dot ? { ...rel(dot), glyph: dot.textContent, kind: dot.getAttribute('data-kind') || null } : null,
         lines,
       })
     })
@@ -1556,6 +1562,10 @@ function _drawTyreBoard(doc, cap, x, y, s) {
     }
     if (c.dot) {
       const cx = X(c.dot.x + c.dot.w / 2), cy = Y(c.dot.y + c.dot.h / 2), rr = (c.dot.w / 2) * s
+      if (c.dot.kind && !c.pending) {
+        // The shared condition picture, the same one the screen shows.
+        drawConditionBadge(doc, c.dot.kind, cx, cy, rr)
+      } else {
       doc.setFillColor(...rgb); doc.circle(cx, cy, rr, 'F')
       doc.setDrawColor(255, 255, 255); doc.setLineWidth(rr * 0.3)
       if (c.tone === 'good' && !c.pending) {
@@ -1566,6 +1576,7 @@ function _drawTyreBoard(doc, cap, x, y, s) {
       } else {
         doc.line(cx, cy - rr * 0.52, cx, cy + rr * 0.12)
         doc.setFillColor(255, 255, 255); doc.circle(cx, cy + rr * 0.45, rr * 0.13, 'F')
+      }
       }
     }
     for (const ln of c.lines) {
@@ -1815,14 +1826,10 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     cy += 2.5
     _drawTyreBoard(doc, board, bx, cy, s)
     cy += boardH + 6
-    const legend = [['good', 'Good'], ['warning', 'Warning'], ['critical', 'Critical'], ['none', 'Not recorded']]
-    doc.setFontSize(7.2); doc.setFont('helvetica', 'normal')
-    const itemW = legend.map(([, l]) => 6 + doc.getTextWidth(l) + 5)
-    let lx = mx + (W - itemW.reduce((a, b) => a + b, 0)) / 2
-    legend.forEach(([tone, label], i) => {
-      doc.setFillColor(..._BOARD_RGB[tone]); doc.circle(lx + 1.8, cy - 1.1, 1.8, 'F')
-      doc.setTextColor(...P.iron); doc.text(label, lx + 5, cy)
-      lx += itemW[i]
+    // One picture + word per condition, the same as the screen's legend.
+    drawConditionLegendRow(doc, mx, cy, W, {
+      labelOf: (k) => (k === 'none' ? 'Not recorded' : null),
+      textRgb: P.iron, fontSize: 7.2,
     })
     cy += 6
     doc.setFontSize(7.5); doc.setTextColor(...P.ghost)
@@ -1852,18 +1859,18 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const drawLegend = (bx, by, bw) => {
     const lx = bx + bw - 40
     doc.setFillColor(...(dbgLight ? [241, 245, 249] : [30, 41, 59]))
-    doc.roundedRect(lx - 3, by + 4, 38, 40, 2, 2, 'F')
-    let ly = by + 10
+    doc.roundedRect(lx - 3, by + 3, 38, 44, 2, 2, 'F')
+    let ly = by + 8.5
     doc.setFontSize(6.8); doc.setFont('helvetica', 'bold')
     doc.setTextColor(...(dbgLight ? [55, 65, 81] : [226, 232, 240]))
-    doc.text('LEGEND', lx, ly); ly += 6.5
-    Object.entries(RISK_LABEL).forEach(([key, label]) => {
-      const [r, g, b] = RISK_RGB[key]
-      doc.setFillColor(r, g, b); doc.circle(lx + 1.8, ly - 1.1, 1.6, 'F')
+    doc.text('LEGEND', lx, ly); ly += 5.4
+    // One fixed colour + one picture + one word per condition (shared tyre map).
+    CONDITION_KINDS.forEach((k) => {
+      drawConditionBadge(doc, k.kind, lx + 1.8, ly - 1.1, 1.8)
       doc.setFontSize(7); doc.setFont('helvetica', 'normal')
       doc.setTextColor(...(dbgLight ? [31, 41, 55] : [220, 225, 235]))
-      doc.text(label, lx + 5.5, ly)
-      ly += 7
+      doc.text(k.label, lx + 5.5, ly)
+      ly += 5.4
     })
   }
   let diagramH = 0

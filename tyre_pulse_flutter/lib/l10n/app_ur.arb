@@ -197,8 +197,9 @@
   "tyreConditionWorn": "گھسا ہوا",
   "tyreConditionDamaged": "خراب",
   "tyreConditionPuncture": "پنکچر",
-  "tyreConditionFlat": "سپاٹ",
+  "tyreConditionFlat": "ہوا نکلی ہوئی",
   "tyreConditionMissing": "غائب",
+  "tyreConditionNotChecked": "چیک نہیں ہوا",
 
   "inspectionNavTitle": "نیا معائنہ",
   "inspectionStep1Label": "1",

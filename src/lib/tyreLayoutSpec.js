@@ -143,13 +143,76 @@ export const FAULT_CONDITION_RE = new RegExp(`${COND.patterns.warning}|${COND.pa
 export const WEAR_CONDITION_RE = COND_RE.warning
 export const GOOD_CONDITION_RE = COND_RE.good
 
+const NEGATION_RE = new RegExp(COND.negation, 'gi')
+
+/**
+ * The condition text with every phrase that DENIES a fault ("no damage",
+ * "not damaged", "without cuts", "undamaged") replaced by "ok". "Good, no
+ * damage" used to match "damage" and paint a healthy tyre red. Every stem test
+ * on a condition word goes through this first.
+ */
+export function neutraliseCondition(condition) {
+  const s = condition == null ? '' : String(condition)
+  return s.replace(NEGATION_RE, ' ok ')
+}
+
 /** good | warning | critical | none. An unknown word is none (No data), never good. */
 export function conditionRisk(condition) {
   const s = condition == null ? '' : String(condition).trim()
   if (!s) return 'none'
   if (COND.exact[s]) return COND.exact[s]
-  for (const band of COND.order) if (COND_RE[band].test(s)) return band
+  const n = neutraliseCondition(s)
+  for (const band of COND.order) if (COND_RE[band].test(n)) return band
   return 'none'
+}
+
+/** True when the word reports a fault (wear or severe), "no damage" excluded. */
+export const isFaultCondition = (c) => FAULT_CONDITION_RE.test(neutraliseCondition(c))
+/** True for a stop-the-vehicle fault (red), "no damage" excluded. */
+export const isSevereConditionText = (c) => SEVERE_CONDITION_RE.test(neutraliseCondition(c))
+/** True when the word reports wear, "no wear" excluded. */
+export const isWearCondition = (c) => WEAR_CONDITION_RE.test(neutraliseCondition(c))
+/** True when the word says the tyre is fine ("Good", "OK", "no damage"). */
+export const isGoodCondition = (c) => GOOD_CONDITION_RE.test(neutraliseCondition(c))
+
+// ── Condition -> kind (one colour, one glyph, one label) ──────────────────────
+/** [{ kind, band, label, match, glyph }] in spec order. */
+export const CONDITION_KINDS = Object.freeze(COND.kinds.map((k) => Object.freeze({
+  ...k, matchRe: k.match ? new RegExp(k.match, 'i') : null,
+})))
+export const CONDITION_KIND = Object.freeze(Object.fromEntries(CONDITION_KINDS.map((k) => [k.kind, k])))
+
+/**
+ * good | worn | puncture | flat | damaged | missing | none. The band decides the
+ * colour, the kind only picks the picture inside it, so a kind can never
+ * disagree with conditionRisk.
+ */
+export function conditionKind(condition) {
+  const band = conditionRisk(condition)
+  const n = neutraliseCondition(condition)
+  const inBand = CONDITION_KINDS.filter((k) => k.band === band)
+  return (inBand.find((k) => k.matchRe && k.matchRe.test(n)) || inBand.find((k) => !k.matchRe) || CONDITION_KIND.none).kind
+}
+
+/** The default kind of a band (good -> good, warning -> worn, critical -> damaged, none -> none). */
+export function kindForBand(band) {
+  return (CONDITION_KINDS.find((k) => k.band === band && !k.matchRe) || CONDITION_KIND.none).kind
+}
+
+/**
+ * The kind to DRAW for a wheel whose band may come from elsewhere (a tyre
+ * record's risk level): the condition word's kind when it agrees with the
+ * band, else the band's default picture. Colour and picture never disagree.
+ */
+export function kindForWheel(condition, band) {
+  const k = conditionKind(condition)
+  if (!band || (CONDITION_KIND[k] || CONDITION_KIND.none).band === band) return k
+  return kindForBand(band)
+}
+
+/** The kind's colour: its band's palette entry in 'light' or 'dark'. */
+export function kindHex(kind, theme = 'light') {
+  return riskHex((CONDITION_KIND[kind] || CONDITION_KIND.none).band, theme)
 }
 
 // ── Palette ───────────────────────────────────────────────────────────────────

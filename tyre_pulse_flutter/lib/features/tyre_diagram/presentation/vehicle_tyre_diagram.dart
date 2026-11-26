@@ -29,6 +29,7 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_matcher.da
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_body_painter.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_glyph.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_pending.dart';
@@ -939,14 +940,6 @@ TpStatus _captureTone(_ResolvedWheel wheel) =>
 TpStatusColors _captureColors(TpPalette palette, TpStatus tone) =>
     tyreRiskColors(palette, tone);
 
-IconData _captureStatusIcon(TpStatus tone) => switch (tone) {
-      TpStatus.ok => Icons.check_rounded,
-      TpStatus.critical => Icons.priority_high_rounded,
-      TpStatus.warning => Icons.priority_high_rounded,
-      TpStatus.unknown => Icons.remove_rounded,
-      TpStatus.info || TpStatus.neutral => Icons.circle,
-    };
-
 /// The dashed leader from a card to the vehicle, ending in a small
 /// status-coloured chevron at the vehicle end. Decoration only - the card is
 /// the one tap target for its wheel.
@@ -1246,16 +1239,17 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                         children: <Widget>[
                           DecoratedBox(
                             decoration: BoxDecoration(
-                              color: colors.base,
+                              color: tyreRiskBaseColor(tone, Brightness.light),
                               shape: BoxShape.circle,
                             ),
-                            child: SizedBox(
-                              width: 15,
-                              height: 15,
-                              child: Icon(
-                                _captureStatusIcon(tone),
-                                color: colors.onBase,
-                                size: 11,
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: TyreConditionGlyph(
+                                condition:
+                                    wheel.isRecorded ? wheel.condition : null,
+                                size: 14,
+                                color: Colors.white,
+                                strokeWidth: 3,
                               ),
                             ),
                           ),
@@ -1448,6 +1442,8 @@ class _ResolvedWheel {
         isSelected: isSelected,
         isOutstanding: isOutstanding,
         isRecorded: isRecorded,
+        conditionKind:
+            condition == null ? null : tyreConditionKindKey(condition),
       );
 }
 
@@ -1494,9 +1490,6 @@ class _SelectedTyreSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TpStatusColors colors = tyreRiskColors(palette, wheel.status);
-    final bool isImmediateAttention =
-        wheel.condition == TyreCondition.puncture ||
-            wheel.condition == TyreCondition.flat;
     final String conditionLabel = wheel.condition == null
         ? l10n.tyreDiagramListNotRecorded
         : tyreConditionLabel(l10n, wheel.condition!);
@@ -1526,12 +1519,10 @@ class _SelectedTyreSummary extends StatelessWidget {
           ),
           child: Row(
             children: <Widget>[
-              Icon(
-                isImmediateAttention
-                    ? Icons.report_problem_outlined
-                    : Icons.tire_repair_outlined,
+              TyreConditionGlyph(
+                condition: wheel.condition,
+                size: TpSizing.iconMd + 8,
                 color: colors.onSoft,
-                size: TpSizing.iconMd,
               ),
               const SizedBox(width: TpSpace.sm),
               Expanded(
@@ -1613,22 +1604,45 @@ class _ConditionLegend extends StatelessWidget {
         ],
       );
     }
+    final TpPalette palette = TpPalette.of(context);
+    // One picture per condition: the same glyph sits on the wheel, the
+    // picker button and the printed report (shared tyre map).
+    Widget item(TyreCondition? condition, String label) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: tyreConditionSelectedFill(condition),
+                shape: BoxShape.circle,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(3),
+                child: TyreConditionGlyph(
+                  condition: condition,
+                  size: 16,
+                  color: Colors.white,
+                  strokeWidth: 3,
+                ),
+              ),
+            ),
+            const SizedBox(width: TpSpace.xs),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ],
+        );
     return Wrap(
       alignment: WrapAlignment.center,
-      spacing: TpSpace.xs,
+      spacing: TpSpace.md,
       runSpacing: TpSpace.xs,
       children: <Widget>[
         for (final TyreCondition condition in _kOrder)
-          TpStatusChip(
-            status: tyreConditionStatus(condition),
-            label: tyreConditionLabel(l10n, condition),
-            icon: switch (condition) {
-              TyreCondition.puncture => Icons.report_problem_outlined,
-              TyreCondition.flat => Icons.warning_amber_rounded,
-              _ => null,
-            },
-            isCompact: true,
-          ),
+          item(condition, tyreConditionLabel(l10n, condition)),
+        item(null, l10n.tyreConditionNotChecked),
       ],
     );
   }

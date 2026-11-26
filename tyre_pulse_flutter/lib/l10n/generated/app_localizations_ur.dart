@@ -641,10 +641,13 @@ class AppLocalizationsUr extends AppLocalizations {
   String get tyreConditionPuncture => 'پنکچر';
 
   @override
-  String get tyreConditionFlat => 'سپاٹ';
+  String get tyreConditionFlat => 'ہوا نکلی ہوئی';
 
   @override
   String get tyreConditionMissing => 'غائب';
+
+  @override
+  String get tyreConditionNotChecked => 'چیک نہیں ہوا';
 
   @override
   String get inspectionNavTitle => 'نیا معائنہ';

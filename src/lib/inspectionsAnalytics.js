@@ -234,9 +234,10 @@ export function checklistProgress(positions) {
 export function checklistConditionTally(positions) {
   const list = positions || []
   return {
-    good: list.filter((p) => p.condition === 'Good').length,
-    wear: list.filter((p) => p.condition === 'Wear').length,
-    critical: list.filter((p) => p.condition === 'Damage' || p.condition === 'Puncture').length,
+    // The shared rule, so Flat counts as critical and "Good, no damage" as good.
+    good: list.filter((p) => p.condition && riskForCondition(p.condition) === 'good').length,
+    wear: list.filter((p) => p.condition && riskForCondition(p.condition) === 'warning').length,
+    critical: list.filter((p) => p.condition && riskForCondition(p.condition) === 'critical').length,
   }
 }
 

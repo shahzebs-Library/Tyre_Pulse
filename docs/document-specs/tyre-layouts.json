@@ -1183,7 +1183,8 @@
     }
   },
   "conditions": {
-    "$comment": "Condition word -> band. exact first, then the patterns in `order` (case-insensitive). A word no rule knows is \"none\" (No data), never good.",
+    "$comment": "Condition word -> band, then band -> kind (the picture). A phrase that DENIES a fault (\"no damage\", \"not damaged\", \"without cuts\", \"undamaged\") is first replaced by \"ok\" using `negation`, so \"Good, no damage\" is good and never red. Then: exact first, then the patterns in `order` (case-insensitive). Severe is tested FIRST (safety first): \"Worn, flat\" or \"wear + cut\" is red, never amber. A word no rule knows is \"none\" (No data), never good. `kinds` gives each condition ONE fixed colour (its band's palette entry), ONE glyph and one short label, used on the picker buttons, the map wheels, the legend and the printed report on the web and the phone. Inside a band the first kind whose `match` hits wins; the kind with no `match` is the band's default. Glyphs are drawn on a 24x24 grid with round-capped strokes: `strokes` open polylines, `closed` polygons, `circles` outlines, `dots` filled circles, as flat [x, y, x, y ...] / [cx, cy, r] lists so every surface draws the same picture with its own primitives.",
+    "negation": "\\b(?:no|not|without|nil|zero|free of)\\s+(?:any\\s+)?(?:visible\\s+)?(?:signs?\\s+of\\s+)?(?:damages?|damaged|punctures?|punctured|cuts?|bulges?|cracks?|cracked|burst|flats?|wear|worn|separation)\\b|\\bun(?:damaged|punctured)\\b|\\b(?:damage|puncture)[\\s-]*free\\b",
     "exact": {
       "Good": "good",
       "Wear": "warning",
@@ -1192,15 +1193,271 @@
       "None": "none"
     },
     "order": [
-      "warning",
       "critical",
+      "warning",
       "good"
     ],
     "patterns": {
       "warning": "wear|worn",
-      "critical": "damage|puncture|flat|burst|blast|\\bcut\\b|bulge|separat",
+      "critical": "damage|puncture|nail|flat|deflat|burst|blast|\\bcut\\b|bulge|separat",
       "good": "good|\\bok\\b"
-    }
+    },
+    "kinds": [
+      {
+        "kind": "good",
+        "band": "good",
+        "label": "Good",
+        "glyph": {
+          "strokes": [
+            [
+              5,
+              12.5,
+              10,
+              17.5,
+              19,
+              7
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "worn",
+        "band": "warning",
+        "label": "Worn",
+        "glyph": {
+          "strokes": [
+            [
+              3,
+              8.5,
+              7.5,
+              4,
+              12,
+              8.5,
+              16.5,
+              4,
+              21,
+              8.5
+            ],
+            [
+              12,
+              11,
+              12,
+              17
+            ],
+            [
+              8.5,
+              14,
+              12,
+              17.5,
+              15.5,
+              14
+            ],
+            [
+              3,
+              20.5,
+              21,
+              20.5
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "puncture",
+        "band": "critical",
+        "label": "Puncture",
+        "match": "punct|nail",
+        "glyph": {
+          "strokes": [
+            [
+              13.5,
+              10.5,
+              20,
+              4
+            ],
+            [
+              17.5,
+              2.5,
+              21.5,
+              6.5
+            ]
+          ],
+          "circles": [
+            [
+              10,
+              14,
+              7
+            ],
+            [
+              10,
+              14,
+              2
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "flat",
+        "band": "critical",
+        "label": "Flat",
+        "match": "flat|deflat",
+        "glyph": {
+          "strokes": [
+            [
+              1.5,
+              19.5,
+              22.5,
+              19.5
+            ],
+            [
+              12,
+              2.5,
+              12,
+              7.5
+            ],
+            [
+              9.5,
+              5.5,
+              12,
+              8,
+              14.5,
+              5.5
+            ]
+          ],
+          "closed": [
+            [
+              21.5,
+              14.5,
+              20.8,
+              16.2,
+              18.7,
+              17.7,
+              15.6,
+              18.7,
+              12.0,
+              19.0,
+              8.4,
+              18.7,
+              5.3,
+              17.7,
+              3.2,
+              16.2,
+              2.5,
+              14.5,
+              3.2,
+              12.8,
+              5.3,
+              11.3,
+              8.4,
+              10.3,
+              12.0,
+              10.0,
+              15.6,
+              10.3,
+              18.7,
+              11.3,
+              20.8,
+              12.8
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "damaged",
+        "band": "critical",
+        "label": "Damaged",
+        "glyph": {
+          "strokes": [
+            [
+              12,
+              9.5,
+              12,
+              14.5
+            ]
+          ],
+          "closed": [
+            [
+              12,
+              3,
+              21.5,
+              20,
+              2.5,
+              20
+            ]
+          ],
+          "dots": [
+            [
+              12,
+              17.3,
+              1.2
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "missing",
+        "band": "none",
+        "label": "Missing",
+        "match": "missing",
+        "glyph": {
+          "strokes": [
+            [
+              7.5,
+              12,
+              16.5,
+              12
+            ]
+          ],
+          "circles": [
+            [
+              12,
+              12,
+              9
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "none",
+        "band": "none",
+        "label": "Not checked",
+        "glyph": {
+          "strokes": [
+            [
+              9,
+              9.5,
+              9.6,
+              7.4,
+              12,
+              6.6,
+              14.4,
+              7.4,
+              15,
+              9.5,
+              14.2,
+              11,
+              12,
+              12.2,
+              12,
+              14
+            ]
+          ],
+          "circles": [
+            [
+              12,
+              12,
+              9.5
+            ]
+          ],
+          "dots": [
+            [
+              12,
+              17.2,
+              1.1
+            ]
+          ]
+        }
+      }
+    ]
   },
   "risk": {
     "order": [

@@ -389,15 +389,199 @@ const Map<String, String> kTyreSpecConditionExact = <String, String>{
   'None': 'none',
 };
 const List<String> kTyreSpecConditionOrder = <String>[
-  'warning',
   'critical',
+  'warning',
   'good',
 ];
 const Map<String, String> kTyreSpecConditionPatterns = <String, String>{
   'warning': r'wear|worn',
-  'critical': r'damage|puncture|flat|burst|blast|\bcut\b|bulge|separat',
+  'critical':
+      r'damage|puncture|nail|flat|deflat|burst|blast|\bcut\b|bulge|separat',
   'good': r'good|\bok\b',
 };
+
+/// Phrases that DENY a fault ("no damage") - replaced by "ok" before any test.
+const String kTyreSpecConditionNegation =
+    r'\b(?:no|not|without|nil|zero|free of)\s+(?:any\s+)?(?:visible\s+)?(?:signs?\s+of\s+)?(?:damages?|damaged|punctures?|punctured|cuts?|bulges?|cracks?|cracked|burst|flats?|wear|worn|separation)\b|\bun(?:damaged|punctured)\b|\b(?:damage|puncture)[\s-]*free\b';
+
+/// (kind, band, label, match or empty, strokes, closed, circles, dots) in spec order.
+/// Glyphs are on a 24x24 grid; see the `conditions.kinds` comment in the JSON.
+const List<
+    (
+      String,
+      String,
+      String,
+      String,
+      List<List<double>>,
+      List<List<double>>,
+      List<List<double>>,
+      List<List<double>>
+    )> kTyreSpecConditionKinds = <(
+  String,
+  String,
+  String,
+  String,
+  List<List<double>>,
+  List<List<double>>,
+  List<List<double>>,
+  List<List<double>>
+)>[
+  (
+    'good',
+    'good',
+    'Good',
+    r'',
+    <List<double>>[
+      <double>[5.0, 12.5, 10.0, 17.5, 19.0, 7.0],
+    ],
+    <List<double>>[],
+    <List<double>>[],
+    <List<double>>[],
+  ),
+  (
+    'worn',
+    'warning',
+    'Worn',
+    r'',
+    <List<double>>[
+      <double>[3.0, 8.5, 7.5, 4.0, 12.0, 8.5, 16.5, 4.0, 21.0, 8.5],
+      <double>[12.0, 11.0, 12.0, 17.0],
+      <double>[8.5, 14.0, 12.0, 17.5, 15.5, 14.0],
+      <double>[3.0, 20.5, 21.0, 20.5],
+    ],
+    <List<double>>[],
+    <List<double>>[],
+    <List<double>>[],
+  ),
+  (
+    'puncture',
+    'critical',
+    'Puncture',
+    r'punct|nail',
+    <List<double>>[
+      <double>[13.5, 10.5, 20.0, 4.0],
+      <double>[17.5, 2.5, 21.5, 6.5],
+    ],
+    <List<double>>[],
+    <List<double>>[
+      <double>[10.0, 14.0, 7.0],
+      <double>[10.0, 14.0, 2.0],
+    ],
+    <List<double>>[],
+  ),
+  (
+    'flat',
+    'critical',
+    'Flat',
+    r'flat|deflat',
+    <List<double>>[
+      <double>[1.5, 19.5, 22.5, 19.5],
+      <double>[12.0, 2.5, 12.0, 7.5],
+      <double>[9.5, 5.5, 12.0, 8.0, 14.5, 5.5],
+    ],
+    <List<double>>[
+      <double>[
+        21.5,
+        14.5,
+        20.8,
+        16.2,
+        18.7,
+        17.7,
+        15.6,
+        18.7,
+        12.0,
+        19.0,
+        8.4,
+        18.7,
+        5.3,
+        17.7,
+        3.2,
+        16.2,
+        2.5,
+        14.5,
+        3.2,
+        12.8,
+        5.3,
+        11.3,
+        8.4,
+        10.3,
+        12.0,
+        10.0,
+        15.6,
+        10.3,
+        18.7,
+        11.3,
+        20.8,
+        12.8,
+      ],
+    ],
+    <List<double>>[],
+    <List<double>>[],
+  ),
+  (
+    'damaged',
+    'critical',
+    'Damaged',
+    r'',
+    <List<double>>[
+      <double>[12.0, 9.5, 12.0, 14.5],
+    ],
+    <List<double>>[
+      <double>[12.0, 3.0, 21.5, 20.0, 2.5, 20.0],
+    ],
+    <List<double>>[],
+    <List<double>>[
+      <double>[12.0, 17.3, 1.2],
+    ],
+  ),
+  (
+    'missing',
+    'none',
+    'Missing',
+    r'missing',
+    <List<double>>[
+      <double>[7.5, 12.0, 16.5, 12.0],
+    ],
+    <List<double>>[],
+    <List<double>>[
+      <double>[12.0, 12.0, 9.0],
+    ],
+    <List<double>>[],
+  ),
+  (
+    'none',
+    'none',
+    'Not checked',
+    r'',
+    <List<double>>[
+      <double>[
+        9.0,
+        9.5,
+        9.6,
+        7.4,
+        12.0,
+        6.6,
+        14.4,
+        7.4,
+        15.0,
+        9.5,
+        14.2,
+        11.0,
+        12.0,
+        12.2,
+        12.0,
+        14.0,
+      ],
+    ],
+    <List<double>>[],
+    <List<double>>[
+      <double>[12.0, 12.0, 9.5],
+    ],
+    <List<double>>[
+      <double>[12.0, 17.2, 1.1],
+    ],
+  ),
+];
 
 const List<String> kTyreSpecRiskOrder = <String>[
   'good',

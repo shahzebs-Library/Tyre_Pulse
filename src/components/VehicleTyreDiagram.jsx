@@ -11,7 +11,9 @@ import { slotStateMap } from '../lib/tyreCompleteness';
 import { riskForCondition } from '../lib/inspectionView';
 import { canonicalToSlotId } from '../lib/tyreBay';
 import { slotForPosition } from '../lib/tyrePositionService';
-import { LAYOUT_GEOMETRY, RISK_ORDER, RISK_LABEL, riskHex, shade, currentTheme } from '../lib/tyreLayoutSpec';
+import { LAYOUT_GEOMETRY, RISK_ORDER, RISK_LABEL, riskHex, shade, currentTheme, CONDITION_KINDS, kindForBand, kindForWheel } from '../lib/tyreLayoutSpec';
+import TyreConditionGlyph from './tyre/TyreConditionGlyph';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // The vehicle-type -> layout-key mapping lives in src/lib/vehicleTyreLayout.js
 // (THE single resolver, mirrored from mobile). It used to be inlined here and
@@ -56,7 +58,7 @@ function resolvePendingKeys(pending) {
 }
 
 // ── Realistic 3D Tyre ──────────────────────────────────────────────────────────
-function Tyre({ x: rawX, y: rawY, w: rawW, h: rawH, id, risk = 'none', onClick, label, sub, pending = false }) {
+function Tyre({ x: rawX, y: rawY, w: rawW, h: rawH, id, risk = 'none', kind, onClick, label, sub, pending = false }) {
   // Some layouts carry coordinates as strings; `"6" + 6` is "66", which drew the
   // hub spokes at invalid positions. Coerce once so every derived value is a number.
   const x = Number(rawX), y = Number(rawY), w = Number(rawW), h = Number(rawH);
@@ -161,6 +163,22 @@ function Tyre({ x: rawX, y: rawY, w: rawW, h: rawH, id, risk = 'none', onClick, 
           {sub}
         </text>
       )}
+
+      {/* The condition picture (shared tyre map glyph) on a disc of the band
+          colour, straddling the top of the tyre so it never covers the code or
+          the pressure. Colour is never the only signal on the map. The disc
+          uses the deep (light palette) colour in both themes so the white
+          picture keeps its contrast. */}
+      {(() => {
+        const r = Math.min(w * 0.42, 8)
+        const k = kind || (risk === 'none' ? 'none' : kindForBand(risk))
+        return (
+          <g data-kind={k} style={{ pointerEvents: 'none' }}>
+            <circle cx={cx} cy={y} r={r} fill={riskHex(risk, 'light')} stroke="#ffffff" strokeWidth={Math.max(0.6, r * 0.14)} />
+            <TyreConditionGlyph kind={k} x={cx - r * 0.72} y={y - r * 0.72} size={r * 1.44} color="#ffffff" strokeWidth={3} />
+          </g>
+        )
+      })()}
 
       {/* Still needs details. This is a SEPARATE visual channel from risk: the
           rim colour keeps saying how the tyre is, a dashed outline says nobody
@@ -1412,6 +1430,7 @@ export default function VehicleTyreDiagram({
   assetNo, country,
 }) {
   useAxleCounts()
+  const { t } = useLanguage()
   const resolved = layoutForAsset(resolveLayoutKey(vehicleType), assetNo, country)
 
   // Custom layouts designed in the console Vehicle Designer (V268). Loaded
@@ -1493,6 +1512,17 @@ export default function VehicleTyreDiagram({
       // The field app writes Worn / Flat / Damaged, which the short map above
       // does not list; the shared condition reader bands every word the same way.
       riskMap[id] = LEVEL_TO_RISK[token] || riskForCondition(typeof v === 'string' ? v : v?.condition)
+    })
+  }
+
+  // The picture each wheel draws: the condition word's kind when it agrees
+  // with the wheel's colour, else the colour's default picture.
+  const kindMap = {}
+  if (slotPositions && Array.isArray(slotPositions)) {
+    slotPositions.forEach(p => { if (p?.position) kindMap[p.position] = kindForWheel(p.condition, riskMap[p.position]) })
+  } else if (slotTyreData && typeof slotTyreData === 'object') {
+    Object.entries(slotTyreData).forEach(([id, v]) => {
+      kindMap[id] = kindForWheel(typeof v === 'string' ? v : v?.condition, riskMap[id])
     })
   }
 
@@ -1610,6 +1640,7 @@ export default function VehicleTyreDiagram({
             key={t.id}
             {...t}
             risk={riskMap[t.id] ?? 'none'}
+            kind={kindMap[t.id] ?? 'none'}
             pending={pendingKeys.has(posKey(t.id))}
             sub={subLabels?.[t.id] || null}
             onClick={handleClick}
@@ -1617,13 +1648,15 @@ export default function VehicleTyreDiagram({
         ))}
       </svg>
 
-      {/* Legend */}
+      {/* Legend: one fixed colour + one picture + one word per condition. */}
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
-        {Object.entries(riskColours(currentTheme())).map(([key, col]) => (
-          <div key={key} className="flex items-center gap-1.5">
-            <span className="inline-block w-3.5 h-3.5 rounded-full"
-              style={{ background: `radial-gradient(circle at 35% 35%, ${col.rim}, ${col.dark})` }} />
-            <span className="text-xs text-gray-400">{col.label}</span>
+        {CONDITION_KINDS.map((k) => (
+          <div key={k.kind} className="flex items-center gap-1.5" data-kind={k.kind}>
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full"
+              style={{ background: riskHex(k.band, 'light') }}>
+              <TyreConditionGlyph kind={k.kind} size={14} color="#ffffff" strokeWidth={3} />
+            </span>
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{t(`common.tyreCondition.${k.kind}`)}</span>
           </div>
         ))}
       </div>

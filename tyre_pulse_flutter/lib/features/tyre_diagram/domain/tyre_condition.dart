@@ -31,10 +31,53 @@ String tyreConditionBand(String? raw) {
   if (s.isEmpty) return 'none';
   final String? exact = kTyreSpecConditionExact[s];
   if (exact != null) return exact;
+  final String n = neutraliseCondition(s);
   for (final String band in kTyreSpecConditionOrder) {
-    if (_bandRe[band]?.hasMatch(s) ?? false) return band;
+    if (_bandRe[band]?.hasMatch(n) ?? false) return band;
   }
   return 'none';
+}
+
+final RegExp _negationRe =
+    RegExp(kTyreSpecConditionNegation, caseSensitive: false);
+
+/// [raw] with every phrase that DENIES a fault ("no damage", "not
+/// damaged", "without cuts", "undamaged") replaced by "ok", the shared
+/// tyre map's rule. "Good, no damage" used to match "damage" and paint a
+/// healthy tyre red; every stem test goes through this first.
+String neutraliseCondition(String? raw) =>
+    (raw ?? '').replaceAll(_negationRe, ' ok ');
+
+final List<(String, String, RegExp?)> _kinds = <(String, String, RegExp?)>[
+  for (final (
+        String kind,
+        String band,
+        String _,
+        String match,
+        List<List<double>> _,
+        List<List<double>> _,
+        List<List<double>> _,
+        List<List<double>> _,
+      ) in kTyreSpecConditionKinds)
+    (kind, band, match.isEmpty ? null : RegExp(match, caseSensitive: false)),
+];
+
+/// The shared kind (`good`, `worn`, `puncture`, `flat`, `damaged`,
+/// `missing`, `none`) the spec gives [raw]. The band decides the colour;
+/// the kind only picks the picture inside it, so the two never disagree.
+String tyreConditionKind(String? raw) {
+  final String band = tyreConditionBand(raw);
+  final String n = neutraliseCondition(raw);
+  String? fallback;
+  for (final (String kind, String kindBand, RegExp? match) in _kinds) {
+    if (kindBand != band) continue;
+    if (match == null) {
+      fallback ??= kind;
+    } else if (match.hasMatch(n)) {
+      return kind;
+    }
+  }
+  return fallback ?? 'none';
 }
 
 /// Maps a raw DB/legacy condition string onto [TyreCondition], or `null`
@@ -43,7 +86,8 @@ String tyreConditionBand(String? raw) {
 ///
 /// Case-insensitive; `'wear'` folds onto [TyreCondition.worn] and
 /// `'damage'` onto [TyreCondition.damaged]. Other fault words (burst, cut,
-/// bulge, separation) are [TyreCondition.damaged].
+/// bulge, separation) are [TyreCondition.damaged]. A denied fault ("Good,
+/// no damage") is [TyreCondition.good].
 TyreCondition? normaliseCondition(String? raw) {
   switch ((raw ?? '').trim().toLowerCase()) {
     case 'good':
@@ -61,20 +105,24 @@ TyreCondition? normaliseCondition(String? raw) {
     case 'missing':
       return TyreCondition.missing;
   }
-  final String s = (raw ?? '').toLowerCase();
-  switch (tyreConditionBand(raw)) {
-    case 'good':
-      return TyreCondition.good;
-    case 'warning':
-      return TyreCondition.worn;
-    case 'critical':
-      if (s.contains('flat')) return TyreCondition.flat;
-      if (s.contains('puncture')) return TyreCondition.puncture;
-      return TyreCondition.damaged;
-    default:
-      return null;
-  }
+  return tyreConditionFromKind(tyreConditionKind(raw));
 }
+
+/// The enum value for a shared kind key, `null` for `none` (not checked).
+TyreCondition? tyreConditionFromKind(String kind) => switch (kind) {
+      'good' => TyreCondition.good,
+      'worn' => TyreCondition.worn,
+      'damaged' => TyreCondition.damaged,
+      'puncture' => TyreCondition.puncture,
+      'flat' => TyreCondition.flat,
+      'missing' => TyreCondition.missing,
+      _ => null,
+    };
+
+/// The shared kind key for [condition]; `null` (nothing recorded) is
+/// `none`, the grey question mark.
+String tyreConditionKindKey(TyreCondition? condition) =>
+    condition?.name ?? 'none';
 
 /// Maps [condition] onto a design-system status; `null` (nothing readable
 /// recorded) is [TpStatus.unknown], the "No data" band.

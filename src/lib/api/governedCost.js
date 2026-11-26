@@ -175,18 +175,34 @@ export async function loadGovernedCost({ country, site, from, to, mode = 'combin
   }
 }
 
+/**
+ * The cost overview is a heavy read (about 2 s on its own). When the home page
+ * fires several heavy reads at once the database can push it past the 8 s
+ * statement limit, which reaches the browser as a 500 (Postgres 57014). One
+ * retry after a short pause is enough in practice; a second failure is shown
+ * as "unavailable" like any other.
+ */
+export async function rpcWithTimeoutRetry(call, { delayMs = 1500 } = {}) {
+  const first = await call()
+  const e = first?.error
+  const timedOut = e && (e.code === '57014' || /statement timeout/i.test(e.message || ''))
+  if (!timedOut) return first
+  await new Promise((r) => setTimeout(r, delayMs))
+  return call()
+}
+
 async function _loadGovernedCost({ country, site, from, to, mode = 'combined' } = {}) {
   const single = isSingleCountry(scope(country))
   const currency = single ? currencyForCountry(country) : MIXED_CURRENCY
 
   const [overviewRes, byCountryRes] = await Promise.all([
-    supabase
+    rpcWithTimeoutRetry(() => supabase
       .rpc('get_cost_cpk_overview', {
         p_country: scope(country),
         p_site: scope(site),
         p_from: from || null,
         p_to: to || null,
-      })
+      }))
       .then((r) => r, () => ({ data: null, error: true })),
     // Always load the per-country split: it is what a multi-country scope must
     // show instead of a blend, and it is cheap.

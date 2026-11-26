@@ -106,10 +106,15 @@ export async function loadJobCardMaterials(jobCard) {
     const stockIds = [...reservations.map((r) => r.stock_id), ...movements.map((m) => m.stock_id), ...inst.rows.map((i) => i.stock_id)]
     const balances = await readByIds(VIEWS.balances, BAL_COLS, 'id', stockIds)
     const rows = buildJobMaterials({ reservations, movements, reversals, installations: inst.rows, balances })
+    const workOrder = (!wo.error && wo.data && wo.data[0]) || null
     return {
       status: 'ok',
-      jobCard: variants[0],
-      workOrder: (!wo.error && wo.data && wo.data[0]) || null,
+      // Show the job card as Work Orders records it, not as it was typed.
+      jobCard: workOrder?.work_order_no || variants[0],
+      // The spelling this read searched with. Reloads must reuse it: the Work
+      // Orders spelling alone can miss materials recorded under the typed one.
+      lookupJobCard: jobCard,
+      workOrder,
       rows,
       summary: summariseJobMaterials(rows, reqs.rows),
       requisitions: reqs.rows,

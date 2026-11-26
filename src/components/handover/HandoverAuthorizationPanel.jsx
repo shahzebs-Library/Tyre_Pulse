@@ -4,11 +4,11 @@ import SignatureCapture from '../checklist/SignatureCapture'
 import SignatureView from '../checklist/SignatureView'
 import HandoverLocation from './HandoverLocation'
 import { toUserMessage } from '../../lib/safeError'
-import { signHandover, listHandoverEvents, getMyLinkedDriverId } from '../../lib/api/handoverReports'
+import { signHandover, listHandoverEvents, getMyLinkedDriverId, getMyUserId } from '../../lib/api/handoverReports'
 import {
   signatureLadder, nextPartyToSign, isFrozen, hasAuthorizationColumns, rowLocation,
   PARTY_LABEL, captureLocation, locationArgs, eventLabel, eventFields, signingSummary,
-  isSentBack, rowSigningMode, onBehalfPrompt, SIGN_ON_BEHALF, SIGN_BLOCKED,
+  isSentBack, rowSigningMode, onBehalfPrompt, SIGN_ON_BEHALF, SIGN_BLOCKED, SIGN_OTHER_ACCOUNT,
 } from '../../lib/handoverAuthorization'
 
 function fmtWhen(v) {
@@ -35,7 +35,13 @@ export default function HandoverAuthorizationPanel({ handover, onSigned }) {
   const [padKey, setPadKey] = useState(0)
   const [myDriverId, setMyDriverId] = useState(null)
   const [behalfOk, setBehalfOk] = useState(false)
-  useEffect(() => { let live = true; getMyLinkedDriverId().then((v) => { if (live) setMyDriverId(v) }); return () => { live = false } }, [])
+  const [myUserId, setMyUserId] = useState(null)
+  useEffect(() => {
+    let live = true
+    getMyLinkedDriverId().then((v) => { if (live) setMyDriverId(v) })
+    getMyUserId().then((v) => { if (live) setMyUserId(v) })
+    return () => { live = false }
+  }, [])
 
   const id = handover?.id
   const loadEvents = useCallback(async () => {
@@ -60,7 +66,7 @@ export default function HandoverAuthorizationPanel({ handover, onSigned }) {
   const dueRung = ladder.find((r) => r.party === due)
   const dueName = dueRung?.driverName || ''
   const canCollect = due && ['draft', 'pending_supervisor', null, undefined].includes(handover.approval_status)
-  const mode = due ? rowSigningMode(handover, due, myDriverId) : null
+  const mode = due ? rowSigningMode(handover, due, myDriverId, myUserId) : null
   const sentBack = isSentBack(handover)
 
   async function collect() {
@@ -120,7 +126,10 @@ export default function HandoverAuthorizationPanel({ handover, onSigned }) {
       {canCollect && mode === SIGN_BLOCKED && (
         <p className="vh-note" data-testid="handover-sign-blocked">You are the other driver on this handover, so this signature must be given by {dueName || 'the driver'} or collected by a supervisor.</p>
       )}
-      {canCollect && mode !== SIGN_BLOCKED && (
+      {canCollect && mode === SIGN_OTHER_ACCOUNT && (
+        <p className="vh-note" data-testid="handover-sign-other-account">You gave the handing signature, and one account cannot give both. {dueName || 'The receiving driver'} signs with their own account, or a different supervisor signs on their behalf.</p>
+      )}
+      {canCollect && mode !== SIGN_BLOCKED && mode !== SIGN_OTHER_ACCOUNT && (
         <div className="vh-signoff-act">
           <p className="vh-signoff-hint">{PARTY_LABEL[due]}: {dueName || 'the driver'} signs here. The time and your account are recorded by the server.</p>
           <SignatureCapture key={padKey} label={`${PARTY_LABEL[due]} signature`} onChange={setSig} height={140} />

@@ -366,6 +366,16 @@ export function getMyLinkedDriverId({ refresh = false } = {}) {
   return myDriverPromise
 }
 
+/** The signed-in account id, or null. */
+export async function getMyUserId() {
+  try {
+    const { data } = await supabase.auth.getUser()
+    return data?.user?.id || null
+  } catch {
+    return null
+  }
+}
+
 /** Append-only audit trail of one handover, oldest first. [] before the migration. */
 export async function listHandoverEvents(id) {
   if (!id) return []

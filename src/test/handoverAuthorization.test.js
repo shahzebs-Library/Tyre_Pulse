@@ -152,6 +152,28 @@ describe('who may sign (review H4) and send-back (M6)', () => {
     expect(rowSigningMode(row, PARTY_HANDING, 'd2')).toBe(SIGN_BLOCKED)
   })
 
+  it('never lets one account give both signatures', async () => {
+    const { rowSigningMode, wizardSigningModes, wizardSigningProblems, SIGN_ON_BEHALF, SIGN_OTHER_ACCOUNT, SIGN_SELF, SIGN_BLOCKED } = await import('../lib/handoverAuthorization')
+    const row = { from_driver_id: 'd1', to_driver_id: 'd2', from_signed_by: 'u-sup', from_signed_at: 'x' }
+    expect(rowSigningMode(row, PARTY_RECEIVING, null, 'u-sup')).toBe(SIGN_OTHER_ACCOUNT)
+    expect(rowSigningMode(row, PARTY_RECEIVING, null, 'u-other-sup')).toBe(SIGN_ON_BEHALF)
+    // A supervisor on one device: handing on behalf now, receiving left for another account.
+    expect(wizardSigningModes({ handingDriverId: 'd1', receivingDriverId: 'd2', myDriverId: null }))
+      .toEqual({ [PARTY_HANDING]: SIGN_ON_BEHALF, [PARTY_RECEIVING]: SIGN_OTHER_ACCOUNT })
+    // The receiving driver on their own account: only their own signature.
+    expect(wizardSigningModes({ handingDriverId: 'd1', receivingDriverId: 'd2', myDriverId: 'd2' }))
+      .toEqual({ [PARTY_HANDING]: SIGN_BLOCKED, [PARTY_RECEIVING]: SIGN_SELF })
+    const base = ['The receiving signature is missing.']
+    expect(wizardSigningProblems(base, { behalf_handing: true }, { [PARTY_HANDING]: SIGN_ON_BEHALF, [PARTY_RECEIVING]: SIGN_OTHER_ACCOUNT })).toEqual([])
+  })
+
+  it('always saves a handover under a site', async () => {
+    const { resolveHandoverSite } = await import('../lib/handoverAuthorization')
+    expect(resolveHandoverSite({ site: 'jeddah ' }, { site: 'RIYADH' })).toBe('JEDDAH')
+    expect(resolveHandoverSite(null, { site: ' dammam' })).toBe('DAMMAM')
+    expect(resolveHandoverSite({ site: '' }, {})).toBe(null)
+  })
+
   it('needs the on-behalf confirmation and skips a blocked party', async () => {
     const { wizardSigningProblems, SIGN_ON_BEHALF, SIGN_BLOCKED, SIGN_SELF } = await import('../lib/handoverAuthorization')
     const base = ['The handing over signature is missing.']

@@ -41,7 +41,13 @@ Who holds the pen for each signature:
   can only be signed on behalf.
 - An account linked to EITHER driver on the handover can never sign for the
   other party. The app should leave that signature for later.
-- One account may collect both signatures only when both are on behalf.
+- One account NEVER collects both signatures, on behalf or not: the receiving
+  signature must come from a different account than the handing one
+  (`from_signed_by <> to_signed_by`, also a table CHECK). So a single
+  supervisor cannot sign for both drivers alone; the second signature is given
+  by the driver's own account or by another supervisor. A one-device wizard
+  therefore records the first signature and leaves the second for the saved
+  record.
 
 On a check-out the driver picked in the form RECEIVES the vehicle (to_*); the
 other party (yard, previous driver) HANDS it over (from_*). On a check-in the
@@ -67,7 +73,7 @@ New columns:
 | from_driver_id | uuid, drivers(id) | client on insert | handing driver, when in the register |
 | to_driver_id | uuid, drivers(id) | client on insert | receiving driver, when in the register |
 | hour_meter | numeric, >= 0 | client on insert | engine hours at handover |
-| site | text (upper case) | client on insert | site isolation applies |
+| site | text (upper case) | client on insert, ALWAYS | the asset's fleet-register site, else the site the user enters; site isolation only protects rows that carry it |
 | from_signature | text (SVG markup or data URL, max 200000 chars) | sign_handover only | |
 | from_signed_name | text | sign_handover only | driver register name, else the typed name |
 | from_signed_at | timestamptz | sign_handover only | server now() |
@@ -137,7 +143,7 @@ Errors (the message is a plain sentence; show it as is):
 
 | code | when |
 |---|---|
-| 42501 | not signed in, or account not active; not the driver's account and `p_on_behalf` not set; on behalf from a non-supervisor; on behalf by an account linked to a driver on this handover; same account for both without both on behalf |
+| 42501 | not signed in, or account not active; not the driver's account and `p_on_behalf` not set; on behalf from a non-supervisor; on behalf by an account linked to a driver on this handover; the same account that gave the handing signature |
 | 22023 | unknown party; missing, oversized or badly formed signature; invalid location; row not visible; already in sign-off; party already signed; receiving before handing; no signer name |
 
 The handing party signs first. Each party signs once. The receiving moment's

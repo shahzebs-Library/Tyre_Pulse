@@ -125,6 +125,13 @@ export function isValidSignature(sig) {
 export const SIGN_SELF = 'self'
 export const SIGN_ON_BEHALF = 'on_behalf'
 export const SIGN_BLOCKED = 'blocked'
+/** This account already gave the other signature; a different account must give this one. */
+export const SIGN_OTHER_ACCOUNT = 'other_account'
+
+/** Modes in which this account cannot sign the party now. */
+export function cannotSignNow(mode) {
+  return mode === SIGN_BLOCKED || mode === SIGN_OTHER_ACCOUNT
+}
 
 /**
  * How the signed-in account may sign for one party, mirroring sign_handover():
@@ -140,13 +147,30 @@ export function signingMode({ partyDriverId = null, otherDriverId = null, myDriv
   return SIGN_ON_BEHALF
 }
 
-/** signingMode() for a party of a saved row. */
-export function rowSigningMode(row, party, myDriverId) {
+/**
+ * signingMode() for a party of a saved row. sign_handover() never lets one
+ * account give both signatures, so the receiving party is `other_account` when
+ * this account (myUserId) already gave the handing signature.
+ */
+export function rowSigningMode(row, party, myDriverId, myUserId = null) {
   const from = row?.from_driver_id || null
   const to = row?.to_driver_id || null
-  return party === PARTY_HANDING
-    ? signingMode({ partyDriverId: from, otherDriverId: to, myDriverId })
-    : signingMode({ partyDriverId: to, otherDriverId: from, myDriverId })
+  if (party === PARTY_HANDING) return signingMode({ partyDriverId: from, otherDriverId: to, myDriverId })
+  if (myUserId && row?.from_signed_by && row.from_signed_by === myUserId) return SIGN_OTHER_ACCOUNT
+  return signingMode({ partyDriverId: to, otherDriverId: from, myDriverId })
+}
+
+/**
+ * Both modes for the new-handover wizard, where one account holds the device.
+ * The server refuses one account for both signatures, so when this account can
+ * sign the handing party the receiving party is left for another account (the
+ * receiving driver, or a different supervisor) to sign from the saved record.
+ */
+export function wizardSigningModes({ handingDriverId = null, receivingDriverId = null, myDriverId = null } = {}) {
+  const handing = signingMode({ partyDriverId: handingDriverId, otherDriverId: receivingDriverId, myDriverId })
+  let receiving = signingMode({ partyDriverId: receivingDriverId, otherDriverId: handingDriverId, myDriverId })
+  if (!cannotSignNow(handing) && !cannotSignNow(receiving)) receiving = SIGN_OTHER_ACCOUNT
+  return { [PARTY_HANDING]: handing, [PARTY_RECEIVING]: receiving }
 }
 
 /** The line the screen shows before an on-behalf signature is recorded. */
@@ -156,8 +180,9 @@ export function onBehalfPrompt(name) {
 
 /**
  * Adjust the wizard's signature problems for the signing modes: a party this
- * account may not sign for needs no signature now (it is collected later from
- * the saved record), and an on-behalf signature needs the explicit confirmation
+ * account may not sign for now (blocked, or already signed by this account's
+ * other signature) needs no signature now (it is collected later from the saved
+ * record), and an on-behalf signature needs the explicit confirmation
  * box ticked. `base` is vehicleHandoverView.signatureProblems(form).
  */
 export function wizardSigningProblems(base, form, modes = {}) {
@@ -167,12 +192,23 @@ export function wizardSigningProblems(base, form, modes = {}) {
   }
   let errs = [...(base || [])]
   for (const party of [PARTY_HANDING, PARTY_RECEIVING]) {
-    if (modes[party] === SIGN_BLOCKED) errs = errs.filter((e) => e !== missing[party])
+    if (cannotSignNow(modes[party])) errs = errs.filter((e) => e !== missing[party])
     else if (modes[party] === SIGN_ON_BEHALF && !form?.[`behalf_${party}`]) {
       errs.push(`Confirm that you are signing on behalf of the ${party === PARTY_HANDING ? 'handing' : 'receiving'} party.`)
     }
   }
   return errs
+}
+
+/**
+ * The site a new handover is saved under: the asset's fleet-register site, else
+ * the one typed in the wizard, upper-cased. null when there is none. The
+ * database's site isolation only protects a row that carries a site, so the
+ * wizard refuses to save without one.
+ */
+export function resolveHandoverSite(assetRow, form) {
+  const s = String(assetRow?.site || form?.site || '').trim().toUpperCase()
+  return s || null
 }
 
 // ---------------------------------------------------------------- location

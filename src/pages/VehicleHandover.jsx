@@ -48,7 +48,8 @@ import {
 } from '../lib/api/handoverReports'
 import {
   partiesFor, captureLocation, locationArgs, isFrozen, PARTY_HANDING, PARTY_RECEIVING,
-  signingMode, wizardSigningProblems, onBehalfPrompt, SIGN_ON_BEHALF, SIGN_BLOCKED,
+  wizardSigningModes, wizardSigningProblems, onBehalfPrompt, SIGN_ON_BEHALF, SIGN_BLOCKED,
+  cannotSignNow, resolveHandoverSite,
 } from '../lib/handoverAuthorization'
 import { brandingForPdf } from '../lib/inspectionChecklistReport'
 import { resolveStorageUrl, resolveStorageUrlMap } from '../lib/storageRefs'
@@ -182,6 +183,8 @@ function Stepper({ step, onJump }) {
   )
 }
 
+const SITE_REQUIRED = 'Enter the site of this handover. The fleet register has no site for this asset.'
+
 export default function VehicleHandover() {
   const { activeCountry, appSettings } = useSettings()
   const { branding } = useTenant()
@@ -248,10 +251,7 @@ export default function VehicleHandover() {
     const checkout = form.handover_type !== 'checkin'
     const handingId = (checkout ? form.other_party_id : form.driver_id) || null
     const receivingId = (checkout ? form.driver_id : form.other_party_id) || null
-    return {
-      [PARTY_HANDING]: signingMode({ partyDriverId: handingId, otherDriverId: receivingId, myDriverId }),
-      [PARTY_RECEIVING]: signingMode({ partyDriverId: receivingId, otherDriverId: handingId, myDriverId }),
-    }
+    return wizardSigningModes({ handingDriverId: handingId, receivingDriverId: receivingId, myDriverId })
   }, [form.handover_type, form.driver_id, form.other_party_id, myDriverId])
   const readLocation = useCallback(async () => {
     setLocation({ busy: true, reading: null })
@@ -338,7 +338,11 @@ export default function VehicleHandover() {
     setLocation({ busy: false, reading: null })
   }
   const next = () => {
-    const errs = [...validateStep(step, form, prev), ...(WIZARD_STEPS[step]?.key === 'signatures' ? wizardSigningProblems(signatureProblems(form), form, signModes) : [])]
+    const errs = [
+      ...validateStep(step, form, prev),
+      ...(step === 0 && !resolveHandoverSite(assetRow, form) ? [SITE_REQUIRED] : []),
+      ...(WIZARD_STEPS[step]?.key === 'signatures' ? wizardSigningProblems(signatureProblems(form), form, signModes) : []),
+    ]
     setStepErrors(errs)
     if (!errs.length) setStep((s) => Math.min(WIZARD_STEPS.length - 1, s + 1))
   }
@@ -364,6 +368,10 @@ export default function VehicleHandover() {
   const completeHandover = async () => {
     const bad = firstInvalidStep(form, prev, WIZARD_STEPS.length - 1)
     if (bad >= 0) { setStep(bad); setStepErrors(validateStep(bad, form, prev)); return }
+    // Site isolation only protects a handover that carries its site, so every
+    // handover is saved with one: the asset's fleet site, else the one chosen.
+    const site = resolveHandoverSite(assetRow, form)
+    if (!site) { setStep(0); setStepErrors([SITE_REQUIRED]); return }
     const sigErrs = wizardSigningProblems(signatureProblems(form), form, signModes)
     if (sigErrs.length) {
       setStep(WIZARD_STEPS.findIndex((w) => w.key === 'signatures')); setStepErrors(sigErrs); return
@@ -373,7 +381,7 @@ export default function VehicleHandover() {
     try {
       const payload = buildHandoverPayload(
         { ...form, artwork_stem: artStem, signature: null },
-        { country: asset.row?.country || activeCountry, site: assetRow?.site || null },
+        { country: asset.row?.country || activeCountry, site },
       )
       row = await createHandoverReport(payload)
       const isCheckout = form.handover_type !== 'checkin'
@@ -390,9 +398,9 @@ export default function VehicleHandover() {
         // receiving party can only sign after the handing party.
         const handingMode = signModes[PARTY_HANDING]
         const receivingMode = signModes[PARTY_RECEIVING]
-        if (handingMode !== SIGN_BLOCKED) {
+        if (!cannotSignNow(handingMode)) {
           await signHandover(row.id, PARTY_HANDING, { signature: form.sig_handing, name: handingName, location: loc, onBehalf: handingMode === SIGN_ON_BEHALF })
-          if (receivingMode !== SIGN_BLOCKED) {
+          if (!cannotSignNow(receivingMode)) {
             await signHandover(row.id, PARTY_RECEIVING, { signature: form.sig_receiving, name: receivingName, location: loc, onBehalf: receivingMode === SIGN_ON_BEHALF })
           }
         }
@@ -670,6 +678,13 @@ export default function VehicleHandover() {
                           <InfoField label="Engine hours" value={prev.engineHours != null ? `${fmtInt(prev.engineHours)} h` : null} />
                           <InfoField label="Current fuel level" value={prev.prevFuel != null ? `${prev.prevFuel}%` : null} />
                           <InfoField label="Site / location" value={assetRow?.site} />
+                          {!assetRow?.site && (
+                            <label className="vh-field" data-testid="wizard-site">
+                              <span>Site of this handover</span>
+                              <input className="vh-input" aria-label="Site of this handover" placeholder="For example: JEDDAH" value={form.site || ''} maxLength={80} onChange={(e) => setF('site', e.target.value)} />
+                              <small className="vh-hint">The fleet register has no site for this asset. The handover is only visible to people who cover this site.</small>
+                            </label>
+                          )}
                           <InfoField label="Country" value={assetRow?.country} />
                         </div>
                       </div>
@@ -836,6 +851,8 @@ export default function VehicleHandover() {
                   <Card key={party} title={label} sub={nameOf(party) ? `Signed by ${nameOf(party)}` : 'Name this person in the Vehicle Details step.'}>
                     {signModes[party] === SIGN_BLOCKED ? (
                       <p className="vh-note" data-testid={`wizard-blocked-${party}`}>You are the other driver on this handover, so {nameOf(party) || 'this person'} signs later from the saved handover, or a supervisor signs on their behalf.</p>
+                    ) : cannotSignNow(signModes[party]) ? (
+                      <p className="vh-note" data-testid={`wizard-other-account-${party}`}>One account cannot give both signatures. After you complete this step, {nameOf(party) || 'this person'} signs from the saved handover with their own account, or a different supervisor signs on their behalf.</p>
                     ) : form[key] ? (
                       <div className="vh-sig">
                         <SignatureView value={form[key]} label={null} name={nameOf(party) || null} />

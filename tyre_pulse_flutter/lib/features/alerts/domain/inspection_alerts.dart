@@ -27,7 +27,15 @@ List<TyreAlert> alertsFromInspections(Iterable<Map<String, Object?>> rows) {
     final String asset = (row['asset_no'] as String? ?? '').trim();
     final String id = '${row['id'] ?? ''}';
     if (asset.isEmpty || id.isEmpty) continue;
-    if (!seen.add(asset.toUpperCase())) continue;
+    // A vehicle is (organisation, country, asset number): the same code can
+    // name a different machine in another country, and one must not hide the
+    // other's findings.
+    final String key = <Object?>[
+      row['organisation_id'] ?? '',
+      (row['country'] as String? ?? '').trim().toUpperCase(),
+      asset.toUpperCase(),
+    ].join('|');
+    if (!seen.add(key)) continue;
     for (final TyreEntryPair pair in readTyreEntries(row['tyre_conditions'])) {
       final TpStatus status = wheelStatusFor(pair.entry);
       final String? level = switch (status) {
@@ -36,8 +44,13 @@ List<TyreAlert> alertsFromInspections(Iterable<Map<String, Object?>> rows) {
         _ => null,
       };
       if (level == null) continue;
-      final Object? serial = pair.entry['serial'] ?? pair.entry['serial_no'];
-      final Object? tread = pair.entry['tread_depth'] ?? pair.entry['tread'];
+      // Canonical keys first (what this app writes), legacy aliases after.
+      final Object? serial = pair.entry['serial_number'] ??
+          pair.entry['serial'] ??
+          pair.entry['serial_no'];
+      final Object? tread = pair.entry['tread_depth_mm'] ??
+          pair.entry['tread_depth'] ??
+          pair.entry['tread'];
       out.add(
         TyreAlert(
           id: inspectionAlertId(id, pair.key),

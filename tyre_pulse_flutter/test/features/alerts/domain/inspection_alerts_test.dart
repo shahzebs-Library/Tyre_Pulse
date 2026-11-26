@@ -11,7 +11,11 @@ void main() {
         'inspection_date': '2026-11-25',
         'tyre_conditions': <String, Object?>{
           'LHF1': <String, Object?>{'condition': 'Damaged', 'checked': true},
-          'RHF1': <String, Object?>{'condition': 'Good', 'checked': true, 'pressure_psi': 110},
+          'RHF1': <String, Object?>{
+            'condition': 'Good',
+            'checked': true,
+            'pressure_psi': 110,
+          },
         },
       },
       // Older inspection of the same asset: superseded, not an alert.
@@ -27,6 +31,36 @@ void main() {
     expect(alerts.single.id, 'insp:i2:LHF1');
     expect(alerts.single.isCritical, isTrue);
     expect(alerts.single.assetNo, 'TM689');
+  });
+
+  test('same asset code in another country is a different vehicle', () {
+    final alerts = alertsFromInspections(<Map<String, Object?>>[
+      <String, Object?>{
+        'id': 'u1',
+        'country': 'UAE',
+        'asset_no': 'GN103',
+        'tyre_conditions': <String, Object?>{
+          'LHF1': <String, Object?>{'condition': 'Good', 'checked': true},
+        },
+      },
+      <String, Object?>{
+        'id': 'k1',
+        'country': 'KSA',
+        'asset_no': 'GN103',
+        'tyre_conditions': <String, Object?>{
+          'LHF1': <String, Object?>{
+            'condition': 'Puncture',
+            'checked': true,
+            'serial_number': 'SN-1',
+            'tread_depth_mm': 4.5,
+          },
+        },
+      },
+    ]);
+    expect(alerts, hasLength(1));
+    expect(alerts.single.id, 'insp:k1:LHF1');
+    expect(alerts.single.serialNo, 'SN-1');
+    expect(alerts.single.treadDepthMm, 4.5);
   });
 
   test('rows without an asset or id are skipped', () {

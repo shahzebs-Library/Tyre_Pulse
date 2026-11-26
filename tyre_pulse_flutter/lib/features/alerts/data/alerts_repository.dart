@@ -91,7 +91,10 @@ final class SupabaseAlertsRepository
           .substring(0, 10);
       var inspections = _client
           .from(SupabaseTables.inspections)
-          .select('id,asset_no,site,inspection_date,tyre_conditions')
+          .select(
+            'id,organisation_id,country,asset_no,site,inspection_date,'
+            'tyre_conditions',
+          )
           .gte('inspection_date', since);
       if (countryFilter != null) {
         inspections = inspections.or(countryFilter);

@@ -1,5 +1,5 @@
 -- ERP Stores Ledger upload (Ramco report CSOL-IMS-013-1)
--- STATUS: NOT APPLIED. Apply only on the owner's explicit OK.
+-- STATUS: APPLIED LIVE 2026-11-26 on the owner's "apply". Reads open to all approved users (owner: rates anyone can see).
 --
 -- What it adds
 --   erp_ledger_uploads        one row per uploaded file: name, sha256, report id, period, currency,
@@ -106,7 +106,7 @@ alter table public.erp_ledger_uploads enable row level security;
 alter table public.erp_ledger_upload_lines enable row level security;
 alter table public.material_master_name_history enable row level security;
 
--- Org isolation (restrictive), country isolation on reads (restrictive), elevated read.
+-- Org isolation (restrictive), country isolation on reads (restrictive), read by any approved user (owner decision).
 drop policy if exists erp_ledger_uploads_org_isolation on public.erp_ledger_uploads;
 create policy erp_ledger_uploads_org_isolation on public.erp_ledger_uploads as restrictive for all to authenticated
   using ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin()))
@@ -117,7 +117,7 @@ create policy erp_ledger_uploads_country_isolation on public.erp_ledger_uploads 
          or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[]))));
 drop policy if exists erp_ledger_uploads_read on public.erp_ledger_uploads;
 create policy erp_ledger_uploads_read on public.erp_ledger_uploads for select to authenticated
-  using ((select public.app_is_elevated()) or (select public.is_super_admin()));
+  using ((select public.app_is_active()) is true);
 
 drop policy if exists erp_ledger_upload_lines_org_isolation on public.erp_ledger_upload_lines;
 create policy erp_ledger_upload_lines_org_isolation on public.erp_ledger_upload_lines as restrictive for all to authenticated
@@ -129,7 +129,7 @@ create policy erp_ledger_upload_lines_country_isolation on public.erp_ledger_upl
          or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[]))));
 drop policy if exists erp_ledger_upload_lines_read on public.erp_ledger_upload_lines;
 create policy erp_ledger_upload_lines_read on public.erp_ledger_upload_lines for select to authenticated
-  using ((select public.app_is_elevated()) or (select public.is_super_admin()));
+  using ((select public.app_is_active()) is true);
 
 drop policy if exists material_master_name_history_org_isolation on public.material_master_name_history;
 create policy material_master_name_history_org_isolation on public.material_master_name_history as restrictive for all to authenticated

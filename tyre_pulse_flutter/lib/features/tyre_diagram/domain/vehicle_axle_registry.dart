@@ -16,10 +16,11 @@
 /// always gets the default build - never a guessed one.
 library;
 
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_layout_spec.g.dart';
+
 /// Layout key -> axle count -> the variant layout key.
-const Map<String, Map<int, String>> kAxleVariants = <String, Map<int, String>>{
-  'Concrete pump': <int, String>{4: 'Concrete pump 4-axle'},
-};
+/// From the shared tyre map (docs/document-specs/tyre-layouts.json).
+const Map<String, Map<int, String>> kAxleVariants = kTyreSpecAxleVariants;
 
 final Map<String, int?> _byCountryAsset = <String, int?>{};
 final Map<String, Set<int?>> _byAsset = <String, Set<int?>>{};

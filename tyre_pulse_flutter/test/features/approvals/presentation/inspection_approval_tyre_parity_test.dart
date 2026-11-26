@@ -219,7 +219,7 @@ void main() {
       );
       expect(flat.label, contains('RHF2'));
       expect(flat.label, contains('Flat'));
-      expect(puncture.label, contains('LHF3'));
+      expect(puncture.label, contains('LHR1-I'));
       expect(puncture.label, contains('Puncture'));
     },
   );
@@ -282,7 +282,7 @@ void main() {
       );
 
       final Finder lastRear = find.bySemanticsLabel(
-        RegExp(r'RHR2-O.*Missing.*0'),
+        RegExp(r'RHRRO.*Missing.*0'),
       );
       expect(lastRear, findsOneWidget);
       await tester.scrollUntilVisible(

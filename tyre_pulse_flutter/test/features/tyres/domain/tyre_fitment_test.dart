@@ -65,16 +65,22 @@ void main() {
       expect(mapped['R2Ro']?.serialNo, 'REAR-OUTER');
     });
 
-    test('uses non-mixer rear codes for a concrete pump', () {
+    test('reads concrete pump records under their own spellings', () {
       final Map<String, TyreFitment> mapped = fitmentsByInspectionSlot(
         vehicleType: 'Concrete pump',
         assetNo: 'CP-045',
         fitments: <TyreFitment>[
-          _fitment(id: '1', code: 'LHR1-O', serial: 'PUMP-REAR'),
+          _fitment(id: '1', code: 'LHR1-O', serial: 'PUMP-AXLE3'),
+          _fitment(id: '2', code: 'LHRCO', serial: 'PUMP-REAR'),
+          _fitment(id: '3', code: 'RHRI', serial: 'PUMP-LEGACY'),
         ],
       );
 
+      // Shared tyre map: on a pump LHR1-O is the axle-3 single wheel, the
+      // rear duals are RC / RR (legacy CO / RO).
+      expect(mapped['F3L']?.serialNo, 'PUMP-AXLE3');
       expect(mapped['R1Lo']?.serialNo, 'PUMP-REAR');
+      expect(mapped['R2Ri']?.serialNo, 'PUMP-LEGACY');
     });
 
     test('newest lifecycle row wins and unknown positions are ignored', () {

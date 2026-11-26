@@ -17,6 +17,7 @@
  *
  * Pure module: no React, no network, no DOM.
  */
+import { NO_TYRE_EQUIPMENT, isTyrelessEquipment as specIsTyreless } from './tyreLayoutSpec'
 import { ZONE_CATALOGS, ZONE_LABELS } from './vehicleDamageZones'
 
 /** Web location of the per-view images copied out of the Flutter bundle. */
@@ -202,25 +203,10 @@ export const VISUAL_KIND = Object.freeze({
  * Matching here short-circuits the whole road-vehicle keyword chain, so a
  * placing boom or a stationary pump can never borrow truck artwork.
  */
-export const NO_TYRE_EQUIPMENT_KEYWORDS = Object.freeze([
-  'generator',
-  'genset',
-  'chiller',
-  'reclaimer',
-  'compressor',
-  'tower light',
-  'light tower',
-  // ANY plant is a fixed installation: bt-plant, ice plant, batching plant,
-  // water treatment plant. One word covers every spelling.
-  'plant',
-  'batch',
-  // A placing boom is mast-mounted concrete placing gear, not a vehicle.
-  'placing boom',
-  'placing',
-  // A stationary pump is skid-mounted concrete pumping gear with NO wheels.
-  'stationary',
-  'building',
-])
+export const NO_TYRE_EQUIPMENT_KEYWORDS = NO_TYRE_EQUIPMENT
+
+/** Whether a description names equipment with no tyres (the shared tyre map's rule). */
+export const isTyrelessEquipment = specIsTyreless
 
 const LEADING_LETTERS = /^[A-Za-z]+/
 
@@ -240,12 +226,6 @@ export function assetClassOf(assetNo) {
   return match ? match[0].toUpperCase() : null
 }
 
-/** Whether a description names equipment with no tyres. Mirrors `isTyrelessEquipment`. */
-export function isTyrelessEquipment(value) {
-  if (value == null || value === '') return false
-  const s = String(value).toLowerCase().trim()
-  return NO_TYRE_EQUIPMENT_KEYWORDS.some((k) => s.includes(k))
-}
 
 /** type + make + model, normalised. Mirrors `_searchableVehicleDescriptionFor`. */
 export function searchableVehicleDescription({ vehicleType, make, model } = {}) {

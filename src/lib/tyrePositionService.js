@@ -39,9 +39,15 @@
  */
 import { parsePosition, canonicalCode, legacyPositionCode } from './tyrePositions'
 import {
-  LAYOUT_SLOTS, resolveLayoutKeyStrict, isTyrelessEquipment, layoutForAsset,
+  LAYOUT_SLOTS, resolveLayoutKeyStrict, isTyrelessEquipment, layoutForAsset, AXLE_VARIANTS,
 } from './vehicleTyreLayout'
 import { positionsFromConfig } from './vehicleDiagram'
+import { slotForStoredPosition } from './tyreLayoutSpec'
+
+// The wheel codes ERP matching runs on. They are mirrored in SQL
+// (tyre_layout_for / tyre_position_resolve), so they leave out the shared map's
+// display-only overrides and change only together with a migration.
+const ERP_SCOPE = { scope: 'erp' }
 
 /**
  * The version of the wheel-matching rules this client runs. The database reports its own
@@ -183,12 +189,10 @@ function resolveLayoutBase(a) {
   return {
     status: POSITION_STATUS.RESOLVED, reason: 'builtin_layout', key, source: 'builtin', basis: 'current',
     version: null,
-    wheels: buildWheels(slots.map((slot) => ({ slot, label: legacyPositionCode(key, slot) }))),
+    wheels: buildWheels(slots.map((slot) => ({ slot, label: legacyPositionCode(key, slot, ERP_SCOPE) }))),
   }
 }
 
-// Mirrors vehicleTyreLayout's AXLE_VARIANTS for an explicitly supplied count.
-const AXLE_VARIANTS = { 'Concrete pump': { 4: 'Concrete pump 4-axle' } }
 
 function customLayout(raw, customKey) {
   if (!raw || typeof raw !== 'object') return null
@@ -391,11 +395,17 @@ export function slotCode(layoutKey, slot) {
 export function slotForPosition(layoutKey, positionCode) {
   const slots = LAYOUT_SLOTS[layoutKey]
   if (!slots || !positionCode) return null
-  // Display has never renamed the ERP dual-rear spelling (LHRCO): it stays as stored.
+  // The shared tyre map first: the slot itself, the code every surface shows
+  // for it, or a spelling the fleet owner confirmed for that wheel (the
+  // concrete pump's LHRCO / LHCO / LHR1-I family). This is display placement
+  // only; ERP matching (resolveWheel) is unchanged and still mirrors the SQL.
+  const mapped = slotForStoredPosition(layoutKey, positionCode)
+  if (mapped) return mapped
+  // Otherwise the ERP dual-rear spelling (LHRCO) is not placed: it stays as stored.
   if (DUAL_REAR_RE.test(up(positionCode))) return null
   const layout = {
     status: POSITION_STATUS.RESOLVED, key: layoutKey, source: 'builtin',
-    wheels: buildWheels(slots.map((slot) => ({ slot, label: legacyPositionCode(layoutKey, slot) }))),
+    wheels: buildWheels(slots.map((slot) => ({ slot, label: legacyPositionCode(layoutKey, slot, ERP_SCOPE) }))),
   }
   const r = resolveWheel(layout, positionCode, { kind: 'any' })
   // Display keeps its older, narrower rule: an exact slot or an exact code.

@@ -242,7 +242,7 @@ void main() {
       );
 
       final Finder innerFlat = find.bySemanticsLabel(
-        RegExp(r'LHR1-I.*0'),
+        RegExp(r'LHRCI.*0'),
       );
       expect(innerFlat, findsOneWidget);
       final TyreDiagramBoard board = tester.widget<TyreDiagramBoard>(
@@ -254,7 +254,7 @@ void main() {
 
       expect(find.byType(TyreDetailScreen), findsOneWidget);
       // The detail heading shows the tyre-map code, not the slot id.
-      expect(find.textContaining('LHR1-I'), findsWidgets);
+      expect(find.textContaining('LHRCI'), findsWidgets);
       expect(find.textContaining('0'), findsWidgets);
 
       semantics.dispose();

@@ -1,57 +1,53 @@
-/// The tyre-condition vocabulary and its mapping onto the design system's
-/// status colours.
+/// The tyre-condition vocabulary and its mapping onto the status colours.
 ///
-/// Ported from `mobile/lib/tyreConditions.ts` (the six-value vocabulary,
-/// `normaliseCondition`) and `CONDITION_RISK` in
-/// `mobile/components/VehicleTyreDiagram.tsx:65-72`, per
-/// `docs/flutter-migration/07-tyre-layout-parity-tests.md` section 7.2.
-///
-/// The production renderer maps each condition onto one of FOUR risk bands
-/// (`good`/`warning`/`critical`/`none`) with its own hard-coded hex
-/// palette, tuned for that app's fixed dark theme. This app is light-first
-/// (`tp_colors.dart`'s own library comment, spec section 53) and already
-/// has exactly this four-band shape in [TpStatus] (`ok`/`warning`/
-/// `critical`/`unknown`), so [tyreConditionStatus] maps directly onto
-/// [TpStatus] rather than re-declaring a parallel four-hue palette that
-/// would drift from the one the rest of the app already themes through -
-/// the same choice `vehicle_asset.dart`'s `vehicleStatusTone` and
-/// `tyre_risk.dart`'s `tyreRiskStatus` already make for their own domain
-/// vocabularies. [TpStatus.unknown] is the correct analogue of the
-/// production `RISK.none` band: both mean "no reading was ever taken",
-/// which is exactly what [TpStatus.unknown]'s own doc comment states.
-///
-/// `RISK` itself (the hex rim/glow/dark palette) is deliberately NOT
-/// ported: the wheel painter (`tyre_wheel_painter.dart`) draws from
-/// `TpPalette.forStatus`, so a condition's colour follows this app's real
-/// light/dark theme instead of a colour set authored for a different app.
-///
-/// The one mapping worth reading twice: [TyreCondition.flat] maps to
-/// [TpStatus.warning], NOT [TpStatus.critical]. That is the production
-/// behaviour (`CONDITION_RISK.Flat = 'warning'`) and it is easy to get
-/// backwards by intuition - see artifact section 7.2, "note `Flat` maps to
-/// warning, not critical, which is easy to get wrong by intuition".
+/// The rule is the shared tyre map's (`docs/document-specs/tyre-layouts.json`,
+/// generated into `tyre_layout_spec.g.dart`), the same rule the web screen
+/// and the printed PDF use: Flat / Damaged / Burst / Puncture are critical
+/// (red), Worn / Wear a warning (amber), Good is ok (green), and a word no
+/// rule knows is "No data" - never Good. (This app once mapped Flat to
+/// warning and any unknown word to Good; the owner approved the shared rule
+/// in 2026-11, so the phone no longer paints a reported flat tyre amber or
+/// an unreadable condition green.)
 library;
 
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_completeness.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_layout_spec.g.dart';
 
 /// The six tyre-condition values the fleet register carries, matching the
 /// web app's set exactly: `Good / Worn / Damaged / Puncture / Flat /
 /// Missing`.
 enum TyreCondition { good, worn, damaged, puncture, flat, missing }
 
-/// Maps a raw DB/legacy condition string onto [TyreCondition].
+final Map<String, RegExp> _bandRe = <String, RegExp>{
+  for (final MapEntry<String, String> e in kTyreSpecConditionPatterns.entries)
+    e.key: RegExp(e.value, caseSensitive: false),
+};
+
+/// The band (`good` / `warning` / `critical` / `none`) the shared rule
+/// gives [raw]: the exact words first, then the patterns in spec order.
+String tyreConditionBand(String? raw) {
+  final String s = (raw ?? '').trim();
+  if (s.isEmpty) return 'none';
+  final String? exact = kTyreSpecConditionExact[s];
+  if (exact != null) return exact;
+  for (final String band in kTyreSpecConditionOrder) {
+    if (_bandRe[band]?.hasMatch(s) ?? false) return band;
+  }
+  return 'none';
+}
+
+/// Maps a raw DB/legacy condition string onto [TyreCondition], or `null`
+/// when nothing readable was recorded (empty, or a word the shared rule does
+/// not know). `null` draws as "No data", never as Good.
 ///
 /// Case-insensitive; `'wear'` folds onto [TyreCondition.worn] and
-/// `'damage'` onto [TyreCondition.damaged] (legacy spellings), matching
-/// `normaliseCondition` verbatim. Anything unrecognised - including `null`
-/// and an empty string - defaults to [TyreCondition.good], matching the
-/// production default exactly (this is the SAME default the capture
-/// screens use to pre-seed a wheel before an inspector touches it; see
-/// `tyre_completeness.dart`'s own note on why a seeded 'Good' cannot be
-/// told apart from a deliberate one by this value alone).
-TyreCondition normaliseCondition(String? raw) {
-  switch ((raw ?? '').toLowerCase()) {
+/// `'damage'` onto [TyreCondition.damaged]. Other fault words (burst, cut,
+/// bulge, separation) are [TyreCondition.damaged].
+TyreCondition? normaliseCondition(String? raw) {
+  switch ((raw ?? '').trim().toLowerCase()) {
+    case 'good':
+      return TyreCondition.good;
     case 'worn':
     case 'wear':
       return TyreCondition.worn;
@@ -64,21 +60,32 @@ TyreCondition normaliseCondition(String? raw) {
       return TyreCondition.flat;
     case 'missing':
       return TyreCondition.missing;
+  }
+  final String s = (raw ?? '').toLowerCase();
+  switch (tyreConditionBand(raw)) {
     case 'good':
-    default:
       return TyreCondition.good;
+    case 'warning':
+      return TyreCondition.worn;
+    case 'critical':
+      if (s.contains('flat')) return TyreCondition.flat;
+      if (s.contains('puncture')) return TyreCondition.puncture;
+      return TyreCondition.damaged;
+    default:
+      return null;
   }
 }
 
-/// Maps [condition] onto a design-system status. See the library comment
-/// for why [TyreCondition.flat] resolves to [TpStatus.warning].
-TpStatus tyreConditionStatus(TyreCondition condition) => switch (condition) {
+/// Maps [condition] onto a design-system status; `null` (nothing readable
+/// recorded) is [TpStatus.unknown], the "No data" band.
+TpStatus tyreConditionStatus(TyreCondition? condition) => switch (condition) {
       TyreCondition.good => TpStatus.ok,
       TyreCondition.worn => TpStatus.warning,
       TyreCondition.damaged => TpStatus.critical,
       TyreCondition.puncture => TpStatus.critical,
-      TyreCondition.flat => TpStatus.warning,
+      TyreCondition.flat => TpStatus.critical,
       TyreCondition.missing => TpStatus.unknown,
+      null => TpStatus.unknown,
     };
 
 /// The condition recorded on a raw `tyre_conditions` entry, or `null` when

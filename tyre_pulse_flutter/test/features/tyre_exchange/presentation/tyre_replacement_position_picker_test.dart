@@ -49,7 +49,7 @@ void main() {
         tester,
         vehicleType: 'Concrete pump',
         assetNo: 'MP083',
-        selectedCode: 'RHR1-I',
+        selectedCode: 'RHRCI',
         onSelected: (_) {},
       );
 

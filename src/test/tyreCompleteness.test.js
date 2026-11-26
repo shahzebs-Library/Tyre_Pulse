@@ -214,7 +214,7 @@ describe('nothing is invented for a machine we cannot read', () => {
     const pump = tyreCompleteness('MP CONCRETE PUMP', 'MP093',
       Object.fromEntries(pumpSlots.map(s => [s, filled()])))
     expect(pump.expected).toBe(14)
-    expect(pendingCodes(pump)).toEqual(['RHR2-I', 'RHR2-O'])
+    expect(pendingCodes(pump)).toEqual(['RHRRI', 'RHRRO'])
     expect(pump.ok).toBe(false)
 
     const loader = tyreCompleteness('WHEEL LOADER', 'WL010', {})

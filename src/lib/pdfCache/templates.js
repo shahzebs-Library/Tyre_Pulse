@@ -17,7 +17,7 @@ export const REPORT_TYPES = Object.freeze({
 })
 
 export const TEMPLATE_VERSIONS = Object.freeze({
-  tyre_inspection: 'ins-2026.11.1',
+  tyre_inspection: 'ins-2026.11.2',
   tyre_observation: 'obs-1.0',
 })
 

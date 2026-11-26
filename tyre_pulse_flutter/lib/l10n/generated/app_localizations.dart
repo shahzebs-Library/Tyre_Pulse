@@ -15753,7 +15753,7 @@ abstract class AppLocalizations {
   /// No description provided for @driverChargeStatementConsent.
   ///
   /// In en, this message translates to:
-  /// **'I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay {amount} in total for this charge. I agree that the company may take this amount from my salary in monthly parts. Each month\'s part will never be more than the legal monthly limit, and I will be shown each month\'s amount before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.'**
+  /// **'I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay {amount} in total for this charge. I agree that the company may take this amount from my salary in monthly parts. The amount taken in any one month will never be more than the legal monthly limit, and I will be shown the amount for each month before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.'**
   String driverChargeStatementConsent(String amount);
 
   /// No description provided for @driverChargeStatementDispute.

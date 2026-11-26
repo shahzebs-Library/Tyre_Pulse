@@ -552,6 +552,56 @@ export const decideOpeningBatch = ({ batchId, decision, note }, key) => rpcWrite
   batch_id: batchId, decision, note: note || null,
 }, key)
 
+// ── ERP stores ledger (Ramco CSOL-IMS-013-1) ─────────────────────────────────
+
+const ERP_UPLOAD_COLS = 'id, country, site, warehouse_code, filename, file_sha256, report_id, currency, period_from, period_to, line_count, summary, posted_by, posted_at'
+
+/**
+ * Every Material Master row for a country (code, name, category, reviewed), for
+ * matching a ledger file. Bounded; `truncated` says when the ceiling was hit.
+ */
+export async function loadMasterForLedger(country) {
+  const { data, error, truncated } = await fetchAllPages((from, to) => supabase.from('material_master')
+    .select('id, item_code, item_name, category, subcategory, reviewed')
+    .eq('country', country)
+    .order('id', { ascending: true }).range(from, to), { max: 40000 })
+  if (error) throw toServiceError(error)
+  return { rows: data || [], truncated: !!truncated }
+}
+
+/** Stock lines at one store location, with their item code. */
+export async function loadStockAtLocation(locationId) {
+  const { data, error, truncated } = await fetchAllPages((from, to) => supabase.from('stock_records')
+    .select('id, item_id, description, qty_on_hand, qty_reserved, condition, ownership, itm:material_master(item_code)')
+    .eq('location_id', locationId)
+    .order('id', { ascending: true }).range(from, to), { max: 20000 })
+  if (error) throw toServiceError(error)
+  const rows = (data || [])
+    .filter((r) => (r.condition || 'new') === 'new' && (r.ownership || 'owned') === 'owned')
+    .map(({ itm, ...r }) => ({ ...r, item_code: itm?.item_code || null }))
+  return { rows, truncated: !!truncated }
+}
+
+/** Earlier ledger uploads, newest first. */
+export function listErpLedgerUploads({ page, pageSize, country } = {}) {
+  return pagedRead('erp_ledger_uploads', ERP_UPLOAD_COLS, {
+    page, pageSize, order: 'posted_at', ascending: false, build: (q) => applyCountry(q, country),
+  })
+}
+
+/** An upload already posted for this file fingerprint, or null. */
+export async function findErpLedgerUpload(sha256) {
+  const { data, error } = await supabase.from('erp_ledger_uploads').select(ERP_UPLOAD_COLS).eq('file_sha256', sha256).limit(1)
+  if (error) {
+    if (isNotProvisioned(error)) return null
+    throw toServiceError(error)
+  }
+  return data?.[0] || null
+}
+
+/** Post one warehouse file (owner only; the database refuses anyone else). */
+export const postErpLedger = (payload, key) => rpcWrite('inv_erp_ledger_post', payload, key)
+
 // ── Master data reviews (no auto-merge) ──────────────────────────────────────
 
 /** UI word -> DB status (a review waiting for a decision is `submitted`). */

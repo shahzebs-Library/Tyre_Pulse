@@ -81,6 +81,13 @@ export function noticeLanguage(detail, appLanguage = 'en') {
   return NOTICE_LANGUAGES.includes(appLanguage) ? appLanguage : 'en'
 }
 
+/** Adds the Art 91 fault finding after the first line, when the charge has one. */
+function withFault(text, finding, lines) {
+  const label = finding && text.fault?.[finding]
+  if (!label || !text.fault_line) return lines
+  return [lines[0], text.fault_line.replace('{fault}', label), ...lines.slice(1)]
+}
+
 /** The plain-language box in the driver's language. Pure. */
 export function buildDriverNotice(detail, language) {
   const text = spec.driver_notice.text[language] || spec.driver_notice.text.en
@@ -96,7 +103,7 @@ export function buildDriverNotice(detail, language) {
     language,
     dir: text.dir,
     title: text.title,
-    lines: text.lines.map(line => line.replace('{amount}', amountText).replace('{window}', window).replace('{deadline}', deadline)),
+    lines: withFault(text, c.fault_finding, text.lines.map(line => line.replace('{amount}', amountText).replace('{window}', window).replace('{deadline}', deadline))),
   }
 }
 

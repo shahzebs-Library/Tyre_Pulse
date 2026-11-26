@@ -21,16 +21,22 @@ void main() {
   test('driver charge notice model matches the web builder', () {
     final Map<String, Object?> spec =
         _json('assets/document_specs/driver-charge-notice.json');
-    final Map<String, Object?> charge =
-        Map<String, Object?>.from(fixture['charge']! as Map);
-    final ChargeDocumentModel model = buildChargeDocument(
-      spec,
-      Map<String, Object?>.from(charge['input']! as Map),
-      generatedAt: generatedAt,
-      utcOffset: offset,
-      language: '${charge['language'] ?? 'en'}',
-    );
-    expect(jsonEncode(model.toJson()), jsonEncode(charge['model']));
+    for (final String key in <String>['charge', 'chargeDamage']) {
+      final Map<String, Object?> charge =
+          Map<String, Object?>.from(fixture[key]! as Map);
+      final ChargeDocumentModel model = buildChargeDocument(
+        spec,
+        Map<String, Object?>.from(charge['input']! as Map),
+        generatedAt: generatedAt,
+        utcOffset: offset,
+        language: '${charge['language'] ?? 'en'}',
+      );
+      expect(
+        jsonEncode(model.toJson()),
+        jsonEncode(charge['model']),
+        reason: key,
+      );
+    }
   });
 
   test('a charge with no details is refused', () {

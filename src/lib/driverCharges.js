@@ -67,6 +67,16 @@ export function chargeBucket(category) {
   return ['accident_damage', 'tyre_damage', 'missing_item', 'handover_damage'].includes(category) ? 'damage' : 'consent'
 }
 
+/**
+ * Saudi Labour Law Art 91(1): damage may be deducted only when caused "as a
+ * result of his own fault or violation of the employer's instructions and not
+ * as a result of a third party's fault or a force majeure". Staff record the
+ * finding on every KSA damage charge; the last two can never be deducted.
+ */
+export const FAULT_FINDINGS = Object.keys(spec.enums.fault_finding)
+export const NO_FAULT_FINDINGS = ['third_party', 'force_majeure']
+export const chargeNeedsFaultFinding = (country, category) => chargeCountryRule(country).statutory && chargeBucket(category) === 'damage'
+
 /** Physical damage needs at least one photo before the driver is notified. */
 export const chargeNeedsPhoto = category => ['accident_damage', 'tyre_damage', 'handover_damage'].includes(category)
 export const photoEvidence = evidence => (Array.isArray(evidence) ? evidence : []).filter(e => e?.kind === 'photo' && typeof e.ref === 'string' && e.ref)
@@ -97,19 +107,23 @@ export function scheduleCapFor({ country, category, monthlyWage, capPct }) {
  */
 export function scheduleBlockFor(detail, now = new Date()) {
   const c = detail?.charge
-  if (!c || c.driver_response === 'accepted') return null
+  if (!c) return null
   const settings = detail.settings || {}
   if (settings.schedule_block && typeof settings.schedule_block === 'object') return settings.schedule_block
   if ('schedule_block' in settings) return null
   const rule = settings.country_rule || chargeCountryRule(c.country)
+  if (rule.statutory && (settings.bucket || chargeBucket(c.category)) === 'damage' && NO_FAULT_FINDINGS.includes(c.fault_finding)) {
+    return { code: 'no_fault', article: '91', until: null, message: 'Saudi Labour Law (Article 91): the damage was found to be caused by a third party or force majeure, so it cannot be deducted from the driver. Waive the charge.' }
+  }
+  if (c.driver_response === 'accepted') return null
   const until = settings.objection_last_day || null
   const deadline = settings.objection_deadline ? new Date(settings.objection_deadline) : null
   const windowOpen = !deadline || deadline.getTime() > now.getTime()
   const appealOpen = detail.appeal && !detail.appeal.outcome
   if (rule.statutory) {
-    if ((settings.bucket || chargeBucket(c.category)) !== 'damage') return { code: 'consent_required', article: '92', until: null, message: "Saudi Labour Law (Article 92): this charge can be deducted only with the driver's written consent. It cannot be scheduled because the driver did not accept it." }
+    if ((settings.bucket || chargeBucket(c.category)) !== 'damage' || !c.fault_finding) return { code: 'consent_required', article: '92', until: null, message: "Saudi Labour Law (Article 92): this charge can be deducted only with the driver's written consent. It cannot be scheduled because the driver did not accept it." }
     if (appealOpen) return { code: 'open_objection', article: '91', until: null, message: 'Saudi Labour Law (Article 91): the driver has an open objection. Decide it first.' }
-    if (windowOpen) return { code: 'window_open', article: '91', until, message: `Saudi Labour Law (Article 91): the driver has 15 working days to object. A deduction can be scheduled after ${until || 'the finance approval'}.` }
+    if (windowOpen) return { code: 'window_open', article: '91', until, message: `Saudi Labour Law (Article 91): the driver has 15 working days from the notice to object. A deduction can be scheduled after ${until || 'the objection window'}.` }
     return null
   }
   if (detail.appeal?.outcome === 'upheld') return null
@@ -214,6 +228,8 @@ const vmsg = (t, key) => (typeof t === 'function' ? t(`driverCharges.validate.${
 
 export function validateIssue(values, t) {
   if (chargeNeedsPhoto(values.category) && photoEvidence(values.evidence).length === 0) return vmsg(t, 'photoRequired')
+  if (values.fault_finding && !FAULT_FINDINGS.includes(values.fault_finding)) return vmsg(t, 'faultFinding')
+  if (chargeNeedsFaultFinding(values.country, values.category) && !values.fault_finding) return vmsg(t, 'faultFinding')
   if (!CATEGORIES.includes(values.category)) return vmsg(t, 'category')
   if (values.category === 'traffic_fine' && values.source_type !== 'driver_fine') return vmsg(t, 'fineSource')
   if (values.source_type && values.source_type !== 'none' && !values.source_id) return vmsg(t, 'sourceRecord')

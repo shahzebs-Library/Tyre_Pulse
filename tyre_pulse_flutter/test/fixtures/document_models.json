@@ -172,7 +172,7 @@
         "lines": [
           "تقول الشركة إنك ملزم بدفع SAR 250.50 عن هذه المطالبة. اقرأ السبب في القسم 3 وانظر إلى الصور في القسم 4a.",
           "إذا كنت موافقا، وقع على الموافقة. وإذا لم تكن موافقا، وقع على أنك استلمت هذه الورقة واكتب السبب.",
-          "يحق لك الاعتراض خلال 15 يوم عمل (من الأحد إلى الخميس) بعد موافقة المالية على المطالبة. آخر يوم: 2026-01-27.",
+          "يحق لك الاعتراض خلال 15 يوم عمل (من الأحد إلى الخميس، دون العطل الرسمية) من يوم استلامك هذه المطالبة. آخر يوم: 2026-01-27.",
           "يجب أن يوافق شخصان مختلفان قبل أن يخصم أي شيء من راتبك."
         ]
       },
@@ -220,6 +220,10 @@
             [
               "Category",
               "Traffic fine"
+            ],
+            [
+              "Fault finding",
+              "Not recorded"
             ],
             [
               "Amount",
@@ -392,7 +396,568 @@
           "rows": [
             [
               "Deduction rule",
-              "Saudi Labour Law (Royal Decree M/51), Articles 70, 71, 91, 92 and 93"
+              "Saudi Labour Law (Royal Decree M/51), Articles 91, 92 and 93"
+            ],
+            [
+              "Monthly wage used for the limit",
+              "SAR 3000.00"
+            ],
+            [
+              "Limit per month for this charge (percent of wage)",
+              "16.67%"
+            ],
+            [
+              "Limit per month for this charge (amount)",
+              "SAR 500.00"
+            ],
+            [
+              "Scheduled by",
+              "Finance One"
+            ],
+            [
+              "Scheduled at",
+              "2026-01-06 15:00 GMT+3"
+            ],
+            [
+              "Deducted so far",
+              "SAR 0.00"
+            ]
+          ]
+        },
+        {
+          "id": "instalments",
+          "title": "9. Instalments",
+          "type": "table",
+          "head": [
+            "No.",
+            "Month",
+            "Amount",
+            "Status",
+            "Payroll reference",
+            "Deducted at"
+          ],
+          "body": [
+            [
+              "1",
+              "February 2026",
+              "SAR 200.00",
+              "Scheduled",
+              "Not recorded",
+              "Not recorded"
+            ],
+            [
+              "2",
+              "March 2026",
+              "SAR 50.50",
+              "Deducted",
+              "PR-3",
+              "2026-03-28 23:30 GMT+3"
+            ]
+          ],
+          "empty": null
+        },
+        {
+          "id": "timeline",
+          "title": "10. Full timeline",
+          "type": "table",
+          "head": [
+            "When",
+            "By",
+            "Action",
+            "Note"
+          ],
+          "body": [
+            [
+              "2026-01-05 13:00 GMT+3",
+              "Supervisor One",
+              "Charge issued",
+              "Issued"
+            ],
+            [
+              "2026-01-05 14:30 GMT+3",
+              "Not recorded",
+              "Driver notified",
+              "Not recorded"
+            ],
+            [
+              "2026-01-05 14:31 GMT+3",
+              "System",
+              "some new action",
+              "x"
+            ]
+          ],
+          "empty": null
+        }
+      ],
+      "signatureTitle": "11. Signatures",
+      "signatureEmpty": "No signature recorded.",
+      "signatures": [
+        {
+          "heading": "Driver written consent to deduction",
+          "statement": "أوافق.",
+          "statementVersion": "deduction-consent-v3",
+          "image": "data:image/png;base64,AAAA",
+          "language": "ar",
+          "imageMissing": "Signature image not shown for this access level.",
+          "rows": [
+            [
+              "Signed by",
+              "Driver A"
+            ],
+            [
+              "Statement language",
+              "Arabic"
+            ],
+            [
+              "Signed at (server time)",
+              "2026-01-06 12:05 GMT+3"
+            ],
+            [
+              "Charge version signed",
+              "3"
+            ],
+            [
+              "Recorded by",
+              "Driver A"
+            ]
+          ]
+        },
+        {
+          "heading": "Witness to refusal",
+          "statement": "Not recorded",
+          "statementVersion": "Not recorded",
+          "image": null,
+          "language": "en",
+          "imageMissing": "Signature image not shown for this access level.",
+          "rows": [
+            [
+              "Signed by",
+              "Witness"
+            ],
+            [
+              "Statement language",
+              "Not recorded"
+            ],
+            [
+              "Signed at (server time)",
+              "2026-09-06 19:45 GMT+3"
+            ],
+            [
+              "Charge version signed",
+              "2"
+            ],
+            [
+              "Recorded by",
+              "Not recorded"
+            ]
+          ]
+        }
+      ],
+      "footerLines": [
+        "Every time on this notice is set by the server when the action was recorded. Records are append-only: a wrong charge is reversed and reissued, never edited after the driver is notified.",
+        "A deduction is made only after the driver gave written consent, or after a witnessed refusal or dispute was reviewed by two different people and the appeal period ended or an appeal was decided by a third person. No monthly instalment exceeds the limit shown in section 8.",
+        "Charges on drivers in Saudi Arabia follow the Saudi Labour Law (Royal Decree M/51): damage or loss at most 5 days' wage a month and 15 working days to object (Article 91), any other deduction, including a traffic fine, only with written consent (Article 92), and all deductions together at most half the wage (Article 93; only deductions recorded in Tyre Pulse are counted)."
+      ],
+      "pageNumber": "Page {page} of {pages}"
+    }
+  },
+  "chargeDamage": {
+    "input": {
+      "access": "driver",
+      "actions": [
+        "charge_appeal"
+      ],
+      "charge": {
+        "id": "c1",
+        "charge_no": "DC-2026-00001",
+        "version": 7,
+        "category": "accident_damage",
+        "source_type": "accident",
+        "source_id": "a1",
+        "source_summary": {
+          "type": "driver_fine",
+          "label": "RTA-55 · TM101"
+        },
+        "source_link_unverified": true,
+        "amount": 250.5,
+        "currency": "SAR",
+        "status": "scheduled",
+        "basis": "Speeding fine issued to the vehicle while assigned to this driver.",
+        "incident_at": "2026-01-02T08:15:00Z",
+        "created_at": "2026-01-05T10:00:00Z",
+        "notified_at": "2026-01-05T11:30:00Z",
+        "issued_by_name": "Supervisor One",
+        "notified_by_name": "Supervisor One",
+        "deducted_amount": 0,
+        "driver_response": "accepted",
+        "response_explanation": null,
+        "acknowledged_at": "2026-01-06T09:05:00Z",
+        "schedule_monthly_wage": 3000,
+        "schedule_cap_pct": 16.67,
+        "schedule_cap_amount": 500,
+        "schedule_rule": "ksa_labour_law",
+        "scheduled_by_name": "Finance One",
+        "scheduled_at": "2026-01-06T12:00:00Z",
+        "site": "JEDDAH",
+        "country": "KSA",
+        "asset_no": "TM101",
+        "supersedes_charge_id": null,
+        "superseded_by_charge_id": null,
+        "reversal_code": null,
+        "close_reason": null,
+        "fault_finding": "instruction_violation"
+      },
+      "driver": {
+        "driver_name": "Driver A",
+        "driver_id": "EMP1"
+      },
+      "evidence": [
+        {
+          "kind": "document",
+          "label": "Fine notice",
+          "ref": "driver_fine/f1",
+          "added_by_name": "Supervisor One",
+          "created_at": "2026-01-05T10:00:00Z"
+        },
+        {
+          "kind": "photo",
+          "label": "Camera frame",
+          "ref": "tp-storage://tyre-photos/modules/driver-charge/u1/1_0_ab.jpg",
+          "added_by_name": "Supervisor One",
+          "created_at": "2026-01-05T10:01:00Z"
+        }
+      ],
+      "settings": {
+        "cap_pct": 20,
+        "appeal_window_days": 7,
+        "country_rule": {
+          "rule": "ksa_labour_law",
+          "statutory": true
+        },
+        "objection_last_day": "2026-01-27"
+      },
+      "signatures": [
+        {
+          "kind": "driver_acceptance",
+          "signer_name": "Driver A",
+          "statement_text": "أوافق.",
+          "statement_version": "deduction-consent-v3",
+          "statement_language": "ar",
+          "signed_at": "2026-01-06T09:05:00Z",
+          "charge_version": 3,
+          "signature": "data:image/png;base64,AAAA",
+          "recorded_by_name": "Driver A"
+        },
+        {
+          "kind": "refusal_witness",
+          "signer_name": "Witness",
+          "statement_text": "",
+          "statement_version": null,
+          "signed_at": "2026-09-06T16:45:00Z",
+          "charge_version": 2,
+          "recorded_by_name": null
+        }
+      ],
+      "decisions": [
+        {
+          "created_at": "2026-01-06T10:00:00Z",
+          "stage": "supervisor",
+          "decision": "approve",
+          "decided_by_name": "Manager Two",
+          "reason": "Fine confirmed"
+        },
+        {
+          "created_at": "2026-01-06T11:00:00Z",
+          "stage": "finance",
+          "decision": "approve",
+          "decided_by_name": null,
+          "reason": ""
+        }
+      ],
+      "appeal": null,
+      "instalments": [
+        {
+          "seq": 1,
+          "due_month": "2026-02-01",
+          "amount": 200,
+          "currency": "SAR",
+          "status": "scheduled",
+          "payroll_reference": null,
+          "deducted_at": null
+        },
+        {
+          "seq": 2,
+          "due_month": "2026-03-01",
+          "amount": 50.5,
+          "currency": "SAR",
+          "status": "deducted",
+          "payroll_reference": "PR-3",
+          "deducted_at": "2026-03-28T20:30:00Z"
+        }
+      ],
+      "events": [
+        {
+          "created_at": "2026-01-05T10:00:00Z",
+          "actor_name": "Supervisor One",
+          "action": "charge_issue",
+          "details": {
+            "reason": "Issued"
+          }
+        },
+        {
+          "created_at": "2026-01-05T11:30:00Z",
+          "actor_name": null,
+          "action": "charge_notify",
+          "details": {}
+        },
+        {
+          "created_at": "2026-01-05T11:31:00Z",
+          "actor_name": "System",
+          "action": "some_new_action",
+          "details": {
+            "reason": "x"
+          }
+        }
+      ]
+    },
+    "language": "en",
+    "model": {
+      "title": "Driver Charge Notice",
+      "documentNumber": "DC-2026-00001-V7",
+      "language": "ar",
+      "driverNotice": {
+        "language": "ar",
+        "dir": "rtl",
+        "title": "ماذا تعني هذه الورقة بالنسبة لك",
+        "lines": [
+          "تقول الشركة إنك ملزم بدفع SAR 250.50 عن هذه المطالبة. اقرأ السبب في القسم 3 وانظر إلى الصور في القسم 4a.",
+          "نتيجة التحقق من التلف: بسبب مخالفتك لتعليمات الشركة.",
+          "إذا كنت موافقا، وقع على الموافقة. وإذا لم تكن موافقا، وقع على أنك استلمت هذه الورقة واكتب السبب.",
+          "يحق لك الاعتراض خلال 15 يوم عمل (من الأحد إلى الخميس، دون العطل الرسمية) من يوم استلامك هذه المطالبة. آخر يوم: 2026-01-27.",
+          "يجب أن يوافق شخصان مختلفان قبل أن يخصم أي شيء من راتبك."
+        ]
+      },
+      "headerLines": [
+        "Document no. DC-2026-00001-V7",
+        "Generated 2026-01-07 13:00 GMT+3. Status at generation: Deduction scheduled"
+      ],
+      "sections": [
+        {
+          "id": "parties",
+          "title": "1. Driver and vehicle",
+          "type": "fields",
+          "rows": [
+            [
+              "Driver",
+              "Driver A"
+            ],
+            [
+              "Employee ID",
+              "EMP1"
+            ],
+            [
+              "Site",
+              "JEDDAH"
+            ],
+            [
+              "Country",
+              "KSA"
+            ],
+            [
+              "Vehicle",
+              "TM101"
+            ]
+          ]
+        },
+        {
+          "id": "charge",
+          "title": "2. Charge",
+          "type": "fields",
+          "rows": [
+            [
+              "Charge number",
+              "DC-2026-00001"
+            ],
+            [
+              "Category",
+              "Accident damage"
+            ],
+            [
+              "Fault finding",
+              "Violation of the company's instructions (Article 91)"
+            ],
+            [
+              "Amount",
+              "SAR 250.50"
+            ],
+            [
+              "Linked record",
+              "Accident case"
+            ],
+            [
+              "Linked record reference",
+              "RTA-55 · TM101"
+            ],
+            [
+              "Link to the driver",
+              "Link to source not confirmed by record"
+            ],
+            [
+              "Incident date and time",
+              "2026-01-02 11:15 GMT+3"
+            ],
+            [
+              "Issued by",
+              "Supervisor One"
+            ],
+            [
+              "Issued at",
+              "2026-01-05 13:00 GMT+3"
+            ],
+            [
+              "Driver notified by",
+              "Supervisor One"
+            ],
+            [
+              "Driver notified at",
+              "2026-01-05 14:30 GMT+3"
+            ],
+            [
+              "Status",
+              "Deduction scheduled"
+            ],
+            [
+              "Replaces charge",
+              "Not recorded"
+            ],
+            [
+              "Replaced by charge",
+              "Not recorded"
+            ],
+            [
+              "Reversal reason",
+              "Not recorded"
+            ],
+            [
+              "Closing reason",
+              "Not recorded"
+            ]
+          ]
+        },
+        {
+          "id": "basis",
+          "title": "3. Written basis for the charge",
+          "type": "text",
+          "text": "Speeding fine issued to the vehicle while assigned to this driver."
+        },
+        {
+          "id": "evidence",
+          "title": "4. Evidence",
+          "type": "table",
+          "head": [
+            "Type",
+            "Description",
+            "Reference",
+            "Added by",
+            "Added at"
+          ],
+          "body": [
+            [
+              "document",
+              "Fine notice",
+              "driver_fine/f1",
+              "Supervisor One",
+              "2026-01-05 13:00 GMT+3"
+            ],
+            [
+              "photo",
+              "Camera frame",
+              "tp-storage://tyre-photos/modules/driver-charge/u1/1_0_ab.jpg",
+              "Supervisor One",
+              "2026-01-05 13:01 GMT+3"
+            ]
+          ],
+          "empty": null
+        },
+        {
+          "id": "photos",
+          "title": "4a. Photos shown to the driver",
+          "type": "photos",
+          "photos": [
+            {
+              "ref": "tp-storage://tyre-photos/modules/driver-charge/u1/1_0_ab.jpg",
+              "caption": "Camera frame"
+            }
+          ],
+          "empty": null,
+          "imageMissing": "Photo could not be loaded."
+        },
+        {
+          "id": "response",
+          "title": "5. Driver response",
+          "type": "fields",
+          "rows": [
+            [
+              "Response",
+              "Accepted and consented"
+            ],
+            [
+              "Driver explanation or refusal circumstances",
+              "Not recorded"
+            ],
+            [
+              "Receipt acknowledged at",
+              "2026-01-06 12:05 GMT+3"
+            ],
+            [
+              "Objection allowed until (last day)",
+              "2026-01-27"
+            ]
+          ]
+        },
+        {
+          "id": "decisions",
+          "title": "6. Reviews and decisions",
+          "type": "table",
+          "head": [
+            "When",
+            "Stage",
+            "Decision",
+            "Decided by",
+            "Reason"
+          ],
+          "body": [
+            [
+              "2026-01-06 13:00 GMT+3",
+              "Supervisor review",
+              "Approved",
+              "Manager Two",
+              "Fine confirmed"
+            ],
+            [
+              "2026-01-06 14:00 GMT+3",
+              "Finance review",
+              "Approved",
+              "Not recorded",
+              "Not recorded"
+            ]
+          ],
+          "empty": null
+        },
+        {
+          "id": "appeal",
+          "title": "7. Appeal",
+          "type": "text",
+          "text": "No appeal filed."
+        },
+        {
+          "id": "schedule",
+          "title": "8. Deduction schedule",
+          "type": "fields",
+          "rows": [
+            [
+              "Deduction rule",
+              "Saudi Labour Law (Royal Decree M/51), Articles 91, 92 and 93"
             ],
             [
               "Monthly wage used for the limit",

@@ -19,7 +19,11 @@ const nextMonth = () => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d
 // 5 supervisor of driver A, 6 other tenant, 10 finance, 11 second manager.
 test('driver charges are consented, separated, capped, appealable and immutable', async t => {
   const db = new PGlite(); let request = 1000;
-  const command = async (action, payload, key = id(request++)) => (await db.query('select driver_workspace_command($1,$2,$3) r', [action, payload, key])).rows[0].r;
+  // Most cases are KSA damage charges, which need a fault finding (Art 91(1)); default it unless a test sets it.
+  const command = async (action, payload, key = id(request++)) => {
+    const p = action === 'charge_issue' && !('fault_finding' in payload) ? { ...payload, fault_finding: 'driver_fault' } : payload;
+    return (await db.query('select driver_workspace_command($1,$2,$3) r', [action, p, key])).rows[0].r;
+  };
   const detail = async charge => (await db.query('select driver_charge_detail($1) r', [charge])).rows[0].r;
   const actor = async n => db.exec(`SET request.jwt.claim.sub='${id(n)}'`);
   const code = c => e => e.code === c;
@@ -408,6 +412,30 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       assert.equal(afterWindow.settings.schedule_block, null); assert.ok(afterWindow.actions.includes('charge_schedule'));
       await schedule(disputedDamage.c, disputedDamage.v, [{ due_month: monthPlus(5), amount: 300 }]);
       assert.equal((await detail(disputedDamage.c)).charge.status, 'scheduled');
+
+      // Art 91(2): the 15 work days run from the notice, so the deadline is stamped when the driver is notified.
+      await actor(11);
+      const noticed = (await command('charge_issue', { driver_id: b, category: 'missing_item', source_type: 'none', basis: 'Missing spare wheel at the evening handover.', amount: 80, currency: 'SAR', evidence: [{ kind: 'document', ref: 'doc/5', label: 'Handover sheet' }] })).id;
+      assert.equal((await detail(noticed)).charge.objection_deadline, null);
+      await command('charge_notify', { driver_id: b, charge_id: noticed, version: (await detail(noticed)).charge.version });
+      const atNotice = await detail(noticed);
+      assert.ok(atNotice.charge.objection_deadline, 'stamped at the notice, before any approval');
+      assert.equal(atNotice.charge.fault_finding, 'driver_fault');
+
+      // Art 91(1): a KSA damage charge needs a fault finding before the driver sees it.
+      const noFinding = (await command('charge_issue', { driver_id: b, category: 'missing_item', source_type: 'none', basis: 'Missing jack after the night shift.', amount: 60, currency: 'SAR', fault_finding: null, evidence: [{ kind: 'document', ref: 'doc/6', label: 'Sheet' }] })).id;
+      await assert.rejects(command('charge_notify', { driver_id: b, charge_id: noFinding, version: (await detail(noFinding)).charge.version }), e => e.code === '22023' && /Article 91/.test(e.message));
+      await assert.rejects(command('charge_issue', { driver_id: b, category: 'missing_item', source_type: 'none', basis: 'Missing jack after the night shift.', amount: 60, currency: 'SAR', fault_finding: 'bad_luck', evidence: [{ kind: 'document', ref: 'doc/7', label: 'Sheet' }] }), code('22023'));
+      // Third party or force majeure: never deducted, even when the driver accepts.
+      const third = await open({ category: 'missing_item', amount: 90, fault_finding: 'third_party' });
+      const thirdDetail = await detail(third.c);
+      assert.equal(thirdDetail.settings.schedule_block.code, 'no_fault'); assert.equal(thirdDetail.settings.schedule_block.article, '91');
+      assert.ok(!thirdDetail.actions.includes('charge_schedule'));
+      await assert.rejects(schedule(third.c, third.v, [{ due_month: monthPlus(6), amount: 90 }]), e => e.code === '22023' && /third party or force majeure/.test(e.message));
+      // The finding is part of the notice and cannot be edited afterwards.
+      await db.exec('RESET ROLE');
+      await assert.rejects(db.query("update driver_charges set fault_finding = 'driver_fault' where id = $1", [third.c]), code('42501'));
+      await db.exec('SET ROLE authenticated');
     });
 
     await t.test('outside KSA: configured percent cap and 7 day window (needs legal confirmation)', async () => {

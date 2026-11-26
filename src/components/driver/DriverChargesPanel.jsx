@@ -7,7 +7,7 @@ import {
   ACTION_LABELS, CATEGORIES, SOURCE_TYPES, STATUSES, REVERSAL_CODES, EVIDENCE_KINDS,
   enumLabel, money, monthStart, buildInstalmentPlan, validateIssue, validateResponse, outstandingByCurrency,
   STATEMENT_VERSIONS, STATEMENT_LANGUAGES, STATEMENT_LANGUAGE_NAMES, statementText, defaultStatementLanguage, isRtlLanguage,
-  chargeCountryRule, chargeNeedsPhoto, photoEvidence, scheduleCapFor, scheduleBlockFor,
+  chargeCountryRule, chargeNeedsPhoto, photoEvidence, scheduleCapFor, scheduleBlockFor, chargeBucket, chargeNeedsFaultFinding, FAULT_FINDINGS,
 } from '../../lib/driverCharges'
 import { resolveStorageUrlMap } from '../../lib/storageRefs'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -58,6 +58,19 @@ export function ChargePhotos({ evidence }) {
   </div>
 }
 
+const faultLabel = (t, finding) => (finding ? t(`driverCharges.fault.${finding}`) : t('driverCharges.fault.none'))
+
+/** Who caused the damage (Saudi Labour Law Art 91(1)); staff pick it, the driver sees it. */
+function FaultFindingField({ t, value, onChange, required }) {
+  return <Field label={`${t('driverCharges.fault.title')}${required ? ' *' : ''}`}>
+    <select aria-label={t('driverCharges.fault.title')} className="input w-full" value={value || ''} onChange={e => onChange(e.target.value || null)}>
+      <option value="">{t('driverCharges.fault.none')}</option>
+      {FAULT_FINDINGS.map(k => <option key={k} value={k}>{t(`driverCharges.fault.${k}`)}</option>)}
+    </select>
+    <span className="text-xs text-[var(--text-muted)]">{t('driverCharges.fault.help')}</span>
+  </Field>
+}
+
 /** The country rule in plain words. "Needs legal confirmation" is a note for staff, never shown to the driver. */
 function ruleLine(t, country, isDriver = false) {
   if (chargeCountryRule(country).statutory) return t('driverCharges.consent.ksaRule')
@@ -84,7 +97,7 @@ function initialFor(action, detail, driverCountry) {
   switch (action) {
     // Currency comes from the driver's country (the server enforces the same rule).
     case 'charge_issue': return { category: 'missing_item', source_type: 'none', currency: currencyForCountry(driverCountry) || '', evidence: [{ kind: 'document', ref: '', label: '' }] }
-    case 'charge_correct': return { amount: c?.amount ?? '', basis: c?.basis || '', reason: '' }
+    case 'charge_correct': return { amount: c?.amount ?? '', basis: c?.basis || '', fault_finding: c?.fault_finding || null, reason: '' }
     case 'charge_attach_evidence': return { kind: 'document', ref: '', label: '' }
     case 'charge_respond': return { response: 'accept', explanation: '' }
     case 'charge_supervisor_review':
@@ -135,12 +148,13 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
     let payload = { driver_id: driverId, ...(charge ? { charge_id: charge.id, version: charge.version } : {}) }
     let message = null
     if (action === 'charge_issue') {
-      message = validateIssue(v, t)
+      message = validateIssue({ ...v, country: driverCountry }, t)
       const evidence = (v.evidence || []).filter(x => x.ref || x.label)
       if (!message && sourceNamesNoDriver && !v.link_unverified) message = 'This record does not name a driver. Confirm the link to continue.'
       payload = { ...payload, category: v.category, source_type: v.source_type, source_id: v.source_type === 'none' ? null : v.source_id, vehicle_id: v.vehicle_id || null,
         ...(sourceNamesNoDriver && v.link_unverified ? { link_unverified: true } : {}),
-        incident_at: v.incident_at ? new Date(v.incident_at).toISOString() : null, basis: v.basis, amount: Number(v.amount), currency: String(v.currency || '').toUpperCase(), evidence }
+        incident_at: v.incident_at ? new Date(v.incident_at).toISOString() : null, basis: v.basis, amount: Number(v.amount), currency: String(v.currency || '').toUpperCase(), evidence,
+        ...(chargeBucket(v.category) === 'damage' ? { fault_finding: v.fault_finding || null } : {}) }
     } else if (action === 'charge_respond') {
       message = validateResponse(v, t)
       if (!message && !statementText(detail, statementVersion, v.language)) message = t('driverCharges.consent.statementUnavailable')
@@ -161,7 +175,7 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
     } else if (action === 'charge_reverse') {
       payload = { ...payload, reversal_code: v.reversal_code, reason: v.reason, ...(v.reissue ? { reissue: { driver_id: v.reissue_driver_id || null, ...(v.reissue_amount ? { amount: Number(v.reissue_amount) } : {}), ...(v.reissue_basis ? { basis: v.reissue_basis } : {}) } } : {}) }
     } else if (action === 'charge_correct') {
-      payload = { ...payload, amount: Number(v.amount), basis: v.basis, reason: v.reason }
+      payload = { ...payload, amount: Number(v.amount), basis: v.basis, reason: v.reason, ...(chargeBucket(charge?.category) === 'damage' ? { fault_finding: v.fault_finding || null } : {}) }
     } else if (action === 'charge_attach_evidence') {
       payload = { ...payload, kind: v.kind, ref: v.ref, label: v.label }
     } else {
@@ -179,6 +193,7 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
   return <Modal open onClose={saving ? undefined : onClose} title={ACTION_LABELS[action]} size="md" footer={footer}><form id={formId} onSubmit={submit} className="space-y-4">
     {action === 'charge_issue' && <>
       <Field label="Category"><select aria-label="Category" className="input w-full" value={v.category} onChange={e => { set('category', e.target.value); if (e.target.value === 'traffic_fine') set('source_type', 'driver_fine') }}>{CATEGORIES.map(k => <option key={k} value={k}>{enumLabel('category', k)}</option>)}</select></Field>
+      {chargeBucket(v.category) === 'damage' && <FaultFindingField t={t} value={v.fault_finding} onChange={x => set('fault_finding', x)} required={chargeNeedsFaultFinding(driverCountry, v.category)} />}
       <Field label="Linked record type"><select aria-label="Linked record type" className="input w-full" value={v.source_type} onChange={e => { set('source_type', e.target.value); set('source_id', null) }}>{SOURCE_TYPES.map(k => <option key={k} value={k}>{enumLabel('source_type', k)}</option>)}</select></Field>
       {v.source_type !== 'none' && <Field label="Linked record"><Picker key={v.source_type} label="linked record" load={loadSources} value={v.source_id} onChange={id => { set('source_id', id); set('link_unverified', false) }} /></Field>}
       {['tyre_record', 'inspection', 'checklist_submission'].includes(v.source_type) && <p className="text-xs text-[var(--text-muted)]">Type at least 3 characters to search this register.</p>}
@@ -203,6 +218,7 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
       <p className="text-xs text-[var(--text-muted)]">The charge stays editable until you notify the driver. After that it can only be reversed with a reason.</p>
     </>}
     {action === 'charge_correct' && <>
+      {chargeBucket(charge?.category) === 'damage' && <FaultFindingField t={t} value={v.fault_finding} onChange={x => set('fault_finding', x)} required={chargeNeedsFaultFinding(chargeCountry, charge?.category)} />}
       <Field label="Amount"><input aria-label="Amount" type="number" step="0.01" className="input w-full" value={v.amount} onChange={e => set('amount', e.target.value)} /></Field>
       <Field label="Written basis"><textarea aria-label="Written basis" className="input w-full" rows={4} value={v.basis} onChange={e => set('basis', e.target.value)} /></Field>
       {reasonField('Correction reason')}
@@ -219,6 +235,7 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
     {action === 'charge_respond' && <>
       <Field label="Your response"><select aria-label="Your response" className="input w-full" value={v.response} onChange={e => { set('response', e.target.value); set('acknowledged', false) }}><option value="accept">I accept and consent to the deduction</option><option value="dispute">I dispute this charge</option></select></Field>
       {v.response === 'dispute' && <Field label="Why you dispute it"><textarea aria-label="Why you dispute it" className="input w-full" rows={4} value={v.explanation} onChange={e => set('explanation', e.target.value)} /></Field>}
+      {chargeBucket(charge?.category) === 'damage' && <p className="text-sm"><strong>{t('driverCharges.fault.title')}:</strong> {faultLabel(t, charge?.fault_finding)}</p>}
       <p className="text-sm font-semibold">{t('driverCharges.consent.photosSeen')}</p>
       <ChargePhotos evidence={detail?.evidence} />
       <p className="text-sm">{ruleLine(t, chargeCountry, true)}{detail?.settings?.objection_last_day ? ` ${t('driverCharges.consent.objectionUntil', { date: detail.settings.objection_last_day })}` : ''}</p>
@@ -311,6 +328,7 @@ function ChargeDetail({ chargeId, driverId, driverCountry, onClose, onChanged })
         {c.supersedes_charge_id && <p>Replaces an earlier charge that was reversed.</p>}{c.superseded_by_charge_id && <p>Reversed and replaced by a new charge.</p>}
       </div>
       <div><h4 className="font-semibold">Written basis</h4><p className="whitespace-pre-wrap">{c.basis}</p></div>
+      {chargeBucket(c.category) === 'damage' && <p><strong>{t('driverCharges.fault.title')}:</strong> {faultLabel(t, c.fault_finding)}</p>}
       <ChargePhotos evidence={detail.evidence} />
       <p className="text-xs text-[var(--text-muted)]">{ruleLine(t, c.country, detail.access === 'driver')}{detail.settings?.objection_last_day ? ` ${t('driverCharges.consent.objectionUntil', { date: detail.settings.objection_last_day })}` : ''}</p>
       {Number(c.deducted_amount) > 0 && !detail.appeal && <p className="text-xs text-[var(--text-muted)]">Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.</p>}

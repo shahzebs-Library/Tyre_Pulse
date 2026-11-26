@@ -8981,11 +8981,33 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get driverChargeKsaRule =>
-      'يطبق نظام العمل السعودي على هذه المطالبة. التلف أو الفقد: بحد أقصى أجر 5 أيام في الشهر. أي مطالبة أخرى، ومنها المخالفة المرورية: فقط بموافقتك الكتابية. مجموع الخصومات: بحد أقصى نصف الأجر. لديك 15 يوم عمل للاعتراض.';
+      'يطبق نظام العمل السعودي على هذه المطالبة. التلف أو الفقد: فقط إذا كان بسبب خطئك أو مخالفتك لتعليمات الشركة، وليس بسبب طرف آخر أو قوة قاهرة، وبحد أقصى أجر 5 أيام في الشهر. أي مطالبة أخرى، ومنها المخالفة المرورية: فقط بموافقتك الكتابية. مجموع الخصومات: بحد أقصى نصف الأجر. لديك 15 يوم عمل من يوم استلامك هذه المطالبة للاعتراض.';
 
   @override
   String get driverChargeOtherRule =>
       'يطبق حد الشركة على هذه المطالبة. هذه القاعدة لا تزال تحتاج إلى تأكيد قانوني في هذه الدولة.';
+
+  @override
+  String get driverChargeBlockNoFault =>
+      'نظام العمل السعودي (المادة 91): التلف كان بسبب طرف آخر أو قوة قاهرة، لذا لا يخصم من السائق أبدا.';
+
+  @override
+  String get driverChargeFaultForceMajeure => 'قوة قاهرة (لا يخصم)';
+
+  @override
+  String get driverChargeFaultThirdParty => 'خطأ طرف آخر (لا يخصم)';
+
+  @override
+  String get driverChargeFaultInstruction => 'مخالفة تعليمات الشركة';
+
+  @override
+  String get driverChargeFaultDriver => 'خطأ السائق نفسه';
+
+  @override
+  String get driverChargeFaultNone => 'غير مسجلة';
+
+  @override
+  String get driverChargeFaultTitle => 'نتيجة التحقق من الخطأ (المادة 91)';
 
   @override
   String get driverChargePdfFontFailed =>

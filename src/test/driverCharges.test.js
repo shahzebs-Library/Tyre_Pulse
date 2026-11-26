@@ -83,7 +83,7 @@ describe('country deduction rules (mirror of the server)', () => {
     expect(scheduleBlockFor(base)).toMatchObject({ code: 'consent_required', article: '92' })
     const fine = { ...base, charge: { ...base.charge, category: 'traffic_fine' } }
     expect(scheduleBlockFor(fine).article).toBe('92')
-    const dmg = { ...base, charge: { ...base.charge, category: 'tyre_damage' }, settings: { country_rule: { statutory: true }, objection_deadline: '2026-12-17T21:00:00Z', objection_last_day: '2026-12-17' } }
+    const dmg = { ...base, charge: { ...base.charge, category: 'tyre_damage', fault_finding: 'driver_fault' }, settings: { country_rule: { statutory: true }, objection_deadline: '2026-12-17T21:00:00Z', objection_last_day: '2026-12-17' } }
     expect(scheduleBlockFor(dmg, new Date('2026-12-10T00:00:00Z'))).toMatchObject({ code: 'window_open', article: '91', until: '2026-12-17' })
     expect(scheduleBlockFor(dmg, new Date('2026-12-18T00:00:00Z'))).toBeNull()
     expect(scheduleBlockFor({ ...dmg, appeal: { outcome: null } }, new Date('2026-12-18T00:00:00Z')).code).toBe('open_objection')
@@ -114,7 +114,7 @@ describe('driver charge notice model', () => {
     expect(noticeLanguage({ signatures: [] }, 'ur')).toBe('ur')
     expect(noticeLanguage({ signatures: [] }, 'fr')).toBe('en')
     const en = buildChargeDocument({ ...detail, signatures: [] }, { generatedAt: '2026-01-07T10:00:00Z' })
-    expect(en.driverNotice.lines[2]).toMatch(/set when finance approves/)
+    expect(en.driverNotice.lines[2]).toMatch(/not set yet/)
     expect(en.sections.find(s => s.id === 'photos').empty).toBe('No photos attached.')
   })
   it('follows the spec order and formats', () => {
@@ -147,5 +147,21 @@ describe('review fixes', () => {
     expect(fitImage(400, 800, 60, 45)).toEqual({ w: 22.5, h: 45, dx: 18.75, dy: 0 })
     expect(fitImage(1600, 400, 60, 45)).toEqual({ w: 60, h: 15, dx: 0, dy: 15 })
     expect(fitImage(0, 0, 60, 45)).toEqual({ w: 60, h: 45, dx: 0, dy: 0 })
+  })
+})
+
+describe('Saudi Labour Law Art 91 fault finding', () => {
+  it('a KSA damage charge needs a finding, and a third party or force majeure finding is never deducted', async () => {
+    const { FAULT_FINDINGS, chargeNeedsFaultFinding } = await import('../lib/driverCharges')
+    expect(FAULT_FINDINGS).toEqual(['driver_fault', 'instruction_violation', 'third_party', 'force_majeure'])
+    expect(chargeNeedsFaultFinding('KSA', 'missing_item')).toBe(true)
+    expect(chargeNeedsFaultFinding('KSA', 'traffic_fine')).toBe(false)
+    expect(chargeNeedsFaultFinding('UAE', 'missing_item')).toBe(false)
+    const issue = { category: 'missing_item', country: 'KSA', source_type: 'none', basis: 'Missing jack after the night shift.', amount: 50, currency: 'SAR', evidence: [{ kind: 'document', ref: 'd', label: 'x' }] }
+    expect(validateIssue(issue)).toMatch(/fault finding/)
+    expect(validateIssue({ ...issue, fault_finding: 'driver_fault' })).toBeNull()
+    const accepted = { charge: { country: 'KSA', category: 'missing_item', driver_response: 'accepted', fault_finding: 'force_majeure' }, settings: {} }
+    expect(scheduleBlockFor(accepted)).toMatchObject({ code: 'no_fault', article: '91' })
+    expect(scheduleBlockFor({ ...accepted, charge: { ...accepted.charge, fault_finding: 'driver_fault' } })).toBeNull()
   })
 })

@@ -28,14 +28,18 @@
 --     audited reason; the charge it opened is reversed, never deleted.
 --
 -- KSA (2026-11-26, owner): charges on drivers in Saudi Arabia follow the Saudi
--- Labour Law (Royal Decree M/51): Art 91 damage or loss caused by the worker
--- may be deducted without written consent, at most 5 days' wage a month, and the
--- worker may object within 15 working days; Art 92 every other deduction,
--- including a government traffic fine recovered from the driver (a debt, not an
--- employer penalty under Art 70/71), needs written consent; Art 93 all
--- deductions together at most half the wage. NOTE: the 50% check only counts
--- deductions recorded through this system; payroll deductions made elsewhere
--- (loans, housing, GOSI) are not known here and finance must allow for them.
+-- Labour Law (Royal Decree M/51), checked against the official English text:
+-- Art 91(1) damage may be deducted without consent only when the worker caused
+-- it "as a result of his own fault or violation of the employer's instructions
+-- and not as a result of a third party's fault or a force majeure", at most "a
+-- five-day wage per month" (the charge carries a fault_finding); Art 91(2) the
+-- worker files his grievance "within fifteen work days ... from the date of his
+-- notification" (the deadline is stamped at the notice); Art 92 every other
+-- deduction, including a government traffic fine paid for the driver (a debt he
+-- owes), needs written consent; Art 93 all deductions together never more than
+-- half the due wage. NOTE: the 50% check only counts deductions recorded
+-- through this system; payroll deductions made elsewhere (loans, housing, GOSI)
+-- are not known here and finance must allow for them.
 -- UAE and Egypt keep the configurable cap and window until legally confirmed.
 -- This is an implementation of the owner's reading, not legal advice.
 -- Damage charges need at least one photo before the driver is notified; the
@@ -71,6 +75,11 @@ CREATE TABLE public.driver_charges (
   country text NOT NULL,
   site text NOT NULL,
   category text NOT NULL CHECK (category IN ('traffic_fine','accident_damage','tyre_damage','missing_item','handover_damage','other')),
+  -- Saudi Labour Law Art 91(1): damage may be deducted only when it was caused
+  -- "as a result of his own fault or violation of the employer's instructions
+  -- and not as a result of a third party's fault or a force majeure". Staff
+  -- record the finding; third_party or force_majeure can never be deducted.
+  fault_finding text CHECK (fault_finding IN ('driver_fault','instruction_violation','third_party','force_majeure')),
   source_type text NOT NULL CHECK (source_type IN ('accident','handover_report','inspection','checklist_submission','tyre_record','driver_fine','none')),
   source_id uuid,
   source_summary jsonb NOT NULL DEFAULT '{}',
@@ -98,8 +107,8 @@ CREATE TABLE public.driver_charges (
   refusal_witness_id uuid REFERENCES public.profiles(id),
   refusal_recorded_by uuid REFERENCES public.profiles(id),
   refusal_recorded_at timestamptz,
-  -- When the driver's objection window closes. Stamped once at finance
-  -- approval (country rule + holiday calendar of that moment), never recomputed.
+  -- When the driver's objection window closes. Stamped once (KSA at the notice,
+  -- Art 91(2); elsewhere at finance approval), never recomputed.
   objection_deadline timestamptz,
   reversal_code text CHECK (reversal_code IN ('wrong_driver','duplicate','wrong_amount','wrong_vehicle','misused','other')),
   close_reason text,
@@ -282,10 +291,10 @@ BEGIN
   IF TG_OP = 'DELETE' THEN RAISE EXCEPTION 'Charges are never deleted. Reverse it with a reason.' USING ERRCODE='42501'; END IF;
   IF OLD.notified_at IS NOT NULL AND (
        NEW.organisation_id, NEW.driver_id, NEW.charge_no, NEW.category, NEW.source_type, NEW.source_id, NEW.source_link_unverified,
-       NEW.vehicle_id, NEW.incident_at, NEW.basis, NEW.amount, NEW.currency, NEW.issued_by, NEW.notified_at, NEW.notified_by)
+       NEW.vehicle_id, NEW.incident_at, NEW.basis, NEW.amount, NEW.currency, NEW.issued_by, NEW.notified_at, NEW.notified_by, NEW.fault_finding)
      IS DISTINCT FROM (
        OLD.organisation_id, OLD.driver_id, OLD.charge_no, OLD.category, OLD.source_type, OLD.source_id, OLD.source_link_unverified,
-       OLD.vehicle_id, OLD.incident_at, OLD.basis, OLD.amount, OLD.currency, OLD.issued_by, OLD.notified_at, OLD.notified_by) THEN
+       OLD.vehicle_id, OLD.incident_at, OLD.basis, OLD.amount, OLD.currency, OLD.issued_by, OLD.notified_at, OLD.notified_by, OLD.fault_finding) THEN
     RAISE EXCEPTION 'A notified charge cannot be edited. Reverse it and reissue with a reason.' USING ERRCODE='42501';
   END IF;
   IF OLD.status IN ('deducted','waived','cancelled_wrongly_issued') AND NEW.status IS DISTINCT FROM OLD.status THEN
@@ -403,16 +412,19 @@ REVOKE ALL ON FUNCTION private.driver_charge_country_currency(text) FROM PUBLIC,
 
 -- ── Country deduction rules ──────────────────────────────────────────────────
 -- KSA: Saudi Labour Law (Royal Decree M/51). Statute, so not a setting:
---   Art 91  damage or loss caused by the worker's fault: may be deducted without
---           written consent, at most 5 days' wage per month; the worker may
---           object within 15 working days.
+--   Art 91  damage or loss caused by the worker's own fault or a violation of
+--           the employer's instructions (fault_finding driver_fault or
+--           instruction_violation; never third_party or force_majeure): may be
+--           deducted without written consent, at most 5 days' wage per month;
+--           the worker may object within 15 work days of being notified.
 --   Art 92  any other deduction needs the worker's written consent. A traffic
---           fine issued by the authorities and recovered from the driver is
---           such a deduction (it is not an Art 70/71 employer penalty).
+--           fine issued by the authorities and paid for the driver is a debt he
+--           owes, so it is such a deduction.
 --   Art 93  all deductions together at most half the wage due (only the
 --           deductions recorded through this system are counted).
--- A day's wage = monthly wage / 30. Working week Sunday to Thursday (Friday and
--- Saturday off), Asia/Riyadh. Public holidays are not excluded (not modelled).
+-- A day's wage = monthly wage / 30: a company convention, the law does not
+-- define it. Working week Sunday to Thursday (Friday and Saturday off),
+-- Asia/Riyadh; public holidays in driver_charge_holidays are skipped.
 -- Every other country: the configurable cap and appeal window, marked as
 -- needing legal confirmation. Not legal advice.
 -- Mirrors: src/lib/driverCharges.js chargeCountryRule() and
@@ -537,9 +549,9 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION private.driver_charge_working_deadline(timestamptz,integer,text,uuid) FROM PUBLIC,anon,authenticated;
 
--- When the driver's objection window would close if finance approved at
--- p_approved. Used ONCE, at finance approval, to stamp
--- driver_charges.objection_deadline; reads use the stamped value.
+-- When the driver's objection window closes if it starts at p_approved: in KSA
+-- the notice date (Art 91(2)), elsewhere the finance approval. Used ONCE to
+-- stamp driver_charges.objection_deadline; reads use the stamped value.
 CREATE FUNCTION private.driver_charge_compute_deadline(p_charge uuid, p_approved timestamptz)
 RETURNS timestamptz LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
 DECLARE c_country text; c_org uuid; r jsonb;
@@ -554,7 +566,7 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION private.driver_charge_compute_deadline(uuid,timestamptz) FROM PUBLIC,anon,authenticated;
 
--- The stamped deadline (NULL until finance has approved).
+-- The stamped deadline (KSA: from the notice; elsewhere NULL until finance approves).
 CREATE FUNCTION private.driver_charge_objection_deadline(p_charge uuid)
 RETURNS timestamptz LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
   SELECT objection_deadline FROM public.driver_charges WHERE id = p_charge
@@ -571,12 +583,20 @@ RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
 DECLARE c public.driver_charges%ROWTYPE; r jsonb; deadline timestamptz; last_day text;
 BEGIN
   SELECT * INTO c FROM public.driver_charges WHERE id = p_charge;
-  IF NOT FOUND OR c.driver_response IS NOT DISTINCT FROM 'accepted' THEN RETURN NULL; END IF;
+  IF NOT FOUND THEN RETURN NULL; END IF;
   r := private.driver_charge_country_rule(c.country);
+  -- Art 91(1): damage caused by a third party or force majeure is never the
+  -- driver's to pay, with or without his consent.
+  IF coalesce((r->>'statutory')::boolean, false) AND private.driver_charge_bucket(c.category) = 'damage'
+     AND c.fault_finding IN ('third_party','force_majeure') THEN
+    RETURN jsonb_build_object('code','no_fault','article','91','until',NULL,
+      'message','Saudi Labour Law (Article 91): the damage was found to be caused by a third party or force majeure, so it cannot be deducted from the driver. Waive the charge.');
+  END IF;
+  IF c.driver_response IS NOT DISTINCT FROM 'accepted' THEN RETURN NULL; END IF;
   deadline := private.driver_charge_objection_deadline(c.id);
   last_day := to_char((deadline - interval '1 second') AT TIME ZONE 'Asia/Riyadh', 'YYYY-MM-DD');
   IF coalesce((r->>'statutory')::boolean, false) THEN
-    IF private.driver_charge_bucket(c.category) <> 'damage' THEN
+    IF private.driver_charge_bucket(c.category) <> 'damage' OR c.fault_finding IS NULL THEN
       RETURN jsonb_build_object('code','consent_required','article','92','until',NULL,
         'message','Saudi Labour Law (Article 92): this charge can be deducted only with the driver''s written consent. It cannot be scheduled because the driver did not accept it.');
     END IF;
@@ -585,7 +605,7 @@ BEGIN
     END IF;
     IF deadline IS NULL OR deadline > now() THEN
       RETURN jsonb_build_object('code','window_open','article','91','until',last_day,
-        'message', format('Saudi Labour Law (Article 91): the driver has 15 working days to object. A deduction can be scheduled after %s.', coalesce(last_day, 'the finance approval')));
+        'message', format('Saudi Labour Law (Article 91): the driver has 15 working days from the notice to object. A deduction can be scheduled after %s.', coalesce(last_day, 'the objection window')));
     END IF;
     RETURN NULL;
   END IF;
@@ -742,6 +762,9 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'Driver unavailable' USING ERRCODE='42501'; END IF;
   IF coalesce(p->>'category','') NOT IN ('traffic_fine','accident_damage','tyre_damage','missing_item','handover_damage','other') THEN RAISE EXCEPTION 'Choose a charge category' USING ERRCODE='22023'; END IF;
   IF src_type NOT IN ('accident','handover_report','inspection','checklist_submission','tyre_record','driver_fine','none') THEN RAISE EXCEPTION 'Unsupported source record' USING ERRCODE='22023'; END IF;
+  IF nullif(p->>'fault_finding','') IS NOT NULL AND p->>'fault_finding' NOT IN ('driver_fault','instruction_violation','third_party','force_majeure') THEN
+    RAISE EXCEPTION 'Choose the fault finding: driver fault, instruction violation, third party or force majeure' USING ERRCODE='22023';
+  END IF;
   IF p->>'category' = 'traffic_fine' AND src_type <> 'driver_fine' THEN RAISE EXCEPTION 'A traffic fine charge must link the traffic fine record' USING ERRCODE='22023'; END IF;
   IF (src_type = 'none') <> (src_id IS NULL) THEN RAISE EXCEPTION 'Choose the linked record' USING ERRCODE='22023'; END IF;
   IF src_id IS NOT NULL THEN
@@ -786,9 +809,10 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended('driver_charge_no'||p_org::text||yr,0));
   SELECT coalesce(max(nullif(split_part(charge_no,'-',3),'')::integer),0)+1 INTO next_no FROM public.driver_charges WHERE organisation_id = p_org AND charge_no LIKE 'DC-'||yr||'-%';
   INSERT INTO public.driver_charges(organisation_id, charge_no, driver_id, vehicle_id, country, site, category, source_type, source_id, source_summary, source_link_unverified,
-      incident_at, basis, amount, currency, issued_by, supersedes_charge_id)
+      incident_at, basis, amount, currency, issued_by, supersedes_charge_id, fault_finding)
     VALUES (p_org, 'DC-'||yr||'-'||lpad(next_no::text,5,'0'), d.id, v.id, d.country, d.site, p->>'category', src_type, src_id, coalesce(summary,'{}'), unverified,
-      nullif(p->>'incident_at','')::timestamptz, btrim(p->>'basis'), round((p->>'amount')::numeric,2), upper(p->>'currency'), p_actor, p_supersedes)
+      nullif(p->>'incident_at','')::timestamptz, btrim(p->>'basis'), round((p->>'amount')::numeric,2), upper(p->>'currency'), p_actor, p_supersedes,
+      CASE WHEN private.driver_charge_bucket(p->>'category') = 'damage' THEN nullif(p->>'fault_finding','') END)
     RETURNING * INTO c;
   FOR item IN SELECT * FROM jsonb_array_elements(coalesce(p->'evidence','[]')) LOOP
     IF NOT private.driver_charge_valid_evidence(item->>'kind', item->>'ref', item->>'label') THEN
@@ -887,6 +911,7 @@ BEGIN
     IF p_payload ? 'amount' AND c.source_type = 'driver_fine' AND (p_payload->>'amount')::numeric > (SELECT f.amount FROM public.driver_fines f WHERE f.id = c.source_id) THEN RAISE EXCEPTION 'The charge cannot be more than the fine amount' USING ERRCODE='22023'; END IF;
     IF nullif(p_payload->>'incident_at','') IS NOT NULL AND (p_payload->>'incident_at')::timestamptz > now() THEN RAISE EXCEPTION 'Incident cannot be in the future' USING ERRCODE='22023'; END IF;
     IF p_payload ? 'basis' AND length(btrim(coalesce(p_payload->>'basis',''))) NOT BETWEEN 10 AND 4000 THEN RAISE EXCEPTION 'Write the basis for the charge' USING ERRCODE='22023'; END IF;
+    IF nullif(p_payload->>'fault_finding','') IS NOT NULL AND p_payload->>'fault_finding' NOT IN ('driver_fault','instruction_violation','third_party','force_majeure') THEN RAISE EXCEPTION 'Choose the fault finding: driver fault, instruction violation, third party or force majeure' USING ERRCODE='22023'; END IF;
     IF nullif(p_payload->>'vehicle_id','') IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.vehicle_fleet v WHERE v.id = (p_payload->>'vehicle_id')::uuid AND v.organisation_id = org AND v.country IS NOT DISTINCT FROM d.country) THEN RAISE EXCEPTION 'Vehicle outside scope' USING ERRCODE='42501'; END IF;
     detail := jsonb_build_object('reason', v_reason, 'before', private.driver_charge_snapshot(c.id), 'changes', p_payload - 'reason' - 'driver_id' - 'charge_id' - 'version');
     UPDATE public.driver_charges SET
@@ -894,6 +919,7 @@ BEGIN
       basis = CASE WHEN p_payload ? 'basis' THEN btrim(p_payload->>'basis') ELSE basis END,
       vehicle_id = CASE WHEN p_payload ? 'vehicle_id' THEN nullif(p_payload->>'vehicle_id','')::uuid ELSE vehicle_id END,
       incident_at = CASE WHEN p_payload ? 'incident_at' THEN nullif(p_payload->>'incident_at','')::timestamptz ELSE incident_at END,
+      fault_finding = CASE WHEN p_payload ? 'fault_finding' AND private.driver_charge_bucket(category) = 'damage' THEN nullif(p_payload->>'fault_finding','') ELSE fault_finding END,
       version = version + 1, updated_at = now() WHERE id = c.id;
 
   WHEN 'charge_attach_evidence' THEN
@@ -911,7 +937,17 @@ BEGIN
     IF private.driver_charge_needs_photo(c.category) AND NOT EXISTS(SELECT 1 FROM public.driver_charge_evidence e WHERE e.charge_id = c.id AND e.kind = 'photo') THEN
       RAISE EXCEPTION 'Add at least one photo of the damage before sending this charge to the driver' USING ERRCODE='22023';
     END IF;
-    UPDATE public.driver_charges SET status = 'notified', notified_at = now(), notified_by = actor, version = version + 1, updated_at = now() WHERE id = c.id;
+    -- Art 91(1): a KSA damage charge states whose fault it was before the driver sees it.
+    IF coalesce((private.driver_charge_country_rule(c.country)->>'statutory')::boolean, false)
+       AND private.driver_charge_bucket(c.category) = 'damage' AND c.fault_finding IS NULL THEN
+      RAISE EXCEPTION 'Saudi Labour Law (Article 91): record the fault finding (driver fault, instruction violation, third party or force majeure) before sending this damage charge to the driver' USING ERRCODE='22023';
+    END IF;
+    -- Art 91(2): the worker's 15 work days run from the date the employer notified him,
+    -- so the KSA deadline is stamped now. Elsewhere it is stamped at finance approval.
+    UPDATE public.driver_charges SET status = 'notified', notified_at = now(), notified_by = actor,
+      objection_deadline = CASE WHEN coalesce((private.driver_charge_country_rule(c.country)->>'statutory')::boolean, false)
+        THEN private.driver_charge_compute_deadline(c.id, now()) ELSE objection_deadline END,
+      version = version + 1, updated_at = now() WHERE id = c.id;
     notify_driver := true;
 
   WHEN 'charge_respond' THEN
@@ -998,7 +1034,8 @@ BEGIN
     INSERT INTO public.driver_charge_decisions(charge_id, driver_id, organisation_id, stage, decision, reason, decided_by, charge_version, details)
       VALUES (c.id, d.id, org, 'finance', choice, v_reason, actor, c.version, detail);
     UPDATE public.driver_charges SET status = CASE choice WHEN 'approve' THEN 'finance_approved' ELSE driver_response END,
-      objection_deadline = CASE choice WHEN 'approve' THEN private.driver_charge_compute_deadline(c.id, now()) ELSE NULL END,
+      -- Outside KSA (company setting) the window starts at finance approval; a KSA deadline is already stamped at notice.
+      objection_deadline = CASE WHEN choice = 'approve' AND objection_deadline IS NULL THEN private.driver_charge_compute_deadline(c.id, now()) ELSE objection_deadline END,
       refusal_witness_id = CASE choice WHEN 'return' THEN NULL ELSE refusal_witness_id END,
       refusal_recorded_by = CASE choice WHEN 'return' THEN NULL ELSE refusal_recorded_by END,
       refusal_recorded_at = CASE choice WHEN 'return' THEN NULL ELSE refusal_recorded_at END,
@@ -1147,6 +1184,7 @@ BEGIN
         'vehicle_id', CASE WHEN reissue ? 'vehicle_id' THEN reissue->>'vehicle_id' ELSE c.vehicle_id::text END,
         'incident_at', c.incident_at, 'basis', coalesce(nullif(btrim(reissue->>'basis'),''), c.basis),
         'amount', coalesce((reissue->>'amount')::numeric, c.amount), 'currency', c.currency,
+        'fault_finding', coalesce(nullif(reissue->>'fault_finding',''), c.fault_finding),
         'evidence', (SELECT coalesce(jsonb_agg(jsonb_build_object('kind',e.kind,'ref',e.ref,'label',e.label) ORDER BY e.created_at, e.id),'[]') FROM public.driver_charge_evidence e WHERE e.charge_id = c.id)), c.id);
       UPDATE public.driver_charges SET superseded_by_charge_id = nc.id WHERE id = c.id;
       INSERT INTO public.driver_workspace_events(organisation_id, driver_id, charge_id, actor_id, action, details)
@@ -1494,6 +1532,8 @@ BEGIN
     ref := coalesce(acc->>'reference_no', a.accident_id::text);
     c := private.driver_charge_issue(org, actor, (p_charge->>'driver_id')::uuid, jsonb_build_object(
       'category', 'accident_damage', 'source_type', 'accident', 'source_id', a.accident_id, 'link_unverified', 'true',
+      -- An approved liability assessment naming the driver as payer is the fault finding unless staff say otherwise.
+      'fault_finding', coalesce(nullif(p_charge->>'fault_finding',''), 'driver_fault'),
       'vehicle_id', acc->>'vehicle_id',
       'incident_at', CASE WHEN acc->>'incident_date' IS NOT NULL THEN (acc->>'incident_date')||'T00:00:00Z' END,
       'basis', coalesce(nullif(btrim(p_charge->>'basis'),''), 'Accident '||ref||': approved liability assessment names the driver as the payer for recovery. Approval reason: '||btrim(p_reason)),

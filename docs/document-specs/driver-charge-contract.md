@@ -70,7 +70,7 @@ and `version` (the version the user was looking at). Returns
 
 | Action | Who | Payload (besides driver_id, charge_id, version) |
 |---|---|---|
-| `charge_issue` | manager or assigned supervisor, never the driver | `category, source_type, source_id?, vehicle_id?, incident_at?, basis (10..4000), amount (finite, > 0, <= 1,000,000), currency, evidence: [{kind, ref, label}]`. `currency` must equal `country_currency` for the driver's country. `traffic_fine` must link `driver_fine`; the fine must be approved (`response_status approved`, `review_stage complete`), open and unpaid, the charge in the fine currency and not above the fine amount; the fine is then linked (`driver_fines.recovery_charge_id`) and its own payment step is locked until the charge closes. A linked record must be in the driver's country, inside the caller's country/site scope and, where it names a driver (id or name), name this driver. When the linked record names no driver (inspections, checklists, or an accident or tyre record with no driver), the payload must carry `link_unverified: true`; it is stored as `source_link_unverified` and the notice states "Link to source not confirmed by record". Needs a source or at least one evidence item. |
+| `charge_issue` | manager or assigned supervisor, never the driver | `category, source_type, source_id?, vehicle_id?, incident_at?, basis (10..4000), fault_finding? (damage charges; required before notice in KSA, Art 91), amount (finite, > 0, <= 1,000,000), currency, evidence: [{kind, ref, label}]`. `currency` must equal `country_currency` for the driver's country. `traffic_fine` must link `driver_fine`; the fine must be approved (`response_status approved`, `review_stage complete`), open and unpaid, the charge in the fine currency and not above the fine amount; the fine is then linked (`driver_fines.recovery_charge_id`) and its own payment step is locked until the charge closes. A linked record must be in the driver's country, inside the caller's country/site scope and, where it names a driver (id or name), name this driver. When the linked record names no driver (inspections, checklists, or an accident or tyre record with no driver), the payload must carry `link_unverified: true`; it is stored as `source_link_unverified` and the notice states "Link to source not confirmed by record". Needs a source or at least one evidence item. |
 | `charge_correct` | manager, or the issuing supervisor, while `issued` | `amount?, basis?, vehicle_id?, incident_at?, reason` |
 | `charge_attach_evidence` | as above, while `issued` | `kind, ref, label`. A `photo` must be a private storage reference `tp-storage://(tyre-photos\|accident-photos\|inspection-photos)/<path>`; anything else (a public URL, a bare path) is refused. |
 | `charge_notify` | manager or supervisor | none. Stamps `notified_at` and `notified_by`; freezes the charge. A physical damage charge (`accident_damage`, `tyre_damage`, `handover_damage`) needs at least one `photo` evidence row first (`22023`). |
@@ -152,26 +152,38 @@ employer imposes, so it is an Article 92 deduction and needs his written consent
 
 ### KSA: Saudi Labour Law, Royal Decree M/51
 
-A day's wage is the monthly wage stated on the schedule divided by 30.
+Checked against the official English text of the law. The quotes below are what the rules rest on.
 
-| Article | Rule enforced on the server |
-|---|---|
-| 91 | Damage or loss caused by the worker's fault (`damage` bucket) may be deducted without the worker's written consent, but at most 5 days' wage per month across all his damage charges. The worker may object within 15 working days. |
-| 92 | Any other deduction (`consent` bucket, including a traffic fine) needs the worker's written consent (`accepted`). |
-| 93 | All deductions together in one month at most half (50%) of the wage due. Only deductions recorded through this system are counted: payroll deductions made elsewhere (loans, housing, GOSI) are not known here and finance must allow for them. |
+| Article | Text | Rule enforced on the server |
+|---|---|---|
+| 91(1) | Deduction only when the worker, "as a result of his own fault or violation of the employer's instructions and not as a result of a third party's fault or a force majeure", caused loss or damage to machinery or products in his custody; at most "a five-day wage per month". | A KSA damage charge (`damage` bucket) carries `fault_finding`: `driver_fault`, `instruction_violation`, `third_party` or `force_majeure`. It cannot be sent to the driver without one. `third_party` or `force_majeure` can never be deducted, with or without consent (`schedule_block` code `no_fault`). Damage deductions at most 5 days' wage per month across all his damage charges. |
+| 91(2) | "Either party shall file its grievance within fifteen work days ... for the worker from the date of his notification of the same by the employer." The employer refunds within 7 days if the Commission rules against it. | The 15 work day window starts when the driver is notified (`charge_notify`) and is stamped on `driver_charges.objection_deadline` at that moment. The 7 day refund is not automated: finance records it. |
+| 72 | A penalty objection "within fifteen days, excluding official holidays, from the date of notifying him". | Supports skipping the official holidays in `driver_charge_holidays` when counting the window. |
+| 92 | A deduction against private rights needs written consent, except (5) "Fines imposed ... for violations committed, as well as deductions made for damages caused" (loans at most 10%, court debts at most a quarter). | Any charge outside the `damage` bucket needs the driver's written consent (`accepted`). A government traffic fine paid for the driver is a debt he owes (like a loan), not a fine the employer imposed for a work violation, so it is kept in the consent bucket. |
+| 93 | Total deductions never more than half the due wage. | All deductions together in one month at most half the wage. Only deductions recorded through this system are counted: payroll deductions made elsewhere (loans, housing, GOSI) are not known here and finance must allow for them. |
+
+A day's wage = the monthly wage stated on the schedule divided by 30. This is a company convention: the law
+does not define it. The lawyer should confirm it.
 
 Without consent (driver `disputed` or `refused`, witnessed): a KSA charge can be scheduled ONLY when it is in
-the `damage` bucket, has supervisor and then finance approval (status `finance_approved`), has no open
-objection (an appeal with no outcome), and the objection window has ended. A disputed or refused traffic
-fine or other charge is refused (`22023`, Article 92). The objection window is 15 working days (Sunday to
-Thursday, Friday and Saturday off, Asia/Riyadh) counted from the finance approval; it closes at the end of the
-15th working day. Public holidays listed in `driver_charge_holidays` for the charge's organisation and country
-are skipped too (see "Public holidays" below). The deadline is computed ONCE, when finance approves, and
-stamped on `driver_charges.objection_deadline`; later holiday or rule changes never move it (the charge guard
-refuses to change a stamped deadline).
+the `damage` bucket with a fault finding of `driver_fault` or `instruction_violation`, has supervisor and then
+finance approval (status `finance_approved`), has no open objection (an appeal with no outcome), and the
+objection window has ended. A disputed or refused traffic fine or other charge is refused (`22023`, Article
+92). The objection window is 15 working days (Sunday to Thursday, Friday and Saturday off, Asia/Riyadh)
+counted from the notice; it closes at the end of the 15th working day. Public holidays listed in
+`driver_charge_holidays` for the charge's organisation and country are skipped too (see "Public holidays"
+below). The deadline is computed ONCE, at the notice, and stamped on `driver_charges.objection_deadline`;
+later holiday or rule changes never move it (the charge guard refuses to change a stamped deadline). Outside
+KSA the window is still counted from finance approval.
+
+The fault finding is part of the notice: it is frozen with the other notified fields (reverse and reissue to
+change it), printed on the notice PDF field rows and in the driver box in his language, and shown to the
+driver before he answers on the web and in the Flutter app. An accident liability approval that names the
+driver as payer opens its charge with `driver_fault` unless staff give another finding.
 
 The rule lives in ONE server function, `private.driver_charge_schedule_block(charge)`, which returns
-`{code, article, until, message}` (codes `consent_required` with article 92, `open_objection`, `window_open`)
+`{code, article, until, message}` (codes `no_fault` with article 91, `consent_required` with article 92,
+`open_objection`, `window_open`)
 or null. `charge_schedule` raises its message; `driver_charge_actions` never lists `charge_schedule` while it
 is not null; `driver_charge_detail.settings.schedule_block` returns it so the web and the Flutter app show the
 plain reason with the article instead of a Schedule button (`scheduleBlockFor` in `src/lib/driverCharges.js`,
@@ -191,11 +203,11 @@ covered (20% cap, 7 calendar days, a disputed "other" charge schedulable after t
 
 ### Legal note
 
-This is an implementation of the owner's reading of the Saudi Labour Law articles cited above. It is not
-legal advice. Have a qualified Saudi labour lawyer confirm the rules (in particular: treating a traffic
-fine recovered from the driver as an Article 92 deduction needing consent, the 15 working day window counted from the finance
-approval, and the day rate of wage / 30) before relying on it in a dispute, and confirm the UAE and Egypt
-rules before using charges there.
+This is an implementation of the owner's reading of the Saudi Labour Law articles quoted above. It is not
+legal advice. Have a qualified Saudi labour lawyer confirm the rules (in particular: treating a traffic fine
+paid for the driver as an Article 92 debt needing consent, the day rate of wage / 30, the four fault findings
+and who may record them, and the 15 work day window counted from the notice) before relying on it in a
+dispute, and confirm the UAE and Egypt rules before using charges there.
 
 ## Evidence photos
 
@@ -236,7 +248,7 @@ the database or through a later Console page.
 | `driver_charge_appeal_window_days` | `7` | Calendar days to object to a charge the driver did not accept, before scheduling (not used in KSA: 15 working days) |
 
 `driver_charge_detail.settings` also returns `country_rule`, `bucket`, `needs_photo`, `objection_deadline`
-(instant the window closes, null before finance approval) and `objection_last_day` (`YYYY-MM-DD`, Riyadh).
+(instant the window closes; KSA from the notice, elsewhere null before finance approval) and `objection_last_day` (`YYYY-MM-DD`, Riyadh).
 
 ## Statements (stored verbatim with each signature)
 

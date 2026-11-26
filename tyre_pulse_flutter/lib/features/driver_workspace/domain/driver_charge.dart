@@ -129,6 +129,21 @@ String driverChargeBucket(Object? category) => switch ('${category ?? ''}') {
       _ => 'consent',
     };
 
+/// Saudi Labour Law Art 91(1) fault findings, recorded by staff on a damage
+/// charge. Mirror of `driver_charges.fault_finding`.
+const List<String> driverChargeFaultFindings = <String>[
+  'driver_fault',
+  'instruction_violation',
+  'third_party',
+  'force_majeure',
+];
+
+/// Damage caused by a third party or force majeure is never deducted.
+const Set<String> driverChargeNoFaultFindings = <String>{
+  'third_party',
+  'force_majeure',
+};
+
 /// Physical damage carries at least one photo before the driver is notified.
 bool driverChargeNeedsPhoto(Object? category) => const <String>{
       'accident_damage',
@@ -358,6 +373,12 @@ final class DriverChargeDetail {
           if (e['kind'] == 'photo' && '${e['ref'] ?? ''}'.isNotEmpty) e,
       ];
 
+  /// The Art 91 fault finding on a damage charge, or null.
+  String? get faultFinding {
+    final Object? f = charge['fault_finding'];
+    return f is String && driverChargeFaultFindings.contains(f) ? f : null;
+  }
+
   /// The deduction rules of the charge country.
   DriverChargeCountryRule get countryRule =>
       driverChargeCountryRule(charge['country']);
@@ -367,7 +388,7 @@ final class DriverChargeDetail {
   /// the rule fields the detail returns. Mirror of `scheduleBlockFor`.
   DriverChargeScheduleBlock? scheduleBlock({DateTime? now}) {
     final DriverRow c = charge;
-    if (c.isEmpty || c['driver_response'] == 'accepted') return null;
+    if (c.isEmpty) return null;
     final Object? settings = data['settings'];
     final Map<Object?, Object?> s =
         settings is Map ? settings : const <Object?, Object?>{};
@@ -384,6 +405,14 @@ final class DriverChargeDetail {
     final bool statutory = rule is Map
         ? rule['statutory'] == true
         : driverChargeCountryRule(c['country']).statutory;
+    final bool damage =
+        '${s['bucket'] ?? driverChargeBucket(c['category'])}' == 'damage';
+    if (statutory &&
+        damage &&
+        driverChargeNoFaultFindings.contains(c['fault_finding'])) {
+      return const DriverChargeScheduleBlock('no_fault', article: '91');
+    }
+    if (c['driver_response'] == 'accepted') return null;
     final String? until = s['objection_last_day'] as String?;
     final DateTime? deadline =
         DateTime.tryParse('${s['objection_deadline'] ?? ''}');
@@ -392,7 +421,7 @@ final class DriverChargeDetail {
     final DriverRow? a = appeal;
     final bool appealOpen = a != null && a['outcome'] == null;
     if (statutory) {
-      if ('${s['bucket'] ?? driverChargeBucket(c['category'])}' != 'damage') {
+      if (!damage || c['fault_finding'] == null) {
         return const DriverChargeScheduleBlock(
           'consent_required',
           article: '92',

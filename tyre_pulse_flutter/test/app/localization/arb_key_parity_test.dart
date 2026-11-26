@@ -693,10 +693,12 @@ void main() {
     // rule line without the legal caveat, photos blocked / still loading,
     // retry, open larger, and the PDF refusing to print without the Arabic
     // and Urdu font).
-    test('en, ar and ur each carry exactly 2707 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2707);
-      expect(_translatableKeys(ar).length, 2707);
-      expect(_translatableKeys(ur).length, 2707);
+    // 2707 + 7 = 2714: the Article 91 fault finding (title, not recorded, four
+    // findings) and the block when it was a third party or force majeure.
+    test('en, ar and ur each carry exactly 2714 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2714);
+      expect(_translatableKeys(ar).length, 2714);
+      expect(_translatableKeys(ur).length, 2714);
     });
   });
 

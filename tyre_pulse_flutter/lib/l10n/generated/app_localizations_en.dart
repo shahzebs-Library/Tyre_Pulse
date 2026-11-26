@@ -8973,11 +8973,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get driverChargeKsaRule =>
-      'Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days to object.';
+      'Saudi Labour Law applies to this charge. Damage or loss: only when caused by your own fault or by not following the company\'s instructions, never by another person or force majeure, and at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days from the day you received this charge to object.';
 
   @override
   String get driverChargeOtherRule =>
       'The company limit applies to this charge. This rule still needs legal confirmation for this country.';
+
+  @override
+  String get driverChargeBlockNoFault =>
+      'Saudi Labour Law (Article 91): the damage was caused by a third party or force majeure, so it can never be deducted from the driver.';
+
+  @override
+  String get driverChargeFaultForceMajeure =>
+      'Force majeure (cannot be deducted)';
+
+  @override
+  String get driverChargeFaultThirdParty =>
+      'Another person\'s fault (cannot be deducted)';
+
+  @override
+  String get driverChargeFaultInstruction =>
+      'Did not follow the company\'s instructions';
+
+  @override
+  String get driverChargeFaultDriver => 'Driver\'s own fault';
+
+  @override
+  String get driverChargeFaultNone => 'Not recorded';
+
+  @override
+  String get driverChargeFaultTitle => 'Fault finding (Article 91)';
 
   @override
   String get driverChargePdfFontFailed =>

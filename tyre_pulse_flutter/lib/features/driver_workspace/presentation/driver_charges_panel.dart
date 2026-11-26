@@ -349,11 +349,26 @@ String _blockText(AppLocalizations l10n, DriverChargeScheduleBlock block) {
   final String day = block.until ?? l10n.valueUnavailable;
   return switch (block.code) {
     'consent_required' => l10n.driverChargeBlockConsent,
+    'no_fault' => l10n.driverChargeBlockNoFault,
     'open_objection' => l10n.driverChargeBlockObjection,
     _ => block.article == '91'
         ? l10n.driverChargeBlockWindowKsa(day)
         : l10n.driverChargeBlockWindow(day),
   };
+}
+
+/// The Art 91 fault finding on a damage charge, in words, or null when the
+/// charge is not a damage charge.
+String? _faultText(AppLocalizations l10n, DriverChargeDetail detail) {
+  if (driverChargeBucket(detail.charge['category']) != 'damage') return null;
+  final String label = switch (detail.faultFinding) {
+    'driver_fault' => l10n.driverChargeFaultDriver,
+    'instruction_violation' => l10n.driverChargeFaultInstruction,
+    'third_party' => l10n.driverChargeFaultThirdParty,
+    'force_majeure' => l10n.driverChargeFaultForceMajeure,
+    _ => l10n.driverChargeFaultNone,
+  };
+  return '${l10n.driverChargeFaultTitle}: $label';
 }
 
 /// The country rule in plain words. "Needs legal confirmation" is a note for
@@ -864,6 +879,8 @@ class _DriverChargeDetailScreenState
           heading(l10n.driverChargePhotosTitle),
           DriverChargePhotos(photos: detail.photos),
           const SizedBox(height: 8),
+          if (_faultText(l10n, detail) case final String fault)
+            Text(fault, style: theme.textTheme.bodyMedium),
           Text(_ruleText(l10n, detail), style: theme.textTheme.bodySmall),
           heading(l10n.driverChargeEvidence),
           if (detail.rows('evidence').isEmpty)
@@ -1146,6 +1163,8 @@ class _DriverChargeResponseSheetState
               style: Theme.of(context).textTheme.bodySmall,
             ),
           const SizedBox(height: 8),
+          if (_faultText(l10n, widget.detail) case final String fault)
+            Text(fault, style: Theme.of(context).textTheme.bodyMedium),
           Text(
             _ruleText(l10n, widget.detail),
             style: Theme.of(context).textTheme.bodySmall,

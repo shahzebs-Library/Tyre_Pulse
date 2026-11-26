@@ -13,7 +13,7 @@
     "photosSeen": "Look at the photos before you answer.",
     "readAloud": "If you cannot read this, ask your supervisor to read it to you before you sign.",
     "acknowledge": "I have read this statement (or it was read to me) and I agree to sign it.",
-    "ksaRule": "Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days to object.",
+    "ksaRule": "Saudi Labour Law applies to this charge. Damage or loss: only when caused by your own fault or by not following the company's instructions, never by another person or force majeure, and at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days from the day you received this charge to object.",
     "otherRule": "The company limit applies to this charge. This rule still needs legal confirmation for this country.",
     "objectionUntil": "You can object until {date}.",
     "photoRequired": "Add at least one photo of the damage before sending this charge to the driver.",
@@ -37,9 +37,19 @@
     "language": "Choose English, Arabic or Urdu.",
     "explanation": "Explain why you dispute the charge.",
     "acknowledge": "Read and confirm the statement.",
-    "signature": "Sign before submitting."
+    "signature": "Sign before submitting.",
+    "faultFinding": "Record the fault finding: whose fault was the damage (Saudi Labour Law, Article 91)."
   },
   "pdf": {
     "scriptUnavailable": "This browser could not draw the Arabic or Urdu text. Open this PDF from Chrome, Edge or Safari to print it in that language."
+  },
+  "fault": {
+    "title": "Fault finding (Article 91)",
+    "help": "Required for a damage charge in Saudi Arabia. Damage caused by a third party or force majeure can never be deducted from the driver.",
+    "none": "Not recorded",
+    "driver_fault": "Driver's own fault",
+    "instruction_violation": "Did not follow the company's instructions",
+    "third_party": "Another person's fault (cannot be deducted)",
+    "force_majeure": "Force majeure (cannot be deducted)"
   }
 }

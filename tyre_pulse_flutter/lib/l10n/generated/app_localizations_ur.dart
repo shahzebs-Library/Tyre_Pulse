@@ -8992,11 +8992,35 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get driverChargeKsaRule =>
-      'اس چارج پر سعودی لیبر قانون لاگو ہے۔ نقصان یا گمشدگی: ہر مہینے زیادہ سے زیادہ 5 دن کی تنخواہ۔ کوئی اور چارج، ٹریفک جرمانے سمیت: صرف آپ کی تحریری اجازت سے۔ تمام کٹوتیاں ملا کر: زیادہ سے زیادہ آدھی تنخواہ۔ آپ کے پاس اعتراض کے لیے 15 کام کے دن ہیں۔';
+      'اس چارج پر سعودی لیبر قانون لاگو ہے۔ نقصان یا گمشدگی: صرف تب جب یہ آپ کی اپنی غلطی سے یا کمپنی کی ہدایات پر عمل نہ کرنے سے ہوا ہو، کسی دوسرے شخص یا ناگہانی آفت سے نہیں، اور ہر مہینے زیادہ سے زیادہ 5 دن کی تنخواہ۔ کوئی اور چارج، ٹریفک جرمانے سمیت: صرف آپ کی تحریری اجازت سے۔ تمام کٹوتیاں ملا کر: زیادہ سے زیادہ آدھی تنخواہ۔ یہ چارج ملنے کے دن سے آپ کے پاس اعتراض کے لیے 15 کام کے دن ہیں۔';
 
   @override
   String get driverChargeOtherRule =>
       'اس چارج پر کمپنی کی حد لاگو ہے۔ اس ملک کے لیے اس اصول کی ابھی قانونی تصدیق باقی ہے۔';
+
+  @override
+  String get driverChargeBlockNoFault =>
+      'سعودی لیبر قانون (دفعہ 91): نقصان کسی دوسرے یا ناگہانی آفت سے ہوا، اس لیے یہ ڈرائیور سے کبھی نہیں کاٹا جائے گا۔';
+
+  @override
+  String get driverChargeFaultForceMajeure =>
+      'ناگہانی آفت (کٹوتی نہیں ہو سکتی)';
+
+  @override
+  String get driverChargeFaultThirdParty =>
+      'کسی دوسرے کی غلطی (کٹوتی نہیں ہو سکتی)';
+
+  @override
+  String get driverChargeFaultInstruction => 'کمپنی کی ہدایات پر عمل نہیں کیا';
+
+  @override
+  String get driverChargeFaultDriver => 'ڈرائیور کی اپنی غلطی';
+
+  @override
+  String get driverChargeFaultNone => 'درج نہیں';
+
+  @override
+  String get driverChargeFaultTitle => 'غلطی کا فیصلہ (دفعہ 91)';
 
   @override
   String get driverChargePdfFontFailed =>

@@ -15681,7 +15681,7 @@ abstract class AppLocalizations {
   /// No description provided for @driverChargeKsaRule.
   ///
   /// In en, this message translates to:
-  /// **'Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days to object.'**
+  /// **'Saudi Labour Law applies to this charge. Damage or loss: only when caused by your own fault or by not following the company\'s instructions, never by another person or force majeure, and at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days from the day you received this charge to object.'**
   String get driverChargeKsaRule;
 
   /// No description provided for @driverChargeOtherRule.
@@ -15689,6 +15689,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The company limit applies to this charge. This rule still needs legal confirmation for this country.'**
   String get driverChargeOtherRule;
+
+  /// No description provided for @driverChargeBlockNoFault.
+  ///
+  /// In en, this message translates to:
+  /// **'Saudi Labour Law (Article 91): the damage was caused by a third party or force majeure, so it can never be deducted from the driver.'**
+  String get driverChargeBlockNoFault;
+
+  /// No description provided for @driverChargeFaultForceMajeure.
+  ///
+  /// In en, this message translates to:
+  /// **'Force majeure (cannot be deducted)'**
+  String get driverChargeFaultForceMajeure;
+
+  /// No description provided for @driverChargeFaultThirdParty.
+  ///
+  /// In en, this message translates to:
+  /// **'Another person\'s fault (cannot be deducted)'**
+  String get driverChargeFaultThirdParty;
+
+  /// No description provided for @driverChargeFaultInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Did not follow the company\'s instructions'**
+  String get driverChargeFaultInstruction;
+
+  /// No description provided for @driverChargeFaultDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver\'s own fault'**
+  String get driverChargeFaultDriver;
+
+  /// No description provided for @driverChargeFaultNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get driverChargeFaultNone;
+
+  /// No description provided for @driverChargeFaultTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fault finding (Article 91)'**
+  String get driverChargeFaultTitle;
 
   /// No description provided for @driverChargePdfFontFailed.
   ///

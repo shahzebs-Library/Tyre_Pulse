@@ -131,8 +131,14 @@
       "driver_dispute": "Driver receipt and dispute",
       "refusal_witness": "Witness to refusal"
     },
+    "fault_finding": {
+      "driver_fault": "Driver's own fault (Article 91)",
+      "instruction_violation": "Violation of the company's instructions (Article 91)",
+      "third_party": "Third party's fault: cannot be deducted (Article 91)",
+      "force_majeure": "Force majeure: cannot be deducted (Article 91)"
+    },
     "schedule_rule": {
-      "ksa_labour_law": "Saudi Labour Law (Royal Decree M/51), Articles 70, 71, 91, 92 and 93",
+      "ksa_labour_law": "Saudi Labour Law (Royal Decree M/51), Articles 91, 92 and 93",
       "company_setting": "Company setting (needs legal confirmation for this country)"
     },
     "language": {
@@ -182,6 +188,11 @@
           "label": "Category",
           "key": "charge.category",
           "format": "enum:category"
+        },
+        {
+          "label": "Fault finding",
+          "key": "charge.fault_finding",
+          "format": "enum:fault_finding"
         },
         {
           "label": "Amount",
@@ -550,7 +561,7 @@
     "page_number": "Page {page} of {pages}"
   },
   "driver_notice": {
-    "rule": "Printed near the top in the driver's language: the language of the driver's latest signature, else the language the app is set to, else English. Placeholders: {amount} is the charge amount with currency, {window} is the objection window, {deadline} is the last day to object or the pending phrase.",
+    "rule": "Printed near the top in the driver's language: the language of the driver's latest signature, else the language the app is set to, else English. Placeholders: {amount} is the charge amount with currency, {window} is the objection window, {deadline} is the last day to object or the pending phrase. When the charge has a fault_finding, fault_line is added after the first line with {fault} replaced by fault[finding].",
     "text": {
       "en": {
         "dir": "ltr",
@@ -558,12 +569,19 @@
         "lines": [
           "The company says you must pay {amount} for this charge. Read the reason in section 3 and look at the photos in section 4a.",
           "If you agree, sign the consent. If you do not agree, sign that you received this paper and write why.",
-          "You can object within {window} after finance approves the charge. Last day: {deadline}.",
+          "You can object within {window}. Last day: {deadline}.",
           "Two different people must approve before anything is taken from your salary."
         ],
-        "window_statutory": "15 working days (Sunday to Thursday)",
-        "window_days": "{days} days",
-        "deadline_pending": "set when finance approves"
+        "window_statutory": "15 working days (Sunday to Thursday, official holidays not counted) from the day you received this charge",
+        "window_days": "{days} days after finance approves the charge",
+        "deadline_pending": "not set yet",
+        "fault_line": "Finding on the damage: {fault}.",
+        "fault": {
+          "driver_fault": "your own fault",
+          "instruction_violation": "you did not follow the company's instructions",
+          "third_party": "another person's fault, so it cannot be taken from you",
+          "force_majeure": "force majeure, outside anyone's control, so it cannot be taken from you"
+        }
       },
       "ar": {
         "dir": "rtl",
@@ -571,12 +589,19 @@
         "lines": [
           "تقول الشركة إنك ملزم بدفع {amount} عن هذه المطالبة. اقرأ السبب في القسم 3 وانظر إلى الصور في القسم 4a.",
           "إذا كنت موافقا، وقع على الموافقة. وإذا لم تكن موافقا، وقع على أنك استلمت هذه الورقة واكتب السبب.",
-          "يحق لك الاعتراض خلال {window} بعد موافقة المالية على المطالبة. آخر يوم: {deadline}.",
+          "يحق لك الاعتراض خلال {window}. آخر يوم: {deadline}.",
           "يجب أن يوافق شخصان مختلفان قبل أن يخصم أي شيء من راتبك."
         ],
-        "window_statutory": "15 يوم عمل (من الأحد إلى الخميس)",
-        "window_days": "{days} أيام",
-        "deadline_pending": "يحدد عند موافقة المالية"
+        "window_statutory": "15 يوم عمل (من الأحد إلى الخميس، دون العطل الرسمية) من يوم استلامك هذه المطالبة",
+        "window_days": "{days} أيام بعد موافقة المالية على المطالبة",
+        "deadline_pending": "لم يحدد بعد",
+        "fault_line": "نتيجة التحقق من التلف: {fault}.",
+        "fault": {
+          "driver_fault": "بسبب خطئك",
+          "instruction_violation": "بسبب مخالفتك لتعليمات الشركة",
+          "third_party": "بسبب خطأ طرف آخر، لذا لا يخصم منك",
+          "force_majeure": "بسبب قوة قاهرة خارجة عن الإرادة، لذا لا يخصم منك"
+        }
       },
       "ur": {
         "dir": "rtl",
@@ -584,12 +609,19 @@
         "lines": [
           "کمپنی کہتی ہے کہ آپ کو اس چارج کے لیے {amount} ادا کرنا ہے۔ وجہ سیکشن 3 میں پڑھیں اور تصویریں سیکشن 4a میں دیکھیں۔",
           "اگر آپ متفق ہیں تو اجازت پر دستخط کریں۔ اگر متفق نہیں ہیں تو دستخط کریں کہ آپ کو یہ کاغذ مل گیا ہے اور وجہ لکھیں۔",
-          "آپ فنانس کی منظوری کے بعد {window} کے اندر اعتراض کر سکتے ہیں۔ آخری دن: {deadline}۔",
+          "آپ {window} کے اندر اعتراض کر سکتے ہیں۔ آخری دن: {deadline}۔",
           "آپ کی تنخواہ سے کچھ کاٹنے سے پہلے دو مختلف لوگوں کی منظوری ضروری ہے۔"
         ],
-        "window_statutory": "15 کام کے دن (اتوار سے جمعرات)",
-        "window_days": "{days} دن",
-        "deadline_pending": "فنانس کی منظوری پر طے ہو گا"
+        "window_statutory": "یہ چارج ملنے کے دن سے 15 کام کے دن (اتوار سے جمعرات، سرکاری چھٹیاں شامل نہیں)",
+        "window_days": "فنانس کی منظوری کے بعد {days} دن",
+        "deadline_pending": "ابھی طے نہیں ہوا",
+        "fault_line": "نقصان کے بارے میں فیصلہ: {fault}۔",
+        "fault": {
+          "driver_fault": "آپ کی اپنی غلطی",
+          "instruction_violation": "آپ نے کمپنی کی ہدایات پر عمل نہیں کیا",
+          "third_party": "کسی دوسرے کی غلطی، اس لیے آپ سے نہیں کاٹا جائے گا",
+          "force_majeure": "ناگہانی آفت، کسی کے بس میں نہیں، اس لیے آپ سے نہیں کاٹا جائے گا"
+        }
       }
     }
   }

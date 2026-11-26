@@ -260,6 +260,7 @@ void main() {
       <String, Object?>{
         'category': 'tyre_damage',
         'driver_response': 'refused',
+        'fault_finding': 'driver_fault',
       },
       ksa,
     );
@@ -408,9 +409,61 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     final Finder picker = find.byType(SegmentedButton<String>);
+    await tester.scrollUntilVisible(
+      picker,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(DriverChargeResponseSheet),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(tester.getSize(picker).height, greaterThanOrEqualTo(48));
     expect(tester.getSize(picker).width, lessThanOrEqualTo(360));
     expect(find.text('English'), findsOneWidget);
+  });
+
+  test('a KSA damage finding of third party or force majeure is never deducted',
+      () {
+    final DriverRow data = _detail();
+    final DriverRow charge = Map<String, Object?>.from(data['charge']! as Map)
+      ..['category'] = 'missing_item'
+      ..['country'] = 'KSA'
+      ..['driver_response'] = 'accepted'
+      ..['fault_finding'] = 'force_majeure';
+    data['charge'] = charge;
+    data['settings'] = <String, Object?>{};
+    final DriverChargeScheduleBlock? block =
+        DriverChargeDetail(data).scheduleBlock();
+    expect(block?.code, 'no_fault');
+    expect(block?.article, '91');
+    charge['fault_finding'] = 'driver_fault';
+    expect(DriverChargeDetail(data).scheduleBlock(), isNull);
+    expect(DriverChargeDetail(data).faultFinding, 'driver_fault');
+  });
+
+  testWidgets('the driver sees the fault finding before answering',
+      (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final DriverRow data = _detail(actions: <String>['charge_respond']);
+    data['charge'] = Map<String, Object?>.from(data['charge']! as Map)
+      ..['category'] = 'missing_item'
+      ..['fault_finding'] = 'instruction_violation';
+    await tester.pumpWidget(
+      _app(
+        _FakeRepo(data),
+        DriverChargeResponseSheet(detail: DriverChargeDetail(data)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        "Fault finding (Article 91): Did not follow the company's instructions",
+      ),
+      findsOneWidget,
+    );
   });
 
   test('the phone only offers driver actions the server returned', () {

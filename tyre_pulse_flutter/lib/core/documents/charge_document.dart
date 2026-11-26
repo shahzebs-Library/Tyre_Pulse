@@ -258,17 +258,29 @@ ChargeDriverNotice buildChargeDriverNotice(
           ? jsString(lastDay).substring(0, 10)
           : jsString(lastDay))
       : '${text['deadline_pending']}';
+  final List<String> lines = <String>[
+    for (final Object? line in text['lines']! as List)
+      '$line'
+          .replaceFirst('{amount}', amountText)
+          .replaceFirst('{window}', window)
+          .replaceFirst('{deadline}', deadline),
+  ];
+  // The Art 91 fault finding goes after the first line, when there is one.
+  final Object? faults = text['fault'];
+  final Object? finding = c['fault_finding'];
+  final Object? label =
+      faults is Map && finding is String ? faults[finding] : null;
+  if (label is String && text['fault_line'] is String && lines.isNotEmpty) {
+    lines.insert(
+      1,
+      '${text['fault_line']}'.replaceFirst('{fault}', label),
+    );
+  }
   return ChargeDriverNotice(
     language: language,
     dir: '${text['dir']}',
     title: '${text['title']}',
-    lines: <String>[
-      for (final Object? line in text['lines']! as List)
-        '$line'
-            .replaceFirst('{amount}', amountText)
-            .replaceFirst('{window}', window)
-            .replaceFirst('{deadline}', deadline),
-    ],
+    lines: lines,
   );
 }
 

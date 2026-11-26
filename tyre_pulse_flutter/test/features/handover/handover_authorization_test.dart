@@ -304,11 +304,16 @@ void main() {
   });
 
   test('signature format follows handover_valid_signature exactly', () {
-    expect(isValidHandoverSignature(_png), isTrue);
+    // A 1x1 PNG is a dot, not a signature: refused (minimum size rule).
+    expect(isValidHandoverSignature(_png), isFalse);
+    expect(
+      isValidHandoverSignature('data:image/png;base64,iVBORw0KGgo${'A' * 1400}'),
+      isTrue,
+    );
     expect(
       isValidHandoverSignature(
         '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100" '
-        'viewBox="0 0 300 100"><path d="M1 2 L3 4" fill="none" '
+        'viewBox="0 0 300 100"><path d="M1 2${' L3 4' * 9}" fill="none" '
         'stroke="#111111" stroke-width="2" stroke-linecap="round" '
         'stroke-linejoin="round"/></svg>',
       ),
@@ -406,5 +411,30 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Signed on their behalf by a supervisor'), findsOneWidget);
+  });
+
+  test('site: the fleet register wins, else the typed site, upper case', () {
+    expect(
+      resolveHandoverSite(registerSite: ' jeddah ', typedSite: 'riyadh'),
+      'JEDDAH',
+    );
+    expect(resolveHandoverSite(registerSite: '', typedSite: ' nhc '), 'NHC');
+    expect(resolveHandoverSite(registerSite: null, typedSite: '  '), isNull);
+  });
+
+  test('the handing signer may not also give the receiving signature', () {
+    final HandoverRecord r = _row(<String, Object?>{
+      'from_signed_at': '2026-09-05T13:25:00Z',
+      'from_signed_by': 'user-1',
+    });
+    expect(mustLeaveReceivingToAnother(record: r, myUserId: 'user-1'), isTrue);
+    expect(mustLeaveReceivingToAnother(record: r, myUserId: 'user-2'), isFalse);
+    expect(
+      mustLeaveReceivingToAnother(
+        record: _row(<String, Object?>{'from_signed_by': 'user-1'}),
+        myUserId: 'user-1',
+      ),
+      isFalse,
+    );
   });
 }

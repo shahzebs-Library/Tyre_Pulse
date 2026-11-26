@@ -118,13 +118,20 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
       setState(() => _message = l10n.handoverAuthBlocked);
       return;
     }
+    if (mustLeaveReceivingToAnother(
+      record: widget.record,
+      myUserId: ref.read(workspaceContextProvider)?.userId,
+    )) {
+      setState(() => _message = l10n.handoverAuthReceivingOtherAccount);
+      return;
+    }
     final String? signature = _signature;
     if (signature == null || signature.isEmpty) {
       setState(() => _message = l10n.driverChargeIssueSignature);
       return;
     }
     if (!isValidHandoverSignature(signature)) {
-      setState(() => _message = l10n.handoverAuthBadSignature);
+      setState(() => _message = l10n.signatureSignAgain);
       return;
     }
     if (mode == HandoverSigningMode.onBehalf && !_behalfConfirmed) {
@@ -302,6 +309,11 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
           const SizedBox(height: TpSpace.sm),
           if (!_myDriverLoaded)
             const LinearProgressIndicator()
+          else if (mustLeaveReceivingToAnother(
+            record: r,
+            myUserId: ref.watch(workspaceContextProvider)?.userId,
+          ))
+            TpCard(child: Text(l10n.handoverAuthReceivingOtherAccount))
           else if (rowSigningMode(r, next, _myDriverId) ==
               HandoverSigningMode.blocked)
             TpCard(child: Text(l10n.handoverAuthBlocked))

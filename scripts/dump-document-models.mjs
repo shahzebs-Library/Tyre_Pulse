@@ -33,7 +33,7 @@ const chargeDetail = {
   actions: ['charge_appeal'],
   charge: {
     id: 'c1', charge_no: 'DC-2026-00001', version: 7, category: 'traffic_fine', source_type: 'driver_fine',
-    source_id: 'f1', source_summary: { type: 'driver_fine', label: 'RTA-55 · TM101' },
+    source_id: 'f1', source_summary: { type: 'driver_fine', label: 'RTA-55 · TM101' }, source_link_unverified: true,
     amount: 250.5, currency: 'SAR', status: 'scheduled', basis: 'Speeding fine issued to the vehicle while assigned to this driver.',
     incident_at: '2026-01-02T08:15:00Z', created_at: '2026-01-05T10:00:00Z', notified_at: '2026-01-05T11:30:00Z',
     issued_by_name: 'Supervisor One', notified_by_name: 'Supervisor One', deducted_amount: 0,

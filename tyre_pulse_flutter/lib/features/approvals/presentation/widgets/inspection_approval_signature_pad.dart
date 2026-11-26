@@ -45,7 +45,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:signature/signature.dart';
@@ -53,6 +52,7 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/signatures/signature_rules.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
 
 /// One captured signature, ready for
@@ -129,9 +129,10 @@ class _InspectionApprovalSignaturePadState
 
   Future<void> _onStrokeEnd() async {
     if (_controller.isEmpty) return;
-    final Uint8List? pngBytes = await _controller.toPngBytes();
-    if (!mounted || pngBytes == null) return;
-    final String dataUrl = 'data:image/png;base64,${base64Encode(pngBytes)}';
+    // Fixed-size export: a cropped short scribble was too small for the
+    // server's signature rule (see core/signatures/signature_rules.dart).
+    final String? dataUrl = await encodeSignaturePng(_controller);
+    if (!mounted || dataUrl == null) return;
     final String strokesJson = jsonEncode(
       _controller.points
           .map(

@@ -19,6 +19,7 @@
           "type": "driver_fine",
           "label": "RTA-55 · TM101"
         },
+        "source_link_unverified": true,
         "amount": 250.5,
         "currency": "SAR",
         "status": "scheduled",
@@ -200,6 +201,10 @@
             [
               "Linked record reference",
               "RTA-55 · TM101"
+            ],
+            [
+              "Link to the driver",
+              "Link to source not confirmed by record"
             ],
             [
               "Incident date and time",

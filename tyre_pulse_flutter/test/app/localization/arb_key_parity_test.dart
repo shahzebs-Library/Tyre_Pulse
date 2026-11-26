@@ -673,10 +673,14 @@ void main() {
     // blocked notice, signed-on-behalf line), the sent-back banner, the
     // signature format refusal, and the refusal witness confirm sheet
     // (driverChargeWitness*).
-    test('en, ar and ur each carry exactly 2675 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2675);
-      expect(_translatableKeys(ar).length, 2675);
-      expect(_translatableKeys(ur).length, 2675);
+    // 2675 + 6 = 2681: the receiving signature from another account, the
+    // site required / taken from the fleet register, the "please sign
+    // again" refusal for a too-short signature, the unconfirmed source link
+    // and the appeal closed after deductions.
+    test('en, ar and ur each carry exactly 2681 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2681);
+      expect(_translatableKeys(ar).length, 2681);
+      expect(_translatableKeys(ur).length, 2681);
     });
   });
 

@@ -3676,5 +3676,11 @@
   "driverChargeWitnessConfirm": "تأكيد الرفض الذي شهدته",
   "driverChargeWitnessIntro": "سميت شاهداً على رفض السائق التوقيع على هذا الإشعار. أكد فقط ما رأيته بنفسك.",
   "driverChargeWitnessPending": "سجل الرفض. بانتظار تأكيد الشاهد المسمى من حسابه.",
-  "driverChargeWitnessSaved": "سجل تأكيدك كشاهد بوقت الخادم."
+  "driverChargeWitnessSaved": "سجل تأكيدك كشاهد بوقت الخادم.",
+  "handoverAuthReceivingOtherAccount": "قدمت توقيع التسليم من هذا الحساب. يجب أن يأتي توقيع الاستلام من شخص آخر: حساب السائق المستلم نفسه أو مشرف مختلف.",
+  "handoverAuthSiteRequired": "أدخل الموقع. لا يوجد موقع لهذه المركبة في سجل الأسطول.",
+  "handoverAuthSiteFromRegister": "مأخوذ من سجل الأسطول لهذه المركبة.",
+  "signatureSignAgain": "التوقيع قصير جداً ولا يمكن قراءته. يرجى التوقيع مرة أخرى بتوقيعك الكامل.",
+  "driverChargeLinkUnverified": "الربط بالسجل المصدر غير مؤكد من السجل",
+  "driverChargeAppealClosedDeducted": "بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي."
 }

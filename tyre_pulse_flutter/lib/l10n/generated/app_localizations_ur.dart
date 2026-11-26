@@ -9263,4 +9263,28 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get driverChargeWitnessSaved =>
       'آپ کی گواہی کی تصدیق سرور کے وقت کے ساتھ درج ہو گئی۔';
+
+  @override
+  String get handoverAuthReceivingOtherAccount =>
+      'آپ نے اس اکاؤنٹ سے حوالے کرنے کا دستخط دیا ہے۔ وصولی کا دستخط کسی دوسرے شخص سے آنا چاہیے: وصول کرنے والے ڈرائیور کا اپنا اکاؤنٹ یا کوئی دوسرا سپروائزر۔';
+
+  @override
+  String get handoverAuthSiteRequired =>
+      'سائٹ درج کریں۔ فلیٹ رجسٹر میں اس گاڑی کی کوئی سائٹ نہیں۔';
+
+  @override
+  String get handoverAuthSiteFromRegister =>
+      'اس گاڑی کے لیے فلیٹ رجسٹر سے لیا گیا۔';
+
+  @override
+  String get signatureSignAgain =>
+      'دستخط بہت چھوٹا ہے اور پڑھا نہیں جا سکتا۔ براہ کرم اپنے پورے دستخط کے ساتھ دوبارہ دستخط کریں۔';
+
+  @override
+  String get driverChargeLinkUnverified =>
+      'ماخذ سے تعلق ریکارڈ سے تصدیق شدہ نہیں';
+
+  @override
+  String get driverChargeAppealClosedDeducted =>
+      'کٹوتیاں شروع ہو چکی ہیں، اس لیے اب یہاں اس واجب الادا کے خلاف اپیل نہیں ہو سکتی۔ مینیجر یا فنانس باقی رقم معاف کر سکتے ہیں۔';
 }

@@ -5,21 +5,14 @@
 /// `20261126171000_handover_authorization_paper.sql`. CHANGE ALL TOGETHER.
 library;
 
+import 'package:tyre_pulse/core/signatures/signature_rules.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_record.dart';
 
-final RegExp _pngSignature = RegExp(r'^data:image/png;base64,[A-Za-z0-9+/=]+$');
-final RegExp _svgSignature = RegExp(
-  r'^<svg xmlns="http://www\.w3\.org/2000/svg" width="[0-9]+" height="[0-9]+" '
-  r'viewBox="[0-9 .]+">(<path d="[ML0-9 .-]+" fill="none" stroke="#[a-fA-F0-9]{6}" '
-  r'stroke-width="[0-9.]+" stroke-linecap="round" stroke-linejoin="round"/>)+</svg>$',
-);
-
-/// The exact rule `handover_valid_signature` applies: a PNG data URL, or the
-/// static SVG the web pad emits. The phone pads emit PNG data URLs.
-bool isValidHandoverSignature(String? signature) {
-  final String s = signature ?? '';
-  return _pngSignature.hasMatch(s) || _svgSignature.hasMatch(s);
-}
+/// The server signature rule (PNG header and minimum size, or the strict
+/// web SVG with at least 10 points). One implementation for charges and
+/// handovers: `core/signatures/signature_rules.dart`.
+bool isValidHandoverSignature(String? signature) =>
+    isAcceptedSignature(signature);
 
 /// How the signed-in account may sign one party.
 enum HandoverSigningMode {
@@ -79,3 +72,25 @@ bool isHandoverSentBack(HandoverRecord record) {
       record.fromSignedAt == null &&
       record.toSignedAt == null;
 }
+
+/// The site written on a handover, mirroring web `resolveHandoverSite`: the
+/// asset's fleet-register site wins, else the typed site; upper case. Null
+/// means the wizard must ask for a site before saving.
+String? resolveHandoverSite({String? registerSite, String? typedSite}) {
+  final String register = (registerSite ?? '').trim();
+  final String s = (register.isNotEmpty ? register : (typedSite ?? ''))
+      .trim()
+      .toUpperCase();
+  return s.isEmpty ? null : s;
+}
+
+/// The receiving signature must come from a different account than the
+/// handing one (`from_signed_by <> to_signed_by` on the server).
+bool mustLeaveReceivingToAnother({
+  required HandoverRecord record,
+  required String? myUserId,
+}) =>
+    record.nextParty == HandoverParty.receiving &&
+    myUserId != null &&
+    myUserId.isNotEmpty &&
+    record.fromSignedBy == myUserId;

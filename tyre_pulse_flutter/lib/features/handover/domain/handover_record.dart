@@ -92,6 +92,7 @@ class HandoverRecord {
   String? get fromSignature => _text('from_signature');
   String? get fromSignedName => _text('from_signed_name');
   String? get fromSignedAt => _text('from_signed_at');
+  String? get fromSignedBy => _text('from_signed_by');
   String? get toSignature => _text('to_signature');
   String? get toSignedName => _text('to_signed_name');
   String? get toSignedAt => _text('to_signed_at');

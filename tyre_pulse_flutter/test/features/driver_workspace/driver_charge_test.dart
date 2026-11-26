@@ -354,4 +354,22 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('pending payroll lock'), findsOneWidget);
   });
+
+  test('appeal is never offered once a deduction is recorded', () {
+    final DriverRow data = _detail(actions: <String>['charge_appeal']);
+    expect(DriverChargeDetail(data).mobileActions, <String>{'charge_appeal'});
+    (data['charge']! as Map<String, Object?>)['deducted_amount'] = 50;
+    expect(DriverChargeDetail(data).mobileActions, isEmpty);
+  });
+
+  testWidgets('an unconfirmed source link is stated on the detail',
+      (WidgetTester tester) async {
+    final DriverRow data = _detail();
+    (data['charge']! as Map<String, Object?>)['source_link_unverified'] = true;
+    await tester.pumpWidget(
+      _app(_FakeRepo(data), const DriverChargeDetailScreen(chargeId: 'c1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Link to source not confirmed by record'), findsOneWidget);
+  });
 }

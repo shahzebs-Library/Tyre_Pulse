@@ -35,11 +35,13 @@ function axleGroups(wheels) {
   return groups
 }
 
-const CARD_H_BASE = 64 // card + its code label, px
-const CARD_W_BASE = 70
+const CARD_H_BASE = 74 // card + its code label, px
+// Wide enough that the condition word at 11px ("Puncture", "Damaged") fits
+// whole beside the picture; a two-word condition wraps between words.
+const CARD_W_BASE = 90
 // Fitted-tyre cards also carry a serial and a brand line, so they need room.
-const CARD_H_RICH = 92
-const CARD_W_RICH = 84
+const CARD_H_RICH = 102
+const CARD_W_RICH = 100
 
 function Card({ w, onSelect, selected, emptyLabel, cardW }) {
   const tone = TONE[w.risk] || 'none'

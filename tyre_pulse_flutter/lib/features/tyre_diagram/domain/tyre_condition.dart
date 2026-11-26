@@ -45,8 +45,14 @@ final RegExp _negationRe =
 /// damaged", "without cuts", "undamaged") replaced by "ok", the shared
 /// tyre map's rule. "Good, no damage" used to match "damage" and paint a
 /// healthy tyre red; every stem test goes through this first.
-String neutraliseCondition(String? raw) =>
-    (raw ?? '').replaceAll(_negationRe, ' ok ');
+String neutraliseCondition(String? raw) => (raw ?? '')
+    .replaceAll(_negatedGoodRe, ' needsattention ')
+    .replaceAll(_negationRe, ' ok ');
+
+/// "not good" / "not ok": a denied good word needs attention (red, warning
+/// picture) and must never read as Good. Replaced before the fault rule.
+final RegExp _negatedGoodRe =
+    RegExp(kTyreSpecConditionNegatedGood, caseSensitive: false);
 
 final List<(String, String, RegExp?)> _kinds = <(String, String, RegExp?)>[
   for (final (
@@ -132,7 +138,8 @@ TpStatus tyreConditionStatus(TyreCondition? condition) => switch (condition) {
       TyreCondition.damaged => TpStatus.critical,
       TyreCondition.puncture => TpStatus.critical,
       TyreCondition.flat => TpStatus.critical,
-      TyreCondition.missing => TpStatus.unknown,
+      // A missing tyre stops the vehicle: red, like the shared map.
+      TyreCondition.missing => TpStatus.critical,
       null => TpStatus.unknown,
     };
 

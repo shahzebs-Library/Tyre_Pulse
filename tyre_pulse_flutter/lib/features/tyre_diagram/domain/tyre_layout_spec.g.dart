@@ -387,6 +387,7 @@ const Map<String, String> kTyreSpecConditionExact = <String, String>{
   'Damage': 'critical',
   'Puncture': 'critical',
   'None': 'none',
+  'Missing': 'critical',
 };
 const List<String> kTyreSpecConditionOrder = <String>[
   'critical',
@@ -396,13 +397,17 @@ const List<String> kTyreSpecConditionOrder = <String>[
 const Map<String, String> kTyreSpecConditionPatterns = <String, String>{
   'warning': r'wear|worn',
   'critical':
-      r'damage|puncture|nail|flat|deflat|burst|blast|\bcut\b|bulge|separat',
+      r'needsattention|damage|puncture|nail|flat|deflat|burst|blast|\bcuts?\b|bulg|crack|separat|missing',
   'good': r'good|\bok\b',
 };
 
 /// Phrases that DENY a fault ("no damage") - replaced by "ok" before any test.
 const String kTyreSpecConditionNegation =
-    r'\b(?:no|not|without|nil|zero|free of)\s+(?:any\s+)?(?:visible\s+)?(?:signs?\s+of\s+)?(?:damages?|damaged|punctures?|punctured|cuts?|bulges?|cracks?|cracked|burst|flats?|wear|worn|separation)\b|\bun(?:damaged|punctured)\b|\b(?:damage|puncture)[\s-]*free\b';
+    r'\b(?:no|not|without|nil|zero|free of)\s+(?:any\s+)?(?:visible\s+)?(?:signs?\s+of\s+)?(?:damages?|damaged|punctures?|punctured|cuts?|bulges?|bulging|cracks?|cracked|burst|flats?|wear|worn|separation)\b|\b(?:damages?|punctures?|cuts?|cracks?|bulges?)\s*[:\-]\s*(?:none|nil|no|n/?a)\b|\bun(?:damaged|punctured)\b|\b(?:damage|puncture)[\s-]*free\b';
+
+/// Phrases that DENY a good word ("not ok") - replaced by "needsattention" first.
+const String kTyreSpecConditionNegatedGood =
+    r"\b(?:not|no|never|isn'?t|is not)\s+(?:good|ok|okay|fine)\b";
 
 /// (kind, band, label, match or empty, strokes, closed, circles, dots) in spec order.
 /// Glyphs are on a 24x24 grid; see the `conditions.kinds` comment in the JSON.
@@ -536,7 +541,7 @@ const List<
   ),
   (
     'missing',
-    'none',
+    'critical',
     'Missing',
     r'missing',
     <List<double>>[

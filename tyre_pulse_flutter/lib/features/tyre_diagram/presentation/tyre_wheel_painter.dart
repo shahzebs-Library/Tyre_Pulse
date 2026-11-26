@@ -334,7 +334,9 @@ class TyreWheelPainter extends CustomPainter {
 
     // The condition picture on a disc of the band colour, white ink, so the
     // wheel says what is wrong without a word (shared tyre map glyphs).
-    final double badge = math.min(body.width * 0.74, body.height * 0.7);
+    // Never smaller than 24 logical px, so the picture inside is >= 16dp.
+    final double badge =
+        math.max(24, math.min(body.width * 0.74, body.height * 0.7));
     final Rect badgeRect = Rect.fromCenter(
       center: centre,
       width: badge,

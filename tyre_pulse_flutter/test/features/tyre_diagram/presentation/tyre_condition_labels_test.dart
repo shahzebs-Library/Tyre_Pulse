@@ -85,8 +85,8 @@ void main() {
       expect(tyreConditionStatus(TyreCondition.puncture), TpStatus.critical);
     });
 
-    test('missing maps to unknown - never measured, not "measured fine"', () {
-      expect(tyreConditionStatus(TyreCondition.missing), TpStatus.unknown);
+    test('missing maps to critical - a missing tyre stops the vehicle', () {
+      expect(tyreConditionStatus(TyreCondition.missing), TpStatus.critical);
     });
   });
 

@@ -199,23 +199,26 @@ class _TyrePositionEditorSheetState
                       ),
                       // A wheel nobody has marked yet is not "Good": the
                       // default selection below is only a starting point.
-                      if (r.checked)
-                        TpStatusChip(
-                          status: tyreConditionStatus(
-                            normaliseCondition(r.condition),
-                          ),
-                          label: tyreConditionLabel(
-                            l10n,
-                            normaliseCondition(r.condition),
-                          ),
-                          isCompact: true,
-                        )
-                      else
-                        TpStatusChip(
-                          status: TpStatus.unknown,
-                          label: l10n.tyreDetailFieldNotRecorded,
-                          isCompact: true,
-                        ),
+                      // Flexible so a large text scale never overflows the
+                      // header row (text scale 2 on a 360dp phone).
+                      Flexible(
+                        child: r.checked
+                            ? TpStatusChip(
+                                status: tyreConditionStatus(
+                                  normaliseCondition(r.condition),
+                                ),
+                                label: tyreConditionLabel(
+                                  l10n,
+                                  normaliseCondition(r.condition),
+                                ),
+                                isCompact: true,
+                              )
+                            : TpStatusChip(
+                                status: TpStatus.unknown,
+                                label: l10n.tyreDetailFieldNotRecorded,
+                                isCompact: true,
+                              ),
+                      ),
                     ],
                   ),
                 ),
@@ -227,8 +230,16 @@ class _TyrePositionEditorSheetState
                 const SizedBox(height: TpSpace.sm),
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
+                    // Three per row normally; two when the text is
+                    // scaled up or the sheet is narrow, so a word such as
+                    // "Puncture" is never cut off (text scale 2 on 360dp).
+                    final double textScale =
+                        MediaQuery.textScalerOf(context).scale(1);
+                    final int columns =
+                        textScale > 1.3 || constraints.maxWidth < 300 ? 2 : 3;
                     final double itemWidth =
-                        (constraints.maxWidth - (TpSpace.sm * 2)) / 3;
+                        (constraints.maxWidth - (TpSpace.sm * (columns - 1))) /
+                            columns;
                     return Wrap(
                       spacing: TpSpace.sm,
                       runSpacing: TpSpace.sm,
@@ -592,8 +603,8 @@ class _ConditionChip extends StatelessWidget {
                   const SizedBox(height: TpSpace.xs),
                   Text(
                     label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                    maxLines: 3,
+                    softWrap: true,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
                           color: ink,

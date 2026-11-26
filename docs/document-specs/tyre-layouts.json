@@ -1183,14 +1183,16 @@
     }
   },
   "conditions": {
-    "$comment": "Condition word -> band, then band -> kind (the picture). A phrase that DENIES a fault (\"no damage\", \"not damaged\", \"without cuts\", \"undamaged\") is first replaced by \"ok\" using `negation`, so \"Good, no damage\" is good and never red. Then: exact first, then the patterns in `order` (case-insensitive). Severe is tested FIRST (safety first): \"Worn, flat\" or \"wear + cut\" is red, never amber. A word no rule knows is \"none\" (No data), never good. `kinds` gives each condition ONE fixed colour (its band's palette entry), ONE glyph and one short label, used on the picker buttons, the map wheels, the legend and the printed report on the web and the phone. Inside a band the first kind whose `match` hits wins; the kind with no `match` is the band's default. Glyphs are drawn on a 24x24 grid with round-capped strokes: `strokes` open polylines, `closed` polygons, `circles` outlines, `dots` filled circles, as flat [x, y, x, y ...] / [cx, cy, r] lists so every surface draws the same picture with its own primitives.",
-    "negation": "\\b(?:no|not|without|nil|zero|free of)\\s+(?:any\\s+)?(?:visible\\s+)?(?:signs?\\s+of\\s+)?(?:damages?|damaged|punctures?|punctured|cuts?|bulges?|cracks?|cracked|burst|flats?|wear|worn|separation)\\b|\\bun(?:damaged|punctured)\\b|\\b(?:damage|puncture)[\\s-]*free\\b",
+    "$comment": "Condition word -> band, then band -> kind (the picture). A phrase that DENIES a good word (\"not good\", \"not ok\") is first replaced by \"needsattention\" (`negatedGood`), which bands critical with the warning-triangle picture. A phrase that DENIES a fault (\"no damage\", \"not damaged\", \"without cuts\", \"undamaged\", \"damage: none\") is first replaced by \"ok\" using `negation`, so \"Good, no damage\" is good and never red. Then: exact first, then the patterns in `order` (case-insensitive). Severe is tested FIRST (safety first): \"Worn, flat\" or \"wear + cut\" is red, never amber. A word no rule knows is \"none\" (No data), never good. `kinds` gives each condition ONE fixed colour (its band's palette entry), ONE glyph and one short label, used on the picker buttons, the map wheels, the legend and the printed report on the web and the phone. Inside a band the first kind whose `match` hits wins; the kind with no `match` is the band's default. Glyphs are drawn on a 24x24 grid with round-capped strokes: `strokes` open polylines, `closed` polygons, `circles` outlines, `dots` filled circles, as flat [x, y, x, y ...] / [cx, cy, r] lists so every surface draws the same picture with its own primitives.",
+    "negatedGood": "\\b(?:not|no|never|isn'?t|is not)\\s+(?:good|ok|okay|fine)\\b",
+    "negation": "\\b(?:no|not|without|nil|zero|free of)\\s+(?:any\\s+)?(?:visible\\s+)?(?:signs?\\s+of\\s+)?(?:damages?|damaged|punctures?|punctured|cuts?|bulges?|bulging|cracks?|cracked|burst|flats?|wear|worn|separation)\\b|\\b(?:damages?|punctures?|cuts?|cracks?|bulges?)\\s*[:\\-]\\s*(?:none|nil|no|n/?a)\\b|\\bun(?:damaged|punctured)\\b|\\b(?:damage|puncture)[\\s-]*free\\b",
     "exact": {
       "Good": "good",
       "Wear": "warning",
       "Damage": "critical",
       "Puncture": "critical",
-      "None": "none"
+      "None": "none",
+      "Missing": "critical"
     },
     "order": [
       "critical",
@@ -1199,7 +1201,7 @@
     ],
     "patterns": {
       "warning": "wear|worn",
-      "critical": "damage|puncture|nail|flat|deflat|burst|blast|\\bcut\\b|bulge|separat",
+      "critical": "needsattention|damage|puncture|nail|flat|deflat|burst|blast|\\bcuts?\\b|bulg|crack|separat|missing",
       "good": "good|\\bok\\b"
     },
     "kinds": [
@@ -1395,7 +1397,7 @@
       },
       {
         "kind": "missing",
-        "band": "none",
+        "band": "critical",
         "label": "Missing",
         "match": "missing",
         "glyph": {

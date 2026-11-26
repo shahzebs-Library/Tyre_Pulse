@@ -76,7 +76,7 @@
 .ts-field > span { font-size: 12px; }
 .ts-form em { color: var(--cc-red); font-style: normal; }
 .ts-form .ts-note { margin: 0; font-weight: 400; }
-.ts-form input, .ts-form select, .ts-form textarea { width: 100%; font-size: 12.5px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 8px 10px; font-family: inherit; }
+.ts-form input:not(.sr-only), .ts-form select, .ts-form textarea { width: 100%; font-size: 12.5px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 8px; padding: 8px 10px; font-family: inherit; }
 html.light .ts-form input, html.light .ts-form select, html.light .ts-form textarea { background: #fff; }
 .ts-form input:focus, .ts-form select:focus, .ts-form textarea:focus { outline: none; border-color: var(--cc-green); }
 .ts-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

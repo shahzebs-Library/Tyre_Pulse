@@ -2139,3 +2139,8 @@ html.light .tp-approvals button:disabled {
    readable on the charcoal sidebar. Approved in docs/icon-preview-fluent-emoji.html. */
 .nav-emoji { background: #e4e8ec; }
 html.light .nav-emoji { background: #f1f4f3; }
+
+/* One breadcrumb per page: a page that draws its own trail (Command Center kit
+   pages) hides the shell's copy, so the reader never sees the path twice. The
+   shell Back button stays. */
+body:has(main nav[aria-label="Breadcrumb"]:not(.tp-shell-crumb)) .tp-shell-crumb { display: none; }

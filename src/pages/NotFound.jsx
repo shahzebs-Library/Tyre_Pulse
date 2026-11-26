@@ -14,6 +14,7 @@ export default function NotFound() {
   return (
     <StateScreen
       illustration="error/404"
+      headingLevel={1}
       title={t('console_nz.pageNotFound')}
       description={t('console_nz.pageNotFoundDescription')}
       action={{ label: t('console_nz.goToDashboard'), onClick: () => navigate('/') }}

@@ -18,7 +18,9 @@ export default function StateScreen({
   size = 260,
   className = '',
   children,
+  headingLevel = 2,     // 1 when the screen IS the page (e.g. 404), so the page has its one h1
 }) {
+  const Heading = headingLevel === 1 ? 'h1' : 'h2'
   return (
     <div className={`flex flex-col items-center justify-center text-center px-6 py-16 min-h-[60vh] ${className}`}>
       {illustration && (
@@ -27,7 +29,7 @@ export default function StateScreen({
         </div>
       )}
       {title && (
-        <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
+        <Heading className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>{title}</Heading>
       )}
       {description && (
         <p className="mt-2 max-w-md text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>

@@ -1619,7 +1619,7 @@ export default function Layout({ children }) {
                     <span className="hidden sm:inline">Back</span>
                   </button>
                 )}
-                <Breadcrumbs navGroups={NAV_GROUPS} t={t} className="min-w-0 flex-1" />
+                <Breadcrumbs navGroups={NAV_GROUPS} t={t} className="tp-shell-crumb min-w-0 flex-1" />
               </div>
             </div>
           )}

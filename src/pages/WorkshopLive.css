@@ -147,7 +147,9 @@ button.wl-strip-item:focus-visible { outline: 2px solid var(--cc-green); outline
 }
 
 /* Technician Board status tabs: one row that scrolls sideways, never a lone tab wrapped onto a second row. */
-.wl-board .cc-tabs-line { flex-wrap: nowrap; overflow-x: auto; gap: 12px; scrollbar-width: none; }
+/* Wrap on desktop so no tab is cut off behind a hidden scrollbar; swipe on phones. */
+.wl-board .cc-tabs-line { flex-wrap: wrap; overflow-x: auto; gap: 4px 12px; scrollbar-width: none; }
+@media (max-width: 640px) { .wl-board .cc-tabs-line { flex-wrap: nowrap; } }
 .wl-board .cc-tabs-line::-webkit-scrollbar { display: none; }
 .wl-board .cc-tabs-line .cc-tab { font-size: 13px; white-space: nowrap; }
 

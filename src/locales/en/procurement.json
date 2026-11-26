@@ -152,5 +152,24 @@
     "notes": "Notes",
     "editPo": "Edit PO",
     "exportPdf": "Export PDF"
+  },
+  "phoneReceipts": {
+    "title": "Phone receipts waiting for approval ({count})",
+    "intro": "Recorded by a store keeper on the phone. Approving posts the goods receipt into stock at the purchase order price. The person who recorded a receipt cannot decide it.",
+    "loadFailed": "Phone receipts could not be loaded.",
+    "decideFailed": "The receipt could not be decided.",
+    "item": "Item",
+    "po": "PO",
+    "location": "Location",
+    "received": "received {qty}",
+    "rejected": "rejected {qty} ({reason})",
+    "noReason": "no reason",
+    "deliveryNote": "DN {no}",
+    "photo": "photo attached",
+    "ownReceipt": "You recorded this; another person must decide.",
+    "noteLabel": "Reason or note",
+    "notePlaceholder": "Reason (needed to reject)",
+    "approve": "Approve",
+    "reject": "Reject"
   }
 }

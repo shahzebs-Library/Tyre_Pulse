@@ -188,7 +188,43 @@ final class StoreReceiptDraft {
     this.deliveryNoteNo = '',
     this.notes = '',
     this.deliveryNotePath,
+    this.receivedInvalid = false,
+    this.rejectedInvalid = false,
   });
+
+  /// Builds a draft from the form's text fields. An empty rejected field is
+  /// 0; rejected text that is not a number is an error, never 0.
+  factory StoreReceiptDraft.fromText({
+    required OpenPoLine line,
+    required String received,
+    required String rejected,
+    String? locationId,
+    String rejectionReason = '',
+    String deliveryNoteNo = '',
+    String notes = '',
+    String? deliveryNotePath,
+  }) {
+    final ReceiptQtyInput r = readReceiptQty(received);
+    final ReceiptQtyInput x = readReceiptQty(rejected);
+    final num? rej = switch (x) {
+      ReceiptQtyEmpty() => 0,
+      ReceiptQtyValue(:final num value) => value,
+      ReceiptQtyInvalid() => null,
+    };
+    return StoreReceiptDraft(
+      line: line,
+      qtyReceived: r is ReceiptQtyValue ? r.value : null,
+      qtyRejected: rej,
+      receivedInvalid: r is ReceiptQtyInvalid,
+      rejectedInvalid: x is ReceiptQtyInvalid,
+      locationId: locationId,
+      // A reason only means something while goods are rejected.
+      rejectionReason: (rej ?? 0) > 0 ? rejectionReason : '',
+      deliveryNoteNo: deliveryNoteNo,
+      notes: notes,
+      deliveryNotePath: deliveryNotePath,
+    );
+  }
 
   final OpenPoLine line;
   final num? qtyReceived;
@@ -201,16 +237,22 @@ final class StoreReceiptDraft {
   /// Storage path of an uploaded delivery-note photo, if any.
   final String? deliveryNotePath;
 
+  /// The received / rejected text was not a number.
+  final bool receivedInvalid;
+  final bool rejectedInvalid;
+
   num get accepted => (qtyReceived ?? 0) - (qtyRejected ?? 0);
 
   /// A copy key for the first problem, or null when it can be sent. The
   /// server repeats every check; this only saves a round trip.
   String? validate() {
     final num? q = qtyReceived;
+    if (receivedInvalid) return 'sr_qtyInvalid';
     if (q == null) return 'sr_qtyRequired';
     if (q <= 0) return 'sr_qtyPositive';
     if (q > 100000) return 'sr_qtyTooLarge';
-    final num r = qtyRejected ?? -1;
+    if (rejectedInvalid || qtyRejected == null) return 'sr_rejectedInvalid';
+    final num r = qtyRejected!;
     if (r < 0 || r > q) return 'sr_rejectedRange';
     if (r > 0 && rejectionReason.trim().isEmpty) return 'sr_reasonRequired';
     if (accepted > line.qtyOpen) return 'sr_overOpen';
@@ -246,12 +288,66 @@ final class StoreReceiptDraft {
       };
 }
 
-/// Where a delivery-note photo is stored (the server checks the prefix).
+/// Where a delivery-note photo is stored: the company folder first, so the
+/// storage company folder wall applies. The server checks the exact path and
+/// that the caller uploaded it.
 String storeReceiptPhotoPath(String orgId, String clientUuid) =>
-    'store_receipts/$orgId/$clientUuid.jpg';
+    '$orgId/store_receipts/$clientUuid.jpg';
 
-num? parseReceiptQty(String text) {
-  final String t = text.trim().replaceAll(',', '.');
-  if (t.isEmpty) return null;
-  return num.tryParse(t);
+/// The result of reading a typed quantity.
+sealed class ReceiptQtyInput {
+  const ReceiptQtyInput();
 }
+
+/// Nothing typed.
+final class ReceiptQtyEmpty extends ReceiptQtyInput {
+  const ReceiptQtyEmpty();
+}
+
+/// Text that is not a plain decimal number (letters, hex, `1,000`, NaN).
+final class ReceiptQtyInvalid extends ReceiptQtyInput {
+  const ReceiptQtyInvalid();
+}
+
+final class ReceiptQtyValue extends ReceiptQtyInput {
+  const ReceiptQtyValue(this.value);
+  final num value;
+}
+
+const Map<String, String> _digitMap = <String, String>{
+  // Arabic-Indic
+  '\u0660': '0', '\u0661': '1', '\u0662': '2', '\u0663': '3', '\u0664': '4',
+  '\u0665': '5', '\u0666': '6', '\u0667': '7', '\u0668': '8', '\u0669': '9',
+  // Extended Arabic-Indic (Persian / Urdu)
+  '\u06F0': '0', '\u06F1': '1', '\u06F2': '2', '\u06F3': '3', '\u06F4': '4',
+  '\u06F5': '5', '\u06F6': '6', '\u06F7': '7', '\u06F8': '8', '\u06F9': '9',
+  // Arabic decimal separator
+  '\u066B': '.',
+};
+
+final RegExp _plainDecimal = RegExp(r'^\d{1,7}(\.\d{1,4})?$');
+
+/// Reads a typed quantity. Accepts Western, Arabic-Indic and Persian digits
+/// and `.` or the Arabic decimal separator. A comma (or the Arabic thousands
+/// separator) is refused: `1,000` could mean one thousand or one, so it is
+/// never guessed. Signs, exponents, hex, NaN and infinity are refused too.
+ReceiptQtyInput readReceiptQty(String text) {
+  final String t = text.trim();
+  if (t.isEmpty) return const ReceiptQtyEmpty();
+  final StringBuffer b = StringBuffer();
+  for (final int rune in t.runes) {
+    final String ch = String.fromCharCode(rune);
+    b.write(_digitMap[ch] ?? ch);
+  }
+  final String n = b.toString();
+  if (!_plainDecimal.hasMatch(n)) return const ReceiptQtyInvalid();
+  final num? v = num.tryParse(n);
+  if (v == null || !v.isFinite) return const ReceiptQtyInvalid();
+  return ReceiptQtyValue(v);
+}
+
+/// The value, or null when empty or not a number.
+num? parseReceiptQty(String text) => switch (readReceiptQty(text)) {
+      ReceiptQtyValue(:final num value) => value,
+      _ => null,
+    };

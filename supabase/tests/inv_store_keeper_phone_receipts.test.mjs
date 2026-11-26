@@ -16,6 +16,12 @@ const cu = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`
 
 async function setup () {
   const db = await buildDb()
+  // Minimal storage.objects (the live table carries the same bucket_id / name / owner columns).
+  await db.exec(`create schema if not exists storage;
+    create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
+    alter table storage.objects enable row level security;
+    create policy objects_all on storage.objects for all to authenticated using (true) with check (true);
+    grant usage on schema storage to authenticated; grant select, insert on storage.objects to authenticated;`)
   await db.exec(MIG)
   await db.exec(`insert into profiles(id, organisation_id, org_id, role, full_name, country, sites, locked) values
     ('${K.pure}','${ORG_A}','${ORG_A}','Store Keeper','Pure keeper',ARRAY['KSA'],ARRAY['S1'],false),
@@ -127,11 +133,25 @@ test('PO status, open quantity across pending receipts, price fields and idempot
       await assert.rejects(submit(K.pure, { po_line_id: pl, qty_received: 1, [f]: f === 'currency' ? 'USD' : 1 }), /cannot set a price/)
     }
     const fresh = (await mkPo('PO-SK-7B', 'Ordered')).pl
-    await assert.rejects(submit(K.pure, { po_line_id: fresh, qty_received: 1, delivery_note_path: 'elsewhere/x.jpg' }), /your company/)
-    await assert.rejects(submit(K.pure, { po_line_id: fresh, qty_received: 1, delivery_note_path: `store_receipts/${id(901)}/x.jpg` }),
-      /your company/)
-    assert.equal((await submit(K.pure, { po_line_id: fresh, qty_received: 1, delivery_note_path: `store_receipts/${ORG_A}/dn.jpg` })).status,
-      'pending')
+    const k1 = cu()
+    const good = `${ORG_A}/store_receipts/${k1}.jpg`
+    const send = (uid, key, path) => rpc(db, uid, 'inv_store_receipt_submit',
+      [j({ client_uuid: key, po_line_id: fresh, qty_received: 1, delivery_note_path: path })])
+    await assert.rejects(send(K.pure, k1, 'elsewhere/x.jpg'), /your company/)
+    await assert.rejects(send(K.pure, k1, `${id(901)}/store_receipts/${k1}.jpg`), /your company/, 'another company folder')
+    await assert.rejects(send(K.pure, k1, `${ORG_A}/store_receipts/%.jpg`), /your company/, 'a wildcard is not a match')
+    await assert.rejects(send(K.pure, k1, `${ORG_A}/store_receipts/${cu()}.jpg`), /your company/, 'another receipt key')
+    await assert.rejects(send(K.pure, k1, good), /not found/, 'the photo must exist in storage')
+    await db.query(`insert into storage.objects(bucket_id, name, owner) values ('tyre-photos', $1, $2)`, [good, U.counter])
+    await assert.rejects(send(K.pure, k1, good), /not found/, 'uploaded by someone else')
+    await db.query(`update storage.objects set owner = $1 where name = $2`, [K.pure, good])
+    assert.equal((await send(K.pure, k1, good)).status, 'pending')
+    // read: uploader and receive holders in scope only
+    const sees = uid => asUser(db, uid, async () => (await db.query(
+      `select count(*)::int n from storage.objects where name = $1`, [good])).rows[0].n)
+    assert.equal(await sees(K.pure), 1)
+    assert.equal(await sees(U.approver), 1)
+    assert.equal(await sees(K.reporter), 0)
 
     // replay after a timeout stores nothing twice; a key is the first user's
     const key = cu()

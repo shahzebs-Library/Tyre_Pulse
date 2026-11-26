@@ -75,6 +75,35 @@ final storeReceiptBoardProvider = FutureProvider.autoDispose<StoreReceiptBoard>(
   (Ref ref) => ref.watch(storeReceiptRepositoryProvider).board(),
 );
 
+/// One request key per purchase-order line draft. It survives leaving and
+/// reopening the form and editing it, and is dropped only once the server has
+/// confirmed the receipt, so a retry after a lost answer never records twice.
+final class StoreReceiptKeys extends Notifier<Map<String, String>> {
+  @override
+  Map<String, String> build() => <String, String>{};
+
+  /// The key for [poLineId], minting one with [mint] the first time.
+  String keyFor(String poLineId, String Function() mint) {
+    final String? have = state[poLineId];
+    if (have != null) return have;
+    final String key = mint();
+    state = <String, String>{...state, poLineId: key};
+    return key;
+  }
+
+  /// The server confirmed (or answered with the stored receipt): the next
+  /// delivery on this line is a new request.
+  void confirmed(String poLineId) {
+    state = <String, String>{...state}..remove(poLineId);
+  }
+}
+
+final NotifierProvider<StoreReceiptKeys, Map<String, String>>
+    storeReceiptKeysProvider =
+    NotifierProvider<StoreReceiptKeys, Map<String, String>>(
+  StoreReceiptKeys.new,
+);
+
 final Provider<CountDraftStore> countDraftStoreProvider =
     Provider<CountDraftStore>(
   (Ref ref) => CountDraftStore(ref.watch(secureStoreProvider)),

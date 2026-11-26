@@ -124,14 +124,22 @@ class InventoryQtyStepper extends StatelessWidget {
     onChanged(next < 0 ? 0 : next);
   }
 
-  Widget _button(String label, num delta, String key) => SizedBox(
-        width: inventoryTouchTarget,
-        height: inventoryTouchTarget,
+  // At least a touch target, growing with the text so "+10" never clips at
+  // large text sizes. The label is always laid out left to right, so "-10"
+  // reads as minus ten in Arabic and Urdu instead of "10-".
+  Widget _button(String label, num delta, String key) => ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: inventoryTouchTarget,
+          minHeight: inventoryTouchTarget,
+        ),
         child: OutlinedButton(
           key: Key(key),
-          style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            minimumSize: const Size(inventoryTouchTarget, inventoryTouchTarget),
+          ),
           onPressed: () => _bump(delta),
-          child: Text(label),
+          child: Text(label, textDirection: TextDirection.ltr),
         ),
       );
 

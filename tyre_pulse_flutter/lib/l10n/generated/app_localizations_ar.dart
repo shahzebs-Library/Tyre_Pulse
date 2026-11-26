@@ -9011,6 +9011,27 @@ class AppLocalizationsAr extends AppLocalizations {
       'رأيت أن ورقة هذه المطالبة سلمت إلى السائق المذكور اسمه فيها، وأن السائق رفض التوقيع عليها أو الرد. تاريخ ووقت هذا السجل يحددهما النظام.';
 
   @override
+  String get driverChargeBlockTitle => 'لا يمكن جدولة الخصم بعد';
+
+  @override
+  String get driverChargeBlockConsent =>
+      'نظام العمل السعودي (المادة 92): لا يجوز خصم هذه المطالبة من الراتب إلا بموافقة السائق الكتابية. السائق لم يوافق، لذلك لا يمكن خصمها.';
+
+  @override
+  String get driverChargeBlockObjection =>
+      'يوجد اعتراض مفتوح. يجب البت فيه أولا.';
+
+  @override
+  String driverChargeBlockWindow(String date) {
+    return 'لا يزال بإمكان السائق الاعتراض حتى $date. لا يمكن جدولة أي خصم قبل ذلك.';
+  }
+
+  @override
+  String driverChargeBlockWindowKsa(String date) {
+    return 'نظام العمل السعودي (المادة 91): للسائق 15 يوم عمل للاعتراض، حتى $date. لا يمكن جدولة أي خصم قبل ذلك.';
+  }
+
+  @override
   String get driverChargeStatementMissing =>
       'تعذر تحميل الإقرار. حدّث الصفحة قبل التوقيع.';
 

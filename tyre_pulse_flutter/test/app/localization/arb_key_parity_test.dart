@@ -685,10 +685,13 @@ void main() {
     // line (replaces driverChargeStatementEnglishOnly), the photo section
     // (title, none, could not load, look first) and the KSA / company rule
     // lines with the objection day.
-    test('en, ar and ur each carry exactly 2695 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2695);
-      expect(_translatableKeys(ar).length, 2695);
-      expect(_translatableKeys(ur).length, 2695);
+    // 2695 + 5 = 2700: why a deduction cannot be scheduled yet (title,
+    // Article 92 consent, open objection, window with and without the KSA
+    // Article 91 wording), shown instead of a schedule the server refuses.
+    test('en, ar and ur each carry exactly 2700 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2700);
+      expect(_translatableKeys(ar).length, 2700);
+      expect(_translatableKeys(ur).length, 2700);
     });
   });
 

@@ -376,13 +376,92 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       };
       const disputedOther = await open({ category: 'other', amount: 100 }, 'dispute', 'ur');
       await shiftBack(disputedOther.c); await actor(10);
+      const otherDetail = await detail(disputedOther.c);
+      assert.equal(otherDetail.settings.schedule_block.code, 'consent_required'); assert.equal(otherDetail.settings.schedule_block.article, '92');
+      assert.ok(!otherDetail.actions.includes('charge_schedule'), 'never offer a schedule the server refuses');
       await assert.rejects(schedule(disputedOther.c, disputedOther.v, [{ due_month: monthPlus(5), amount: 100 }]), e => e.code === '22023' && /Article 92/.test(e.message));
       const disputedDamage = await open({ category: 'accident_damage', source_type: 'accident', source_id: id(42), amount: 300, evidence: [photo] }, 'dispute');
       await assert.rejects(schedule(disputedDamage.c, disputedDamage.v, [{ due_month: monthPlus(5), amount: 300 }]), e => e.code === '22023' && /15 working days/.test(e.message));
+      const inWindow = await detail(disputedDamage.c);
+      assert.equal(inWindow.settings.schedule_block.code, 'window_open'); assert.ok(!inWindow.actions.includes('charge_schedule'));
       const dd = (await detail(disputedDamage.c)).settings; assert.ok(dd.objection_deadline); assert.match(dd.objection_last_day, /^\d{4}-\d{2}-\d{2}$/);
       await shiftBack(disputedDamage.c); await actor(10);
+      const afterWindow = await detail(disputedDamage.c);
+      assert.equal(afterWindow.settings.schedule_block, null); assert.ok(afterWindow.actions.includes('charge_schedule'));
       await schedule(disputedDamage.c, disputedDamage.v, [{ due_month: monthPlus(5), amount: 300 }]);
       assert.equal((await detail(disputedDamage.c)).charge.status, 'scheduled');
+    });
+
+    await t.test('outside KSA: configured percent cap and 7 day window (needs legal confirmation)', async () => {
+      await db.exec(`RESET ROLE;
+        CREATE OR REPLACE FUNCTION app_country_scope() RETURNS text[] LANGUAGE sql AS $$ SELECT ARRAY['ksa','uae'] $$;
+        INSERT INTO profiles(id,org_id,full_name,role) VALUES ('${id(12)}','${id(1)}','Driver C','Driver');
+        SET ROLE authenticated;`);
+      await actor(2);
+      const c = (await command('create_driver', { driver_id: 'EMP3', driver_name: 'Driver C', country: 'UAE', site: 'JEDDAH' })).driver_id;
+      await command('link_account', { driver_id: c, user_id: id(12), reason: 'Verified employee identity' });
+      const open = async (fields, response) => {
+        await actor(11); const ch = (await command('charge_issue', { driver_id: c, basis: 'Charge recorded for the UAE test case here.', currency: 'AED', source_type: 'none', evidence: [{ kind: 'document', ref: 'doc/9', label: 'Record' }], ...fields })).id;
+        let v = (await detail(ch)).charge.version;
+        await command('charge_notify', { driver_id: c, charge_id: ch, version: v }); v++;
+        await actor(12); await command('charge_respond', { driver_id: c, charge_id: ch, version: v, response, statement_version: response === 'accept' ? 'deduction-consent-v2' : 'receipt-dispute-v2', statement_language: 'en', acknowledged: true, explanation: 'I did not lose this item at all.', signature: SIG }); v++;
+        await actor(2); await command('charge_supervisor_review', { driver_id: c, charge_id: ch, version: v, decision: 'approve', reason: 'Evidence reviewed' }); v++;
+        await actor(10); await command('charge_finance_review', { driver_id: c, charge_id: ch, version: v, decision: 'approve', reason: 'Amount verified' }); v++;
+        return { ch, v };
+      };
+      const schedule = (ch, v, instalments) => command('charge_schedule', { driver_id: c, charge_id: ch, version: v, monthly_wage: 3000, wage_currency: 'AED', instalments });
+      const accepted = await open({ category: 'missing_item', amount: 700 }, 'accept');
+      const rule = (await detail(accepted.ch)).settings.country_rule;
+      assert.equal(rule.statutory, false); assert.equal(rule.needs_legal_confirmation, true);
+      // 20% of 3000 = 600 per month, not the KSA 5 days (500).
+      await assert.rejects(schedule(accepted.ch, accepted.v, [{ due_month: thisMonth(), amount: 700 }]), code('22023'));
+      await schedule(accepted.ch, accepted.v, [{ due_month: thisMonth(), amount: 600 }, { due_month: nextMonth(), amount: 100 }]);
+      let x = await detail(accepted.ch); assert.equal(x.charge.schedule_rule, 'company_setting'); assert.equal(Number(x.charge.schedule_cap_amount), 600);
+      // A disputed "other" charge is not refused outright outside KSA: after 7 calendar days it can be scheduled.
+      const disputed = await open({ category: 'other', amount: 100 }, 'dispute');
+      x = await detail(disputed.ch);
+      assert.equal(x.settings.schedule_block.code, 'window_open'); assert.ok(!x.actions.includes('charge_schedule'));
+      await assert.rejects(schedule(disputed.ch, disputed.v, [{ due_month: monthPlus(3), amount: 100 }]), e => e.code === '22023' && /appeal period/.test(e.message));
+      await db.exec('RESET ROLE; ALTER TABLE driver_charge_decisions DISABLE TRIGGER driver_charge_decisions_append_only');
+      await db.query("update driver_charge_decisions set created_at = now() - interval '8 days' where charge_id = $1 and stage = 'finance'", [disputed.ch]);
+      await db.exec('ALTER TABLE driver_charge_decisions ENABLE TRIGGER driver_charge_decisions_append_only; SET ROLE authenticated');
+      await actor(10); x = await detail(disputed.ch);
+      assert.equal(x.settings.schedule_block, null); assert.ok(x.actions.includes('charge_schedule'));
+      await schedule(disputed.ch, disputed.v, [{ due_month: monthPlus(3), amount: 100 }]);
+      await db.exec(`RESET ROLE; CREATE OR REPLACE FUNCTION app_country_scope() RETURNS text[] LANGUAGE sql AS $$ SELECT ARRAY['ksa'] $$; SET ROLE authenticated;`);
+    });
+
+    await t.test('charge photos are readable only by people who can see the charge', async () => {
+      const name = 'modules/driver-charge/abc/2_0_y.jpg';
+      await db.exec(`RESET ROLE;
+        CREATE POLICY test_storage_read ON storage.objects FOR SELECT TO authenticated USING (true);
+        INSERT INTO storage.objects(bucket_id,name,owner_id) VALUES ('tyre-photos','${name}','${id(11)}'),
+          ('tyre-photos','modules/driver-charge/sup/unattached.jpg','${id(5)}'),('tyre-photos','modules/wash/w.jpg','${id(5)}');
+        SET ROLE authenticated;`);
+      const visible = async (n, obj) => { await actor(n); return (await db.query('select count(*)::int n from storage.objects where name=$1', [obj])).rows[0].n; };
+      assert.equal(await visible(4, name), 1, 'the driver of the charge');
+      assert.equal(await visible(11, name), 1, 'the uploader');
+      assert.equal(await visible(2, name), 1, 'organisation admin / manager');
+      assert.equal(await visible(10, name), 1, 'finance');
+      assert.equal(await visible(3, name), 0, 'another driver');
+      assert.equal(await visible(5, name), 0, 'a supervisor of another driver');
+      assert.equal(await visible(6, name), 0, 'another tenant');
+      assert.equal(await visible(5, 'modules/driver-charge/sup/unattached.jpg'), 1, 'own upload before it is attached');
+      assert.equal(await visible(4, 'modules/driver-charge/sup/unattached.jpg'), 0);
+      assert.equal(await visible(3, 'modules/wash/w.jpg'), 1, 'other paths keep the bucket rule');
+      await db.exec('RESET ROLE; DROP POLICY test_storage_read ON storage.objects; SET ROLE authenticated;');
+    });
+
+    await t.test('admin-maintained public holidays are skipped by the working-day counter', async () => {
+      const deadline = async () => new Date((await db.query(`select private.driver_charge_working_deadline('2026-11-26T09:00:00+03:00', 15, 'KSA', '${id(1)}') r`)).rows[0].r).toISOString();
+      await db.exec('RESET ROLE'); assert.equal(await deadline(), '2026-12-17T21:00:00.000Z', 'empty by default'); await db.exec('SET ROLE authenticated');
+      await actor(5); await assert.rejects(db.query("insert into driver_charge_holidays(country,holiday,label) values ('KSA','2026-12-01','Test holiday')"), code('42501'));
+      await actor(2); await db.query("insert into driver_charge_holidays(country,holiday,label) values ('KSA','2026-12-01','Test holiday')");
+      await actor(5); assert.equal((await db.query('select count(*)::int n from driver_charge_holidays')).rows[0].n, 1, 'everyone in the organisation can read the list');
+      await db.exec('RESET ROLE');
+      assert.equal(await deadline(), '2026-12-20T21:00:00.000Z', 'Tue 1 Dec skipped, the window ends on Sun 20 Dec');
+      assert.equal(new Date((await db.query(`select private.driver_charge_working_deadline('2026-11-26T09:00:00+03:00', 15, 'UAE', '${id(1)}') r`)).rows[0].r).toISOString(), '2026-12-17T21:00:00.000Z', 'a KSA holiday does not move a UAE window');
+      await db.query("delete from driver_charge_holidays"); await db.exec('SET ROLE authenticated');
     });
 
     await t.test('RLS keeps another tenant and another driver out', async () => {

@@ -75,6 +75,36 @@ export function scheduleCapFor({ country, category, monthlyWage, capPct }) {
   return round2(wage * rule.total_pct / 100)
 }
 
+/**
+ * Why finance cannot schedule a deduction yet, or null. Prefers the server's
+ * own answer (driver_charge_detail.settings.schedule_block, the rule the
+ * schedule command enforces); otherwise works it out from the rule fields the
+ * detail returns. Only for a charge the driver did not accept.
+ * Returns { code, article, until, message } or null.
+ */
+export function scheduleBlockFor(detail, now = new Date()) {
+  const c = detail?.charge
+  if (!c || c.driver_response === 'accepted') return null
+  const settings = detail.settings || {}
+  if (settings.schedule_block && typeof settings.schedule_block === 'object') return settings.schedule_block
+  if ('schedule_block' in settings) return null
+  const rule = settings.country_rule || chargeCountryRule(c.country)
+  const until = settings.objection_last_day || null
+  const deadline = settings.objection_deadline ? new Date(settings.objection_deadline) : null
+  const windowOpen = !deadline || deadline.getTime() > now.getTime()
+  const appealOpen = detail.appeal && !detail.appeal.outcome
+  if (rule.statutory) {
+    if ((settings.bucket || chargeBucket(c.category)) !== 'damage') return { code: 'consent_required', article: '92', until: null, message: "Saudi Labour Law (Article 92): this charge can be deducted only with the driver's written consent. It cannot be scheduled because the driver did not accept it." }
+    if (appealOpen) return { code: 'open_objection', article: '91', until: null, message: 'Saudi Labour Law (Article 91): the driver has an open objection. Decide it first.' }
+    if (windowOpen) return { code: 'window_open', article: '91', until, message: `Saudi Labour Law (Article 91): the driver has 15 working days to object. A deduction can be scheduled after ${until || 'the finance approval'}.` }
+    return null
+  }
+  if (detail.appeal?.outcome === 'upheld') return null
+  if (appealOpen) return { code: 'open_objection', article: null, until: null, message: 'The driver has an open appeal. Decide it first.' }
+  if (windowOpen) return { code: 'window_open', article: null, until, message: `The driver did not consent. A deduction can be scheduled only after the appeal period ends (${until || 'after the finance approval'}) or an appeal is decided.` }
+  return null
+}
+
 /** KSA monthly limits across all of a driver's charges. Null outside KSA. */
 export function ksaMonthlyLimits(monthlyWage) {
   const wage = Number(monthlyWage)

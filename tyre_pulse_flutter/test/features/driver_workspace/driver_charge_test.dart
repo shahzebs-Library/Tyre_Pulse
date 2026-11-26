@@ -229,6 +229,82 @@ void main() {
     );
   });
 
+  test('never offers a schedule the server would refuse', () {
+    DriverChargeDetail d(
+      Map<String, Object?> charge,
+      Map<String, Object?> settings, {
+      DriverRow? appeal,
+    }) =>
+        DriverChargeDetail(<String, Object?>{
+          'charge': <String, Object?>{'status': 'finance_approved', ...charge},
+          'settings': settings,
+          'appeal': appeal,
+        });
+    const Map<String, Object?> ksa = <String, Object?>{
+      'country_rule': <String, Object?>{'statutory': true},
+      'objection_deadline': '2026-12-17T21:00:00Z',
+      'objection_last_day': '2026-12-17',
+    };
+    expect(
+      d(
+        <String, Object?>{'category': 'other', 'driver_response': 'disputed'},
+        ksa,
+      ).scheduleBlock()?.article,
+      '92',
+    );
+    final DriverChargeDetail damage = d(
+      <String, Object?>{
+        'category': 'tyre_damage',
+        'driver_response': 'refused',
+      },
+      ksa,
+    );
+    expect(
+      damage.scheduleBlock(now: DateTime.utc(2026, 12, 10))?.until,
+      '2026-12-17',
+    );
+    expect(damage.scheduleBlock(now: DateTime.utc(2026, 12, 18)), isNull);
+    expect(
+      d(<String, Object?>{
+        'category': 'other',
+        'driver_response': 'disputed',
+      }, <String, Object?>{
+        'country_rule': <String, Object?>{'statutory': false},
+        'objection_deadline': '2026-12-01T00:00:00Z',
+      }).scheduleBlock(now: DateTime.utc(2026, 12, 2)),
+      isNull,
+    );
+    expect(
+      d(<String, Object?>{
+        'category': 'other',
+        'driver_response': 'disputed',
+      }, <String, Object?>{
+        'schedule_block': <String, Object?>{
+          'code': 'open_objection',
+          'article': '91',
+        },
+      }).scheduleBlock()?.code,
+      'open_objection',
+    );
+  });
+
+  testWidgets('a blocked schedule is explained on the detail',
+      (WidgetTester tester) async {
+    final DriverRow data = _detail();
+    (data['charge']! as Map<String, Object?>)
+      ..['status'] = 'finance_approved'
+      ..['driver_response'] = 'disputed'
+      ..['category'] = 'other';
+    (data['settings']! as Map<String, Object?>)['schedule_block'] =
+        <String, Object?>{'code': 'consent_required', 'article': '92'};
+    await tester.pumpWidget(
+      _app(_FakeRepo(data), const DriverChargeDetailScreen(chargeId: 'c1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Deduction cannot be scheduled yet'), findsOneWidget);
+    expect(find.textContaining('Article 92'), findsOneWidget);
+  });
+
   testWidgets('the driver sees the photos and signs in Urdu',
       (WidgetTester tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 1400));

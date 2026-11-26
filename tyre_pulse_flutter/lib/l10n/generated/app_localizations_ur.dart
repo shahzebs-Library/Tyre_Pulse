@@ -9022,6 +9022,27 @@ class AppLocalizationsUr extends AppLocalizations {
       'میں نے دیکھا کہ اس چارج کا کاغذ اس پر لکھے ہوئے ڈرائیور کو دیا گیا۔ ڈرائیور نے اس پر دستخط کرنے یا جواب دینے سے انکار کیا۔ اس ریکارڈ کی تاریخ اور وقت سسٹم طے کرتا ہے۔';
 
   @override
+  String get driverChargeBlockTitle => 'کٹوتی ابھی شیڈول نہیں ہو سکتی';
+
+  @override
+  String get driverChargeBlockConsent =>
+      'سعودی لیبر قانون (آرٹیکل 92): یہ چارج تنخواہ سے صرف ڈرائیور کی تحریری اجازت سے کاٹا جا سکتا ہے۔ ڈرائیور متفق نہیں ہوا، اس لیے یہ نہیں کاٹا جا سکتا۔';
+
+  @override
+  String get driverChargeBlockObjection =>
+      'ایک اعتراض کھلا ہے۔ پہلے اس کا فیصلہ ہونا ضروری ہے۔';
+
+  @override
+  String driverChargeBlockWindow(String date) {
+    return 'ڈرائیور ابھی $date تک اعتراض کر سکتا ہے۔ اس سے پہلے کچھ بھی شیڈول نہیں ہو سکتا۔';
+  }
+
+  @override
+  String driverChargeBlockWindowKsa(String date) {
+    return 'سعودی لیبر قانون (آرٹیکل 91): ڈرائیور کے پاس اعتراض کے لیے $date تک 15 کام کے دن ہیں۔ اس سے پہلے کچھ بھی شیڈول نہیں ہو سکتا۔';
+  }
+
+  @override
   String get driverChargeStatementMissing =>
       'بیان لوڈ نہیں ہو سکا۔ دستخط سے پہلے ریفریش کریں۔';
 

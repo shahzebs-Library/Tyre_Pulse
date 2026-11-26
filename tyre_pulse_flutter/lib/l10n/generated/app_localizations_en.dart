@@ -9003,6 +9003,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'I saw this charge paper given to the driver named on it. The driver did not want to sign it or answer. The date and time of this record are set by the system.';
 
   @override
+  String get driverChargeBlockTitle => 'Deduction cannot be scheduled yet';
+
+  @override
+  String get driverChargeBlockConsent =>
+      'Saudi Labour Law (Article 92): this charge can be taken from the salary only with the driver’s written consent. The driver did not agree, so it cannot be deducted.';
+
+  @override
+  String get driverChargeBlockObjection =>
+      'An objection is open. It must be decided first.';
+
+  @override
+  String driverChargeBlockWindow(String date) {
+    return 'The driver can still object until $date. Nothing can be scheduled before then.';
+  }
+
+  @override
+  String driverChargeBlockWindowKsa(String date) {
+    return 'Saudi Labour Law (Article 91): the driver has 15 working days to object, until $date. Nothing can be scheduled before then.';
+  }
+
+  @override
   String get driverChargeStatementMissing =>
       'The statement could not be loaded. Refresh before signing.';
 

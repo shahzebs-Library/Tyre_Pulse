@@ -234,6 +234,30 @@ DO $wage$ DECLARE cols text; BEGIN
   EXECUTE format('GRANT SELECT (%s) ON public.driver_charges TO authenticated', cols);
 END $wage$;
 
+-- ── Photo privacy ────────────────────────────────────────────────────────────
+-- Charge photos are uploaded to tyre-photos under modules/driver-charge/. The
+-- bucket's tyre_photos_read policy lets any active member of the organisation
+-- read modules/*; for these objects that is too wide. This RESTRICTIVE policy
+-- (ANDed with every permissive read policy) narrows them to: the uploader, a
+-- super admin, an organisation admin, or anyone whose driver-workspace access
+-- reaches the driver of a charge that lists the photo (the driver himself,
+-- the issuer or supervisor in scope, finance). Other paths are unaffected.
+CREATE FUNCTION private.driver_charge_photo_readable(p_name text, p_owner_id text)
+RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN RETURN false; END IF;
+  IF p_owner_id IS NOT NULL AND p_owner_id = auth.uid()::text THEN RETURN true; END IF;
+  IF coalesce(public.is_super_admin(), false) THEN RETURN true; END IF;
+  RETURN EXISTS(SELECT 1 FROM public.driver_charge_evidence e
+    WHERE e.ref = 'tp-storage://tyre-photos/' || p_name AND e.organisation_id = public.app_current_org()
+      AND (coalesce(public.app_is_org_admin(), false) OR private.driver_workspace_access(e.driver_id) <> 'none'));
+END $$;
+REVOKE ALL ON FUNCTION private.driver_charge_photo_readable(text,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION private.driver_charge_photo_readable(text,text) TO authenticated;
+CREATE POLICY driver_charge_photos_read ON storage.objects AS RESTRICTIVE FOR SELECT TO authenticated
+  USING (bucket_id <> 'tyre-photos' OR name NOT LIKE 'modules/driver-charge/%'
+    OR private.driver_charge_photo_readable(name, owner_id));
+
 -- ── Append-only and post-notification immutability (defence in depth: the
 --    tables carry SELECT grants only, so these guard definer-function bugs). ──
 CREATE FUNCTION private.driver_charge_append_only()
@@ -407,39 +431,106 @@ RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path='' AS $$
 $$;
 REVOKE ALL ON FUNCTION private.driver_charge_needs_photo(text) FROM PUBLIC,anon,authenticated;
 
--- End of the p_days-th working day (Sunday to Thursday) after the local date of
--- p_from in Asia/Riyadh. The window is open until this moment.
-CREATE FUNCTION private.driver_charge_working_deadline(p_from timestamptz, p_days integer)
-RETURNS timestamptz LANGUAGE plpgsql STABLE SET search_path='' AS $$
-DECLARE d date; n integer := 0;
+-- Public holidays the working-day counter skips, maintained per organisation
+-- and country by an administrator (for example Eid holidays in KSA). Seeded
+-- empty on purpose: the dates are announced each year.
+CREATE TABLE public.driver_charge_holidays (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organisation_id uuid NOT NULL DEFAULT public.app_current_org(),
+  country text NOT NULL CHECK (length(btrim(country)) BETWEEN 2 AND 60),
+  holiday date NOT NULL,
+  label text NOT NULL CHECK (length(btrim(label)) BETWEEN 2 AND 160),
+  created_by uuid REFERENCES public.profiles(id) DEFAULT auth.uid(),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX driver_charge_holidays_day ON public.driver_charge_holidays(organisation_id, upper(btrim(country)), holiday);
+ALTER TABLE public.driver_charge_holidays ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.driver_charge_holidays FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.driver_charge_holidays TO authenticated;
+CREATE POLICY driver_charge_holidays_read ON public.driver_charge_holidays FOR SELECT TO authenticated
+  USING (organisation_id = public.app_current_org() AND coalesce(public.app_is_active(), false));
+CREATE POLICY driver_charge_holidays_admin ON public.driver_charge_holidays FOR ALL TO authenticated
+  USING (organisation_id = public.app_current_org() AND (coalesce(public.app_is_org_admin(), false) OR coalesce(public.is_super_admin(), false)))
+  WITH CHECK (organisation_id = public.app_current_org() AND (coalesce(public.app_is_org_admin(), false) OR coalesce(public.is_super_admin(), false)));
+
+-- End of the p_days-th working day (Sunday to Thursday, not a listed public
+-- holiday of p_country in p_org) after the local date of p_from in
+-- Asia/Riyadh. The window is open until this moment.
+CREATE FUNCTION private.driver_charge_working_deadline(p_from timestamptz, p_days integer, p_country text DEFAULT NULL, p_org uuid DEFAULT NULL)
+RETURNS timestamptz LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE d date; n integer := 0; guard integer := 0;
 BEGIN
   IF p_from IS NULL OR p_days IS NULL OR p_days < 1 THEN RETURN p_from; END IF;
   d := (p_from AT TIME ZONE 'Asia/Riyadh')::date;
-  WHILE n < p_days LOOP
-    d := d + 1;
-    IF extract(isodow FROM d) NOT IN (5,6) THEN n := n + 1; END IF;
+  WHILE n < p_days AND guard < 3660 LOOP
+    d := d + 1; guard := guard + 1;
+    IF extract(isodow FROM d) NOT IN (5,6) AND NOT EXISTS(
+         SELECT 1 FROM public.driver_charge_holidays h WHERE h.organisation_id = p_org
+           AND upper(btrim(h.country)) = upper(btrim(coalesce(p_country,''))) AND h.holiday = d) THEN
+      n := n + 1;
+    END IF;
   END LOOP;
   RETURN (d + 1)::timestamp AT TIME ZONE 'Asia/Riyadh';
 END $$;
-REVOKE ALL ON FUNCTION private.driver_charge_working_deadline(timestamptz,integer) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION private.driver_charge_working_deadline(timestamptz,integer,text,uuid) FROM PUBLIC,anon,authenticated;
 
 -- When the driver's objection window closes. Counted from the finance approval
 -- (the driver is notified then). NULL until finance has approved.
 CREATE FUNCTION private.driver_charge_objection_deadline(p_charge uuid)
 RETURNS timestamptz LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
-DECLARE c_country text; approved timestamptz; r jsonb;
+DECLARE c_country text; c_org uuid; approved timestamptz; r jsonb;
 BEGIN
-  SELECT country INTO c_country FROM public.driver_charges WHERE id = p_charge;
+  SELECT country, organisation_id INTO c_country, c_org FROM public.driver_charges WHERE id = p_charge;
   IF NOT FOUND THEN RETURN NULL; END IF;
   SELECT max(created_at) INTO approved FROM public.driver_charge_decisions WHERE charge_id = p_charge AND stage = 'finance' AND decision = 'approve';
   IF approved IS NULL THEN RETURN NULL; END IF;
   r := private.driver_charge_country_rule(c_country);
   IF coalesce((r->>'statutory')::boolean, false) THEN
-    RETURN private.driver_charge_working_deadline(approved, (r->>'objection_working_days')::integer);
+    RETURN private.driver_charge_working_deadline(approved, (r->>'objection_working_days')::integer, c_country, c_org);
   END IF;
   RETURN approved + make_interval(days => private.driver_charge_setting('driver_charge_appeal_window_days', 7)::integer);
 END $$;
 REVOKE ALL ON FUNCTION private.driver_charge_objection_deadline(uuid) FROM PUBLIC,anon,authenticated;
+
+-- Why a deduction cannot be scheduled yet for a charge the driver did not
+-- accept, or NULL when it can. The ONE place this rule lives: charge_schedule
+-- raises its message, driver_charge_actions hides the action, and
+-- driver_charge_detail returns it so the screens show the reason instead of a
+-- button the server would refuse. {code, article, until, message}.
+CREATE FUNCTION private.driver_charge_schedule_block(p_charge uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
+DECLARE c public.driver_charges%ROWTYPE; r jsonb; deadline timestamptz; last_day text;
+BEGIN
+  SELECT * INTO c FROM public.driver_charges WHERE id = p_charge;
+  IF NOT FOUND OR c.driver_response IS NOT DISTINCT FROM 'accepted' THEN RETURN NULL; END IF;
+  r := private.driver_charge_country_rule(c.country);
+  deadline := private.driver_charge_objection_deadline(c.id);
+  last_day := to_char((deadline - interval '1 second') AT TIME ZONE 'Asia/Riyadh', 'YYYY-MM-DD');
+  IF coalesce((r->>'statutory')::boolean, false) THEN
+    IF private.driver_charge_bucket(c.category) <> 'damage' THEN
+      RETURN jsonb_build_object('code','consent_required','article','92','until',NULL,
+        'message','Saudi Labour Law (Article 92): this charge can be deducted only with the driver''s written consent. It cannot be scheduled because the driver did not accept it.');
+    END IF;
+    IF EXISTS(SELECT 1 FROM public.driver_charge_appeals a WHERE a.charge_id = c.id AND a.outcome IS NULL) THEN
+      RETURN jsonb_build_object('code','open_objection','article','91','until',NULL,'message','Saudi Labour Law (Article 91): the driver has an open objection. Decide it first.');
+    END IF;
+    IF deadline IS NULL OR deadline > now() THEN
+      RETURN jsonb_build_object('code','window_open','article','91','until',last_day,
+        'message', format('Saudi Labour Law (Article 91): the driver has 15 working days to object. A deduction can be scheduled after %s.', coalesce(last_day, 'the finance approval')));
+    END IF;
+    RETURN NULL;
+  END IF;
+  IF EXISTS(SELECT 1 FROM public.driver_charge_appeals a WHERE a.charge_id = c.id AND a.outcome = 'upheld') THEN RETURN NULL; END IF;
+  IF EXISTS(SELECT 1 FROM public.driver_charge_appeals a WHERE a.charge_id = c.id AND a.outcome IS NULL) THEN
+    RETURN jsonb_build_object('code','open_objection','article',NULL,'until',NULL,'message','The driver has an open appeal. Decide it first.');
+  END IF;
+  IF deadline IS NULL OR deadline > now() THEN
+    RETURN jsonb_build_object('code','window_open','article',NULL,'until',last_day,
+      'message', format('The driver did not consent. A deduction can be scheduled only after the appeal period ends (%s) or an appeal is decided.', coalesce(last_day, 'after the finance approval')));
+  END IF;
+  RETURN NULL;
+END $$;
+REVOKE ALL ON FUNCTION private.driver_charge_schedule_block(uuid) FROM PUBLIC,anon,authenticated;
 
 -- One evidence item. A photo must be a private storage reference in one of the
 -- photo buckets (never a public URL), so the driver and the PDF can show it.
@@ -653,7 +744,7 @@ DECLARE
   is_staff boolean; is_finance boolean; is_manager boolean; choice text; target_driver uuid; v_reason text := btrim(coalesce(p_payload->>'reason',''));
   stmt_version text; stmt text; cap_pct numeric; cap_amount numeric; wage numeric; total numeric := 0; item jsonb; seq integer := 0; last_month date;
   appeal_days numeric; approved_at timestamptz; approved_at_cap numeric; reissue jsonb; notify_driver boolean := false; signer text;
-  lang text; crule jsonb; statutory boolean := false; bucket text; deadline timestamptz; breach text; damage_cap numeric; fine_cap numeric; total_cap numeric;
+  lang text; block jsonb; crule jsonb; statutory boolean := false; bucket text; deadline timestamptz; breach text; damage_cap numeric; fine_cap numeric; total_cap numeric;
 BEGIN
   IF actor IS NULL OR org IS NULL OR NOT coalesce(public.app_is_active(),false) THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501'; END IF;
   IF p_request_id IS NULL OR jsonb_typeof(p_payload) IS DISTINCT FROM 'object' OR octet_length(p_payload::text) > 600000 THEN RAISE EXCEPTION 'Invalid request' USING ERRCODE='22023'; END IF;
@@ -816,25 +907,9 @@ BEGIN
     crule := private.driver_charge_country_rule(c.country);
     statutory := coalesce((crule->>'statutory')::boolean, false);
     bucket := private.driver_charge_bucket(c.category);
-    IF c.driver_response IS DISTINCT FROM 'accepted' THEN
-      deadline := private.driver_charge_objection_deadline(c.id);
-      IF statutory THEN
-        -- Saudi Labour Law: without written consent only damage or loss (Art 91)
-        -- may be deducted, after supervisor and finance approval (status is
-        -- finance_approved here), with no open objection, after 15 working days.
-        IF bucket <> 'damage' THEN
-          RAISE EXCEPTION 'Saudi Labour Law (Article 92): this charge can be deducted only with the driver''s written consent' USING ERRCODE='22023';
-        END IF;
-        IF EXISTS(SELECT 1 FROM public.driver_charge_appeals WHERE charge_id = c.id AND outcome IS NULL) THEN
-          RAISE EXCEPTION 'The driver has an open objection. Decide it first.' USING ERRCODE='22023';
-        END IF;
-        IF deadline IS NULL OR deadline > now() THEN
-          RAISE EXCEPTION 'Saudi Labour Law (Article 91): the driver has 15 working days to object. A deduction can be scheduled from %', to_char(deadline AT TIME ZONE 'Asia/Riyadh', 'YYYY-MM-DD') USING ERRCODE='22023';
-        END IF;
-      ELSIF NOT EXISTS(SELECT 1 FROM public.driver_charge_appeals WHERE charge_id = c.id AND outcome = 'upheld') AND (deadline IS NULL OR deadline > now()) THEN
-        RAISE EXCEPTION 'The driver did not consent. A deduction can be scheduled only after the appeal period ends or an appeal is decided.' USING ERRCODE='22023';
-      END IF;
-    END IF;
+    -- Consent, objection and window rules: driver_charge_schedule_block().
+    block := private.driver_charge_schedule_block(c.id);
+    IF block IS NOT NULL THEN RAISE EXCEPTION '%', block->>'message' USING ERRCODE='22023'; END IF;
     wage := nullif(p_payload->>'monthly_wage','')::numeric;
     IF NOT private.driver_charge_finite(wage) OR wage <= 0 OR wage > 1000000 THEN RAISE EXCEPTION 'Enter the driver monthly wage (more than 0 and at most 1,000,000)' USING ERRCODE='22023'; END IF;
     IF upper(coalesce(p_payload->>'wage_currency','')) IS DISTINCT FROM c.currency THEN RAISE EXCEPTION 'State the wage in the charge currency (%)', c.currency USING ERRCODE='22023'; END IF;
@@ -1062,7 +1137,7 @@ BEGIN
   IF c.status IN ('accepted','disputed','refused') AND staff AND c.issued_by <> auth.uid() AND c.notified_by IS DISTINCT FROM auth.uid()
      AND c.refusal_witness_id IS DISTINCT FROM auth.uid() AND c.refusal_recorded_by IS DISTINCT FROM auth.uid() THEN a := array_append(a, 'charge_supervisor_review'); END IF;
   IF c.status = 'supervisor_approved' AND fin THEN a := array_append(a, 'charge_finance_review'); END IF;
-  IF c.status = 'finance_approved' AND fin THEN a := array_append(a, 'charge_schedule'); END IF;
+  IF c.status = 'finance_approved' AND fin AND private.driver_charge_schedule_block(c.id) IS NULL THEN a := array_append(a, 'charge_schedule'); END IF;
   IF c.status = 'scheduled' AND fin THEN a := array_append(a, 'charge_record_deduction'); END IF;
   IF c.status IN ('supervisor_approved','finance_approved','scheduled') AND is_driver AND c.deducted_amount = 0 AND NOT EXISTS(SELECT 1 FROM public.driver_charge_appeals WHERE charge_id = c.id) THEN a := array_append(a, 'charge_appeal'); END IF;
   IF c.status = 'under_appeal' AND (staff OR fin) THEN a := array_append(a, 'charge_decide_appeal'); END IF;
@@ -1137,6 +1212,7 @@ BEGIN
       'bucket', private.driver_charge_bucket(c.category),
       'needs_photo', private.driver_charge_needs_photo(c.category),
       'objection_deadline', private.driver_charge_objection_deadline(c.id),
+      'schedule_block', private.driver_charge_schedule_block(c.id),
       -- The last calendar day the driver may object (Riyadh date of the moment before the deadline).
       'objection_last_day', to_char((private.driver_charge_objection_deadline(c.id) - interval '1 second') AT TIME ZONE 'Asia/Riyadh', 'YYYY-MM-DD')));
 END $$;
@@ -1459,6 +1535,8 @@ GRANT EXECUTE ON FUNCTION public.review_driver_expense(uuid,text,text,timestampt
 --   DROP FUNCTION public.review_driver_expense(uuid,text,text,timestamptz); DROP TRIGGER driver_expense_guard ON public.driver_expenses;
 --   DROP FUNCTION private.driver_expense_guard(); (restore the V152 update/delete policies)
 --   DROP FUNCTION public.reopen_accident_liability(uuid,text), public.approve_accident_liability(uuid,text,jsonb);
+--   DROP POLICY driver_charge_photos_read ON storage.objects; DROP FUNCTION private.driver_charge_photo_readable(text,text);
+--   DROP TABLE public.driver_charge_holidays;
 --   DROP TRIGGER accident_liability_guard ON public.accident_liability_assessments; DROP TRIGGER accident_liability_delete_guard ON public.accidents;
 --   DROP FUNCTION private.accident_liability_guard(), private.accident_liability_delete_guard();
 --   DROP TABLE public.accident_liability_reopens, public.accident_liability_approvals;

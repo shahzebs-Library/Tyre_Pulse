@@ -129,6 +129,15 @@ DateTime? chargeWorkingDeadline(DateTime? from, int days) {
   return d.add(const Duration(days: 1)).subtract(riyadh);
 }
 
+/// Why a deduction cannot be scheduled yet: `consent_required` (KSA Art 92),
+/// `open_objection` or `window_open` (with the last objection day).
+final class DriverChargeScheduleBlock {
+  const DriverChargeScheduleBlock(this.code, {this.article, this.until});
+  final String code;
+  final String? article;
+  final String? until;
+}
+
 enum DriverChargeResponse {
   accept('accept', chargeConsentStatement),
   dispute('dispute', chargeDisputeStatement);
@@ -326,6 +335,62 @@ final class DriverChargeDetail {
   /// The deduction rules of the charge country.
   DriverChargeCountryRule get countryRule =>
       driverChargeCountryRule(charge['country']);
+
+  /// Why finance cannot schedule a deduction yet, or null. The server's own
+  /// answer (`settings.schedule_block`) wins; otherwise it is worked out from
+  /// the rule fields the detail returns. Mirror of `scheduleBlockFor`.
+  DriverChargeScheduleBlock? scheduleBlock({DateTime? now}) {
+    final DriverRow c = charge;
+    if (c.isEmpty || c['driver_response'] == 'accepted') return null;
+    final Object? settings = data['settings'];
+    final Map<Object?, Object?> s =
+        settings is Map ? settings : const <Object?, Object?>{};
+    final Object? server = s['schedule_block'];
+    if (server is Map) {
+      return DriverChargeScheduleBlock(
+        '${server['code'] ?? ''}',
+        article: server['article'] as String?,
+        until: server['until'] as String?,
+      );
+    }
+    if (s.containsKey('schedule_block')) return null;
+    final Object? rule = s['country_rule'];
+    final bool statutory = rule is Map
+        ? rule['statutory'] == true
+        : driverChargeCountryRule(c['country']).statutory;
+    final String? until = s['objection_last_day'] as String?;
+    final DateTime? deadline =
+        DateTime.tryParse('${s['objection_deadline'] ?? ''}');
+    final bool windowOpen =
+        deadline == null || deadline.isAfter(now ?? DateTime.now());
+    final DriverRow? a = appeal;
+    final bool appealOpen = a != null && a['outcome'] == null;
+    if (statutory) {
+      if ('${s['bucket'] ?? driverChargeBucket(c['category'])}' != 'damage') {
+        return const DriverChargeScheduleBlock(
+          'consent_required',
+          article: '92',
+        );
+      }
+      if (appealOpen) {
+        return const DriverChargeScheduleBlock('open_objection', article: '91');
+      }
+      if (windowOpen) {
+        return DriverChargeScheduleBlock(
+          'window_open',
+          article: '91',
+          until: until,
+        );
+      }
+      return null;
+    }
+    if (a != null && a['outcome'] == 'upheld') return null;
+    if (appealOpen) return const DriverChargeScheduleBlock('open_objection');
+    if (windowOpen) {
+      return DriverChargeScheduleBlock('window_open', until: until);
+    }
+    return null;
+  }
 
   /// Last day the driver may object (`YYYY-MM-DD`), once finance approved.
   String? get objectionLastDay {

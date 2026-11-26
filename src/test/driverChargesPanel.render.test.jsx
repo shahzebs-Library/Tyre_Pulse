@@ -68,6 +68,17 @@ describe('driver charges panel', () => {
     expect(api.driverChargeCommand.mock.calls[0][1]).toMatchObject({ statement_version: 'deduction-consent-v2', statement_language: 'ur' })
   })
 
+  it('shows why a deduction cannot be scheduled instead of a Schedule button', async () => {
+    api.getDriverCharge.mockResolvedValue({ ...detail, access: 'finance', actions: ['charge_schedule', 'charge_waive'],
+      charge: { ...detail.charge, status: 'finance_approved', driver_response: 'disputed', country: 'KSA', category: 'other' },
+      settings: { ...detail.settings, schedule_block: { code: 'consent_required', article: '92', message: 'Saudi Labour Law (Article 92): needs written consent.' } } })
+    render(<DriverChargesPanel driverId="d1" canIssue={false} />)
+    fireEvent.click(await screen.findByText(/DC-2026-00001/))
+    expect(await screen.findByText(/Article 92/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Schedule deduction' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Waive charge' })).toBeInTheDocument()
+  })
+
   it('shows a retry on load failure', async () => {
     api.listDriverCharges.mockRejectedValueOnce(new Error('boom'))
     render(<DriverChargesPanel driverId="d1" canIssue />)

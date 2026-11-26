@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildInstalmentPlan, capAmountFor, validateIssue, validateResponse, outstandingByCurrency, enumLabel, CATEGORIES, ACTION_LABELS, CHARGE_SPEC,
-  chargeCountryRule, chargeBucket, chargeNeedsPhoto, scheduleCapFor, ksaMonthlyLimits, workingDeadline, statementText, defaultStatementLanguage } from '../lib/driverCharges'
+  chargeCountryRule, chargeBucket, chargeNeedsPhoto, scheduleCapFor, ksaMonthlyLimits, workingDeadline, statementText, defaultStatementLanguage, scheduleBlockFor } from '../lib/driverCharges'
 import { buildChargeDocument, getPath, formatValue, noticeLanguage, hasArabicScript } from '../lib/driverChargePdf'
 
 const detail = {
@@ -75,6 +75,21 @@ describe('country deduction rules (mirror of the server)', () => {
     expect(statementText(d, 'deduction-consent-v2', 'ur')).toBeNull()
     expect(defaultStatementLanguage('ar')).toBe('ar'); expect(defaultStatementLanguage('fr')).toBe('en')
     expect(validateResponse({ response: 'accept', language: 'fr', acknowledged: true, signature: 'x' })).toMatch(/Urdu/)
+  })
+  it('never offers a schedule the server would refuse, and says why with the article', () => {
+    const base = { charge: { status: 'finance_approved', country: 'KSA', category: 'other', driver_response: 'disputed' }, settings: { country_rule: { statutory: true } }, appeal: null }
+    expect(scheduleBlockFor(base)).toMatchObject({ code: 'consent_required', article: '92' })
+    const fine = { ...base, charge: { ...base.charge, category: 'traffic_fine' } }
+    expect(scheduleBlockFor(fine).article).toBe('92')
+    const dmg = { ...base, charge: { ...base.charge, category: 'tyre_damage' }, settings: { country_rule: { statutory: true }, objection_deadline: '2026-12-17T21:00:00Z', objection_last_day: '2026-12-17' } }
+    expect(scheduleBlockFor(dmg, new Date('2026-12-10T00:00:00Z'))).toMatchObject({ code: 'window_open', article: '91', until: '2026-12-17' })
+    expect(scheduleBlockFor(dmg, new Date('2026-12-18T00:00:00Z'))).toBeNull()
+    expect(scheduleBlockFor({ ...dmg, appeal: { outcome: null } }, new Date('2026-12-18T00:00:00Z')).code).toBe('open_objection')
+    const uae = { charge: { status: 'finance_approved', country: 'UAE', category: 'other', driver_response: 'refused' }, settings: { country_rule: { statutory: false }, objection_deadline: '2026-12-01T00:00:00Z' }, appeal: null }
+    expect(scheduleBlockFor(uae, new Date('2026-12-02T00:00:00Z'))).toBeNull()
+    expect(scheduleBlockFor({ ...uae, charge: { ...uae.charge, driver_response: 'accepted' } })).toBeNull()
+    expect(scheduleBlockFor({ ...base, settings: { schedule_block: { code: 'x', message: 'Server says no' } } }).message).toBe('Server says no')
+    expect(scheduleBlockFor({ ...base, settings: { schedule_block: null } })).toBeNull()
   })
   it('a damage charge needs a photo before it is issued', () => {
     const base = { category: 'tyre_damage', source_type: 'none', basis: 'Sidewall cut found at yard exit', amount: 10, currency: 'SAR', evidence: [{ kind: 'document', ref: 'r', label: 'l' }] }

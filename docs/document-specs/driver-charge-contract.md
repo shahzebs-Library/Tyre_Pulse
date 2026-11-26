@@ -158,7 +158,15 @@ the `damage` bucket, has supervisor and then finance approval (status `finance_a
 objection (an appeal with no outcome), and the objection window has ended. A disputed or refused fine or
 other charge is refused (`22023`, Article 92). The objection window is 15 working days (Sunday to Thursday,
 Friday and Saturday off, Asia/Riyadh) counted from the finance approval; it closes at the end of the 15th
-working day. Saudi public holidays are not excluded (not modelled).
+working day. Public holidays listed in `driver_charge_holidays` for the charge's organisation and country
+are skipped too (see "Public holidays" below).
+
+The rule lives in ONE server function, `private.driver_charge_schedule_block(charge)`, which returns
+`{code, article, until, message}` (codes `consent_required` with article 92, `open_objection`, `window_open`)
+or null. `charge_schedule` raises its message; `driver_charge_actions` never lists `charge_schedule` while it
+is not null; `driver_charge_detail.settings.schedule_block` returns it so the web and the Flutter app show the
+plain reason with the article instead of a Schedule button (`scheduleBlockFor` in `src/lib/driverCharges.js`,
+`DriverChargeDetail.scheduleBlock` in Flutter: the server value wins, the mirror only fills in when absent).
 
 The company setting `driver_charge_instalment_cap_pct` is not used in KSA: the statute sets the limits.
 
@@ -168,7 +176,8 @@ The configurable behaviour is unchanged: instalment cap `driver_charge_instalmen
 wage, per driver per month across all charges, and a deduction without consent only after
 `driver_charge_appeal_window_days` calendar days from finance approval or after an upheld appeal. The UAE
 and Egypt labour law rules have NOT been checked; `country_rule` returns `needs_legal_confirmation: true` and
-both clients say so on screen.
+both clients say so on screen. A UAE driver case in `supabase/tests/driver_charges.test.mjs` keeps this path
+covered (20% cap, 7 calendar days, a disputed "other" charge schedulable after the window).
 
 ### Legal note
 
@@ -184,9 +193,23 @@ The issuer uploads photos to the PRIVATE `tyre-photos` bucket under
 `modules/driver-charge/<first 8 of uid>/<time>_<n>_<rand>.<ext>` (web `uploadDriverChargePhoto`, same checks
 as handover photos: JPEG, PNG, WebP or HEIC, 20 MB). The charge stores the `tp-storage://` reference as a
 `photo` evidence row. The driver sees the photos (short-lived signed URLs) before accepting, disputing or
-appealing, on the web and in the Flutter app, and the notice PDF prints them in section 4a. Note: the
-`tyre_photos_read` storage policy lets any active member of the organisation read objects under
-`modules/`; it is not per charge.
+appealing, on the web and in the Flutter app, and the notice PDF prints them in section 4a.
+
+Privacy: the RESTRICTIVE storage policy `driver_charge_photos_read` (ANDed with the bucket's
+`tyre_photos_read`) makes objects under `tyre-photos/modules/driver-charge/` readable only by the uploader
+(`owner_id`), a super admin, an organisation admin, or someone whose driver-workspace access reaches the driver
+of a charge that lists the photo (`private.driver_charge_photo_readable`): the driver himself, the issuer or
+supervisor in scope, finance. Every other path in the bucket keeps the bucket rule.
+
+## Public holidays
+
+`public.driver_charge_holidays (organisation_id, country, holiday date, label, created_by, created_at)`,
+unique per organisation, country and day. Readable by active members of the organisation; inserted, changed
+and deleted only by an organisation admin or a super admin (RLS). Seeded empty: an administrator adds each
+year's announced holidays (for example Eid in KSA). `private.driver_charge_working_deadline(from, days,
+country, org)` skips Fridays, Saturdays and these dates. The JS and Dart `workingDeadline` mirrors do not know
+the holidays; the screens show the server's `objection_last_day`. No admin screen is built yet: add rows in
+the database or through a later Console page.
 
 ## Settings (`system_config`)
 

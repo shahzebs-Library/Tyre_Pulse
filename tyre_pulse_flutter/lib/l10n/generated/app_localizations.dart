@@ -15726,6 +15726,36 @@ abstract class AppLocalizations {
   /// **'I saw this charge paper given to the driver named on it. The driver did not want to sign it or answer. The date and time of this record are set by the system.'**
   String get driverChargeStatementWitness;
 
+  /// No description provided for @driverChargeBlockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deduction cannot be scheduled yet'**
+  String get driverChargeBlockTitle;
+
+  /// No description provided for @driverChargeBlockConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'Saudi Labour Law (Article 92): this charge can be taken from the salary only with the driver’s written consent. The driver did not agree, so it cannot be deducted.'**
+  String get driverChargeBlockConsent;
+
+  /// No description provided for @driverChargeBlockObjection.
+  ///
+  /// In en, this message translates to:
+  /// **'An objection is open. It must be decided first.'**
+  String get driverChargeBlockObjection;
+
+  /// No description provided for @driverChargeBlockWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'The driver can still object until {date}. Nothing can be scheduled before then.'**
+  String driverChargeBlockWindow(String date);
+
+  /// No description provided for @driverChargeBlockWindowKsa.
+  ///
+  /// In en, this message translates to:
+  /// **'Saudi Labour Law (Article 91): the driver has 15 working days to object, until {date}. Nothing can be scheduled before then.'**
+  String driverChargeBlockWindowKsa(String date);
+
   /// No description provided for @driverChargeStatementMissing.
   ///
   /// In en, this message translates to:

@@ -7,7 +7,7 @@ import {
   ACTION_LABELS, CATEGORIES, SOURCE_TYPES, STATUSES, REVERSAL_CODES, EVIDENCE_KINDS,
   enumLabel, money, monthStart, buildInstalmentPlan, validateIssue, validateResponse, outstandingByCurrency,
   STATEMENT_VERSIONS, STATEMENT_LANGUAGES, STATEMENT_LANGUAGE_NAMES, statementText, defaultStatementLanguage, isRtlLanguage,
-  chargeCountryRule, chargeNeedsPhoto, photoEvidence, scheduleCapFor,
+  chargeCountryRule, chargeNeedsPhoto, photoEvidence, scheduleCapFor, scheduleBlockFor,
 } from '../../lib/driverCharges'
 import { resolveStorageUrlMap } from '../../lib/storageRefs'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -106,6 +106,7 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
   const charge = detail?.charge
   const outstanding = charge ? Number(charge.amount) - Number(charge.deducted_amount || 0) : 0
   const chargeCountry = charge?.country || driverCountry
+  const scheduleBlock = action === 'charge_schedule' ? scheduleBlockFor(detail) : null
   const cap = scheduleCapFor({ country: chargeCountry, category: charge?.category, monthlyWage: v.monthly_wage, capPct: detail?.settings?.cap_pct })
   const plan = useMemo(() => (action === 'charge_schedule' && cap ? buildInstalmentPlan(outstanding, cap, v.first_month) : []), [action, cap, outstanding, v.first_month])
   const loadVehicles = useCallback(s => driverWorkspaceOptions('vehicles', s, 0), [])
@@ -151,7 +152,8 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
     } else if (action === 'charge_notify') {
       if (chargeNeedsPhoto(charge?.category) && photoEvidence(detail?.evidence).length === 0) message = t('driverCharges.consent.photoRequired')
     } else if (action === 'charge_schedule') {
-      if (!plan.length) message = 'Enter the monthly wage and first month to build the schedule.'
+      if (scheduleBlock) message = scheduleBlock.message
+      else if (!plan.length) message = 'Enter the monthly wage and first month to build the schedule.'
       else if (String(v.wage_currency || '').toUpperCase() !== charge?.currency) message = `State the wage in the charge currency (${charge?.currency}).`
       payload = { ...payload, monthly_wage: Number(v.monthly_wage), wage_currency: String(v.wage_currency || '').toUpperCase(), instalments: plan, reason: v.reason }
     } else if (action === 'charge_reverse') {
@@ -170,7 +172,7 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
   }
 
   const formId = `driver-charge-${action}-form`
-  const footer = <><button form={formId} type="submit" disabled={saving || uploading} className="btn-primary">{saving ? 'Saving...' : 'Submit'}</button><button type="button" disabled={saving} className="btn-secondary" onClick={onClose}>Cancel</button></>
+  const footer = <><button form={formId} type="submit" disabled={saving || uploading || !!scheduleBlock} className="btn-primary">{saving ? 'Saving...' : 'Submit'}</button><button type="button" disabled={saving} className="btn-secondary" onClick={onClose}>Cancel</button></>
   const reasonField = label => <Field label={label}><textarea className="input w-full" rows={3} maxLength={2000} aria-label={label} value={v.reason || ''} onChange={e => set('reason', e.target.value)} /></Field>
   return <Modal open onClose={saving ? undefined : onClose} title={ACTION_LABELS[action]} size="md" footer={footer}><form id={formId} onSubmit={submit} className="space-y-4">
     {action === 'charge_issue' && <>
@@ -242,6 +244,7 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
     {action === 'charge_schedule' && <>
       <p className="text-sm">Outstanding: {money(outstanding, charge?.currency)}. {chargeCountryRule(chargeCountry).statutory ? 'Saudi Labour Law limits apply.' : `Limit per month: ${detail?.settings?.cap_pct}% of the monthly wage.`}</p>
       <p className="text-xs text-[var(--text-muted)]">{ruleLine(t, chargeCountry)}</p>
+      {scheduleBlock && <p role="alert" className="text-sm font-semibold">{scheduleBlock.message}</p>}
       {detail?.settings?.objection_last_day && charge?.driver_response !== 'accepted' && <p className="text-xs">Objection window ends on {detail.settings.objection_last_day}. The server refuses a schedule before then.</p>}
       <div className="grid grid-cols-2 gap-3"><Field label="Driver monthly wage"><input aria-label="Driver monthly wage" type="number" step="0.01" min="0" className="input w-full" value={v.monthly_wage} onChange={e => set('monthly_wage', e.target.value)} /></Field>
         <Field label="Wage currency"><input aria-label="Wage currency" className="input w-full" maxLength={3} value={v.wage_currency || ''} onChange={e => set('wage_currency', e.target.value.toUpperCase())} /></Field></div>
@@ -310,7 +313,8 @@ function ChargeDetail({ chargeId, driverId, driverCountry, onClose, onChanged })
       <p className="text-xs text-[var(--text-muted)]">{ruleLine(t, c.country)}{detail.settings?.objection_last_day ? ` ${t('driverCharges.consent.objectionUntil', { date: detail.settings.objection_last_day })}` : ''}</p>
       {Number(c.deducted_amount) > 0 && !detail.appeal && <p className="text-xs text-[var(--text-muted)]">Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.</p>}
       {c.refusal_witness_id && c.status === 'notified' && <p className="text-xs text-[var(--text-muted)]">A refusal was recorded and is waiting for the named witness to confirm it.</p>}
-      <div className="flex flex-wrap gap-2">{(detail.actions || []).map(a => <button key={a} type="button" className={a === 'charge_respond' ? 'btn-primary' : 'btn-secondary'} onClick={() => setAction(a)}>{ACTION_LABELS[a] || a}</button>)}</div>
+      {c.status === 'finance_approved' && scheduleBlockFor(detail) && <p role="status" className="rounded border border-[var(--input-border)] p-2 text-sm"><strong>Deduction cannot be scheduled yet:</strong> {scheduleBlockFor(detail).message}</p>}
+      <div className="flex flex-wrap gap-2">{(detail.actions || []).filter(a => a !== 'charge_schedule' || !scheduleBlockFor(detail)).map(a => <button key={a} type="button" className={a === 'charge_respond' ? 'btn-primary' : 'btn-secondary'} onClick={() => setAction(a)}>{ACTION_LABELS[a] || a}</button>)}</div>
       <div><h4 className="font-semibold">Evidence</h4>{detail.evidence.length === 0 ? <p>No evidence listed.</p> : detail.evidence.map(e => <p key={e.id}>{e.kind}: {e.label}{e.kind === 'photo' ? '' : ` (${e.ref})`}</p>)}</div>
       <div><h4 className="font-semibold">Signatures</h4>{detail.signatures.length === 0 && <p>No signature recorded.</p>}{detail.signatures.map(s => <div key={s.id} className="rounded border border-[var(--input-border)] p-2 mb-2"><p><strong>{enumLabel('signature_kind', s.kind)}</strong> | {s.signer_name} | {when(s.signed_at)}</p><p className="text-xs" dir={isRtlLanguage(s.statement_language) ? 'rtl' : 'ltr'} lang={s.statement_language || 'en'}>{s.statement_text}</p>{s.signature && <img className="max-h-24 bg-white" src={signatureImage(s.signature)} alt={`${s.signer_name} signature`} />}</div>)}</div>
       <div><h4 className="font-semibold">Decisions</h4>{detail.decisions.length === 0 ? <p>No review recorded yet.</p> : detail.decisions.map(d => <p key={d.id}>{when(d.created_at)} | {enumLabel('decision_stage', d.stage)} | {enumLabel('decision', d.decision)} | {d.decided_by_name || 'Recorded user'} | {d.reason}</p>)}</div>

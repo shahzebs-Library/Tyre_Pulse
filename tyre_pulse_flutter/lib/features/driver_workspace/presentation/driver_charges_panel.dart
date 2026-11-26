@@ -164,6 +164,17 @@ class _StatementPicker extends StatelessWidget {
   }
 }
 
+String _blockText(AppLocalizations l10n, DriverChargeScheduleBlock block) {
+  final String day = block.until ?? l10n.valueUnavailable;
+  return switch (block.code) {
+    'consent_required' => l10n.driverChargeBlockConsent,
+    'open_objection' => l10n.driverChargeBlockObjection,
+    _ => block.article == '91'
+        ? l10n.driverChargeBlockWindowKsa(day)
+        : l10n.driverChargeBlockWindow(day),
+  };
+}
+
 String _ruleText(AppLocalizations l10n, DriverChargeDetail detail) {
   final String rule = detail.countryRule.statutory
       ? l10n.driverChargeKsaRule
@@ -582,6 +593,23 @@ class _DriverChargeDetailScreenState
               ),
             ),
           ),
+          if (c['status'] == 'finance_approved' &&
+              detail.scheduleBlock() != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      l10n.driverChargeBlockTitle,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    Text(_blockText(l10n, detail.scheduleBlock()!)),
+                  ],
+                ),
+              ),
+            ),
           if (chargeAwaitsWitness(c))
             Card(
               child: Padding(

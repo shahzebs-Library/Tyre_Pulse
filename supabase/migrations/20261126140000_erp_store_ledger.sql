@@ -206,9 +206,8 @@ begin
     raise exception 'This file is in %, but % stock is kept in %. Amounts are never converted.',
       coalesce(v_cur, 'an unknown currency'), v_country, public.currency_for_country(v_country) using errcode = '22023';
   end if;
-  begin
-    v_to := (p_payload->>'period_to')::date; v_from := nullif(p_payload->>'period_from', '')::date;
-  exception when others then v_to := null; end;
+  begin v_to := (p_payload->>'period_to')::date; exception when others then v_to := null; end;
+  begin v_from := nullif(p_payload->>'period_from', '')::date; exception when others then v_from := null; end;
   if v_to is null then raise exception 'The balance date of the file could not be read.' using errcode = '22023'; end if;
   if v_to > current_date then raise exception 'The balance date % is in the future.', v_to using errcode = '22023'; end if;
   if jsonb_typeof(p_payload->'lines') is distinct from 'array'
@@ -272,9 +271,9 @@ begin
     if v_code = '' or v_name is null then continue; end if;
     if not (v_cat = any(v_cats)) then v_cat := 'unclassified'; end if;
     insert into public.material_master(organisation_id, country, item_code, item_name, category, subcategory,
-      reviewed, proposed_from, stocked, status, notes)
+      reviewed, proposed_from, stocked, status, notes, serial_tracked)
     values (v_org, v_country, v_code, v_name, v_cat, nullif(btrim(l->>'subcategory'), ''),
-      false, 'erp_store_ledger', true, 'active', 'Added from ERP stores ledger ' || v_file)
+      false, 'erp_store_ledger', true, 'active', 'Added from ERP stores ledger ' || v_file, v_cat = 'tyre')
     on conflict (organisation_id, country, item_code) do nothing;
     if found then v_added := v_added || jsonb_build_object('code', v_code, 'category', v_cat); end if;
   end loop;
@@ -300,7 +299,7 @@ begin
     v_code := upper(btrim(coalesce(l->>'code', '')));
     v_cat := lower(coalesce(nullif(btrim(l->>'category'), ''), ''));
     if v_code = '' or not (v_cat = any(v_cats)) or v_cat = 'unclassified' then continue; end if;
-    update public.material_master set category = v_cat,
+    update public.material_master set category = v_cat, serial_tracked = (serial_tracked or v_cat = 'tyre'),
       subcategory = coalesce(subcategory, nullif(btrim(l->>'subcategory'), '')),
       proposed_from = coalesce(proposed_from, 'erp_store_ledger')
      where organisation_id = v_org and country = v_country and item_code = v_code
@@ -329,7 +328,8 @@ begin
   select count(*) into v_pending from public.erp_ledger_upload_lines where upload_id = v_up and status = 'pending';
 
   update public.erp_ledger_uploads set applied = jsonb_build_object('items_added', v_added, 'names_updated', v_renamed,
-    'categories_set', v_reclass) where id = v_up;
+    'categories_set', v_reclass, 'movements_after_balance_date', p_payload->'movements_after',
+    'movements_after_acknowledged', coalesce((p_payload->>'movements_after_ack')::boolean, false)) where id = v_up;
 
   return public._inv_req_end('inv_erp_ledger_begin', p_payload, jsonb_build_object('upload_id', v_up,
     'codes', v_lines, 'pending', v_pending, 'items_added', jsonb_array_length(v_added),
@@ -368,7 +368,7 @@ begin
       update public.erp_ledger_upload_lines set status = 'held', reason = 'no_item', processed_at = now() where id = x.id;
       v_n := v_n + 1; continue;
     end if;
-    if v_item.serial_tracked or v_item.lot_tracked then
+    if v_item.serial_tracked or v_item.lot_tracked or v_item.category = 'tyre' then
       update public.erp_ledger_upload_lines set status = 'held', reason = 'serial_tracked', item_id = v_item.id, processed_at = now() where id = x.id;
       v_n := v_n + 1; continue;
     end if;
@@ -387,19 +387,25 @@ begin
         qty_before = v_rec.qty_on_hand, qty_change = 0, processed_at = now() where id = x.id;
       v_n := v_n + 1; continue;
     end if;
-    v_res := public._inv_post(jsonb_build_object(
-      'idempotency_key', 'erpledger:' || v.id::text || ':' || x.item_code,
-      'stock_id', v_rec.id, 'item_id', v_item.id, 'location_id', v_loc.id,
-      'movement_type', 'stocktake', 'qty_change', v_delta,
-      'reason', 'ERP stores ledger ' || v.filename || ' as at ' || v.period_to,
-      'source_doc_type', 'erp_ledger', 'source_doc_id', v.id::text, 'approval_ref', v.id::text), false);
-    if v_res->>'status' = 'refused_shortage' then
-      raise exception 'Item % at % cannot go below reserved stock.', x.item_code, v_loc.code using errcode = '23514';
-    end if;
-    update public.erp_ledger_upload_lines set status = 'posted', item_id = v_item.id,
-      stock_id = coalesce(v_rec.id, nullif(v_res->>'stock_id', '')::uuid), qty_before = coalesce(v_rec.qty_on_hand, 0),
-      qty_change = v_delta, movement_id = nullif(v_res->>'movement_id', '')::uuid, processed_at = now()
-     where id = x.id;
+    begin
+      v_res := public._inv_post(jsonb_build_object(
+        'idempotency_key', 'erpledger:' || v.id::text || ':' || x.item_code,
+        'stock_id', v_rec.id, 'item_id', v_item.id, 'location_id', v_loc.id,
+        'movement_type', 'stocktake', 'qty_change', v_delta,
+        'reason', 'ERP stores ledger ' || v.filename || ' as at ' || v.period_to,
+        'source_doc_type', 'erp_ledger', 'source_doc_id', v.id::text, 'approval_ref', v.id::text), false);
+      if v_res->>'status' = 'refused_shortage' then
+        raise exception 'Item % at % cannot go below reserved stock.', x.item_code, v_loc.code using errcode = '23514';
+      end if;
+      update public.erp_ledger_upload_lines set status = 'posted', item_id = v_item.id,
+        stock_id = coalesce(v_rec.id, nullif(v_res->>'stock_id', '')::uuid), qty_before = coalesce(v_rec.qty_on_hand, 0),
+        qty_change = v_delta, movement_id = nullif(v_res->>'movement_id', '')::uuid, processed_at = now()
+       where id = x.id;
+    exception when others then
+      -- One bad line must not block the whole store: hold it with the reason and carry on.
+      update public.erp_ledger_upload_lines set status = 'held', reason = 'error: ' || left(sqlerrm, 180), item_id = v_item.id,
+        stock_id = v_rec.id, qty_before = v_rec.qty_on_hand, processed_at = now() where id = x.id;
+    end;
     v_n := v_n + 1;
   end loop;
 
@@ -439,7 +445,7 @@ begin
        order by s.id limit v_limit
        for update of s
     loop
-      if coalesce(v_rec.qty_reserved, 0) > 0 or exists (select 1 from public.material_master mm where mm.id = v_rec.item_id and (mm.serial_tracked or mm.lot_tracked)) then
+      if coalesce(v_rec.qty_reserved, 0) > 0 or exists (select 1 from public.material_master mm where mm.id = v_rec.item_id and (mm.serial_tracked or mm.lot_tracked or mm.category = 'tyre')) then
         insert into public.erp_ledger_upload_lines(organisation_id, upload_id, country, item_code, description, erp_qty, status, reason,
           item_id, stock_id, qty_before, processed_at)
         values (v_org, v.id, v.country, v_rec.item_code, v_rec.description, null, 'held',

@@ -143,8 +143,8 @@ describe('suggestMaterialClass', () => {
 
 describe('buildLedgerPlan', () => {
   const master = [
-    { id: 'm1', item_code: '221855-O', item_name: 'TIRE 385-65R22.5', category: 'tyre', reviewed: true },
-    { id: 'm2', item_code: '223758-O', item_name: 'TIRE 315/80', category: 'unclassified', reviewed: false },
+    { id: 'm1', item_code: '221855-O', item_name: 'TIRE 385-65R22.5', category: 'spare_part', reviewed: true },
+    { id: 'm2', item_code: '223758-O', item_name: 'HOSE 315/80', category: 'unclassified', reviewed: false },
     { id: 'm3', item_code: 'GONE-1', item_name: 'OLD PART', category: 'spare_part', reviewed: true },
     { id: 'm4', item_code: 'RES-1', item_name: 'RESERVED', category: 'spare_part', reviewed: true },
     { id: 'm5', item_code: 'TYRE-1', item_name: 'TIRE 315/80 R22.5', category: 'tyre', reviewed: true, serial_tracked: true },
@@ -157,7 +157,7 @@ describe('buildLedgerPlan', () => {
   ]
   const lines = [
     { code: '221855-O', description: 'TIRE 385-65R22.5', qty: 1, rate: 990 },
-    { code: '223758-O', description: 'TIRE 315/80 R22.5', qty: 1003, rate: 723.55 },
+    { code: '223758-O', description: 'HOSE 315/80 EXTRA', qty: 1003, rate: 723.55 },
     { code: 'NEW-1', description: 'BRAKE PAD SANY', qty: 2, rate: null },
     { code: 'NEG-1', description: 'GLOVES', qty: -2, rate: null },
     { code: 'RES-1', description: 'RESERVED', qty: 5, rate: null },
@@ -178,11 +178,17 @@ describe('buildLedgerPlan', () => {
   })
   it('finds new codes, names and unclassified items', () => {
     expect(plan.newItems.map((n) => n.code)).toEqual(['NEW-1', 'NEG-1', 'MIX-1'])
-    expect(plan.renames).toEqual([{ code: '223758-O', item_id: 'm2', from: 'TIRE 315/80', to: 'TIRE 315/80 R22.5' }])
-    expect(plan.reclassify.map((r) => [r.code, r.category])).toEqual([['223758-O', 'tyre']])
+    expect(plan.renames).toEqual([{ code: '223758-O', item_id: 'm2', from: 'HOSE 315/80', to: 'HOSE 315/80 EXTRA' }])
+    expect(plan.reclassify.map((r) => [r.code, r.category])).toEqual([['223758-O', 'spare_part']])
   })
   it('lists stock the file leaves out', () => {
-    expect(plan.missing.map((m) => m.code)).toEqual(['GONE-1'])
+    expect(plan.missing.map((m) => [m.code, m.keep])).toEqual([['GONE-1', null]])
+  })
+  it('holds back a new code that is a tyre, and a tyre category item', () => {
+    const p2 = buildLedgerPlan({ lines: [{ code: '310999-O', description: 'TIRE 12.00R24', qty: 4 }], master: [], stock: [] })
+    expect(p2.held).toEqual([expect.objectContaining({ code: '310999-O', reason: 'serial_tracked' })])
+    const p3 = buildLedgerPlan({ lines: [{ code: 'T-2', description: 'X', qty: 1 }], master: [{ id: 't', item_code: 'T-2', category: 'tyre', reviewed: true }], stock: [] })
+    expect(p3.held[0].reason).toBe('serial_tracked')
   })
   it('sends only what the owner kept, and the server recomputes quantities', () => {
     const payload = buildPostPayload({

@@ -603,14 +603,14 @@ export async function findErpLedgerUpload(sha256) {
 /** Stock movements at a store recorded after a date (a ledger older than these would undo them). */
 export async function countMovementsAfter(locationId, isoDate) {
   if (!locationId || !isoDate) return null
-  const next = new Date(`${isoDate}T00:00:00Z`)
-  next.setUTCDate(next.getUTCDate() + 1)
+  // From the start of the balance day: a movement that day may or may not be in the export.
   const { count, error } = await supabase.from('stock_movements')
     .select('id', { count: 'exact', head: true })
     .eq('location_id', locationId)
-    .gte('created_at', next.toISOString())
-  if (error) return null
-  return count ?? null
+    .gte('posted_at', `${isoDate}T00:00:00Z`)
+  // -1 = could not check; the screen then asks for the same acknowledgement.
+  if (error) return -1
+  return count ?? -1
 }
 
 // Owner only; the database refuses anyone else. A post runs in parts so a

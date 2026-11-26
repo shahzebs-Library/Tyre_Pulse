@@ -49,8 +49,8 @@ export function normCode(v) {
 export function toNumber(v) {
   let s = clean(v).replace(/,/g, '')
   let sign = 1
-  const paren = s.match(/^\((.*)\)$/)
-  if (paren) { s = paren[1].trim(); sign = -1 }
+  const paren = s.match(/^\(([^-].*)\)$/)
+  if (paren) { s = paren[1].trim(); sign = -1 } else if (/^\(.*\)$/.test(s)) return null
   if (!s || !/^-?(\d+\.?\d*|\.\d+)$/.test(s)) return null
   const n = Number(s) * sign
   return Number.isFinite(n) ? n : null
@@ -165,7 +165,8 @@ export function parseStoreLedger(aoa, { filename = '' } = {}) {
   if (lines.some((l) => l.rows.length > 1)) warnings.push('repeated_codes')
   if (!complete) warnings.push('incomplete')
   const sum = Math.round(lines.reduce((a, l) => a + l.qty, 0) * 1e4) / 1e4
-  if (totalQty !== null && Math.abs(totalQty - sum) > 0.01) warnings.push('total_mismatch')
+  // The ERP prints the total rounded; allow for that on a large file.
+  if (totalQty !== null && Math.abs(totalQty - sum) > Math.max(0.01, Math.abs(totalQty) * 1e-6 + lines.length * 0.005)) warnings.push('total_mismatch')
   meta.warehouses = warehouses
   meta.complete = complete
   meta.totalQty = totalQty
@@ -353,18 +354,22 @@ export function buildLedgerPlan({ lines = [], master = [], stock = [], neighbour
 
   for (const l of lines) {
     const m = byCode.get(l.code)
+    let newTyre = false
     if (!m) {
       const s = suggestMaterialClass(l.code, l.description, { neighbours: nb })
       newItems.push({ code: l.code, item_name: l.description, ...s })
+      newTyre = s.category === 'tyre'
     } else {
       if (shouldRename(m.item_name, l.description)) renames.push({ code: l.code, item_id: m.id, from: m.item_name || null, to: l.description })
       if ((m.category || 'unclassified') === 'unclassified' && !m.reviewed) {
         const s = suggestMaterialClass(l.code, l.description || m.item_name, { neighbours: nb })
         reclassify.push({ code: l.code, item_id: m.id, name: l.description || m.item_name, ...s })
+        // Becoming a tyre means the server will hold its quantity for serials.
+        if (s.category === 'tyre') newTyre = true
       }
     }
     if (l.qty < 0 || l.hasNegative) { held.push({ code: l.code, description: l.description, qty: l.qty, reason: 'negative_qty' }); continue }
-    if (m && (m.serial_tracked || m.lot_tracked)) { held.push({ code: l.code, description: l.description, qty: l.qty, reason: 'serial_tracked' }); fileItemIds.add(m.id); continue }
+    if (newTyre || (m && (m.serial_tracked || m.lot_tracked || m.category === 'tyre'))) { held.push({ code: l.code, description: l.description, qty: l.qty, reason: 'serial_tracked' }); if (m) fileItemIds.add(m.id); continue }
     const rec = m ? stockByItem.get(m.id) : null
     if (m) fileItemIds.add(m.id)
     const onHand = Number(rec?.qty_on_hand ?? 0)
@@ -377,9 +382,15 @@ export function buildLedgerPlan({ lines = [], master = [], stock = [], neighbour
   }
 
   // Stock Tyre Pulse holds at this store that the ERP file does not list.
+  const masterById = new Map(master.map((x) => [x.id, x]))
   const missing = stock
     .filter((s) => s.item_id && !fileItemIds.has(s.item_id) && Number(s.qty_on_hand) > 0)
-    .map((s) => ({ stock_id: s.id, item_id: s.item_id, code: s.item_code || null, description: s.description || null, on_hand: Number(s.qty_on_hand), reserved: Number(s.qty_reserved || 0) }))
+    .map((s) => {
+      const mm = masterById.get(s.item_id)
+      const reserved = Number(s.qty_reserved || 0)
+      const keep = reserved > 0 ? 'reserved' : (mm && (mm.serial_tracked || mm.lot_tracked || mm.category === 'tyre')) ? 'serial_tracked' : null
+      return { stock_id: s.id, item_id: s.item_id, code: s.item_code || null, description: s.description || null, on_hand: Number(s.qty_on_hand), reserved, keep }
+    })
 
   const totals = {
     lines: lines.length,

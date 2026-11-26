@@ -156,7 +156,8 @@ export default function ErpLedgerPanel({ scope }) {
   }
   const cancelOpen = async (f) => {
     setBusy(true); setErr('')
-    try { await cancelErpLedger(f.previous.id, newIdempotencyKey()); patch(f.id, { previous: null }); history.retry() }
+    // A fresh request key: the old one would replay the cancelled upload.
+    try { await cancelErpLedger(f.previous.id, newIdempotencyKey()); patch(f.id, { previous: null, key: newIdempotencyKey() }); history.retry() }
     catch (e) { setErr(toUserMessage(e)) } finally { setBusy(false) }
   }
 
@@ -175,10 +176,27 @@ export default function ErpLedgerPanel({ scope }) {
         idempotencyKey: f.key,
         choices: { zeroMissing: f.zeroMissing, renames: keep(plan.renames, f.skipRenames), reclassify: keep(withCats.reclassify, f.skipReclass) },
       })
+      payload.movements_after = f.movesAfter ?? null
+      payload.movements_after_ack = Boolean(f.ackMoves)
       const begun = await beginErpLedger(payload, f.key)
       patch(f.id, { previous: { id: begun.upload_id, status: 'open', created_at: new Date().toISOString(), filename: f.filename } })
       await runUpload(f, begun.upload_id)
-    } catch (e) { setErr(toUserMessage(e)); patch(f.id, { progress: null }) } finally { setBusy(false) }
+    } catch (e) {
+      setErr(toUserMessage(e))
+      // If the upload started on the server, show it so it can be continued.
+      const prev = await findErpLedgerUpload(f.sha).catch(() => null)
+      patch(f.id, { progress: null, previous: prev || f.previous || null })
+    } finally { setBusy(false) }
+  }
+
+  // Continue or cancel an unfinished upload from the history list (no file needed).
+  const runFromHistory = async (u, action) => {
+    setBusy(true); setErr('')
+    try {
+      if (action === 'cancel') await cancelErpLedger(u.id, newIdempotencyKey())
+      else await runErpLedger(u.id)
+      history.retry()
+    } catch (e) { setErr(toUserMessage(e)) } finally { setBusy(false) }
   }
 
   // A file with the same content as one earlier in the list is marked, so only one is posted.
@@ -240,7 +258,16 @@ export default function ErpLedgerPanel({ scope }) {
         <PagedTable query={history} page={page} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(0) }}
           empty="No ERP stores ledger has been posted yet." what="ERP stores ledger uploads" noun="uploads"
           columns={[
-            { key: 'posted_at', header: 'Posted', cell: (u) => fmtDateTime(u.posted_at) },
+            { key: 'posted_at', header: 'Posted', cell: (u) => fmtDateTime(u.posted_at || u.created_at) },
+            { key: 'status', header: 'Status', cell: (u) => (u.status === 'open'
+              ? (
+                <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <StatusPill value="open" tone="warning" label="Not finished" />
+                  {isSuperAdmin && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={(e) => { e.stopPropagation(); runFromHistory(u, 'continue') }}>Continue</button>}
+                  {isSuperAdmin && <button type="button" className="cc-btn-ghost" disabled={busy} onClick={(e) => { e.stopPropagation(); runFromHistory(u, 'cancel') }}>Cancel</button>}
+                </span>
+              )
+              : <StatusPill value={u.status} tone="good" label="Posted" />) },
             { key: 'filename', header: 'File', cell: (u) => <span className="inv-mono">{u.filename}</span> },
             { key: 'warehouse_code', header: 'ERP store' },
             { key: 'site', header: 'Site' },
@@ -261,7 +288,7 @@ export default function ErpLedgerPanel({ scope }) {
         footer={(
           <div className="inv-actions">
             <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => setConfirm(null)}>Cancel</button>
-            <button type="button" className="cc-btn-primary" disabled={busy || (files.find((f) => f.id === confirm)?.movesAfter > 0 && !files.find((f) => f.id === confirm)?.ackMoves)}
+            <button type="button" className="cc-btn-primary" disabled={busy || (files.find((f) => f.id === confirm)?.movesAfter !== 0 && !files.find((f) => f.id === confirm)?.ackMoves)}
               onClick={() => post(files.find((f) => f.id === confirm))}>
               <Send size={14} aria-hidden="true" /> {busy ? 'Posting...' : 'Post'}
             </button>
@@ -282,10 +309,12 @@ export default function ErpLedgerPanel({ scope }) {
                 <li>{p.held.length} lines held back</li>
                 <li>{f.zeroMissing ? `${p.missing.length} items not in the file set to zero` : `${p.missing.length} items not in the file left as they are`}</li>
               </ul>
-              {f.movesAfter > 0 && (
+              {f.movesAfter !== 0 && (
                 <label className="inv-check">
                   <input type="checkbox" checked={Boolean(f.ackMoves)} onChange={() => patch(f.id, (c) => ({ ackMoves: !c.ackMoves }))} />
-                  <span>{f.movesAfter} stock movements were recorded at this store after {f.parsed.meta.to}. Posting sets the ERP figures and replaces their effect. I understand.</span>
+                  <span>{f.movesAfter > 0
+                    ? `${f.movesAfter} stock movements were recorded at this store on or after ${f.parsed.meta.to}. Posting sets the ERP figures and replaces their effect. I understand.`
+                    : `Tyre Pulse could not check for stock movements at this store since ${f.parsed.meta.to}. Posting sets the ERP figures. I understand.`}</span>
                 </label>
               )}
               {f.progress && <p className="cc-card-sub" role="status">{f.progress}</p>}
@@ -340,6 +369,7 @@ function FileDetail({ f, tab, setTab, patch, canPost, onPost, isOwner, busy, onR
             <div className="inv-actions" style={{ marginTop: 8 }}>
               <button type="button" className="cc-btn-primary" disabled={busy} onClick={onResume}><Send size={14} aria-hidden="true" /> {busy ? 'Posting...' : 'Continue'}</button>
               <button type="button" className="cc-btn-ghost" disabled={busy} onClick={onCancelOpen}>Cancel upload</button>
+              <span className="cc-card-sub">Cancelling keeps the new item codes, names and categories already saved; only unposted stock is dropped.</span>
             </div>
           )}
         </Note>
@@ -420,6 +450,7 @@ function FileDetail({ f, tab, setTab, patch, canPost, onPost, isOwner, busy, onR
                 { key: 'code', header: 'Item', cell: (r) => <span className="inv-mono">{r.code || 'N/A'}</span> },
                 { key: 'description', header: 'Description' },
                 { key: 'on_hand', header: 'Tyre Pulse', numeric: true, cell: (r) => formatQty(r.on_hand) },
+                { key: 'keep', header: 'If set to zero', cell: (r) => (r.keep === 'reserved' ? 'Kept: reserved for a job card' : r.keep === 'serial_tracked' ? 'Kept: tyre, needs serials' : 'Set to 0') },
               ]} />
             </>
           )}

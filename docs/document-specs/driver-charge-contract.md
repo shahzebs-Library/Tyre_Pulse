@@ -67,20 +67,20 @@ and `version` (the version the user was looking at). Returns
 
 | Action | Who | Payload (besides driver_id, charge_id, version) |
 |---|---|---|
-| `charge_issue` | manager or assigned supervisor, never the driver | `category, source_type, source_id?, vehicle_id?, incident_at?, basis (10..4000), amount (finite, > 0, <= 1,000,000), currency, evidence: [{kind, ref, label}]`. `currency` must equal `country_currency` for the driver's country. `traffic_fine` must link `driver_fine`; the fine must be approved (`response_status approved`, `review_stage complete`), open and unpaid, the charge in the fine currency and not above the fine amount; the fine is then linked (`driver_fines.recovery_charge_id`) and its own payment step is locked until the charge closes. A linked record must be in the driver's country, inside the caller's country/site scope and, where it names a driver (id or name), name this driver. Needs a source or at least one evidence item. |
+| `charge_issue` | manager or assigned supervisor, never the driver | `category, source_type, source_id?, vehicle_id?, incident_at?, basis (10..4000), amount (finite, > 0, <= 1,000,000), currency, evidence: [{kind, ref, label}]`. `currency` must equal `country_currency` for the driver's country. `traffic_fine` must link `driver_fine`; the fine must be approved (`response_status approved`, `review_stage complete`), open and unpaid, the charge in the fine currency and not above the fine amount; the fine is then linked (`driver_fines.recovery_charge_id`) and its own payment step is locked until the charge closes. A linked record must be in the driver's country, inside the caller's country/site scope and, where it names a driver (id or name), name this driver. When the linked record names no driver (inspections, checklists, or an accident or tyre record with no driver), the payload must carry `link_unverified: true`; it is stored as `source_link_unverified` and the notice states "Link to source not confirmed by record". Needs a source or at least one evidence item. |
 | `charge_correct` | manager, or the issuing supervisor, while `issued` | `amount?, basis?, vehicle_id?, incident_at?, reason` |
 | `charge_attach_evidence` | as above, while `issued` | `kind, ref, label` |
 | `charge_notify` | manager or supervisor | none. Stamps `notified_at` and `notified_by`; freezes the charge. |
 | `charge_respond` | linked driver only, status `notified` | `response: accept or dispute, statement_version (deduction-consent-v1 for accept, receipt-dispute-v1 for dispute), statement_language: en, acknowledged: true, signature, explanation (required for dispute)` |
-| `charge_record_refusal` | manager or supervisor, status `notified` | `witness_user_id, reason`. Step 1 of 2: names an active account in the tenant that is not the recorder, the issuer, the person who served the notice or the driver. The charge stays `notified` until the witness confirms. |
+| `charge_record_refusal` | manager or supervisor, status `notified` | `witness_user_id, reason`. Step 1 of 2: names an active account in the tenant that has access to this driver's workspace and is not the recorder, the issuer, the person who served the notice or the driver. The charge stays `notified` until the witness confirms; until then the refusal can be recorded again (for example with another witness), which replaces the pending one. A supervisor or finance return clears a pending refusal. |
 | `charge_witness_confirm` | the named witness only, signed in as themselves | `statement_version: refusal-witness-v1, acknowledged: true, signature`. Step 2: records the witness signature and moves the charge to `refused`. |
-| `charge_supervisor_review` | manager or supervisor who did NOT issue it, serve it or witness the refusal | `decision: approve or return, reason` |
+| `charge_supervisor_review` | manager or supervisor who did NOT issue it, serve it, record the refusal or witness it | `decision: approve or return, reason` |
 | `charge_finance_review` | finance reviewer, not the issuer, notifier, witness or supervisor approver | `decision: approve or return, reason` |
-| `charge_schedule` | finance reviewer, status `finance_approved` | `monthly_wage (finite, > 0, <= 1,000,000), wage_currency (must equal the charge currency), instalments: [{due_month: YYYY-MM-01, amount}], reason?`. Each instalment at most `round(monthly_wage * cap_pct / 100, 2)`, and the SUM of all non-cancelled instalments of this driver in each month, across ALL his charges, must stay within that limit (a month holding another currency is refused); total equals the outstanding amount; months ascending from the current month. If the driver did not accept: only after the appeal window since finance approval, or after an upheld appeal. |
+| `charge_schedule` | finance reviewer, status `finance_approved` | `monthly_wage (finite, > 0, <= 1,000,000), wage_currency (must equal the charge currency), instalments: [{due_month: YYYY-MM-01, amount}], reason?`. Each instalment at most `round(monthly_wage * cap_pct / 100, 2)`, and the SUM of all non-cancelled instalments of this driver in each month, across ALL his charges, must stay within the limit computed from the LOWEST wage stated for him in that month (a month holding another currency is refused). The wage is not copied into decisions or events; total equals the outstanding amount; months ascending from the current month. If the driver did not accept: only after the appeal window since finance approval, or after an upheld appeal. |
 | `charge_record_deduction` | finance reviewer, status `scheduled` | `instalment_id, payroll_reference`. Month must be due. |
 | `charge_waive` | manager or finance | `reason` |
 | `charge_reverse` | manager, no deduction recorded | `reversal_code (wrong_driver, duplicate, wrong_amount, wrong_vehicle, misused, other), reason (10+), reissue?: {driver_id?, amount?, basis?, vehicle_id?}`. Duplicate and misused cannot reissue. Wrong driver must reissue to a different driver. |
-| `charge_appeal` | linked driver, once, status `supervisor_approved`, `finance_approved` or `scheduled` | `reason (10+)` |
+| `charge_appeal` | linked driver, once, status `supervisor_approved`, `finance_approved` or `scheduled`, and only while nothing has been deducted (there is no refund step; after the first deduction a manager or finance can waive the remainder) | `reason (10+)` |
 | `charge_decide_appeal` | staff or finance who is not the issuer, notifier, refusal witness, any approver or the driver | `outcome: upheld or allowed, reason (10+)` |
 
 Every choice field (`response`, `decision`, `outcome`, `reversal_code`) is required: a missing value is refused, never treated as a pass.
@@ -104,11 +104,16 @@ omitted for the `viewer` access level.
 ### `driver_charge_sources(p_source_type text, p_driver_id uuid, p_search text, p_offset integer)`
 
 Staff picker for linked records. Returns `[{ id, summary: { type, id, label, country, site, amount, currency } }]`.
-Only records the charge could actually link (same rules as `charge_issue`) are listed. The search
+Only records the charge could actually link (same rules as `charge_issue`) are listed; `summary.driver_recorded` says whether the record names a driver. Tyre records, inspections and checklists need a search of at least 3 characters (shorter returns `[]`). Cheap filters run before the 101-row limit, so a page can hold fewer than 101 rows. The search
 matches named human-readable columns only (for example reference, asset, plate, driver name), never
 the whole row.
 
 Signatures are not readable from `driver_charge_signatures` directly; use `driver_charge_detail`.
+`driver_charges.schedule_monthly_wage` and `schedule_cap_amount` are not readable directly either
+(column grant), and `driver_charge_detail` omits them for the `viewer` access level. A signature must
+be a PNG data URL of at least about 1 KB or an SVG with at least 10 points.
+Approval and reopen history (`accident_liability_approvals`, `accident_liability_reopens`) is readable
+only where the caller can read the parent assessment (its org, country and site policies).
 
 ### `approve_accident_liability(p_assessment_id uuid, p_reason text, p_charge jsonb)`
 
@@ -146,10 +151,13 @@ no deduction. Refused when deductions exist: waive the remainder on the charge f
 `{ assessment_id, reopen_id, reversed_charge_id }`. The approver must not be the person who recorded
 the assessment. An approved assessment still accepts `field_audit` updates. An accident with an
 approval on record cannot be deleted (the case is closed instead); an accident whose assessment was
-never approved deletes normally.
+never approved, or was approved before this migration (no approval row), deletes normally with its
+assessment. Such an approved assessment cannot be deleted on its own.
 
 ### `review_driver_expense(p_id uuid, p_status text, p_reason text, p_expected_updated_at timestamptz)`
 
 Elevated, not the claim owner, in country and site scope (site from the claim or its vehicle).
 `p_expected_updated_at` is the `updated_at` the reviewer saw; a changed claim returns `PT409`. A
-reviewed claim cannot be deleted except by a super admin.
+reviewed claim cannot be deleted except by a super admin. The pending and review rules apply to
+signed-in client writes only; service role and definer import functions (Data Intake) keep the
+status they write.

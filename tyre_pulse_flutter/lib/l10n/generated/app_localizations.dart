@@ -15395,6 +15395,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Approving {done} of {total}'**
   String approvalsBulkProgress(int done, int total);
+
+  /// Store history and stock item detail screens: packed key=value catalog separated by ~, read through StoreHistoryCopy. Keep keys; translate values only.
+  ///
+  /// In en, this message translates to:
+  /// **'historyTitle=Store history~itemTitle=Stock item~onHand=On hand~reserved=Reserved~available=Available~minLevel=Minimum~criticalLevel=Critical~levelsNote=Reorder levels are set on the web by an admin.~recent=Recent movements~fullHistory=Full history~loadMore=Load more~noMovements=No movements yet~noMovementsBody=Receipts, issues, transfers and counts for this item appear here once they are posted.~noMatch=No movements match these filters~noMatchBody=Widen the dates or clear a filter.~balanceAfter=Balance~by=By~ref=Ref~unknownUser=Not recorded~cat_receipt=Receipt~cat_issue=Issue~cat_returned=Return~cat_transfer=Transfer~cat_adjustment=Adjustment~cat_count=Count~cat_opening=Opening balance~cat_erpLedger=ERP ledger~cat_other=Other~filter_all=All types~dateRange=Dates~anyDate=Any date~allLocations=All locations~location=Location~searchItem=Search item~clearFilters=Clear filters~type=Type~stockIn=Stock in~stockOut=Stock out~net=Net change~openingsNote=Opening balances are not counted as stock in.~byMonth=By month~summaryFailed=Totals could not be loaded.~summaryCapped=Too many movements to total. Narrow the dates.~receive=Receive stock~type_receipt=Receipt (new stock)~type_returned=Return to store~quantity=Quantity~reference=Reference (GRN, job card)~reason=Note~post=Post~cancel=Cancel~postedTitle=Stock posted~postedBody=New balance~done=Done~receiveNote=Posted straight to the stock ledger. The server checks that you are allowed to post this type.~qtyRequired=Enter a quantity~qtyPositive=Quantity must be more than zero~qtyWhole=Use a whole number~qtyTooLarge=That quantity is too large~refTooLong=The reference is too long~postOffline=No connection. Nothing was posted; try again when you are online.~postFailed=The movement could not be posted.~loadFailed=Stock history could not be loaded.~openItem=Open item details'**
+  String get storeHistoryCopyCatalog;
 }
 
 class _AppLocalizationsDelegate

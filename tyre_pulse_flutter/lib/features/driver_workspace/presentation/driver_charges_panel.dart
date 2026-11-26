@@ -601,10 +601,19 @@ class DriverChargeResponseSheet extends ConsumerStatefulWidget {
 
 class _DriverChargeResponseSheetState
     extends ConsumerState<DriverChargeResponseSheet> {
-  /// One id per sheet: a retry after a lost answer replays the same request,
-  /// which the server answers with the first result instead of a second
-  /// signature.
-  final String _requestId = const Uuid().v4();
+  /// One id per distinct answer: a retry of the same answer replays the same
+  /// request (the server returns the first result, never a second signature),
+  /// while changing the answer after a failed send gets a fresh id.
+  String _requestId = const Uuid().v4();
+  String? _requestKey;
+
+  String _idFor(String key) {
+    if (_requestKey != null && _requestKey != key) {
+      _requestId = const Uuid().v4();
+    }
+    _requestKey = key;
+    return _requestId;
+  }
   final TextEditingController _explanation = TextEditingController();
   DriverChargeResponse _response = DriverChargeResponse.accept;
   bool _acknowledged = false;
@@ -645,7 +654,7 @@ class _DriverChargeResponseSheetState
                   : '',
               signature: _signature!,
             ),
-            _requestId,
+            _idFor('${_response.name}|${_explanation.text}|$_signature'),
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -773,7 +782,16 @@ class DriverChargeAppealSheet extends ConsumerStatefulWidget {
 
 class _DriverChargeAppealSheetState
     extends ConsumerState<DriverChargeAppealSheet> {
-  final String _requestId = const Uuid().v4();
+  String _requestId = const Uuid().v4();
+  String? _requestKey;
+
+  String _idFor(String key) {
+    if (_requestKey != null && _requestKey != key) {
+      _requestId = const Uuid().v4();
+    }
+    _requestKey = key;
+    return _requestId;
+  }
   final TextEditingController _reason = TextEditingController();
   String? _message;
   bool _busy = false;
@@ -802,7 +820,7 @@ class _DriverChargeAppealSheetState
               charge: widget.detail.charge,
               reason: _reason.text,
             ),
-            _requestId,
+            _idFor(_reason.text),
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context)

@@ -89,7 +89,13 @@ export async function createExpense(values = {}) {
   // Since migration 20261126170000 the server records every new claim as
   // pending; any other status is a review and goes through the stamped RPC.
   if (created && status !== 'pending' && created.status !== status) {
-    return reviewExpense(created.id, status, values.review_reason || 'Status set when the claim was recorded')
+    try {
+      return await reviewExpense(created.id, status, values.review_reason || 'Status set when the claim was recorded')
+    } catch (e) {
+      // The claim exists; never let a refused review look like a failed save
+      // (a retry would duplicate it). Report it as recorded but still pending.
+      return { ...created, review_error: e?.message || 'The review was not recorded.' }
+    }
   }
   return created
 }

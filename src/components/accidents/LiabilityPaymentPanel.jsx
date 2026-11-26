@@ -134,6 +134,12 @@ function Derived({ label, children }) {
   )
 }
 
+// The charge opens in the accident's own country currency; never assume SAR.
+const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', EGYPT: 'EGP' }
+function currencyForCountry(country) {
+  return COUNTRY_CURRENCY[String(country || '').trim().toUpperCase()] || ''
+}
+
 function Field({ label, value, onChange, disabled, placeholder }) {
   return (
     <div>
@@ -161,7 +167,7 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
   const [parityProvisioned, setParityProvisioned] = useState(true)
   const [changeReason, setChangeReason] = useState('')
   const [approveReason, setApproveReason] = useState('')
-  const [recoveryCharge, setRecoveryCharge] = useState({ driver_id: '', currency: 'SAR', amount: '' })
+  const [recoveryCharge, setRecoveryCharge] = useState({ driver_id: '', currency: currencyForCountry(acc?.country), amount: '' })
   const [recoveryDrivers, setRecoveryDrivers] = useState([])
   const [safetyOpen, setSafetyOpen] = useState(false)
   const [uploadingKey, setUploadingKey] = useState('')
@@ -278,6 +284,10 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
 
   async function approve() {
     if (!assessment?.id || saving) return
+    if (draft?.payer === 'driver_recovery' && !/^[A-Z]{3}$/.test(String(recoveryCharge.currency || '').toUpperCase())) {
+      setErr('Enter the currency of the driver charge (for example SAR, AED or EGP).')
+      return
+    }
     setSaving(true); setErr('')
     try {
       const charge = draft?.payer === 'driver_recovery'

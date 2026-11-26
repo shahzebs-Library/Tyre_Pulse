@@ -241,6 +241,14 @@ final class SupabaseHandoverRemoteRepository
           !hasAuthKeys) {
         rethrow;
       }
+      // That server cannot collect the two drivers' signatures either, so an
+      // unsigned paper would reach the supervisor as if it were signed.
+      // Refuse instead; the draft stays on the phone and goes through once
+      // the server update is installed.
+      final Object? legacySignature = row['signature_url'];
+      if (legacySignature == null || '$legacySignature'.trim().isEmpty) {
+        rethrow;
+      }
       await write(<String, Object?>{
         for (final MapEntry<String, Object?> e in row.entries)
           if (!HandoverPayload.authorizationKeys.contains(e.key)) e.key: e.value,
@@ -291,16 +299,26 @@ final class SupabaseHandoverRemoteRepository
   Future<List<HandoverDriverOption>> listDrivers({String? country}) async {
     try {
       return await guard<List<HandoverDriverOption>>(() async {
-        var query = _client
-            .from('drivers')
-            .select('id,driver_id,driver_name,site,country,status');
-        if (country != null && country.isNotEmpty && country != 'All') {
-          query = query.eq('country', country);
+        // The register holds hundreds of drivers and the server caps every
+        // response at 1000 rows, so read it in pages; a driver who is cut off
+        // cannot be picked and the not-the-signing-driver check is lost.
+        const int pageSize = 1000;
+        const int maxRows = 10000;
+        final List<Map<String, dynamic>> rows = <Map<String, dynamic>>[];
+        for (int from = 0; from < maxRows; from += pageSize) {
+          var query = _client
+              .from('drivers')
+              .select('id,driver_id,driver_name,site,country,status');
+          if (country != null && country.isNotEmpty && country != 'All') {
+            query = query.eq('country', country);
+          }
+          final List<Map<String, dynamic>> page = await query
+              .order('driver_name', ascending: true)
+              .order('id', ascending: true)
+              .range(from, from + pageSize - 1);
+          rows.addAll(page);
+          if (page.length < pageSize) break;
         }
-        final List<Map<String, dynamic>> rows = await query
-            .order('driver_name', ascending: true)
-            .order('id', ascending: true)
-            .limit(500);
         return <HandoverDriverOption>[
           for (final Map<String, dynamic> r in rows)
             if ((r['driver_name'] as Object?)?.toString().trim().isNotEmpty ??

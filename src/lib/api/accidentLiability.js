@@ -151,9 +151,16 @@ export async function saveLiabilityAssessment(accidentId, patch, { existingId, i
 export async function approveLiabilityAssessment(id, { reason, charge = null } = {}) {
   if (!id) throw new Error('A liability assessment is required.')
   if (!reason || String(reason).trim().length < 3) throw new Error('An approval reason is required.')
-  const approval = unwrap(await supabase.rpc('approve_accident_liability', {
+  const { data: approval, error } = await supabase.rpc('approve_accident_liability', {
     p_assessment_id: id, p_reason: String(reason).trim(), p_charge: charge,
-  }))
+  })
+  if (error) {
+    // Never fall back to a browser-stamped approval: that is the hole this RPC closes.
+    if (error.code === '42883' || error.code === 'PGRST202') {
+      throw new Error('Approval is not available until the server update for liability approval is installed.')
+    }
+    unwrap({ data: null, error })
+  }
   const { result } = await withColumnFallback(async (cols) =>
     unwrap(await supabase.from('accident_liability_assessments').select(cols).eq('id', id).single()),
   )

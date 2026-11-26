@@ -1,5 +1,5 @@
 {
-  "$comment": "Cases BOTH the web (src/test/tyreLayoutSpec.test.js) and Flutter (test/features/tyre_diagram/domain/tyre_layout_spec_parity_test.dart) resolve through their own reader of tyre-layouts.json. `conditions` also pins the negation rule (\"Good, no damage\" is good, never red). Same input, same answer, on every surface. vehicle_type spellings are the ones carried in the live fleet register.",
+  "$comment": "Cases BOTH the web (src/test/tyreLayoutSpec.test.js) and Flutter (test/features/tyre_diagram/domain/tyre_layout_spec_parity_test.dart) resolve through their own reader of tyre-layouts.json. `conditions` also pins the negation rule (\"Good, no damage\" is good, never red) and safety first (\"Worn, flat\" is red). Same input, same answer, on every surface. vehicle_type spellings are the ones carried in the live fleet register.",
   "resolve": [
     ["TR-MIXER", "TM514", "Tri-mixer", 12],
     ["Tr-Mixer", "", "Tri-mixer", 12],
@@ -59,7 +59,8 @@
     "Good, no damage": "good", "Good no damage": "good", "No damage": "good", "not damaged": "good",
     "Without damage": "good", "No visible damage": "good", "Undamaged": "good", "Damage free": "good",
     "No puncture": "good", "Not flat": "good", "Worn, no damage": "warning",
-    "Damaged, not punctured": "critical", "Nail in tread": "critical", "Deflated": "critical"
+    "Damaged, not punctured": "critical", "Nail in tread": "critical", "Deflated": "critical",
+    "Worn, flat": "critical", "wear + cut": "critical", "Worn, puncture": "critical", "Puncture, worn": "critical"
   },
   "$kinds": "The picture (and so the label) each word gets: conditions.kinds in tyre-layouts.json.",
   "kinds": {
@@ -69,6 +70,7 @@
     "Flat": "flat", "Deflated": "flat",
     "Damaged": "damaged", "Damage": "damaged", "Sidewall cut": "damaged", "Bulge": "damaged",
     "Burst": "damaged", "Damaged, not punctured": "damaged",
+    "Worn, flat": "flat", "wear + cut": "damaged", "Worn, puncture": "puncture",
     "Missing": "missing", "": "none", "nonsense": "none", "Not checked": "none"
   }
 }

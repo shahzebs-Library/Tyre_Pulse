@@ -1183,7 +1183,7 @@
     }
   },
   "conditions": {
-    "$comment": "Condition word -> band, then band -> kind (the picture). A phrase that DENIES a fault (\"no damage\", \"not damaged\", \"without cuts\", \"undamaged\") is first replaced by \"ok\" using `negation`, so \"Good, no damage\" is good and never red. Then: exact first, then the patterns in `order` (case-insensitive). A word no rule knows is \"none\" (No data), never good. `kinds` gives each condition ONE fixed colour (its band's palette entry), ONE glyph and one short label, used on the picker buttons, the map wheels, the legend and the printed report on the web and the phone. Inside a band the first kind whose `match` hits wins; the kind with no `match` is the band's default. Glyphs are drawn on a 24x24 grid with round-capped strokes: `strokes` open polylines, `closed` polygons, `circles` outlines, `dots` filled circles, as flat [x, y, x, y ...] / [cx, cy, r] lists so every surface draws the same picture with its own primitives.",
+    "$comment": "Condition word -> band, then band -> kind (the picture). A phrase that DENIES a fault (\"no damage\", \"not damaged\", \"without cuts\", \"undamaged\") is first replaced by \"ok\" using `negation`, so \"Good, no damage\" is good and never red. Then: exact first, then the patterns in `order` (case-insensitive). Severe is tested FIRST (safety first): \"Worn, flat\" or \"wear + cut\" is red, never amber. A word no rule knows is \"none\" (No data), never good. `kinds` gives each condition ONE fixed colour (its band's palette entry), ONE glyph and one short label, used on the picker buttons, the map wheels, the legend and the printed report on the web and the phone. Inside a band the first kind whose `match` hits wins; the kind with no `match` is the band's default. Glyphs are drawn on a 24x24 grid with round-capped strokes: `strokes` open polylines, `closed` polygons, `circles` outlines, `dots` filled circles, as flat [x, y, x, y ...] / [cx, cy, r] lists so every surface draws the same picture with its own primitives.",
     "negation": "\\b(?:no|not|without|nil|zero|free of)\\s+(?:any\\s+)?(?:visible\\s+)?(?:signs?\\s+of\\s+)?(?:damages?|damaged|punctures?|punctured|cuts?|bulges?|cracks?|cracked|burst|flats?|wear|worn|separation)\\b|\\bun(?:damaged|punctured)\\b|\\b(?:damage|puncture)[\\s-]*free\\b",
     "exact": {
       "Good": "good",
@@ -1193,8 +1193,8 @@
       "None": "none"
     },
     "order": [
-      "warning",
       "critical",
+      "warning",
       "good"
     ],
     "patterns": {
@@ -1228,39 +1228,35 @@
           "strokes": [
             [
               3,
-              9,
-              6,
-              6,
-              9,
-              9,
+              8.5,
+              7.5,
+              4,
               12,
-              6,
-              15,
-              9,
-              18,
-              6,
+              8.5,
+              16.5,
+              4,
               21,
-              9
-            ],
-            [
-              3,
-              19,
-              21,
-              19
+              8.5
             ],
             [
               12,
               11,
               12,
-              16
+              17
             ],
             [
-              9.5,
-              13.5,
+              8.5,
+              14,
               12,
-              16,
-              14.5,
-              13.5
+              17.5,
+              15.5,
+              14
+            ],
+            [
+              3,
+              20.5,
+              21,
+              20.5
             ]
           ]
         }
@@ -1308,32 +1304,59 @@
           "strokes": [
             [
               1.5,
-              20.5,
+              19.5,
               22.5,
-              20.5
+              19.5
+            ],
+            [
+              12,
+              2.5,
+              12,
+              7.5
+            ],
+            [
+              9.5,
+              5.5,
+              12,
+              8,
+              14.5,
+              5.5
             ]
           ],
           "closed": [
             [
-              4,
-              9,
-              7.5,
-              6,
-              16.5,
-              6,
-              20,
-              9,
               21.5,
-              17,
+              14.5,
+              20.8,
+              16.2,
+              18.7,
+              17.7,
+              15.6,
+              18.7,
+              12.0,
+              19.0,
+              8.4,
+              18.7,
+              5.3,
+              17.7,
+              3.2,
+              16.2,
               2.5,
-              17
-            ]
-          ],
-          "circles": [
-            [
-              12,
-              11.5,
-              2.5
+              14.5,
+              3.2,
+              12.8,
+              5.3,
+              11.3,
+              8.4,
+              10.3,
+              12.0,
+              10.0,
+              15.6,
+              10.3,
+              18.7,
+              11.3,
+              20.8,
+              12.8
             ]
           ]
         }

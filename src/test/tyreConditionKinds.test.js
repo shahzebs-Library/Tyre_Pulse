@@ -47,6 +47,20 @@ describe('a denied fault is not a fault', () => {
   })
 })
 
+describe('safety first: a severe fault beats wear', () => {
+  it('"Worn, flat" and "wear + cut" are red', () => {
+    expect(conditionRisk('Worn, flat')).toBe('critical')
+    expect(conditionKind('Worn, flat')).toBe('flat')
+    expect(conditionRisk('wear + cut')).toBe('critical')
+    expect(conditionKind('wear + cut')).toBe('damaged')
+    expect(conditionRisk('Worn')).toBe('warning')
+  })
+  it('counts put a worn-and-flat tyre under damage', () => {
+    expect(conditionCounts({ tyre_conditions: { A: 'Worn, flat', B: 'Worn' } }))
+      .toEqual({ good: 0, wear: 1, damage: 1, other: 0 })
+  })
+})
+
 describe('kinds agree with colours', () => {
   it('every kind has a band, a label and a glyph', () => {
     expect(CONDITION_KINDS.map((k) => k.kind)).toEqual(['good', 'worn', 'puncture', 'flat', 'damaged', 'missing', 'none'])

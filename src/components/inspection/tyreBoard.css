@@ -41,7 +41,10 @@
 .tb-vals b { font-size: 11px; font-weight: 700; white-space: nowrap; }
 .tb-vals b small { font-weight: 500; font-size: 9px; color: var(--text-secondary); }
 .tb-muted { font-size: 9.5px; color: var(--text-secondary); }
-.tb-cond { font-size: 9px; letter-spacing: -0.2px; color: var(--text-secondary); overflow-wrap: break-word; }
+/* A condition word is never split mid-letters ("Damage d"): it stays whole,
+   one step smaller, and wraps only between words. */
+.tb-cond { font-size: 8.5px; letter-spacing: -0.25px; color: var(--text-secondary);
+  overflow-wrap: normal; word-break: keep-all; hyphens: none; }
 .tb-bad .tb-cond { color: var(--tb-bad); font-weight: 600; }
 .tb-warn .tb-cond { color: var(--tb-warn); font-weight: 600; }
 .tb-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px;

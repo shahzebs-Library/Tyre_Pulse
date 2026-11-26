@@ -92,6 +92,15 @@ void main() {
       );
       expect(normaliseCondition('Damaged'), TyreCondition.damaged);
     });
+    test('safety first: a severe fault beats wear', () {
+      expect(normaliseCondition('Worn, flat'), TyreCondition.flat);
+      expect(normaliseCondition('wear + cut'), TyreCondition.damaged);
+      expect(
+        tyreConditionStatus(normaliseCondition('Worn, flat')),
+        TpStatus.critical,
+      );
+      expect(normaliseCondition('Worn'), TyreCondition.worn);
+    });
   });
 
   test('generated layouts equal the JSON, slot for slot', () {

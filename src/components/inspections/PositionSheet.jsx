@@ -17,11 +17,11 @@ import { conditionKind, CONDITION_KIND, kindHex, currentTheme } from '../../lib/
  * colours stay semantic, and each carries an icon and its word, so colour is
  * never the only signal.
  */
-// The words the web form stores (unchanged vocabulary, plus Flat, which the
-// field app already records). Colour, picture and label come from the shared
+// The words the web form stores (unchanged vocabulary, plus Flat and Missing,
+// which the field app already records, so web and phone offer the same six). Colour, picture and label come from the shared
 // tyre map (conditions.kinds), so a tyre man who cannot read still knows each
 // button: green tick, amber worn tread, red nail, red flat tyre, red warning.
-const CONDITIONS = ['Good', 'Wear', 'Damage', 'Puncture', 'Flat']
+const CONDITIONS = ['Good', 'Wear', 'Damage', 'Puncture', 'Flat', 'Missing']
 
 export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, lang, onUpdate, onNext, onPrev, onClose }) {
   const { t } = useLanguage()
@@ -103,7 +103,7 @@ export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCoun
           <p className="text-[11px] font-bold uppercase tracking-widest mb-2.5 text-[var(--text-muted)]" id={`${titleId}-cond`}>
             {L.condition}
           </p>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-4" role="group" aria-labelledby={`${titleId}-cond`}>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4" role="group" aria-labelledby={`${titleId}-cond`}>
             {CONDITIONS.map((cond) => {
               const on = pos.condition === cond
               const kind = conditionKind(cond)

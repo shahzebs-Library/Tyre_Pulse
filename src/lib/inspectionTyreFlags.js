@@ -177,11 +177,11 @@ export function conditionCounts(inspection) {
   for (const v of values) {
     const cond = conditionOf(v)
     if (!cond) continue
-    // Wear is tested FIRST so a worn tyre is counted as wear rather than as
-    // damage - this breakdown exists to keep the two apart. Everything else the
-    // fault test recognises (flat, burst, cut) is damage; before this a burst
-    // tyre fell into "other", which is a category nobody looks at.
-    if (WEAR_RE.test(cond)) out.wear += 1
+    // Safety first, the shared rule: a severe fault (flat, burst, cut,
+    // puncture) is damage even when wear is mentioned too ("Worn, flat").
+    // A tyre that is only worn is wear - this breakdown keeps the two apart.
+    if (SEVERE_RE.test(cond)) out.damage += 1
+    else if (WEAR_RE.test(cond)) out.wear += 1
     else if (FAULT_RE.test(cond)) out.damage += 1
     else if (GOOD_RE.test(cond)) out.good += 1
     else out.other += 1

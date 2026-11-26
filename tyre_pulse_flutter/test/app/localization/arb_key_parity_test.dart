@@ -663,16 +663,16 @@ void main() {
     // 2525 + 3 = 2528: the Vehicle 360 tyre map names the inspection its
     // readings come from, and says when they could not be loaded; the
     // inspection meter fields refuse a date typed as a reading.
-    // 2549 + 115 = 2664: driver charges and the handover authorization paper
+    // 2549 + 115 + 1 = 2665: driver charges, the handover authorization paper and the store history copy
     // (driverChargeSectionTitle ... driverChargeReplaced, the driver's "My
     // charges" list, detail, consent / dispute / appeal sheets, status,
     // category and linked-record labels; handoverAuthSignaturesTitle ...
     // handoverAuthNotAvailable, the two-party signing panel, location line
     // and wizard fields). Fragment copies: lib/l10n/fragments/driver_legal.*.
-    test('en, ar and ur each carry exactly 2664 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2664);
-      expect(_translatableKeys(ar).length, 2664);
-      expect(_translatableKeys(ur).length, 2664);
+    test('en, ar and ur each carry exactly 2665 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2665);
+      expect(_translatableKeys(ar).length, 2665);
+      expect(_translatableKeys(ur).length, 2665);
     });
   });
 

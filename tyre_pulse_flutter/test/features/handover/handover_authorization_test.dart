@@ -41,7 +41,7 @@ final class _FakeRepo implements HandoverRemoteRepository {
 
   @override
   Future<HandoverSignResult> sign(HandoverSignInput input) async {
-    if (failure != null) throw failure!;
+    if (failure != null) throw failure!; // ignore: only_throw_errors
     signed.add(input);
     return const HandoverSignResult(status: 'draft');
   }
@@ -235,8 +235,8 @@ void main() {
   testWidgets('offline, a signature is refused with a plain message',
       (WidgetTester tester) async {
     final _FakeRepo repo = _FakeRepo(
-      failure: SupabaseFailure(
-        error: const AppError.network(),
+      failure: const SupabaseFailure(
+        error: AppError.network(),
         cause: SupabaseFailureCause.offline,
       ),
     );

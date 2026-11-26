@@ -135,8 +135,10 @@ void main() {
       DriverChargeIssue.signature,
     );
     expect(validateChargeAppeal('too short'), DriverChargeIssue.reason);
-    expect(validateChargeAppeal('The fine was issued to another vehicle.'),
-        isNull);
+    expect(
+      validateChargeAppeal('The fine was issued to another vehicle.'),
+      isNull,
+    );
   });
 
   test('payloads carry the contract fields, version and statement', () {
@@ -192,8 +194,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Respond to this charge'), findsNothing);
-    expect(find.text('No action is waiting for you on this charge.'),
-        findsOneWidget);
+    expect(
+      find.text('No action is waiting for you on this charge.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the exact server statement is shown before signing',

@@ -1,0 +1,130 @@
+{
+  "common": {
+    "na": "N/A"
+  },
+  "location": {
+    "none": "No location"
+  },
+  "putaway": {
+    "noStock": "Choose the stock line to put away.",
+    "noLocation": "This stock line has no location, so it cannot be moved. Give it a location first.",
+    "noTarget": "Choose the bin or shelf to put it in.",
+    "sameLocation": "Choose a different location from the one it is in.",
+    "otherSite": "Put-away stays inside one site. Use a transfer to move stock to another site.",
+    "noQty": "Enter a quantity above zero.",
+    "onlyFree": "Only {free} is free to move (the rest is reserved)."
+  },
+  "pick": {
+    "noLine": "Choose a pick line.",
+    "holdLine": "This line is a job card hold, not a stock reservation. Reserve the stock for the job card first, then pick it.",
+    "noJobCard": "The job card number is missing.",
+    "noQty": "Enter a quantity above zero.",
+    "onlyReserved": "Only {qty} is reserved for this job card on this line.",
+    "noSite": "No site",
+    "stockNotVisible": "Stock line not visible"
+  },
+  "handover": {
+    "unknownUser": "Unknown user",
+    "notRecorded": "Not recorded",
+    "unknownItem": "Unknown item"
+  },
+  "erp": {
+    "notLedger": "This file is not an ERP Stores Ledger (report CSOL-IMS-013-1).",
+    "otherReport": "The report is {report}, not the Stores Ledger ({expected}).",
+    "notNamed": "not named",
+    "noLines": "The file has no stock lines.",
+    "severalWarehouses": "The file covers more than one store ({warehouses}). Export one store per file.",
+    "rejectedRows": "{count} rows could not be read. Fix them in the export and upload again.",
+    "incomplete": "The file has no end of report line; it may be cut off.",
+    "totalMismatch": "The lines add up to a different total than the file shows ({total}).",
+    "noDate": "The balance date could not be read.",
+    "noCurrency": "The currency could not be read.",
+    "tooMany": "The file has {count} item codes; one upload takes at most 5000. Split the export.",
+    "held": {
+      "negative_qty": "Negative quantity in the ERP. A count cannot be below zero; check it in the ERP.",
+      "below_reserved": "Below the quantity reserved for job cards.",
+      "no_item": "Item code not in the Material Master.",
+      "serial_tracked": "Tyres and other serial-tracked items need their serial numbers; count them in Tyre custody.",
+      "missing_but_reserved": "Not in the file, but reserved for a job card."
+    },
+    "heldShort": {
+      "negative_qty": "negative",
+      "below_reserved": "below reserved",
+      "no_item": "unknown code",
+      "serial_tracked": "serial-tracked",
+      "missing_but_reserved": "reserved"
+    },
+    "reject": {
+      "bad_qty": "Quantity is not a number",
+      "no_code": "No item code",
+      "no_warehouse": "No store on the row"
+    }
+  },
+  "warranty": {
+    "noStock": "Choose the stock line the claim is for.",
+    "noFailure": "Choose what went wrong.",
+    "noQty": "Enter how many units the claim covers.",
+    "overOnHand": "The claim cannot cover more than the {onHand} on hand.",
+    "describe": "Describe the failure."
+  },
+  "scrap": {
+    "noStock": "Choose the stock line to scrap.",
+    "noQty": "Enter how many units to scrap.",
+    "overOnHand": "You cannot scrap more than the {onHand} on hand.",
+    "noReason": "Give the reason for scrapping (at least a few words)."
+  },
+  "reconcile": {
+    "reason": {
+      "sameCode": "Same item code and country",
+      "sameSize": "Same tyre size {size}",
+      "sameBrand": "Same brand {brands}",
+      "differentBrand": "Different brand ({brands})",
+      "noBrandLine": "Brand not stated on the stock line",
+      "noBrandCatalogue": "Brand not stated on the catalogue item"
+    },
+    "check": {
+      "ledger_drift": {
+        "label": "Ledger differs from balance",
+        "help": "The sum of posted movements is not equal to the quantity on hand."
+      },
+      "stock_qty_diff": {
+        "label": "Old stock quantity differs",
+        "help": "The legacy stock quantity column is not equal to the quantity on hand."
+      },
+      "qty_no_ledger": {
+        "label": "Quantity with no movements",
+        "help": "The line holds quantity but no movement was ever posted for it."
+      },
+      "reserved_mismatch": {
+        "label": "Reserved quantity differs",
+        "help": "Reserved quantity is not equal to the sum of reservation movements, or exceeds the quantity on hand."
+      },
+      "negative": {
+        "label": "Negative stock",
+        "help": "Quantity on hand is below zero."
+      },
+      "unvalued": {
+        "label": "Quantity without a value",
+        "help": "Part or all of the quantity on hand carries no cost."
+      },
+      "unlinked": {
+        "label": "Not linked to Material Master",
+        "help": "The line has no Material Master item."
+      },
+      "not_in_catalogue": {
+        "label": "Item not in the governed catalogue",
+        "help": "The Material Master item has no catalogue link."
+      }
+    }
+  },
+  "finance": {
+    "finding": {
+      "erpOnly": "Issued in the ERP, not recorded as an issue in the store.",
+      "storeOnly": "Issued in the store, not in the ERP.",
+      "unvalued": "Store issues include unvalued quantity; the cost is unknown, not zero.",
+      "differ": "Quantities differ between the store and the ERP.",
+      "agree": "Quantities agree.",
+      "receiptsOnly": "Receipts only this month."
+    }
+  }
+}

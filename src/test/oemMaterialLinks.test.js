@@ -126,3 +126,16 @@ describe('requisition drafts', () => {
     expect(() => buildRequisitionDrafts(sel, { quantity: 0 })).toThrow(/quantity/)
   })
 })
+
+describe('candidateWarnings translation', () => {
+  const row = { ...base, same_description: false, candidate_count: 3 }
+  it('keeps the English text without t', () => {
+    expect(candidateWarnings(row)).toEqual([
+      'Same code, different description. A code can mean a different item in another country.',
+      'This ERP item matches 3 catalogue items. Pick one; none is chosen for you.',
+    ])
+  })
+  it('uses the given t', () => {
+    expect(candidateWarnings(row, (k) => k)).toEqual(['wmsmsgparts.queue.differentDescription', 'wmsmsgparts.queue.manyCandidates'])
+  })
+})

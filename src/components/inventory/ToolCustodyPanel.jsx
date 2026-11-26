@@ -95,8 +95,8 @@ export default function ToolCustodyPanel({ scope, can = () => false }) {
                 { key: 'tool', header: p('colTool'), cell: (r) => toolById.get(r.equipment_id)?.name || p('unknownTool') },
                 { key: 'serial', header: p('colSerial'), cell: (r) => toolById.get(r.equipment_id)?.serial_no || NA },
                 { key: 'holder_name', header: p('colHolder'), cell: (r) => r.holder_name || p('notRecorded') },
-                { key: 'issued_at', header: p('colIssued'), cell: (r) => fmtDate(r.issued_at) },
-                { key: 'due_back_at', header: p('colDueBack'), cell: (r) => fmtDate(r.due_back_at) },
+                { key: 'issued_at', header: p('colIssued'), cell: (r) => fmtDate(r.issued_at, NA) },
+                { key: 'due_back_at', header: p('colDueBack'), cell: (r) => fmtDate(r.due_back_at, NA) },
                 { key: 'daysOut', header: p('colDaysOut'), numeric: true, cell: (r) => r.daysOut ?? NA },
                 { key: 'status', header: p('colStatus'), cell: (r) => <StatusPill value={r.status} tone={STATUS_TONE[r.status]} label={custodyLabel(r.status)} /> },
                 { key: 'daysOverdue', header: p('colDaysOverdue'), numeric: true, cell: (r) => r.daysOverdue ?? '' },
@@ -117,7 +117,7 @@ export default function ToolCustodyPanel({ scope, can = () => false }) {
                 { key: 'site', header: p('colSite'), cell: (r) => r.site || NA },
                 { key: 'cal', header: p('colCalibration'), cell: (r) => {
                   const c = calibrationState(r)
-                  return <StatusPill value={c.state} tone={CAL_TONE[c.state]} label={c.state === 'not_set' ? calLabel('not_set') : `${calLabel(c.state)}: ${fmtDate(r.calibration_due)}`} />
+                  return <StatusPill value={c.state} tone={CAL_TONE[c.state]} label={c.state === 'not_set' ? calLabel('not_set') : `${calLabel(c.state)}: ${fmtDate(r.calibration_due, NA)}`} />
                 } },
                 { key: 'act', header: '', sortable: false, cell: (r) => <button type="button" className="cc-btn-ghost" onClick={() => setIssueFor(r)}>{p('issue')}</button> },
               ]} />
@@ -132,7 +132,7 @@ export default function ToolCustodyPanel({ scope, can = () => false }) {
               { key: 'name', header: p('colTool') },
               { key: 'serial_no', header: p('colSerial'), cell: (r) => r.serial_no || NA },
               { key: 'site', header: p('colSite'), cell: (r) => r.site || NA },
-              { key: 'calibration_due', header: p('colDue'), cell: (r) => fmtDate(r.calibration_due) },
+              { key: 'calibration_due', header: p('colDue'), cell: (r) => fmtDate(r.calibration_due, NA) },
               { key: 'state', header: p('colStatus'), cell: (r) => <StatusPill value={r.state} tone={CAL_TONE[r.state]} label={calLabel(r.state)} /> },
               { key: 'days', header: p('colDays'), numeric: true, cell: (r) => (r.state === 'overdue' ? p('daysOver', { n: r.days }) : p('daysLeft', { n: r.days })) },
               { key: 'act', header: '', sortable: false, cell: (r) => (canCalibrate
@@ -156,7 +156,7 @@ export default function ToolCustodyPanel({ scope, can = () => false }) {
                 const o = open.find((c) => c.equipment_id === r.id)
                 return o?.holder_name || <span className="cc-na">{p('notRecorded')}</span>
               } },
-              { key: 'calibration_due', header: p('colCalDue'), cell: (r) => fmtDate(r.calibration_due) },
+              { key: 'calibration_due', header: p('colCalDue'), cell: (r) => fmtDate(r.calibration_due, NA) },
             ]} />
         </div>
       </SectionCard>
@@ -169,7 +169,7 @@ export default function ToolCustodyPanel({ scope, can = () => false }) {
                 { key: 'name', header: p('colTool') },
                 { key: 'serial_no', header: p('colSerial'), cell: (r) => r.serial_no || NA },
                 { key: 'status', header: p('colStatus') },
-                { key: 'calibration_due', header: p('colCalDue'), cell: (r) => (r.calibration_due ? fmtDate(r.calibration_due) : calLabel('not_set')) },
+                { key: 'calibration_due', header: p('colCalDue'), cell: (r) => (r.calibration_due ? fmtDate(r.calibration_due, NA) : calLabel('not_set')) },
                 { key: 'act', header: '', sortable: false, cell: (r) => <button type="button" className="cc-btn-ghost" onClick={() => setCalFor(r)}>{p('recordCal')}</button> },
               ]} />
           </div>
@@ -187,7 +187,7 @@ export default function ToolCustodyPanel({ scope, can = () => false }) {
                   { key: 'item_code', header: p('colItemCode') },
                   { key: 'description', header: p('colDescription'), cell: (r) => r.description || NA },
                   { key: 'qty', header: p('colQtyHeld'), numeric: true, cell: (r) => formatQty(r.qty) },
-                  { key: 'lastIssued', header: p('colLastIssued'), cell: (r) => fmtDate(r.lastIssued) },
+                  { key: 'lastIssued', header: p('colLastIssued'), cell: (r) => fmtDate(r.lastIssued, NA) },
                 ])} />
             </div>
           </>

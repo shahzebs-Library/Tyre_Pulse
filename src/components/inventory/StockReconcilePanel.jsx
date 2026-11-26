@@ -10,7 +10,7 @@ import { useMemo, useState } from 'react'
 import { Scale, AlertTriangle, Link2Off, Download, RefreshCw, Ban, PackageX, Coins, Layers, BookX } from 'lucide-react'
 import { KitTable, Kpi } from '../commandCenter/kit'
 import { loadStockReconcile } from '../../lib/api/stockReconcile'
-import { reconcileExportRows, isDemoLine } from '../../lib/inventory/stockReconcile'
+import { reconcileExportRows, isDemoLine, reconcileCheckText } from '../../lib/inventory/stockReconcile'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { useInvQuery, ErrorNote, NotSetUp, Note, StatusPill, SearchBox, SectionCard, alignNumeric, fmtDateTime } from './InvUi'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -27,7 +27,7 @@ export default function StockReconcilePanel({ scope, can }) {
   const p = (k, v) => t(`wmsfloor.reconcile.${k}`, v)
   const NA = t('wmsfloor.common.na')
   const qty = (v) => (v === null || v === undefined ? <span className="cc-na">{NA}</span> : formatQty(v))
-  const checkText = (c, part) => (c && ICONS[c.key] ? t(`wmsfloor.reconcile.check.${c.key}.${part}`) : c?.[part])
+  const checkText = (c, part) => reconcileCheckText(c, part, t)
   const q = useInvQuery(() => loadStockReconcile(scope), [scope?.country, scope?.site])
   const [active, setActive] = useState('ledger_drift')
   const [search, setSearch] = useState('')

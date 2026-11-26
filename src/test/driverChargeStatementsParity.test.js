@@ -35,7 +35,7 @@ describe('driver charge statements', () => {
     expect(sqlStatements()).toEqual(spec.statements)
   })
   it('the web locales carry the same words', () => {
-    for (const lang of ['en', 'ar']) {
+    for (const lang of ['en', 'ar', 'ur']) {
       const locale = json(`src/locales/${lang}/driverCharges.json`)
       for (const [version, byLang] of Object.entries(spec.statements)) expect(locale.statements[version]).toBe(byLang[lang])
     }

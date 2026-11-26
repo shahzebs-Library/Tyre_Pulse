@@ -17,7 +17,7 @@ import { Link2, Link2Off, Search, FlaskConical, Download, RefreshCw, CheckCircle
 import { KitTable, Kpi } from '../commandCenter/kit'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { loadUnmatchedReview } from '../../lib/api/stockReconcile'
-import { UNMATCHED_KINDS, unmatchedExportRows } from '../../lib/inventory/stockReconcile'
+import { UNMATCHED_KINDS, unmatchedExportRows, candidateReasons } from '../../lib/inventory/stockReconcile'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { useInvQuery, ErrorNote, NotSetUp, Note, StatusPill, SectionCard, alignNumeric, fmtDateTime } from './InvUi'
 import { proposeStockLink, decideLink, loadStockLinkProposals } from '../../lib/api/materialLinks'
@@ -110,7 +110,7 @@ function Candidates({ row, canPropose, canDecide, userId, proposals, onDone }) {
         { key: 'linked', header: t('wmsparts.unmatched.inCatalogue'), cell: (c) => (c.linked === true
           ? <StatusPill value="yes" tone="good" label={t('wmsparts.unmatched.linked')} />
           : c.linked === false ? <StatusPill value="no" tone="warning" label={t('wmsparts.unmatched.notLinked')} /> : <span className="cc-na">{t('wmsparts.common.na')}</span>) },
-        { key: 'reasons', header: exact ? t('wmsparts.common.basis') : t('wmsparts.unmatched.whySuggested'), cell: (c) => (c.reasons || []).join('. ') },
+        { key: 'reasons', header: exact ? t('wmsparts.common.basis') : t('wmsparts.unmatched.whySuggested'), cell: (c) => candidateReasons(c, t).join('. ') },
         { key: 'confirm', header: '', cell: (c) => {
           if (c.source === 'material_canonical') {
             return <span className="cc-card-sub">{t('wmsparts.unmatched.catalogueOnly')}</span>

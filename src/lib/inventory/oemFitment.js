@@ -39,6 +39,7 @@
  *        list is offered, because a list of 400 "NUT" items helps nobody.
  */
 import { normalizePartNo, descriptionTokens, isPartNumberToken } from './oemCrossRef'
+import { textFn } from '../wmsText'
 
 /** Uppercase, collapse inner spaces, trim. */
 export function normalizeMake(v) {
@@ -107,14 +108,33 @@ export function buildManualFitment({ manuals = [], fleet = [] } = {}) {
   })
 }
 
-/** Plain English sentence for one manual's fitment, never claiming a fit. */
-export function fitmentSentence(f) {
-  const name = [f.manual?.manufacturer, f.model].filter(Boolean).join(' ') || 'this manual'
-  if (f.basis === 'no_make') return `The manual names no manufacturer, so it cannot be compared with the fleet.`
-  const makeLine = `${f.makeAssets} fleet asset${f.makeAssets === 1 ? '' : 's'} carry the make ${f.make}`
-  if (f.basis !== 'model') return `The manual names no model code. ${makeLine}; the manual cannot say which of them it covers.`
-  const recorded = `${f.modelRecorded} of them record a model`
-  return `Manual says ${name}. ${makeLine}; ${recorded}; ${f.modelMatches} record the model ${f.family}.`
+/**
+ * Plain sentence for one manual's fitment, never claiming a fit. Optional `t`
+ * translates it; without one the English text is returned.
+ */
+export function fitmentSentence(f, t) {
+  const tx = textFn(t)
+  const name = [f.manual?.manufacturer, f.model].filter(Boolean).join(' ') || tx('wmsmsgparts.fitment.thisManual')
+  if (f.basis === 'no_make') return tx('wmsmsgparts.fitment.noMake')
+  const makeLine = tx(f.makeAssets === 1 ? 'wmsmsgparts.fitment.makeLineOne' : 'wmsmsgparts.fitment.makeLineMany', { n: f.makeAssets, make: f.make })
+  if (f.basis !== 'model') return tx('wmsmsgparts.fitment.noModel', { makeLine })
+  return tx('wmsmsgparts.fitment.full', { name, makeLine, recorded: f.modelRecorded, matches: f.modelMatches, family: f.family })
+}
+
+const EVIDENCE_FIELDS = new Set([
+  'variant', 'description', 'words',
+  'reference_oem', 'reference_alternative', 'reference_superseded', 'reference_barcode', 'reference_erp_legacy',
+  'reference_aftermarket', 'reference_company_sku', 'reference_erp_sku', 'reference_other',
+])
+
+/**
+ * Display name of a candidate evidence field ('reference_oem' -> "reference oem").
+ * Optional `t` translates it; an unknown field keeps its plain English form.
+ */
+export function evidenceFieldLabel(field, t) {
+  const f = String(field || '')
+  if (typeof t === 'function' && EVIDENCE_FIELDS.has(f)) return t(`wmsmsgparts.evidence.${f}`)
+  return f.replace(/_/g, ' ')
 }
 
 /** Distinct manuals behind a set of manual rows (for an item's fitment). */

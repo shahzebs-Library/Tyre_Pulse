@@ -268,7 +268,10 @@ html.light .cc-hero-light { display: block; }
 .cc-field { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
 .cc-field > span { font-size: 11.5px; color: var(--cc-ink-2); font-weight: 500; }
 .cc-field .cc-select { padding-top: 8px; padding-bottom: 8px; font-size: 12.5px; }
-.cc-search { position: relative; flex: 1 1 260px; min-width: 200px; }
+.cc-search { position: relative; flex: 1 1 260px; min-width: 200px; max-height: max-content; }
+/* flex-basis 260px is meant as a WIDTH in toolbar rows. Inside a column flex
+   container (a SectionCard) it became a 260px HEIGHT; max-height caps the box
+   at its content height in every layout without changing the row behaviour. */
 .cc-search svg { position: absolute; inset-inline-start: 11px; top: 50%; transform: translateY(-50%); color: var(--cc-ink-3); pointer-events: none; }
 .cc-search input { width: 100%; font-size: 13px; color: var(--cc-ink); background: var(--cc-inner); border: 1px solid var(--cc-inner-border); border-radius: 9px; padding-block: 9px; padding-inline: 34px 12px; outline: none; }
 html.light .cc-search input, html.light .cc-btn-ghost, html.light .cc-icon-btn { background: #fff; }

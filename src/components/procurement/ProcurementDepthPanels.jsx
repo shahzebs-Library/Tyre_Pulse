@@ -23,7 +23,7 @@ import { toUserMessage } from '../../lib/safeError'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { MaterialPicker } from './ProcurementChainPanels'
 import {
-  NOT_SET_UP, newIdempotencyKey, listSuppliersForApproval, setSupplierApproval, listRfqs, createRfq, recordQuote, awardRfq, cancelRfq,
+  newIdempotencyKey, listSuppliersForApproval, setSupplierApproval, listRfqs, createRfq, recordQuote, awardRfq, cancelRfq,
   listBackorders, listEmergencyPurchases, approveEmergencyPurchase, listReturnableReceipts, listSupplierReturns, postSupplierReturn,
   listSupplierInvoices, createSupplierInvoice, matchSupplierInvoice, listPoLinesForInvoice, listInvoiceablePurchaseOrders,
   listSupplierPerformance,
@@ -89,7 +89,7 @@ function Frame({ icon: Icon, title, sub, action, children }) {
 function States({ st, empty, children }) {
   const { t } = useLanguage()
   if (st.loading && !st.rows.length) return <div className="space-y-2" aria-busy="true">{[0, 1, 2].map((i) => <div key={i} className="cc-skel" style={{ height: 30 }} />)}</div>
-  if (st.notSetUp) return <p className="text-xs text-amber-300" role="note">{NOT_SET_UP}</p>
+  if (st.notSetUp) return <p className="text-xs text-amber-300" role="note">{t('wmsmsgprocure.notSetUp')}</p>
   if (st.error) {
     return (
       <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-red-300">
@@ -306,7 +306,7 @@ function RfqDetail({ rfq, allowed, onChanged, onNavigate }) {
     setBusy(true)
     try {
       const r = await awardRfq({ rfqId: rfq.id, quoteId: choice, reason }, newIdempotencyKey())
-      setMsg({ ok: t('wmsprocure.depth.awarded', { po: r?.po_number || '', amount: formatMoneyIn(r?.total, r?.currency) }) })
+      setMsg({ ok: t('wmsprocure.depth.awarded', { po: r?.po_number || '', amount: formatMoneyIn(r?.total, r?.currency, t) }) })
       onChanged?.()
     } catch (e) { setMsg({ error: toUserMessage(e, t('wmsprocure.depth.awardErr')) }) } finally { setBusy(false) }
   }
@@ -331,13 +331,13 @@ function RfqDetail({ rfq, allowed, onChanged, onNavigate }) {
                 {cmp.quotes.map((q) => {
                   const c = q.cells.find((x) => x.rfq_line_id === l.id)
                   const best = cmp.lineBest[l.id]?.[q.currency] === q.id
-                  return <Td key={q.id} right>{c?.unit_price == null ? <span className="cc-na">{t('wmsprocure.depth.noBid')}</span> : <span className={best ? 'text-green-300 font-semibold' : ''}>{formatMoneyIn(c.unit_price, q.currency)}</span>}</Td>
+                  return <Td key={q.id} right>{c?.unit_price == null ? <span className="cc-na">{t('wmsprocure.depth.noBid')}</span> : <span className={best ? 'text-green-300 font-semibold' : ''}>{formatMoneyIn(c.unit_price, q.currency, t)}</span>}</Td>
                 })}
               </tr>
             ))}
             <tr className="border-t border-[var(--hairline)] font-semibold">
               <Td>{t('wmsprocure.depth.totalOwn')}</Td>
-              {cmp.quotes.map((q) => <Td key={q.id} right>{formatMoneyIn(q.total, q.currency)}{!q.complete && <span className="block text-xs text-amber-300">{t('wmsprocure.depth.notAllPriced')}</span>}{q.isLowest && <span className="block"><Pill tone="good">{t('wmsprocure.depth.lowest', { currency: q.currency })}</Pill></span>}</Td>)}
+              {cmp.quotes.map((q) => <Td key={q.id} right>{formatMoneyIn(q.total, q.currency, t)}{!q.complete && <span className="block text-xs text-amber-300">{t('wmsprocure.depth.notAllPriced')}</span>}{q.isLowest && <span className="block"><Pill tone="good">{t('wmsprocure.depth.lowest', { currency: q.currency })}</Pill></span>}</Td>)}
             </tr>
           </tbody>
         </Table>
@@ -350,7 +350,7 @@ function RfqDetail({ rfq, allowed, onChanged, onNavigate }) {
               <h3 className="text-xs font-semibold text-[var(--text-secondary)]">{t('wmsprocure.depth.chooseWinner')}</h3>
               <select aria-label={t('wmsprocure.depth.winningQuote')} className="input w-full min-h-[44px]" value={choice} onChange={(e) => setChoice(e.target.value)}>
                 <option value="">{t('wmsprocure.depth.chooseQuote')}</option>
-                {cmp.quotes.filter((q) => q.status === 'received').map((q) => <option key={q.id} value={q.id}>{q.supplier_name}: {formatMoneyIn(q.total, q.currency)}{q.isLowest ? t('wmsprocure.depth.lowestSuffix') : ''}</option>)}
+                {cmp.quotes.filter((q) => q.status === 'received').map((q) => <option key={q.id} value={q.id}>{q.supplier_name}: {formatMoneyIn(q.total, q.currency, t)}{q.isLowest ? t('wmsprocure.depth.lowestSuffix') : ''}</option>)}
               </select>
               {needReason && <textarea aria-label={t('wmsprocure.depth.reasonAria')} className="input w-full" rows={2} maxLength={500} placeholder={t('wmsprocure.depth.reasonPlaceholder')} value={reason} onChange={(e) => setReason(e.target.value)} />}
               <div className="flex flex-wrap justify-end gap-2">
@@ -419,7 +419,7 @@ export function BackorderPanel({ scope = {} }) {
         <div className="flex flex-wrap gap-2 text-xs">
           <Pill tone="info">{t('wmsprocure.depth.openLines', { lines: sum.openLines, pos: sum.openPos })}</Pill>
           <Pill tone={sum.overdueLines ? 'bad' : 'good'}>{sum.maxDaysOverdue ? t('wmsprocure.depth.overdueOldest', { count: sum.overdueLines, days: sum.maxDaysOverdue }) : t('wmsprocure.depth.overdue', { count: sum.overdueLines })}</Pill>
-          {Object.entries(sum.valueByCurrency).map(([c, v]) => <Pill key={c}>{t('wmsprocure.depth.outstandingValue', { amount: formatMoneyIn(v, c) })}</Pill>)}
+          {Object.entries(sum.valueByCurrency).map(([c, v]) => <Pill key={c}>{t('wmsprocure.depth.outstandingValue', { amount: formatMoneyIn(v, c, t) })}</Pill>)}
           {sum.unvaluedLines > 0 && <Pill tone="warn">{t('wmsprocure.depth.unvalued', { count: sum.unvaluedLines })}</Pill>}
           <label className="inline-flex items-center gap-2 min-h-[44px]"><input type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} /> {t('wmsprocure.depth.overdueOnly')}</label>
         </div>
@@ -587,7 +587,7 @@ function NewInvoiceForm({ scope, onSaved }) {
           <tbody>{lines.rows.map((l) => (
             <tr key={l.po_line_id} className="border-t border-[var(--hairline)]">
               <Td>{l.item_code && <span className="font-mono text-xs" dir="ltr">{l.item_code} </span>}{l.item_name}</Td>
-              <Td right>{fmtNum(l.qty_ordered)}</Td><Td right>{fmtNum(l.qty_accepted)}</Td><Td right>{formatMoneyIn(l.unit_price, l.currency)}</Td>
+              <Td right>{fmtNum(l.qty_ordered)}</Td><Td right>{fmtNum(l.qty_accepted)}</Td><Td right>{formatMoneyIn(l.unit_price, l.currency, t)}</Td>
               <Td><input aria-label={t('wmsprocure.depth.invoicedQtyAria')} type="number" min="0" step="any" className="input w-24 min-h-[40px]" value={entries[l.po_line_id]?.qty ?? ''} disabled={!!savedId} onChange={(e) => setEntries((x) => ({ ...x, [l.po_line_id]: { ...x[l.po_line_id], qty: e.target.value } }))} /></Td>
               <Td><input aria-label={t('wmsprocure.depth.invoiceUnitPriceAria')} type="number" min="0" step="any" className="input w-28 min-h-[40px]" value={entries[l.po_line_id]?.price ?? ''} disabled={!!savedId} onChange={(e) => setEntries((x) => ({ ...x, [l.po_line_id]: { ...x[l.po_line_id], price: e.target.value } }))} /></Td>
             </tr>
@@ -625,7 +625,7 @@ export function ThreeWayMatchPanel({ scope = {}, can }) {
               <tr key={i.id} className="border-t border-[var(--hairline)]">
                 <Td mono>{i.invoice_no}<span className="block text-[var(--text-muted)]">{fmtDate(i.invoice_date)}</span></Td>
                 <Td>{i.supplier?.supplier_name || t('wmsprocure.depth.na')}</Td><Td mono>{i.po?.po_number || t('wmsprocure.depth.none')}</Td>
-                <Td right>{formatMoneyIn(i.total_amount, i.currency)}</Td>
+                <Td right>{formatMoneyIn(i.total_amount, i.currency, t)}</Td>
                 <Td><Pill tone={m.tone}>{tv(t, 'wmsprocure.match', MATCH_STATUS[i.match_status] ? i.match_status : 'pending')}</Pill></Td>
                 <Td><div className="flex flex-wrap gap-1">
                   <button type="button" className="cc-btn-ghost min-h-[44px]" aria-expanded={open === i.id} onClick={() => setOpen(open === i.id ? null : i.id)}>{t('wmsprocure.depth.lines')}</button>
@@ -640,7 +640,7 @@ export function ThreeWayMatchPanel({ scope = {}, can }) {
                       <tbody>{i.match_details.map((d) => (
                         <tr key={d.line_no} className="border-t border-[var(--hairline)]">
                           <Td>{d.line_no}</Td><Td right>{fmtNum(d.invoice_qty)}</Td><Td right>{fmtNum(d.received_accepted_qty)}</Td><Td right>{fmtNum(d.previously_invoiced_qty)}</Td>
-                          <Td right>{formatMoneyIn(d.invoice_price, i.currency)}</Td><Td right>{formatMoneyIn(d.po_price, i.currency)}</Td>
+                          <Td right>{formatMoneyIn(d.invoice_price, i.currency, t)}</Td><Td right>{formatMoneyIn(d.po_price, i.currency, t)}</Td>
                           <Td><Pill tone={(MATCH_STATUS[d.status] || MATCH_STATUS.pending).tone}>{t(`wmsprocure.match.${MATCH_STATUS[d.status] ? d.status : 'pending'}`)}</Pill></Td>
                         </tr>
                       ))}</tbody>
@@ -747,10 +747,10 @@ export function EmergencyPurchasesPanel({ scope = {}, can, userId }) {
               <tr key={p.id} className="border-t border-[var(--hairline)]">
                 <Td mono>{p.po_number}<span className="block text-[var(--text-muted)]">{fmtDate(p.emergency_declared_at)}</span></Td>
                 <Td>{p.supplier_name || p.vendor_name || t('wmsprocure.depth.na')}</Td><Td>{tv(t, 'wmsprocure.poStatus', p.status)}</Td>
-                <Td right>{formatMoneyIn(Number(p.total_amount) > 0 ? p.total_amount : null, p.currency)}</Td>
+                <Td right>{formatMoneyIn(Number(p.total_amount) > 0 ? p.total_amount : null, p.currency, t)}</Td>
                 <Td>
-                  <span className="block">{tv(t, 'wmsprocure.emergency.cat', p.emergency_category) || categoryLabel(p.emergency_category)}{p.emergency_asset_no ? `, ${p.emergency_asset_no}` : ''}{p.emergency_job_card_no ? `, ${p.emergency_job_card_no}` : ''}</span>
-                  <span className="block text-xs text-[var(--text-muted)]">{t('wmsprocure.depth.impactEstimate', { impact: impactText(p), estimate: estimateText(p) })}</span>
+                  <span className="block">{categoryLabel(p.emergency_category, t)}{p.emergency_asset_no ? `, ${p.emergency_asset_no}` : ''}{p.emergency_job_card_no ? `, ${p.emergency_job_card_no}` : ''}</span>
+                  <span className="block text-xs text-[var(--text-muted)]">{t('wmsprocure.depth.impactEstimate', { impact: impactText(p, t), estimate: estimateText(p, t) })}</span>
                   <button type="button" className="underline text-xs min-h-[44px]" aria-expanded={open === p.id}
                     onClick={() => setOpen(open === p.id ? '' : p.id)}>{open === p.id ? t('wmsprocure.depth.hideJust') : t('wmsprocure.depth.showJust')}</button>
                   {open === p.id && <div className="mt-1 max-w-[420px]"><EmergencyJustificationView po={p} compact /></div>}

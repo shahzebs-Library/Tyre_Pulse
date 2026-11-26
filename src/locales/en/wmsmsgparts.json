@@ -1,0 +1,74 @@
+{
+  "fitment": {
+    "thisManual": "this manual",
+    "noMake": "The manual names no manufacturer, so it cannot be compared with the fleet.",
+    "makeLineOne": "{n} fleet asset carry the make {make}",
+    "makeLineMany": "{n} fleet assets carry the make {make}",
+    "noModel": "The manual names no model code. {makeLine}; the manual cannot say which of them it covers.",
+    "full": "Manual says {name}. {makeLine}; {recorded} of them record a model; {matches} record the model {family}."
+  },
+  "evidence": {
+    "variant": "variant",
+    "description": "description",
+    "words": "words",
+    "reference_oem": "reference oem",
+    "reference_alternative": "reference alternative",
+    "reference_superseded": "reference superseded",
+    "reference_barcode": "reference barcode",
+    "reference_erp_legacy": "reference erp legacy",
+    "reference_aftermarket": "reference aftermarket",
+    "reference_company_sku": "reference company sku",
+    "reference_erp_sku": "reference erp sku",
+    "reference_other": "reference other"
+  },
+  "queue": {
+    "differentDescription": "Same code, different description. A code can mean a different item in another country.",
+    "aliasNotVerified": "The OEM number on the catalogue item is not verified.",
+    "manyCandidates": "This ERP item matches {n} catalogue items. Pick one; none is chosen for you.",
+    "taken": "This catalogue item is already linked to another ERP item in this country."
+  },
+  "loc": {
+    "capacityPositive": "Capacity must be a number above zero.",
+    "capacityUnit": "Say what the capacity is measured in.",
+    "vanOnlyService": "Only a service van names a vehicle.",
+    "vanRequired": "Name the van (its fleet asset number).",
+    "over": "Over capacity ({pct}%)",
+    "nearly": "Nearly full ({pct}%)",
+    "breachOne": "{n} stock line break the \"{rule}\" rule",
+    "breachMany": "{n} stock lines break the \"{rule}\" rule",
+    "mixing": "More than one item in a no-mixing location",
+    "restriction": {
+      "none": "No restriction",
+      "tyres_only": "Tyres only",
+      "lubricants_only": "Lubricants only",
+      "hazardous": "Hazardous goods",
+      "serial_tracked_only": "Serial-tracked items only",
+      "no_mixing": "One item only (no mixing)",
+      "quarantine_only": "Quarantine stock only"
+    }
+  },
+  "tool": {
+    "calDate": "Give the calibration date.",
+    "calFuture": "The calibration date cannot be in the future.",
+    "calResult": "Choose the result.",
+    "calNextDue": "Give the next due date after the calibration date.",
+    "holder": "Say who is taking the tool.",
+    "dueBackInvalid": "The due-back date is not a date.",
+    "dueBackPast": "The due-back date must be in the future."
+  },
+  "lube": {
+    "stockLine": "Choose the lubricant stock line.",
+    "qty": "Enter how much was dispensed.",
+    "onlyFree": "Only {free} is free on this line.",
+    "asset": "Choose the asset it went into.",
+    "meterNumber": "The meter reading must be a number.",
+    "meterType": "Say whether the reading is km or hours."
+  },
+  "unit": {
+    "item": "Choose the item.",
+    "serial": "Give the serial number.",
+    "event": "Choose what happened.",
+    "asset": "Choose the asset.",
+    "vendor": "Choose the repair vendor."
+  }
+}

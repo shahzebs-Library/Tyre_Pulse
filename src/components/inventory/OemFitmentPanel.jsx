@@ -19,7 +19,7 @@ import { loadFitmentSources, loadCatalogueStock, loadLinkStock, loadAllCatalogue
 import { newIdempotencyKey } from '../../lib/api/inventory'
 import { normalizePartNo } from '../../lib/inventory/oemCrossRef'
 import {
-  buildManualFitment, fitmentSentence, catalogueStockRows, linkStockRows, summarizeStockRows,
+  buildManualFitment, fitmentSentence, evidenceFieldLabel, catalogueStockRows, linkStockRows, summarizeStockRows,
   existingAlternatives, ALT_RELATIONS, buildCandidateIndex, buildUnmatchedRows, filterUnmatched,
   summarizeUnmatched, UNMATCHED_FILTERS, BROAD_LIMIT,
 } from '../../lib/inventory/oemFitment'
@@ -90,7 +90,7 @@ function FitmentTab({ base, country }) {
               const rows = lookupHits.hits.filter((e) => e.manual_id === id)
               return (
                 <li key={id}>
-                  <strong dir="ltr">{rows[0]?.part_no}</strong> {rows[0]?.description || ''} ({t(rows.length === 1 ? 'wmsparts.fitment.rowsOne' : 'wmsparts.fitment.rowsMany', { n: rows.length })}). {f ? fitmentSentence(f) : t('wmsparts.fitment.manualNotReadable')}
+                  <strong dir="ltr">{rows[0]?.part_no}</strong> {rows[0]?.description || ''} ({t(rows.length === 1 ? 'wmsparts.fitment.rowsOne' : 'wmsparts.fitment.rowsMany', { n: rows.length })}). {f ? fitmentSentence(f, t) : t('wmsparts.fitment.manualNotReadable')}
                 </li>
               )
             })}
@@ -110,7 +110,7 @@ function FitmentTab({ base, country }) {
             <span className="inv-mm-chips">{Object.entries(f.byType).sort((a, b) => b[1] - a[1]).map(([k, n]) => <span key={k} className="inv-chip">{k}: {n}</span>)}</span>
           ) },
           { key: 'evidence', header: t('wmsparts.fitment.col.evidence'), sortable: false, cell: (f) => (
-            <span className="cc-card-sub">{fitmentSentence(f)}{f.matchedAssets.length ? ` ${t('wmsparts.fitment.assetsPrefix')} ${f.matchedAssets.slice(0, 8).map((a) => a.asset_no).filter(Boolean).join(', ')}${f.matchedAssets.length > 8 ? '...' : ''}` : ''}</span>
+            <span className="cc-card-sub">{fitmentSentence(f, t)}{f.matchedAssets.length ? ` ${t('wmsparts.fitment.assetsPrefix')} ${f.matchedAssets.slice(0, 8).map((a) => a.asset_no).filter(Boolean).join(', ')}${f.matchedAssets.length > 8 ? '...' : ''}` : ''}</span>
           ) },
         ]} />
       )}
@@ -318,7 +318,7 @@ function UnmatchedTab({ base }) {
             <span style={{ display: 'grid', gap: 4 }}>
               {r.candidates.map((c) => (
                 <span key={c.canonical.id}><strong dir="ltr">{c.canonical.company_sku}</strong> {c.canonical.description}
-                  <span className="cc-card-sub"> ({c.rule === 'part_number' ? c.evidence.map((x) => x.field.replace(/_/g, ' ')).join(', ') : t('wmsparts.fitment.wordsValue', { words: r.words.join(' ') })})</span></span>
+                  <span className="cc-card-sub"> ({c.rule === 'part_number' ? c.evidence.map((x) => evidenceFieldLabel(x.field, t)).join(', ') : t('wmsparts.fitment.wordsValue', { words: r.words.join(' ') })})</span></span>
               ))}
               {r.rule === 'words' && r.broadCount > r.candidates.length && <span className="cc-card-sub">{t('wmsparts.fitment.moreQualify', { n: r.broadCount - r.candidates.length })}</span>}
             </span>

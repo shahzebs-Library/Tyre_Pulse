@@ -26,7 +26,9 @@ import {
 } from '../../lib/api/inventory'
 import {
   parseStoreLedger, postBlockers, resolveLocation, buildLedgerPlan, buildNeighbours, buildPostPayload, sha256Hex,
+  heldReasonText, heldReasonShort, rejectReasonText,
 } from '../../lib/inventory/erpStoreLedger'
+import { warmFloorText } from '../../lib/inventory/floorText'
 import { MATERIAL_CATEGORIES } from '../../lib/materialMaster'
 import { formatQty, formatMoney } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
@@ -34,16 +36,16 @@ import { useInvQuery, PagedTable, ErrorNote, Note, StatusPill, SectionCard, fmtD
 import { useLanguage } from '../../contexts/LanguageContext'
 
 const COUNTRIES = ['KSA', 'UAE', 'Egypt']
-const HELD_REASONS = ['negative_qty', 'below_reserved', 'no_item', 'serial_tracked', 'missing_but_reserved']
-const REJECT_REASONS = ['bad_qty', 'no_code', 'no_warehouse']
 const useErpText = () => {
   const { t } = useLanguage()
   const p = (k, v) => t(`wmsfloor.erp.${k}`, v)
+  warmFloorText(t)
   return {
+    t,
     p,
     NA: t('wmsfloor.common.na'),
-    reasonText: (r) => (HELD_REASONS.includes(r) ? t(`wmsfloor.erp.held.${r}`) : r),
-    rejectText: (r) => (REJECT_REASONS.includes(r) ? t(`wmsfloor.erp.reject.${r}`) : r),
+    reasonText: (r) => heldReasonText(r, t),
+    rejectText: (r) => rejectReasonText(r, t),
     reasonLabel: (r) => {
       const [kind, note] = String(r || '').split(':')
       if (kind === 'code_range') return p('whyCodeRange', { note: note || '' })
@@ -54,7 +56,7 @@ const useErpText = () => {
     heldSummary: (held = []) => {
       const by = {}
       held.forEach((h) => { by[h.reason] = (by[h.reason] || 0) + 1 })
-      const parts = Object.entries(by).map(([r, n]) => `${n} ${HELD_REASONS.includes(r) ? t(`wmsfloor.erp.heldShort.${r}`) : r}`)
+      const parts = Object.entries(by).map(([r, n]) => `${n} ${heldReasonShort(r, t)}`)
       return parts.length ? ` (${parts.join(', ')})` : ''
     },
   }
@@ -375,7 +377,7 @@ export default function ErpLedgerPanel({ scope }) {
 }
 
 function FileDetail({ f, tab, setTab, patch, onCategory, canPost, onPost, isOwner, busy, onResume, onCancelOpen, err }) {
-  const { p, NA, reasonText, rejectText, reasonLabel, heldSummary } = useErpText()
+  const { t, p, NA, reasonText, rejectText, reasonLabel, heldSummary } = useErpText()
   const pl = f.plan
   const toggle = (field, code) => patch(f.id, (cur) => {
     const s = new Set(cur[field]); if (s.has(code)) s.delete(code); else s.add(code); return { [field]: s }
@@ -387,7 +389,7 @@ function FileDetail({ f, tab, setTab, patch, onCategory, canPost, onPost, isOwne
     </select>
   )
   const meta = f.parsed?.meta
-  const blockers = f.parsed?.ok ? postBlockers(f.parsed) : []
+  const blockers = f.parsed?.ok ? postBlockers(f.parsed, t) : []
 
   if (f.error) return <ErrorNote error={f.error} />
   if (f.stockError) {

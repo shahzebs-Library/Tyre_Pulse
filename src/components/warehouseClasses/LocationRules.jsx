@@ -19,18 +19,6 @@ import { formatQty } from '../../lib/inventory/inventoryMoney'
 const RESTRICTION_KEYS = new Set(LOCATION_RESTRICTIONS.map((r) => r.value))
 const restrictionText = (t, v) => t(`wmsparts.loc.restriction.${RESTRICTION_KEYS.has(v || '') && v ? v : 'none'}`)
 
-// Mirrors locationFindings() in lib/warehouseClasses/specialClasses.js, translated at render.
-function findingTexts(row, t) {
-  const out = []
-  const pct = row?.pct_used === null || row?.pct_used === undefined || row?.pct_used === '' ? null : Number(row.pct_used)
-  if (pct !== null && Number.isFinite(pct) && pct > 100) out.push({ tone: 'bad', text: t('wmsparts.loc.find.over', { pct }) })
-  else if (pct !== null && Number.isFinite(pct) && pct >= 90) out.push({ tone: 'warn', text: t('wmsparts.loc.find.nearly', { pct }) })
-  const br = Number(row?.restriction_breaches) || 0
-  if (br > 0) out.push({ tone: 'bad', text: t(br === 1 ? 'wmsparts.loc.find.breachOne' : 'wmsparts.loc.find.breachMany', { n: br, rule: restrictionText(t, row.restriction) }) })
-  if (row?.mixing_breach) out.push({ tone: 'bad', text: t('wmsparts.loc.find.mixing') })
-  return out
-}
-
 export function LocationRulesFields({ draft, setDraft, errors = {} }) {
   const { t } = useLanguage()
   const [people, setPeople] = useState([])
@@ -80,8 +68,8 @@ export function LocationRulesSection({ scope, people = [] }) {
   const personName = useMemo(() => new Map(people.map((p) => [p.id, p.full_name || p.username])), [people])
   const rows = useMemo(() => (q.data?.rows || [])
     .filter((r) => r.capacity_qty !== null || r.restriction || r.responsible_user_id || r.van_asset_no)
-    .map((r) => ({ ...r, findings: locationFindings(r) }))
-    .filter((r) => !onlyIssues || r.findings.length), [q.data, onlyIssues])
+    .map((r) => ({ ...r, findings: locationFindings(r, t) }))
+    .filter((r) => !onlyIssues || r.findings.length), [q.data, onlyIssues, t])
 
   if (q.data?.status === 'not_provisioned') {
     return (
@@ -105,7 +93,7 @@ export function LocationRulesSection({ scope, people = [] }) {
             { key: 'qty_on_hand', header: t('wmsparts.common.onHand'), numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
             { key: 'capacity', header: t('wmsparts.loc.capacity'), numeric: true, cell: (r) => (r.capacity_qty === null ? t('wmsparts.loc.notSet') : `${formatQty(r.capacity_qty)} ${r.capacity_uom || ''}`) },
             { key: 'findings', header: t('wmsparts.queue.check'), cell: (r) => (r.findings.length
-              ? findingTexts(r, t).map((f) => <StatusPill key={f.text} value={f.tone} tone={f.tone} label={f.text} />)
+              ? r.findings.map((f) => <StatusPill key={f.text} value={f.tone} tone={f.tone} label={f.text} />)
               : <StatusPill value="ok" tone="good" label={t('wmsparts.loc.ok')} />) },
           ])} />
       </div>

@@ -61,5 +61,14 @@
   "language": "زبان",
   "collapse": "سمیٹیں",
   "expand": "پھیلائیں",
-  "clearSearch": "تلاش صاف کریں"
+  "clearSearch": "تلاش صاف کریں",
+  "tyreCondition": {
+    "good": "ٹھیک",
+    "worn": "گھسا ہوا",
+    "puncture": "پنکچر",
+    "flat": "ہوا نکلا ہوا",
+    "damaged": "خراب",
+    "missing": "غائب",
+    "none": "چیک نہیں ہوا"
+  }
 }

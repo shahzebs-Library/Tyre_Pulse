@@ -23,6 +23,7 @@ import Modal from '../ui/Modal'
 import { useInvQuery, ErrorNote, Note, NotSetUp, SectionCard, StatusPill, SearchBox, Field, fmtDate, alignNumeric } from './InvUi'
 import { loadStockWithLocations, listStockWarrantyClaims, listScrapMovements, raiseStockWarrantyClaim } from '../../lib/api/warehouseAssets'
 import { repairableRows, claimsByStock, stockWarrantyDraft, REPAIR_STATES, STOCK_FAILURE_TYPES } from '../../lib/inventory/warehouseAssets'
+import { warmFloorText } from '../../lib/inventory/floorText'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { ScrapRequestsSection, ScrapProposeModal } from '../warehouseClasses/ScrapRequests'
@@ -132,7 +133,7 @@ export default function StockWarrantyScrapPanel({ scope, can, userId, onNavigate
               { key: 'supplier', header: p('colSupplier'), cell: (r) => r.supplier || NA },
               { key: 'claim_status', header: p('colStatus'), cell: (r) => <StatusPill value={r.claim_status} tone={CLAIM_TONE[r.claim_status]} label={r.claim_status ? claimLabel(r.claim_status) : undefined} /> },
               { key: 'credit', header: p('colCredit'), numeric: true, cell: (r) => (r.credit_amount === null || r.credit_amount === undefined ? p('notDecided') : formatMoney(r.credit_amount, null)) },
-              { key: 'created_at', header: p('colRaised'), cell: (r) => fmtDate(r.created_at) },
+              { key: 'created_at', header: p('colRaised'), cell: (r) => fmtDate(r.created_at, NA) },
             ])} />
         </div>
       </SectionCard>
@@ -148,7 +149,7 @@ export default function StockWarrantyScrapPanel({ scope, can, userId, onNavigate
           <div className="inv-scroll">
             <KitTable compact loading={scraps.loading && !scraps.data} rows={scraps.data?.rows || []} empty={p('scrapEmpty')}
               columns={alignNumeric([
-                { key: 'created_at', header: p('colDate'), cell: (r) => fmtDate(r.created_at) },
+                { key: 'created_at', header: p('colDate'), cell: (r) => fmtDate(r.created_at, NA) },
                 { key: 'site', header: p('colSite') },
                 { key: 'description', header: p('colDescription'), cell: (r) => r.description || NA },
                 { key: 'qty_change', header: p('colQty'), numeric: true, cell: (r) => formatQty(r.qty_change) },
@@ -167,14 +168,15 @@ export default function StockWarrantyScrapPanel({ scope, can, userId, onNavigate
 }
 
 function ClaimModal({ stock, onClose, onSaved }) {
-  const { p, failureLabel } = useWarrantyText()
+  const { t, p, failureLabel } = useWarrantyText()
+  warmFloorText(t)
   const [form, setForm] = useState({ failure_type: '', qty: '', supplier: '', serial: '', notes: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   async function submit() {
-    const check = stockWarrantyDraft(stock, form)
+    const check = stockWarrantyDraft(stock, form, t)
     if (check.error) { setError(check.error); return }
     setBusy(true)
     setError(null)

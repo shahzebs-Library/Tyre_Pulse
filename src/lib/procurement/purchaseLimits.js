@@ -13,7 +13,10 @@
  *   - once ANY active row exists, a role without its own row cannot approve
  *     a purchase order;
  *   - a value above the amount, an unknown value or another currency blocks.
+ *
+ * Messages are English unless the caller passes `t` (see src/lib/wmsText.js).
  */
+import { textFn } from '../wmsText'
 
 export const LIMIT_CURRENCIES = Object.freeze([
   { currency: 'SAR', country: 'KSA', label: 'SAR (Saudi Arabia)' },
@@ -50,14 +53,15 @@ export function rolesWithoutLimit(roles = [], active = []) {
 }
 
 /** Validate the add / edit form. Returns an error message or null. */
-export function validateLimitForm({ role, currency, amount, noUpperLimit } = {}, roles = []) {
-  if (!role || !String(role).trim()) return 'Choose a role.'
-  if (roles.length && !roles.includes(role)) return `${role} cannot approve purchase orders.`
-  if (!currencyCountry(currency)) return 'Choose SAR, AED or EGP.'
+export function validateLimitForm({ role, currency, amount, noUpperLimit } = {}, roles = [], t) {
+  const tx = textFn(t)
+  if (!role || !String(role).trim()) return tx('wmsmsgprocure.limits.chooseRole')
+  if (roles.length && !roles.includes(role)) return tx('wmsmsgprocure.limits.roleCannotApprove', { role })
+  if (!currencyCountry(currency)) return tx('wmsmsgprocure.limits.chooseCurrency')
   if (noUpperLimit) return null
   const n = num(amount)
-  if (n === null) return 'Enter the highest order value this role may approve, or tick "No upper limit".'
-  if (n <= 0) return 'The amount must be above zero.'
+  if (n === null) return tx('wmsmsgprocure.limits.enterAmount')
+  if (n <= 0) return tx('wmsmsgprocure.limits.aboveZero')
   return null
 }
 
@@ -75,8 +79,9 @@ export function limitPayload({ role, currency, amount, noUpperLimit, site } = {}
   }
 }
 
-export function formatLimitAmount(row) {
-  if (!row) return 'N/A'
-  if (row.amount === null) return 'No upper limit'
+export function formatLimitAmount(row, t) {
+  const tx = textFn(t)
+  if (!row) return tx('wmsmsgprocure.common.na')
+  if (row.amount === null) return tx('wmsmsgprocure.limits.noUpperLimit')
   return `${row.currency || ''} ${row.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim()
 }

@@ -76,7 +76,7 @@ export function ScrapProposeModal({ stock, onClose, onDone }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   async function submit() {
-    const check = scrapProposal(stock, form)
+    const check = scrapProposal(stock, form, t)
     if (check.error) { setError(check.error); return }
     setBusy(true); setError(null)
     try {

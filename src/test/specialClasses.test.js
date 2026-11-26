@@ -117,3 +117,20 @@ describe('locations', () => {
     expect(locationFindings({ pct_used: null })).toEqual([])
   })
 })
+
+describe('special classes text translation', () => {
+  const fakeT = (k) => k
+  it('keeps the English text without t', () => {
+    expect(validateToolIssue({}).error).toBe('Say who is taking the tool.')
+    expect(validateDispense({ id: 's1', qty_on_hand: 5, qty_reserved: 1 }, { qty: 9 }).error).toBe('Only 4 is free on this line.')
+    expect(locationFindings({ restriction: 'tyres_only', restriction_breaches: 1 })[0].text).toBe('1 stock line break the "Tyres only" rule')
+  })
+  it('uses the given t', () => {
+    expect(validateToolIssue({}, NOW, fakeT).error).toBe('wmsmsgparts.tool.holder')
+    expect(validateCalibration({}, NOW, fakeT).error).toBe('wmsmsgparts.tool.calDate')
+    expect(validateDispense(null, {}, fakeT).error).toBe('wmsmsgparts.lube.stockLine')
+    expect(validateUnitEvent({}, fakeT).error).toBe('wmsmsgparts.unit.item')
+    expect(validateLocationClass({ location_type: 'service_van' }, fakeT).errors.van_asset_no).toBe('wmsmsgparts.loc.vanRequired')
+    expect(locationFindings({ pct_used: 95, mixing_breach: true }, fakeT).map((x) => x.text)).toEqual(['wmsmsgparts.loc.nearly', 'wmsmsgparts.loc.mixing'])
+  })
+})

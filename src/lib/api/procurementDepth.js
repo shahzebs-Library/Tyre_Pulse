@@ -11,10 +11,13 @@
  */
 import { supabase, applyCountry, toServiceError, isNotProvisioned, isMissingColumn, ServiceError } from './_client'
 import { newIdempotencyKey } from './inventory'
+import { enText } from '../wmsText'
 
 export { newIdempotencyKey }
 
-export const NOT_SET_UP = 'This part of procurement is not switched on yet. Ask an administrator to apply the procurement update.'
+// The English text lives in locales/en/wmsmsgprocure.json (key wmsmsgprocure.notSetUp);
+// screens render the translated key, errors thrown here stay English.
+export const NOT_SET_UP = enText('wmsmsgprocure.notSetUp')
 
 async function rpc(fn, payload, key) {
   const { data, error } = await supabase.rpc(fn, { p_payload: { ...payload, idempotency_key: key || newIdempotencyKey() } })

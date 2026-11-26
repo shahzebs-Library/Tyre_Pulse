@@ -17,6 +17,7 @@
  *    is missing (no purchase order, no lead time) the detail says "not
  *    recorded". Money stays in its own currency; nothing is converted.
  */
+import { textFn } from '../wmsText'
 
 export const BASIS_LABEL = {
   exact_code: 'Same item code',
@@ -50,19 +51,14 @@ export function candidateStatus(row, userId) {
 }
 
 /** Plain-English warnings an approver must see before deciding. */
-export function candidateWarnings(row) {
+export function candidateWarnings(row, t) {
+  const tx = textFn(t)
   const out = []
   if (!row) return out
-  if (row.basis === 'exact_code' && row.same_description === false) {
-    out.push('Same code, different description. A code can mean a different item in another country.')
-  }
-  if (row.basis === 'normalized_oem' && row.alias_verified === false) {
-    out.push('The OEM number on the catalogue item is not verified.')
-  }
-  if (Number(row.candidate_count) > 1) {
-    out.push(`This ERP item matches ${row.candidate_count} catalogue items. Pick one; none is chosen for you.`)
-  }
-  if (row.canonical_taken) out.push('This catalogue item is already linked to another ERP item in this country.')
+  if (row.basis === 'exact_code' && row.same_description === false) out.push(tx('wmsmsgparts.queue.differentDescription'))
+  if (row.basis === 'normalized_oem' && row.alias_verified === false) out.push(tx('wmsmsgparts.queue.aliasNotVerified'))
+  if (Number(row.candidate_count) > 1) out.push(tx('wmsmsgparts.queue.manyCandidates', { n: row.candidate_count }))
+  if (row.canonical_taken) out.push(tx('wmsmsgparts.queue.taken'))
   return out
 }
 

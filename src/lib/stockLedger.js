@@ -6,6 +6,7 @@
  * raises a balance is never read as stock received. No I/O; day keys use LOCAL
  * calendar getters (never toISOString, which is UTC).
  */
+import { textFn } from './wmsText'
 
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null
@@ -107,13 +108,18 @@ export function tyresFitted(issues = []) {
   return (issues || []).reduce((sum, r) => { const q = num(r?.qty); return sum + (q === null || q <= 0 ? 1 : q) }, 0)
 }
 
-/** Honest comparison of tyres fitted against stock recorded as utilised. */
-export function utilisationGap(fitted, utilised) {
+/** Honest comparison of tyres fitted against stock recorded as utilised (note translated when `t` is given). */
+export function utilisationGap(fitted, utilised, t) {
   if (!fitted) return { gap: 0, note: '' }
   const gap = Math.max(0, fitted - utilised)
   if (!gap) return { gap: 0, note: '' }
+  const tx = textFn(t)
+  const k = 'wmsmsgprocure.ledger.gap.'
   return {
     gap,
-    note: `${fitted} tyre${fitted === 1 ? '' : 's'} were fitted in this period but only ${utilised} ${utilised === 1 ? 'was' : 'were'} issued from stock. Fitments are not deducted automatically: record an Issue so balances fall when tyres are used.`,
+    note: tx(`${k}note`, {
+      fitted: tx(`${k}${fitted === 1 ? 'fittedOne' : 'fittedOther'}`, { count: fitted }),
+      issued: tx(`${k}${utilised === 1 ? 'issuedOne' : 'issuedOther'}`, { count: utilised }),
+    }),
   }
 }

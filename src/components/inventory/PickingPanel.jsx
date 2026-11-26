@@ -18,6 +18,7 @@ import { loadPickList, confirmPick } from '../../lib/api/floorWorkflow'
 import {
   groupPickList, pickIssueArgs, pickExportRows, PICK_EXPORT_COLUMNS, normaliseJobCard,
 } from '../../lib/inventory/floorWorkflow'
+import { warmFloorText } from '../../lib/inventory/floorText'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
@@ -28,6 +29,7 @@ import { useLanguage } from '../../contexts/LanguageContext'
 export default function PickingPanel({ scope, can }) {
   const { t } = useLanguage()
   const p = (k, v) => t(`wmsfloor.picking.${k}`, v)
+  warmFloorText(t)
   const na = <span className="cc-na">{t('wmsfloor.common.na')}</span>
   const canIssue = typeof can === 'function' && can('issue')
   const canExport = typeof can === 'function' && can('export')
@@ -46,7 +48,7 @@ export default function PickingPanel({ scope, can }) {
     if (!j) { setState({ loading: false, error: p('enterJobCard'), data: null }); return }
     setState((s) => ({ ...s, loading: true, error: '' }))
     try {
-      const data = await loadPickList(j, { country: scope?.country })
+      const data = await loadPickList(j, { country: scope?.country, t })
       setState({ loading: false, error: '', data })
       setQtys({}); setLineErr({})
     } catch (e) {
@@ -56,12 +58,12 @@ export default function PickingPanel({ scope, can }) {
 
   const data = state.data
   const lines = data?.lines || []
-  const groups = groupPickList(lines)
+  const groups = groupPickList(lines, t)
   const pickable = lines.filter((l) => l.source === 'reservation')
 
   const keyFor = (l) => keys[l.key] || null
   const confirm = async (l) => {
-    const built = pickIssueArgs({ line: l, qty: qtys[l.key], jobCard: data.jobCard, receivedBy, note })
+    const built = pickIssueArgs({ line: l, qty: qtys[l.key], jobCard: data.jobCard, receivedBy, note }, t)
     if (!built.ok) { setLineErr((m) => ({ ...m, [l.key]: built.error })); return false }
     const key = keyFor(l) || newIdempotencyKey()
     if (!keyFor(l)) setKeys((m) => ({ ...m, [l.key]: key }))

@@ -1,0 +1,74 @@
+{
+  "fitment": {
+    "thisManual": "هذا الدليل",
+    "noMake": "لا يذكر الدليل أي شركة مصنعة، لذلك لا يمكن مقارنته بالأسطول.",
+    "makeLineOne": "{n} أصل في الأسطول يحمل الماركة {make}",
+    "makeLineMany": "{n} أصول في الأسطول تحمل الماركة {make}",
+    "noModel": "لا يذكر الدليل رمز طراز. {makeLine}؛ ولا يمكن للدليل تحديد أي منها يغطي.",
+    "full": "يذكر الدليل {name}. {makeLine}؛ {recorded} منها مسجل لها طراز؛ {matches} مسجل لها الطراز {family}."
+  },
+  "evidence": {
+    "variant": "نسخة",
+    "description": "الوصف",
+    "words": "الكلمات",
+    "reference_oem": "مرجع OEM",
+    "reference_alternative": "مرجع بديل",
+    "reference_superseded": "مرجع مستبدل",
+    "reference_barcode": "مرجع باركود",
+    "reference_erp_legacy": "مرجع ERP قديم",
+    "reference_aftermarket": "مرجع ما بعد البيع",
+    "reference_company_sku": "مرجع SKU الشركة",
+    "reference_erp_sku": "مرجع SKU في ERP",
+    "reference_other": "مرجع آخر"
+  },
+  "queue": {
+    "differentDescription": "نفس الرمز بوصف مختلف. قد يعني الرمز صنفا مختلفا في دولة أخرى.",
+    "aliasNotVerified": "رقم OEM على صنف الكتالوج لم يتم التحقق منه.",
+    "manyCandidates": "صنف ERP هذا يطابق {n} أصناف في الكتالوج. اختر واحدا؛ لن يتم الاختيار نيابة عنك.",
+    "taken": "صنف الكتالوج هذا مرتبط مسبقا بصنف ERP آخر في هذه الدولة."
+  },
+  "loc": {
+    "capacityPositive": "يجب أن تكون السعة رقما أكبر من صفر.",
+    "capacityUnit": "حدد وحدة قياس السعة.",
+    "vanOnlyService": "فقط شاحنة الخدمة تحدد مركبة.",
+    "vanRequired": "حدد الشاحنة (رقم أصلها في الأسطول).",
+    "over": "تجاوز السعة ({pct}%)",
+    "nearly": "ممتلئ تقريبا ({pct}%)",
+    "breachOne": "{n} سطر مخزون يخالف قاعدة \"{rule}\"",
+    "breachMany": "{n} أسطر مخزون تخالف قاعدة \"{rule}\"",
+    "mixing": "أكثر من صنف في موقع ممنوع فيه الخلط",
+    "restriction": {
+      "none": "بدون قيود",
+      "tyres_only": "إطارات فقط",
+      "lubricants_only": "زيوت وشحوم فقط",
+      "hazardous": "مواد خطرة",
+      "serial_tracked_only": "أصناف بأرقام تسلسلية فقط",
+      "no_mixing": "صنف واحد فقط (بدون خلط)",
+      "quarantine_only": "مخزون الحجر فقط"
+    }
+  },
+  "tool": {
+    "calDate": "أدخل تاريخ المعايرة.",
+    "calFuture": "لا يمكن أن يكون تاريخ المعايرة في المستقبل.",
+    "calResult": "اختر النتيجة.",
+    "calNextDue": "أدخل تاريخ الاستحقاق التالي بعد تاريخ المعايرة.",
+    "holder": "حدد من يستلم الأداة.",
+    "dueBackInvalid": "تاريخ الإرجاع ليس تاريخا صحيحا.",
+    "dueBackPast": "يجب أن يكون تاريخ الإرجاع في المستقبل."
+  },
+  "lube": {
+    "stockLine": "اختر سطر مخزون الزيوت.",
+    "qty": "أدخل الكمية المصروفة.",
+    "onlyFree": "المتاح في هذا السطر {free} فقط.",
+    "asset": "اختر الأصل الذي صرفت له.",
+    "meterNumber": "يجب أن تكون قراءة العداد رقما.",
+    "meterType": "حدد إن كانت القراءة بالكيلومتر أو بالساعات."
+  },
+  "unit": {
+    "item": "اختر الصنف.",
+    "serial": "أدخل الرقم التسلسلي.",
+    "event": "اختر ما حدث.",
+    "asset": "اختر الأصل.",
+    "vendor": "اختر مورد الإصلاح."
+  }
+}

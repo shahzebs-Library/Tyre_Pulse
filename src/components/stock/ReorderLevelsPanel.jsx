@@ -49,8 +49,8 @@ export default function ReorderLevelsPanel({ records = [], usageIdx = null, deta
   const [result, setResult] = useState(null)
 
   const items = useMemo(
-    () => (usageIdx ? buildReorderSuggestions(records, r => usageFor(r, usageIdx)) : []),
-    [records, usageIdx],
+    () => (usageIdx ? buildReorderSuggestions(records, r => usageFor(r, usageIdx), { t }) : []),
+    [records, usageIdx, t],
   )
   const summary = useMemo(() => summarizeSuggestions(items), [items])
   const sites = useMemo(

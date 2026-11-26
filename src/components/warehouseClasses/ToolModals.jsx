@@ -42,7 +42,7 @@ export function IssueToolModal({ tool, onClose, onDone }) {
   }, [])
 
   async function submit() {
-    const v = validateToolIssue(form)
+    const v = validateToolIssue(form, Date.now(), t)
     if (v.error) { setError(v.error); return }
     setBusy(true); setError(null)
     try {
@@ -132,7 +132,7 @@ export function CalibrationModal({ tool, onClose, onDone }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   async function submit() {
-    const v = validateCalibration(form)
+    const v = validateCalibration(form, Date.now(), t)
     if (v.error) { setError(v.error); return }
     setBusy(true); setError(null)
     try {

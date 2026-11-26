@@ -16,6 +16,7 @@ import { ArrowDownToLine, PackageCheck } from 'lucide-react'
 import { newIdempotencyKey } from '../../lib/api/inventory'
 import { listPutawayCandidates, startPutaway, finishPutaway } from '../../lib/api/floorWorkflow'
 import { putawayTargets, validatePutaway, putawayStage, freeQty, locationIndex, locationPath } from '../../lib/inventory/floorWorkflow'
+import { warmFloorText } from '../../lib/inventory/floorText'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, PagedTable, Field, ErrorNote, Note, SectionCard, SearchBox } from './InvUi'
@@ -26,6 +27,7 @@ const freshAction = () => ({ dispatchKey: newIdempotencyKey(), receiveKey: newId
 export default function PutawayPanel({ scope, can }) {
   const { t } = useLanguage()
   const p = (k, v) => t(`wmsfloor.putaway.${k}`, v)
+  warmFloorText(t)
   const na = <span className="cc-na">{t('wmsfloor.common.na')}</span>
   const allowed = typeof can === 'function' && can('transfer')
   const [page, setPage] = useState(0)
@@ -74,7 +76,7 @@ export default function PutawayPanel({ scope, can }) {
     try {
       setBusy(true)
       if (putawayStage(state) === 'start') {
-        const v = validatePutaway({ stock, target, qty: form.qty })
+        const v = validatePutaway({ stock, target, qty: form.qty }, t)
         if (!v.ok) { setErr(v.error); return }
         const res = await startPutaway({ stock, targetId: target.id, qty: v.qty, note: form.note }, state.dispatchKey)
         if (res.refused) { setErr(p('refused')); return }
@@ -99,7 +101,7 @@ export default function PutawayPanel({ scope, can }) {
     { key: 'item_code', header: p('colItem'), cell: (r) => r.item_code || na },
     { key: 'description', header: p('colDescription'), cell: (r) => r.description || na },
     { key: 'site', header: p('colSite') },
-    { key: 'location_code', header: p('colReceiving'), cell: (r) => locationPath(r.location_id, index, r.location_code) },
+    { key: 'location_code', header: p('colReceiving'), cell: (r) => locationPath(r.location_id, index, r.location_code, t) },
     { key: 'qty_on_hand', header: p('colOnHand'), numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
     { key: 'free', header: p('colFree'), numeric: true, sortable: false, cell: (r) => formatQty(freeQty(r)) },
   ]
@@ -122,7 +124,7 @@ export default function PutawayPanel({ scope, can }) {
 
       {(stock || stage === 'receive') && (
         <SectionCard title={stage === 'receive' ? p('finish') : p('putAwayItem', { item: stock?.item_code || '' })}
-          sub={stock ? p('stockSub', { description: stock.description || '', location: locationPath(stock.location_id, index, stock.location_code), free: formatQty(freeQty(stock)) }) : undefined}>
+          sub={stock ? p('stockSub', { description: stock.description || '', location: locationPath(stock.location_id, index, stock.location_code, t), free: formatQty(freeQty(stock)) }) : undefined}>
           {stage === 'start' && (
             <div className="inv-form">
               <Field label={p('binLabel')}>

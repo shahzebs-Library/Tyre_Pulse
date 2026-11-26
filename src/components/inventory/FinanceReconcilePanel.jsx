@@ -20,22 +20,15 @@ import { loadFinanceRecon } from '../../lib/api/warehouseAssets'
 import { buildFinanceRecon, stockValueBySite, financeTotals, reconFinding, monthsAgoStart } from '../../lib/inventory/warehouseAssets'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { warmFloorText } from '../../lib/inventory/floorText'
 
 const WINDOWS = [3, 6, 12]
-// reconFinding (lib) returns fixed English sentences; translate them at render.
-const FINDING_KEY = {
-  'Issued in the ERP, not recorded as an issue in the store.': 'erpOnly',
-  'Issued in the store, not in the ERP.': 'storeOnly',
-  'Store issues include unvalued quantity; the cost is unknown, not zero.': 'unvalued',
-  'Quantities differ between the store and the ERP.': 'differ',
-  'Quantities agree.': 'agree',
-  'Receipts only this month.': 'receiptsOnly',
-}
 
 export default function FinanceReconcilePanel({ scope, can }) {
   const { t } = useLanguage()
   const p = (k, v) => t(`wmsfloor.finance.${k}`, v)
-  const finding = (r) => { const f = reconFinding(r); return f ? (FINDING_KEY[f] ? t(`wmsfloor.finance.finding.${FINDING_KEY[f]}`) : f) : '' }
+  warmFloorText(t)
+  const finding = (r) => reconFinding(r, t) || ''
   const [months, setMonths] = useState(6)
   const fromMonth = useMemo(() => monthsAgoStart(months - 1), [months])
   const q = useInvQuery(() => loadFinanceRecon({ ...scope, fromMonth }), [scope.country, scope.site, fromMonth])

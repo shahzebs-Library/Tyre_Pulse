@@ -429,7 +429,7 @@ export default function Procurement() {
     if (formData.items.length === 0)  { alert(t('procurement.alerts.lineItemRequired')); return }
     if (!editPO && formData.is_emergency) {
       const check = validateEmergency(formData.emergency, {
-        currency: currencyForCountry(formData.country?.trim()), supplier: vendorName, country: formData.country?.trim(),
+        currency: currencyForCountry(formData.country?.trim()), supplier: vendorName, country: formData.country?.trim(), t,
       })
       if (!check.ok) { setEmergencyTouched(true); alert(t('wmsprocure.proc.emergencyAlert', { message: check.first })); return }
     }
@@ -1032,7 +1032,7 @@ export default function Procurement() {
                         showErrors={emergencyTouched}
                         errors={validateEmergency(formData.emergency, {
                           currency: currencyForCountry(formData.country?.trim()),
-                          supplier: supplierPick?.supplier_name || formData.vendor_name, country: formData.country?.trim(),
+                          supplier: supplierPick?.supplier_name || formData.vendor_name, country: formData.country?.trim(), t,
                         }).errors}
                       />
                     )}

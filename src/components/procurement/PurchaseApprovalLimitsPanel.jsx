@@ -13,7 +13,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
 import {
-  NOT_SET_UP, newIdempotencyKey, listPurchaseApprovalLimits, listPurchaseApproverRoles, savePurchaseApprovalLimit,
+  newIdempotencyKey, listPurchaseApprovalLimits, listPurchaseApproverRoles, savePurchaseApprovalLimit,
 } from '../../lib/api/procurementDepth'
 import {
   LIMIT_CURRENCIES, shapeLimits, rolesWithoutLimit, validateLimitForm, limitPayload, formatLimitAmount,
@@ -55,7 +55,7 @@ export default function PurchaseApprovalLimitsPanel() {
     setMsg({})
     setForm({ role: r.role, currency: r.currency || 'SAR', amount: r.amount ?? '', noUpperLimit: r.amount === null, site: r.site, editing: r.id })
   }
-  const formError = form ? validateLimitForm(form, st.roles) : null
+  const formError = form ? validateLimitForm(form, st.roles, t) : null
 
   const save = async () => {
     if (formError) { setMsg({ error: formError }); return }
@@ -158,7 +158,7 @@ export default function PurchaseApprovalLimitsPanel() {
           <button type="button" className="underline min-h-[44px]" onClick={load}>{t('wmsprocure.limits.tryAgain')}</button>
         </div>
       ) : st.notSetUp ? (
-        <p className="text-xs text-amber-300" role="note">{NOT_SET_UP}</p>
+        <p className="text-xs text-amber-300" role="note">{t('wmsmsgprocure.notSetUp')}</p>
       ) : !shaped.active.length ? (
         <p className="text-sm text-[var(--text-muted)]">{t('wmsprocure.limits.empty')}{isAdmin ? t('wmsprocure.limits.emptyAdmin') : ''}</p>
       ) : (
@@ -168,7 +168,7 @@ export default function PurchaseApprovalLimitsPanel() {
               <li key={r.id} className="rounded-lg border border-[var(--hairline)] p-3 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{r.role}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{formatLimitAmount(r)}{r.site ? t('wmsprocure.limits.siteSuffix', { site: r.site }) : ''}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{formatLimitAmount(r, t)}{r.site ? t('wmsprocure.limits.siteSuffix', { site: r.site }) : ''}</p>
                 </div>
                 {isAdmin && <RowActions r={r} busy={busy} onEdit={openEdit} onRemove={remove} />}
               </li>
@@ -187,7 +187,7 @@ export default function PurchaseApprovalLimitsPanel() {
                 <tr key={r.id} className="border-t border-[var(--hairline)]">
                   <td className="py-2 pe-2">{r.role}{r.site ? <span className="block text-xs text-[var(--text-muted)]">{t('wmsprocure.limits.siteLine', { site: r.site })}</span> : null}</td>
                   <td className="py-2 pe-2">{r.currency || t('wmsprocure.limits.na')}</td>
-                  <td className="py-2 pe-2 text-end tabular-nums">{formatLimitAmount(r)}</td>
+                  <td className="py-2 pe-2 text-end tabular-nums">{formatLimitAmount(r, t)}</td>
                   <td className="py-2 pe-2">{fmtDate(r.updated_at)}</td>
                   {isAdmin && <td className="py-2 pe-2"><RowActions r={r} busy={busy} onEdit={openEdit} onRemove={remove} /></td>}
                 </tr>

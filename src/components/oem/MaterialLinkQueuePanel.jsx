@@ -24,16 +24,6 @@ import { toUserMessage } from '../../lib/inventory/errorText'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, StatusPill, SearchBox } from '../inventory/InvUi'
 
-// Mirrors candidateWarnings() in lib/oem/materialLinks.js, translated at render.
-function warningTexts(row, t) {
-  const out = []
-  if (!row) return out
-  if (row.basis === 'exact_code' && row.same_description === false) out.push(t('wmsparts.queue.warn.differentDescription'))
-  if (row.basis === 'normalized_oem' && row.alias_verified === false) out.push(t('wmsparts.queue.warn.aliasNotVerified'))
-  if (Number(row.candidate_count) > 1) out.push(t('wmsparts.queue.warn.manyCandidates', { n: row.candidate_count }))
-  if (row.canonical_taken) out.push(t('wmsparts.queue.warn.taken'))
-  return out
-}
 const COUNTRIES = ['UAE', 'Egypt', 'KSA']
 
 export default function MaterialLinkQueuePanel({ scope, can, userId }) {
@@ -133,7 +123,7 @@ export default function MaterialLinkQueuePanel({ scope, can, userId }) {
       </span>
     ) },
     { key: 'check', header: t('wmsparts.queue.check'), sortable: false, cell: (r) => {
-      const w = candidateWarnings(r).length ? warningTexts(r, t) : []
+      const w = candidateWarnings(r, t)
       if (!w.length) return <StatusPill value="ok" tone="good" label={r.same_description ? t('wmsparts.queue.sameDescription') : t('wmsparts.queue.noWarning')} />
       return <ul className="oem-warn-list">{w.map((x) => <li key={x}>{x}</li>)}</ul>
     } },

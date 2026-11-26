@@ -24,6 +24,7 @@
  *   - a negative ERP quantity cannot be counted and is held back.
  */
 import { categoryFromCode, hasTyreSize, isLubricant, isNonTyrePart } from '../classificationBrain'
+import { floorText } from './floorText'
 
 export const LEDGER_REPORT_ID = 'CSOL-IMS-013-1'
 
@@ -183,20 +184,42 @@ export function parseStoreLedger(aoa, { filename = '' } = {}) {
  * means the file can be posted. Rejected rows block the post: a row we could
  * not read is stock we would otherwise treat as missing.
  */
-export function postBlockers(parsed) {
-  if (!parsed?.ok) return ['This file is not an ERP Stores Ledger (report CSOL-IMS-013-1).']
+export function postBlockers(parsed, t) {
+  const tx = floorText(t)
+  const m = (k, v) => tx(`wmsmsgfloor.erp.${k}`, v)
+  if (!parsed?.ok) return [m('notLedger')]
   const out = []
   const w = new Set(parsed.warnings)
-  if (parsed.meta.reportId !== LEDGER_REPORT_ID) out.push(`The report is ${parsed.meta.reportId || 'not named'}, not the Stores Ledger (${LEDGER_REPORT_ID}).`)
-  if (w.has('no_lines')) out.push('The file has no stock lines.')
-  if (w.has('several_warehouses')) out.push(`The file covers more than one store (${parsed.meta.warehouses.join(', ')}). Export one store per file.`)
-  if (parsed.rejected.length) out.push(`${parsed.rejected.length} rows could not be read. Fix them in the export and upload again.`)
-  if (w.has('incomplete')) out.push('The file has no end of report line; it may be cut off.')
-  if (w.has('total_mismatch')) out.push(`The lines add up to a different total than the file shows (${parsed.meta.totalQty}).`)
-  if (!parsed.meta.to) out.push('The balance date could not be read.')
-  if (!parsed.meta.currency) out.push('The currency could not be read.')
-  if (parsed.lines.length > 5000) out.push(`The file has ${parsed.lines.length} item codes; one upload takes at most 5000. Split the export.`)
+  if (parsed.meta.reportId !== LEDGER_REPORT_ID) out.push(m('otherReport', { report: parsed.meta.reportId || m('notNamed'), expected: LEDGER_REPORT_ID }))
+  if (w.has('no_lines')) out.push(m('noLines'))
+  if (w.has('several_warehouses')) out.push(m('severalWarehouses', { warehouses: parsed.meta.warehouses.join(', ') }))
+  if (parsed.rejected.length) out.push(m('rejectedRows', { count: parsed.rejected.length }))
+  if (w.has('incomplete')) out.push(m('incomplete'))
+  if (w.has('total_mismatch')) out.push(m('totalMismatch', { total: parsed.meta.totalQty }))
+  if (!parsed.meta.to) out.push(m('noDate'))
+  if (!parsed.meta.currency) out.push(m('noCurrency'))
+  if (parsed.lines.length > 5000) out.push(m('tooMany', { count: parsed.lines.length }))
   return out
+}
+
+/** Reason codes a line is held back (plan.held, missing). */
+export const HELD_REASONS = Object.freeze(['negative_qty', 'below_reserved', 'no_item', 'serial_tracked', 'missing_but_reserved'])
+/** Reason codes a row could not be read (parsed.rejected). */
+export const REJECT_REASONS = Object.freeze(['bad_qty', 'no_code', 'no_warehouse'])
+
+/** Sentence for a held-back reason code; an unknown code is returned as is. */
+export function heldReasonText(reason, t) {
+  return HELD_REASONS.includes(reason) ? floorText(t)(`wmsmsgfloor.erp.held.${reason}`) : reason
+}
+
+/** One or two words for a held-back reason code (for summaries). */
+export function heldReasonShort(reason, t) {
+  return HELD_REASONS.includes(reason) ? floorText(t)(`wmsmsgfloor.erp.heldShort.${reason}`) : reason
+}
+
+/** Text for a rejected-row reason code; an unknown code is returned as is. */
+export function rejectReasonText(reason, t) {
+  return REJECT_REASONS.includes(reason) ? floorText(t)(`wmsmsgfloor.erp.reject.${reason}`) : reason
 }
 
 /**

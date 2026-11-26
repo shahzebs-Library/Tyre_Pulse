@@ -46,7 +46,7 @@ export default function StockQuickEntry({ records, initialSite = '', onClose, on
   const [manualOpen, setManualOpen] = useState(false)
   const [manual, setManual] = useState(emptyManual)
   const [manualUnitTouched, setManualUnitTouched] = useState(false)
-  const manualGuess = useMemo(() => suggestStockUnit({ name: manual.name, kind: manual.kind }), [manual.name, manual.kind])
+  const manualGuess = useMemo(() => suggestStockUnit({ name: manual.name, kind: manual.kind, t }), [manual.name, manual.kind, t])
   const request = useRef(null)
   const alive = useRef(true)
   const searchRef = useRef(null)
@@ -87,20 +87,20 @@ export default function StockQuickEntry({ records, initialSite = '', onClose, on
   const update = (index, patch) => { setRows(prev => prev.map((r, i) => i === index ? { ...r, ...patch } : r)); setErrors([]) }
   function choose(option) {
     if (rows.some(r => r.rowKey === option.key)) { setErrors([t('wmsissue.quick.alreadyAdded')]); return }
-    const row = stockDraft(option)
+    const row = stockDraft(option, t)
     setRows(prev => [...prev, row]); setSelected(row); setQuery(''); setRemote([]); setErrors([]); setSuggestionsOpen(false)
   }
   function changeSite(value) {
     setSite(value); setRows([]); setSelected(null); setQuery(''); setErrors([]); request.current = null
   }
   function openReview() {
-    const problems = entryErrors(rows, { site, country, mode, reference })
+    const problems = entryErrors(rows, { site, country, mode, reference, t })
     setErrors(problems)
     if (!problems.length) { setReview(true); setConfirmed(false); request.current = crypto.randomUUID() }
   }
   async function save() {
     if (saving) return
-    const problems = entryErrors(rows, { site, country, mode, reference, confirmed })
+    const problems = entryErrors(rows, { site, country, mode, reference, confirmed, t })
     setErrors(problems)
     if (problems.length) return
     setSaving(true)

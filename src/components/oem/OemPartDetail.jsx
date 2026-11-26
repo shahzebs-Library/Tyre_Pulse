@@ -84,7 +84,7 @@ export default function OemPartDetail({ reference, onClose }) {
                       <ul className="oem-dt-list">
                         {d.fitment.manuals.map((f) => (
                           <li key={f.manual.id}>
-                            {fitmentSentence(f)}
+                            {fitmentSentence(f, t)}
                             {f.makeAssets > 0 && f.modelRecorded === 0 ? ` ${t('wmsparts.detail.noModelRecorded')}` : ''}
                           </li>
                         ))}

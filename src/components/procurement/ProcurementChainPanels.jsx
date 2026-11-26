@@ -28,10 +28,12 @@ import {
 } from '../../lib/procurementChain'
 import { REJECTION_CODES, rejectionReasonText } from '../../lib/procurement/procurementDepth'
 import { findOpenRfqForRequisition } from '../../lib/api/procurementDepth'
+import { textFn } from '../../lib/wmsText'
 
 const fmtNum = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString())
-const fmtMoney = (v, cur) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))
-  ? 'No cost recorded'
+// Pass `t` for the translated "No cost recorded"; without it the text is English.
+const fmtMoney = (v, cur, t) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))
+  ? textFn(t)('wmsmsgprocure.common.noCost')
   : `${cur || ''} ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim())
 
 /** Server-decided procurement rights. `loading` stays true until the answer lands. */
@@ -184,7 +186,7 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
   }, [requisition])
   if (!requisition) return null
   const currency = currencyForCountry(requisition.country)
-  const draft = requisitionPoDraft(requisition, { supplier, material, unitPrice, country: requisition.country })
+  const draft = requisitionPoDraft(requisition, { supplier, material, unitPrice, country: requisition.country, t })
   const submit = async () => {
     setError(''); setWarning('')
     // Once this modal created the PO, its own link sets po_ref; do not block the retry on it.
@@ -309,7 +311,7 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
     const withReasons = Object.fromEntries(Object.entries(entries).map(([id, e]) => [id, {
       ...e, rejection_reason: Number(e.qty_rejected) > 0 && e.rejection_code ? rejectionReasonText(e.rejection_code, e.rejection_note) : null,
     }]))
-    const plan = receiptPlan(lines || [], withReasons)
+    const plan = receiptPlan(lines || [], withReasons, t)
     if (plan.errors.length) { setError(plan.errors.join(' ')); return }
     if (supplierOwned) plan.lines = plan.lines.map((l) => ({ ...l, ownership: 'consignment', owner_supplier_id: po.supplier_id }))
     setBusy(true)

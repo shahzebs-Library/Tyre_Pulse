@@ -6,7 +6,11 @@
  * justification is incomplete, resolves the asset / job card in the PO's
  * company and country, and stamps who requested it. These helpers only mirror
  * those rules so the form can say what is missing before saving.
+ *
+ * Text is English unless the caller passes `t` (see src/lib/wmsText.js).
+ * Exports call without `t`, so files stay English.
  */
+import { textFn } from '../wmsText'
 
 export const EMERGENCY_CATEGORIES = Object.freeze([
   { value: 'breakdown', label: 'Breakdown' },
@@ -25,7 +29,11 @@ export const EMPTY_EMERGENCY = Object.freeze({
   routeReason: '', estValue: '', estCurrency: '', attachmentPath: '',
 })
 
-export const categoryLabel = (v) => EMERGENCY_CATEGORIES.find((c) => c.value === v)?.label || (v ? String(v) : 'N/A')
+export const categoryLabel = (v, t) => {
+  const tx = textFn(t)
+  if (EMERGENCY_CATEGORIES.some((c) => c.value === v)) return tx(`wmsmsgprocure.emergency.cat.${v}`)
+  return v ? String(v) : tx('wmsmsgprocure.common.na')
+}
 
 const txt = (v) => String(v ?? '').trim()
 const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
@@ -33,32 +41,34 @@ const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinit
 /**
  * Check a justification form. Returns { ok, errors: {field: message}, first }.
  * @param {object} f        form (EMPTY_EMERGENCY shape)
- * @param {object} ctx      { currency: PO currency, supplier: supplier name or id, country }
+ * @param {object} ctx      { currency: PO currency, supplier: supplier name or id, country, t? }
  */
 export function validateEmergency(f = {}, ctx = {}) {
+  const tx = textFn(ctx.t)
+  const e = (key, vars) => tx(`wmsmsgprocure.emergency.err.${key}`, vars)
   const errors = {}
-  if (!EMERGENCY_CATEGORIES.some((c) => c.value === f.category)) errors.category = 'Choose why this is an emergency.'
+  if (!EMERGENCY_CATEGORIES.some((c) => c.value === f.category)) errors.category = e('category')
   if (f.category === 'other' && txt(f.categoryNote).length < OTHER_NOTE_MIN) {
-    errors.categoryNote = `Describe the emergency in at least ${OTHER_NOTE_MIN} characters.`
+    errors.categoryNote = e('categoryNote', { min: OTHER_NOTE_MIN })
   }
-  if (!txt(f.assetNo) && !txt(f.jobCardNo)) errors.asset = 'Name the affected asset number or job card.'
+  if (!txt(f.assetNo) && !txt(f.jobCardNo)) errors.asset = e('asset')
   const hours = num(f.downtimeHours)
-  if (f.downtimeHours !== '' && f.downtimeHours != null && (hours === null || hours < 0)) errors.downtimeHours = 'Downtime hours must be zero or more.'
+  if (f.downtimeHours !== '' && f.downtimeHours != null && (hours === null || hours < 0)) errors.downtimeHours = e('downtimeHours')
   if (hours === null && txt(f.impact).length < IMPACT_TEXT_MIN) {
-    errors.impact = `Give the downtime hours, or describe the impact of waiting in at least ${IMPACT_TEXT_MIN} characters.`
+    errors.impact = e('impact', { min: IMPACT_TEXT_MIN })
   }
   if (txt(f.routeReason).length < ROUTE_REASON_MIN) {
-    errors.routeReason = `Explain why the normal approval route could not be used (at least ${ROUTE_REASON_MIN} characters).`
+    errors.routeReason = e('routeReason', { min: ROUTE_REASON_MIN })
   }
   const est = num(f.estValue)
-  if (est === null || est <= 0) errors.estValue = 'Enter the estimated value.'
+  if (est === null || est <= 0) errors.estValue = e('estValue')
   const cur = txt(f.estCurrency || ctx.currency).toUpperCase()
-  if (!/^[A-Z]{3}$/.test(cur)) errors.estCurrency = 'Choose the currency of the estimated value.'
+  if (!/^[A-Z]{3}$/.test(cur)) errors.estCurrency = e('estCurrency')
   else if (ctx.currency && cur !== String(ctx.currency).toUpperCase()) {
-    errors.estCurrency = `The order is in ${String(ctx.currency).toUpperCase()}. The estimate must use the same currency; currencies are not converted.`
+    errors.estCurrency = e('estCurrencyMismatch', { currency: String(ctx.currency).toUpperCase() })
   }
-  if (!txt(ctx.supplier)) errors.supplier = 'Choose or type the supplier.'
-  if (!txt(ctx.country)) errors.country = 'Choose the country of the order.'
+  if (!txt(ctx.supplier)) errors.supplier = e('supplier')
+  if (!txt(ctx.country)) errors.country = e('country')
   const keys = Object.keys(errors)
   return { ok: keys.length === 0, errors, first: keys.length ? errors[keys[0]] : null }
 }
@@ -82,33 +92,37 @@ export function emergencyColumns(f = {}, ctx = {}) {
 }
 
 /** One plain line describing the impact of waiting. */
-export function impactText(po = {}) {
+export function impactText(po = {}, t) {
+  const tx = textFn(t)
   const hours = num(po.emergency_downtime_hours)
   const parts = []
-  if (hours !== null) parts.push(`${hours.toLocaleString('en-US')} h downtime`)
+  if (hours !== null) parts.push(tx('wmsmsgprocure.emergency.downtime', { hours: hours.toLocaleString('en-US') }))
   if (txt(po.emergency_impact)) parts.push(txt(po.emergency_impact))
-  return parts.join('; ') || 'N/A'
+  return parts.join('; ') || tx('wmsmsgprocure.common.na')
 }
 
-export function estimateText(po = {}) {
+export function estimateText(po = {}, t) {
   const v = num(po.emergency_est_value)
-  if (v === null) return 'No estimate'
+  if (v === null) return textFn(t)('wmsmsgprocure.emergency.noEstimate')
   return `${po.emergency_est_currency || po.currency || ''} ${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim()
 }
 
 /** Ordered label / value pairs for showing the full justification. */
-export function justificationFields(po = {}) {
+export function justificationFields(po = {}, t) {
+  const tx = textFn(t)
+  const f = (key) => tx(`wmsmsgprocure.emergency.f.${key}`)
+  const na = tx('wmsmsgprocure.common.na')
   return [
-    ['Reason category', po.emergency_category === 'other' && po.emergency_category_note
-      ? `Other: ${po.emergency_category_note}` : categoryLabel(po.emergency_category)],
-    ['Affected asset', po.emergency_asset_no || 'N/A'],
-    ['Job card', po.emergency_job_card_no || 'N/A'],
-    ['Impact of waiting', impactText(po)],
-    ['Why the normal approval route could not be used', po.emergency_reason || 'N/A'],
-    ['Estimated value', estimateText(po)],
-    ['Supplier', po.supplier_name || po.vendor_name || 'N/A'],
-    ['Requested by', po.emergency_requested_by_name || 'N/A'],
-    ['Attachment', po.emergency_attachment_path || 'None'],
+    [f('category'), po.emergency_category === 'other' && po.emergency_category_note
+      ? tx('wmsmsgprocure.emergency.otherNote', { note: po.emergency_category_note }) : categoryLabel(po.emergency_category, t)],
+    [f('asset'), po.emergency_asset_no || na],
+    [f('jobCard'), po.emergency_job_card_no || na],
+    [f('impact'), impactText(po, t)],
+    [f('route'), po.emergency_reason || na],
+    [f('estimate'), estimateText(po, t)],
+    [f('supplier'), po.supplier_name || po.vendor_name || na],
+    [f('requestedBy'), po.emergency_requested_by_name || na],
+    [f('attachment'), po.emergency_attachment_path || tx('wmsmsgprocure.common.none')],
   ]
 }
 

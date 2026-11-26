@@ -59,7 +59,7 @@ export default function StockMovementsPanel({ records, country, site }) {
   const ledger = useMemo(() => summarizeLedger(scoped), [scoped])
   const days = useMemo(() => dailyLedger(scoped), [scoped])
   const fitted = issues ? tyresFitted(site && site !== 'all' ? issues.filter(i => i.site === site) : issues) : null
-  const gap = fitted == null ? null : utilisationGap(fitted, ledger.totals.utilised)
+  const gap = fitted == null ? null : utilisationGap(fitted, ledger.totals.utilised, t)
 
   const itemColumns = useMemo(() => [
     { accessorKey: 'site', header: t('wmsissue.filters.site') },

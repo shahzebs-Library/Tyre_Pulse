@@ -14,6 +14,8 @@
  * helpers only decide what is offered and what is sent.
  */
 
+import { floorText } from './floorText'
+
 /** Location types goods are received into and put away FROM. */
 export const PUTAWAY_SOURCE_TYPES = ['warehouse', 'zone', 'rack']
 /** Location types goods are put away INTO. */
@@ -54,10 +56,10 @@ export function ancestorIds(loc, index) {
   return out
 }
 
-/** "WH-01 > ZONE-A > BIN-03" for a location id; the code alone when there is no tree. */
-export function locationPath(locationId, index, fallbackCode = '') {
+/** "WH-01 > ZONE-A > BIN-03" for a location id; the code alone when there is no tree. `t` translates "No location". */
+export function locationPath(locationId, index, fallbackCode = '', t) {
   const loc = locationId ? index.get(locationId) : null
-  if (!loc) return text(fallbackCode) || 'No location'
+  if (!loc) return text(fallbackCode) || floorText(t)('wmsmsgfloor.location.none')
   const chain = [...ancestorIds(loc, index)].reverse().map((id) => index.get(id)?.code).filter(Boolean)
   return [...chain, loc.code].filter(Boolean).join(' > ')
 }
@@ -95,18 +97,18 @@ export function putawayTargets(stock, locations = []) {
  * Validate a put-away before sending it. `{ ok, qty, error }`.
  * Reserved stock is left where it is: only free stock can be put away.
  */
-export function validatePutaway({ stock, target, qty }) {
-  if (!stock) return { ok: false, error: 'Choose the stock line to put away.' }
-  if (!stock.location_id) return { ok: false, error: 'This stock line has no location, so it cannot be moved. Give it a location first.' }
-  if (!target) return { ok: false, error: 'Choose the bin or shelf to put it in.' }
-  if (target.id === stock.location_id) return { ok: false, error: 'Choose a different location from the one it is in.' }
-  if (!same(target.site, stock.site) || !same(target.country, stock.country)) {
-    return { ok: false, error: 'Put-away stays inside one site. Use a transfer to move stock to another site.' }
-  }
+export function validatePutaway({ stock, target, qty }, t) {
+  const tx = floorText(t)
+  const fail = (k, v) => ({ ok: false, error: tx(`wmsmsgfloor.putaway.${k}`, v) })
+  if (!stock) return fail('noStock')
+  if (!stock.location_id) return fail('noLocation')
+  if (!target) return fail('noTarget')
+  if (target.id === stock.location_id) return fail('sameLocation')
+  if (!same(target.site, stock.site) || !same(target.country, stock.country)) return fail('otherSite')
   const n = num(qty)
-  if (n === null || n <= 0) return { ok: false, error: 'Enter a quantity above zero.' }
+  if (n === null || n <= 0) return fail('noQty')
   const free = freeQty(stock)
-  if (free !== null && n > free) return { ok: false, error: `Only ${free} is free to move (the rest is reserved).` }
+  if (free !== null && n > free) return fail('onlyFree', { free })
   return { ok: true, qty: n }
 }
 
@@ -150,7 +152,8 @@ export function reservationOpenQty(r) {
  * work-order reservation lines `{ reservation_id, stock_id, quantity }`, shown
  * for information only: inv_issue cannot consume them.
  */
-export function buildPickList({ reservations = [], holds = [], balances = [], locations = [] } = {}) {
+export function buildPickList({ reservations = [], holds = [], balances = [], locations = [], t } = {}) {
+  const tx = floorText(t)
   const stock = new Map((balances || []).map((b) => [b.id, b]))
   const index = locationIndex(locations)
   const line = (b, extra) => ({
@@ -162,7 +165,7 @@ export function buildPickList({ reservations = [], holds = [], balances = [], lo
     country: b?.country || extra.country || null,
     locationId: b?.location_id || null,
     locationCode: b?.location_code || null,
-    locationPath: b ? locationPath(b.location_id, index, b.location_code) : 'Stock line not visible',
+    locationPath: b ? locationPath(b.location_id, index, b.location_code, t) : tx('wmsmsgfloor.pick.stockNotVisible'),
     onHand: num(b?.qty_on_hand),
     uom: b?.uom || null,
     visible: !!b,
@@ -190,11 +193,12 @@ export function buildPickList({ reservations = [], holds = [], balances = [], lo
     || text(a.itemCode).localeCompare(text(b.itemCode)))
 }
 
-/** Pick lines grouped by site, then by location (walking order). */
-export function groupPickList(lines = []) {
+/** Pick lines grouped by site, then by location (walking order). `t` translates "No site". */
+export function groupPickList(lines = [], t) {
+  const noSite = floorText(t)('wmsmsgfloor.pick.noSite')
   const sites = new Map()
   for (const l of lines || []) {
-    const s = l.site || 'No site'
+    const s = l.site || noSite
     if (!sites.has(s)) sites.set(s, new Map())
     const locs = sites.get(s)
     const k = l.locationPath
@@ -276,16 +280,16 @@ export function parseHandover(reason) {
  * The inv_issue arguments for confirming one pick line. `{ ok, args, error }`.
  * Only a reservation line can be confirmed here; the issue consumes it.
  */
-export function pickIssueArgs({ line, qty, jobCard, receivedBy, note }) {
-  if (!line) return { ok: false, error: 'Choose a pick line.' }
-  if (line.source !== 'reservation' || !line.reservationId) {
-    return { ok: false, error: 'This line is a job card hold, not a stock reservation. Reserve the stock for the job card first, then pick it.' }
-  }
+export function pickIssueArgs({ line, qty, jobCard, receivedBy, note }, t) {
+  const tx = floorText(t)
+  const fail = (k, v) => ({ ok: false, error: tx(`wmsmsgfloor.pick.${k}`, v) })
+  if (!line) return fail('noLine')
+  if (line.source !== 'reservation' || !line.reservationId) return fail('holdLine')
   const jc = normaliseJobCard(jobCard)
-  if (!jc) return { ok: false, error: 'The job card number is missing.' }
+  if (!jc) return fail('noJobCard')
   const n = num(qty === '' || qty == null ? line.qty : qty)
-  if (n === null || n <= 0) return { ok: false, error: 'Enter a quantity above zero.' }
-  if (n > line.qty) return { ok: false, error: `Only ${line.qty} is reserved for this job card on this line.` }
+  if (n === null || n <= 0) return fail('noQty')
+  if (n > line.qty) return fail('onlyReserved', { qty: line.qty })
   return {
     ok: true,
     args: {
@@ -302,7 +306,8 @@ export function pickIssueArgs({ line, qty, jobCard, receivedBy, note }) {
  * Handover record for a job card, from its issue / return movements.
  * `people` = profiles `{ id, full_name, username }`.
  */
-export function summariseHandover(movements = [], people = []) {
+export function summariseHandover(movements = [], people = [], t) {
+  const tx = floorText(t)
   const names = new Map((people || []).map((p) => [p.id, p.full_name || p.username || null]))
   const rows = (movements || []).map((m) => {
     const h = parseHandover(m.reason)
@@ -316,7 +321,7 @@ export function summariseHandover(movements = [], people = []) {
       location: m.location_code || m.site || null,
       site: m.site || null,
       qty: Math.abs(num(m.qty_change) || 0),
-      givenBy: actor ? (names.get(actor) || 'Unknown user') : 'Not recorded',
+      givenBy: actor ? (names.get(actor) || tx('wmsmsgfloor.handover.unknownUser')) : tx('wmsmsgfloor.handover.notRecorded'),
       receivedBy: isReturn ? null : h.receivedBy,
       note: h.note,
       viaPick: h.picked,
@@ -324,7 +329,7 @@ export function summariseHandover(movements = [], people = []) {
   })
   const byItem = new Map()
   for (const r of rows) {
-    const k = r.itemCode || 'Unknown item'
+    const k = r.itemCode || tx('wmsmsgfloor.handover.unknownItem')
     const cur = byItem.get(k) || { itemCode: k, issued: 0, returned: 0 }
     if (r.kind === 'Issued') cur.issued += r.qty
     else cur.returned += r.qty

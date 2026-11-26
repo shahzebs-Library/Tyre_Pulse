@@ -155,7 +155,7 @@ function DispenseModal({ line, onClose, onDone }) {
   const unit = line.uom || line.item?.base_uom || line.item?.uom || t('wmsparts.lub.unitsAsStocked')
 
   async function submit() {
-    const v = validateDispense(line, form)
+    const v = validateDispense(line, form, t)
     if (v.error) { setError(v.error); return }
     setBusy(true); setError(null)
     try {

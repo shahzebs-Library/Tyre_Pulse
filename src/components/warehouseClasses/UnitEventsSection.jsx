@@ -115,7 +115,7 @@ function UnitEventModal({ unit, can, scope, vendors, onClose, onDone }) {
   }, [itemTerm, known, scope.country])
 
   async function submit() {
-    const v = validateUnitEvent(form)
+    const v = validateUnitEvent(form, t)
     if (v.error) { setError(v.error); return }
     setBusy(true); setError(null)
     try {

@@ -3,22 +3,8 @@
  * 2026-11-24). The database checks every rule again (trg_po_controls); these
  * components only collect and show the fields.
  */
-import { EMERGENCY_CATEGORIES, ROUTE_REASON_MIN, IMPACT_TEXT_MIN, OTHER_NOTE_MIN, justificationFields } from '../../lib/procurement/emergencyJustification'
+import { EMERGENCY_CATEGORIES, ROUTE_REASON_MIN, categoryLabel, justificationFields } from '../../lib/procurement/emergencyJustification'
 import { useLanguage } from '../../contexts/LanguageContext'
-
-// Field order matches justificationFields() in the lib.
-const FIELD_KEYS = ['category', 'asset', 'jobCard', 'impact', 'route', 'estimate', 'supplier', 'requestedBy', 'attachment']
-const VALUE_KEYS = { 'N/A': 'na', None: 'none', 'No estimate': 'noEstimate' }
-
-/** Translate a validateEmergency() message by its field (the lib returns English). */
-function errText(t, field, msg, currency) {
-  if (!msg) return msg
-  const min = { categoryNote: OTHER_NOTE_MIN, impact: IMPACT_TEXT_MIN, routeReason: ROUTE_REASON_MIN }[field]
-  if (field === 'estCurrency' && /^The order is in/.test(msg)) {
-    return t('wmsprocure.emergency.err.estCurrencyMismatch', { currency: String(currency || '').toUpperCase() })
-  }
-  return t(`wmsprocure.emergency.err.${field}`, min != null ? { min } : undefined)
-}
 
 const L = ({ htmlFor, children }) => <label htmlFor={htmlFor} className="text-[var(--text-secondary)] text-xs mb-1 block">{children}</label>
 const Err = ({ children }) => (children ? <p className="text-xs text-amber-300 mt-1">{children}</p> : null)
@@ -27,7 +13,7 @@ const Err = ({ children }) => (children ? <p className="text-xs text-amber-300 m
  * @param {object} props
  * @param {object} props.value     EMPTY_EMERGENCY shape
  * @param {Function} props.onChange (next) => void
- * @param {object} props.errors    from validateEmergency (shown once showErrors is true)
+ * @param {object} props.errors    from validateEmergency(form, { ..., t }) so they are already translated
  * @param {boolean} props.showErrors
  * @param {string} props.currency  the PO currency (estimate must match it)
  */
@@ -37,7 +23,7 @@ export function EmergencyJustificationFields({ value, onChange, errors = {}, sho
   const e = showErrors ? errors : {}
   const routeLen = String(v.routeReason || '').trim().length
   const { t } = useLanguage()
-  const er = (f) => errText(t, f, e[f], currency)
+  const er = (f) => e[f]
   return (
     <div className="space-y-3" role="group" aria-label={t('wmsprocure.emergency.aria')}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -45,7 +31,7 @@ export function EmergencyJustificationFields({ value, onChange, errors = {}, sho
           <L htmlFor="em-category">{t('wmsprocure.emergency.reasonCategory')}</L>
           <select id="em-category" className="input w-full" value={v.category || ''} onChange={set('category')} aria-invalid={!!e.category}>
             <option value="">{t('wmsprocure.emergency.choose')}</option>
-            {EMERGENCY_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{t(`wmsprocure.emergency.cat.${c.value}`)}</option>)}
+            {EMERGENCY_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{categoryLabel(c.value, t)}</option>)}
           </select>
           <Err>{er('category')}</Err>
         </div>
@@ -116,10 +102,10 @@ export function EmergencyJustificationView({ po, compact = false }) {
   if (!po?.is_emergency) return null
   return (
     <dl className={`grid gap-x-3 gap-y-1 text-xs ${compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
-      {justificationFields(po).map(([k, val], i) => (
-        <div key={k} className="min-w-0">
-          <dt className="text-[var(--text-muted)]">{FIELD_KEYS[i] ? t(`wmsprocure.emergency.f.${FIELD_KEYS[i]}`) : k}</dt>
-          <dd className="text-[var(--text-primary)] break-words">{VALUE_KEYS[val] ? t(`wmsprocure.emergency.v.${VALUE_KEYS[val]}`) : i === 0 && po.emergency_category !== 'other' && EMERGENCY_CATEGORIES.some((c) => c.value === po.emergency_category) ? t(`wmsprocure.emergency.cat.${po.emergency_category}`) : val}</dd>
+      {justificationFields(po, t).map(([k, val], i) => (
+        <div key={i} className="min-w-0">
+          <dt className="text-[var(--text-muted)]">{k}</dt>
+          <dd className="text-[var(--text-primary)] break-words">{val}</dd>
         </div>
       ))}
     </dl>

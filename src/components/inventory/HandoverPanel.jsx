@@ -36,7 +36,7 @@ export default function HandoverPanel({ can }) {
     if (!j) { setState({ loading: false, error: p('enterJobCard'), data: null }); return }
     setState((s) => ({ ...s, loading: true, error: '' }))
     try {
-      setState({ loading: false, error: '', data: await loadHandover(j) })
+      setState({ loading: false, error: '', data: await loadHandover(j, { t }) })
     } catch (e) {
       setState({ loading: false, error: toUserMessage(e), data: null })
     }
@@ -55,7 +55,7 @@ export default function HandoverPanel({ can }) {
   )
 
   const columns = [
-    { key: 'postedAt', header: p('colWhen'), cell: (r) => fmtDateTime(r.postedAt) },
+    { key: 'postedAt', header: p('colWhen'), cell: (r) => fmtDateTime(r.postedAt, t('wmsfloor.common.na')) },
     { key: 'kind', header: p('colMovement'), cell: (r) => <StatusPill value={r.kind} tone={r.kind === 'Issued' ? 'info' : 'muted'} label={kindLabel(r.kind)} /> },
     { key: 'itemCode', header: p('colItem'), cell: (r) => r.itemCode || na },
     { key: 'location', header: p('colFrom'), cell: (r) => r.location || na },

@@ -1,0 +1,121 @@
+{
+  "notSetUp": "This part of procurement is not switched on yet. Ask an administrator to apply the procurement update.",
+  "common": {
+    "na": "N/A",
+    "none": "None",
+    "noPrice": "No price",
+    "noCost": "No cost recorded"
+  },
+  "chain": {
+    "draft": {
+      "noRequisition": "No requisition.",
+      "chooseSupplier": "Choose a supplier.",
+      "chooseItem": "Choose the item from the Material Master.",
+      "needQty": "The requisition needs a quantity above zero.",
+      "unitPrice": "Unit price must be zero or more."
+    },
+    "receipt": {
+      "line": "Line {no}",
+      "lineBare": "Line",
+      "receivedQty": "{label}: received quantity must be a number above zero.",
+      "rejectedQty": "{label}: rejected quantity must be zero or more.",
+      "rejectedOverReceived": "{label}: rejected cannot be more than received.",
+      "rejectedReason": "{label}: give a reason for the rejected quantity (damaged, wrong part, quality, expired).",
+      "overOutstanding": "{label}: accepting {qty} exceeds the {outstanding} still outstanding.",
+      "noMaterial": "{label}: this PO line has no Material Master item, so it cannot be received into stock.",
+      "chooseLocation": "{label}: choose a receiving location.",
+      "nothingEntered": "Enter a received quantity on at least one line."
+    }
+  },
+  "limits": {
+    "chooseRole": "Choose a role.",
+    "roleCannotApprove": "{role} cannot approve purchase orders.",
+    "chooseCurrency": "Choose SAR, AED or EGP.",
+    "enterAmount": "Enter the highest order value this role may approve, or tick \"No upper limit\".",
+    "aboveZero": "The amount must be above zero.",
+    "noUpperLimit": "No upper limit"
+  },
+  "emergency": {
+    "err": {
+      "category": "Choose why this is an emergency.",
+      "categoryNote": "Describe the emergency in at least {min} characters.",
+      "asset": "Name the affected asset number or job card.",
+      "downtimeHours": "Downtime hours must be zero or more.",
+      "impact": "Give the downtime hours, or describe the impact of waiting in at least {min} characters.",
+      "routeReason": "Explain why the normal approval route could not be used (at least {min} characters).",
+      "estValue": "Enter the estimated value.",
+      "estCurrency": "Choose the currency of the estimated value.",
+      "estCurrencyMismatch": "The order is in {currency}. The estimate must use the same currency; currencies are not converted.",
+      "supplier": "Choose or type the supplier.",
+      "country": "Choose the country of the order."
+    },
+    "cat": {
+      "breakdown": "Breakdown",
+      "safety": "Safety",
+      "production_stoppage": "Production stoppage",
+      "customer_commitment": "Customer commitment",
+      "other": "Other"
+    },
+    "f": {
+      "category": "Reason category",
+      "asset": "Affected asset",
+      "jobCard": "Job card",
+      "impact": "Impact of waiting",
+      "route": "Why the normal approval route could not be used",
+      "estimate": "Estimated value",
+      "supplier": "Supplier",
+      "requestedBy": "Requested by",
+      "attachment": "Attachment"
+    },
+    "downtime": "{hours} h downtime",
+    "noEstimate": "No estimate",
+    "otherNote": "Other: {note}"
+  },
+  "stock": {
+    "err": {
+      "chooseCountry": "Choose one country in the workspace header.",
+      "chooseSite": "Choose a site / store.",
+      "addItem": "Add at least one item.",
+      "max100": "Save no more than 100 items at once.",
+      "reference": "Enter one receipt or delivery reference.",
+      "confirm": "Confirm the item details and physical quantities.",
+      "qtyReceipt": "{name}: enter a whole positive receipt quantity.",
+      "qtyCount": "{name}: enter a whole count of zero or more.",
+      "unit": "{name}: confirm the unit of measure.",
+      "kind": "{name}: choose tyre, rim or tyre/rim accessory.",
+      "duplicate": "{name}: this item and location are already in the count."
+    },
+    "unit": {
+      "recorded": "Unit recorded on this item.",
+      "learned": "Same unit as this item already in stock.",
+      "pair": "The description says pair.",
+      "box": "Supplied in boxes or packets.",
+      "set": "Supplied as a kit or set.",
+      "tyre": "Tyres are counted one by one.",
+      "rim": "Rims are counted one by one.",
+      "perTin": "Counted per tin or tube ({pack} each).",
+      "paste": "Bulk paste is weighed. Check the pack.",
+      "tinNoPack": "Counted per tin or tube. Pack size not stated, check it.",
+      "looseWeights": "Loose weights are weighed.",
+      "weights": "Weights are counted one by one.",
+      "oneByOne": "Counted one by one."
+    }
+  },
+  "reorder": {
+    "noCode": "No item code, so usage cannot be measured.",
+    "countryOnly": "This site has not issued the item in the last 12 months; only other sites in the country have. No site rate to size levels from.",
+    "noUsage": "No issues of this item in the last 12 months.",
+    "leadMaster": "{days}-day lead time from Material Master",
+    "leadDefault": "{days}-day default lead time (none set in Material Master)",
+    "explanation": "This site used {rate} a month over the last 12 months. Critical {critical} covers the {lead}; min {min} adds half a month of safety stock; reorder {reorder} covers two months."
+  },
+  "ledger": {
+    "gap": {
+      "fittedOne": "{count} tyre",
+      "fittedOther": "{count} tyres",
+      "issuedOne": "{count} was",
+      "issuedOther": "{count} were",
+      "note": "{fitted} were fitted in this period but only {issued} issued from stock. Fitments are not deducted automatically: record an Issue so balances fall when tyres are used."
+    }
+  }
+}

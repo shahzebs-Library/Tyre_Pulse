@@ -11,12 +11,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Smartphone } from 'lucide-react'
 import { toUserMessage } from '../../lib/safeError'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { listPendingStoreReceipts, decideStoreReceipt } from '../../lib/api/procurementChain'
 
 const fmt = (v) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString())
 
 export default function PhoneReceiptsPanel({ country, onDecided }) {
   const { profile } = useAuth() || {}
+  const { t } = useLanguage()
+  const k = (key, vars) => t(`procurement.phoneReceipts.${key}`, vars)
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -29,11 +32,11 @@ export default function PhoneReceiptsPanel({ country, onDecided }) {
       setRows(await listPendingStoreReceipts({ country }))
       setError('')
     } catch (e) {
-      setError(toUserMessage(e, 'Phone receipts could not be loaded.'))
+      setError(toUserMessage(e, t('procurement.phoneReceipts.loadFailed')))
     } finally {
       setLoading(false)
     }
-  }, [country])
+  }, [country, t])
 
   useEffect(() => { load() }, [load])
 
@@ -45,7 +48,7 @@ export default function PhoneReceiptsPanel({ country, onDecided }) {
       await load()
       onDecided?.()
     } catch (e) {
-      setError(toUserMessage(e, 'The receipt could not be decided.'))
+      setError(toUserMessage(e, k('decideFailed')))
     } finally {
       setBusyId(null)
     }
@@ -58,11 +61,10 @@ export default function PhoneReceiptsPanel({ country, onDecided }) {
     <section className="card p-4 space-y-3" aria-labelledby="phone-receipts-title">
       <div className="flex items-center gap-2">
         <Smartphone size={16} aria-hidden="true" />
-        <h2 id="phone-receipts-title" className="font-semibold">Phone receipts waiting for approval ({rows.length})</h2>
+        <h2 id="phone-receipts-title" className="font-semibold">{k('title', { count: rows.length })}</h2>
       </div>
       <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-        Recorded by a store keeper on the phone. Approving posts the goods receipt into stock at the purchase order price.
-        The person who recorded a receipt cannot decide it.
+        {k('intro')}
       </p>
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
       <ul className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -74,34 +76,34 @@ export default function PhoneReceiptsPanel({ country, onDecided }) {
             <li key={r.id} className="py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="text-sm">
                 <div className="font-medium">
-                  {po.po_number || 'PO'} · {[item.item_code, item.item_name].filter(Boolean).join(' ') || 'Item'}
+                  {po.po_number || k('po')} · {[item.item_code, item.item_name].filter(Boolean).join(' ') || k('item')}
                 </div>
                 <div style={{ color: 'var(--text-secondary)' }}>
-                  {r.site} · {r.inventory_locations?.code || 'Location'} · received {fmt(r.qty_received)}
-                  {Number(r.qty_rejected) > 0 ? `, rejected ${fmt(r.qty_rejected)} (${r.rejection_reason || 'no reason'})` : ''}
-                  {r.delivery_note_no ? ` · DN ${r.delivery_note_no}` : ''}
-                  {r.delivery_note_path ? ' · photo attached' : ''}
+                  {r.site} · {r.inventory_locations?.code || k('location')} · {k('received', { qty: fmt(r.qty_received) })}
+                  {Number(r.qty_rejected) > 0 ? ` · ${k('rejected', { qty: fmt(r.qty_rejected), reason: r.rejection_reason || k('noReason') })}` : ''}
+                  {r.delivery_note_no ? ` · ${k('deliveryNote', { no: r.delivery_note_no })}` : ''}
+                  {r.delivery_note_path ? ` · ${k('photo')}` : ''}
                 </div>
               </div>
               {own ? (
-                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>You recorded this; another person must decide.</span>
+                <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{k('ownReceipt')}</span>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <label className="sr-only" htmlFor={`sr-note-${r.id}`}>Reason or note</label>
+                  <label className="sr-only" htmlFor={`sr-note-${r.id}`}>{k('noteLabel')}</label>
                   <input
                     id={`sr-note-${r.id}`}
                     className="input text-sm min-h-[44px]"
-                    placeholder="Reason (needed to reject)"
+                    placeholder={k('notePlaceholder')}
                     value={notes[r.id] || ''}
                     onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
                   />
                   <button type="button" className="btn-primary text-sm min-h-[44px]" disabled={busyId === r.id}
                     onClick={() => decide(r, 'approve')}>
-                    {busyId === r.id ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : 'Approve'}
+                    {busyId === r.id ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : k('approve')}
                   </button>
                   <button type="button" className="btn-secondary text-sm min-h-[44px]" disabled={busyId === r.id || !(notes[r.id] || '').trim()}
                     onClick={() => decide(r, 'reject')}>
-                    Reject
+                    {k('reject')}
                   </button>
                 </div>
               )}

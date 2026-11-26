@@ -2,10 +2,14 @@
 /// arrived, optionally photograph the delivery note, send for approval.
 ///
 /// Pushed with Navigator from Stock Count (router files are reserved, same as
-/// Transfers). Online only: the server checks the PO, the line's open
-/// quantity, the keeper's NAMED site and refuses any price. Stock moves only
-/// when a different person approves. One client_uuid per distinct request, so
-/// Send after a timeout repeats the same request and never records twice.
+/// Transfers). Online only, and it says so at the top of both screens: the
+/// server checks the PO, the line's open quantity, the keeper's NAMED site and
+/// refuses any price. Stock moves only when a different person approves.
+///
+/// One request key per PO line draft (storeReceiptKeysProvider), kept across
+/// leaving and reopening the form and across edits until the server confirms,
+/// so Send after a lost answer repeats the same request and never records
+/// twice.
 library;
 
 import 'dart:async';
@@ -18,6 +22,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/inventory/data/store_receipt_repository.dart';
@@ -29,17 +34,96 @@ import 'package:tyre_pulse/features/inventory/presentation/inventory_widgets.dar
 String _qty(num v) =>
     v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
-/// The sentence for a failed send (never a raw database text).
+/// Server refusals this flow raises, matched on the (never displayed) server
+/// text and shown as a sentence in the user's language. Anything else falls
+/// back by kind; a raw database message is never shown.
+const List<(String, String)> _refusals = <(String, String)>[
+  ('assigned to you by name', 'sr_errSite'),
+  ('approved or ordered', 'sr_errPoStatus'),
+  ('already closed', 'sr_errLineClosed'),
+  ('still open on this purchase order line', 'sr_overOpen'),
+  ('cannot set a price', 'sr_noPrice'),
+  ('photo was not found', 'sr_photoFailed'),
+  ('delivery note photo must be stored', 'sr_photoFailed'),
+  ('receiving location', 'sr_locationRequired'),
+  ('say why goods were rejected', 'sr_reasonRequired'),
+  ('only an approved store keeper', 'sr_errNotKeeper'),
+];
+
+/// The sentence for a failed send, in the user's language.
 String storeReceiptFailureText(Object error, InventoryCopy copy) {
   if (error is SupabaseFailure) {
     if (error.isSchemaMismatch) return copy('notProvisionedBody');
     if (error.isConnectivity) return copy('sr_offline');
-    return error.error.message;
+    final String raw = (error.rawMessage ?? '').toLowerCase();
+    for (final (String needle, String key) in _refusals) {
+      if (raw.contains(needle)) return copy(key);
+    }
+    if (error.error.kind == AppErrorKind.authorization) {
+      return copy('sr_errNotKeeper');
+    }
   }
   return copy('sr_failed');
 }
 
-class StoreReceiptScreen extends ConsumerWidget {
+/// "Needs a connection" at the top of both screens.
+class _OnlineBanner extends StatelessWidget {
+  const _OnlineBanner({required this.copy});
+
+  final InventoryCopy copy;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return Container(
+      key: const Key('inventory.sr.online'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: TpSpace.md,
+        vertical: TpSpace.sm,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.wifi_rounded, size: 20, color: palette.textSecondary),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(child: Text(copy('sr_onlineNote'))),
+        ],
+      ),
+    );
+  }
+}
+
+/// A full-width action button that grows with the text (never a fixed height).
+Widget _actionButton({
+  required Key key,
+  required VoidCallback? onPressed,
+  required Widget child,
+  bool filled = true,
+}) {
+  const ButtonStyle style = ButtonStyle(
+    minimumSize: WidgetStatePropertyAll<Size>(
+      Size(double.infinity, inventoryTouchTarget),
+    ),
+  );
+  return filled
+      ? FilledButton(
+          key: key,
+          style: style,
+          onPressed: onPressed,
+          child: child,
+        )
+      : OutlinedButton(
+          key: key,
+          style: style,
+          onPressed: onPressed,
+          child: child,
+        );
+}
+
+class StoreReceiptScreen extends ConsumerStatefulWidget {
   const StoreReceiptScreen({super.key});
 
   static Route<void> route() => MaterialPageRoute<void>(
@@ -48,7 +132,26 @@ class StoreReceiptScreen extends ConsumerWidget {
       );
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StoreReceiptScreen> createState() => _StoreReceiptScreenState();
+}
+
+class _StoreReceiptScreenState extends ConsumerState<StoreReceiptScreen> {
+  final TextEditingController _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  bool _matches(OpenPoLine l, String q) {
+    if (q.isEmpty) return true;
+    return <String?>[l.poNumber, l.itemCode, l.itemName, l.supplier, l.site]
+        .any((String? v) => (v ?? '').toLowerCase().contains(q));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final InventoryCopy copy = InventoryCopy.of(context);
     final TpPalette palette = TpPalette.of(context);
     final AsyncValue<StoreReceiptBoard> state =
@@ -65,95 +168,194 @@ class StoreReceiptScreen extends ConsumerWidget {
       appBar: TpAppBar(title: copy('sr_title')),
       body: state.when(
         loading: () => const TpLoadingState(),
-        error: (Object error, StackTrace _) => InventoryFailureView(
-          error: error,
-          copy: copy,
-          onRetry: () => ref.invalidate(storeReceiptBoardProvider),
-        ),
-        data: (StoreReceiptBoard board) => RefreshIndicator(
-          onRefresh: refresh,
-          child: ListView(
-            key: const Key('inventory.sr.list'),
-            padding: const EdgeInsets.all(TpSpace.lg),
-            children: <Widget>[
-              Text(
-                copy('sr_intro'),
-                style: TextStyle(color: palette.textSecondary),
+        error: (Object error, StackTrace _) => Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.all(TpSpace.lg),
+              child: _OnlineBanner(copy: copy),
+            ),
+            Expanded(
+              child: InventoryFailureView(
+                error: error,
+                copy: copy,
+                onRetry: () => ref.invalidate(storeReceiptBoardProvider),
               ),
-              const SizedBox(height: TpSpace.md),
-              if (board.lines.isEmpty)
-                TpEmptyState(
-                  key: const Key('inventory.sr.empty'),
-                  icon: Icons.move_to_inbox_outlined,
-                  title: copy('sr_noLines'),
-                  message: copy('sr_noLinesBody'),
-                )
-              else
-                for (final OpenPoLine line in board.lines)
-                  Card(
-                    key: Key('inventory.sr.line.${line.poLineId}'),
-                    child: ListTile(
-                      minTileHeight: inventoryTouchTarget,
-                      title: Text(
-                        line.itemLabel.isEmpty ? line.poNumber : line.itemLabel,
-                      ),
-                      subtitle: Text(
-                        <String>[
-                          line.poNumber,
-                          if (line.supplier != null) line.supplier!,
-                          if (line.site != null) line.site!,
-                          copy('sr_ordered')
-                              .replaceAll('%n', _qty(line.qtyOrdered)),
-                        ].join(' · '),
-                      ),
-                      trailing: Text(
-                        copy('sr_open').replaceAll(
-                          '%n',
-                          '${_qty(line.qtyOpen)}'
-                              '${line.uom == null ? '' : ' ${line.uom}'}',
-                        ),
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      onTap: () => unawaited(
-                        Navigator.of(context)
-                            .push<bool>(
-                              StoreReceiptFormScreen.route(
-                                line: line,
-                                locations: board.locationsFor(line),
-                              ),
-                            )
-                            .then(
-                              (_) => ref.invalidate(storeReceiptBoardProvider),
-                            ),
+            ),
+          ],
+        ),
+        data: (StoreReceiptBoard board) {
+          final String q = _search.text.trim().toLowerCase();
+          final List<OpenPoLine> lines = board.lines
+              .where((OpenPoLine l) => _matches(l, q))
+              .toList(growable: false);
+          // Lazily built rows: header widgets, then lines, then my receipts.
+          final List<Widget Function()> rows = <Widget Function()>[
+            () => _OnlineBanner(copy: copy),
+            () => Padding(
+                  padding: const EdgeInsets.only(top: TpSpace.sm),
+                  child: Text(
+                    copy('sr_intro'),
+                    style: TextStyle(color: palette.textSecondary),
+                  ),
+                ),
+            if (board.lines.isNotEmpty)
+              () => Padding(
+                    padding: const EdgeInsets.only(top: TpSpace.md),
+                    child: TextField(
+                      key: const Key('inventory.sr.search'),
+                      controller: _search,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        labelText: copy('sr_search'),
+                        prefixIcon: const Icon(Icons.search_rounded),
                       ),
                     ),
                   ),
-              if (board.mine.isNotEmpty) ...<Widget>[
-                const SizedBox(height: TpSpace.lg),
-                Text(
-                  copy('sr_mine'),
-                  style: Theme.of(context).textTheme.titleSmall,
+            if (board.lines.isEmpty)
+              () => TpEmptyState(
+                    key: const Key('inventory.sr.empty'),
+                    icon: Icons.move_to_inbox_outlined,
+                    title: copy('sr_noLines'),
+                    message: copy('sr_noLinesBody'),
+                  )
+            else if (lines.isEmpty)
+              () => Padding(
+                    padding: const EdgeInsets.all(TpSpace.lg),
+                    child: Text(
+                      copy('sr_noMatch'),
+                      key: const Key('inventory.sr.noMatch'),
+                    ),
+                  ),
+            for (final OpenPoLine line in lines)
+              () => _LineCard(line: line, board: board, copy: copy),
+            if (board.mine.isNotEmpty)
+              () => Padding(
+                    padding: const EdgeInsets.only(top: TpSpace.lg),
+                    child: Text(
+                      copy('sr_mine'),
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+            for (final MyStoreReceipt r in board.mine)
+              () => _MineTile(receipt: r, copy: copy),
+          ];
+          return RefreshIndicator(
+            onRefresh: refresh,
+            child: ListView.builder(
+              key: const Key('inventory.sr.list'),
+              padding: const EdgeInsets.all(TpSpace.lg),
+              itemCount: rows.length,
+              itemBuilder: (BuildContext context, int i) => rows[i](),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LineCard extends ConsumerWidget {
+  const _LineCard({
+    required this.line,
+    required this.board,
+    required this.copy,
+  });
+
+  final OpenPoLine line;
+  final StoreReceiptBoard board;
+  final InventoryCopy copy;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      key: Key('inventory.sr.line.${line.poLineId}'),
+      child: ListTile(
+        minTileHeight: inventoryTouchTarget,
+        title: Text(line.itemLabel.isEmpty ? line.poNumber : line.itemLabel),
+        subtitle: Text(
+          <String>[
+            line.poNumber,
+            if (line.supplier != null) line.supplier!,
+            if (line.site != null) line.site!,
+            copy('sr_ordered').replaceAll('%n', _qty(line.qtyOrdered)),
+            copy('sr_open').replaceAll(
+              '%n',
+              '${_qty(line.qtyOpen)}${line.uom == null ? '' : ' ${line.uom}'}',
+            ),
+          ].join(' · '),
+        ),
+        onTap: () => unawaited(
+          Navigator.of(context)
+              .push<bool>(
+                StoreReceiptFormScreen.route(
+                  line: line,
+                  locations: board.locationsFor(line),
                 ),
-                for (final MyStoreReceipt r in board.mine)
-                  _MineTile(receipt: r, copy: copy),
-              ],
-            ],
-          ),
+              )
+              .then((_) => ref.invalidate(storeReceiptBoardProvider)),
         ),
       ),
     );
   }
 }
 
-class _MineTile extends ConsumerWidget {
+class _MineTile extends ConsumerStatefulWidget {
   const _MineTile({required this.receipt, required this.copy});
 
   final MyStoreReceipt receipt;
   final InventoryCopy copy;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final MyStoreReceipt r = receipt;
+  ConsumerState<_MineTile> createState() => _MineTileState();
+}
+
+class _MineTileState extends ConsumerState<_MineTile> {
+  bool _busy = false;
+
+  Future<void> _withdraw() async {
+    if (_busy) return;
+    final InventoryCopy copy = widget.copy;
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext c) => AlertDialog(
+        title: Text(copy('sr_withdrawTitle')),
+        content: Text(copy('sr_withdrawBody')),
+        actions: <Widget>[
+          TextButton(
+            key: const Key('inventory.sr.withdraw.keep'),
+            onPressed: () => Navigator.of(c).pop(false),
+            child: Text(copy('sr_keep')),
+          ),
+          FilledButton(
+            key: const Key('inventory.sr.withdraw.confirm'),
+            onPressed: () => Navigator.of(c).pop(true),
+            child: Text(copy('sr_withdraw')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(storeReceiptRepositoryProvider).cancel(widget.receipt.id);
+      messenger.showSnackBar(SnackBar(content: Text(copy('sr_withdrawn'))));
+    } on Object catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(storeReceiptFailureText(e, copy))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        ref.invalidate(storeReceiptBoardProvider);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final MyStoreReceipt r = widget.receipt;
+    final InventoryCopy copy = widget.copy;
     return Card(
       key: Key('inventory.sr.mine.${r.id}'),
       child: ListTile(
@@ -168,7 +370,7 @@ class _MineTile extends ConsumerWidget {
           <String>[
             if (r.poNumber != null) r.poNumber!,
             '${_qty(r.qtyReceived)}'
-                '${r.qtyRejected > 0 ? ' (-${_qty(r.qtyRejected)})' : ''}',
+                '${r.qtyRejected > 0 ? ' (${copy('sr_qtyRejected')} ${_qty(r.qtyRejected)})' : ''}',
             copy.label('sr_status_', r.status),
             if (r.decisionNote != null) r.decisionNote!,
           ].join(' · '),
@@ -176,21 +378,7 @@ class _MineTile extends ConsumerWidget {
         trailing: r.isPending
             ? TextButton(
                 key: Key('inventory.sr.withdraw.${r.id}'),
-                onPressed: () async {
-                  final ScaffoldMessengerState m =
-                      ScaffoldMessenger.of(context);
-                  try {
-                    await ref.read(storeReceiptRepositoryProvider).cancel(r.id);
-                    m.showSnackBar(
-                      SnackBar(content: Text(copy('sr_withdrawn'))),
-                    );
-                  } on Object catch (e) {
-                    m.showSnackBar(
-                      SnackBar(content: Text(storeReceiptFailureText(e, copy))),
-                    );
-                  }
-                  ref.invalidate(storeReceiptBoardProvider);
-                },
+                onPressed: _busy ? null : () => unawaited(_withdraw()),
                 child: Text(copy('sr_withdraw')),
               )
             : null,
@@ -199,7 +387,7 @@ class _MineTile extends ConsumerWidget {
   }
 }
 
-/// Reads a picked photo's bytes. Overridable in tests.
+/// Returns a picked photo's path, or null when cancelled. Overridable in tests.
 typedef StoreReceiptPhotoPicker = Future<String?> Function();
 
 class StoreReceiptFormScreen extends ConsumerStatefulWidget {
@@ -237,9 +425,9 @@ class StoreReceiptFormScreen extends ConsumerStatefulWidget {
 
 class _StoreReceiptFormScreenState
     extends ConsumerState<StoreReceiptFormScreen> {
-  late final TextEditingController _received =
-      TextEditingController(text: _qty(widget.line.qtyOpen));
-  final TextEditingController _rejected = TextEditingController(text: '0');
+  // Empty on purpose: the keeper types what actually arrived.
+  final TextEditingController _received = TextEditingController();
+  final TextEditingController _rejected = TextEditingController();
   final TextEditingController _reason = TextEditingController();
   final TextEditingController _noteNo = TextEditingController();
   final TextEditingController _notes = TextEditingController();
@@ -248,8 +436,6 @@ class _StoreReceiptFormScreenState
       widget.locations.isEmpty ? null : widget.locations.first.id;
   String? _photoLocalPath;
   String? _photoUploadedPath;
-  String? _key;
-  String? _keySignature;
   bool _sending = false;
   String? _problem;
 
@@ -263,10 +449,10 @@ class _StoreReceiptFormScreenState
     super.dispose();
   }
 
-  StoreReceiptDraft _draft({String? photoPath}) => StoreReceiptDraft(
+  StoreReceiptDraft _draft({String? photoPath}) => StoreReceiptDraft.fromText(
         line: widget.line,
-        qtyReceived: parseReceiptQty(_received.text),
-        qtyRejected: parseReceiptQty(_rejected.text) ?? 0,
+        received: _received.text,
+        rejected: _rejected.text,
         locationId: _locationId,
         rejectionReason: _reason.text,
         deliveryNoteNo: _noteNo.text,
@@ -274,7 +460,26 @@ class _StoreReceiptFormScreenState
         deliveryNotePath: photoPath,
       );
 
-  Future<void> _takePhoto() async {
+  String _key() => ref
+      .read(storeReceiptKeysProvider.notifier)
+      .keyFor(widget.line.poLineId, ref.read(inventoryIdFactoryProvider));
+
+  void _rejectedChanged(String _) {
+    final num rej = parseReceiptQty(_rejected.text) ?? 0;
+    setState(() {
+      if (rej <= 0 && _reason.text.isNotEmpty) _reason.clear();
+    });
+  }
+
+  Future<void> _takePhoto(InventoryCopy copy) async {
+    // The photo is uploaded before the receipt is sent; say so up front
+    // rather than after the keeper has framed the shot.
+    final bool online = await ref.read(inventoryOnlineCheckProvider)();
+    if (!mounted) return;
+    if (!online) {
+      setState(() => _problem = copy('sr_photoOffline'));
+      return;
+    }
     final StoreReceiptPhotoPicker pick = widget.pickPhoto ??
         () async {
           final XFile? f = await ImagePicker().pickImage(
@@ -288,28 +493,24 @@ class _StoreReceiptFormScreenState
     final String? path = await pick();
     if (path == null || !mounted) return;
     setState(() {
+      _problem = null;
       _photoLocalPath = path;
       _photoUploadedPath = null;
     });
   }
 
   Future<void> _send(InventoryCopy copy) async {
-    final StoreReceiptDraft check = _draft();
-    final String? invalid = check.validate();
+    if (_sending) return;
+    final String? invalid = _draft().validate();
     if (invalid != null) {
       setState(() => _problem = copy(invalid));
       return;
-    }
-    final String signature = '${check.signature}|$_photoLocalPath';
-    if (_keySignature != signature) {
-      _key = ref.read(inventoryIdFactoryProvider)();
-      _keySignature = signature;
-      _photoUploadedPath = null;
     }
     setState(() {
       _sending = true;
       _problem = null;
     });
+    final String key = _key();
     final StoreReceiptRepository repo =
         ref.read(storeReceiptRepositoryProvider);
     try {
@@ -322,7 +523,7 @@ class _StoreReceiptFormScreenState
           setState(() => _problem = copy('sr_photoFailed'));
           return;
         }
-        final String path = storeReceiptPhotoPath(org, _key!);
+        final String path = storeReceiptPhotoPath(org, key);
         try {
           final Uint8List bytes = await (widget.readPhoto ??
               (String p) => File(p).readAsBytes())(_photoLocalPath!);
@@ -335,8 +536,11 @@ class _StoreReceiptFormScreenState
       }
       final StoreReceiptOutcome out = await repo.submit(
         _draft(photoPath: _photoUploadedPath),
-        clientUuid: _key!,
+        clientUuid: key,
       );
+      ref
+          .read(storeReceiptKeysProvider.notifier)
+          .confirmed(widget.line.poLineId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -368,6 +572,8 @@ class _StoreReceiptFormScreenState
         child: ListView(
           padding: const EdgeInsets.all(TpSpace.lg),
           children: <Widget>[
+            _OnlineBanner(copy: copy),
+            const SizedBox(height: TpSpace.md),
             TpCard(
               key: const Key('inventory.sr.lineCard'),
               padding: const EdgeInsets.all(TpSpace.md),
@@ -417,7 +623,7 @@ class _StoreReceiptFormScreenState
               controller: _rejected,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (_) => setState(() {}),
+              onChanged: _rejectedChanged,
               decoration: InputDecoration(labelText: copy('sr_qtyRejected')),
             ),
             if (rejected > 0)
@@ -465,22 +671,28 @@ class _StoreReceiptFormScreenState
             Row(
               children: <Widget>[
                 Expanded(
-                  child: SizedBox(
-                    height: inventoryTouchTarget,
-                    child: OutlinedButton.icon(
-                      key: const Key('inventory.sr.photo'),
-                      onPressed:
-                          _sending ? null : () => unawaited(_takePhoto()),
-                      icon: Icon(
-                        _photoLocalPath == null
-                            ? Icons.photo_camera_outlined
-                            : Icons.check_circle_outline,
-                      ),
-                      label: Text(
-                        _photoLocalPath == null
-                            ? copy('sr_photo')
-                            : copy('sr_photoTaken'),
-                      ),
+                  child: _actionButton(
+                    key: const Key('inventory.sr.photo'),
+                    filled: false,
+                    onPressed:
+                        _sending ? null : () => unawaited(_takePhoto(copy)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(
+                          _photoLocalPath == null
+                              ? Icons.photo_camera_outlined
+                              : Icons.check_circle_outline,
+                        ),
+                        const SizedBox(width: TpSpace.sm),
+                        Flexible(
+                          child: Text(
+                            _photoLocalPath == null
+                                ? copy('sr_photo')
+                                : copy('sr_photoTaken'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -500,7 +712,7 @@ class _StoreReceiptFormScreenState
             ),
             const SizedBox(height: TpSpace.md),
             Text(
-              '${copy('sr_noPrice')} ${copy('sr_onlineNote')}',
+              copy('sr_noPrice'),
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: palette.textSecondary),
             ),
@@ -513,21 +725,18 @@ class _StoreReceiptFormScreenState
               ),
             ],
             const SizedBox(height: TpSpace.lg),
-            SizedBox(
-              height: inventoryTouchTarget,
-              child: FilledButton(
-                key: const Key('inventory.sr.send'),
-                onPressed: _sending || widget.locations.isEmpty
-                    ? null
-                    : () => unawaited(_send(copy)),
-                child: _sending
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
-                      )
-                    : Text(copy('sr_send')),
-              ),
+            _actionButton(
+              key: const Key('inventory.sr.send'),
+              onPressed: _sending || widget.locations.isEmpty
+                  ? null
+                  : () => unawaited(_send(copy)),
+              child: _sending
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    )
+                  : Text(copy('sr_send')),
             ),
           ],
         ),

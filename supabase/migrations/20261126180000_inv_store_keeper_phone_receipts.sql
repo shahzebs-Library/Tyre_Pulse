@@ -21,7 +21,9 @@
 --         line: ordered - accepted - every other pending phone receipt on that line;
 --       - no price, cost or currency can be sent (the PO line price is used on approval);
 --       - a rejection needs a reason; the delivery note photo, when given, must sit under
---         store_receipts/<company>/ in the tyre-photos bucket;
+--         exactly <company id>/store_receipts/<client_uuid>.jpg in the tyre-photos bucket (so the
+--         existing storage_company_folder_wall applies), and must already exist in storage,
+--         uploaded by the caller;
 --       - idempotent on client_uuid (a retry after a timeout stores nothing twice; a key
 --         belongs to the person who first used it).
 --   * inv_store_receipt_decide(p_payload): a DIFFERENT person holding "receive", in scope
@@ -53,7 +55,8 @@
 --   drop function if exists public.inv_store_receipt_submit(jsonb), public.inv_store_receipt_decide(jsonb),
 --     public.inv_store_receipt_open_lines(jsonb), public.inv_store_receipt_cancel(jsonb),
 --     public._inv_store_site_ok(text, text), public._inv_store_receiver(), public._inv_store_line_open(uuid, uuid),
---     public.inv_store_receipt_can_read(text, text, uuid);
+--     public.inv_store_receipt_can_read(text, text, uuid), public.inv_store_receipt_photo_can_read(text, uuid);
+--   drop policy if exists store_receipt_photos_read on storage.objects;
 --   drop table if exists public.inv_store_receipt_requests;   -- only while it holds no decided rows you need
 --   commit;
 
@@ -73,7 +76,8 @@ create table if not exists public.inv_store_receipt_requests (
   qty_rejected numeric not null default 0 check (qty_rejected >= 0),
   rejection_reason text check (rejection_reason is null or length(rejection_reason) <= 500),
   delivery_note_no text check (delivery_note_no is null or length(delivery_note_no) <= 120),
-  delivery_note_path text check (delivery_note_path is null or delivery_note_path like 'store_receipts/%'),
+  delivery_note_path text check (delivery_note_path is null
+    or delivery_note_path ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/store_receipts/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jpg$'),
   notes text check (notes is null or length(notes) <= 1000),
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected', 'cancelled')),
   submitted_by uuid not null,
@@ -244,8 +248,13 @@ begin
     raise exception 'Only % is still open on this purchase order line.', trim_scale(greatest(v_open, 0)) using errcode = '22023';
   end if;
   v_path := nullif(btrim(coalesce(p_payload->>'delivery_note_path', '')), '');
-  if v_path is not null and v_path not like 'store_receipts/' || v_org::text || '/%' then
-    raise exception 'The delivery note photo must be stored under store_receipts/<your company>/.' using errcode = '22023';
+  -- Exact path, no pattern matching (a LIKE would treat _ and % in the text as wildcards).
+  if v_path is not null and v_path <> v_org::text || '/store_receipts/' || v_cu::text || '.jpg' then
+    raise exception 'The delivery note photo must be stored as <your company>/store_receipts/<receipt id>.jpg.' using errcode = '22023';
+  end if;
+  if v_path is not null and not exists (select 1 from storage.objects o
+       where o.bucket_id = 'tyre-photos' and o.name = v_path and o.owner = auth.uid()) then
+    raise exception 'The delivery note photo was not found. Upload it again, or send without it.' using errcode = '22023';
   end if;
 
   insert into public.inv_store_receipt_requests(organisation_id, client_uuid, country, site, po_id, po_line_id, item_id,
@@ -391,6 +400,32 @@ begin
       join public.purchase_orders po on po.id = r.po_id
       left join public.material_master m on m.id = r.item_id), '[]'::jsonb));
 end $fn$;
+
+-- Delivery-note photos: the company folder wall (storage_company_folder_wall) already keeps them
+-- inside the company. Within it, only the uploader and "receive" holders who may see the receipt
+-- read them (RESTRICTIVE, only for <company>/store_receipts/ in tyre-photos).
+create or replace function public.inv_store_receipt_photo_can_read(p_name text, p_owner uuid)
+returns boolean language sql stable security definer set search_path = public as $fn$
+  select p_owner = auth.uid()
+      or exists (select 1 from public.inv_store_receipt_requests r
+                  where r.delivery_note_path = p_name and r.organisation_id = public.app_current_org()
+                    and public.inv_store_receipt_can_read(r.country, r.site, r.submitted_by))
+$fn$;
+revoke all on function public.inv_store_receipt_photo_can_read(text, uuid) from public;
+revoke all on function public.inv_store_receipt_photo_can_read(text, uuid) from anon;
+grant execute on function public.inv_store_receipt_photo_can_read(text, uuid) to authenticated, service_role;
+
+do $st$
+begin
+  if to_regclass('storage.objects') is null then
+    raise notice 'storage.objects not present; delivery-note photo policy skipped';
+    return;
+  end if;
+  execute 'drop policy if exists store_receipt_photos_read on storage.objects';
+  execute $p$create policy store_receipt_photos_read on storage.objects as restrictive for select to authenticated
+    using (bucket_id <> 'tyre-photos' or split_part(name, '/', 2) <> 'store_receipts'
+           or public.inv_store_receipt_photo_can_read(name, owner))$p$;
+end $st$;
 
 -- Grants: PUBLIC first, then anon by name (Supabase grants EXECUTE to anon at create time).
 revoke all on function public._inv_store_site_ok(text, text), public._inv_store_receiver(),

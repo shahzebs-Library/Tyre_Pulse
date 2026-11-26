@@ -87,9 +87,55 @@ void main() {
     expect(StoreReceiptBoard.fromJson(null).lines, isEmpty);
   });
 
-  test('photo path is under store_receipts/<company>/', () {
-    expect(storeReceiptPhotoPath('org', 'cu'), 'store_receipts/org/cu.jpg');
-    expect(parseReceiptQty(' 2,5 '), 2.5);
-    expect(parseReceiptQty(''), isNull);
+  test('photo path starts with the company folder', () {
+    expect(storeReceiptPhotoPath('org', 'cu'), 'org/store_receipts/cu.jpg');
+  });
+
+  test('quantity reading: digits, separators and refusals', () {
+    expect(parseReceiptQty(' 12 '), 12);
+    expect(parseReceiptQty('2.5'), 2.5);
+    expect(parseReceiptQty('\u0661\u0662'), 12, reason: 'Arabic-Indic');
+    expect(parseReceiptQty('\u06F3'), 3, reason: 'Persian / Urdu');
+    expect(
+      parseReceiptQty('\u0662\u066B\u0665'),
+      2.5,
+      reason: 'Arabic decimal',
+    );
+    for (final String bad in <String>[
+      '1,000',
+      '1\u066C000',
+      '2,5',
+      'NaN',
+      'Infinity',
+      '0x10',
+      '1e3',
+      '-1',
+      '+1',
+      '1.2.3',
+      'abc',
+      '.5',
+    ]) {
+      expect(readReceiptQty(bad), isA<ReceiptQtyInvalid>(), reason: bad);
+    }
+    expect(readReceiptQty('  '), isA<ReceiptQtyEmpty>());
+  });
+
+  test('fromText: empty rejected is 0, unparseable rejected is an error', () {
+    StoreReceiptDraft f(String rec, String rej, {String reason = ''}) =>
+        StoreReceiptDraft.fromText(
+          line: _line,
+          received: rec,
+          rejected: rej,
+          locationId: 'loc-a',
+          rejectionReason: reason,
+        );
+    expect(f('3', '').validate(), isNull);
+    expect(f('3', '').qtyRejected, 0);
+    expect(f('3', 'x').validate(), 'sr_rejectedInvalid');
+    expect(f('1,000', '').validate(), 'sr_qtyInvalid');
+    expect(f('', '').validate(), 'sr_qtyRequired');
+    // a reason is dropped once nothing is rejected
+    expect(f('3', '0', reason: 'Wet').rejectionReason, '');
+    expect(f('3', '1', reason: 'Wet').rejectionReason, 'Wet');
   });
 }

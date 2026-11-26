@@ -119,7 +119,11 @@ const SIG_PNG = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/
 const SIG_SVG = /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="[0-9]+" height="[0-9]+" viewBox="[0-9 .]+">(<path d="[ML0-9 .-]+" fill="none" stroke="#[a-fA-F0-9]{6}" stroke-width="[0-9.]+" stroke-linecap="round" stroke-linejoin="round"\/>)+<\/svg>$/
 export function isValidSignature(sig) {
   const s = String(sig || '')
-  return SIG_PNG.test(s) || SIG_SVG.test(s)
+  // Mirrors handover_valid_signature: a real PNG of some size, or the pad SVG
+  // with at least 10 points.
+  if (SIG_PNG.test(s)) return s.startsWith('data:image/png;base64,iVBORw0KGgo') && s.length >= 1400
+  if (SIG_SVG.test(s)) return (s.length - s.replace(/L/g, '').length) >= 9
+  return false
 }
 
 export const SIGN_SELF = 'self'

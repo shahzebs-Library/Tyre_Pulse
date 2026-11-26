@@ -186,9 +186,13 @@ describe('who may sign (review H4) and send-back (M6)', () => {
   it('accepts exactly what the signature pad emits, and nothing looser', async () => {
     const { isValidSignature } = await import('../lib/handoverAuthorization')
     const { buildSvg } = await import('../components/checklist/SignatureCapture')
-    const svg = buildSvg([[{ x: 1.25, y: 2 }, { x: 30, y: -4.5 }]], 318.6, 140)
+    const pts = Array.from({ length: 12 }, (_, i) => ({ x: 1.25 + i * 4, y: (i % 3) * 2 }))
+    const svg = buildSvg([pts], 318.6, 140)
     expect(isValidSignature(svg)).toBe(true)
-    expect(isValidSignature('data:image/png;base64,iVBORw0KGgo=')).toBe(true)
+    // A dot is not a signature.
+    expect(isValidSignature(buildSvg([[{ x: 1.25, y: 2 }, { x: 30, y: -4.5 }]], 318.6, 140))).toBe(false)
+    expect(isValidSignature('data:image/png;base64,iVBORw0KGgo' + 'A'.repeat(1400))).toBe(true)
+    expect(isValidSignature('data:image/png;base64,iVBORw0KGgo=')).toBe(false)
     expect(isValidSignature(SIG)).toBe(false)
     expect(isValidSignature('<svg onload="alert(1)"></svg>')).toBe(false)
   })

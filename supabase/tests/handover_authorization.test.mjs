@@ -37,8 +37,8 @@ const DRV_TO = id(21)
 const DRV_OTHER_ORG = id(22)
 const DRV_UAE = id(23)
 // The exact shape the web SignatureCapture emits (and the driver charge module accepts).
-const SIG = '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="130" viewBox="0 0 320 130"><path d="M0 0 L5 5" fill="none" stroke="#111827" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-const PNG = 'data:image/png;base64,iVBORw0KGgo='
+const SIG = '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="130" viewBox="0 0 320 130"><path d="M0 0 L5 5 L10 8 L15 6 L20 12 L25 9 L30 14 L35 11 L40 16 L45 13" fill="none" stroke="#111827" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+const PNG = 'data:image/png;base64,iVBORw0KGgo' + 'A'.repeat(1400)
 
 async function setup() {
   const db = new PGlite()

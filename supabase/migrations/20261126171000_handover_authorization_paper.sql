@@ -130,8 +130,11 @@ comment on column public.handover_reports.to_on_behalf is
 -- web SignatureCapture emits (paths only, no script, no external reference).
 create or replace function public.handover_valid_signature(p text)
 returns boolean language sql immutable set search_path = '' as $fn$
-  select coalesce(p,'') ~ '^data:image/png;base64,[A-Za-z0-9+/=]+$'
-    or coalesce(p,'') ~ '^<svg xmlns="http://www.w3.org/2000/svg" width="[0-9]+" height="[0-9]+" viewBox="[0-9 .]+">(<path d="[ML0-9 .-]+" fill="none" stroke="#[a-fA-F0-9]{6}" stroke-width="[0-9.]+" stroke-linecap="round" stroke-linejoin="round"/>)+</svg>$'
+  -- Same rule as private.driver_charge_valid_signature: a real PNG of some
+  -- size, or the web pad SVG with at least 10 points. A dot is not a signature.
+  select (coalesce(p,'') ~ '^data:image/png;base64,iVBORw0KGgo[A-Za-z0-9+/=]+$' and length(p) >= 1400)
+    or (coalesce(p,'') ~ '^<svg xmlns="http://www.w3.org/2000/svg" width="[0-9]+" height="[0-9]+" viewBox="[0-9 .]+">(<path d="[ML0-9 .-]+" fill="none" stroke="#[a-fA-F0-9]{6}" stroke-width="[0-9.]+" stroke-linecap="round" stroke-linejoin="round"/>)+</svg>$'
+        and length(p) - length(replace(p, 'L', '')) >= 9)
 $fn$;
 revoke all on function public.handover_valid_signature(text) from public;
 revoke all on function public.handover_valid_signature(text) from anon;

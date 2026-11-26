@@ -307,7 +307,9 @@ void main() {
     // A 1x1 PNG is a dot, not a signature: refused (minimum size rule).
     expect(isValidHandoverSignature(_png), isFalse);
     expect(
-      isValidHandoverSignature('data:image/png;base64,iVBORw0KGgo${'A' * 1400}'),
+      isValidHandoverSignature(
+        'data:image/png;base64,iVBORw0KGgo${'A' * 1400}',
+      ),
       isTrue,
     );
     expect(
@@ -329,17 +331,27 @@ void main() {
       'from_driver_id': 'drv-from',
       'to_driver_id': 'drv-to',
     });
-    expect(rowSigningMode(r, HandoverParty.handing, 'drv-from'),
-        HandoverSigningMode.self,);
-    expect(rowSigningMode(r, HandoverParty.handing, 'drv-to'),
-        HandoverSigningMode.blocked,);
-    expect(rowSigningMode(r, HandoverParty.handing, null),
-        HandoverSigningMode.onBehalf,);
+    expect(
+      rowSigningMode(r, HandoverParty.handing, 'drv-from'),
+      HandoverSigningMode.self,
+    );
+    expect(
+      rowSigningMode(r, HandoverParty.handing, 'drv-to'),
+      HandoverSigningMode.blocked,
+    );
+    expect(
+      rowSigningMode(r, HandoverParty.handing, null),
+      HandoverSigningMode.onBehalf,
+    );
     // A typed-name party can only be signed on behalf.
     expect(
-        rowSigningMode(
-            _row(<String, Object?>{}), HandoverParty.receiving, 'drv-x',),
-        HandoverSigningMode.onBehalf,);
+      rowSigningMode(
+        _row(<String, Object?>{}),
+        HandoverParty.receiving,
+        'drv-x',
+      ),
+      HandoverSigningMode.onBehalf,
+    );
   });
 
   test('sent back means draft with a reason and no signatures, or rejected',
@@ -353,7 +365,8 @@ void main() {
     expect(isHandoverSentBack(_row(<String, Object?>{})), isFalse);
     expect(
       isHandoverSentBack(
-          _row(<String, Object?>{'approval_status': 'rejected'}),),
+        _row(<String, Object?>{'approval_status': 'rejected'}),
+      ),
       isTrue,
     );
   });

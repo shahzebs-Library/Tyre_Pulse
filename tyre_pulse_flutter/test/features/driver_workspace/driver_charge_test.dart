@@ -202,7 +202,9 @@ void main() {
       (WidgetTester tester) async {
     await tester.pumpWidget(
       _app(
-          _FakeRepo(_detail()), const DriverChargeDetailScreen(chargeId: 'c1'),),
+        _FakeRepo(_detail()),
+        const DriverChargeDetailScreen(chargeId: 'c1'),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.text('Respond to this charge'), findsNothing);
@@ -240,8 +242,10 @@ void main() {
       offline: true,
     );
     await tester.pumpWidget(
-      _app(repo,
-          DriverChargeAppealSheet(detail: DriverChargeDetail(repo.detailData)),),
+      _app(
+        repo,
+        DriverChargeAppealSheet(detail: DriverChargeDetail(repo.detailData)),
+      ),
     );
     await tester.enterText(
       find.byType(TextField),
@@ -336,7 +340,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Confirm the refusal you witnessed'), findsOneWidget);
     expect(
-        find.textContaining('Waiting for the named witness'), findsOneWidget,);
+      find.textContaining('Waiting for the named witness'),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Confirm the refusal you witnessed'));
     await tester.pumpAndSettle();
     expect(find.text('I witnessed the refusal.'), findsOneWidget);

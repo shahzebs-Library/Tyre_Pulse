@@ -46,8 +46,7 @@ Future<Uint8List> buildChargeNoticePdf(
 Future<void> shareChargeNoticePdf(Map<String, Object?> detail) async {
   final Uint8List bytes = await buildChargeNoticePdf(detail);
   final Object? charge = detail['charge'];
-  final String number =
-      charge is Map ? '${charge['charge_no'] ?? ''}' : '';
+  final String number = charge is Map ? '${charge['charge_no'] ?? ''}' : '';
   await Printing.sharePdf(
     bytes: bytes,
     filename: '${_fileSafe('Driver Charge $number')}.pdf',

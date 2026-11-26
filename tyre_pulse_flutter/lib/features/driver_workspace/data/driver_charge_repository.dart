@@ -22,7 +22,8 @@ import 'package:tyre_pulse/features/driver_workspace/domain/driver_workspace.dar
 
 final Provider<DriverChargeRepository> driverChargeRepositoryProvider =
     Provider<DriverChargeRepository>(
-  (Ref ref) => SupabaseDriverChargeRepository(ref.watch(supabaseClientProvider)),
+  (Ref ref) =>
+      SupabaseDriverChargeRepository(ref.watch(supabaseClientProvider)),
 );
 
 /// The request could not reach the server; nothing was recorded.

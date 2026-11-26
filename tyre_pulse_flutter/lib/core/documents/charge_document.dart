@@ -195,7 +195,11 @@ ChargeDocumentModel buildChargeDocument(
             for (final Object? field in section['fields']! as List)
               <String>[
                 '${(field! as Map)['label']}',
-                f.field(Map<String, Object?>.from(field as Map), detail, detail),
+                f.field(
+                  Map<String, Object?>.from(field as Map),
+                  detail,
+                  detail,
+                ),
               ],
           ],
         ),
@@ -325,7 +329,8 @@ final class _ChargeFormatter {
     final String sign = minutes >= 0 ? '+' : '-';
     final int hours = minutes.abs() ~/ 60;
     final int rest = minutes.abs() % 60;
-    final String zone = 'GMT$sign$hours${rest == 0 ? '' : ':${twoDigits(rest)}'}';
+    final String zone =
+        'GMT$sign$hours${rest == 0 ? '' : ':${twoDigits(rest)}'}';
     return '${d.year}-${twoDigits(d.month)}-${twoDigits(d.day)} '
         '${twoDigits(d.hour)}:${twoDigits(d.minute)} $zone';
   }
@@ -336,9 +341,7 @@ final class _ChargeFormatter {
     if (format.startsWith('enum:')) {
       final Object? table = (spec['enums']! as Map)[format.substring(5)];
       final Object? label = table is Map ? table[jsString(raw)] : null;
-      return jsTruthy(label)
-          ? '$label'
-          : jsString(raw).replaceAll('_', ' ');
+      return jsTruthy(label) ? '$label' : jsString(raw).replaceAll('_', ' ');
     }
     switch (format) {
       case 'datetime':

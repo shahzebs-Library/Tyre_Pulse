@@ -147,7 +147,8 @@ class _DriverChargesSectionState extends ConsumerState<DriverChargesSection> {
         if (_error != null)
           Card(
             child: ListTile(
-              leading: Icon(Icons.error_outline, color: theme.colorScheme.error),
+              leading:
+                  Icon(Icons.error_outline, color: theme.colorScheme.error),
               title: Text(
                 _errorText(l10n, _error!, l10n.driverChargeLoadError),
               ),
@@ -221,8 +222,9 @@ class _DriverChargeDetailScreenState
       _error = null;
     });
     try {
-      final DriverChargeDetail detail =
-          await ref.read(driverChargeRepositoryProvider).detail(widget.chargeId);
+      final DriverChargeDetail detail = await ref
+          .read(driverChargeRepositoryProvider)
+          .detail(widget.chargeId);
       if (mounted) setState(() => _detail = detail);
     } on Object catch (error) {
       if (mounted) setState(() => _error = error);
@@ -337,7 +339,8 @@ class _DriverChargeDetailScreenState
     final ThemeData theme = Theme.of(context);
     final String currency = '${c['currency'] ?? ''}';
     final Set<String> actions = detail.mobileActions;
-    final bool deductionsStarted = (num.tryParse('${c['deducted_amount'] ?? 0}') ?? 0) > 0;
+    final bool deductionsStarted =
+        (num.tryParse('${c['deducted_amount'] ?? 0}') ?? 0) > 0;
     String money(Object? v) =>
         formatChargeMoney(v, currency) ?? l10n.valueUnavailable;
     String text(Object? v) =>
@@ -380,7 +383,10 @@ class _DriverChargeDetailScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(money(c['amount']), style: theme.textTheme.headlineSmall),
+                  Text(
+                    money(c['amount']),
+                    style: theme.textTheme.headlineSmall,
+                  ),
                   Text(driverChargeStatusLabel(l10n, c['status'] as String?)),
                   fact(
                     l10n.driverChargeCategoryLabel,
@@ -390,7 +396,10 @@ class _DriverChargeDetailScreenState
                   fact(
                     l10n.driverChargeLinkedRecord,
                     <String>[
-                      driverChargeSourceLabel(l10n, c['source_type'] as String?),
+                      driverChargeSourceLabel(
+                        l10n,
+                        c['source_type'] as String?,
+                      ),
                       if (summary?['label'] != null) '${summary!['label']}',
                     ].join(' · '),
                   ),
@@ -478,7 +487,8 @@ class _DriverChargeDetailScreenState
           heading(l10n.driverChargeBasis),
           Text(text(c['basis'])),
           heading(l10n.driverChargeEvidence),
-          if (detail.rows('evidence').isEmpty) Text(l10n.driverChargeNoEvidence),
+          if (detail.rows('evidence').isEmpty)
+            Text(l10n.driverChargeNoEvidence),
           for (final DriverRow e in detail.rows('evidence'))
             ListTile(
               contentPadding: EdgeInsets.zero,
@@ -645,6 +655,7 @@ class _DriverChargeResponseSheetState
     _requestKey = key;
     return _requestId;
   }
+
   final TextEditingController _explanation = TextEditingController();
   DriverChargeResponse _response = DriverChargeResponse.accept;
   bool _acknowledged = false;
@@ -827,6 +838,7 @@ class _DriverChargeAppealSheetState
     _requestKey = key;
     return _requestId;
   }
+
   final TextEditingController _reason = TextEditingController();
   String? _message;
   bool _busy = false;
@@ -913,7 +925,6 @@ class _DriverChargeAppealSheetState
   }
 }
 
-
 /// Step 2 of a refusal: the named witness reads the server statement,
 /// confirms it and signs from their own account.
 class DriverChargeWitnessSheet extends ConsumerStatefulWidget {
@@ -979,8 +990,7 @@ class _DriverChargeWitnessSheetState
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String? statement =
-        widget.detail.statement(chargeWitnessStatement);
+    final String? statement = widget.detail.statement(chargeWitnessStatement);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.driverChargeWitnessConfirm)),
       body: ListView(

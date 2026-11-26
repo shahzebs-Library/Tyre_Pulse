@@ -38,13 +38,12 @@ final Provider<StockCountRecorder> stockCountRecorderProvider =
 /// The stock ledger reader / receipt poster for the store history screens.
 final Provider<StockHistoryRepository> stockHistoryRepositoryProvider =
     Provider<StockHistoryRepository>(
-  (Ref ref) =>
-      DefaultStockHistoryRepository(ref.watch(supabaseClientProvider)),
+  (Ref ref) => DefaultStockHistoryRepository(ref.watch(supabaseClientProvider)),
 );
 
 /// In / out / net totals for one history filter.
-final stockHistorySummaryProvider = FutureProvider.autoDispose
-    .family<MovementSummary, StockHistoryQuery>(
+final stockHistorySummaryProvider =
+    FutureProvider.autoDispose.family<MovementSummary, StockHistoryQuery>(
   (Ref ref, StockHistoryQuery query) =>
       ref.watch(stockHistoryRepositoryProvider).summary(query),
 );

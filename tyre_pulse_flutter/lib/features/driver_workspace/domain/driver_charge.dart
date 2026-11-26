@@ -100,8 +100,7 @@ List<ChargeOutstanding> chargeOutstandingByCurrency(List<DriverRow> rows) {
   final Map<String, double> totals = <String, double>{};
   for (final DriverRow row in rows) {
     final String status = '${row['status'] ?? ''}';
-    if (driverChargeTerminalStatuses.contains(status) &&
-        status != 'deducted') {
+    if (driverChargeTerminalStatuses.contains(status) && status != 'deducted') {
       continue;
     }
     final double? value = _number(row['outstanding']) ??

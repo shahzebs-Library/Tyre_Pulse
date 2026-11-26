@@ -21,7 +21,8 @@ const int minSignaturePngLength = 1400;
 /// Minimum number of `L` segments in an accepted SVG (10 points).
 const int minSignatureSvgSegments = 9;
 
-final RegExp _png = RegExp(r'^data:image/png;base64,iVBORw0KGgo[A-Za-z0-9+/=]+$');
+final RegExp _png =
+    RegExp(r'^data:image/png;base64,iVBORw0KGgo[A-Za-z0-9+/=]+$');
 final RegExp _svg = RegExp(
   r'^<svg xmlns="http://www\.w3\.org/2000/svg" width="[0-9]+" height="[0-9]+" '
   r'viewBox="[0-9 .]+">(<path d="[ML0-9 .-]+" fill="none" stroke="#[a-fA-F0-9]{6}" '

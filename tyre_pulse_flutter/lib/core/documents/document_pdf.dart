@@ -173,7 +173,8 @@ Future<Uint8List> renderChargeNoticePdf(
       build: (pw.Context context) => <pw.Widget>[
         pw.Text(
           model.title,
-          style: const pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          style:
+              const pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
         ),
         pw.SizedBox(height: 4),
         for (final String line in model.headerLines)

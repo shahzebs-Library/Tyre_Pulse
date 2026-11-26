@@ -78,9 +78,8 @@ bool isHandoverSentBack(HandoverRecord record) {
 /// means the wizard must ask for a site before saving.
 String? resolveHandoverSite({String? registerSite, String? typedSite}) {
   final String register = (registerSite ?? '').trim();
-  final String s = (register.isNotEmpty ? register : (typedSite ?? ''))
-      .trim()
-      .toUpperCase();
+  final String s =
+      (register.isNotEmpty ? register : (typedSite ?? '')).trim().toUpperCase();
   return s.isEmpty ? null : s;
 }
 

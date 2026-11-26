@@ -1358,7 +1358,6 @@ class _ReviewRow extends StatelessWidget {
   }
 }
 
-
 class _RegisterPickButton extends StatelessWidget {
   const _RegisterPickButton({
     required this.linked,
@@ -1377,7 +1376,8 @@ class _RegisterPickButton extends StatelessWidget {
       alignment: AlignmentDirectional.centerStart,
       child: TextButton.icon(
         onPressed: enabled ? onPressed : null,
-        icon: Icon(linked ? Icons.verified_user_outlined : Icons.badge_outlined),
+        icon:
+            Icon(linked ? Icons.verified_user_outlined : Icons.badge_outlined),
         label: Text(l10n.handoverAuthDriverRegister),
       ),
     );

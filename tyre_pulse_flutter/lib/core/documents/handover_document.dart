@@ -227,7 +227,8 @@ HandoverDocumentModel buildHandoverDocument(
   final List<String> headerLines = <String>[
     for (final Object? raw in header['right_lines']! as List)
       () {
-        final Map<String, Object?> line = Map<String, Object?>.from(raw! as Map);
+        final Map<String, Object?> line =
+            Map<String, Object?>.from(raw! as Map);
         return '${line['label']}: '
             '${f.value(line['format'] as String?, f.field(row, line, ctx))}';
       }(),
@@ -236,8 +237,7 @@ HandoverDocumentModel buildHandoverDocument(
       Map<String, Object?>.from(spec['status_words']! as Map);
   final Object? status =
       statusWords[jsString(row['approval_status'] ?? '').toLowerCase()];
-  final String statusWord =
-      status is Map ? '${status['word']}' : 'No sign-off';
+  final String statusWord = status is Map ? '${status['word']}' : 'No sign-off';
   final String statusTone = status is Map ? '${status['tone']}' : 'none';
 
   final List<HandoverDocumentSection> sections = <HandoverDocumentSection>[];
@@ -373,8 +373,7 @@ HandoverDocumentModel buildHandoverDocument(
     lockedNote: jsTruthy(row['frozen_at'])
         ? 'Signed record. Content locked at ${f.when(row['frozen_at'])}.'
         : null,
-    qrTarget:
-        id.isEmpty ? null : '/handovers?view=${Uri.encodeComponent(id)}',
+    qrTarget: id.isEmpty ? null : '/handovers?view=${Uri.encodeComponent(id)}',
     qrCaption: <String>[for (final Object? c in qr['caption']! as List) '$c'],
     page: Map<String, Object?>.from(spec['page']! as Map),
     fileName: '${spec['file_name']}',
@@ -414,7 +413,8 @@ List<HandoverSignatureBlock> _signatureBlocks(
         if (jsTruthy(signature) &&
             b['behalf'] != null &&
             row['${b['behalf']}'] == true) {
-          sub = '$sub, ${jsTruthy(b['behalf_text']) ? b['behalf_text'] : 'signed on behalf'}';
+          sub =
+              '$sub, ${jsTruthy(b['behalf_text']) ? b['behalf_text'] : 'signed on behalf'}';
         }
         return HandoverSignatureBlock(
           title: '${b['title']}',
@@ -459,13 +459,11 @@ final class _HandoverFormatter {
   /// `YYYY-MM-DD` in local time; a bare date is local midnight.
   String date(Object? v) {
     final String s = jsString(v);
-    final DateTime? instant = s.length == 10
-        ? DateTime.tryParse('${s}T00:00:00')
-        : parseSpecDate(v);
+    final DateTime? instant =
+        s.length == 10 ? DateTime.tryParse('${s}T00:00:00') : parseSpecDate(v);
     if (instant == null) return s.length > 10 ? s.substring(0, 10) : s;
-    final DateTime d = s.length == 10
-        ? instant
-        : specWallClock(instant, utcOffset).$1;
+    final DateTime d =
+        s.length == 10 ? instant : specWallClock(instant, utcOffset).$1;
     return '${d.year}-${twoDigits(d.month)}-${twoDigits(d.day)}';
   }
 
@@ -493,8 +491,8 @@ final class _HandoverFormatter {
             ((spec['formats']! as Map)['handover_type'] as Map)[jsString(v)];
         return jsTruthy(label) ? '$label' : 'N/A';
       case 'status_pill':
-        final Object? meta = (spec['status_words']! as Map)[
-            jsString(v).toLowerCase()];
+        final Object? meta =
+            (spec['status_words']! as Map)[jsString(v).toLowerCase()];
         return meta is Map ? '${meta['word']}' : 'No sign-off';
       default:
         return jsString(v);

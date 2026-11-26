@@ -82,8 +82,9 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
 
   Future<void> _loadMyDriver() async {
     final String userId = ref.read(workspaceContextProvider)?.userId ?? '';
-    final String? id =
-        await ref.read(handoverRemoteRepositoryProvider).myLinkedDriverId(userId);
+    final String? id = await ref
+        .read(handoverRemoteRepositoryProvider)
+        .myLinkedDriverId(userId);
     if (mounted) {
       setState(() {
         _myDriverId = id;
@@ -161,7 +162,8 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
               signerName: needsName ? _name.text.trim() : null,
               latitude: location.captured ? location.latitude : null,
               longitude: location.captured ? location.longitude : null,
-              accuracyMeters: location.captured ? location.accuracyMeters : null,
+              accuracyMeters:
+                  location.captured ? location.accuracyMeters : null,
               locationStatus: location.captured ? null : location.status,
               onBehalf: mode == HandoverSigningMode.onBehalf,
             ),
@@ -173,7 +175,9 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
       _signature = null;
       await widget.onSigned();
     } on Object catch (error) {
-      if (mounted) setState(() => _message = handoverSignErrorText(l10n, error));
+      if (mounted) {
+        setState(() => _message = handoverSignErrorText(l10n, error));
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -236,7 +240,10 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Text(l10n.handoverAuthSignaturesTitle, style: theme.textTheme.titleMedium),
+        Text(
+          l10n.handoverAuthSignaturesTitle,
+          style: theme.textTheme.titleMedium,
+        ),
         Text(
           l10n.handoverAuthDocumentNo(handoverDocumentNumber(r.row)),
           style: theme.textTheme.bodySmall,
@@ -318,67 +325,68 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
               HandoverSigningMode.blocked)
             TpCard(child: Text(l10n.handoverAuthBlocked))
           else ...<Widget>[
-          if (!r.partyHasRegisterDriver(next)) ...<Widget>[
-            TpInput(
-              label: l10n.handoverAuthSignerName,
-              controller: _name,
-              hint: l10n.handoverAuthSignerHint,
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: TpSpace.sm),
-          ],
-          if (rowSigningMode(r, next, _myDriverId) ==
-              HandoverSigningMode.onBehalf)
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _behalfConfirmed,
-              onChanged: _busy
-                  ? null
-                  : (bool? v) => setState(() => _behalfConfirmed = v ?? false),
-              title: Text(
-                l10n.handoverAuthOnBehalf(
-                  (r.partyHasRegisterDriver(next)
-                          ? (next == HandoverParty.handing
-                              ? r.fromDriver
-                              : r.toDriver)
-                          : _name.text.trim()) ??
-                      l10n.valueUnavailable,
+            if (!r.partyHasRegisterDriver(next)) ...<Widget>[
+              TpInput(
+                label: l10n.handoverAuthSignerName,
+                controller: _name,
+                hint: l10n.handoverAuthSignerHint,
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: TpSpace.sm),
+            ],
+            if (rowSigningMode(r, next, _myDriverId) ==
+                HandoverSigningMode.onBehalf)
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _behalfConfirmed,
+                onChanged: _busy
+                    ? null
+                    : (bool? v) =>
+                        setState(() => _behalfConfirmed = v ?? false),
+                title: Text(
+                  l10n.handoverAuthOnBehalf(
+                    (r.partyHasRegisterDriver(next)
+                            ? (next == HandoverParty.handing
+                                ? r.fromDriver
+                                : r.toDriver)
+                            : _name.text.trim()) ??
+                        l10n.valueUnavailable,
+                  ),
                 ),
               ),
-            ),
-          TpCard(
-            child: HandoverSignaturePad(
-              key: ValueKey<String>('sign-${next.key}'),
-              value: _signature,
-              height: 180,
-              onChanged: (String? v) => setState(() => _signature = v),
-            ),
-          ),
-          if (_message != null)
-            Padding(
-              padding: const EdgeInsets.only(top: TpSpace.sm),
-              child: Text(
-                _message!,
-                style: TextStyle(color: theme.colorScheme.error),
+            TpCard(
+              child: HandoverSignaturePad(
+                key: ValueKey<String>('sign-${next.key}'),
+                value: _signature,
+                height: 180,
+                onChanged: (String? v) => setState(() => _signature = v),
               ),
             ),
-          const SizedBox(height: TpSpace.sm),
-          if (_readingLocation)
-            Padding(
-              padding: const EdgeInsets.only(bottom: TpSpace.sm),
-              child: Text(l10n.handoverAuthReadingLocation),
+            if (_message != null)
+              Padding(
+                padding: const EdgeInsets.only(top: TpSpace.sm),
+                child: Text(
+                  _message!,
+                  style: TextStyle(color: theme.colorScheme.error),
+                ),
+              ),
+            const SizedBox(height: TpSpace.sm),
+            if (_readingLocation)
+              Padding(
+                padding: const EdgeInsets.only(bottom: TpSpace.sm),
+                child: Text(l10n.handoverAuthReadingLocation),
+              ),
+            FilledButton.icon(
+              onPressed: _busy ? null : () => unawaited(_sign(next)),
+              icon: _busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.draw_outlined),
+              label: Text(l10n.handoverAuthSignSubmit),
             ),
-          FilledButton.icon(
-            onPressed: _busy ? null : () => unawaited(_sign(next)),
-            icon: _busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.draw_outlined),
-            label: Text(l10n.handoverAuthSignSubmit),
-          ),
           ],
         ],
       ],

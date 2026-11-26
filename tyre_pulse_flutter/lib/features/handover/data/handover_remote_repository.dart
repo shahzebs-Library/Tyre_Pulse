@@ -235,10 +235,10 @@ final class SupabaseHandoverRemoteRepository
     };
     Future<void> write(Map<String, Object?> values) => guard<void>(() async {
           await _client.from(SupabaseTables.handoverReports).upsert(
-            values,
-            onConflict: 'client_uuid',
-            ignoreDuplicates: true,
-          );
+                values,
+                onConflict: 'client_uuid',
+                ignoreDuplicates: true,
+              );
         });
     try {
       await write(row);
@@ -262,7 +262,8 @@ final class SupabaseHandoverRemoteRepository
       }
       await write(<String, Object?>{
         for (final MapEntry<String, Object?> e in row.entries)
-          if (!HandoverPayload.authorizationKeys.contains(e.key)) e.key: e.value,
+          if (!HandoverPayload.authorizationKeys.contains(e.key))
+            e.key: e.value,
       });
     }
   }
@@ -410,10 +411,8 @@ final class SupabaseHandoverRemoteRepository
   }) async {
     final List<Map<String, dynamic>> rows =
         await _withColumns<List<Map<String, dynamic>>>((String columns) async {
-      var query = _client
-          .from(SupabaseTables.handoverReports)
-          .select(columns)
-          .inFilter(
+      var query =
+          _client.from(SupabaseTables.handoverReports).select(columns).inFilter(
         'approval_status',
         <String>['pending_supervisor', 'pending_incharge'],
       );

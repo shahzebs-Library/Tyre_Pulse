@@ -319,7 +319,7 @@ export const HANDOVER_WAITING_STATUSES = ['pending_supervisor', 'pending_incharg
 
 /**
  * Vehicle handovers waiting for the fleet supervisor or the fleet incharge,
- * oldest first. Once the authorization update (20261126170000) is applied a
+ * oldest first. Once the authorization update (20261126171000) is applied a
  * handover only enters the queue after BOTH drivers signed (the receiving
  * signature submits it), so an unsigned paper never reaches an approver. On a
  * database without that update the signature columns are absent and the read

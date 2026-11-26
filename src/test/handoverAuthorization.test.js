@@ -97,6 +97,8 @@ describe('handover PDF spec', () => {
     expect(blocks.map((b) => b.title)).toEqual(['Handing over', 'Receiving'])
     expect(blocks[0].sub).toMatch(/^Signed: /)
     expect(blocks[1]).toMatchObject({ name: 'Dana', sub: 'Not signed' })
+    const behalf = signatureBlocks({ from_signature: SIG, from_signed_at: '2026-11-26T08:00:00Z', from_on_behalf: true }, section)
+    expect(behalf[0].sub).toMatch(/on their behalf by a supervisor$/)
     const legacy = signatureBlocks({ signature_url: SIG, to_driver: 'Dana' }, section)
     expect(legacy).toHaveLength(1)
     expect(legacy[0].title).toBe('Driver')
@@ -135,5 +137,57 @@ describe('signHandover service', () => {
     h.rpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'permission denied for table handover_reports' } })
     await expect(signHandover('id-1', 'receiving', { signature: SIG })).rejects.toThrow()
     await expect(signHandover('id-1', 'nobody', { signature: SIG })).rejects.toThrow(/who is signing/)
+  })
+})
+
+describe('who may sign (review H4) and send-back (M6)', () => {
+  it('classifies each party as self, on behalf or blocked', async () => {
+    const { signingMode, rowSigningMode, SIGN_SELF, SIGN_ON_BEHALF, SIGN_BLOCKED } = await import('../lib/handoverAuthorization')
+    expect(signingMode({ partyDriverId: 'd1', otherDriverId: 'd2', myDriverId: 'd1' })).toBe(SIGN_SELF)
+    expect(signingMode({ partyDriverId: 'd1', otherDriverId: 'd2', myDriverId: 'd2' })).toBe(SIGN_BLOCKED)
+    expect(signingMode({ partyDriverId: 'd1', otherDriverId: 'd2', myDriverId: null })).toBe(SIGN_ON_BEHALF)
+    expect(signingMode({ partyDriverId: null, otherDriverId: null, myDriverId: 'd9' })).toBe(SIGN_ON_BEHALF)
+    const row = { from_driver_id: 'd1', to_driver_id: 'd2' }
+    expect(rowSigningMode(row, PARTY_RECEIVING, 'd2')).toBe(SIGN_SELF)
+    expect(rowSigningMode(row, PARTY_HANDING, 'd2')).toBe(SIGN_BLOCKED)
+  })
+
+  it('needs the on-behalf confirmation and skips a blocked party', async () => {
+    const { wizardSigningProblems, SIGN_ON_BEHALF, SIGN_BLOCKED, SIGN_SELF } = await import('../lib/handoverAuthorization')
+    const base = ['The handing over signature is missing.']
+    expect(wizardSigningProblems(base, {}, { [PARTY_HANDING]: SIGN_BLOCKED, [PARTY_RECEIVING]: SIGN_SELF })).toEqual([])
+    const errs = wizardSigningProblems([], {}, { [PARTY_HANDING]: SIGN_ON_BEHALF, [PARTY_RECEIVING]: SIGN_SELF })
+    expect(errs).toEqual(['Confirm that you are signing on behalf of the handing party.'])
+    expect(wizardSigningProblems([], { behalf_handing: true }, { [PARTY_HANDING]: SIGN_ON_BEHALF })).toEqual([])
+  })
+
+  it('accepts exactly what the signature pad emits, and nothing looser', async () => {
+    const { isValidSignature } = await import('../lib/handoverAuthorization')
+    const { buildSvg } = await import('../components/checklist/SignatureCapture')
+    const svg = buildSvg([[{ x: 1.25, y: 2 }, { x: 30, y: -4.5 }]], 318.6, 140)
+    expect(isValidSignature(svg)).toBe(true)
+    expect(isValidSignature('data:image/png;base64,iVBORw0KGgo=')).toBe(true)
+    expect(isValidSignature(SIG)).toBe(false)
+    expect(isValidSignature('<svg onload="alert(1)"></svg>')).toBe(false)
+  })
+
+  it('reads a sent-back draft as needing new signatures', async () => {
+    const { isSentBack } = await import('../lib/handoverAuthorization')
+    const back = { approval_status: 'draft', review_note: 'Odometer is wrong', to_signed_at: null, from_signed_at: null }
+    expect(isSentBack(back)).toBe(true)
+    expect(signingSummary(back).text).toMatch(/Sent back/)
+    expect(isSentBack({ approval_status: 'draft', review_note: null })).toBe(false)
+    expect(isSentBack({ approval_status: 'rejected' })).toBe(true)
+    expect(eventLabel('sent_back')).toMatch(/Sent back/)
+  })
+
+  it('sends the on-behalf flag to sign_handover', async () => {
+    const { signHandover } = await import('../lib/api/handoverReports')
+    h.rpc.mockReset()
+    h.rpc.mockResolvedValue({ data: { ok: true, party: 'handing', status: 'draft', on_behalf: true }, error: null })
+    await signHandover('id-1', 'handing', { signature: SIG, onBehalf: true })
+    expect(h.rpc.mock.calls[0][1].p_on_behalf).toBe(true)
+    await signHandover('id-1', 'handing', { signature: SIG })
+    expect(h.rpc.mock.calls[1][1].p_on_behalf).toBe(false)
   })
 })

@@ -42,7 +42,7 @@ export const COLS =
   'incharge_name,incharge_signature,incharge_at,incharge_by'
 
 /**
- * The authorization paper columns (migration 20261126170000). Selected on top of
+ * The authorization paper columns (the handover authorization paper migration). Selected on top of
  * COLS; when the database has not had that migration applied PostgREST refuses
  * the whole select (42703 / PGRST204), so every read retries with COLS alone and
  * the screen falls back to the single legacy signature.
@@ -51,7 +51,7 @@ export const AUTH_COLS =
   'from_driver_id,to_driver_id,hour_meter,site,from_signature,from_signed_name,' +
   'from_signed_at,from_signed_by,to_signature,to_signed_name,to_signed_at,' +
   'to_signed_by,latitude,longitude,location_accuracy_m,location_status,' +
-  'location_captured_at,frozen_at'
+  'location_captured_at,frozen_at,from_on_behalf,to_on_behalf'
 export const FULL_COLS = `${COLS},${AUTH_COLS}`
 const AUTH_WRITE_KEYS = ['from_driver_id', 'to_driver_id', 'hour_meter', 'site']
 
@@ -313,10 +313,14 @@ export async function updateHandoverReport(id, patch = {}) {
  *
  * @param {string} id
  * @param {'handing'|'receiving'} party
- * @param {{ signature:string, name?:string|null, location?:{latitude,longitude,accuracy,status} }} opts
- * @returns {Promise<{ok:boolean, party:string, signed_name:string, signed_at:string, signed_by:string, status:string}>}
+ * `onBehalf` must be true when the signing account is NOT the account linked to
+ * that party's driver: only a supervisor-level account may do that, and the
+ * flag is stored on the record and in the audit trail.
+ *
+ * @param {{ signature:string, name?:string|null, location?:{latitude,longitude,accuracy,status}, onBehalf?:boolean }} opts
+ * @returns {Promise<{ok:boolean, party:string, signed_name:string, signed_at:string, signed_by:string, on_behalf:boolean, status:string}>}
  */
-export async function signHandover(id, party, { signature, name = null, location = null } = {}) {
+export async function signHandover(id, party, { signature, name = null, location = null, onBehalf = false } = {}) {
   if (!id) throw new Error('A handover is required to sign.')
   if (party !== 'handing' && party !== 'receiving') throw new Error('Choose who is signing.')
   const sig = asSignature(signature)
@@ -331,10 +335,35 @@ export async function signHandover(id, party, { signature, name = null, location
     p_longitude: Number.isFinite(loc.longitude) ? loc.longitude : null,
     p_accuracy_m: Number.isFinite(loc.accuracy) ? loc.accuracy : null,
     p_location_status: loc.status === 'denied' ? 'denied' : loc.status === 'captured' ? 'captured' : 'unavailable',
+    p_on_behalf: onBehalf === true,
   })
   if (error) throw new ServiceError(toUserMessage(error, 'Could not record the signature.'), error.code, error)
   if (!data || data.ok !== true) throw new ServiceError('The server did not confirm the signature. Refresh before retrying.')
   return data
+}
+
+let myDriverPromise = null
+/**
+ * The driver-register id linked to the signed-in account (driver_account_links),
+ * or null. Cached for the session; any read failure resolves to null, which only
+ * means the screen asks "signing on behalf" and the server decides.
+ */
+export function getMyLinkedDriverId({ refresh = false } = {}) {
+  if (!myDriverPromise || refresh) {
+    myDriverPromise = (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser()
+        const uid = auth?.user?.id
+        if (!uid) return null
+        const { data, error } = await supabase.from('driver_account_links').select('driver_id').eq('user_id', uid).maybeSingle()
+        if (error) return null
+        return data?.driver_id || null
+      } catch {
+        return null
+      }
+    })()
+  }
+  return myDriverPromise
 }
 
 /** Append-only audit trail of one handover, oldest first. [] before the migration. */

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/alerts/data/tyre_alert_dto.dart';
+import 'package:tyre_pulse/features/alerts/domain/inspection_alerts.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 
 const String _alertColumns = 'id,asset_no,site,brand,position,tyre_position,'
@@ -83,10 +84,31 @@ final class SupabaseAlertsRepository
       final Set<String> acked = acknowledgedTyreIds(
         acks.map((Map<String, dynamic> row) => row['message']),
       );
-      return rows
-          .map(TyreAlertDto.fromRow)
-          .map((TyreAlertDto dto) => dto.toDomain())
+      // What inspectors recorded in the last 30 days, latest per vehicle.
+      final String since = DateTime.now()
+          .subtract(const Duration(days: 30))
+          .toIso8601String()
+          .substring(0, 10);
+      var inspections = _client
+          .from(SupabaseTables.inspections)
+          .select('id,asset_no,site,inspection_date,tyre_conditions')
+          .gte('inspection_date', since);
+      if (countryFilter != null) {
+        inspections = inspections.or(countryFilter);
+      }
+      final List<Map<String, dynamic>> inspectionRows = await inspections
+          .order('inspection_date', ascending: false)
+          .order('created_at', ascending: false)
+          .limit(1000);
+      final List<TyreAlert> all = <TyreAlert>[
+        ...rows
+            .map(TyreAlertDto.fromRow)
+            .map((TyreAlertDto dto) => dto.toDomain()),
+        ...alertsFromInspections(inspectionRows),
+      ];
+      return all
           .where((TyreAlert alert) => !acked.contains(alert.id))
+          .take(300)
           .toList(growable: false);
     });
   }

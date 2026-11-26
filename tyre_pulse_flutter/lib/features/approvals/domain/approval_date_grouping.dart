@@ -35,6 +35,7 @@ List<ApprovalDateGroup> groupApprovalsByDate(
   required String todayLabel,
   required String yesterdayLabel,
   required String unknownLabel,
+  String Function(DateTime day)? formatDay,
 }) {
   final DateTime today = DateTime(now.year, now.month, now.day);
   final DateTime yesterday = today.subtract(const Duration(days: 1));
@@ -61,6 +62,7 @@ List<ApprovalDateGroup> groupApprovalsByDate(
       todayLabel: todayLabel,
       yesterdayLabel: yesterdayLabel,
       unknownLabel: unknownLabel,
+      formatDay: formatDay,
     );
     if (label != currentLabel) {
       flush();
@@ -81,6 +83,7 @@ String _labelFor(
   required String todayLabel,
   required String yesterdayLabel,
   required String unknownLabel,
+  String Function(DateTime day)? formatDay,
 }) {
   if (iso == null || iso.isEmpty) return unknownLabel;
   final DateTime? parsed = DateTime.tryParse(iso);
@@ -89,6 +92,9 @@ String _labelFor(
   final DateTime day = DateTime(local.year, local.month, local.day);
   if (day == today) return todayLabel;
   if (day == yesterday) return yesterdayLabel;
+  // A readable, locale-aware date when the caller supplies one; the plain
+  // ISO form stays as the dependency-free default.
+  if (formatDay != null) return formatDay(day);
   final String y = local.year.toString().padLeft(4, '0');
   final String m = local.month.toString().padLeft(2, '0');
   final String d = local.day.toString().padLeft(2, '0');

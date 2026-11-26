@@ -461,6 +461,9 @@ class _InspectionApprovalsQueueScreenState
       todayLabel: l10n.dateGroupToday,
       yesterdayLabel: l10n.dateGroupYesterday,
       unknownLabel: l10n.valueUnavailable,
+      formatDay: (DateTime day) =>
+          DateFormat('d MMM yyyy', Localizations.localeOf(context).toString())
+              .format(day),
     );
 
     // Flattened once so `ListView.builder` can mix section headers and rows

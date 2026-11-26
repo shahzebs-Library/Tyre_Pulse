@@ -82,6 +82,10 @@ class TpAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       automaticallyImplyLeading: false,
+      // iOS centres titles by default and Android does not, so the same
+      // screen read differently per platform and a tab root without Back
+      // looked like it had lost its button. One alignment everywhere.
+      centerTitle: false,
       titleSpacing: showBack ? 0 : TpSpace.lg,
       leading: showBack
           ? IconButton(

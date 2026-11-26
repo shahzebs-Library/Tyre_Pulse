@@ -357,16 +357,21 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
           TpSpace.xxxl,
         ),
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _Metric(value: rows.length, label: copy('items')),
-              ),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(child: _Metric(value: low, label: copy('reorder'))),
-              const SizedBox(width: TpSpace.sm),
-              Expanded(child: _Metric(value: stale, label: copy('notToday'))),
-            ],
+          // Equal-height tiles: a label that wraps (e.g. "Need reorder") must
+          // not push its tile out of line with the others.
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Expanded(
+                  child: _Metric(value: rows.length, label: copy('items')),
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(child: _Metric(value: low, label: copy('reorder'))),
+                const SizedBox(width: TpSpace.sm),
+                Expanded(child: _Metric(value: stale, label: copy('notToday'))),
+              ],
+            ),
           ),
           const SizedBox(height: TpSpace.md),
           TextField(
@@ -636,9 +641,15 @@ class _Metric extends StatelessWidget {
   Widget build(BuildContext context) => TpCard(
         padding: const EdgeInsets.all(TpSpace.md),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             Text('$value', style: Theme.of(context).textTheme.headlineSmall),
-            Text(label, textAlign: TextAlign.center),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       );

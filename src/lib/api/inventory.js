@@ -115,6 +115,8 @@ async function headCount(table, build) {
  * (segregation of duties, missing capability, refused shortage, wrong state).
  */
 const REFUSAL_CODES = new Set(['22023', '42501', 'P0001', '23514', 'PT409', '55000'])
+// The ERP stores ledger's own refusals use 23505 / P0002; only these exact sentences are shown.
+const LEDGER_REFUSAL = /^(This file was already (started|posted) on .{0,120}|Another upload for [A-Z0-9_-]{1,40} is not finished\. Finish or cancel it first\.|Upload not found\.)$/
 /** Anything that reads like database internals is never shown verbatim. */
 const INTERNAL_TEXT = /relation |column |constraint|function |syntax|violates|null value|duplicate key|permission denied for|schema |operator |does not exist|sqlstate|pg_|::/i
 
@@ -129,6 +131,7 @@ export function inventoryRefusalText(err) {
   const e = err?.cause || err
   const code = e?.code ? String(e.code) : ''
   const msg = typeof e?.message === 'string' ? e.message.trim() : ''
+  if ((code === '23505' || code === 'P0002') && msg && LEDGER_REFUSAL.test(msg)) return msg
   if (!REFUSAL_CODES.has(code) || !msg) return null
   for (const [re, plain] of PLAIN_REFUSALS) {
     const m = msg.match(re)
@@ -551,6 +554,97 @@ export const submitOpeningBatch = (batchId, key) => rpcWrite('inv_opening_batch_
 export const decideOpeningBatch = ({ batchId, decision, note }, key) => rpcWrite('inv_opening_batch_approve', {
   batch_id: batchId, decision, note: note || null,
 }, key)
+
+// ── ERP stores ledger (Ramco CSOL-IMS-013-1) ─────────────────────────────────
+
+const ERP_UPLOAD_COLS = 'id, country, site, location_id, warehouse_code, filename, file_sha256, report_id, currency, period_from, period_to, line_count, status, zero_missing, applied, summary, posted_by, created_at, posted_at'
+
+/**
+ * Every Material Master row for a country (code, name, category, reviewed), for
+ * matching a ledger file. Bounded; `truncated` says when the ceiling was hit.
+ */
+export async function loadMasterForLedger(country) {
+  const { data, error, truncated } = await fetchAllPages((from, to) => supabase.from('material_master')
+    .select('id, item_code, item_name, category, subcategory, reviewed, serial_tracked, lot_tracked')
+    .eq('country', country)
+    .order('id', { ascending: true }).range(from, to), { max: 40000 })
+  if (error) throw toServiceError(error)
+  return { rows: data || [], truncated: !!truncated }
+}
+
+/** Stock lines at one store location, with their item code. */
+export async function loadStockAtLocation(locationId) {
+  const { data, error, truncated } = await fetchAllPages((from, to) => supabase.from('stock_records')
+    .select('id, item_id, description, qty_on_hand, qty_reserved, condition, ownership, itm:material_master(item_code)')
+    .eq('location_id', locationId)
+    .order('id', { ascending: true }).range(from, to), { max: 20000 })
+  if (error) throw toServiceError(error)
+  const rows = (data || [])
+    .filter((r) => (r.condition || 'new') === 'new' && (r.ownership || 'owned') === 'owned')
+    .map(({ itm, ...r }) => ({ ...r, item_code: itm?.item_code || null }))
+  return { rows, truncated: !!truncated }
+}
+
+/** Earlier ledger uploads, newest first. */
+export function listErpLedgerUploads({ page, pageSize, country } = {}) {
+  return pagedRead('erp_ledger_uploads', ERP_UPLOAD_COLS, {
+    page, pageSize, order: 'created_at', ascending: false, build: (q) => applyCountry(q, country).neq('status', 'cancelled'),
+  })
+}
+
+/** An upload already posted for this file fingerprint, or null. */
+export async function findErpLedgerUpload(sha256) {
+  const { data, error } = await supabase.from('erp_ledger_uploads').select(ERP_UPLOAD_COLS).eq('file_sha256', sha256)
+    .neq('status', 'cancelled').limit(1)
+  if (error) {
+    if (isNotProvisioned(error)) return null
+    throw toServiceError(error)
+  }
+  return data?.[0] || null
+}
+
+/** Stock movements at a store recorded after a date (a ledger older than these would undo them). */
+// Local-day offsets; Egypt uses +03 so its summer time is covered (an earlier start only counts more).
+const LEDGER_DAY_OFFSET = { KSA: '+03:00', UAE: '+04:00', Egypt: '+03:00' }
+export async function countMovementsAfter(locationId, isoDate, country) {
+  if (!locationId || !isoDate) return null
+  // From the start of the balance day, store time: a movement that day may or may not be in the export.
+  // The ledger's own earlier postings are not movements the export missed.
+  const { count, error } = await supabase.from('stock_movements')
+    .select('id', { count: 'exact', head: true })
+    .eq('location_id', locationId)
+    .gte('posted_at', `${isoDate}T00:00:00${LEDGER_DAY_OFFSET[country] || '+03:00'}`)
+    .or('source_doc_type.is.null,source_doc_type.neq.erp_ledger')
+  // -1 = could not check; the screen then asks for the same acknowledgement.
+  if (error) return -1
+  return count ?? -1
+}
+
+// Owner only; the database refuses anyone else. A post runs in parts so a
+// large store stays inside the request time limit; every part is safe to retry.
+export const beginErpLedger = (payload, key) => rpcWrite('inv_erp_ledger_begin', payload, key)
+export const applyErpLedger = (uploadId, key, limit = 150) => rpcWrite('inv_erp_ledger_apply', { upload_id: uploadId, limit }, key)
+export const finishErpLedger = (uploadId, key, limit = 150) => rpcWrite('inv_erp_ledger_finish', { upload_id: uploadId, limit }, key)
+export const cancelErpLedger = (uploadId, key) => rpcWrite('inv_erp_ledger_cancel', { upload_id: uploadId }, key)
+
+/**
+ * Run an upload to the end: post the stock in parts, then finish it.
+ * Calls onProgress({ phase, remaining }) between parts. Resumable: call it
+ * again with the same upload id after a failure.
+ */
+export async function runErpLedger(uploadId, { onProgress, limit = 150, maxRounds = 200 } = {}) {
+  for (let i = 0; i < maxRounds; i += 1) {
+    const r = await applyErpLedger(uploadId, newIdempotencyKey(), limit)
+    onProgress?.({ phase: 'stock', remaining: r?.remaining ?? 0 })
+    if (!r?.remaining) break
+  }
+  for (let i = 0; i < maxRounds; i += 1) {
+    const r = await finishErpLedger(uploadId, newIdempotencyKey(), limit)
+    onProgress?.({ phase: 'finish', remaining: r?.remaining ?? 0 })
+    if (r?.done) return r
+  }
+  throw new ServiceError('The upload did not finish. Open it again and continue.', 'INV_ERP_UNFINISHED')
+}
 
 // ── Master data reviews (no auto-merge) ──────────────────────────────────────
 

@@ -14,6 +14,7 @@ import OpeningBalancePanel from './OpeningBalancePanel'
 import ApprovalsPanel from './ApprovalsPanel'
 import UnmatchedItemsPanel from './UnmatchedItemsPanel'
 import StockReconcilePanel from './StockReconcilePanel'
+import ErpLedgerPanel from './ErpLedgerPanel'
 
 function Permissions({ can }) {
   const { t } = useLanguage()
@@ -59,7 +60,7 @@ function MasterReviews() {
   )
 }
 
-const CONTROL_TABS = ['approvals', 'permissions', 'opening', 'master', 'unmatched', 'reconcile']
+const CONTROL_TABS = ['approvals', 'permissions', 'opening', 'erp_ledger', 'master', 'unmatched', 'reconcile']
 
 export default function ControlsSection(props) {
   const { t } = useLanguage()
@@ -70,6 +71,7 @@ export default function ControlsSection(props) {
         { key: 'approvals', label: t('inventory.controls.tabs.approvals') },
         { key: 'permissions', label: t('inventory.controls.tabs.permissions') },
         { key: 'opening', label: t('inventory.controls.tabs.opening') },
+        { key: 'erp_ledger', label: 'ERP stores ledger' },
         { key: 'master', label: t('inventory.controls.tabs.master') },
         // Plain English for now; the Arabic labels follow with the locale pass.
         { key: 'unmatched', label: 'Unmatched items' },
@@ -78,6 +80,7 @@ export default function ControlsSection(props) {
       {tab === 'approvals' && <ApprovalsPanel {...props} />}
       {tab === 'permissions' && <Permissions can={props.can} />}
       {tab === 'opening' && <OpeningBalancePanel {...props} />}
+      {tab === 'erp_ledger' && <ErpLedgerPanel {...props} />}
       {tab === 'master' && <MasterReviews />}
       {tab === 'unmatched' && <UnmatchedItemsPanel {...props} />}
       {tab === 'reconcile' && <StockReconcilePanel {...props} />}

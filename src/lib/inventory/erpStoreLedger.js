@@ -47,9 +47,12 @@ export function normCode(v) {
 
 /** A number as the ERP prints it ("1,234.50", " 2 ", "-3"); null when it is not a number. */
 export function toNumber(v) {
-  const s = clean(v).replace(/,/g, '')
-  if (!s || !/^-?\d+(\.\d+)?$/.test(s)) return null
-  const n = Number(s)
+  let s = clean(v).replace(/,/g, '')
+  let sign = 1
+  const paren = s.match(/^\((.*)\)$/)
+  if (paren) { s = paren[1].trim(); sign = -1 }
+  if (!s || !/^-?(\d+\.?\d*|\.\d+)$/.test(s)) return null
+  const n = Number(s) * sign
   return Number.isFinite(n) ? n : null
 }
 
@@ -116,16 +119,19 @@ export function parseStoreLedger(aoa, { filename = '' } = {}) {
   const rejected = []
   const warnings = []
   const byKey = new Map()
+  let complete = false
+  let totalQty = null
 
   for (let r = headerIdx + 1; r < aoa.length; r += 1) {
     const row = aoa[r] || []
     const first = lower(row[iCode])
     if (!row.some((c) => clean(c))) continue
-    if (first === '<end of report>' || first.startsWith('<end')) break
+    if (first === '<end of report>' || first.startsWith('<end')) { complete = true; break }
     const wh = normCode(row[iWh])
-    // Total rows carry no warehouse.
-    if (first === 'total' || !wh) continue
+    // The total row carries no warehouse; it is kept to check the file is whole.
+    if (first === 'total') { const t = toNumber(row[iQty]); totalQty = totalQty === null ? t : totalQty; continue }
     const code = normCode(row[iCode])
+    if (!wh) { rejected.push({ row: r + 1, code, reason: 'no_warehouse' }); continue }
     if (!code) { rejected.push({ row: r + 1, reason: 'no_code' }); continue }
     const qty = toNumber(row[iQty])
     if (qty === null) { rejected.push({ row: r + 1, code, reason: 'bad_qty' }); continue }
@@ -137,6 +143,7 @@ export function parseStoreLedger(aoa, { filename = '' } = {}) {
     const prev = byKey.get(key)
     if (prev) {
       prev.qty += qty
+      if (qty < 0) prev.hasNegative = true
       prev.value = prev.value === null || valueRaw === null ? null : prev.value + valueRaw
       prev.rows.push(r + 1)
       continue
@@ -145,7 +152,7 @@ export function parseStoreLedger(aoa, { filename = '' } = {}) {
       code, description: clean(row[iDesc]) || null, warehouse: wh, zone, bin, qty,
       // A rate of 0 or less is not a price: the line stays unvalued.
       rate: rateRaw !== null && rateRaw > 0 ? rateRaw : null,
-      value: valueRaw, rows: [r + 1],
+      value: valueRaw, rows: [r + 1], hasNegative: qty < 0,
     })
   }
 
@@ -156,8 +163,33 @@ export function parseStoreLedger(aoa, { filename = '' } = {}) {
   if (warehouses.length > 1) warnings.push('several_warehouses')
   if (lines.some((l) => l.qty < 0)) warnings.push('negative_qty')
   if (lines.some((l) => l.rows.length > 1)) warnings.push('repeated_codes')
+  if (!complete) warnings.push('incomplete')
+  const sum = Math.round(lines.reduce((a, l) => a + l.qty, 0) * 1e4) / 1e4
+  if (totalQty !== null && Math.abs(totalQty - sum) > 0.01) warnings.push('total_mismatch')
   meta.warehouses = warehouses
+  meta.complete = complete
+  meta.totalQty = totalQty
   return { ok: true, meta, lines, rejected, warnings, error: null }
+}
+
+/**
+ * Reasons a parsed file must not be posted, in plain words. An empty list
+ * means the file can be posted. Rejected rows block the post: a row we could
+ * not read is stock we would otherwise treat as missing.
+ */
+export function postBlockers(parsed) {
+  if (!parsed?.ok) return ['This file is not an ERP Stores Ledger (report CSOL-IMS-013-1).']
+  const out = []
+  const w = new Set(parsed.warnings)
+  if (parsed.meta.reportId !== LEDGER_REPORT_ID) out.push(`The report is ${parsed.meta.reportId || 'not named'}, not the Stores Ledger (${LEDGER_REPORT_ID}).`)
+  if (w.has('no_lines')) out.push('The file has no stock lines.')
+  if (w.has('several_warehouses')) out.push(`The file covers more than one store (${parsed.meta.warehouses.join(', ')}). Export one store per file.`)
+  if (parsed.rejected.length) out.push(`${parsed.rejected.length} rows could not be read. Fix them in the export and upload again.`)
+  if (w.has('incomplete')) out.push('The file has no end of report line; it may be cut off.')
+  if (w.has('total_mismatch')) out.push(`The lines add up to a different total than the file shows (${parsed.meta.totalQty}).`)
+  if (!parsed.meta.to) out.push('The balance date could not be read.')
+  if (!parsed.meta.currency) out.push('The currency could not be read.')
+  return out
 }
 
 /**
@@ -331,7 +363,8 @@ export function buildLedgerPlan({ lines = [], master = [], stock = [], neighbour
         reclassify.push({ code: l.code, item_id: m.id, name: l.description || m.item_name, ...s })
       }
     }
-    if (l.qty < 0) { held.push({ code: l.code, description: l.description, qty: l.qty, reason: 'negative_qty' }); continue }
+    if (l.qty < 0 || l.hasNegative) { held.push({ code: l.code, description: l.description, qty: l.qty, reason: 'negative_qty' }); continue }
+    if (m && (m.serial_tracked || m.lot_tracked)) { held.push({ code: l.code, description: l.description, qty: l.qty, reason: 'serial_tracked' }); fileItemIds.add(m.id); continue }
     const rec = m ? stockByItem.get(m.id) : null
     if (m) fileItemIds.add(m.id)
     const onHand = Number(rec?.qty_on_hand ?? 0)
@@ -375,7 +408,7 @@ export function buildPostPayload({ meta, location, country, lines, plan, choices
     location_id: location?.id || null,
     country,
     zero_missing: Boolean(choices.zeroMissing),
-    lines: lines.map((l) => ({ code: l.code, description: l.description, qty: l.qty, rate: l.rate, value: l.value })),
+    lines: lines.map((l) => ({ code: l.code, description: l.description, warehouse: l.warehouse, qty: l.qty, rate: l.rate, value: l.value, has_negative: Boolean(l.hasNegative) })),
     new_items: pick(plan.newItems, 'newItems').map((n) => ({ code: n.code, item_name: n.item_name, category: n.category, subcategory: n.subcategory })),
     renames: pick(plan.renames, 'renames').map((r) => ({ code: r.code, item_name: r.to })),
     reclassify: pick(plan.reclassify, 'reclassify').map((r) => ({ code: r.code, category: r.category, subcategory: r.subcategory })),

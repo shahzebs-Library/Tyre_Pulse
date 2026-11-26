@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  parseStoreLedger, isStoreLedger, resolveLocation, suggestMaterialClass, buildNeighbours, shouldRename,
+  parseStoreLedger, postBlockers, isStoreLedger, resolveLocation, suggestMaterialClass, buildNeighbours, shouldRename,
   buildLedgerPlan, buildPostPayload, toNumber, toIsoDate, sha256Hex,
 } from '../lib/inventory/erpStoreLedger'
 
@@ -17,7 +17,7 @@ const SHEET = [
   ['313582-O', 'COTTON GLOVES', '', 'QID-UP-ST', 'null', 'null', '-2', '0', '', '0'],
   ['313582-O', 'COTTON GLOVES', '', 'QID-UP-ST', 'null', 'null', '5', '', '', ''],
   ['BAD-1', 'BROKEN ROW', '', 'QID-UP-ST', 'null', 'null', 'abc', '', '', ''],
-  ['TOTAL', '', '', '', '', '', '4.000', '  ', '', '3160.66'],
+  ['TOTAL', '', '', '', '', '', '1007.000', '  ', '', '3160.66'],
   ['<End Of Report>', '', '', '', '', '', '', '', '', ''],
   ['999999-O', 'AFTER END', '', 'QID-UP-ST', 'null', 'null', '1', '', '', ''],
 ]
@@ -48,6 +48,28 @@ describe('parseStoreLedger', () => {
     expect(parseStoreLedger([['Asset', 'Site'], ['TM1', 'NHC']]).ok).toBe(false)
     expect(isStoreLedger(null)).toBe(false)
   })
+  it('checks the file is whole and allows posting only when nothing is wrong', () => {
+    expect(p.meta.complete).toBe(true)
+    expect(p.warnings).not.toContain('total_mismatch')
+    // The BAD-1 row could not be read, so this file must not be posted.
+    expect(postBlockers(p)).toEqual([expect.stringMatching(/1 rows could not be read/)])
+    const clean = parseStoreLedger(SHEET.filter((r) => r[0] !== 'BAD-1'))
+    expect(postBlockers(clean)).toEqual([])
+  })
+  it('blocks a cut-off file, a wrong total, two stores and a row with no store', () => {
+    const cut = parseStoreLedger(SHEET.slice(0, 8))
+    expect(postBlockers(cut).join(' ')).toMatch(/end of report/)
+    const wrongTotal = parseStoreLedger(SHEET.filter((r) => r[0] !== 'BAD-1').map((r) => (r[0] === 'TOTAL' ? ['TOTAL', '', '', '', '', '', '9', '', '', ''] : r)))
+    expect(postBlockers(wrongTotal).join(' ')).toMatch(/different total/)
+    const two = parseStoreLedger(SHEET.slice(0, 7).concat([['X-1', 'A', '', 'JED-ST', 'null', 'null', '1', '', '', ''], ['<End Of Report>']]))
+    expect(postBlockers(two).join(' ')).toMatch(/more than one store/)
+    const noWh = parseStoreLedger(SHEET.slice(0, 7).concat([['X-2', 'A', '', '', 'null', 'null', '1', '', '', ''], ['<End Of Report>']]))
+    expect(noWh.rejected).toEqual([{ row: 8, code: 'X-2', reason: 'no_warehouse' }])
+    expect(postBlockers(parseStoreLedger([['x']]))[0]).toMatch(/not an ERP Stores Ledger/)
+  })
+  it('marks a repeated code that had a negative line', () => {
+    expect(p.lines.find((l) => l.code === '313582-O').hasNegative).toBe(true)
+  })
   it('flags negative quantities', () => {
     const neg = parseStoreLedger(SHEET.slice(0, 6).concat([['X-1', 'A', '', 'JED-ST', 'null', 'null', '-2', '5', '', '-10']]))
     expect(neg.warnings).toContain('negative_qty')
@@ -60,6 +82,9 @@ describe('helpers', () => {
     expect(toNumber(' -3 ')).toBe(-3)
     expect(toNumber('')).toBeNull()
     expect(toNumber('1.2.3')).toBeNull()
+    expect(toNumber('.5')).toBe(0.5)
+    expect(toNumber('5.')).toBe(5)
+    expect(toNumber('(3)')).toBe(-3)
   })
   it('toIsoDate reads day first', () => {
     expect(toIsoDate('07/09/2026')).toBe('2026-09-07')
@@ -122,6 +147,7 @@ describe('buildLedgerPlan', () => {
     { id: 'm2', item_code: '223758-O', item_name: 'TIRE 315/80', category: 'unclassified', reviewed: false },
     { id: 'm3', item_code: 'GONE-1', item_name: 'OLD PART', category: 'spare_part', reviewed: true },
     { id: 'm4', item_code: 'RES-1', item_name: 'RESERVED', category: 'spare_part', reviewed: true },
+    { id: 'm5', item_code: 'TYRE-1', item_name: 'TIRE 315/80 R22.5', category: 'tyre', reviewed: true, serial_tracked: true },
   ]
   const stock = [
     { id: 's1', item_id: 'm1', qty_on_hand: 1, qty_reserved: 0, item_code: '221855-O' },
@@ -135,6 +161,8 @@ describe('buildLedgerPlan', () => {
     { code: 'NEW-1', description: 'BRAKE PAD SANY', qty: 2, rate: null },
     { code: 'NEG-1', description: 'GLOVES', qty: -2, rate: null },
     { code: 'RES-1', description: 'RESERVED', qty: 5, rate: null },
+    { code: 'TYRE-1', description: 'TIRE 315/80 R22.5', qty: 4, rate: 700 },
+    { code: 'MIX-1', description: 'MIXED LINES', qty: 3, rate: null, hasNegative: true },
   ]
   const plan = buildLedgerPlan({ lines, master, stock })
   it('lists quantity changes against live stock', () => {
@@ -146,10 +174,10 @@ describe('buildLedgerPlan', () => {
     expect(plan.totals.increase).toBe(105)
   })
   it('holds back negative quantities and anything below reserved', () => {
-    expect(plan.held.map((h) => [h.code, h.reason])).toEqual([['NEG-1', 'negative_qty'], ['RES-1', 'below_reserved']])
+    expect(plan.held.map((h) => [h.code, h.reason])).toEqual([['NEG-1', 'negative_qty'], ['RES-1', 'below_reserved'], ['TYRE-1', 'serial_tracked'], ['MIX-1', 'negative_qty']])
   })
   it('finds new codes, names and unclassified items', () => {
-    expect(plan.newItems.map((n) => n.code)).toEqual(['NEW-1', 'NEG-1'])
+    expect(plan.newItems.map((n) => n.code)).toEqual(['NEW-1', 'NEG-1', 'MIX-1'])
     expect(plan.renames).toEqual([{ code: '223758-O', item_id: 'm2', from: 'TIRE 315/80', to: 'TIRE 315/80 R22.5' }])
     expect(plan.reclassify.map((r) => [r.code, r.category])).toEqual([['223758-O', 'tyre']])
   })
@@ -164,8 +192,9 @@ describe('buildLedgerPlan', () => {
     })
     expect(payload).toMatchObject({ location_id: 'loc', country: 'KSA', zero_missing: true, currency: 'SAR', period_to: '2026-11-26' })
     expect(payload.renames).toEqual([])
-    expect(payload.new_items).toHaveLength(2)
-    expect(payload.lines[0]).toEqual({ code: '221855-O', description: 'TIRE 385-65R22.5', qty: 1, rate: 990, value: undefined })
+    expect(payload.new_items).toHaveLength(3)
+    expect(payload.lines[0]).toEqual({ code: '221855-O', description: 'TIRE 385-65R22.5', warehouse: undefined, qty: 1, rate: 990, value: undefined, has_negative: false })
+    expect(payload.lines.find((l) => l.code === 'MIX-1').has_negative).toBe(true)
     expect(payload.lines.some((l) => 'delta' in l)).toBe(false)
   })
 })

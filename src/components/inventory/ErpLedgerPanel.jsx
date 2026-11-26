@@ -20,10 +20,11 @@ import SideDrawer from '../ui/SideDrawer'
 import { KitTable, Kpi, Tabs } from '../commandCenter/kit'
 import { useAuth } from '../../contexts/AuthContext'
 import {
-  listLocations, loadMasterForLedger, loadStockAtLocation, listErpLedgerUploads, findErpLedgerUpload, postErpLedger, newIdempotencyKey,
+  listLocations, loadMasterForLedger, loadStockAtLocation, listErpLedgerUploads, findErpLedgerUpload, beginErpLedger, runErpLedger,
+  cancelErpLedger, countMovementsAfter, newIdempotencyKey,
 } from '../../lib/api/inventory'
 import {
-  parseStoreLedger, resolveLocation, buildLedgerPlan, buildNeighbours, buildPostPayload, sha256Hex,
+  parseStoreLedger, postBlockers, resolveLocation, buildLedgerPlan, buildNeighbours, buildPostPayload, sha256Hex,
 } from '../../lib/inventory/erpStoreLedger'
 import { MATERIAL_CATEGORIES } from '../../lib/materialMaster'
 import { formatQty, formatMoney } from '../../lib/inventory/inventoryMoney'
@@ -35,6 +36,8 @@ const REASON_TEXT = {
   negative_qty: 'Negative quantity in the ERP. A count cannot be below zero; check it in the ERP.',
   below_reserved: 'Below the quantity reserved for job cards.',
   no_item: 'Item code not in the Material Master.',
+  serial_tracked: 'Tyres and other serial-tracked items need their serial numbers; count them in Tyre custody.',
+  missing_but_reserved: 'Not in the file, but reserved for a job card.',
 }
 const reasonLabel = (r) => {
   const [kind, note] = String(r || '').split(':')
@@ -44,13 +47,21 @@ const reasonLabel = (r) => {
   return 'No clear signal; spare part'
 }
 const signed = (n) => (n > 0 ? `+${formatQty(n)}` : formatQty(n))
+const heldSummary = (held = []) => {
+  const by = {}
+  held.forEach((h) => { by[h.reason] = (by[h.reason] || 0) + 1 })
+  const parts = Object.entries(by).map(([r, n]) => `${n} ${({ negative_qty: 'negative', below_reserved: 'below reserved', no_item: 'unknown code', serial_tracked: 'serial-tracked', missing_but_reserved: 'reserved' }[r] || r)}`)
+  return parts.length ? ` (${parts.join(', ')})` : ''
+}
 
 function fileStatus(f) {
   if (f.reading) return { tone: 'info', label: 'Reading' }
   if (f.error) return { tone: 'bad', label: 'Could not read' }
   if (!f.parsed?.ok) return { tone: 'bad', label: 'Not a stores ledger' }
   if (f.posted) return { tone: 'good', label: 'Posted' }
+  if (f.previous?.status === 'open') return { tone: 'warning', label: 'Not finished' }
   if (f.previous) return { tone: 'muted', label: 'Already posted' }
+  if (postBlockers(f.parsed).length) return { tone: 'bad', label: 'Cannot post' }
   if (f.location === null) return { tone: 'warning', label: 'Store not found' }
   if (f.loading || !f.plan) return { tone: 'info', label: 'Checking' }
   return { tone: 'info', label: 'Ready' }
@@ -96,6 +107,7 @@ export default function ErpLedgerPanel({ scope }) {
       loadStockAtLocation(location.id)
         .then((st) => {
           const plan = buildLedgerPlan({ lines: f.parsed.lines, master: ref.master, stock: st.rows, neighbours: ref.neighbours })
+          countMovementsAfter(location.id, f.parsed.meta.to).then((n) => patch(f.id, { movesAfter: n })).catch(() => {})
           patch(f.id, {
             loading: false, plan, stockTruncated: st.truncated,
             categories: Object.fromEntries([...plan.newItems, ...plan.reclassify].map((x) => [x.code, x.category])),
@@ -127,6 +139,27 @@ export default function ErpLedgerPanel({ scope }) {
     }
   }
 
+  const runUpload = async (f, uploadId) => {
+    patch(f.id, { progress: 'Posting stock...' })
+    const res = await runErpLedger(uploadId, {
+      onProgress: ({ phase, remaining }) => patch(f.id, { progress: phase === 'stock' ? `Posting stock, ${remaining} codes left...` : `Finishing, ${remaining} left...` }),
+    })
+    patch(f.id, { posted: res, progress: null, previous: null })
+    setConfirm(null)
+    history.retry()
+  }
+
+  // Continue an upload that stopped part way (it is safe to run again).
+  const resume = async (f) => {
+    setBusy(true); setErr('')
+    try { await runUpload(f, f.previous.id) } catch (e) { setErr(toUserMessage(e)); patch(f.id, { progress: null }) } finally { setBusy(false) }
+  }
+  const cancelOpen = async (f) => {
+    setBusy(true); setErr('')
+    try { await cancelErpLedger(f.previous.id, newIdempotencyKey()); patch(f.id, { previous: null }); history.retry() }
+    catch (e) { setErr(toUserMessage(e)) } finally { setBusy(false) }
+  }
+
   const post = async (f) => {
     setBusy(true); setErr('')
     try {
@@ -142,11 +175,10 @@ export default function ErpLedgerPanel({ scope }) {
         idempotencyKey: f.key,
         choices: { zeroMissing: f.zeroMissing, renames: keep(plan.renames, f.skipRenames), reclassify: keep(withCats.reclassify, f.skipReclass) },
       })
-      const res = await postErpLedger(payload, f.key)
-      patch(f.id, { posted: res })
-      setConfirm(null)
-      history.retry()
-    } catch (e) { setErr(toUserMessage(e)) } finally { setBusy(false) }
+      const begun = await beginErpLedger(payload, f.key)
+      patch(f.id, { previous: { id: begun.upload_id, status: 'open', created_at: new Date().toISOString(), filename: f.filename } })
+      await runUpload(f, begun.upload_id)
+    } catch (e) { setErr(toUserMessage(e)); patch(f.id, { progress: null }) } finally { setBusy(false) }
   }
 
   // A file with the same content as one earlier in the list is marked, so only one is posted.
@@ -164,7 +196,7 @@ export default function ErpLedgerPanel({ scope }) {
 
   const cur = open ? files.find((f) => f.id === open) : null
   const isDuplicate = (f) => rows.find((r) => r.id === f?.id)?.duplicateOf
-  const canPost = (f) => Boolean(isSuperAdmin && f?.plan && !f.previous && !f.posted && f.location && !f.loading && !isDuplicate(f))
+  const canPost = (f) => Boolean(isSuperAdmin && f?.plan && !f.previous && !f.posted && f.location && !f.loading && !isDuplicate(f) && !postBlockers(f.parsed).length)
 
   return (
     <div className="inv-hub">
@@ -199,7 +231,7 @@ export default function ErpLedgerPanel({ scope }) {
       {files.length > 0 && (
         <SectionCard title="Files" sub="Open a file to check every change before you post it. * = the ERP spells the store differently.">
           <KitTable compact scroll rows={rows} columns={columns} empty="No files yet."
-            onRowClick={(f) => { if (f.plan || f.error || !f.parsed?.ok) { setOpen(f.id); setTab('stock') } }} />
+            onRowClick={(f) => { if (!f.reading && !f.loading) { setOpen(f.id); setTab('stock') } }} />
           {rows.some((f) => f.duplicateOf) && <Note tone="warn">Some files have the same content as another file in this list ({rows.filter((f) => f.duplicateOf).map((f) => f.filename).join(', ')}). Only the first of each can be posted.</Note>}
         </SectionCard>
       )}
@@ -221,14 +253,16 @@ export default function ErpLedgerPanel({ scope }) {
 
       <SideDrawer className="cc inv-panel" open={!!cur} onClose={() => !busy && setOpen(null)} busy={busy} size="xl"
         title={cur ? cur.filename : ''} closeLabel="Close">
-        {cur && <FileDetail f={cur} tab={tab} setTab={setTab} patch={patch} canPost={canPost(cur)} onPost={() => setConfirm(cur.id)} />}
+        {cur && <FileDetail f={cur} tab={tab} setTab={setTab} patch={patch} canPost={canPost(cur)} onPost={() => setConfirm(cur.id)}
+          isOwner={isSuperAdmin} busy={busy} onResume={() => resume(cur)} onCancelOpen={() => cancelOpen(cur)} err={err} />}
       </SideDrawer>
 
       <Modal className="cc inv-panel" open={!!confirm} onClose={() => !busy && setConfirm(null)} size="md" title="Post this ledger?"
         footer={(
           <div className="inv-actions">
             <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => setConfirm(null)}>Cancel</button>
-            <button type="button" className="cc-btn-primary" disabled={busy} onClick={() => post(files.find((f) => f.id === confirm))}>
+            <button type="button" className="cc-btn-primary" disabled={busy || (files.find((f) => f.id === confirm)?.movesAfter > 0 && !files.find((f) => f.id === confirm)?.ackMoves)}
+              onClick={() => post(files.find((f) => f.id === confirm))}>
               <Send size={14} aria-hidden="true" /> {busy ? 'Posting...' : 'Post'}
             </button>
           </div>
@@ -236,6 +270,7 @@ export default function ErpLedgerPanel({ scope }) {
         {confirm && (() => {
           const f = files.find((x) => x.id === confirm)
           const p = f.plan
+          const cats = (list) => list.filter((n) => (f.categories[n.code] || n.category) !== 'unclassified')
           return (
             <div className="inv-hub" style={{ gap: 8 }}>
               <p>Store {f.location.code} ({f.location.site}), balance as at {f.parsed.meta.to || 'N/A'}.</p>
@@ -243,11 +278,18 @@ export default function ErpLedgerPanel({ scope }) {
                 <li>{p.changes.length} quantities set to the ERP figure ({signed(p.totals.increase)} / {signed(p.totals.decrease)})</li>
                 <li>{p.newItems.length} new item codes added to the Material Master</li>
                 <li>{p.renames.length - f.skipRenames.size} item names changed to the ERP wording</li>
-                <li>{p.reclassify.length - f.skipReclass.size} unclassified items given a category</li>
+                <li>{cats(p.reclassify).filter((n) => !f.skipReclass.has(n.code)).length} unclassified items given a category</li>
                 <li>{p.held.length} lines held back</li>
                 <li>{f.zeroMissing ? `${p.missing.length} items not in the file set to zero` : `${p.missing.length} items not in the file left as they are`}</li>
               </ul>
-              <Note>Each change is logged with this file. A quantity change can be reversed from the stock movement history.</Note>
+              {f.movesAfter > 0 && (
+                <label className="inv-check">
+                  <input type="checkbox" checked={Boolean(f.ackMoves)} onChange={() => patch(f.id, (c) => ({ ackMoves: !c.ackMoves }))} />
+                  <span>{f.movesAfter} stock movements were recorded at this store after {f.parsed.meta.to}. Posting sets the ERP figures and replaces their effect. I understand.</span>
+                </label>
+              )}
+              {f.progress && <p className="cc-card-sub" role="status">{f.progress}</p>}
+              <Note>Each change is logged with this file. Large stores post in parts; if it stops, open the file again and continue.</Note>
               {err && <ErrorNote error={err} />}
             </div>
           )
@@ -257,7 +299,7 @@ export default function ErpLedgerPanel({ scope }) {
   )
 }
 
-function FileDetail({ f, tab, setTab, patch, canPost, onPost }) {
+function FileDetail({ f, tab, setTab, patch, canPost, onPost, isOwner, busy, onResume, onCancelOpen, err }) {
   const p = f.plan
   const toggle = (field, code) => patch(f.id, (cur) => {
     const s = new Set(cur[field]); if (s.has(code)) s.delete(code); else s.add(code); return { [field]: s }
@@ -269,6 +311,7 @@ function FileDetail({ f, tab, setTab, patch, canPost, onPost }) {
     </select>
   )
   const meta = f.parsed?.meta
+  const blockers = f.parsed?.ok ? postBlockers(f.parsed) : []
 
   if (f.error) return <ErrorNote error={f.error} />
   if (!f.parsed?.ok) return <Note tone="bad">This file is not an ERP Stores Ledger (report CSOL-IMS-013-1). Export the Stores Ledger from the ERP and upload that file.</Note>
@@ -281,10 +324,30 @@ function FileDetail({ f, tab, setTab, patch, canPost, onPost }) {
         <dt>Currency</dt><dd>{meta.currency || 'N/A'}</dd>
         <dt>Store</dt><dd>{f.location ? `${f.location.code} (${f.location.site})` : `${meta.warehouses.join(', ')}: no matching location`}</dd>
       </dl>
-      {f.previous && <Note tone="warn">This exact file was already posted on {fmtDateTime(f.previous.posted_at)}. It cannot be posted again.</Note>}
-      {!f.location && <Note tone="warn">No Tyre Pulse store location has the code {meta.warehouses.join(', ')}. Add the location, or ask for the spelling to be linked, then upload again.</Note>}
-      {f.parsed.rejected.length > 0 && <Note tone="warn">{f.parsed.rejected.length} rows could not be read and are left out.</Note>}
-      {f.posted && <Note tone="good" icon={CheckCircle2}>Posted: {f.posted.quantities_changed} quantities changed, {f.posted.items_added} items added, {f.posted.names_updated} names updated, {f.posted.categories_set} categories set, {f.posted.held_back?.length || 0} held back.</Note>}
+      {blockers.length > 0 && <Note tone="bad" title="This file cannot be posted"><ul style={{ margin: 0, paddingInlineStart: 18 }}>{blockers.map((b) => <li key={b}>{b}</li>)}</ul></Note>}
+      {f.parsed.rejected.length > 0 && (
+        <KitTable compact rows={f.parsed.rejected.map((r, i) => ({ ...r, i }))} empty="" columns={[
+          { key: 'row', header: 'Row', numeric: true },
+          { key: 'code', header: 'Item', cell: (r) => r.code || <span className="cc-na">N/A</span> },
+          { key: 'reason', header: 'Problem', cell: (r) => ({ bad_qty: 'Quantity is not a number', no_code: 'No item code', no_warehouse: 'No store on the row' }[r.reason] || r.reason) },
+        ]} />
+      )}
+      {f.previous?.status === 'posted' && <Note tone="warn">This exact file was already posted on {fmtDateTime(f.previous.posted_at)}. It cannot be posted again.</Note>}
+      {f.previous?.status === 'open' && (
+        <Note tone="warn" title="This upload stopped part way">
+          It started on {fmtDateTime(f.previous.created_at)}. Continue it to post the rest; every part is safe to run again.
+          {isOwner && (
+            <div className="inv-actions" style={{ marginTop: 8 }}>
+              <button type="button" className="cc-btn-primary" disabled={busy} onClick={onResume}><Send size={14} aria-hidden="true" /> {busy ? 'Posting...' : 'Continue'}</button>
+              <button type="button" className="cc-btn-ghost" disabled={busy} onClick={onCancelOpen}>Cancel upload</button>
+            </div>
+          )}
+        </Note>
+      )}
+      {f.progress && <p className="cc-card-sub" role="status">{f.progress}</p>}
+      {err && !canPost && <ErrorNote error={err} />}
+      {f.location === null && <Note tone="warn">No Tyre Pulse store location has the code {meta.warehouses.join(', ')}. Add the location, or ask for the spelling to be linked, then upload again.</Note>}
+      {f.posted && <Note tone="good" icon={CheckCircle2}>Posted: {f.posted.quantities_changed} quantities changed, {f.posted.set_to_zero || 0} set to zero, {f.posted.items_added} items added, {f.posted.names_updated} names updated, {f.posted.categories_set} categories set, {f.posted.held_back?.length || 0} held back{heldSummary(f.posted.held_back)}.</Note>}
 
       {p && (
         <>

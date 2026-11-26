@@ -8971,8 +8971,79 @@ class AppLocalizationsUr extends AppLocalizations {
   String get driverChargeStatementTitle => 'وہ بیان جس پر آپ دستخط کر رہے ہیں';
 
   @override
-  String get driverChargeStatementEnglishOnly =>
-      'یہ بیان قانونی الفاظ ہیں اور صرف انگریزی میں دکھایا جاتا ہے۔ دستخط سے پہلے اپنے سپروائزر سے اس کی وضاحت کروائیں۔';
+  String get driverChargeStatementLanguage =>
+      'اس بیان کی زبان جس پر آپ دستخط کرتے ہیں';
+
+  @override
+  String get driverChargeStatementReadAloud =>
+      'اگر آپ یہ نہیں پڑھ سکتے تو دستخط سے پہلے اپنے سپروائزر سے کہیں کہ آپ کو پڑھ کر سنائے۔';
+
+  @override
+  String get driverChargePhotosTitle => 'اس چارج کی تصویریں';
+
+  @override
+  String get driverChargePhotosNone => 'اس چارج کے ساتھ کوئی تصویر نہیں ہے۔';
+
+  @override
+  String get driverChargePhotoUnavailable => 'تصویر لوڈ نہیں ہو سکی۔';
+
+  @override
+  String get driverChargePhotosSeen => 'جواب دینے سے پہلے تصویریں دیکھیں۔';
+
+  @override
+  String get driverChargeKsaRule =>
+      'اس چارج پر سعودی لیبر قانون لاگو ہے۔ نقصان یا گمشدگی: ہر مہینے زیادہ سے زیادہ 5 دن کی تنخواہ۔ جرمانے: زیادہ سے زیادہ 5 دن کی تنخواہ۔ تمام کٹوتیاں مل کر: زیادہ سے زیادہ آدھی تنخواہ۔ اعتراض کے لیے آپ کے پاس 15 کام کے دن ہیں۔';
+
+  @override
+  String get driverChargeOtherRule =>
+      'اس چارج پر کمپنی کی حد لاگو ہے۔ اس ملک کے لیے اس اصول کی ابھی قانونی تصدیق باقی ہے۔';
+
+  @override
+  String driverChargeObjectionUntil(String date) {
+    return 'آپ $date تک اعتراض کر سکتے ہیں۔';
+  }
+
+  @override
+  String get driverChargeLangEnglish => 'English';
+
+  @override
+  String get driverChargeLangArabic => 'العربية';
+
+  @override
+  String get driverChargeLangUrdu => 'اردو';
+
+  @override
+  String get driverChargeStatementConsent =>
+      'میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ میں نے یہ چارج دیکھ لیا ہے: اس کی وجہ، رقم، اور اس کے ساتھ دکھائے گئے ثبوت اور تصویریں۔ میں مانتا ہوں کہ یہ چارج مجھے ادا کرنا ہے۔ میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے ہر مہینے کچھ حصہ کر کے کاٹے، جیسا کہ کٹوتی کے پلان میں لکھا ہے۔ یہ اجازت صرف اسی چارج کے لیے ہے۔ میں اس کاغذ پر لکھی مدت کے اندر اب بھی اعتراض کر سکتا ہوں۔';
+
+  @override
+  String get driverChargeStatementDispute =>
+      'میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ مجھے یہ چارج مل گیا ہے اور میں نے اس کی وجہ، ثبوت اور تصویریں دیکھ لی ہیں۔ میں ان وجوہات کی وجہ سے جو میں نے لکھی ہیں، اس چارج سے متفق نہیں ہوں۔ میرے دستخط صرف یہ بتاتے ہیں کہ مجھے یہ کاغذ مل گیا ہے۔ اس کا مطلب یہ نہیں کہ میں متفق ہوں۔ میں اس کاغذ پر لکھی مدت کے اندر اعتراض کر سکتا ہوں۔';
+
+  @override
+  String get driverChargeStatementWitness =>
+      'میں نے دیکھا کہ اس چارج کا کاغذ اس پر لکھے ہوئے ڈرائیور کو دیا گیا۔ ڈرائیور نے اس پر دستخط کرنے یا جواب دینے سے انکار کیا۔ اس ریکارڈ کی تاریخ اور وقت سسٹم طے کرتا ہے۔';
+
+  @override
+  String get driverChargeBlockTitle => 'کٹوتی ابھی شیڈول نہیں ہو سکتی';
+
+  @override
+  String get driverChargeBlockConsent =>
+      'سعودی لیبر قانون (آرٹیکل 92): یہ چارج تنخواہ سے صرف ڈرائیور کی تحریری اجازت سے کاٹا جا سکتا ہے۔ ڈرائیور متفق نہیں ہوا، اس لیے یہ نہیں کاٹا جا سکتا۔';
+
+  @override
+  String get driverChargeBlockObjection =>
+      'ایک اعتراض کھلا ہے۔ پہلے اس کا فیصلہ ہونا ضروری ہے۔';
+
+  @override
+  String driverChargeBlockWindow(String date) {
+    return 'ڈرائیور ابھی $date تک اعتراض کر سکتا ہے۔ اس سے پہلے کچھ بھی شیڈول نہیں ہو سکتا۔';
+  }
+
+  @override
+  String driverChargeBlockWindowKsa(String date) {
+    return 'سعودی لیبر قانون (آرٹیکل 91): ڈرائیور کے پاس اعتراض کے لیے $date تک 15 کام کے دن ہیں۔ اس سے پہلے کچھ بھی شیڈول نہیں ہو سکتا۔';
+  }
 
   @override
   String get driverChargeStatementMissing =>

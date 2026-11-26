@@ -13,12 +13,15 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/core/documents/document_share.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/signatures/signature_rules.dart';
+import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
+import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/driver_workspace/data/driver_charge_repository.dart';
 import 'package:tyre_pulse/features/driver_workspace/domain/driver_charge.dart';
@@ -26,6 +29,159 @@ import 'package:tyre_pulse/features/driver_workspace/domain/driver_workspace.dar
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_charge_l10n.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_l10n.dart';
 import 'package:uuid/uuid.dart';
+
+/// The charge photos, resolved through the authenticated private-storage
+/// resolver (short-lived signed URLs). Shown before the driver answers.
+class DriverChargePhotos extends ConsumerWidget {
+  const DriverChargePhotos({required this.photos, super.key});
+  final List<DriverRow> photos;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final ThemeData theme = Theme.of(context);
+    if (photos.isEmpty) return Text(l10n.driverChargePhotosNone);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        for (final DriverRow p in photos)
+          SizedBox(
+            width: 150,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: SizedBox(
+                    width: 150,
+                    height: 112,
+                    child: ref
+                        .watch(privateStorageImageUrlProvider('${p['ref']}'))
+                        .when(
+                          data: (String url) => Image.network(
+                            url,
+                            fit: BoxFit.cover,
+                            semanticLabel: '${p['label'] ?? ''}',
+                            errorBuilder: (_, __, ___) => Center(
+                              child: Text(l10n.driverChargePhotoUnavailable),
+                            ),
+                          ),
+                          loading: () => const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          error: (_, __) => Center(
+                            child: Text(
+                              l10n.driverChargePhotoUnavailable,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                  ),
+                ),
+                Text(
+                  '${p['label'] ?? ''}',
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+String _languageName(AppLocalizations l10n, String language) =>
+    switch (language) {
+      'ar' => l10n.driverChargeLangArabic,
+      'ur' => l10n.driverChargeLangUrdu,
+      _ => l10n.driverChargeLangEnglish,
+    };
+
+/// Language picker plus the exact server statement in that language.
+class _StatementPicker extends StatelessWidget {
+  const _StatementPicker({
+    required this.detail,
+    required this.version,
+    required this.language,
+    required this.onLanguage,
+    required this.enabled,
+  });
+  final DriverChargeDetail detail;
+  final String version;
+  final String language;
+  final ValueChanged<String> onLanguage;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String? statement = detail.statement(version, language: language);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          l10n.driverChargeStatementTitle,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 6),
+        Text(l10n.driverChargeStatementLanguage),
+        SegmentedButton<String>(
+          segments: <ButtonSegment<String>>[
+            for (final String lang in chargeStatementLanguages)
+              ButtonSegment<String>(
+                value: lang,
+                label: Text(_languageName(l10n, lang)),
+              ),
+          ],
+          selected: <String>{language},
+          onSelectionChanged:
+              enabled ? (Set<String> s) => onLanguage(s.first) : null,
+        ),
+        const SizedBox(height: 6),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Directionality(
+              textDirection: chargeStatementIsRtl(language)
+                  ? TextDirection.rtl
+                  : TextDirection.ltr,
+              child: Text(
+                statement ?? l10n.driverChargeStatementMissing,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+          ),
+        ),
+        Text(
+          l10n.driverChargeStatementReadAloud,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+}
+
+String _blockText(AppLocalizations l10n, DriverChargeScheduleBlock block) {
+  final String day = block.until ?? l10n.valueUnavailable;
+  return switch (block.code) {
+    'consent_required' => l10n.driverChargeBlockConsent,
+    'open_objection' => l10n.driverChargeBlockObjection,
+    _ => block.article == '91'
+        ? l10n.driverChargeBlockWindowKsa(day)
+        : l10n.driverChargeBlockWindow(day),
+  };
+}
+
+String _ruleText(AppLocalizations l10n, DriverChargeDetail detail) {
+  final String rule = detail.countryRule.statutory
+      ? l10n.driverChargeKsaRule
+      : l10n.driverChargeOtherRule;
+  final String? day = detail.objectionLastDay;
+  return day == null ? rule : '$rule ${l10n.driverChargeObjectionUntil(day)}';
+}
 
 String _errorText(AppLocalizations l10n, Object error, String offline) {
   if (error is ChargeOfflineFailure) return offline;
@@ -239,7 +395,18 @@ class _DriverChargeDetailScreenState
     final AppLocalizations l10n = AppLocalizations.of(context);
     setState(() => _sharing = true);
     try {
-      await shareChargeNoticePdf(detail.data);
+      final PrivateStorageReferenceResolver resolver =
+          ref.read(privateStorageReferenceResolverProvider);
+      await shareChargeNoticePdf(
+        detail.data,
+        language: Localizations.localeOf(context).languageCode,
+        loadPhoto: (String reference) async {
+          final String url = await resolver.resolve(reference);
+          final ByteData data =
+              await NetworkAssetBundle(Uri.parse(url)).load(url);
+          return data.buffer.asUint8List();
+        },
+      );
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -426,6 +593,23 @@ class _DriverChargeDetailScreenState
               ),
             ),
           ),
+          if (c['status'] == 'finance_approved' &&
+              detail.scheduleBlock() != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      l10n.driverChargeBlockTitle,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    Text(_blockText(l10n, detail.scheduleBlock()!)),
+                  ],
+                ),
+              ),
+            ),
           if (chargeAwaitsWitness(c))
             Card(
               child: Padding(
@@ -486,6 +670,10 @@ class _DriverChargeDetailScreenState
             ),
           heading(l10n.driverChargeBasis),
           Text(text(c['basis'])),
+          heading(l10n.driverChargePhotosTitle),
+          DriverChargePhotos(photos: detail.photos),
+          const SizedBox(height: 8),
+          Text(_ruleText(l10n, detail), style: theme.textTheme.bodySmall),
           heading(l10n.driverChargeEvidence),
           if (detail.rows('evidence').isEmpty)
             Text(l10n.driverChargeNoEvidence),
@@ -608,7 +796,10 @@ class _SignatureTile extends StatelessWidget {
               Text(l10n.driverChargeSignatureHidden),
             if (row['statement_text'] != null)
               Directionality(
-                textDirection: TextDirection.ltr,
+                textDirection:
+                    chargeStatementIsRtl('${row['statement_language'] ?? 'en'}')
+                        ? TextDirection.rtl
+                        : TextDirection.ltr,
                 child: Text(
                   '${row['statement_text']}',
                   style: Theme.of(context).textTheme.bodySmall,
@@ -661,6 +852,7 @@ class _DriverChargeResponseSheetState
   bool _acknowledged = false;
   String? _signature;
   String? _message;
+  String? _language;
   bool _busy = false;
 
   @override
@@ -668,6 +860,12 @@ class _DriverChargeResponseSheetState
     _explanation.dispose();
     super.dispose();
   }
+
+  String get _lang =>
+      _language ??
+      defaultChargeStatementLanguage(
+        Localizations.localeOf(context).languageCode,
+      );
 
   Future<void> _submit() async {
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -698,9 +896,10 @@ class _DriverChargeResponseSheetState
               explanation: _response == DriverChargeResponse.dispute
                   ? _explanation.text
                   : '',
+              language: _lang,
               signature: _signature!,
             ),
-            _idFor('${_response.name}|${_explanation.text}|$_signature'),
+            _idFor('${_response.name}|$_lang|${_explanation.text}|$_signature'),
           );
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -720,13 +919,27 @@ class _DriverChargeResponseSheetState
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String? statement =
-        widget.detail.statement(_response.statementVersion);
+    final String? statement = widget.detail.statement(
+      _response.statementVersion,
+      language: _lang,
+    );
     return Scaffold(
       appBar: AppBar(title: Text(l10n.driverChargeRespond)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
+          Text(
+            l10n.driverChargePhotosSeen,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          DriverChargePhotos(photos: widget.detail.photos),
+          const SizedBox(height: 8),
+          Text(
+            _ruleText(l10n, widget.detail),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
           SegmentedButton<DriverChargeResponse>(
             segments: <ButtonSegment<DriverChargeResponse>>[
               ButtonSegment<DriverChargeResponse>(
@@ -749,23 +962,16 @@ class _DriverChargeResponseSheetState
                     }),
           ),
           const SizedBox(height: 16),
-          Text(
-            l10n.driverChargeStatementTitle,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          Text(
-            l10n.driverChargeStatementEnglishOnly,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 6),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Directionality(
-                textDirection: TextDirection.ltr,
-                child: Text(statement ?? l10n.driverChargeStatementMissing),
-              ),
-            ),
+          _StatementPicker(
+            detail: widget.detail,
+            version: _response.statementVersion,
+            language: _lang,
+            enabled: !_busy,
+            onLanguage: (String lang) => setState(() {
+              _language = lang;
+              // New words: confirmation must be given again.
+              _acknowledged = false;
+            }),
           ),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
@@ -944,6 +1150,13 @@ class _DriverChargeWitnessSheetState
   String? _message;
   bool _busy = false;
 
+  String? _language;
+
+  String get _lang =>
+      _language ??
+      defaultChargeStatementLanguage(
+        Localizations.localeOf(context).languageCode,
+      );
   Future<void> _submit() async {
     final AppLocalizations l10n = AppLocalizations.of(context);
     if (!_acknowledged) {
@@ -968,6 +1181,7 @@ class _DriverChargeWitnessSheetState
             chargeWitnessPayload(
               charge: widget.detail.charge,
               signature: _signature!,
+              language: _lang,
             ),
             _requestId,
           );
@@ -990,7 +1204,10 @@ class _DriverChargeWitnessSheetState
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final String? statement = widget.detail.statement(chargeWitnessStatement);
+    final String? statement = widget.detail.statement(
+      chargeWitnessStatement,
+      language: _lang,
+    );
     return Scaffold(
       appBar: AppBar(title: Text(l10n.driverChargeWitnessConfirm)),
       body: ListView(
@@ -998,22 +1215,15 @@ class _DriverChargeWitnessSheetState
         children: <Widget>[
           Text(l10n.driverChargeWitnessIntro),
           const SizedBox(height: 12),
-          Text(
-            l10n.driverChargeStatementTitle,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          Text(
-            l10n.driverChargeStatementEnglishOnly,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Directionality(
-                textDirection: TextDirection.ltr,
-                child: Text(statement ?? l10n.driverChargeStatementMissing),
-              ),
-            ),
+          _StatementPicker(
+            detail: widget.detail,
+            version: chargeWitnessStatement,
+            language: _lang,
+            enabled: !_busy,
+            onLanguage: (String lang) => setState(() {
+              _language = lang;
+              _acknowledged = false;
+            }),
           ),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,

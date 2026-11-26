@@ -3,6 +3,7 @@
  * spec so the screen, the PDF and the Flutter app use the same words.
  */
 import spec from '../../docs/document-specs/driver-charge-notice.json'
+import statementSpec from '../../docs/document-specs/driver-charge-statements.json'
 
 export const CHARGE_SPEC = spec
 export const CATEGORIES = Object.keys(spec.enums.category)
@@ -11,6 +12,124 @@ export const STATUSES = Object.keys(spec.enums.status)
 export const REVERSAL_CODES = Object.keys(spec.enums.reversal_code)
 export const EVIDENCE_KINDS = ['notice', 'photo', 'document', 'record', 'statement', 'other']
 export const TERMINAL_STATUSES = ['deducted', 'waived', 'cancelled_wrongly_issued']
+
+/** Statement versions the server stores verbatim with each signature. */
+export const STATEMENT_VERSIONS = Object.freeze({ accept: 'deduction-consent-v2', dispute: 'receipt-dispute-v2', witness: 'refusal-witness-v2' })
+/** Languages a driver or witness may sign in. The server accepts exactly these. */
+export const STATEMENT_LANGUAGES = statementSpec.languages
+export const STATEMENT_LANGUAGE_NAMES = Object.freeze({ en: 'English', ar: 'العربية', ur: 'اردو' })
+export const STATEMENT_SPEC = statementSpec
+export const isRtlLanguage = lang => lang === 'ar' || lang === 'ur'
+
+/**
+ * The exact statement for a version and language, from the server payload
+ * (driver_charge_detail.statements[version][lang]). Null when the server did
+ * not send it: never sign words the server did not supply.
+ */
+export function statementText(detail, version, lang = 'en') {
+  const entry = detail?.statements?.[version]
+  const text = entry && typeof entry === 'object' ? entry[lang] : null
+  return typeof text === 'string' && text.trim() ? text : null
+}
+
+/** Pick a statement language: the app language when signable, else English. */
+export function defaultStatementLanguage(appLanguage) {
+  return STATEMENT_LANGUAGES.includes(appLanguage) ? appLanguage : 'en'
+}
+
+// ── Country deduction rules. Mirror of private.driver_charge_country_rule()
+//    in the migration; display only, the server enforces. ───────────────────
+const KSA_NAMES = new Set(['KSA', 'SA', 'SAU', 'SAUDI ARABIA'])
+export function chargeCountryRule(country) {
+  if (KSA_NAMES.has(String(country || '').trim().toUpperCase())) {
+    return { rule: 'ksa_labour_law', statutory: true, needs_legal_confirmation: false, damage_days: 5, fine_days: 5, wage_days: 30, total_pct: 50, objection_working_days: 15 }
+  }
+  return { rule: 'company_setting', statutory: false, needs_legal_confirmation: true }
+}
+
+/** damage (Art 91), fine (Art 70/71) or consent (Art 92). */
+export function chargeBucket(category) {
+  if (['accident_damage', 'tyre_damage', 'missing_item', 'handover_damage'].includes(category)) return 'damage'
+  return category === 'traffic_fine' ? 'fine' : 'consent'
+}
+
+/** Physical damage needs at least one photo before the driver is notified. */
+export const chargeNeedsPhoto = category => ['accident_damage', 'tyre_damage', 'handover_damage'].includes(category)
+export const photoEvidence = evidence => (Array.isArray(evidence) ? evidence : []).filter(e => e?.kind === 'photo' && typeof e.ref === 'string' && e.ref)
+
+const round2 = n => Math.round(n * 100) / 100
+
+/**
+ * The highest instalment one charge may take per month, exactly like the
+ * server: KSA damage and fines 5 days' wage (wage / 30 * 5), other KSA
+ * deductions half the wage; elsewhere the configured percent.
+ */
+export function scheduleCapFor({ country, category, monthlyWage, capPct }) {
+  const wage = Number(monthlyWage)
+  if (!Number.isFinite(wage) || wage <= 0) return null
+  const rule = chargeCountryRule(country)
+  if (!rule.statutory) return capAmountFor(wage, capPct)
+  const bucket = chargeBucket(category)
+  if (bucket === 'damage') return round2(wage * rule.damage_days / rule.wage_days)
+  if (bucket === 'fine') return round2(wage * rule.fine_days / rule.wage_days)
+  return round2(wage * rule.total_pct / 100)
+}
+
+/**
+ * Why finance cannot schedule a deduction yet, or null. Prefers the server's
+ * own answer (driver_charge_detail.settings.schedule_block, the rule the
+ * schedule command enforces); otherwise works it out from the rule fields the
+ * detail returns. Only for a charge the driver did not accept.
+ * Returns { code, article, until, message } or null.
+ */
+export function scheduleBlockFor(detail, now = new Date()) {
+  const c = detail?.charge
+  if (!c || c.driver_response === 'accepted') return null
+  const settings = detail.settings || {}
+  if (settings.schedule_block && typeof settings.schedule_block === 'object') return settings.schedule_block
+  if ('schedule_block' in settings) return null
+  const rule = settings.country_rule || chargeCountryRule(c.country)
+  const until = settings.objection_last_day || null
+  const deadline = settings.objection_deadline ? new Date(settings.objection_deadline) : null
+  const windowOpen = !deadline || deadline.getTime() > now.getTime()
+  const appealOpen = detail.appeal && !detail.appeal.outcome
+  if (rule.statutory) {
+    if ((settings.bucket || chargeBucket(c.category)) !== 'damage') return { code: 'consent_required', article: '92', until: null, message: "Saudi Labour Law (Article 92): this charge can be deducted only with the driver's written consent. It cannot be scheduled because the driver did not accept it." }
+    if (appealOpen) return { code: 'open_objection', article: '91', until: null, message: 'Saudi Labour Law (Article 91): the driver has an open objection. Decide it first.' }
+    if (windowOpen) return { code: 'window_open', article: '91', until, message: `Saudi Labour Law (Article 91): the driver has 15 working days to object. A deduction can be scheduled after ${until || 'the finance approval'}.` }
+    return null
+  }
+  if (detail.appeal?.outcome === 'upheld') return null
+  if (appealOpen) return { code: 'open_objection', article: null, until: null, message: 'The driver has an open appeal. Decide it first.' }
+  if (windowOpen) return { code: 'window_open', article: null, until, message: `The driver did not consent. A deduction can be scheduled only after the appeal period ends (${until || 'after the finance approval'}) or an appeal is decided.` }
+  return null
+}
+
+/** KSA monthly limits across all of a driver's charges. Null outside KSA. */
+export function ksaMonthlyLimits(monthlyWage) {
+  const wage = Number(monthlyWage)
+  if (!Number.isFinite(wage) || wage <= 0) return null
+  return { damage: round2(wage * 5 / 30), fine: round2(wage * 5 / 30), total: round2(wage * 0.5) }
+}
+
+/**
+ * Mirror of private.driver_charge_working_deadline(): the end of the n-th
+ * working day (Sunday to Thursday) after the Riyadh date of `from`. Returns an
+ * ISO instant (Riyadh is UTC+3 all year, no daylight saving).
+ */
+export function workingDeadline(from, days) {
+  const t = new Date(from).getTime()
+  if (!Number.isFinite(t) || !(days >= 1)) return null
+  const riyadh = new Date(t + 3 * 3600 * 1000)
+  let d = Date.UTC(riyadh.getUTCFullYear(), riyadh.getUTCMonth(), riyadh.getUTCDate())
+  let n = 0
+  while (n < days) {
+    d += 86400000
+    const dow = new Date(d).getUTCDay() // 5 Friday, 6 Saturday
+    if (dow !== 5 && dow !== 6) n += 1
+  }
+  return new Date(d + 86400000 - 3 * 3600 * 1000).toISOString()
+}
 
 export const ACTION_LABELS = {
   charge_issue: 'Issue charge',
@@ -77,6 +196,7 @@ export function buildInstalmentPlan(outstanding, capAmount, firstMonth) {
 }
 
 export function validateIssue(values) {
+  if (chargeNeedsPhoto(values.category) && photoEvidence(values.evidence).length === 0) return 'Add at least one photo of the damage. The driver sees it before answering.'
   if (!CATEGORIES.includes(values.category)) return 'Choose a charge category.'
   if (values.category === 'traffic_fine' && values.source_type !== 'driver_fine') return 'A traffic fine charge must link the traffic fine record.'
   if (values.source_type && values.source_type !== 'none' && !values.source_id) return 'Choose the linked record.'
@@ -91,6 +211,7 @@ export function validateIssue(values) {
 
 export function validateResponse(values) {
   if (!['accept', 'dispute'].includes(values.response)) return 'Choose accept or dispute.'
+  if (values.language && !STATEMENT_LANGUAGES.includes(values.language)) return 'Choose English, Arabic or Urdu.'
   if (values.response === 'dispute' && (values.explanation || '').trim().length < 10) return 'Explain why you dispute the charge.'
   if (!values.acknowledged) return 'Read and confirm the statement.'
   if (!values.signature) return 'Sign before submitting.'

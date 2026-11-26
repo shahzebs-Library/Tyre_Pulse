@@ -8961,8 +8961,78 @@ class AppLocalizationsAr extends AppLocalizations {
   String get driverChargeStatementTitle => 'الإقرار الذي توقع عليه';
 
   @override
-  String get driverChargeStatementEnglishOnly =>
-      'هذا الإقرار نص قانوني ويعرض باللغة الإنجليزية فقط. اطلب من مشرفك شرحه قبل التوقيع.';
+  String get driverChargeStatementLanguage => 'لغة الإقرار الذي توقع عليه';
+
+  @override
+  String get driverChargeStatementReadAloud =>
+      'إذا كنت لا تستطيع القراءة، اطلب من مشرفك أن يقرأها لك قبل التوقيع.';
+
+  @override
+  String get driverChargePhotosTitle => 'صور هذه المطالبة';
+
+  @override
+  String get driverChargePhotosNone => 'لا توجد صور مرفقة بهذه المطالبة.';
+
+  @override
+  String get driverChargePhotoUnavailable => 'تعذر تحميل الصورة.';
+
+  @override
+  String get driverChargePhotosSeen => 'انظر إلى الصور قبل أن تجيب.';
+
+  @override
+  String get driverChargeKsaRule =>
+      'يطبق نظام العمل السعودي على هذه المطالبة. التلف أو الفقد: بحد أقصى أجر 5 أيام في الشهر. الغرامات: بحد أقصى أجر 5 أيام. مجموع الخصومات: بحد أقصى نصف الأجر. لديك 15 يوم عمل للاعتراض.';
+
+  @override
+  String get driverChargeOtherRule =>
+      'يطبق حد الشركة على هذه المطالبة. هذه القاعدة لا تزال تحتاج إلى تأكيد قانوني في هذه الدولة.';
+
+  @override
+  String driverChargeObjectionUntil(String date) {
+    return 'يمكنك الاعتراض حتى $date.';
+  }
+
+  @override
+  String get driverChargeLangEnglish => 'English';
+
+  @override
+  String get driverChargeLangArabic => 'العربية';
+
+  @override
+  String get driverChargeLangUrdu => 'اردو';
+
+  @override
+  String get driverChargeStatementConsent =>
+      'أنا السائق المذكور اسمه في هذه الورقة. اطلعت على هذه المطالبة: السبب والمبلغ والأدلة والصور المرفقة بها. أوافق على أنني ملزم بدفع هذه المطالبة. وأوافق على أن تخصم الشركة هذا المبلغ من راتبي، جزءا كل شهر، كما هو موضح في خطة الخصم. هذه الموافقة تخص هذه المطالبة فقط. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.';
+
+  @override
+  String get driverChargeStatementDispute =>
+      'أنا السائق المذكور اسمه في هذه الورقة. استلمت هذه المطالبة واطلعت على السبب والأدلة والصور. لا أوافق على هذه المطالبة للأسباب التي كتبتها. توقيعي يثبت فقط أنني استلمت هذه الورقة، ولا يعني أنني موافق. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.';
+
+  @override
+  String get driverChargeStatementWitness =>
+      'رأيت أن ورقة هذه المطالبة سلمت إلى السائق المذكور اسمه فيها، وأن السائق رفض التوقيع عليها أو الرد. تاريخ ووقت هذا السجل يحددهما النظام.';
+
+  @override
+  String get driverChargeBlockTitle => 'لا يمكن جدولة الخصم بعد';
+
+  @override
+  String get driverChargeBlockConsent =>
+      'نظام العمل السعودي (المادة 92): لا يجوز خصم هذه المطالبة من الراتب إلا بموافقة السائق الكتابية. السائق لم يوافق، لذلك لا يمكن خصمها.';
+
+  @override
+  String get driverChargeBlockObjection =>
+      'يوجد اعتراض مفتوح. يجب البت فيه أولا.';
+
+  @override
+  String driverChargeBlockWindow(String date) {
+    return 'لا يزال بإمكان السائق الاعتراض حتى $date. لا يمكن جدولة أي خصم قبل ذلك.';
+  }
+
+  @override
+  String driverChargeBlockWindowKsa(String date) {
+    return 'نظام العمل السعودي (المادة 91): للسائق 15 يوم عمل للاعتراض، حتى $date. لا يمكن جدولة أي خصم قبل ذلك.';
+  }
 
   @override
   String get driverChargeStatementMissing =>

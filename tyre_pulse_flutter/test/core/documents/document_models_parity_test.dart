@@ -28,6 +28,7 @@ void main() {
       Map<String, Object?>.from(charge['input']! as Map),
       generatedAt: generatedAt,
       utcOffset: offset,
+      language: '${charge['language'] ?? 'en'}',
     );
     expect(jsonEncode(model.toJson()), jsonEncode(charge['model']));
   });

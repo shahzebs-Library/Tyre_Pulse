@@ -677,12 +677,22 @@ void main() {
     // site required / taken from the fleet register, the "please sign
     // again" refusal for a too-short signature, the unconfirmed source link
     // and the appeal closed after deductions.
-    // 2681 + 1 = 2682: the tyre condition picker and legend name the grey
-    // question-mark wheel nobody checked yet (tyreConditionNotChecked).
-    test('en, ar and ur each carry exactly 2682 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2682);
-      expect(_translatableKeys(ar).length, 2682);
-      expect(_translatableKeys(ur).length, 2682);
+    // 2681 - 1 + 15 = 2695: driver charge consent in English, Arabic and Urdu
+    // (driverChargeStatementConsent / Dispute / Witness, the exact words the
+    // server stores, pinned against docs/document-specs/driver-charge-
+    // statements.json by src/test/driverChargeStatementsParity.test.js), the
+    // statement language picker and the three language names, the read-aloud
+    // line (replaces driverChargeStatementEnglishOnly), the photo section
+    // (title, none, could not load, look first) and the KSA / company rule
+    // lines with the objection day.
+    // 2695 + 5 = 2700: why a deduction cannot be scheduled yet (title,
+    // Article 92 consent, open objection, window with and without the KSA
+    // Article 91 wording), shown instead of a schedule the server refuses.
+    // 2700 + 1 = 2701: tyreConditionNotChecked (grey question-mark wheel).
+    test('en, ar and ur each carry exactly 2701 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2701);
+      expect(_translatableKeys(ar).length, 2701);
+      expect(_translatableKeys(ur).length, 2701);
     });
   });
 

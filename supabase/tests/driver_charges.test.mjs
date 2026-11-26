@@ -110,11 +110,11 @@ test('driver charges are consented, separated, capped, appealable and immutable'
     });
 
     await t.test('only the linked driver accepts, with consent text and signature', async () => {
-      const accept = { driver_id: a, charge_id: charge, version, response: 'accept', statement_version: 'deduction-consent-v1', acknowledged: true, signature: SIG };
+      const accept = { driver_id: a, charge_id: charge, version, response: 'accept', statement_version: 'deduction-consent-v2', acknowledged: true, signature: SIG };
       await actor(4); await assert.rejects(command('charge_respond', accept), code('42501'));
       await actor(5); await assert.rejects(command('charge_respond', accept), code('42501'));
       await actor(3);
-      await assert.rejects(command('charge_respond', { ...accept, statement_version: 'receipt-dispute-v1' }), code('22023'));
+      await assert.rejects(command('charge_respond', { ...accept, statement_version: 'receipt-dispute-v2' }), code('22023'));
       await assert.rejects(command('charge_respond', { ...accept, signature: '<svg><script/></svg>' }), code('22023'));
       await assert.rejects(command('charge_respond', { ...accept, signature: THIN_SIG }), code('22023'));
       const dot = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10"><path d="M1 1 L2 2" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -122,7 +122,7 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       await command('charge_respond', accept);
       const x = await refresh();
       assert.equal(x.charge.status, 'accepted'); assert.equal(x.signatures[0].kind, 'driver_acceptance');
-      assert.match(x.signatures[0].statement_text, /written consent/); assert.ok(x.signatures[0].signed_at);
+      assert.match(x.signatures[0].statement_text, /take this amount from my salary/); assert.equal(x.signatures[0].statement_language, 'en'); assert.ok(x.signatures[0].signed_at);
       assert.deepEqual(x.actions, []);
     });
 
@@ -143,9 +143,9 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       await actor(3); await assert.rejects(command('charge_appeal', { driver_id: a, charge_id: charge, version, reason: 'Second appeal attempt here.' }), code('23505'));
     });
 
-    await t.test('instalments are capped by the configured share of wage and must add up', async () => {
+    await t.test('KSA instalments are capped at 5 days wage (Art 91) and must add up', async () => {
       await actor(10);
-      const base = { driver_id: a, charge_id: charge, version, monthly_wage: 1000, wage_currency: 'SAR' };
+      const base = { driver_id: a, charge_id: charge, version, monthly_wage: 1200, wage_currency: 'SAR' };
       for (const bad of [{ monthly_wage: 'NaN' }, { monthly_wage: 'Infinity' }, { monthly_wage: 0 }, { monthly_wage: 5000000 }, { wage_currency: 'USD' }, { wage_currency: null }]) {
         await assert.rejects(command('charge_schedule', { ...base, ...bad, instalments: [{ due_month: thisMonth(), amount: 200 }, { due_month: nextMonth(), amount: 50 }] }), code('22023'));
       }
@@ -165,10 +165,10 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       const other = (await issue({ basis: 'Second item missing: first aid kit not returned at handover.', amount: 100 })).id;
       let v = (await detail(other)).charge.version;
       await command('charge_notify', { driver_id: a, charge_id: other, version: v }); v++;
-      await actor(3); await command('charge_respond', { driver_id: a, charge_id: other, version: v, response: 'accept', statement_version: 'deduction-consent-v1', acknowledged: true, signature: SIG }); v++;
+      await actor(3); await command('charge_respond', { driver_id: a, charge_id: other, version: v, response: 'accept', statement_version: 'deduction-consent-v2', acknowledged: true, signature: SIG }); v++;
       await actor(2); await command('charge_supervisor_review', { driver_id: a, charge_id: other, version: v, decision: 'approve', reason: 'Kit missing per checklist' }); v++;
       await actor(10); await command('charge_finance_review', { driver_id: a, charge_id: other, version: v, decision: 'approve', reason: 'Price verified' }); v++;
-      const base = { driver_id: a, charge_id: other, version: v, monthly_wage: 1000, wage_currency: 'SAR' };
+      const base = { driver_id: a, charge_id: other, version: v, monthly_wage: 1200, wage_currency: 'SAR' };
       // this month already carries 200 from the first charge: 200 + 100 > 200
       await assert.rejects(command('charge_schedule', { ...base, instalments: [{ due_month: thisMonth(), amount: 100 }] }), e => e.code === '22023' && /across all charges/.test(e.message));
       // next month carries 50: 50 + 100 <= 200
@@ -198,8 +198,8 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       const c = (await issue()).id; const v = (await detail(c)).charge.version;
       await assert.rejects(command('charge_correct', { driver_id: a, charge_id: c, version: v, incident_at: '2999-01-01T00:00:00Z', reason: 'Wrong date' }), code('22023'));
       await command('charge_notify', { driver_id: a, charge_id: c, version: v });
-      await actor(3); await assert.rejects(command('charge_respond', { driver_id: a, charge_id: c, version: v + 1, statement_version: 'receipt-dispute-v1', acknowledged: true, explanation: 'No response chosen here', signature: SIG }), code('22023'));
-      await command('charge_respond', { driver_id: a, charge_id: c, version: v + 1, response: 'accept', statement_version: 'deduction-consent-v1', acknowledged: true, signature: SIG });
+      await actor(3); await assert.rejects(command('charge_respond', { driver_id: a, charge_id: c, version: v + 1, statement_version: 'receipt-dispute-v2', acknowledged: true, explanation: 'No response chosen here', signature: SIG }), code('22023'));
+      await command('charge_respond', { driver_id: a, charge_id: c, version: v + 1, response: 'accept', statement_version: 'deduction-consent-v2', acknowledged: true, signature: SIG });
       await actor(2); await assert.rejects(command('charge_supervisor_review', { driver_id: a, charge_id: c, version: v + 2, reason: 'No decision given' }), code('22023'));
       accepted = c;
       await actor(3);
@@ -211,7 +211,7 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       let v = (await detail(accepted)).charge.version;
       await actor(2); await command('charge_supervisor_review', { driver_id: a, charge_id: accepted, version: v, decision: 'approve', reason: 'Item missing per checklist' }); v++;
       await actor(10); await command('charge_finance_review', { driver_id: a, charge_id: accepted, version: v, decision: 'approve', reason: 'Price verified' }); v++;
-      // next month already holds 150 scheduled on a 1000 wage (limit 200); a 5000 wage must not lift that
+      // next month already holds 150 scheduled on a 1200 wage (limit 5 days = 200); a 5000 wage must not lift that
       await assert.rejects(command('charge_schedule', { driver_id: a, charge_id: accepted, version: v, monthly_wage: 5000, wage_currency: 'SAR',
         instalments: [{ due_month: nextMonth(), amount: 60 }, { due_month: monthPlus(2), amount: 240 }] }), e => e.code === '22023' && /across all charges/.test(e.message));
       await command('charge_schedule', { driver_id: a, charge_id: accepted, version: v, monthly_wage: 5000, wage_currency: 'SAR', instalments: [{ due_month: monthPlus(2), amount: 300 }] });
@@ -277,11 +277,11 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       await assert.rejects(command('charge_record_refusal', { driver_id: a, charge_id: second, version: v, witness_user_id: id(4), reason: 'Presented at gate office' }), e => e.code === '22023' && /access/.test(e.message));
       await command('charge_record_refusal', { driver_id: a, charge_id: second, version: v, witness_user_id: id(2), reason: 'Presented at gate office' }); v++;
       await command('charge_record_refusal', { driver_id: a, charge_id: second, version: v, witness_user_id: id(11), reason: 'Presented at gate office, second witness' }); v++;
-      await actor(2); await assert.rejects(command('charge_witness_confirm', { driver_id: a, charge_id: second, version: v, statement_version: 'refusal-witness-v1', acknowledged: true, signature: SIG }), code('42501'));
+      await actor(2); await assert.rejects(command('charge_witness_confirm', { driver_id: a, charge_id: second, version: v, statement_version: 'refusal-witness-v2', acknowledged: true, signature: SIG }), code('42501'));
       await actor(5);
       let x = await detail(second); assert.equal(x.charge.status, 'notified', 'one person alone cannot make a refusal count'); assert.equal(x.signatures.length, 0);
       await actor(2); await assert.rejects(command('charge_supervisor_review', { driver_id: a, charge_id: second, version: v, decision: 'approve', reason: 'Too early review' }), code('PT409'));
-      const confirm = { driver_id: a, charge_id: second, version: v, statement_version: 'refusal-witness-v1', acknowledged: true, signature: SIG };
+      const confirm = { driver_id: a, charge_id: second, version: v, statement_version: 'refusal-witness-v2', acknowledged: true, signature: SIG };
       for (const n of [5, 10, 2]) { await actor(n); await assert.rejects(command('charge_witness_confirm', confirm), code('42501')); }
       await actor(11); assert.ok((await detail(second)).actions.includes('charge_witness_confirm'));
       await assert.rejects(command('charge_witness_confirm', { ...confirm, acknowledged: false }), code('22023'));
@@ -294,12 +294,12 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       await actor(11); await command('charge_witness_confirm', { ...confirm, version: v }); v++;
       await actor(2); await command('charge_supervisor_review', { driver_id: a, charge_id: second, version: v, decision: 'approve', reason: 'Gate photo confirms damage' }); v++;
       await actor(10); await command('charge_finance_review', { driver_id: a, charge_id: second, version: v, decision: 'approve', reason: 'Quote checked' }); v++;
-      await assert.rejects(command('charge_schedule', { driver_id: a, charge_id: second, version: v, monthly_wage: 1000, wage_currency: 'SAR', instalments: [{ due_month: thisMonth(), amount: 120 }] }), code('22023'));
+      await assert.rejects(command('charge_schedule', { driver_id: a, charge_id: second, version: v, monthly_wage: 1200, wage_currency: 'SAR', instalments: [{ due_month: thisMonth(), amount: 120 }] }), code('22023'));
     });
 
     await t.test('wrongly issued charge is reversed and reissued with lineage, never edited', async () => {
       await actor(5);
-      const thirdIssue = { driver_id: a, category: 'accident_damage', source_type: 'accident', source_id: id(40), basis: 'Rear bumper damage recorded on accident ACC-2026-0001.', amount: 500, currency: 'SAR' };
+      const thirdIssue = { driver_id: a, category: 'accident_damage', source_type: 'accident', source_id: id(40), basis: 'Rear bumper damage recorded on accident ACC-2026-0001.', amount: 500, currency: 'SAR', evidence: [{ kind: 'photo', ref: 'tp-storage://tyre-photos/modules/driver-charge/abc/1_0_x.jpg', label: 'Rear bumper' }] };
       await assert.rejects(command('charge_issue', thirdIssue), e => e.code === '22023' && /does not name a driver/.test(e.message));
       const third = (await command('charge_issue', { ...thirdIssue, link_unverified: true })).id;
       assert.equal((await detail(third)).charge.source_link_unverified, true);
@@ -311,6 +311,157 @@ test('driver charges are consented, separated, capped, appealable and immutable'
       const old = await detail(third); assert.equal(old.charge.status, 'cancelled_wrongly_issued'); assert.equal(old.charge.superseded_by_charge_id, r.replacement_charge_id);
       const fresh = await detail(r.replacement_charge_id); assert.equal(fresh.charge.driver_id, b); assert.equal(fresh.charge.source_link_unverified, true); assert.equal(fresh.charge.status, 'issued'); assert.equal(fresh.charge.supersedes_charge_id, third);
       await actor(3); await assert.rejects(detail(r.replacement_charge_id), code('42501'));
+    });
+
+    await t.test('KSA labour law: photos, statement languages, 5 day caps, 50% total, 15 working day objection', async () => {
+      const rule = async c => (await db.query('select private.driver_charge_country_rule($1) r', [c])).rows[0].r;
+      await db.exec('RESET ROLE');
+      assert.equal((await rule('KSA')).statutory, true); assert.equal((await rule('UAE')).statutory, false); assert.equal((await rule('UAE')).needs_legal_confirmation, true);
+      // Thu 2026-11-26 + 15 working days (Sun-Thu) = Thu 2026-12-17, window closes at the end of that day in Riyadh.
+      assert.equal(new Date((await db.query("select private.driver_charge_working_deadline('2026-11-26T09:00:00+03:00', 15) r")).rows[0].r).toISOString(), '2026-12-17T21:00:00.000Z');
+      await db.exec(`INSERT INTO driver_fines(id,organisation_id,driver_id,vehicle_id,country,site,authority,notice_reference,incident_at,amount,currency,description,assignment_reason,status,response_status,review_stage,created_by) VALUES
+          ('${id(63)}','${id(1)}','${b}','${id(7)}','KSA','JEDDAH','Muroor','N-63',now()-interval '3 days',400,'SAR','Speeding','Driver on shift','open','approved','complete','${id(2)}'),
+          ('${id(64)}','${id(1)}','${b}','${id(7)}','KSA','JEDDAH','Muroor','N-64',now()-interval '3 days',600,'SAR','Speeding twice','Driver on shift','open','approved','complete','${id(2)}');
+        SET ROLE authenticated;`);
+      const photo = { kind: 'photo', ref: 'tp-storage://tyre-photos/modules/driver-charge/abc/2_0_y.jpg', label: 'Damage photo' };
+      const open = async (fields, response = 'accept', lang = 'en') => {
+        await actor(11); const c = (await command('charge_issue', { driver_id: b, basis: 'Charge recorded for the KSA labour law test case.', currency: 'SAR', source_type: 'none', evidence: [{ kind: 'document', ref: 'doc/1', label: 'Record' }], ...fields })).id;
+        let v = (await detail(c)).charge.version;
+        await command('charge_notify', { driver_id: b, charge_id: c, version: v }); v++;
+        await actor(4); await command('charge_respond', { driver_id: b, charge_id: c, version: v, response, statement_version: response === 'accept' ? 'deduction-consent-v2' : 'receipt-dispute-v2', statement_language: lang, acknowledged: true, explanation: 'I was not driving this vehicle that day.', signature: SIG }); v++;
+        await actor(2); await command('charge_supervisor_review', { driver_id: b, charge_id: c, version: v, decision: 'approve', reason: 'Evidence reviewed' }); v++;
+        await actor(10); await command('charge_finance_review', { driver_id: b, charge_id: c, version: v, decision: 'approve', reason: 'Amount verified' }); v++;
+        return { c, v };
+      };
+      const schedule = (c, v, instalments, wage = 3000) => command('charge_schedule', { driver_id: b, charge_id: c, version: v, monthly_wage: wage, wage_currency: 'SAR', instalments });
+
+      // A damage charge cannot reach the driver without a photo; a photo must be an uploaded private file.
+      await actor(11);
+      const noPhoto = (await command('charge_issue', { driver_id: b, category: 'tyre_damage', source_type: 'none', basis: 'Tyre sidewall cut from kerb strike on the yard exit.', amount: 100, currency: 'SAR', evidence: [{ kind: 'document', ref: 'doc/2', label: 'Report' }] })).id;
+      await assert.rejects(command('charge_notify', { driver_id: b, charge_id: noPhoto, version: (await detail(noPhoto)).charge.version }), e => e.code === '22023' && /photo/.test(e.message));
+      await assert.rejects(command('charge_attach_evidence', { driver_id: b, charge_id: noPhoto, version: (await detail(noPhoto)).charge.version, kind: 'photo', ref: 'https://example.com/x.jpg', label: 'Public URL' }), code('22023'));
+      await command('charge_attach_evidence', { driver_id: b, charge_id: noPhoto, version: (await detail(noPhoto)).charge.version, ...photo });
+      await command('charge_notify', { driver_id: b, charge_id: noPhoto, version: (await detail(noPhoto)).charge.version });
+      await actor(4);
+      const seen = await detail(noPhoto);
+      assert.equal(seen.evidence.filter(e => e.kind === 'photo').length, 1, 'the driver sees the photo before answering');
+      assert.ok(seen.statements['deduction-consent-v2'].ar && seen.statements['deduction-consent-v2'].ur);
+      assert.equal(seen.settings.country_rule.rule, 'ksa_labour_law');
+      await assert.rejects(command('charge_respond', { driver_id: b, charge_id: noPhoto, version: seen.charge.version, response: 'accept', statement_version: 'deduction-consent-v2', statement_language: 'fr', acknowledged: true, signature: SIG }), code('22023'));
+      await command('charge_respond', { driver_id: b, charge_id: noPhoto, version: seen.charge.version, response: 'accept', statement_version: 'deduction-consent-v2', statement_language: 'ar', acknowledged: true, signature: SIG });
+      const signedAr = (await detail(noPhoto)).signatures[0];
+      assert.equal(signedAr.statement_language, 'ar'); assert.equal(signedAr.statement_text, seen.statements['deduction-consent-v2'].ar);
+
+      // Damage (Art 91): one instalment at most 5 days wage (3000 / 30 * 5 = 500).
+      const dmg = await open({ category: 'missing_item', amount: 600 });
+      await assert.rejects(schedule(dmg.c, dmg.v, [{ due_month: thisMonth(), amount: 600 }]), code('22023'));
+      await schedule(dmg.c, dmg.v, [{ due_month: thisMonth(), amount: 500 }, { due_month: nextMonth(), amount: 100 }]);
+      let x = await detail(dmg.c); assert.equal(Number(x.charge.schedule_cap_amount), 500); assert.equal(x.charge.schedule_rule, 'ksa_labour_law');
+      // Fines (Art 70/71) have their own 5 day limit, so 500 damage + 400 fine in one month is allowed.
+      const fine = await open({ category: 'traffic_fine', source_type: 'driver_fine', source_id: id(63), amount: 400, evidence: [] });
+      await schedule(fine.c, fine.v, [{ due_month: thisMonth(), amount: 400 }]);
+      // A fine for one violation above 5 days wage cannot be deducted (Art 71).
+      const bigFine = await open({ category: 'traffic_fine', source_type: 'driver_fine', source_id: id(64), amount: 600, evidence: [] });
+      await assert.rejects(schedule(bigFine.c, bigFine.v, [{ due_month: monthPlus(3), amount: 500 }, { due_month: monthPlus(4), amount: 100 }]), e => e.code === '22023' && /Article 71/.test(e.message));
+      // All deductions together at most half the wage (Art 93): 500 + 400 + 700 > 1500 in this month.
+      const consent = await open({ category: 'other', amount: 1000 });
+      await assert.rejects(schedule(consent.c, consent.v, [{ due_month: thisMonth(), amount: 700 }, { due_month: nextMonth(), amount: 300 }]), e => e.code === '22023' && /Article 93/.test(e.message) && /across all charges/.test(e.message));
+      await schedule(consent.c, consent.v, [{ due_month: thisMonth(), amount: 600 }, { due_month: nextMonth(), amount: 400 }]);
+
+      // Without consent: only damage, only after 15 working days, never another category (Art 92).
+      const shiftBack = async c => {
+        await db.exec('RESET ROLE; ALTER TABLE driver_charge_decisions DISABLE TRIGGER driver_charge_decisions_append_only');
+        await db.query("update driver_charge_decisions set created_at = now() - interval '40 days' where charge_id = $1 and stage = 'finance'", [c]);
+        await db.exec('ALTER TABLE driver_charge_decisions ENABLE TRIGGER driver_charge_decisions_append_only; SET ROLE authenticated');
+      };
+      const disputedOther = await open({ category: 'other', amount: 100 }, 'dispute', 'ur');
+      await shiftBack(disputedOther.c); await actor(10);
+      const otherDetail = await detail(disputedOther.c);
+      assert.equal(otherDetail.settings.schedule_block.code, 'consent_required'); assert.equal(otherDetail.settings.schedule_block.article, '92');
+      assert.ok(!otherDetail.actions.includes('charge_schedule'), 'never offer a schedule the server refuses');
+      await assert.rejects(schedule(disputedOther.c, disputedOther.v, [{ due_month: monthPlus(5), amount: 100 }]), e => e.code === '22023' && /Article 92/.test(e.message));
+      const disputedDamage = await open({ category: 'accident_damage', source_type: 'accident', source_id: id(42), amount: 300, evidence: [photo] }, 'dispute');
+      await assert.rejects(schedule(disputedDamage.c, disputedDamage.v, [{ due_month: monthPlus(5), amount: 300 }]), e => e.code === '22023' && /15 working days/.test(e.message));
+      const inWindow = await detail(disputedDamage.c);
+      assert.equal(inWindow.settings.schedule_block.code, 'window_open'); assert.ok(!inWindow.actions.includes('charge_schedule'));
+      const dd = (await detail(disputedDamage.c)).settings; assert.ok(dd.objection_deadline); assert.match(dd.objection_last_day, /^\d{4}-\d{2}-\d{2}$/);
+      await shiftBack(disputedDamage.c); await actor(10);
+      const afterWindow = await detail(disputedDamage.c);
+      assert.equal(afterWindow.settings.schedule_block, null); assert.ok(afterWindow.actions.includes('charge_schedule'));
+      await schedule(disputedDamage.c, disputedDamage.v, [{ due_month: monthPlus(5), amount: 300 }]);
+      assert.equal((await detail(disputedDamage.c)).charge.status, 'scheduled');
+    });
+
+    await t.test('outside KSA: configured percent cap and 7 day window (needs legal confirmation)', async () => {
+      await db.exec(`RESET ROLE;
+        CREATE OR REPLACE FUNCTION app_country_scope() RETURNS text[] LANGUAGE sql AS $$ SELECT ARRAY['ksa','uae'] $$;
+        INSERT INTO profiles(id,org_id,full_name,role) VALUES ('${id(12)}','${id(1)}','Driver C','Driver');
+        SET ROLE authenticated;`);
+      await actor(2);
+      const c = (await command('create_driver', { driver_id: 'EMP3', driver_name: 'Driver C', country: 'UAE', site: 'JEDDAH' })).driver_id;
+      await command('link_account', { driver_id: c, user_id: id(12), reason: 'Verified employee identity' });
+      const open = async (fields, response) => {
+        await actor(11); const ch = (await command('charge_issue', { driver_id: c, basis: 'Charge recorded for the UAE test case here.', currency: 'AED', source_type: 'none', evidence: [{ kind: 'document', ref: 'doc/9', label: 'Record' }], ...fields })).id;
+        let v = (await detail(ch)).charge.version;
+        await command('charge_notify', { driver_id: c, charge_id: ch, version: v }); v++;
+        await actor(12); await command('charge_respond', { driver_id: c, charge_id: ch, version: v, response, statement_version: response === 'accept' ? 'deduction-consent-v2' : 'receipt-dispute-v2', statement_language: 'en', acknowledged: true, explanation: 'I did not lose this item at all.', signature: SIG }); v++;
+        await actor(2); await command('charge_supervisor_review', { driver_id: c, charge_id: ch, version: v, decision: 'approve', reason: 'Evidence reviewed' }); v++;
+        await actor(10); await command('charge_finance_review', { driver_id: c, charge_id: ch, version: v, decision: 'approve', reason: 'Amount verified' }); v++;
+        return { ch, v };
+      };
+      const schedule = (ch, v, instalments) => command('charge_schedule', { driver_id: c, charge_id: ch, version: v, monthly_wage: 3000, wage_currency: 'AED', instalments });
+      const accepted = await open({ category: 'missing_item', amount: 700 }, 'accept');
+      const rule = (await detail(accepted.ch)).settings.country_rule;
+      assert.equal(rule.statutory, false); assert.equal(rule.needs_legal_confirmation, true);
+      // 20% of 3000 = 600 per month, not the KSA 5 days (500).
+      await assert.rejects(schedule(accepted.ch, accepted.v, [{ due_month: thisMonth(), amount: 700 }]), code('22023'));
+      await schedule(accepted.ch, accepted.v, [{ due_month: thisMonth(), amount: 600 }, { due_month: nextMonth(), amount: 100 }]);
+      let x = await detail(accepted.ch); assert.equal(x.charge.schedule_rule, 'company_setting'); assert.equal(Number(x.charge.schedule_cap_amount), 600);
+      // A disputed "other" charge is not refused outright outside KSA: after 7 calendar days it can be scheduled.
+      const disputed = await open({ category: 'other', amount: 100 }, 'dispute');
+      x = await detail(disputed.ch);
+      assert.equal(x.settings.schedule_block.code, 'window_open'); assert.ok(!x.actions.includes('charge_schedule'));
+      await assert.rejects(schedule(disputed.ch, disputed.v, [{ due_month: monthPlus(3), amount: 100 }]), e => e.code === '22023' && /appeal period/.test(e.message));
+      await db.exec('RESET ROLE; ALTER TABLE driver_charge_decisions DISABLE TRIGGER driver_charge_decisions_append_only');
+      await db.query("update driver_charge_decisions set created_at = now() - interval '8 days' where charge_id = $1 and stage = 'finance'", [disputed.ch]);
+      await db.exec('ALTER TABLE driver_charge_decisions ENABLE TRIGGER driver_charge_decisions_append_only; SET ROLE authenticated');
+      await actor(10); x = await detail(disputed.ch);
+      assert.equal(x.settings.schedule_block, null); assert.ok(x.actions.includes('charge_schedule'));
+      await schedule(disputed.ch, disputed.v, [{ due_month: monthPlus(3), amount: 100 }]);
+      await db.exec(`RESET ROLE; CREATE OR REPLACE FUNCTION app_country_scope() RETURNS text[] LANGUAGE sql AS $$ SELECT ARRAY['ksa'] $$; SET ROLE authenticated;`);
+    });
+
+    await t.test('charge photos are readable only by people who can see the charge', async () => {
+      const name = 'modules/driver-charge/abc/2_0_y.jpg';
+      await db.exec(`RESET ROLE;
+        CREATE POLICY test_storage_read ON storage.objects FOR SELECT TO authenticated USING (true);
+        INSERT INTO storage.objects(bucket_id,name,owner_id) VALUES ('tyre-photos','${name}','${id(11)}'),
+          ('tyre-photos','modules/driver-charge/sup/unattached.jpg','${id(5)}'),('tyre-photos','modules/wash/w.jpg','${id(5)}');
+        SET ROLE authenticated;`);
+      const visible = async (n, obj) => { await actor(n); return (await db.query('select count(*)::int n from storage.objects where name=$1', [obj])).rows[0].n; };
+      assert.equal(await visible(4, name), 1, 'the driver of the charge');
+      assert.equal(await visible(11, name), 1, 'the uploader');
+      assert.equal(await visible(2, name), 1, 'organisation admin / manager');
+      assert.equal(await visible(10, name), 1, 'finance');
+      assert.equal(await visible(3, name), 0, 'another driver');
+      assert.equal(await visible(5, name), 0, 'a supervisor of another driver');
+      assert.equal(await visible(6, name), 0, 'another tenant');
+      assert.equal(await visible(5, 'modules/driver-charge/sup/unattached.jpg'), 1, 'own upload before it is attached');
+      assert.equal(await visible(4, 'modules/driver-charge/sup/unattached.jpg'), 0);
+      assert.equal(await visible(3, 'modules/wash/w.jpg'), 1, 'other paths keep the bucket rule');
+      await db.exec('RESET ROLE; DROP POLICY test_storage_read ON storage.objects; SET ROLE authenticated;');
+    });
+
+    await t.test('admin-maintained public holidays are skipped by the working-day counter', async () => {
+      const deadline = async () => new Date((await db.query(`select private.driver_charge_working_deadline('2026-11-26T09:00:00+03:00', 15, 'KSA', '${id(1)}') r`)).rows[0].r).toISOString();
+      await db.exec('RESET ROLE'); assert.equal(await deadline(), '2026-12-17T21:00:00.000Z', 'empty by default'); await db.exec('SET ROLE authenticated');
+      await actor(5); await assert.rejects(db.query("insert into driver_charge_holidays(country,holiday,label) values ('KSA','2026-12-01','Test holiday')"), code('42501'));
+      await actor(2); await db.query("insert into driver_charge_holidays(country,holiday,label) values ('KSA','2026-12-01','Test holiday')");
+      await actor(5); assert.equal((await db.query('select count(*)::int n from driver_charge_holidays')).rows[0].n, 1, 'everyone in the organisation can read the list');
+      await db.exec('RESET ROLE');
+      assert.equal(await deadline(), '2026-12-20T21:00:00.000Z', 'Tue 1 Dec skipped, the window ends on Sun 20 Dec');
+      assert.equal(new Date((await db.query(`select private.driver_charge_working_deadline('2026-11-26T09:00:00+03:00', 15, 'UAE', '${id(1)}') r`)).rows[0].r).toISOString(), '2026-12-17T21:00:00.000Z', 'a KSA holiday does not move a UAE window');
+      await db.query("delete from driver_charge_holidays"); await db.exec('SET ROLE authenticated');
     });
 
     await t.test('RLS keeps another tenant and another driver out', async () => {

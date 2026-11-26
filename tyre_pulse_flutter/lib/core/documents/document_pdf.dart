@@ -4,8 +4,9 @@
 /// every word and value in spec order; this file only draws them, mirroring
 /// the section shapes of the web renderers (`src/lib/driverChargePdf.js`,
 /// `src/lib/vehicleHandoverPdf.js`). Like the web, the paper is English: the
-/// spec labels and the server statements are English text. Arabic-script
-/// values (a driver's name) need a fallback font, passed by the caller.
+/// spec labels are English. The driver notice box and each signed statement
+/// are in the driver's language (Arabic and Urdu right to left); the caller
+/// passes an Arabic-script fallback font.
 library;
 
 import 'dart:convert';
@@ -132,11 +133,46 @@ pw.Widget _title(String text, {double size = 11}) => pw.Padding(
       ),
     );
 
+/// Text that is Arabic or Urdu is drawn right to left.
+pw.TextDirection _dirFor(bool rtl) =>
+    rtl ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+
 /// The Driver Charge Notice, laid out like `renderDriverChargePdf`.
+/// [photoBytes] maps a photo reference to its image bytes (loaded by the
+/// caller); a missing entry prints the spec's "could not be loaded" line.
 Future<Uint8List> renderChargeNoticePdf(
   ChargeDocumentModel model, {
   List<pw.Font> fontFallback = const <pw.Font>[],
+  Map<String, Uint8List> photoBytes = const <String, Uint8List>{},
 }) {
+  pw.Widget photoTile(ChargeDocumentPhoto photo, String missing) {
+    final Uint8List? bytes = photoBytes[photo.ref];
+    pw.Widget image = pw.Text(missing, style: const pw.TextStyle(fontSize: 7));
+    if (bytes != null) {
+      try {
+        image = pw.Image(
+          pw.MemoryImage(bytes),
+          width: 160,
+          height: 120,
+          fit: pw.BoxFit.cover,
+        );
+      } on Object {
+        image = pw.Text(missing, style: const pw.TextStyle(fontSize: 7));
+      }
+    }
+    return pw.SizedBox(
+      width: 160,
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: <pw.Widget>[
+          pw.SizedBox(width: 160, height: 120, child: image),
+          pw.Text(photo.caption, style: const pw.TextStyle(fontSize: 7)),
+        ],
+      ),
+    );
+  }
+
+  final ChargeDriverNotice notice = model.driverNotice;
   final pw.Document doc = pw.Document(
     title: model.title,
     theme: pw.ThemeData.withFont(fontFallback: fontFallback),
@@ -179,9 +215,46 @@ Future<Uint8List> renderChargeNoticePdf(
         pw.SizedBox(height: 4),
         for (final String line in model.headerLines)
           pw.Text(line, style: const pw.TextStyle(fontSize: 9)),
+        pw.Container(
+          margin: const pw.EdgeInsets.only(top: 8),
+          padding: const pw.EdgeInsets.all(6),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: _accent, width: 0.8),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: <pw.Widget>[
+              pw.Text(
+                notice.title,
+                textDirection: _dirFor(notice.rtl),
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              for (final String line in notice.lines)
+                pw.Text(
+                  '- $line',
+                  textDirection: _dirFor(notice.rtl),
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+            ],
+          ),
+        ),
         for (final ChargeDocumentSection s in model.sections) ...<pw.Widget>[
           _title(s.title),
-          if (s.type == 'text')
+          if (s.type == 'photos')
+            s.empty != null
+                ? pw.Text(s.empty!, style: const pw.TextStyle(fontSize: 9))
+                : pw.Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: <pw.Widget>[
+                      for (final ChargeDocumentPhoto p in s.photos!)
+                        photoTile(p, s.imageMissing ?? ''),
+                    ],
+                  )
+          else if (s.type == 'text')
             pw.Text(s.text ?? '', style: const pw.TextStyle(fontSize: 9))
           else if (s.type == 'fields')
             _gridTable(s.rows ?? const <List<String>>[], labelWidth: 150)
@@ -212,8 +285,15 @@ Future<Uint8List> renderChargeNoticePdf(
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(
-                  '${s.statement} (${s.statementVersion})',
+                  s.statement,
+                  textDirection: _dirFor(
+                    s.language == 'ar' || s.language == 'ur',
+                  ),
                   style: const pw.TextStyle(fontSize: 8),
+                ),
+                pw.Text(
+                  '(${s.statementVersion})',
+                  style: const pw.TextStyle(fontSize: 7),
                 ),
                 pw.SizedBox(height: 4),
                 signatureImageWidget(s.image, height: 55, width: 180) ??

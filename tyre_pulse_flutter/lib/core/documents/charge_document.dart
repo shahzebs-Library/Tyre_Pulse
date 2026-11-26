@@ -26,7 +26,44 @@ const List<String> _months = <String>[
   'December',
 ];
 
-/// One section of the notice. [type] is `text`, `fields` or `table`.
+/// One photo of the `photos` section: the private storage reference and the
+/// caption. The renderer loads the image; the model never holds bytes.
+final class ChargeDocumentPhoto {
+  const ChargeDocumentPhoto({required this.ref, required this.caption});
+  final String ref;
+  final String caption;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'ref': ref,
+        'caption': caption,
+      };
+}
+
+/// The plain-language box printed in the driver's language.
+final class ChargeDriverNotice {
+  const ChargeDriverNotice({
+    required this.language,
+    required this.dir,
+    required this.title,
+    required this.lines,
+  });
+  final String language;
+  final String dir;
+  final String title;
+  final List<String> lines;
+
+  bool get rtl => dir == 'rtl';
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'language': language,
+        'dir': dir,
+        'title': title,
+        'lines': lines,
+      };
+}
+
+/// One section of the notice. [type] is `text`, `fields`, `table` or
+/// `photos`.
 final class ChargeDocumentSection {
   const ChargeDocumentSection({
     required this.id,
@@ -37,6 +74,8 @@ final class ChargeDocumentSection {
     this.head,
     this.body,
     this.empty,
+    this.photos,
+    this.imageMissing,
   });
 
   final String id;
@@ -47,6 +86,8 @@ final class ChargeDocumentSection {
   final List<String>? head;
   final List<List<String>>? body;
   final String? empty;
+  final List<ChargeDocumentPhoto>? photos;
+  final String? imageMissing;
 
   Map<String, Object?> toJson() => <String, Object?>{
         'id': id,
@@ -57,6 +98,13 @@ final class ChargeDocumentSection {
         if (head != null) 'head': head,
         if (body != null) 'body': body,
         if (head != null) 'empty': empty,
+        if (photos != null) ...<String, Object?>{
+          'photos': <Map<String, Object?>>[
+            for (final ChargeDocumentPhoto p in photos!) p.toJson(),
+          ],
+          'empty': empty,
+          'imageMissing': imageMissing,
+        },
       };
 }
 
@@ -69,6 +117,7 @@ final class ChargeDocumentSignature {
     required this.image,
     required this.imageMissing,
     required this.rows,
+    this.language = 'en',
   });
 
   final String heading;
@@ -78,11 +127,15 @@ final class ChargeDocumentSignature {
   final String imageMissing;
   final List<List<String>> rows;
 
+  /// The language the statement was signed in (`en`, `ar` or `ur`).
+  final String language;
+
   Map<String, Object?> toJson() => <String, Object?>{
         'heading': heading,
         'statement': statement,
         'statementVersion': statementVersion,
         'image': image,
+        'language': language,
         'imageMissing': imageMissing,
         'rows': rows,
       };
@@ -92,6 +145,8 @@ final class ChargeDocumentModel {
   const ChargeDocumentModel({
     required this.title,
     required this.documentNumber,
+    required this.language,
+    required this.driverNotice,
     required this.headerLines,
     required this.sections,
     required this.signatureTitle,
@@ -104,6 +159,10 @@ final class ChargeDocumentModel {
 
   final String title;
   final String documentNumber;
+
+  /// The driver's language for the notice box.
+  final String language;
+  final ChargeDriverNotice driverNotice;
   final List<String> headerLines;
   final List<ChargeDocumentSection> sections;
   final String signatureTitle;
@@ -120,6 +179,8 @@ final class ChargeDocumentModel {
   Map<String, Object?> toJson() => <String, Object?>{
         'title': title,
         'documentNumber': documentNumber,
+        'language': language,
+        'driverNotice': driverNotice.toJson(),
         'headerLines': headerLines,
         'sections': <Map<String, Object?>>[
           for (final ChargeDocumentSection s in sections) s.toJson(),
@@ -134,6 +195,83 @@ final class ChargeDocumentModel {
       };
 }
 
+/// The driver's language for the notice box: the language of his latest
+/// signature, else [appLanguage], else English. Mirror of `noticeLanguage`.
+String chargeNoticeLanguage(
+  Map<String, Object?> spec,
+  Map<String, Object?> detail, [
+  String appLanguage = 'en',
+]) {
+  final Map<String, Object?> text = Map<String, Object?>.from(
+    (spec['driver_notice']! as Map)['text']! as Map,
+  );
+  String? signed;
+  final Object? rows = detail['signatures'];
+  if (rows is List) {
+    for (final Object? row in rows) {
+      if (row is! Map) continue;
+      final Object? kind = row['kind'];
+      final Object? lang = row['statement_language'];
+      if ((kind == 'driver_acceptance' || kind == 'driver_dispute') &&
+          lang is String &&
+          text.containsKey(lang)) {
+        signed = lang;
+      }
+    }
+  }
+  return signed ?? (text.containsKey(appLanguage) ? appLanguage : 'en');
+}
+
+/// The plain-language box. Mirror of `buildDriverNotice`.
+ChargeDriverNotice buildChargeDriverNotice(
+  Map<String, Object?> spec,
+  Map<String, Object?> detail,
+  String language,
+) {
+  final Map<String, Object?> all = Map<String, Object?>.from(
+    (spec['driver_notice']! as Map)['text']! as Map,
+  );
+  final Map<String, Object?> text =
+      Map<String, Object?>.from((all[language] ?? all['en'])! as Map);
+  final String missing = '${(spec['formats']! as Map)['missing']}';
+  final Map<String, Object?> c = detail['charge'] is Map
+      ? Map<String, Object?>.from(detail['charge']! as Map)
+      : <String, Object?>{};
+  final double amount = jsNumber(c['amount']);
+  final String amountText =
+      c['amount'] != null && c['amount'] != '' && amount.isFinite
+          ? '${c['currency'] ?? ''} ${jsToFixed(amount, 2)}'.trim()
+          : missing;
+  final Map<String, Object?> settings = detail['settings'] is Map
+      ? Map<String, Object?>.from(detail['settings']! as Map)
+      : <String, Object?>{};
+  final Object? rule = settings['country_rule'];
+  final bool statutory = rule is Map && rule['statutory'] == true;
+  final double days = jsNumber(settings['appeal_window_days']);
+  final String window = statutory
+      ? '${text['window_statutory']}'
+      : '${text['window_days']}'
+          .replaceFirst('{days}', days.isFinite ? jsString(days) : missing);
+  final Object? lastDay = settings['objection_last_day'];
+  final String deadline = jsTruthy(lastDay)
+      ? (jsString(lastDay).length > 10
+          ? jsString(lastDay).substring(0, 10)
+          : jsString(lastDay))
+      : '${text['deadline_pending']}';
+  return ChargeDriverNotice(
+    language: language,
+    dir: '${text['dir']}',
+    title: '${text['title']}',
+    lines: <String>[
+      for (final Object? line in text['lines']! as List)
+        '$line'
+            .replaceFirst('{amount}', amountText)
+            .replaceFirst('{window}', window)
+            .replaceFirst('{deadline}', deadline),
+    ],
+  );
+}
+
 /// Builds the notice. Pure. [utcOffset] fixes the printed time zone (the web
 /// prints in the browser zone; null here means the device zone).
 ChargeDocumentModel buildChargeDocument(
@@ -141,6 +279,7 @@ ChargeDocumentModel buildChargeDocument(
   Map<String, Object?> detail, {
   required String generatedAt,
   Duration? utcOffset,
+  String language = 'en',
 }) {
   if (detail['charge'] is! Map) {
     throw const FormatException('Charge details are unavailable.');
@@ -181,6 +320,37 @@ ChargeDocumentModel buildChargeDocument(
           title: title,
           type: type,
           text: f.value(specPath(detail, '${section['key']}'), null),
+        ),
+      );
+      continue;
+    }
+    if (type == 'photos') {
+      final Object? listed = specPath(detail, '${section['rows']}');
+      final List<ChargeDocumentPhoto> photos = <ChargeDocumentPhoto>[
+        if (listed is List)
+          for (final Object? item in listed)
+            if (item is Map &&
+                item['kind'] == section['kind'] &&
+                jsTruthy(item['${section['image_key']}']))
+              ChargeDocumentPhoto(
+                ref: jsString(item['${section['image_key']}']),
+                caption: jsTruthy(item['${section['caption_key']}'])
+                    ? jsString(item['${section['caption_key']}'])
+                    : f.missing,
+              ),
+      ];
+      sections.add(
+        ChargeDocumentSection(
+          id: id,
+          title: title,
+          type: type,
+          photos: photos,
+          empty: photos.isNotEmpty
+              ? null
+              : (jsTruthy(section['empty'])
+                  ? '${section['empty']}'
+                  : f.missing),
+          imageMissing: '${section['image_missing']}',
         ),
       );
       continue;
@@ -252,9 +422,12 @@ ChargeDocumentModel buildChargeDocument(
       Map<String, Object?>.from(spec['header']! as Map);
   final Map<String, Object?> footer =
       Map<String, Object?>.from(spec['footer']! as Map);
+  final String noticeLanguage = chargeNoticeLanguage(spec, detail, language);
   return ChargeDocumentModel(
     title: '${spec['title']}',
     documentNumber: documentNumber,
+    language: noticeLanguage,
+    driverNotice: buildChargeDriverNotice(spec, detail, noticeLanguage),
     headerLines: <String>[
       for (final Object? line in header['lines']! as List)
         f.interpolate('$line', ctx),
@@ -280,7 +453,9 @@ ChargeDocumentSignature _signature(
   final Object? statement = s['${block['statement_key']}'];
   final Object? version = s['${block['statement_version_key']}'];
   final Object? image = s['${block['image_key']}'];
+  final Object? language = s['${block['statement_language_key']}'];
   return ChargeDocumentSignature(
+    language: jsTruthy(language) ? jsString(language) : 'en',
     heading: f.value(
       s['${block['heading_key']}'],
       block['heading_format'] as String?,

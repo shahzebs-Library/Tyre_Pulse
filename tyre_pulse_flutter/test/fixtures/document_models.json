@@ -34,8 +34,9 @@
         "response_explanation": null,
         "acknowledged_at": "2026-01-06T09:05:00Z",
         "schedule_monthly_wage": 3000,
-        "schedule_cap_pct": 20,
-        "schedule_cap_amount": 600,
+        "schedule_cap_pct": 16.67,
+        "schedule_cap_amount": 500,
+        "schedule_rule": "ksa_labour_law",
         "scheduled_by_name": "Finance One",
         "scheduled_at": "2026-01-06T12:00:00Z",
         "site": "JEDDAH",
@@ -57,14 +58,31 @@
           "ref": "driver_fine/f1",
           "added_by_name": "Supervisor One",
           "created_at": "2026-01-05T10:00:00Z"
+        },
+        {
+          "kind": "photo",
+          "label": "Camera frame",
+          "ref": "tp-storage://tyre-photos/modules/driver-charge/u1/1_0_ab.jpg",
+          "added_by_name": "Supervisor One",
+          "created_at": "2026-01-05T10:01:00Z"
         }
       ],
+      "settings": {
+        "cap_pct": 20,
+        "appeal_window_days": 7,
+        "country_rule": {
+          "rule": "ksa_labour_law",
+          "statutory": true
+        },
+        "objection_last_day": "2026-01-27"
+      },
       "signatures": [
         {
           "kind": "driver_acceptance",
           "signer_name": "Driver A",
-          "statement_text": "I accept.",
-          "statement_version": "deduction-consent-v1",
+          "statement_text": "أوافق.",
+          "statement_version": "deduction-consent-v2",
+          "statement_language": "ar",
           "signed_at": "2026-01-06T09:05:00Z",
           "charge_version": 3,
           "signature": "data:image/png;base64,AAAA",
@@ -142,9 +160,22 @@
         }
       ]
     },
+    "language": "en",
     "model": {
       "title": "Driver Charge Notice",
       "documentNumber": "DC-2026-00001-V7",
+      "language": "ar",
+      "driverNotice": {
+        "language": "ar",
+        "dir": "rtl",
+        "title": "ماذا تعني هذه الورقة بالنسبة لك",
+        "lines": [
+          "تقول الشركة إنك ملزم بدفع SAR 250.50 عن هذه المطالبة. اقرأ السبب في القسم 3 وانظر إلى الصور في القسم 4a.",
+          "إذا كنت موافقا، وقع على الموافقة. وإذا لم تكن موافقا، وقع على أنك استلمت هذه الورقة واكتب السبب.",
+          "يحق لك الاعتراض خلال 15 يوم عمل (من الأحد إلى الخميس) بعد موافقة المالية على المطالبة. آخر يوم: 2026-01-27.",
+          "يجب أن يوافق شخصان مختلفان قبل أن يخصم أي شيء من راتبك."
+        ]
+      },
       "headerLines": [
         "Document no. DC-2026-00001-V7",
         "Generated 2026-01-07 13:00 GMT+3. Status at generation: Deduction scheduled"
@@ -272,9 +303,29 @@
               "driver_fine/f1",
               "Supervisor One",
               "2026-01-05 13:00 GMT+3"
+            ],
+            [
+              "photo",
+              "Camera frame",
+              "tp-storage://tyre-photos/modules/driver-charge/u1/1_0_ab.jpg",
+              "Supervisor One",
+              "2026-01-05 13:01 GMT+3"
             ]
           ],
           "empty": null
+        },
+        {
+          "id": "photos",
+          "title": "4a. Photos shown to the driver",
+          "type": "photos",
+          "photos": [
+            {
+              "ref": "tp-storage://tyre-photos/modules/driver-charge/u1/1_0_ab.jpg",
+              "caption": "Camera frame"
+            }
+          ],
+          "empty": null,
+          "imageMissing": "Photo could not be loaded."
         },
         {
           "id": "response",
@@ -292,6 +343,10 @@
             [
               "Receipt acknowledged at",
               "2026-01-06 12:05 GMT+3"
+            ],
+            [
+              "Objection allowed until (last day)",
+              "2026-01-27"
             ]
           ]
         },
@@ -336,16 +391,20 @@
           "type": "fields",
           "rows": [
             [
+              "Deduction rule",
+              "Saudi Labour Law (Royal Decree M/51), Articles 70, 71, 91, 92 and 93"
+            ],
+            [
               "Monthly wage used for the limit",
               "SAR 3000.00"
             ],
             [
-              "Limit per month (percent of wage)",
-              "20%"
+              "Limit per month for this charge (percent of wage)",
+              "16.67%"
             ],
             [
-              "Limit per month (amount)",
-              "SAR 600.00"
+              "Limit per month for this charge (amount)",
+              "SAR 500.00"
             ],
             [
               "Scheduled by",
@@ -431,14 +490,19 @@
       "signatures": [
         {
           "heading": "Driver written consent to deduction",
-          "statement": "I accept.",
-          "statementVersion": "deduction-consent-v1",
+          "statement": "أوافق.",
+          "statementVersion": "deduction-consent-v2",
           "image": "data:image/png;base64,AAAA",
+          "language": "ar",
           "imageMissing": "Signature image not shown for this access level.",
           "rows": [
             [
               "Signed by",
               "Driver A"
+            ],
+            [
+              "Statement language",
+              "Arabic"
             ],
             [
               "Signed at (server time)",
@@ -459,11 +523,16 @@
           "statement": "Not recorded",
           "statementVersion": "Not recorded",
           "image": null,
+          "language": "en",
           "imageMissing": "Signature image not shown for this access level.",
           "rows": [
             [
               "Signed by",
               "Witness"
+            ],
+            [
+              "Statement language",
+              "Not recorded"
             ],
             [
               "Signed at (server time)",
@@ -482,7 +551,8 @@
       ],
       "footerLines": [
         "Every time on this notice is set by the server when the action was recorded. Records are append-only: a wrong charge is reversed and reissued, never edited after the driver is notified.",
-        "A deduction is made only after the driver gave written consent, or after a witnessed refusal or dispute was reviewed by two different people and the appeal period ended or an appeal was decided by a third person. No monthly instalment exceeds the limit shown in section 8."
+        "A deduction is made only after the driver gave written consent, or after a witnessed refusal or dispute was reviewed by two different people and the appeal period ended or an appeal was decided by a third person. No monthly instalment exceeds the limit shown in section 8.",
+        "Charges on drivers in Saudi Arabia follow the Saudi Labour Law (Royal Decree M/51): damage or loss at most 5 days' wage a month and 15 working days to object (Article 91), a fine at most 5 days' wage (Articles 70 and 71), any other deduction only with written consent (Article 92), and all deductions together at most half the wage (Article 93)."
       ],
       "pageNumber": "Page {page} of {pages}"
     }

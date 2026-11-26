@@ -1,5 +1,5 @@
 -- 20261126180000_inv_store_keeper_phone_receipts.sql
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's yes.
+-- STATUS: APPLIED LIVE 2026-11-26 on owner approval; recorded in supabase_migrations.schema_migrations.
 --
 -- PURPOSE
 --   Owner decision (2026-11-26): a Store Keeper may record goods received on the phone.

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- DRIVER CHARGE CASES (2026-11-26)
--- STATUS: AUTHORED, NOT APPLIED. Do not apply without the owner's explicit yes.
+-- STATUS: APPLIED LIVE 2026-11-26 on owner approval; recorded in supabase_migrations.schema_migrations.
 --
 -- Why: a driver may complain to the labour ministry about a deduction he did
 -- not authorise. Every amount the company recovers from a driver must be

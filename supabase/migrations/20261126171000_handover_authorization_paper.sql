@@ -2,7 +2,7 @@
 -- with server time, location, a per-org document number, a freeze once signed,
 -- an approver-is-not-the-driver rule and an append-only audit trail.
 --
--- STATUS: AUTHORED, NOT APPLIED. Proven in PGlite by
+-- STATUS: APPLIED LIVE 2026-11-26 on owner approval; recorded in supabase_migrations.schema_migrations.
 -- supabase/tests/handover_authorization.test.mjs. Apply only on the owner's yes.
 --
 -- WHAT WAS WRONG (measured in the repo, 2026-11-26):

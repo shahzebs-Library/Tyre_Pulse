@@ -1,6 +1,6 @@
 -- =============================================================================
 -- 20261126182000_latency_bulk_rpcs.sql
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's yes.
+-- STATUS: APPLIED LIVE 2026-11-26 on owner approval; recorded in supabase_migrations.schema_migrations.
 --
 -- WHY (docs/performance/REGION_LATENCY_AUDIT.md): users are in Saudi Arabia and
 -- the database is in Tokyo, so every request costs ~400 ms of network while the

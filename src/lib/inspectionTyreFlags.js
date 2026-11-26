@@ -3,7 +3,7 @@
  * flags (single-calc rule: the band judgement is bandFor from tyreRunningLife,
  * never re-derived here). No I/O; everything injectable and null-tolerant.
  */
-import { FAULT_CONDITION_RE, SEVERE_CONDITION_RE, WEAR_CONDITION_RE, GOOD_CONDITION_RE } from './tyreLayoutSpec'
+import { isFaultCondition, isSevereConditionText, isWearCondition, isGoodCondition } from './tyreLayoutSpec'
 import { bandFor } from './tyreRunningLife'
 import { displayPositionCode, inspectionTypeHint } from './tyreBay'
 import {
@@ -69,7 +69,9 @@ export function buildAssetFlagMap(lifeRows = []) {
  * Kept deliberately tight: it must never match "Good", which is 88% of every
  * condition ever recorded and the one word that means nothing is wrong.
  */
-const FAULT_RE = FAULT_CONDITION_RE
+// "Good, no damage" is not a fault: the shared reader drops negated fault
+// words before testing (tyreLayoutSpec.neutraliseCondition).
+const FAULT_RE = { test: isFaultCondition }
 
 /**
  * The subset that stops a vehicle rather than schedules work. A flat, a cut
@@ -81,7 +83,7 @@ const FAULT_RE = FAULT_CONDITION_RE
  * flat tyre is the one condition on the list where the vehicle cannot be driven
  * at all.
  */
-const SEVERE_RE = SEVERE_CONDITION_RE
+const SEVERE_RE = { test: isSevereConditionText }
 
 function conditionOf(value) {
   if (value == null) return ''
@@ -157,8 +159,8 @@ function inWindow(r, from, to) {
  * from/to, YYYY-MM-DD string-prefix compare - same rule as the page filter).
  * Honest zeros; flagMap-derived figures are 0 when flagMap is empty.
  */
-const WEAR_RE = WEAR_CONDITION_RE
-const GOOD_RE = GOOD_CONDITION_RE
+const WEAR_RE = { test: isWearCondition }
+const GOOD_RE = { test: isGoodCondition }
 
 /**
  * Count one inspection's tyre conditions into good / wear / damage / other.

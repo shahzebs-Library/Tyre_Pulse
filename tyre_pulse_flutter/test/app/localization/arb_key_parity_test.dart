@@ -677,10 +677,12 @@ void main() {
     // site required / taken from the fleet register, the "please sign
     // again" refusal for a too-short signature, the unconfirmed source link
     // and the appeal closed after deductions.
-    test('en, ar and ur each carry exactly 2681 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2681);
-      expect(_translatableKeys(ar).length, 2681);
-      expect(_translatableKeys(ur).length, 2681);
+    // 2681 + 1 = 2682: the tyre condition picker and legend name the grey
+    // question-mark wheel nobody checked yet (tyreConditionNotChecked).
+    test('en, ar and ur each carry exactly 2682 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2682);
+      expect(_translatableKeys(ar).length, 2682);
+      expect(_translatableKeys(ur).length, 2682);
     });
   });
 

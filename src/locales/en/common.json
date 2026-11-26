@@ -61,5 +61,14 @@
   "language": "Language",
   "collapse": "Collapse",
   "expand": "Expand",
-  "clearSearch": "Clear search"
+  "clearSearch": "Clear search",
+  "tyreCondition": {
+    "good": "Good",
+    "worn": "Worn",
+    "puncture": "Puncture",
+    "flat": "Flat",
+    "damaged": "Damaged",
+    "missing": "Missing",
+    "none": "Not checked"
+  }
 }

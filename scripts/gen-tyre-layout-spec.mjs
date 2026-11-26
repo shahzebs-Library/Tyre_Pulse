@@ -82,6 +82,20 @@ lines.push('')
 lines.push(`const Map<String, String> kTyreSpecConditionExact = ${strMap(spec.conditions.exact)};`)
 lines.push(`const List<String> kTyreSpecConditionOrder = ${strList(spec.conditions.order)};`)
 lines.push(`const Map<String, String> kTyreSpecConditionPatterns = <String, String>{${Object.entries(spec.conditions.patterns).map(([k, v]) => `${s(k)}: ${raw(v)}`).join(', ')}};`)
+lines.push('/// Phrases that DENY a fault ("no damage") - replaced by "ok" before any test.')
+lines.push(`const String kTyreSpecConditionNegation = ${raw(spec.conditions.negation)};`)
+lines.push('')
+const nums = (a) => `<double>[${a.map(num).join(', ')}]`
+const numLists = (a) => `<List<double>>[${(a || []).map(nums).join(', ')}]`
+lines.push('/// (kind, band, label, match or empty, strokes, closed, circles, dots) in spec order.')
+lines.push('/// Glyphs are on a 24x24 grid; see the `conditions.kinds` comment in the JSON.')
+lines.push('const List<(String, String, String, String, List<List<double>>, List<List<double>>, List<List<double>>, List<List<double>>)> kTyreSpecConditionKinds =')
+lines.push('    <(String, String, String, String, List<List<double>>, List<List<double>>, List<List<double>>, List<List<double>>)>[')
+for (const k of spec.conditions.kinds) {
+  const g = k.glyph || {}
+  lines.push(`  (${s(k.kind)}, ${s(k.band)}, ${s(k.label)}, ${raw(k.match || '')}, ${numLists(g.strokes)}, ${numLists(g.closed)}, ${numLists(g.circles)}, ${numLists(g.dots)}),`)
+}
+lines.push('];')
 lines.push('')
 lines.push(`const List<String> kTyreSpecRiskOrder = ${strList(spec.risk.order)};`)
 lines.push(`const Map<String, String> kTyreSpecRiskLabels = ${strMap(spec.risk.labels)};`)
@@ -95,5 +109,17 @@ lines.push('')
 
 writeFileSync(out, lines.join('\n'))
 // Keep the file in the shape CI's format check expects. Only this one file.
-try { execFileSync('dart', ['format', out], { stdio: 'ignore' }) } catch { console.warn('dart not found: run `dart format` on the generated file') }
+// The committed file carries a trailing comma on every multi-line collection
+// (require_trailing_commas), so format once, add the commas where the
+// formatter split a collection, and format again (idempotent).
+try {
+  execFileSync('dart', ['format', out], { stdio: 'ignore' })
+  let formatted = readFileSync(out, 'utf8')
+  for (let prev = ''; prev !== formatted;) {
+    prev = formatted
+    formatted = formatted.replace(/([^,\[{(\s>])\n(\s*[\]})])/g, '$1,\n$2')
+  }
+  writeFileSync(out, formatted)
+  execFileSync('dart', ['format', out], { stdio: 'ignore' })
+} catch { console.warn('dart not found: run `dart format` on the generated file') }
 console.log(`wrote ${out}`)

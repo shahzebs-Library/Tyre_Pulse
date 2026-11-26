@@ -1180,6 +1180,12 @@ abstract class AppLocalizations {
   /// **'Missing'**
   String get tyreConditionMissing;
 
+  /// Picker/legend label for a wheel nobody has checked yet (grey question mark).
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked'**
+  String get tyreConditionNotChecked;
+
   /// App bar title on the header step of the inspection capture wizard.
   ///
   /// In en, this message translates to:

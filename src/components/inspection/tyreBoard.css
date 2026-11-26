@@ -31,7 +31,7 @@
 .tb-warn .tb-body { border-left-color: var(--tb-warn); }
 .tb-bad .tb-body { border-left-color: var(--tb-bad); }
 .tb-none .tb-body { border-left-color: var(--tb-none); border-style: dashed; border-left-style: solid; }
-.tb-dot { flex: 0 0 13px; width: 13px; height: 13px; border-radius: 50%; display: inline-flex;
+.tb-dot { flex: 0 0 16px; width: 16px; height: 16px; border-radius: 50%; display: inline-flex;
   align-items: center; justify-content: center; font-size: 9px; font-style: normal; font-weight: 800;
   color: #fff; background: var(--tb-none); line-height: 1; }
 .tb-good .tb-dot, .tb-dot.tb-good { background: var(--tb-good); }
@@ -47,6 +47,7 @@
 .tb-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px;
   font-size: 10.5px; color: var(--text-secondary); }
 .tb-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.tb-dot .tp-cond-glyph { display: block; }
 
 /* Fitted tyre identity (brand / serial) - one line, never wraps the card. */
 .tb-ident { font-size: 9px; color: var(--text-secondary); white-space: nowrap; overflow: hidden;

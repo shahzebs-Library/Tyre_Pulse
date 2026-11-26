@@ -13,10 +13,11 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { serialFlags, serialFlagText } from '../../lib/tyreSerialCheck'
 import './tyreBoard.css'
-import { riskCssVars } from '../../lib/tyreLayoutSpec'
+import { riskCssVars, kindForWheel, kindHex, CONDITION_KINDS } from '../../lib/tyreLayoutSpec'
+import TyreConditionGlyph from '../tyre/TyreConditionGlyph'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const TONE = { good: 'good', warning: 'warn', critical: 'bad', none: 'none' }
-const ICON = { good: '✓', warn: '!', bad: '!', none: '–' }
 const RISK_WORD = { good: 'Good', warning: 'Warning', critical: 'Critical' }
 const fmt = (v) => {
   if (v == null || v === '') return null
@@ -51,7 +52,10 @@ function Card({ w, onSelect, selected, emptyLabel, cardW }) {
     <>
       <span className="tb-code">{w.code}</span>
       <span className="tb-body">
-        <i className="tb-dot" aria-hidden="true">{w.pending ? '!' : ICON[tone]}</i>
+        <i className="tb-dot" aria-hidden="true" data-kind={w.pending || !recorded ? 'none' : w.kind}
+          style={w.pending ? undefined : { background: kindHex(!recorded ? 'none' : w.kind, 'light') }}>
+          <TyreConditionGlyph kind={w.pending || !recorded ? 'none' : w.kind} size={12} color="#fff" strokeWidth={3} />
+        </i>
         <span className="tb-vals">
           {!recorded && <small className="tb-muted">{w.pending ? 'Needs details' : emptyLabel}</small>}
           {recorded && tread && <b>{tread}<small> mm</small></b>}
@@ -81,6 +85,7 @@ export default function TyreBoard({
   tyres, viewH, photo, Body, tyreData = {}, riskOf, codeOf, title, width = 340,
   onSelect, selectedId = null, isPending, emptyLabel = 'Not recorded', recordedLabel = 'recorded',
 }) {
+  const { t } = useLanguage()
   // The board is laid out at its natural width, then shrunk as a whole to the
   // card it sits in. A twin-wheel truck needs ~380px and the side card is ~300,
   // which used to cut off every right-hand wheel.
@@ -114,6 +119,8 @@ export default function TyreBoard({
       recorded,
       pending: !!isPending?.(t.id),
       condition: d?.condition || (risk && risk !== 'none' ? RISK_WORD[risk] : null),
+      // One picture per condition (shared tyre map), agreeing with the colour.
+      kind: kindForWheel(d?.condition, risk),
       pressure: d?.pressure ?? null,
       tread: d?.tread ?? null,
       serial: d?.serial || null,
@@ -238,10 +245,14 @@ export default function TyreBoard({
         </div>
       )}
       <div className="tb-legend">
-        <span><i className="tb-dot tb-good">✓</i>Good</span>
-        <span><i className="tb-dot tb-warn">!</i>Warning</span>
-        <span><i className="tb-dot tb-bad">!</i>Critical</span>
-        <span><i className="tb-dot tb-none">–</i>{emptyLabel}</span>
+        {CONDITION_KINDS.map((k) => (
+          <span key={k.kind}>
+            <i className={`tb-dot tb-${TONE[k.band] || 'none'}`} data-kind={k.kind} style={{ background: kindHex(k.kind, 'light') }}>
+              <TyreConditionGlyph kind={k.kind} size={12} color="#fff" strokeWidth={3} />
+            </i>
+            {k.kind === 'none' ? emptyLabel : t(`common.tyreCondition.${k.kind}`)}
+          </span>
+        ))}
       </div>
     </div></div>
   )

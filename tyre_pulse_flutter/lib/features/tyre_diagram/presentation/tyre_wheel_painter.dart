@@ -33,6 +33,7 @@ import 'dart:ui' show PathMetric;
 
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_glyph.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_risk_colors.dart';
 
@@ -48,6 +49,7 @@ class TyreWheelPaintData {
     required this.isSelected,
     required this.isOutstanding,
     required this.isRecorded,
+    this.conditionKind,
   });
 
   final double svgX;
@@ -68,6 +70,12 @@ class TyreWheelPaintData {
   /// At least one field was recorded for this wheel - drawn as a small
   /// filled dot, distinct from [isSelected]'s ring.
   final bool isRecorded;
+
+  /// The shared condition kind (`good`, `worn`, `puncture`, `flat`,
+  /// `damaged`, `missing`) whose picture sits on the rim; `null` or an
+  /// unrecorded wheel draws the Not checked question mark. Colour is never
+  /// the only signal on the map.
+  final String? conditionKind;
 }
 
 /// Paints every wheel in [wheels] against [viewport] and [palette].
@@ -322,6 +330,36 @@ class TyreWheelPainter extends CustomPainter {
         height: hubRy * 0.9,
       ),
       Paint()..color = const Color(0xFFF8FAFC).withValues(alpha: 0.85),
+    );
+
+    // The condition picture on a disc of the band colour, white ink, so the
+    // wheel says what is wrong without a word (shared tyre map glyphs).
+    final double badge = math.min(body.width * 0.74, body.height * 0.7);
+    final Rect badgeRect = Rect.fromCenter(
+      center: centre,
+      width: badge,
+      height: badge,
+    );
+    // Deep (light palette) colour in both themes: white ink stays readable.
+    canvas.drawCircle(
+      centre,
+      badge / 2,
+      Paint()..color = tyreRiskBaseColor(wheel.status, Brightness.light),
+    );
+    canvas.drawCircle(
+      centre,
+      badge / 2,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.9)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(0.8, badge * 0.06),
+    );
+    paintTyreConditionGlyph(
+      canvas,
+      badgeRect.deflate(badge * 0.16),
+      wheel.isRecorded ? (wheel.conditionKind ?? 'none') : 'none',
+      Colors.white,
+      strokeWidth: 3,
     );
 
     if (wheel.isRecorded && !wheel.isSelected) {

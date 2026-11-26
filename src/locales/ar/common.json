@@ -61,5 +61,14 @@
   "language": "اللغة",
   "collapse": "طي",
   "expand": "توسيع",
-  "clearSearch": "مسح البحث"
+  "clearSearch": "مسح البحث",
+  "tyreCondition": {
+    "good": "جيد",
+    "worn": "مهترئ",
+    "puncture": "مثقوب",
+    "flat": "فارغ من الهواء",
+    "damaged": "تالف",
+    "missing": "مفقود",
+    "none": "لم يُفحص"
+  }
 }

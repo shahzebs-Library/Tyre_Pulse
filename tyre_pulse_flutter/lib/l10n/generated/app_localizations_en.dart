@@ -647,6 +647,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tyreConditionMissing => 'Missing';
 
   @override
+  String get tyreConditionNotChecked => 'Not checked';
+
+  @override
   String get inspectionNavTitle => 'New inspection';
 
   @override

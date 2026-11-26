@@ -10,10 +10,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
-import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_body_painter.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_glyph.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/vehicle_tyre_diagram.dart';
 
@@ -237,7 +238,7 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('the condition legend shows all six conditions', (
+  testWidgets('the condition legend shows every condition with its picture', (
     WidgetTester tester,
   ) async {
     await _pump(
@@ -255,8 +256,22 @@ void main() {
       'Puncture',
       'Flat',
       'Missing',
+      'Not checked',
     ]) {
-      expect(find.widgetWithText(TpStatusChip, label), findsOneWidget);
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+    // One picture per condition, Not checked (null) included.
+    for (final TyreCondition? c in <TyreCondition?>[
+      ...TyreCondition.values,
+      null,
+    ]) {
+      expect(
+        find.byWidgetPredicate(
+          (Widget w) => w is TyreConditionGlyph && w.condition == c,
+        ),
+        findsWidgets,
+        reason: '$c',
+      );
     }
   });
 
@@ -281,7 +296,14 @@ void main() {
       expect(find.text('LHF1'), findsOneWidget);
       expect(find.text('Flat'), findsNWidgets(2));
       expect(find.textContaining('0'), findsWidgets);
-      expect(find.byIcon(Icons.report_problem_outlined), findsWidgets);
+      // The flat tyre carries its own picture (shared tyre map glyph).
+      expect(
+        find.byWidgetPredicate(
+          (Widget w) =>
+              w is TyreConditionGlyph && w.condition == TyreCondition.flat,
+        ),
+        findsWidgets,
+      );
     },
   );
 

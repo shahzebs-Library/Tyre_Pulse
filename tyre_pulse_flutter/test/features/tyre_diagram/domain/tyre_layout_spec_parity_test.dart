@@ -62,6 +62,36 @@ void main() {
         expect(tyreConditionBand(e.key), e.value, reason: e.key);
       }
     });
+    test('condition kinds (the picture each word gets)', () {
+      final Map<String, Object?> words =
+          cases['kinds']! as Map<String, Object?>;
+      for (final MapEntry<String, Object?> e in words.entries) {
+        expect(tyreConditionKind(e.key), e.value, reason: e.key);
+      }
+    });
+  });
+
+  group('a denied fault is not a fault', () {
+    test('"Good, no damage" is green, never red', () {
+      expect(normaliseCondition('Good, no damage'), TyreCondition.good);
+      expect(
+        tyreConditionStatus(normaliseCondition('Good, no damage')),
+        TpStatus.ok,
+      );
+    });
+    test('"not damaged" and "without damage" read as good', () {
+      expect(normaliseCondition('not damaged'), TyreCondition.good);
+      expect(normaliseCondition('Without any damage'), TyreCondition.good);
+      expect(normaliseCondition('Undamaged'), TyreCondition.good);
+    });
+    test('a real fault beside a denied one still counts', () {
+      expect(normaliseCondition('Worn, no damage'), TyreCondition.worn);
+      expect(
+        normaliseCondition('Damaged, not punctured'),
+        TyreCondition.damaged,
+      );
+      expect(normaliseCondition('Damaged'), TyreCondition.damaged);
+    });
   });
 
   test('generated layouts equal the JSON, slot for slot', () {
@@ -119,6 +149,38 @@ void main() {
         spec['conditions']! as Map<String, Object?>;
     expect(kTyreSpecConditionExact, cond['exact']);
     expect(kTyreSpecConditionPatterns, cond['patterns']);
+    expect(kTyreSpecConditionNegation, cond['negation']);
+    final List<Object?> kinds = cond['kinds']! as List<Object?>;
+    expect(kTyreSpecConditionKinds.length, kinds.length);
+    List<List<double>> nums(Object? v) => <List<double>>[
+          for (final Object? row in (v as List<Object?>?) ?? <Object?>[])
+            <double>[
+              for (final Object? n in row! as List<Object?>)
+                (n! as num).toDouble(),
+            ],
+        ];
+    for (int i = 0; i < kinds.length; i++) {
+      final Map<String, Object?> k = kinds[i]! as Map<String, Object?>;
+      final Map<String, Object?> g = k['glyph']! as Map<String, Object?>;
+      final (
+        String kind,
+        String band,
+        String label,
+        String match,
+        List<List<double>> strokes,
+        List<List<double>> closed,
+        List<List<double>> circles,
+        List<List<double>> dots,
+      ) = kTyreSpecConditionKinds[i];
+      expect(kind, k['kind']);
+      expect(band, k['band']);
+      expect(label, k['label']);
+      expect(match, k['match'] ?? '');
+      expect(strokes, nums(g['strokes']), reason: kind);
+      expect(closed, nums(g['closed']), reason: kind);
+      expect(circles, nums(g['circles']), reason: kind);
+      expect(dots, nums(g['dots']), reason: kind);
+    }
     final Map<String, Object?> palette = (spec['risk']!
         as Map<String, Object?>)['palette']! as Map<String, Object?>;
     for (final String theme in <String>['light', 'dark']) {

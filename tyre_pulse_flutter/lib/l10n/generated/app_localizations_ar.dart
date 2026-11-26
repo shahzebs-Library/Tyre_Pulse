@@ -661,10 +661,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get tyreConditionPuncture => 'مثقوب';
 
   @override
-  String get tyreConditionFlat => 'فارغ';
+  String get tyreConditionFlat => 'فارغ من الهواء';
 
   @override
   String get tyreConditionMissing => 'مفقود';
+
+  @override
+  String get tyreConditionNotChecked => 'لم يُفحص';
 
   @override
   String get inspectionNavTitle => 'فحص جديد';

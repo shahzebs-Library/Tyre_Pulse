@@ -1183,7 +1183,8 @@
     }
   },
   "conditions": {
-    "$comment": "Condition word -> band. exact first, then the patterns in `order` (case-insensitive). A word no rule knows is \"none\" (No data), never good.",
+    "$comment": "Condition word -> band, then band -> kind (the picture). A phrase that DENIES a fault (\"no damage\", \"not damaged\", \"without cuts\", \"undamaged\") is first replaced by \"ok\" using `negation`, so \"Good, no damage\" is good and never red. Then: exact first, then the patterns in `order` (case-insensitive). A word no rule knows is \"none\" (No data), never good. `kinds` gives each condition ONE fixed colour (its band's palette entry), ONE glyph and one short label, used on the picker buttons, the map wheels, the legend and the printed report on the web and the phone. Inside a band the first kind whose `match` hits wins; the kind with no `match` is the band's default. Glyphs are drawn on a 24x24 grid with round-capped strokes: `strokes` open polylines, `closed` polygons, `circles` outlines, `dots` filled circles, as flat [x, y, x, y ...] / [cx, cy, r] lists so every surface draws the same picture with its own primitives.",
+    "negation": "\\b(?:no|not|without|nil|zero|free of)\\s+(?:any\\s+)?(?:visible\\s+)?(?:signs?\\s+of\\s+)?(?:damages?|damaged|punctures?|punctured|cuts?|bulges?|cracks?|cracked|burst|flats?|wear|worn|separation)\\b|\\bun(?:damaged|punctured)\\b|\\b(?:damage|puncture)[\\s-]*free\\b",
     "exact": {
       "Good": "good",
       "Wear": "warning",
@@ -1198,9 +1199,242 @@
     ],
     "patterns": {
       "warning": "wear|worn",
-      "critical": "damage|puncture|flat|burst|blast|\\bcut\\b|bulge|separat",
+      "critical": "damage|puncture|nail|flat|deflat|burst|blast|\\bcut\\b|bulge|separat",
       "good": "good|\\bok\\b"
-    }
+    },
+    "kinds": [
+      {
+        "kind": "good",
+        "band": "good",
+        "label": "Good",
+        "glyph": {
+          "strokes": [
+            [
+              5,
+              12.5,
+              10,
+              17.5,
+              19,
+              7
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "worn",
+        "band": "warning",
+        "label": "Worn",
+        "glyph": {
+          "strokes": [
+            [
+              3,
+              9,
+              6,
+              6,
+              9,
+              9,
+              12,
+              6,
+              15,
+              9,
+              18,
+              6,
+              21,
+              9
+            ],
+            [
+              3,
+              19,
+              21,
+              19
+            ],
+            [
+              12,
+              11,
+              12,
+              16
+            ],
+            [
+              9.5,
+              13.5,
+              12,
+              16,
+              14.5,
+              13.5
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "puncture",
+        "band": "critical",
+        "label": "Puncture",
+        "match": "punct|nail",
+        "glyph": {
+          "strokes": [
+            [
+              13.5,
+              10.5,
+              20,
+              4
+            ],
+            [
+              17.5,
+              2.5,
+              21.5,
+              6.5
+            ]
+          ],
+          "circles": [
+            [
+              10,
+              14,
+              7
+            ],
+            [
+              10,
+              14,
+              2
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "flat",
+        "band": "critical",
+        "label": "Flat",
+        "match": "flat|deflat",
+        "glyph": {
+          "strokes": [
+            [
+              1.5,
+              20.5,
+              22.5,
+              20.5
+            ]
+          ],
+          "closed": [
+            [
+              4,
+              9,
+              7.5,
+              6,
+              16.5,
+              6,
+              20,
+              9,
+              21.5,
+              17,
+              2.5,
+              17
+            ]
+          ],
+          "circles": [
+            [
+              12,
+              11.5,
+              2.5
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "damaged",
+        "band": "critical",
+        "label": "Damaged",
+        "glyph": {
+          "strokes": [
+            [
+              12,
+              9.5,
+              12,
+              14.5
+            ]
+          ],
+          "closed": [
+            [
+              12,
+              3,
+              21.5,
+              20,
+              2.5,
+              20
+            ]
+          ],
+          "dots": [
+            [
+              12,
+              17.3,
+              1.2
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "missing",
+        "band": "none",
+        "label": "Missing",
+        "match": "missing",
+        "glyph": {
+          "strokes": [
+            [
+              7.5,
+              12,
+              16.5,
+              12
+            ]
+          ],
+          "circles": [
+            [
+              12,
+              12,
+              9
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "none",
+        "band": "none",
+        "label": "Not checked",
+        "glyph": {
+          "strokes": [
+            [
+              9,
+              9.5,
+              9.6,
+              7.4,
+              12,
+              6.6,
+              14.4,
+              7.4,
+              15,
+              9.5,
+              14.2,
+              11,
+              12,
+              12.2,
+              12,
+              14
+            ]
+          ],
+          "circles": [
+            [
+              12,
+              12,
+              9.5
+            ]
+          ],
+          "dots": [
+            [
+              12,
+              17.2,
+              1.1
+            ]
+          ]
+        }
+      }
+    ]
   },
   "risk": {
     "order": [

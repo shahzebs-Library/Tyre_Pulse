@@ -197,8 +197,9 @@
   "tyreConditionWorn": "مهترئ",
   "tyreConditionDamaged": "تالف",
   "tyreConditionPuncture": "مثقوب",
-  "tyreConditionFlat": "فارغ",
+  "tyreConditionFlat": "فارغ من الهواء",
   "tyreConditionMissing": "مفقود",
+  "tyreConditionNotChecked": "لم يُفحص",
 
   "inspectionNavTitle": "فحص جديد",
   "inspectionStep1Label": "1",

@@ -4,6 +4,7 @@ import EnterpriseTable from '../ui/EnterpriseTable'
 import TablePagination, { usePagedRows } from '../ui/TablePagination'
 import Modal from '../ui/Modal'
 import { stock } from '../../lib/api'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
 import { usageFor, registerItemCode, USAGE_MONTHS } from '../../lib/stockRegisterDetail'
 import {
@@ -13,15 +14,18 @@ import {
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-bright,#22c55e)]'
 const APPLY_CONCURRENCY = 4
 
-const fmt = (v) => (v === null || v === undefined ? 'N/A' : String(v))
+const fmt = (v, na = 'N/A') => (v === null || v === undefined ? na : String(v))
 
 function Pair({ now, next }) {
+  const { t } = useLanguage()
+  const na = t('wmsissue.common.na')
   const same = now === next
   return (
     <span className="tabular-nums whitespace-nowrap">
-      <span className="text-[var(--text-muted)]">{fmt(now)}</span>
-      <span className="text-[var(--text-dim)]" aria-hidden="true"> → </span>
-      <span className={same ? 'text-[var(--text-muted)]' : 'font-semibold text-[var(--text-primary)]'}>{fmt(next)}</span>
+      <span className="text-[var(--text-muted)]">{fmt(now, na)}</span>
+      <span className="text-[var(--text-dim)] inline-block mx-1 rtl-flip" aria-hidden="true">→</span>
+      <span className="sr-only"> {t('wmsissue.reorder.toNew')} </span>
+      <span className={same ? 'text-[var(--text-muted)]' : 'font-semibold text-[var(--text-primary)]'}>{fmt(next, na)}</span>
     </span>
   )
 }
@@ -33,6 +37,8 @@ function Pair({ now, next }) {
  * until a person selects rows and confirms.
  */
 export default function ReorderLevelsPanel({ records = [], usageIdx = null, detailState = 'loading', canApply = false, userId = null, onApplied }) {
+  const { t } = useLanguage()
+  const na = t('wmsissue.common.na')
   const [site, setSite] = useState('all')
   const [onlyDiffer, setOnlyDiffer] = useState(true)
   const [search, setSearch] = useState('')
@@ -104,7 +110,7 @@ export default function ReorderLevelsPanel({ records = [], usageIdx = null, deta
           await stock.updateStockRecord(it.row.id, { ...patch, updated_by: userId, updated_at: stamp })
           ok.push(it.row.id)
         } catch (err) {
-          failed.push({ id: it.row.id, label: `${registerItemCode(it.row) || it.row.description || 'Item'} at ${it.row.site || 'unknown site'}`, message: toUserMessage(err, 'Could not save the levels.') })
+          failed.push({ id: it.row.id, label: t('wmsissue.reorder.itemAtSite', { item: registerItemCode(it.row) || it.row.description || t('wmsissue.cols.item'), site: it.row.site || t('wmsissue.reorder.unknownSite') }), message: toUserMessage(err, t('wmsissue.reorder.saveError')) })
         }
         done += 1
         setProgress(done)
@@ -125,111 +131,110 @@ export default function ReorderLevelsPanel({ records = [], usageIdx = null, deta
   const columns = useMemo(() => [
     { id: 'pick', size: 44,
       header: () => (
-        <input type="checkbox" aria-label="Select all rows that differ" checked={allSelected}
+        <input type="checkbox" aria-label={t('wmsissue.reorder.selectAll')} checked={allSelected}
           disabled={!canApply || selectable.length === 0} onChange={toggleAll} className={FOCUS} />
       ),
       cell: ({ row }) => {
         const it = row.original
         return (
-          <input type="checkbox" aria-label={`Select ${registerItemCode(it.row) || 'row'} at ${it.row.site || ''}`}
+          <input type="checkbox" aria-label={t('wmsissue.reorder.selectRow', { item: registerItemCode(it.row) || t('wmsissue.reorder.row'), site: it.row.site || '' })}
             checked={selected.has(it.row.id)} disabled={!canApply || !it.s.differs}
             onChange={() => toggle(it.row.id)} className={FOCUS} />
         )
       } },
-    { id: 'item', header: 'Item', size: 260,
+    { id: 'item', header: t('wmsissue.cols.item'), size: 260,
       cell: ({ row }) => {
         const r = row.original.row
         return (
           <div className="min-w-0">
-            <div className="font-mono text-xs text-[var(--text-muted)]">{registerItemCode(r) || 'N/A'}</div>
-            <div className="truncate text-[var(--text-primary)]" title={r.item?.item_name || r.description || ''}>{r.item?.item_name || r.description || 'N/A'}</div>
+            <div className="font-mono text-xs text-[var(--text-muted)]" dir="ltr">{registerItemCode(r) || na}</div>
+            <div className="truncate text-[var(--text-primary)]" title={r.item?.item_name || r.description || ''}>{r.item?.item_name || r.description || na}</div>
           </div>
         )
       } },
-    { id: 'site', header: 'Site', size: 120, cell: ({ row }) => row.original.row.site || 'N/A' },
-    { id: 'qty', header: 'On hand', size: 80, meta: { align: 'right' },
-      cell: ({ row }) => <span className="tabular-nums">{fmt(row.original.row.stock_qty)}</span> },
-    { id: 'rate', header: 'Used / month', size: 100, meta: { align: 'right' },
-      cell: ({ row }) => <span className="tabular-nums">{fmt(row.original.s.avgPerMonth)}</span> },
-    { id: 'critical', header: 'Critical', size: 100, cell: ({ row }) => <Pair now={row.original.s.current.critical} next={row.original.s.critical} /> },
-    { id: 'min', header: 'Min', size: 100, cell: ({ row }) => <Pair now={row.original.s.current.min} next={row.original.s.min} /> },
-    { id: 'reorder', header: 'Reorder qty', size: 110, cell: ({ row }) => <Pair now={row.original.s.current.reorderQty} next={row.original.s.reorderQty} /> },
-    { id: 'why', header: 'Basis', size: 320,
+    { id: 'site', header: t('wmsissue.filters.site'), size: 120, cell: ({ row }) => row.original.row.site || na },
+    { id: 'qty', header: t('wmsissue.reorder.onHand'), size: 80, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmt(row.original.row.stock_qty, na)}</span> },
+    { id: 'rate', header: t('wmsissue.reorder.usedPerMonth'), size: 100, meta: { align: 'right' },
+      cell: ({ row }) => <span className="tabular-nums">{fmt(row.original.s.avgPerMonth, na)}</span> },
+    { id: 'critical', header: t('wmsissue.reorder.critical'), size: 100, cell: ({ row }) => <Pair now={row.original.s.current.critical} next={row.original.s.critical} /> },
+    { id: 'min', header: t('wmsissue.reorder.min'), size: 100, cell: ({ row }) => <Pair now={row.original.s.current.min} next={row.original.s.min} /> },
+    { id: 'reorder', header: t('wmsissue.reorder.reorderQty'), size: 110, cell: ({ row }) => <Pair now={row.original.s.current.reorderQty} next={row.original.s.reorderQty} /> },
+    { id: 'why', header: t('wmsissue.reorder.basis'), size: 320,
       cell: ({ row }) => <span className="text-xs text-[var(--text-secondary)] whitespace-normal">{row.original.s.explanation}</span> },
   // toggle / toggleAll read current state; recomputed when that state changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [selected, allSelected, canApply, selectable])
+  ], [selected, allSelected, canApply, selectable, t, na])
 
   if (detailState === 'loading' && !usageIdx) {
     return (
       <div className="card p-6 flex items-center gap-2 text-sm text-[var(--text-muted)]" role="status">
-        <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Reading the last {USAGE_MONTHS} months of issues…
+        <Loader2 size={16} className="animate-spin" aria-hidden="true" /> {t('wmsissue.reorder.reading', { months: USAGE_MONTHS })}
       </div>
     )
   }
   if (!usageIdx) {
     return (
       <div className="card p-6 text-sm text-[var(--text-secondary)]" role="alert">
-        Issue history could not be read for this scope, so no levels can be suggested. Pick one country and reload the page.
+        {t('wmsissue.reorder.historyError')}
       </div>
     )
   }
 
   return (
-    <section className="space-y-3" aria-label="Suggested reorder levels">
+    <section className="space-y-3" aria-label={t('wmsissue.reorder.title')}>
       <div className="card p-4 space-y-2">
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">Suggested reorder levels</h2>
+        <h2 className="text-base font-semibold text-[var(--text-primary)]">{t('wmsissue.reorder.title')}</h2>
         <p className="text-sm text-[var(--text-secondary)]">
-          Sized from each site&apos;s ERP issues over the last {USAGE_MONTHS} months. Critical level covers the lead time
-          (Material Master lead time when set, otherwise {DEFAULT_LEAD_DAYS} days); min adds half a month of safety stock;
-          reorder qty covers two months. Nothing changes until you select rows and apply them.
+          {t('wmsissue.reorder.explain', { months: USAGE_MONTHS, days: DEFAULT_LEAD_DAYS })}
         </p>
         <p className="text-xs text-[var(--text-muted)] flex items-start gap-1.5">
           <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
           <span>
-            {summary.suggested} of {summary.total} rows have a site rate ({summary.differs} differ from today&apos;s levels).
-            {' '}{summary.countryOnly} only have usage at other sites in the country and get no suggestion;
-            {' '}{summary.noUsage} had no issues; {summary.noCode} have no item code.
+            {t('wmsissue.reorder.coverage', {
+              suggested: summary.suggested, total: summary.total, differs: summary.differs,
+              countryOnly: summary.countryOnly, noUsage: summary.noUsage, noCode: summary.noCode,
+            })}
           </span>
         </p>
         {!canApply && (
-          <p className="text-xs text-amber-500">You can view suggestions but do not have permission to edit stock levels.</p>
+          <p className="text-xs text-amber-500">{t('wmsissue.reorder.noPermission')}</p>
         )}
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-          Search
-          <input type="search" className="input min-h-[44px] w-56" value={search} onChange={e => setSearch(e.target.value)} placeholder="Code, name or site" />
+          {t('wmsissue.filters.search')}
+          <input type="search" className="input min-h-[44px] w-56" value={search} onChange={e => setSearch(e.target.value)} placeholder={t('wmsissue.reorder.searchPlaceholder')} />
         </label>
         <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-          Site
+          {t('wmsissue.filters.site')}
           <select className="input min-h-[44px]" value={site} onChange={e => setSite(e.target.value)}>
-            <option value="all">All sites</option>
+            <option value="all">{t('wmsissue.filters.allSites')}</option>
             {sites.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
         <label className="inline-flex items-center gap-2 min-h-[44px] text-sm text-[var(--text-secondary)]">
           <input type="checkbox" checked={onlyDiffer} onChange={e => setOnlyDiffer(e.target.checked)} className={FOCUS} />
-          Only rows that differ
+          {t('wmsissue.reorder.onlyDiffer')}
         </label>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-sm text-[var(--text-muted)]">{selectedItems.length} selected</span>
+        <div className="ms-auto flex items-center gap-2">
+          <span className="text-sm text-[var(--text-muted)]">{t('wmsissue.reorder.selected', { count: selectedItems.length })}</span>
           <button type="button" disabled={!canApply || selectedItems.length === 0 || applying}
             onClick={() => { setResult(null); setConfirmOpen(true) }}
             className={`btn-primary min-h-[44px] px-4 inline-flex items-center gap-2 disabled:opacity-50 ${FOCUS}`}>
-            <Check size={16} aria-hidden="true" /> Apply
+            <Check size={16} aria-hidden="true" /> {t('wmsissue.reorder.apply')}
           </button>
         </div>
       </div>
 
       {result && (
         <div className="card p-3 text-sm" role="status">
-          <p className="text-[var(--text-primary)]">{result.ok} row{result.ok === 1 ? '' : 's'} updated.{result.failed.length ? ` ${result.failed.length} failed:` : ''}</p>
+          <p className="text-[var(--text-primary)]">{t('wmsissue.reorder.updated', { count: result.ok })}{result.failed.length ? ` ${t('wmsissue.reorder.failed', { count: result.failed.length })}` : ''}</p>
           {result.failed.length > 0 && (
-            <ul className="mt-1 list-disc pl-5 text-red-500 text-xs space-y-0.5">
+            <ul className="mt-1 list-disc ps-5 text-red-500 text-xs space-y-0.5">
               {result.failed.slice(0, 20).map(f => <li key={f.id}>{f.label}: {f.message}</li>)}
-              {result.failed.length > 20 && <li>and {result.failed.length - 20} more</li>}
+              {result.failed.length > 20 && <li>{t('wmsissue.reorder.andMore', { count: result.failed.length - 20 })}</li>}
             </ul>
           )}
         </div>
@@ -244,22 +249,19 @@ export default function ReorderLevelsPanel({ records = [], usageIdx = null, deta
         enableSorting={false}
         enableExport={false}
         emptyMessage={summary.suggested === 0
-          ? 'No row has issues at its own site in the last 12 months, so there is nothing to size levels from.'
-          : 'No rows match these filters.'}
+          ? t('wmsissue.reorder.emptyNoUsage')
+          : t('wmsissue.reorder.noMatch')}
       />
       <TablePagination {...pager} />
 
-      <Modal open={confirmOpen} onClose={() => { if (!applying) setConfirmOpen(false) }} title="Apply suggested levels" size="sm">
+      <Modal open={confirmOpen} onClose={() => { if (!applying) setConfirmOpen(false) }} title={t('wmsissue.reorder.confirmTitle')} size="sm">
         <div className="space-y-3 text-sm text-[var(--text-secondary)]">
-          <p>
-            This writes min level, critical level and reorder qty on {selectedItems.length} stock row{selectedItems.length === 1 ? '' : 's'}.
-            Stock quantities are not changed. Each row can be edited back from the register.
-          </p>
-          {applying && <p role="status" className="tabular-nums">Saving {progress} of {selectedItems.length}…</p>}
+          <p>{t('wmsissue.reorder.confirmBody', { count: selectedItems.length })}</p>
+          {applying && <p role="status" className="tabular-nums">{t('wmsissue.reorder.saving', { done: progress, total: selectedItems.length })}</p>}
           <div className="flex justify-end gap-2">
-            <button type="button" className={`btn-secondary min-h-[44px] px-4 ${FOCUS}`} disabled={applying} onClick={() => setConfirmOpen(false)}>Cancel</button>
+            <button type="button" className={`btn-secondary min-h-[44px] px-4 ${FOCUS}`} disabled={applying} onClick={() => setConfirmOpen(false)}>{t('wmsissue.common.cancel')}</button>
             <button type="button" className={`btn-primary min-h-[44px] px-4 inline-flex items-center gap-2 ${FOCUS}`} disabled={applying} onClick={applySelected}>
-              {applying && <Loader2 size={14} className="animate-spin" aria-hidden="true" />} Apply to {selectedItems.length}
+              {applying && <Loader2 size={14} className="animate-spin" aria-hidden="true" />} {t('wmsissue.reorder.applyTo', { count: selectedItems.length })}
             </button>
           </div>
         </div>

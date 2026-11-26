@@ -94,8 +94,8 @@ export default function IdentificationSection({ onNavigate }) {
               ? <Note tone="warn" title={t('inventory.ident.noCompat')}>{c.oemReferences === null && c.fitments === null ? t('inventory.ident.compatNotSetUp') : t('inventory.ident.noCompatBody')}</Note>
               : (
                 <dl className="inv-dl">
-                  <dt>{t('inventory.ident.oemRefs')}</dt><dd className="inv-num">{c.oemReferences ?? 'N/A'}</dd>
-                  <dt>{t('inventory.ident.fitments')}</dt><dd className="inv-num">{c.fitments ?? 'N/A'}</dd>
+                  <dt>{t('inventory.ident.oemRefs')}</dt><dd className="inv-num">{c.oemReferences ?? t('wmsfloor.common.na')}</dd>
+                  <dt>{t('inventory.ident.fitments')}</dt><dd className="inv-num">{c.fitments ?? t('wmsfloor.common.na')}</dd>
                 </dl>
               )
           )}

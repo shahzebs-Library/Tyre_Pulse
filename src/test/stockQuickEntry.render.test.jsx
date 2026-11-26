@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 const h=vi.hoisted(()=>({search:vi.fn(),save:vi.fn(),sites:vi.fn(),create:true,edit:true}))
 vi.mock('../contexts/AuthContext',()=>({useAuth:()=>({profile:{id:'owner'},hasCapability:(_,cap)=>cap==='create'?h.create:h.edit})}))
@@ -6,6 +6,12 @@ vi.mock('../contexts/SettingsContext',()=>({useSettings:()=>({activeCountry:'KSA
 vi.mock('../lib/api/sites',()=>({listSites:h.sites}))
 vi.mock('../lib/api/stockQuickEntry',()=>({searchStockItems:h.search,saveStockEntry:h.save}))
 import StockQuickEntry from '../components/stock/StockQuickEntry'
+import { LanguageProvider, useLanguage } from '../contexts/LanguageContext'
+
+// The wmsissue namespace loads lazily; warm it once so synchronous queries see
+// the real English strings rather than the humanised placeholder.
+function WarmLocale() { const { t } = useLanguage(); return <span>{t('wmsissue.common.na')}</span> }
+beforeAll(async () => { render(<LanguageProvider><WarmLocale /></LanguageProvider>); await screen.findByText('N/A'); cleanup() })
 const record={id:'s1',site:'SITE-A',country:'KSA',description:'315/80 R22.5 Triangle tyre',stock_qty:24,updated_at:'2026-10-18T09:00:00Z',brand:'Triangle',tyre_size:'315/80 R22.5',custom_data:{stock_item:{code:'TY-01',kind:'tyre',unit:'PCS',condition:'New',bin:'A1'}}}
 const mount=()=>{const saved=vi.fn();render(<StockQuickEntry records={[record]} onClose={vi.fn()} onSaved={saved}/>);return saved}
 const search=async text=>{fireEvent.change(screen.getByRole('combobox',{name:'Type item code, size, brand or description'}),{target:{value:text}})}

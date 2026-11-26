@@ -97,7 +97,7 @@ export default function LocationBulkSetup({ open, onClose, onCreated, stores, ro
         <div className="inv-actions">
           {step === 'preview' && (
             <button type="button" className="cc-btn-ghost" onClick={() => setStep('edit')} disabled={busy}>
-              <ArrowLeft size={14} aria-hidden="true" /> {t('inventory.locations.bulk.back')}
+              <ArrowLeft size={14} aria-hidden="true" className="rtl-flip" /> {t('inventory.locations.bulk.back')}
             </button>
           )}
           <button type="button" className="cc-btn-ghost" onClick={onClose} disabled={busy}>{t('inventory.actions.cancel')}</button>

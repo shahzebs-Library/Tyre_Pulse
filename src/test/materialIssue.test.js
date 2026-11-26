@@ -568,9 +568,18 @@ vi.mock('../contexts/SettingsContext', () => ({
   useSettings: () => ({ activeCountry: 'KSA', activeCurrency: 'SAR' }),
   COUNTRIES: ['KSA', 'UAE', 'Egypt'],
 }))
-vi.mock('../contexts/LanguageContext', () => ({
-  useLanguage: () => ({ t: (k, d) => (typeof d === 'string' ? d : k), language: 'en', dir: 'ltr' }),
-}))
+vi.mock('../contexts/LanguageContext', async () => {
+  // Resolve the page's own namespace from the real English file so assertions
+  // read the strings a user sees; any other key still falls back as before.
+  const en = (await import('../locales/en/wmsissue.json')).default
+  const t = (k, d) => {
+    const s = String(k).startsWith('wmsissue.') ? k.split('.').slice(1).reduce((o, p) => o?.[p], en) : undefined
+    const base = typeof s === 'string' ? s : (typeof d === 'string' ? d : k)
+    return d && typeof d === 'object' ? base.replace(/\{(\w+)\}/g, (m, n) => (d[n] != null ? String(d[n]) : m)) : base
+  }
+  const value = { t, language: 'en', dir: 'ltr', isRTL: false }
+  return { useLanguage: () => value }
+})
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ profile: { role: 'Admin' }, isSuperAdmin: false }),
 }))

@@ -53,7 +53,7 @@ export default function TyreInvestigationPanel({ conflictId, who, onChanged, onN
     return () => { live = false }
   }, [acts.assign, peopleNonce])
   const candidates = useMemo(() => investigatorCandidates(people), [people])
-  const nameOf = (id) => people.find((p) => p.id === id)?.full_name || (id ? t('inventory.tyres.inv.assignedSomeone') : 'N/A')
+  const nameOf = (id) => people.find((p) => p.id === id)?.full_name || (id ? t('inventory.tyres.inv.assignedSomeone') : t('wmsfloor.common.na'))
 
   const refresh = () => { setNonce((n) => n + 1); onChanged?.() }
   const run = async (setter, state, call) => {
@@ -79,11 +79,11 @@ export default function TyreInvestigationPanel({ conflictId, who, onChanged, onN
       <dl className="inv-dl">
         <dt>{t('inventory.tyres.inv.step')}</dt>
         <dd><StatusPill value={step} tone={STEP_TONE[step]} label={t(`inventory.tyres.inv.steps.${step}`)} /></dd>
-        <dt>{t('inventory.tyres.inv.investigator')}</dt><dd>{row.investigator_id ? nameOf(row.investigator_id) : 'N/A'}</dd>
+        <dt>{t('inventory.tyres.inv.investigator')}</dt><dd>{row.investigator_id ? nameOf(row.investigator_id) : t('wmsfloor.common.na')}</dd>
         <dt>{t('inventory.tyres.inv.assignedAt')}</dt><dd>{fmtDateTime(row.assigned_at)}</dd>
         {corr && (<><dt>{t('inventory.tyres.inv.proposed')}</dt>
-          <dd>{t(`inventory.tyres.inv.actions.${corr.action}`)}: {corr.detail || 'N/A'}</dd></>)}
-        {row.approval_request_id && (<><dt>{t('inventory.tyres.inv.approval')}</dt><dd>{row.approval_status || 'N/A'}</dd></>)}
+          <dd>{t(`inventory.tyres.inv.actions.${corr.action}`)}: {corr.detail || t('wmsfloor.common.na')}</dd></>)}
+        {row.approval_request_id && (<><dt>{t('inventory.tyres.inv.approval')}</dt><dd>{row.approval_status || t('wmsfloor.common.na')}</dd></>)}
       </dl>
 
       {notes.length > 0 && (
@@ -93,7 +93,7 @@ export default function TyreInvestigationPanel({ conflictId, who, onChanged, onN
             {notes.map((n, i) => (
               <li key={i}>
                 <span className="cc-card-sub">{fmtDateTime(n?.at)} {n?.kind === 'assigned' || n?.kind === 'finding' ? t(`inventory.tyres.inv.kinds.${n.kind}`) : ''}</span>{' '}
-                {typeof n === 'object' ? (n?.note || 'N/A') : String(n)}
+                {typeof n === 'object' ? (n?.note || t('wmsfloor.common.na')) : String(n)}
               </li>
             ))}
           </ul>

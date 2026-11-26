@@ -1,0 +1,202 @@
+{
+  "errors": {
+    "loadFailed": "اسٹاک ریکارڈز لوڈ نہیں ہو سکے۔"
+  },
+  "title": "اسٹاک انتظام",
+  "subtitle": "{count} سائٹس زیر نگرانی",
+  "actions": {
+    "import": "ڈیٹا انٹیک سینٹر کے ذریعے امپورٹ کریں",
+    "excel": "Excel",
+    "pdf": "PDF",
+    "addStock": "اسٹاک شامل کریں"
+  },
+  "intakeNote": {
+    "prefix": "نیا: کنٹرول شدہ",
+    "linkText": "ڈیٹا انٹیک سینٹر",
+    "suffix": "استعمال کریں، تصدیق شدہ، آڈٹ شدہ، کئی ممالک کی امپورٹ کے لیے، جس میں ڈپلیکیٹ کی شناخت اور واپسی کی سہولت ہے۔"
+  },
+  "tabs": {
+    "stock": "اسٹاک کی سطح",
+    "bySite": "سائٹ اور سائز کے لحاظ سے ٹائر",
+    "transfer": "منتقلی",
+    "timeline": "ٹائم لائن",
+    "movements": "نقل و حرکت",
+    "reorder": "دوبارہ آرڈر کی سطح"
+  },
+  "tyreBySite": {
+    "title": "سائٹ اور سائز کے لحاظ سے ٹائر اسٹاک",
+    "subtitle": "ہر سائٹ پر موجودہ تعداد، ٹائر سائز کے لحاظ سے تقسیم۔",
+    "search": "سائٹ یا ٹائر سائز تلاش کریں",
+    "total": "کل ٹائر اسٹاک",
+    "sites": "ٹائر اسٹاک والی سائٹس",
+    "sitesWithStock": "گنتی کے قابل ٹائر اسٹاک والی سائٹس",
+    "sizes": "ٹائر سائز",
+    "distinctSizes": "اسٹاک میں مختلف سائز",
+    "empty": "اس ملک کے لیے گنتی کے قابل کوئی ٹائر اسٹاک درج نہیں۔",
+    "noMatch": "آپ کی تلاش سے کوئی سائٹ یا سائز نہیں ملتا۔",
+    "site": "سائٹ",
+    "siteStore": "سائٹ / اسٹور",
+    "allLocations": "تمام مقامات",
+    "locationTotal": "مقام کا کل",
+    "companyTotal": "کمپنی کا کل",
+    "tableLabel": "سائٹ اور سائز کے لحاظ سے موجودہ ٹائر تعداد"
+  },
+  "companyTyres": {
+    "title": "کمپنی کا ٹائر اسٹاک",
+    "piecesOnHand": "عدد موجود",
+    "allCountries": "تمام قابل رسائی ممالک",
+    "unitExcluded": "{count} ٹائر لائن(یں) خارج کی گئیں کیونکہ یونٹ کی بطور عدد تصدیق نہیں",
+    "currentBySize": "سائز کے لحاظ سے موجودہ اسٹاک",
+    "changeTimeline": "وقت کے ساتھ ٹائر تبدیلیاں",
+    "lastSixMonths": "پچھلے چھ ماہ",
+    "recordedChanges": "درج شدہ تبدیلیاں",
+    "monthlyChartLabel": "ماہانہ درج شدہ ٹائر تبدیلیاں، چھ ماہ میں کل {total}",
+    "changeDefinition": "مثبت ٹائر ریکارڈ مقدار اور اجرا کی تاریخ کی بنیاد پر۔",
+    "changedBySize": "ٹائر سائز کے لحاظ سے تبدیل",
+    "openTimeline": "تفصیل",
+    "changed": "تبدیل",
+    "noChanges": "اس مدت میں کوئی ٹائر تبدیلی درج نہیں۔",
+    "unavailable": "سائز کی تفصیل دستیاب نہیں۔"
+  },
+  "statuses": {
+    "OK": "ٹھیک",
+    "Low": "کم",
+    "Critical": "انتہائی کم"
+  },
+  "table": {
+    "columns": {
+      "site": "سائٹ",
+      "description": "تفصیل",
+      "item": "آئٹم",
+      "brand": "برانڈ",
+      "partType": "اصلی یا متبادل",
+      "category": "زمرہ",
+      "oem": "OEM نمبر",
+      "stock": "اسٹاک",
+      "min": "کم از کم",
+      "critical": "انتہائی کم",
+      "reorderQty": "دوبارہ آرڈر مقدار",
+      "status": "حالت",
+      "velocity": "رفتار",
+      "daysLeft": "باقی دن",
+      "action": "کارروائی"
+    },
+    "emptyTitle": "ابھی کوئی اسٹاک ریکارڈ نہیں",
+    "reorderBadge": "دوبارہ آرڈر: {qty}",
+    "edit": "ترمیم کریں",
+    "movementHistoryTooltip": "نقل و حرکت کی تاریخ",
+    "generateReorderPdfTooltip": "دوبارہ آرڈر PDF بنائیں"
+  },
+  "transfer": {
+    "heading": "سائٹس کے درمیان اسٹاک کی منتقلی",
+    "subtitle": "سائٹس کے درمیان اسٹاک منتقل کریں۔ نقل و حرکت کے ریکارڈ اور اسٹاک کی مقدار دونوں اپ ڈیٹ ہوں گے۔",
+    "successMsg": "{fromSite} سے {toSite} کو {qty} یونٹس کامیابی سے منتقل ہو گئے۔",
+    "errors": {
+      "selectBoth": "دونوں سائٹس (سے اور کو) منتخب کریں۔",
+      "sameSite": "سے اور کو سائٹس مختلف ہونی چاہئیں۔",
+      "minQty": "مقدار کم از کم 1 ہونی چاہیے۔",
+      "noRecordForSite": "اس سائٹ کا کوئی اسٹاک ریکارڈ نہیں ملا: {site}",
+      "insufficientStock": "{site} پر اسٹاک ناکافی ہے۔ دستیاب: {qty}",
+      "inboundFailed": "باہر جانے کا اندراج ہو گیا لیکن آمد ناکام رہی: {message}"
+    },
+    "fromSite": "سائٹ سے *",
+    "toSite": "سائٹ کو *",
+    "quantity": "مقدار *",
+    "notes": "نوٹس",
+    "selectOption": "- منتخب کریں -",
+    "availablePrefix": "دستیاب:",
+    "currentPrefix": "موجودہ:",
+    "unitsSuffix": "یونٹس",
+    "notesPlaceholder": "منتقلی کی وجہ یا حوالہ (اختیاری)",
+    "previewTitle": "منتقلی کا پیش منظر",
+    "transferring": "منتقل ہو رہا ہے...",
+    "transferStock": "اسٹاک منتقل کریں"
+  },
+  "timeline": {
+    "today": "آج:",
+    "yesterday": "کل:",
+    "issues": "اجرا",
+    "change": "تبدیلی: ",
+    "na": "N/A",
+    "from": "سے",
+    "to": "تک",
+    "chips": {
+      "today": "آج",
+      "yesterday": "کل",
+      "last7Days": "پچھلے 7 دن",
+      "last30Days": "پچھلے 30 دن",
+      "thisMonth": "اس مہینے"
+    },
+    "chartTitle": "روزانہ اجرا (خالص)",
+    "netChangeLabel": "خالص تبدیلی (باہر)",
+    "columns": {
+      "date": "تاریخ",
+      "itemsIn": "آنے والے آئٹمز",
+      "itemsOut": "جانے والے آئٹمز",
+      "netChange": "خالص تبدیلی"
+    },
+    "loading": "لوڈ ہو رہا ہے...",
+    "emptyPeriod": "اس مدت میں کوئی ریکارڈ نہیں"
+  },
+  "historyModal": {
+    "title": "نقل و حرکت کی تاریخ · {site}",
+    "subtitle": "{description} · موجودہ: {qty}",
+    "logMovement": "اسٹاک کی نقل و حرکت درج کریں",
+    "type": "قسم",
+    "qtyChange": "مقدار میں تبدیلی",
+    "qtyChangePlaceholder": "مثلاً -4 یا +10",
+    "reason": "وجہ",
+    "reasonPlaceholder": "کیوں؟",
+    "refNo": "حوالہ نمبر",
+    "refNoPlaceholder": "PO / جاب کارڈ",
+    "saving": "محفوظ ہو رہا ہے...",
+    "logMovementBtn": "نقل و حرکت درج کریں",
+    "newQty": "نئی مقدار: {qty}",
+    "loading": "لوڈ ہو رہا ہے...",
+    "emptyHistory": "ابھی نقل و حرکت کی کوئی تاریخ نہیں",
+    "documentedOnly": "وصولی، منتقلی، سپلائر کو واپسی، اسکریپ اور واپسی کے لیے اپنی دستاویز درکار ہے۔ ان میں سے کوئی ایک استعمال کریں:",
+    "noAdjustRight": "یہاں صرف اجرا درج کیا جا سکتا ہے۔ اسٹاک میں ردوبدل صرف ایڈمن یا سپر ایڈمن کرتا ہے۔",
+    "refused": "آپ کو یہ نقل و حرکت درج کرنے کی اجازت نہیں۔ اس کی بجائے متعلقہ ورک فلو استعمال کریں۔",
+    "links": {
+      "receive": "سامان وصول کریں",
+      "transfers": "منتقلیاں",
+      "supplierReturns": "سپلائر کو واپسی",
+      "scrap": "اسکریپ کی درخواست",
+      "jobMaterials": "جاب کارڈ کا سامان",
+      "physical": "اسٹاک گنتی"
+    },
+    "columns": {
+      "date": "تاریخ",
+      "type": "قسم",
+      "before": "پہلے",
+      "change": "تبدیلی",
+      "after": "بعد",
+      "reason": "وجہ",
+      "ref": "حوالہ"
+    }
+  },
+  "movementTypes": {
+    "receipt": "وصولی",
+    "return": "واپسی",
+    "transfer_in": "منتقلی آمد",
+    "adjustment_up": "اضافی ردوبدل",
+    "issue": "اجرا",
+    "transfer_out": "منتقلی روانگی",
+    "scrap": "اسکریپ",
+    "adjustment_down": "کمی کا ردوبدل"
+  },
+  "form": {
+    "editTitle": "اسٹاک ریکارڈ میں ترمیم کریں",
+    "addTitle": "اسٹاک ریکارڈ شامل کریں",
+    "site": "سائٹ *",
+    "description": "تفصیل",
+    "descriptionPlaceholder": "مثلاً 12.00R24 Bridgestone",
+    "stockQty": "اسٹاک مقدار",
+    "minLevel": "کم از کم سطح",
+    "criticalLevel": "انتہائی کم سطح",
+    "managementAction": "انتظامی کارروائی",
+    "saving": "محفوظ ہو رہا ہے...",
+    "save": "محفوظ کریں",
+    "cancel": "منسوخ کریں"
+  }
+}

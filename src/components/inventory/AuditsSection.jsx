@@ -57,7 +57,7 @@ export default function AuditsSection({ scope, can, userId, onNavigate }) {
   const columns = [
     { key: 'ref', header: t('inventory.audits.ref'), cell: (a) => <span className="inv-mono">{a.ref || a.id?.slice(0, 8)}</span> },
     { key: 'audit_type', header: t('inventory.audits.type'), cell: (a) => t(`inventory.auditTypes.${a.audit_type}`) },
-    { key: 'site', header: t('inventory.scope.site'), cell: (a) => a.site || <span className="cc-na">N/A</span> },
+    { key: 'site', header: t('inventory.scope.site'), cell: (a) => a.site || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
     { key: 'status', header: t('inventory.common.status'), cell: (a) => <StatusPill value={a.status} tone={AUDIT_STATUS_TONE[a.status]} label={t(`inventory.auditStatus.${a.status}`)} /> },
     { key: 'counter_id', header: t('inventory.audits.counter'), cell: (a) => nameOf(a.counter_id) },
     { key: 'reviewer_id', header: t('inventory.audits.reviewer'), cell: (a) => nameOf(a.reviewer_id) },
@@ -195,7 +195,7 @@ export default function AuditsSection({ scope, can, userId, onNavigate }) {
                   <dt>{t('inventory.audits.due')}</dt><dd>{fmtDate(open.due_at)}</dd>
                   <dt>{t('inventory.audits.snapshot')}</dt><dd>{open.snapshot_at ? fmtDateTime(open.snapshot_at) : t('inventory.audits.noSnapshot')}</dd>
                   <dt>{t('inventory.audits.yourRole')}</dt><dd>{roles.length ? roles.map((r) => t(`inventory.roles.${r}`)).join(', ') : t('inventory.roles.none')}</dd>
-                  <dt>{t('inventory.audits.instructions')}</dt><dd>{open.instructions || <span className="cc-na">N/A</span>}</dd>
+                  <dt>{t('inventory.audits.instructions')}</dt><dd>{open.instructions || <span className="cc-na">{t('wmsfloor.common.na')}</span>}</dd>
                 </dl>
                 {roles.includes('counter') && <Note>{t('inventory.audits.counterNote')}</Note>}
                 {actions.length === 0 && <Note>{t('inventory.audits.noActions')}</Note>}

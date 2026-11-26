@@ -20,13 +20,14 @@ import DateField from '../components/ui/DateField'
 import Modal from '../components/ui/Modal'
 import StatTile from '../components/ui/StatTile'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrencyCompact } from '../lib/formatters'
 import {
   listRequisitions, createRequisition, updateRequisition, deleteRequisition,
   REQUISITION_STATUSES, REQUISITION_CATEGORIES,
 } from '../lib/api/requisitions'
 import {
-  summarizeRequisitionRegister, filterRequisitions, lineValue, dueBand, DUE_BANDS,
+  summarizeRequisitionRegister, filterRequisitions, lineValue, dueBand, DUE_BANDS, DUE_SOON_DAYS,
 } from '../lib/requisitionsAnalytics'
 import { exportToExcel, exportToPdf, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
@@ -63,6 +64,13 @@ const DUE_META = {
   none: { label: 'No date', cls: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]' },
   closed: { label: 'Closed', cls: 'bg-[var(--input-bg)] text-[var(--text-dim)] border border-[var(--input-border)]' },
 }
+/** Display label for a database token; an unknown token falls back to `fallback`. */
+const tv = (t, base, v, fallback) => {
+  if (v === null || v === undefined || v === '') return fallback ?? ''
+  const k = `${base}.${v}`
+  const r = t(k)
+  return r === k ? (fallback ?? String(v)) : r
+}
 function fmtDate(v) {
   if (!v) return 'N/A'
   const d = new Date(v)
@@ -72,6 +80,7 @@ const cap = (s) => (s ? String(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.t
 
 // ─── Create / Edit modal ──────────────────────────────────────────────────────
 function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId, country }) {
+  const { t } = useLanguage()
   const [form, setForm] = useState(EMPTY_FORM)
   const [material, setMaterial] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -106,8 +115,8 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
     setError('')
-    if (!form.item.trim()) { setError('Please enter the item being requested.'); return }
-    if (!statusOptions.includes(form.status)) { setError('You cannot set this status.'); return }
+    if (!form.item.trim()) { setError(t('wmsprocure.req.itemRequired')); return }
+    if (!statusOptions.includes(form.status)) { setError(t('wmsprocure.req.statusNotAllowed')); return }
     setBusy(true)
     try {
       // item_id links the request to the Material Master (WP4); the service drops it
@@ -117,11 +126,11 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
       else await createRequisition({ ...form, item_id: material?.id || null, country: scopedCountry(country) })
       onSaved?.()
     } catch (err) {
-      setError(toUserMessage(err, 'Could not save the requisition.'))
+      setError(toUserMessage(err, t('wmsprocure.req.saveErr')))
     } finally {
       setBusy(false)
     }
-  }, [form, initial, onSaved, statusOptions, country, material])
+  }, [form, initial, onSaved, statusOptions, country, material, t])
 
   if (!open) return null
 
@@ -135,41 +144,41 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
       title={(
         <span className="inline-flex items-center gap-2">
           <ClipboardList size={18} className="text-[var(--brand-bright)]" aria-hidden="true" />
-          {initial?.id ? 'Edit requisition' : 'New requisition'}
+          {initial?.id ? t('wmsprocure.req.editTitle') : t('wmsprocure.req.newTitle')}
         </span>
       )}
     >
       <form onSubmit={submit} className="space-y-4">
         {!editable && (
           <p role="status" className="text-xs text-amber-300">
-            This request is {initial?.status}. Only procurement can change it now, so it is shown read only.
+            {t('wmsprocure.req.readOnly', { status: tv(t, 'wmsprocure.req.status', initial?.status) })}
           </p>
         )}
         <fieldset disabled={!editable} className="space-y-4">
         <MaterialPicker
-          id="req-material" label="Pick from the Material Master (optional)" country={country} value={material}
+          id="req-material" label={t('wmsprocure.req.pickMaterial')} country={country} value={material}
           onPick={(m) => { setMaterial(m); if (m) set('item', `${m.item_code} ${m.item_name || ''}`.trim()) }}
         />
         <div>
-          <label className="label" htmlFor="req-item">Item *</label>
+          <label className="label" htmlFor="req-item">{t('wmsprocure.req.itemLabel')}</label>
           <input
-            id="req-item" className="input w-full" placeholder="e.g. 315/80R22.5 drive tyres" maxLength={300}
+            id="req-item" className="input w-full" placeholder={t('wmsprocure.req.itemPlaceholder')} maxLength={300}
             value={form.item} onChange={(e) => set('item', e.target.value)}
           />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label" htmlFor="req-no">Requisition no.</label>
+            <label className="label" htmlFor="req-no">{t('wmsprocure.req.reqNoLabel')}</label>
             <input
-              id="req-no" className="input w-full" placeholder="e.g. REQ-2026-001" maxLength={120}
+              id="req-no" className="input w-full" placeholder={t('wmsprocure.req.reqNoPlaceholder')} maxLength={120}
               value={form.requisition_no} onChange={(e) => set('requisition_no', e.target.value)}
             />
           </div>
           <div>
-            <label className="label" htmlFor="req-requester">Requester</label>
+            <label className="label" htmlFor="req-requester">{t('wmsprocure.req.requester')}</label>
             <input
-              id="req-requester" className="input w-full" placeholder="e.g. Workshop Supervisor" maxLength={200}
+              id="req-requester" className="input w-full" placeholder={t('wmsprocure.req.requesterPlaceholder')} maxLength={200}
               value={form.requester} onChange={(e) => set('requester', e.target.value)}
             />
           </div>
@@ -177,30 +186,30 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label" htmlFor="req-category">Category</label>
+            <label className="label" htmlFor="req-category">{t('wmsprocure.req.categoryLabel')}</label>
             <select id="req-category" className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
-              {REQUISITION_CATEGORIES.map((c) => <option key={c} value={c}>{cap(c)}</option>)}
+              {REQUISITION_CATEGORIES.map((c) => <option key={c} value={c}>{tv(t, 'wmsprocure.req.category', c, cap(c))}</option>)}
             </select>
           </div>
           <div>
-            <label className="label" htmlFor="req-status">Status</label>
+            <label className="label" htmlFor="req-status">{t('wmsprocure.req.statusLabel')}</label>
             <select id="req-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-              {statusOptions.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>)}
+              {statusOptions.map((s) => <option key={s} value={s}>{tv(t, 'wmsprocure.req.status', s)}</option>)}
             </select>
-            {!canProcure && <p className="text-[11px] text-[var(--text-muted)] mt-1">Submit the request; procurement approves it.</p>}
+            {!canProcure && <p className="text-[11px] text-[var(--text-muted)] mt-1">{t('wmsprocure.req.submitHint')}</p>}
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label" htmlFor="req-qty">Quantity</label>
+            <label className="label" htmlFor="req-qty">{t('wmsprocure.req.quantity')}</label>
             <input
               id="req-qty" className="input w-full" type="number" min="0" step="1" placeholder="0"
               value={form.quantity} onChange={(e) => set('quantity', e.target.value)}
             />
           </div>
           <div>
-            <label className="label" htmlFor="req-unit">Est. unit cost</label>
+            <label className="label" htmlFor="req-unit">{t('wmsprocure.req.estUnitCost')}</label>
             <input
               id="req-unit" className="input w-full" type="number" min="0" step="0.01" placeholder="0.00"
               value={form.est_cost} onChange={(e) => set('est_cost', e.target.value)}
@@ -210,16 +219,16 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="label" htmlFor="req-needed">Needed by</label>
+            <label className="label" htmlFor="req-needed">{t('wmsprocure.req.neededBy')}</label>
             <DateField
-              ariaLabel="Needed by"
+              ariaLabel={t('wmsprocure.req.neededBy')}
               value={form.needed_by || ''} onChange={(v) => set('needed_by', v)}
             />
           </div>
           <div>
-            <label className="label" htmlFor="req-site">Site</label>
+            <label className="label" htmlFor="req-site">{t('wmsprocure.req.site')}</label>
             <input
-              id="req-site" className="input w-full" placeholder="e.g. Riyadh Depot" maxLength={200}
+              id="req-site" className="input w-full" placeholder={t('wmsprocure.req.sitePlaceholder')} maxLength={200}
               value={form.site} onChange={(e) => set('site', e.target.value)}
             />
           </div>
@@ -227,15 +236,15 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
 
         {estTotal > 0 && (
           <p className="text-xs text-[var(--text-muted)] -mt-1">
-            Estimated total: <span className="font-semibold text-[var(--text-secondary)]">{estTotal.toLocaleString()}</span> (qty x est. unit cost, in the {scopedCountry(initial?.country || country) || 'requisition country'} currency)
+            {t('wmsprocure.req.estTotal')} <span className="font-semibold text-[var(--text-secondary)]">{estTotal.toLocaleString()}</span> {t('wmsprocure.req.estTotalNote', { country: scopedCountry(initial?.country || country) || t('wmsprocure.req.reqCountry') })}
           </p>
         )}
 
         <div>
-          <label className="label" htmlFor="req-notes">Notes</label>
+          <label className="label" htmlFor="req-notes">{t('wmsprocure.req.notes')}</label>
           <textarea
             id="req-notes" className="input w-full min-h-[90px] resize-y" maxLength={8000}
-            placeholder="Optional justification or notes for this request"
+            placeholder={t('wmsprocure.req.notesPlaceholder')}
             value={form.notes} onChange={(e) => set('notes', e.target.value)}
           />
         </div>
@@ -248,10 +257,10 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
         )}
 
         <div className="flex items-center justify-end gap-2 pt-1">
-          <button type="button" onClick={onClose} className="btn-secondary text-sm">Cancel</button>
+          <button type="button" onClick={onClose} className="btn-secondary text-sm">{t('wmsprocure.req.cancel')}</button>
           <button type="submit" disabled={busy || !editable} className="btn-primary text-sm inline-flex items-center gap-2 disabled:opacity-60">
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            {busy ? 'Saving' : 'Save requisition'}
+            {busy ? t('wmsprocure.req.saving') : t('wmsprocure.req.save')}
           </button>
         </div>
       </form>
@@ -261,12 +270,13 @@ function RequisitionModal({ open, initial, onClose, onSaved, canProcure, userId,
 
 // ─── Delete confirmation ──────────────────────────────────────────────────────
 function DeleteDialog({ row, onCancel, onConfirm }) {
+  const { t } = useLanguage()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   if (!row) return null
   const run = async () => {
     setBusy(true); setError('')
-    try { await onConfirm() } catch (e) { setError(toUserMessage(e, 'Could not delete.')); setBusy(false) }
+    try { await onConfirm() } catch (e) { setError(toUserMessage(e, t('wmsprocure.req.deleteErr'))); setBusy(false) }
   }
   return (
     <Modal
@@ -277,21 +287,21 @@ function DeleteDialog({ row, onCancel, onConfirm }) {
       title={(
         <span className="inline-flex items-center gap-2">
           <Trash2 size={18} className="text-red-400" aria-hidden="true" />
-          Delete requisition?
+          {t('wmsprocure.req.deleteTitle')}
         </span>
       )}
     >
       <div className="space-y-4">
         <p className="text-sm text-[var(--text-muted)]">
-          This will permanently remove the request for
+          {t('wmsprocure.req.deleteBody1')}
           <span className="text-[var(--text-secondary)] font-medium"> {row.item}</span>
-          {row.requisition_no ? ` (${row.requisition_no})` : ''}. This cannot be undone.
+          {row.requisition_no ? ` (${row.requisition_no})` : ''}. {t('wmsprocure.req.deleteBody2')}
         </p>
         {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
         <div className="flex items-center justify-end gap-2">
-          <button onClick={onCancel} disabled={busy} className="btn-secondary text-sm">Cancel</button>
+          <button onClick={onCancel} disabled={busy} className="btn-secondary text-sm">{t('wmsprocure.req.cancel')}</button>
           <button onClick={run} disabled={busy} className="btn-primary text-sm inline-flex items-center gap-2 !bg-red-600 hover:!bg-red-500 disabled:opacity-60">
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} {t('wmsprocure.req.delete')}
           </button>
         </div>
       </div>
@@ -310,7 +320,7 @@ function Kpi({ label, value, hint, icon, tone, onClick, active, index }) {
       type="button"
       onClick={onClick}
       aria-pressed={!!active}
-      className={`block h-full w-full text-left min-h-[44px] rounded-[var(--radius-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] ${active ? 'ring-2 ring-[var(--brand-bright)]' : ''}`}
+      className={`block h-full w-full text-start min-h-[44px] rounded-[var(--radius-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)] ${active ? 'ring-2 ring-[var(--brand-bright)]' : ''}`}
     >
       {tile}
     </button>
@@ -319,6 +329,7 @@ function Kpi({ label, value, hint, icon, tone, onClick, active, index }) {
 
 export default function Requisitions() {
   const { activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
   const { user, profile } = useAuth() || {}
   const caps = useProcurementCaps()
   const [raising, setRaising] = useState(null)
@@ -353,7 +364,7 @@ export default function Requisitions() {
         if (probe.checked && !probe.exists) setMissing(true)
       }
     } catch (err) {
-      setError(toUserMessage(err, 'Could not load requisitions.'))
+      setError(toUserMessage(err, t('wmsprocure.req.loadErr')))
       setRows(null)
     } finally {
       setRefreshing(false)
@@ -382,22 +393,22 @@ export default function Requisitions() {
   // On the All-countries view SAR, AED and EGP must not be added together.
   const money = useMemo(() => currencyScope(rows || []), [rows])
   const fmtMoney = useCallback((v) => {
-    if (v == null) return 'N/A'
-    if (money.mixed) return 'Mixed currencies'
+    if (v == null) return t('wmsprocure.req.na')
+    if (money.mixed) return t('wmsprocure.req.mixed')
     return formatCurrencyCompact(v, money.currency || activeCurrency)
-  }, [activeCurrency, money])
+  }, [activeCurrency, money, t])
   const loaded = rows !== null
-  const show = (v) => (loaded ? v : 'N/A')
+  const show = (v) => (loaded ? v : t('wmsprocure.req.na'))
 
   const kpis = [
-    { label: 'Total requisitions', value: show(summary.total), icon: ShoppingCart, tone: 'neutral', hint: loaded ? `${summary.requesters} requester${summary.requesters === 1 ? '' : 's'}` : null },
-    { label: 'Pending approval', value: show(summary.pending), icon: Clock, tone: 'warn', hint: loaded ? `${summary.byStatus.draft} draft, ${summary.byStatus.submitted} submitted` : null },
-    { label: 'Approved', value: show(summary.approved), icon: CheckCircle2, tone: 'info', hint: loaded && summary.approvalRate != null ? `${summary.approvalRate}% of decided` : 'No decisions yet', onClick: () => setStatusFilter(statusFilter === 'approved' ? 'all' : 'approved'), active: statusFilter === 'approved' },
-    { label: 'Overdue', value: show(summary.overdue), icon: CalendarX, tone: 'crit', hint: 'Open past needed-by', onClick: () => setDueFilter(dueFilter === 'overdue' ? 'all' : 'overdue'), active: dueFilter === 'overdue' },
-    { label: 'Due in 14 days', value: show(summary.dueSoon), icon: CalendarClock, tone: 'warn', onClick: () => setDueFilter(dueFilter === 'due_soon' ? 'all' : 'due_soon'), active: dueFilter === 'due_soon' },
-    { label: 'Est. value (qty x unit)', value: loaded ? fmtMoney(summary.totalValue) : 'N/A', icon: DollarSign, tone: 'accent', hint: loaded ? `${summary.valued} of ${summary.total} priced` : null },
-    { label: 'Open est. value', value: loaded ? fmtMoney(summary.openValue) : 'N/A', icon: DollarSign, tone: 'neutral', hint: 'Excludes ordered and rejected' },
-    { label: 'Requesters', value: show(summary.requesters), icon: Users, tone: 'neutral' },
+    { label: t('wmsprocure.req.kTotal'), value: show(summary.total), icon: ShoppingCart, tone: 'neutral', hint: loaded ? t(summary.requesters === 1 ? 'wmsprocure.req.kRequesterOne' : 'wmsprocure.req.kRequesterMany', { count: summary.requesters }) : null },
+    { label: t('wmsprocure.req.kPending'), value: show(summary.pending), icon: Clock, tone: 'warn', hint: loaded ? t('wmsprocure.req.kPendingHint', { draft: summary.byStatus.draft, submitted: summary.byStatus.submitted }) : null },
+    { label: t('wmsprocure.req.kApproved'), value: show(summary.approved), icon: CheckCircle2, tone: 'info', hint: loaded && summary.approvalRate != null ? t('wmsprocure.req.kApprovedHint', { pct: summary.approvalRate }) : t('wmsprocure.req.kNoDecisions'), onClick: () => setStatusFilter(statusFilter === 'approved' ? 'all' : 'approved'), active: statusFilter === 'approved' },
+    { label: t('wmsprocure.req.kOverdue'), value: show(summary.overdue), icon: CalendarX, tone: 'crit', hint: t('wmsprocure.req.kOverdueHint'), onClick: () => setDueFilter(dueFilter === 'overdue' ? 'all' : 'overdue'), active: dueFilter === 'overdue' },
+    { label: t('wmsprocure.req.kDueSoon', { days: DUE_SOON_DAYS }), value: show(summary.dueSoon), icon: CalendarClock, tone: 'warn', onClick: () => setDueFilter(dueFilter === 'due_soon' ? 'all' : 'due_soon'), active: dueFilter === 'due_soon' },
+    { label: t('wmsprocure.req.kValue'), value: loaded ? fmtMoney(summary.totalValue) : t('wmsprocure.req.na'), icon: DollarSign, tone: 'accent', hint: loaded ? t('wmsprocure.req.kValueHint', { valued: summary.valued, total: summary.total }) : null },
+    { label: t('wmsprocure.req.kOpenValue'), value: loaded ? fmtMoney(summary.openValue) : t('wmsprocure.req.na'), icon: DollarSign, tone: 'neutral', hint: t('wmsprocure.req.kOpenValueHint') },
+    { label: t('wmsprocure.req.kRequesters'), value: show(summary.requesters), icon: Users, tone: 'neutral' },
   ]
 
   const EXPORT_COLS = ['requisition_no', 'item', 'category', 'requester', 'quantity', 'est_cost', 'line_value', 'needed_by', 'due', 'site', 'status']
@@ -425,43 +436,43 @@ export default function Requisitions() {
     setActionMsg('')
     try {
       await decideRequisition(row.id, decision, { approverName: profile?.full_name || user?.email || null })
-      setActionMsg(`${row.requisition_no || row.item} ${decision}.`)
+      setActionMsg(t(decision === 'approved' ? 'wmsprocure.req.decidedApproved' : 'wmsprocure.req.decidedRejected', { name: row.requisition_no || row.item }))
       load()
-    } catch (e) { setActionMsg(toUserMessage(e, 'Could not record the decision.')) }
-  }, [load, profile, user])
+    } catch (e) { setActionMsg(toUserMessage(e, t('wmsprocure.req.decideErr'))) }
+  }, [load, profile, user, t])
 
   const columns = useMemo(() => [
     {
-      id: 'item', header: 'Item', accessorFn: (r) => r.item || '',
-      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.item || 'N/A'}</span>,
+      id: 'item', header: t('wmsprocure.req.colItem'), accessorFn: (r) => r.item || '',
+      cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{row.original.item || t('wmsprocure.req.na')}</span>,
     },
-    { id: 'requisition_no', header: 'Req. no.', accessorFn: (r) => r.requisition_no || '', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() || 'N/A'}</span> },
-    { id: 'category', header: 'Category', accessorFn: (r) => cap(r.category) || '', cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'requester', header: 'Requester', accessorFn: (r) => r.requester || '', cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'site', header: 'Site', accessorFn: (r) => r.site || '', cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'po_ref', header: 'PO', accessorFn: (r) => r.po_ref || '', cell: ({ getValue }) => <span className="font-mono text-xs">{getValue() || 'N/A'}</span> },
-    { id: 'quantity', header: 'Qty', accessorFn: (r) => (r.quantity == null || r.quantity === '' ? null : Number(r.quantity)), meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'N/A' : getValue()) },
-    { id: 'est_cost', header: 'Unit cost', accessorFn: (r) => (r.est_cost == null || r.est_cost === '' ? null : Number(r.est_cost)), meta: { align: 'right' }, cell: ({ getValue }) => fmtMoney(getValue()) },
-    { id: 'line_value', header: 'Est. value', accessorFn: (r) => lineValue(r), meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-medium">{fmtMoney(getValue())}</span> },
+    { id: 'requisition_no', header: t('wmsprocure.req.colReqNo'), accessorFn: (r) => r.requisition_no || '', cell: ({ getValue }) => <span className="font-mono text-xs" dir="ltr">{getValue() || t('wmsprocure.req.na')}</span> },
+    { id: 'category', header: t('wmsprocure.req.categoryLabel'), accessorFn: (r) => tv(t, 'wmsprocure.req.category', r.category, cap(r.category)) || '', cell: ({ getValue }) => getValue() || t('wmsprocure.req.na') },
+    { id: 'requester', header: t('wmsprocure.req.requester'), accessorFn: (r) => r.requester || '', cell: ({ getValue }) => getValue() || t('wmsprocure.req.na') },
+    { id: 'site', header: t('wmsprocure.req.site'), accessorFn: (r) => r.site || '', cell: ({ getValue }) => getValue() || t('wmsprocure.req.na') },
+    { id: 'po_ref', header: t('wmsprocure.req.colPo'), accessorFn: (r) => r.po_ref || '', cell: ({ getValue }) => <span className="font-mono text-xs" dir="ltr">{getValue() || t('wmsprocure.req.na')}</span> },
+    { id: 'quantity', header: t('wmsprocure.req.colQty'), accessorFn: (r) => (r.quantity == null || r.quantity === '' ? null : Number(r.quantity)), meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? t('wmsprocure.req.na') : getValue()) },
+    { id: 'est_cost', header: t('wmsprocure.req.colUnitCost'), accessorFn: (r) => (r.est_cost == null || r.est_cost === '' ? null : Number(r.est_cost)), meta: { align: 'right' }, cell: ({ getValue }) => fmtMoney(getValue()) },
+    { id: 'line_value', header: t('wmsprocure.req.colEstValue'), accessorFn: (r) => lineValue(r), meta: { align: 'right' }, cell: ({ getValue }) => <span className="font-medium">{fmtMoney(getValue())}</span> },
     {
-      id: 'needed_by', header: 'Needed by', accessorFn: (r) => r.needed_by || '',
+      id: 'needed_by', header: t('wmsprocure.req.neededBy'), accessorFn: (r) => r.needed_by || '',
       cell: ({ row }) => {
         const band = dueBand(row.original, now)
         const d = DUE_META[band]
         return (
           <span className="inline-flex items-center gap-2 whitespace-nowrap">
             <span>{fmtDate(row.original.needed_by)}</span>
-            {(band === 'overdue' || band === 'due_soon') && <span className={`text-[11px] px-1.5 py-0.5 rounded ${d.cls}`}>{d.label}</span>}
+            {(band === 'overdue' || band === 'due_soon') && <span className={`text-[11px] px-1.5 py-0.5 rounded ${d.cls}`}>{t(`wmsprocure.req.due.${band}`)}</span>}
           </span>
         )
       },
     },
     {
-      id: 'status', header: 'Status', accessorFn: (r) => STATUS_META[r.status]?.label || r.status || '',
+      id: 'status', header: t('wmsprocure.req.statusLabel'), accessorFn: (r) => tv(t, 'wmsprocure.req.status', r.status),
       meta: { filterVariant: 'select' },
       cell: ({ row }) => {
         const st = STATUS_META[row.original.status] || STATUS_META.draft
-        return <span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+        return <span className={`badge text-[11px] px-2 py-0.5 rounded ${st.cls}`}>{tv(t, 'wmsprocure.req.status', STATUS_META[row.original.status] ? row.original.status : 'draft')}</span>
       },
     },
     {
@@ -470,27 +481,27 @@ export default function Requisitions() {
         <div className="flex items-center justify-end gap-1">
           {canDecideRequisition(row.original, { canProcure: caps.procure, userId: user?.id || null }) && (
             <>
-              <button type="button" onClick={(e) => { e.stopPropagation(); decide(row.original, 'approved') }} className="btn-secondary text-xs min-h-[44px]">Approve</button>
-              <button type="button" onClick={(e) => { e.stopPropagation(); decide(row.original, 'rejected') }} className="btn-secondary text-xs min-h-[44px]">Reject</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); decide(row.original, 'approved') }} className="btn-secondary text-xs min-h-[44px]">{t('wmsprocure.req.approve')}</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); decide(row.original, 'rejected') }} className="btn-secondary text-xs min-h-[44px]">{t('wmsprocure.req.reject')}</button>
             </>
           )}
           {canRaisePo(row.original, { canProcure: caps.procure }) && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); setRaising(row.original) }} className="btn-primary text-xs min-h-[44px]">Raise PO</button>
+            <button type="button" onClick={(e) => { e.stopPropagation(); setRaising(row.original) }} className="btn-primary text-xs min-h-[44px]">{t('wmsprocure.req.raisePo')}</button>
           )}
-          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} aria-label={`Edit ${row.original.item || 'requisition'}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"><Pencil size={15} /></button>
-          {caps.adminDelete && <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(row.original) }} aria-label={`Delete ${row.original.item || 'requisition'}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-400"><Trash2 size={15} /></button>}
+          <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row.original) }} aria-label={t('wmsprocure.req.editAria', { name: row.original.item || t('wmsprocure.req.reqWord') })} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"><Pencil size={15} /></button>
+          {caps.adminDelete && <button type="button" onClick={(e) => { e.stopPropagation(); setDeleting(row.original) }} aria-label={t('wmsprocure.req.deleteAria', { name: row.original.item || t('wmsprocure.req.reqWord') })} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400 focus-visible:ring-2 focus-visible:ring-red-400"><Trash2 size={15} /></button>}
         </div>
       ),
     },
-  ], [fmtMoney, now, openEdit, caps.procure, caps.adminDelete, decide, user?.id])
+  ], [fmtMoney, now, openEdit, caps.procure, caps.adminDelete, decide, user?.id, t])
 
   const capped = loaded && rows.length >= READ_CAP
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Requisitions"
-        subtitle="Raise and track internal purchase requests before they become POs, with approval status, due dates and export."
+        title={t('wmsprocure.req.title')}
+        subtitle={t('wmsprocure.req.subtitle')}
         icon={ClipboardList}
         onRefresh={load}
         refreshing={refreshing}
@@ -502,17 +513,17 @@ export default function Requisitions() {
               onClick={() => exportToExcel(exportRows, EXPORT_COLS, EXPORT_HEADERS, fileName, 'Requisitions', { currency: activeCurrency })}
               className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}
             >
-              <FileSpreadsheet size={14} /> Excel
+              <FileSpreadsheet size={14} /> {t('wmsprocure.req.excel')}
             </button>
             <button
               type="button"
               onClick={() => exportToPdf(exportRows, EXPORT_COLS.map((k, i) => ({ key: k, header: EXPORT_HEADERS[i] })), 'Purchase Requisitions', fileName, 'landscape', '', { currency: activeCurrency })}
               className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!filtered.length}
             >
-              <FileText size={14} /> PDF
+              <FileText size={14} /> {t('wmsprocure.req.pdf')}
             </button>
             <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]">
-              <Plus size={15} /> New requisition
+              <Plus size={15} /> {t('wmsprocure.req.newTitle')}
             </button>
           </div>
         }
@@ -522,9 +533,9 @@ export default function Requisitions() {
         <div className="card border border-amber-800/50 flex items-start gap-3" role="status">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Requisitions are not enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">{t('wmsprocure.req.notEnabled')}</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V156_REQUISITIONS.sql</span>, then reload.
+              {t('wmsprocure.req.apply')} <span className="font-mono text-[var(--text-primary)]" dir="ltr">MIGRATIONS_V156_REQUISITIONS.sql</span>{t('wmsprocure.req.thenReload')}
             </p>
           </div>
         </div>
@@ -532,14 +543,14 @@ export default function Requisitions() {
 
       {money.mixed && (
         <p className="text-xs text-amber-300" role="status">
-          These requisitions span {money.currencies.join(', ')}. Values are not added across currencies; pick a country to see totals.
+          {t('wmsprocure.req.mixedNote', { currencies: money.currencies.join(', ') })}
         </p>
       )}
       {actionMsg && <p className="text-sm text-[var(--text-secondary)]" role="status">{actionMsg}</p>}
 
       {capped && (
         <p className="text-xs text-amber-300" role="status">
-          Showing the {READ_CAP} requisitions needed soonest. Older or later requests are not loaded, so the figures below cover these {READ_CAP} only.
+          {t('wmsprocure.req.capped', { cap: READ_CAP })}
         </p>
       )}
 
@@ -549,7 +560,7 @@ export default function Requisitions() {
 
       {loaded && summary.byCategory.length > 0 && (
         <div className="card">
-          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Estimated value by category</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t('wmsprocure.req.byCategory')}</h2>
           <ul className="space-y-2">
             {summary.byCategory.slice(0, 8).map((c) => {
               const max = summary.byCategory[0]?.value || 0
@@ -560,10 +571,10 @@ export default function Requisitions() {
                     type="button"
                     onClick={() => setCategoryFilter(categoryFilter === c.key ? 'all' : c.key)}
                     aria-pressed={categoryFilter === c.key}
-                    className="w-full text-left min-h-[44px] rounded-lg px-2 py-1 hover:bg-[var(--input-bg)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"
+                    className="w-full text-start min-h-[44px] rounded-lg px-2 py-1 hover:bg-[var(--input-bg)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"
                   >
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-[var(--text-secondary)]">{cap(c.key)} <span className="text-[var(--text-muted)]">({c.count})</span></span>
+                      <span className="text-[var(--text-secondary)]">{tv(t, 'wmsprocure.req.category', c.key, cap(c.key))} <span className="text-[var(--text-muted)]">({c.count})</span></span>
                       <span className="tabular-nums text-[var(--text-primary)]">{fmtMoney(c.value)}</span>
                     </div>
                     <div className="h-1.5 mt-1 rounded bg-[var(--input-bg)] overflow-hidden" aria-hidden="true">
@@ -580,27 +591,27 @@ export default function Requisitions() {
       <div className="card space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-            <input className="input pl-9 w-full min-h-[44px]" placeholder="Search item, req. no., requester, site" aria-label="Search requisitions" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input className="input ps-9 w-full min-h-[44px]" placeholder={t('wmsprocure.req.searchPlaceholder')} aria-label={t('wmsprocure.req.searchAria')} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Status">
-            <option value="all">All statuses</option>
-            {REQUISITION_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label || s}</option>)}
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label={t('wmsprocure.req.statusLabel')}>
+            <option value="all">{t('wmsprocure.req.allStatuses')}</option>
+            {REQUISITION_STATUSES.map((s) => <option key={s} value={s}>{tv(t, 'wmsprocure.req.status', s)}</option>)}
           </select>
-          <select className="input min-h-[44px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
-            <option value="all">All categories</option>
-            {categoryOptions.map((c) => <option key={c} value={c}>{cap(c)}</option>)}
+          <select className="input min-h-[44px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label={t('wmsprocure.req.categoryLabel')}>
+            <option value="all">{t('wmsprocure.req.allCategories')}</option>
+            {categoryOptions.map((c) => <option key={c} value={c}>{tv(t, 'wmsprocure.req.category', c, cap(c))}</option>)}
           </select>
-          <select className="input min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Site">
-            <option value="all">All sites</option>
+          <select className="input min-h-[44px]" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label={t('wmsprocure.req.site')}>
+            <option value="all">{t('wmsprocure.req.allSites')}</option>
             {siteOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select className="input min-h-[44px]" value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} aria-label="Needed-by">
-            <option value="all">Any needed-by</option>
-            {DUE_BANDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+          <select className="input min-h-[44px]" value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} aria-label={t('wmsprocure.req.neededByAria')}>
+            <option value="all">{t('wmsprocure.req.anyNeededBy')}</option>
+            {DUE_BANDS.map((b) => <option key={b.key} value={b.key}>{tv(t, 'wmsprocure.req.dueBand', b.key, b.label).replace('{days}', String(DUE_SOON_DAYS))}</option>)}
           </select>
-          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{filtered.length} of {summary.total}</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} /> {t('wmsprocure.req.clear')}</button>}
+          <span className="text-xs text-[var(--text-muted)] ms-auto" aria-live="polite">{t('wmsprocure.req.countOf', { count: filtered.length, total: summary.total })}</span>
         </div>
       </div>
 
@@ -613,7 +624,7 @@ export default function Requisitions() {
         onRetry={load}
         enableGlobalFilter={false}
         exportFileName={fileName}
-        emptyMessage={summary.total === 0 ? 'No requisitions yet. Raise the first one.' : 'No requisitions match these filters.'}
+        emptyMessage={summary.total === 0 ? t('wmsprocure.req.emptyFirst') : t('wmsprocure.req.emptyFiltered')}
         onRowClick={(r) => openEdit(r)}
       />
 
@@ -625,7 +636,7 @@ export default function Requisitions() {
         <RaisePoModal
           requisition={raising}
           onClose={() => setRaising(null)}
-          onDone={(po) => { setRaising(null); setActionMsg(po ? `Purchase order ${po.po_number} raised.` : 'Purchase order raised.'); load() }}
+          onDone={(po) => { setRaising(null); setActionMsg(po ? t('wmsprocure.req.poRaised', { po: po.po_number }) : t('wmsprocure.req.poRaisedPlain')); load() }}
         />
       )}
       <DeleteDialog row={deleting} onCancel={() => setDeleting(null)} onConfirm={confirmDelete} />

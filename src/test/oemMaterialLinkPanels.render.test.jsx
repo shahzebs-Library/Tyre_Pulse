@@ -38,7 +38,7 @@ describe('MaterialLinkQueuePanel', () => {
       row({ item_id: 'i2', item_code: 'X2', proposal_id: 'p2', proposal_status: 'proposed', proposed_by: 'u1', same_description: true }),
     ] })
     wrap(<MaterialLinkQueuePanel scope={{ country: 'UAE' }} can={can} userId="u1" />)
-    await waitFor(() => expect(screen.getByText(/different description/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/Same code, different description/)).toBeTruthy())
     expect(screen.getByText('Proposed by you')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Approve/ })).toBeNull()
     expect(screen.getByRole('button', { name: /Withdraw/ })).toBeTruthy()

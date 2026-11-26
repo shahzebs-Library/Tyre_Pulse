@@ -62,7 +62,7 @@ function ValuationOverview({ scope }) {
   if (q.data?.status === 'not_provisioned') return <NotSetUp what={t('inventory.valuation.viewName')} />
   const loading = q.loading && !q.data
   const headline = sum.currencies.filter((c) => c.currency)
-  const display = headline.length === 0 ? 'N/A'
+  const display = headline.length === 0 ? t('wmsfloor.common.na')
     : headline.map((c) => (c.valuedAmount === null ? `${c.currency} N/A` : formatMoney(c.valuedAmount, c.currency))).join(' | ')
 
   return (
@@ -73,11 +73,11 @@ function ValuationOverview({ scope }) {
         <ExplainedKpi icon={Scale} tone="t-blue" loading={loading}
           display={formatQty(sum.currencies.reduce((a, c) => a + (c.valuedQty || 0), 0))} label={t('inventory.valuation.valuedQty')} />
         <ExplainedKpi metricId="inv_unvalued_stock" country={scope.country} icon={PackageX} tone="t-amber" loading={loading}
-          display={sum.unvaluedQty === null ? 'N/A' : formatQty(sum.unvaluedQty)} label={t('inventory.valuation.unvaluedQty')} />
+          display={sum.unvaluedQty === null ? t('wmsfloor.common.na') : formatQty(sum.unvaluedQty)} label={t('inventory.valuation.unvaluedQty')} />
         <ExplainedKpi icon={Split} tone="t-purple" loading={loading}
           display={formatQty(sum.pendingAllocationQty)} label={t('inventory.valuation.pendingQty')} />
         <ExplainedKpi icon={ClipboardList} tone="t-blue" loading={loading}
-          display={sum.openReconciliations === null ? 'N/A' : formatQty(sum.openReconciliations)} label={t('inventory.valuation.openRecon')} />
+          display={sum.openReconciliations === null ? t('wmsfloor.common.na') : formatQty(sum.openReconciliations)} label={t('inventory.valuation.openRecon')} />
       </div>
       <div className="inv-actions"><CompleteFlag complete={sum.complete} /></div>
       {sum.complete === false && <Note tone="warn">{t('inventory.valuation.incompleteNote')}</Note>}
@@ -93,22 +93,22 @@ function ValuationOverview({ scope }) {
             { key: 'valuedQty', header: t('inventory.valuation.valuedQty'), numeric: true, cell: (r) => formatQty(r.valuedQty) },
             { key: 'unvaluedQty', header: t('inventory.valuation.unvaluedQty'), numeric: true, cell: (r) => formatQty(r.unvaluedQty) },
             { key: 'pending', header: t('inventory.valuation.pendingQty'), numeric: true, cell: (r) => formatQty(r.pendingAllocationQty ?? pendingOf(r)) },
-            { key: 'valuedAmount', header: t('inventory.valuation.valuedAmount'), numeric: true, cell: (r) => (r.valuedAmount === null ? 'N/A' : formatMoney(r.valuedAmount, r.currency)) },
+            { key: 'valuedAmount', header: t('inventory.valuation.valuedAmount'), numeric: true, cell: (r) => (r.valuedAmount === null ? t('wmsfloor.common.na') : formatMoney(r.valuedAmount, r.currency)) },
             { key: 'complete', header: t('inventory.valuation.completeness'), cell: (r) => <CompleteFlag complete={r.complete} /> },
           ])} />
       </SectionCard>
       <SectionCard title={t('inventory.valuation.bySite')} sub={t('inventory.valuation.bySiteSub')}>
         <div className="inv-scroll">
           <KitTable compact rows={rows} loading={loading} empty={t('inventory.valuation.empty')} columns={alignNumeric([
-            { key: 'itemCode', header: t('inventory.common.item'), cell: (r) => r.itemCode || r.description || <span className="cc-na">N/A</span> },
-            { key: 'site', header: t('inventory.scope.site'), cell: (r) => r.site || <span className="cc-na">N/A</span> },
+            { key: 'itemCode', header: t('inventory.common.item'), cell: (r) => r.itemCode || r.description || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+            { key: 'site', header: t('inventory.scope.site'), cell: (r) => r.site || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
             { key: 'ownership', header: t('inventory.valuation.ownership'), cell: (r) => t(`inventory.valuation.own.${r.ownership || 'owned'}`) },
             { key: 'currency', header: t('inventory.common.currency'), cell: (r) => r.currency || <span className="cc-na">{t('inventory.valuation.noCurrency')}</span> },
             { key: 'valuedQty', header: t('inventory.valuation.valuedQty'), numeric: true, cell: (r) => formatQty(r.valuedQty) },
             { key: 'unvaluedQty', header: t('inventory.valuation.unvaluedQty'), numeric: true, cell: (r) => formatQty(r.unvaluedQty) },
             { key: 'pending', header: t('inventory.valuation.pendingQty'), numeric: true, cell: (r) => formatQty(r.pendingAllocationQty ?? pendingOf(r)) },
-            { key: 'valuedAmount', header: t('inventory.valuation.valuedAmount'), numeric: true, cell: (r) => (r.valuedAmount === null ? 'N/A' : formatMoney(r.valuedAmount, r.currency)) },
-            { key: 'openReconciliations', header: t('inventory.valuation.openRecon'), numeric: true, cell: (r) => (r.openReconciliations === null ? <span className="cc-na">N/A</span> : formatQty(r.openReconciliations)) },
+            { key: 'valuedAmount', header: t('inventory.valuation.valuedAmount'), numeric: true, cell: (r) => (r.valuedAmount === null ? t('wmsfloor.common.na') : formatMoney(r.valuedAmount, r.currency)) },
+            { key: 'openReconciliations', header: t('inventory.valuation.openRecon'), numeric: true, cell: (r) => (r.openReconciliations === null ? <span className="cc-na">{t('wmsfloor.common.na')}</span> : formatQty(r.openReconciliations)) },
             { key: 'complete', header: t('inventory.valuation.completeness'), cell: (r) => <CompleteFlag complete={r.complete} /> },
           ])} />
         </div>
@@ -173,9 +173,9 @@ function CostReconciliationQueue({ scope, can, userId }) {
       <PagedTable query={{ ...q, data: shaped }} page={page} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(0) }}
         empty={t('inventory.costRecon.empty')} what={t('inventory.costRecon.title')} noun={t('inventory.supply.linesNoun')} onRowClick={openRow}
         columns={[
-          { key: 'itemCode', header: t('inventory.common.item'), cell: (r) => r.itemCode || <span className="cc-na">N/A</span> },
-          { key: 'site', header: t('inventory.scope.site'), cell: (r) => r.site || <span className="cc-na">N/A</span> },
-          { key: 'kind', header: t('inventory.costRecon.kind'), cell: (r) => (r.kind ? t(`inventory.costRecon.kinds.${r.kind}`) : <span className="cc-na">N/A</span>) },
+          { key: 'itemCode', header: t('inventory.common.item'), cell: (r) => r.itemCode || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+          { key: 'site', header: t('inventory.scope.site'), cell: (r) => r.site || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+          { key: 'kind', header: t('inventory.costRecon.kind'), cell: (r) => (r.kind ? t(`inventory.costRecon.kinds.${r.kind}`) : <span className="cc-na">{t('wmsfloor.common.na')}</span>) },
           { key: 'unvaluedQty', header: t('inventory.valuation.unvaluedQty'), numeric: true, cell: (r) => formatQty(r.unvaluedQty) },
           { key: 'proposedCost', header: t('inventory.costRecon.proposedCost'), numeric: true, cell: (r) => (r.isAllocation
             ? (r.proposedValuedQty === null ? <span className="cc-na">{t('inventory.costRecon.noSplit')}</span> : t('inventory.costRecon.splitShort', { valued: formatQty(r.proposedValuedQty), total: formatQty(r.allocationQty) }))
@@ -192,8 +192,8 @@ function CostReconciliationQueue({ scope, can, userId }) {
           <div className="inv-hub" style={{ gap: 12 }}>
             <dl className="inv-dl">
               <dt>{t(allocation ? 'inventory.valuation.pendingQty' : 'inventory.valuation.unvaluedQty')}</dt><dd className="inv-num">{formatQty(allocation ? open.row.allocationQty : open.row.unvaluedQty)}</dd>
-              <dt>{t('inventory.costRecon.kind')}</dt><dd>{open.row.kind ? t(`inventory.costRecon.kinds.${open.row.kind}`) : 'N/A'}</dd>
-              <dt>{t('inventory.common.currency')}</dt><dd>{open.row.currency || 'N/A'}</dd>
+              <dt>{t('inventory.costRecon.kind')}</dt><dd>{open.row.kind ? t(`inventory.costRecon.kinds.${open.row.kind}`) : t('wmsfloor.common.na')}</dd>
+              <dt>{t('inventory.common.currency')}</dt><dd>{open.row.currency || t('wmsfloor.common.na')}</dd>
               <dt>{t('inventory.common.status')}</dt><dd><StatusPill value={open.row.status} tone={COST_RECON_TONE[open.row.status] || 'muted'} label={t(`inventory.costRecon.status.${open.row.status}`)} /></dd>
               {open.row.resolvedCost !== null && (<><dt>{t('inventory.costRecon.resolvedCost')}</dt><dd className="inv-num">{formatMoney(open.row.resolvedCost, open.row.currency)}</dd></>)}
             </dl>
@@ -231,7 +231,7 @@ function CostReconciliationQueue({ scope, can, userId }) {
                     </select>
                   </Field>
                   {open.resolution === 'resolved' && (
-                    <Field label={`${t('inventory.costRecon.unitCost')} (${open.row.currency || 'N/A'})`}>
+                    <Field label={`${t('inventory.costRecon.unitCost')} (${open.row.currency || t('wmsfloor.common.na')})`}>
                       <input className="inv-input inv-num" type="number" min="0" step="any" value={open.unitCost}
                         onChange={(e) => setOpen((o) => ({ ...o, unitCost: e.target.value }))} />
                     </Field>
@@ -327,13 +327,13 @@ function ErpReconciliationPanel({ scope, can }) {
       <PagedTable query={{ ...q, data: shaped }} page={page} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(0) }}
         empty={t('inventory.erp.empty')} what={t('inventory.erp.title')} noun={t('inventory.supply.linesNoun')}
         columns={[
-          { key: 'month', header: t('inventory.erp.month'), cell: (r) => (r.month ? String(r.month).slice(0, 7) : <span className="cc-na">N/A</span>) },
-          { key: 'itemCode', header: t('inventory.common.item'), cell: (r) => r.itemCode || <span className="cc-na">N/A</span> },
-          { key: 'site', header: t('inventory.scope.site'), cell: (r) => r.site || <span className="cc-na">N/A</span> },
+          { key: 'month', header: t('inventory.erp.month'), cell: (r) => (r.month ? String(r.month).slice(0, 7) : <span className="cc-na">{t('wmsfloor.common.na')}</span>) },
+          { key: 'itemCode', header: t('inventory.common.item'), cell: (r) => r.itemCode || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+          { key: 'site', header: t('inventory.scope.site'), cell: (r) => r.site || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
           { key: 'invQty', header: t('inventory.erp.invQty'), numeric: true, cell: (r) => formatQty(r.invQty) },
           { key: 'invUnvaluedQty', header: t('inventory.erp.invUnvaluedQty'), numeric: true, cell: (r) => formatQty(r.invUnvaluedQty) },
           { key: 'erpQty', header: t('inventory.erp.erpQty'), numeric: true, cell: (r) => formatQty(r.erpQty) },
-          { key: 'qtyDiff', header: t('inventory.erp.qtyDiff'), numeric: true, cell: (r) => (r.qtyDiff === null ? <span className="cc-na">N/A</span> : `${r.qtyDiff > 0 ? '+' : ''}${formatQty(r.qtyDiff)}`) },
+          { key: 'qtyDiff', header: t('inventory.erp.qtyDiff'), numeric: true, cell: (r) => (r.qtyDiff === null ? <span className="cc-na">{t('wmsfloor.common.na')}</span> : `${r.qtyDiff > 0 ? '+' : ''}${formatQty(r.qtyDiff)}`) },
           ...(can('view_value') ? [
             { key: 'invValue', header: t('inventory.erp.invValue'), numeric: true, cell: (r) => formatMoney(r.invValue, r.currency) },
             { key: 'erpValue', header: t('inventory.erp.erpValue'), numeric: true, cell: (r) => formatMoney(r.erpValue, r.currency) },

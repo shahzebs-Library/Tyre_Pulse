@@ -15,6 +15,7 @@
 import { useMemo, useState } from 'react'
 import { Link2, Link2Off, Search, FlaskConical, Download, RefreshCw, CheckCircle2, Send, Check, X, Undo2 } from 'lucide-react'
 import { KitTable, Kpi } from '../commandCenter/kit'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { loadUnmatchedReview } from '../../lib/api/stockReconcile'
 import { UNMATCHED_KINDS, unmatchedExportRows } from '../../lib/inventory/stockReconcile'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
@@ -24,16 +25,11 @@ import { newIdempotencyKey } from '../../lib/api/inventory'
 import { toUserMessage } from '../../lib/inventory/errorText'
 
 const KIND_TONE = { code_exact: 'good', code_ambiguous: 'warning', code_missing: 'bad', no_code_suggest: 'info', no_code_none: 'muted' }
-const SOURCE_LABEL = { material_master: 'ERP item (Material Master)', material_canonical: 'Catalogue item' }
-const FILTERS = [
-  { key: 'real', label: 'Real stock' },
-  { key: 'code', label: 'Has a code' },
-  { key: 'nocode', label: 'No code' },
-  { key: 'demo', label: 'Demo data' },
-  { key: 'all', label: 'All' },
-]
+const SOURCES = ['material_master', 'material_canonical']
+const FILTERS = ['real', 'code', 'nocode', 'demo', 'all']
 
 function Candidates({ row, canPropose, canDecide, userId, proposals, onDone }) {
+  const { t } = useLanguage()
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
   const [note, setNote] = useState('')
@@ -53,33 +49,36 @@ function Candidates({ row, canPropose, canDecide, userId, proposals, onDone }) {
     const item = list.find((c) => (c.item_id || c.id) === open.item_id)
     return (
       <div>
-        <Note tone="warn" title="A link is awaiting approval">
-          {`Proposed item: ${item ? `${item.code || item.item_code} ${item.name || item.item_name || ''}` : open.item_id}. Basis: ${open.basis === 'exact_code' ? 'same item code' : 'confirmed suggestion'}.`}
-          {open.note ? ` Note: ${open.note}` : ''}
+        <Note tone="warn" title={t('wmsparts.unmatched.awaitingTitle')}>
+          {t('wmsparts.unmatched.awaitingBody', {
+            item: item ? `${item.code || item.item_code} ${item.name || item.item_name || ''}`.trim() : open.item_id,
+            basis: open.basis === 'exact_code' ? t('wmsparts.unmatched.basisCode') : t('wmsparts.unmatched.basisSuggestion'),
+          })}
+          {open.note ? ` ${t('wmsparts.unmatched.noteValue', { note: open.note })}` : ''}
         </Note>
         {error && <ErrorNote error={error} />}
         <div className="inv-actions">
           {own ? (
             <>
-              <span className="cc-card-sub">Another person must approve it.</span>
+              <span className="cc-card-sub">{t('wmsparts.unmatched.anotherMustApprove')}</span>
               <button type="button" className="cc-btn-ghost" disabled={!!busy}
                 onClick={() => act('w', (k) => decideLink({ id: open.id, decision: 'withdraw' }, k))}>
-                <Undo2 size={13} aria-hidden="true" /> Withdraw
+                <Undo2 size={13} aria-hidden="true" /> {t('wmsparts.common.withdraw')}
               </button>
             </>
           ) : canDecide ? (
             <>
               <button type="button" className="inv-btn-accent" disabled={!!busy}
                 onClick={() => act('a', (k) => decideLink({ id: open.id, decision: 'approve' }, k))}>
-                <Check size={13} aria-hidden="true" /> Approve link
+                <Check size={13} aria-hidden="true" /> {t('wmsparts.unmatched.approveLink')}
               </button>
-              <input className="inv-input" value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder="Reason to reject" aria-label="Reason to reject" />
+              <input className="inv-input" value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} placeholder={t('wmsparts.unmatched.rejectReason')} aria-label={t('wmsparts.unmatched.rejectReason')} />
               <button type="button" className="inv-btn-outline" disabled={!!busy || !rejectNote.trim()}
                 onClick={() => act('r', (k) => decideLink({ id: open.id, decision: 'reject', note: rejectNote }, k))}>
-                <X size={13} aria-hidden="true" /> Reject
+                <X size={13} aria-hidden="true" /> {t('wmsparts.common.reject')}
               </button>
             </>
-          ) : <span className="cc-card-sub">Needs an approver with the master-data right.</span>}
+          ) : <span className="cc-card-sub">{t('wmsparts.unmatched.needsApprover')}</span>}
         </div>
       </div>
     )
@@ -89,53 +88,54 @@ function Candidates({ row, canPropose, canDecide, userId, proposals, onDone }) {
     return (
       <Note tone="warn">
         {row.code
-          ? `Code ${row.code} is not in Material Master for ${row.country || 'this country'}. Add the item to Material Master first, or correct the code on the stock line.`
-          : 'No tyre size could be read from this description, so no catalogue item can be suggested. A person must identify the item.'}
+          ? t('wmsparts.unmatched.codeMissing', { code: row.code, country: row.country || t('wmsparts.unmatched.thisCountry') })
+          : t('wmsparts.unmatched.noSize')}
       </Note>
     )
   }
   return (
     <div className="inv-scroll">
-      {last && <Note tone={last.status === 'rejected' ? 'warn' : 'info'}>{`The last proposal was ${last.status}${last.decision_note ? `: ${last.decision_note}` : '.'}`}</Note>}
+      {last && <Note tone={last.status === 'rejected' ? 'warn' : 'info'}>{t('wmsparts.unmatched.lastProposal', { status: t(`wmsparts.candStatus.${last.status}`) })}{last.decision_note ? `: ${last.decision_note}` : '.'}</Note>}
       {error && <ErrorNote error={error} />}
       {!exact && canPropose && (
         <label className="cc-field" style={{ maxWidth: 420 }}>
-          <span>Why is this the right item? (needed for a suggestion)</span>
-          <input className="inv-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="For example: brand and size checked on the shelf" />
+          <span>{t('wmsparts.unmatched.whyLabel')}</span>
+          <input className="inv-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('wmsparts.unmatched.whyPh')} />
         </label>
       )}
       <KitTable compact rows={list} columns={alignNumeric([
-        { key: 'code', header: 'Code', cell: (c) => c.code || c.item_code || <span className="cc-na">N/A</span> },
-        { key: 'name', header: 'Name', cell: (c) => c.name || c.item_name || <span className="cc-na">N/A</span> },
-        { key: 'source', header: 'Source', cell: (c) => SOURCE_LABEL[c.source] || c.source },
-        { key: 'linked', header: 'In catalogue', cell: (c) => (c.linked === true
-          ? <StatusPill value="yes" tone="good" label="Linked" />
-          : c.linked === false ? <StatusPill value="no" tone="warning" label="Not linked" /> : <span className="cc-na">N/A</span>) },
-        { key: 'reasons', header: exact ? 'Basis' : 'Why suggested', cell: (c) => (c.reasons || []).join('. ') },
+        { key: 'code', header: t('wmsparts.common.code'), cell: (c) => (c.code || c.item_code ? <span dir="ltr">{c.code || c.item_code}</span> : <span className="cc-na">{t('wmsparts.common.na')}</span>) },
+        { key: 'name', header: t('wmsparts.common.name'), cell: (c) => c.name || c.item_name || <span className="cc-na">{t('wmsparts.common.na')}</span> },
+        { key: 'source', header: t('wmsparts.common.source'), cell: (c) => (SOURCES.includes(c.source) ? t(`wmsparts.unmatched.source.${c.source}`) : c.source) },
+        { key: 'linked', header: t('wmsparts.unmatched.inCatalogue'), cell: (c) => (c.linked === true
+          ? <StatusPill value="yes" tone="good" label={t('wmsparts.unmatched.linked')} />
+          : c.linked === false ? <StatusPill value="no" tone="warning" label={t('wmsparts.unmatched.notLinked')} /> : <span className="cc-na">{t('wmsparts.common.na')}</span>) },
+        { key: 'reasons', header: exact ? t('wmsparts.common.basis') : t('wmsparts.unmatched.whySuggested'), cell: (c) => (c.reasons || []).join('. ') },
         { key: 'confirm', header: '', cell: (c) => {
           if (c.source === 'material_canonical') {
-            return <span className="cc-card-sub">Catalogue only. Link it to an ERP item first.</span>
+            return <span className="cc-card-sub">{t('wmsparts.unmatched.catalogueOnly')}</span>
           }
           const key = c.id || c.item_id
           return (
             <button type="button" className="inv-btn-outline" disabled={!canPropose || !!busy || (!exact && !note.trim())}
-              title={!canPropose ? 'You do not have permission to propose links.' : (!exact && !note.trim()) ? 'Write why this item is right first.' : undefined}
+              title={!canPropose ? t('wmsparts.unmatched.noPermission') : (!exact && !note.trim()) ? t('wmsparts.unmatched.writeWhy') : undefined}
               onClick={() => act(key, (k) => proposeStockLink(row, c, note, k))}>
-              <Send size={13} aria-hidden="true" /> Propose link
+              <Send size={13} aria-hidden="true" /> {t('wmsparts.unmatched.proposeLink')}
             </button>
           )
         } },
       ])} />
       <p className="cc-muted" style={{ margin: '6px 0 0' }}>
         {exact
-          ? 'The server checks the code again. A second person approves before the line is linked.'
-          : 'Suggestions only. They are ranked by tyre size and brand and are never applied automatically. A second person approves.'}
+          ? t('wmsparts.unmatched.exactFoot')
+          : t('wmsparts.unmatched.suggestFoot')}
       </p>
     </div>
   )
 }
 
 export default function UnmatchedItemsPanel({ scope, can, userId }) {
+  const { t } = useLanguage()
   const q = useInvQuery(() => loadUnmatchedReview(scope), [scope?.country, scope?.site])
   const ids = (q.data?.rows || []).map((r) => r.id).join(',')
   const pq = useInvQuery(() => (ids ? loadStockLinkProposals(ids.split(',')) : Promise.resolve([])), [ids])
@@ -160,7 +160,7 @@ export default function UnmatchedItemsPanel({ scope, can, userId }) {
   }, [q.data, filter])
 
   if (q.error) return <ErrorNote error={q.error} onRetry={q.retry} />
-  if (q.data?.status === 'not_provisioned') return <NotSetUp what="stock lines" />
+  if (q.data?.status === 'not_provisioned') return <NotSetUp what={t('wmsparts.unmatched.what')} />
 
   const s = q.data?.summary
   const loading = q.loading && !q.data
@@ -174,22 +174,22 @@ export default function UnmatchedItemsPanel({ scope, can, userId }) {
       const headers = ['Stock line', 'Country', 'Site', 'Description', 'Code on line', 'Tyre size', 'On hand', 'Data', 'Finding', 'Proposed code', 'Proposed item', 'Source', 'Basis', 'Status']
       await exportToExcel(data, keys, headers, reportFileName('Unmatched stock items', scope?.country || 'All countries'), 'Unmatched')
     } catch {
-      setExportErr('The file could not be created. Try again.')
+      setExportErr(t('wmsparts.unmatched.exportFailed'))
     } finally { setExporting(false) }
   }
 
   const columns = [
-    { key: 'site', header: 'Site', cell: (r) => r.site || <span className="cc-na">N/A</span> },
-    { key: 'description', header: 'Description', cell: (r) => (
-      <span>{r.description || <span className="cc-na">N/A</span>}{r.demo && <> <StatusPill value="demo" tone="muted" label="Demo" /></>}</span>
+    { key: 'site', header: t('wmsparts.common.site'), cell: (r) => r.site || <span className="cc-na">{t('wmsparts.common.na')}</span> },
+    { key: 'description', header: t('wmsparts.common.description'), cell: (r) => (
+      <span>{r.description || <span className="cc-na">{t('wmsparts.common.na')}</span>}{r.demo && <> <StatusPill value="demo" tone="muted" label={t('wmsparts.unmatched.demo')} /></>}</span>
     ) },
-    { key: 'code', header: 'Code on line', cell: (r) => r.code || <span className="cc-na">None</span> },
-    { key: 'size', header: 'Tyre size', cell: (r) => r.size || <span className="cc-na">N/A</span> },
-    { key: 'qty_on_hand', header: 'On hand', numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
-    { key: 'kind', header: 'Finding', cell: (r) => <StatusPill value={r.kind} tone={KIND_TONE[r.kind]} label={UNMATCHED_KINDS[r.kind]} /> },
-    { key: 'best', header: 'Proposed match', cell: (r) => {
+    { key: 'code', header: t('wmsparts.unmatched.codeOnLine'), cell: (r) => (r.code ? <span dir="ltr">{r.code}</span> : <span className="cc-na">{t('wmsparts.common.none')}</span>) },
+    { key: 'size', header: t('wmsparts.unmatched.tyreSize'), cell: (r) => (r.size ? <span dir="ltr">{r.size}</span> : <span className="cc-na">{t('wmsparts.common.na')}</span>) },
+    { key: 'qty_on_hand', header: t('wmsparts.common.onHand'), numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
+    { key: 'kind', header: t('wmsparts.unmatched.finding'), cell: (r) => <StatusPill value={r.kind} tone={KIND_TONE[r.kind]} label={UNMATCHED_KINDS[r.kind] ? t(`wmsparts.unmatched.kind.${r.kind}`) : r.kind} /> },
+    { key: 'best', header: t('wmsparts.unmatched.proposedMatch'), cell: (r) => {
       const b = r.candidates?.[0]
-      if (!b) return <span className="cc-na">None</span>
+      if (!b) return <span className="cc-na">{t('wmsparts.common.none')}</span>
       return <span>{b.code || b.item_code} {b.name || b.item_name ? `- ${b.name || b.item_name}` : ''}{r.candidates.length > 1 ? ` (+${r.candidates.length - 1})` : ''}</span>
     } },
   ]
@@ -198,34 +198,27 @@ export default function UnmatchedItemsPanel({ scope, can, userId }) {
 
   return (
     <div className="inv-hub">
-      <Note>
-        Stock lines that are not linked to a Material Master item cannot show catalogue details, consumption or cost.
-        Lines with a code are matched exactly. Lines without a code get suggestions by tyre size and brand that a
-        person must confirm; nothing is linked automatically.
-      </Note>
-      <Note title="Two people link a line">
-        One person proposes the item for a stock line; a second person approves it. Nothing is linked automatically.
-        Demo lines are test data and should not be linked.
-      </Note>
-      {q.data?.truncated && <Note tone="warn">Not every line was read. Narrow the country or site to see the rest.</Note>}
+      <Note>{t('wmsparts.unmatched.intro')}</Note>
+      <Note title={t('wmsparts.unmatched.twoPeopleTitle')}>{t('wmsparts.unmatched.twoPeopleBody')}</Note>
+      {q.data?.truncated && <Note tone="warn">{t('wmsparts.unmatched.truncated')}</Note>}
       <div className="inv-kpis">
-        <Kpi icon={Link2Off} tone="t-amber" loading={loading} value={s?.real} label="Real lines not linked" />
-        <Kpi icon={CheckCircle2} tone="t-green" loading={loading} value={s?.code_exact} label="Exact code match found" />
-        <Kpi icon={Search} tone="t-blue" loading={loading} value={s?.no_code_suggest} label="Suggestions to review" />
-        <Kpi icon={Link2} tone="t-red" loading={loading} value={s ? s.code_missing + s.code_ambiguous + s.no_code_none : null} label="Need a person to identify" />
-        <Kpi icon={FlaskConical} tone="t-blue" loading={loading} value={s?.demo} label="Demo / test lines" />
+        <Kpi icon={Link2Off} tone="t-amber" loading={loading} value={s?.real} label={t('wmsparts.unmatched.kpi.real')} />
+        <Kpi icon={CheckCircle2} tone="t-green" loading={loading} value={s?.code_exact} label={t('wmsparts.unmatched.kpi.exact')} />
+        <Kpi icon={Search} tone="t-blue" loading={loading} value={s?.no_code_suggest} label={t('wmsparts.unmatched.kpi.suggest')} />
+        <Kpi icon={Link2} tone="t-red" loading={loading} value={s ? s.code_missing + s.code_ambiguous + s.no_code_none : null} label={t('wmsparts.unmatched.kpi.identify')} />
+        <Kpi icon={FlaskConical} tone="t-blue" loading={loading} value={s?.demo} label={t('wmsparts.unmatched.kpi.demo')} />
       </div>
       <SectionCard
-        title={`Unmatched stock lines (${formatQty(rows.length)})`}
-        sub={q.data ? `Read ${fmtDateTime(q.data.generatedAt)}. Select a line to see every proposal.` : undefined}
+        title={t('wmsparts.unmatched.title', { n: formatQty(rows.length) })}
+        sub={q.data ? t('wmsparts.unmatched.sub', { time: fmtDateTime(q.data.generatedAt) }) : undefined}
         action={(
           <div className="inv-actions">
             <button type="button" className="cc-btn-ghost" onClick={q.retry} disabled={q.loading}>
-              <RefreshCw size={14} aria-hidden="true" /> Refresh
+              <RefreshCw size={14} aria-hidden="true" /> {t('wmsparts.common.refresh')}
             </button>
             {canExport && (
               <button type="button" className="cc-btn-ghost" onClick={doExport} disabled={exporting || !rows.length}>
-                <Download size={14} aria-hidden="true" /> {exporting ? 'Preparing...' : 'Excel'}
+                <Download size={14} aria-hidden="true" /> {exporting ? t('wmsparts.common.preparing') : t('wmsparts.common.excel')}
               </button>
             )}
           </div>
@@ -233,26 +226,26 @@ export default function UnmatchedItemsPanel({ scope, can, userId }) {
         {exportErr && <ErrorNote error={exportErr} />}
         <div className="inv-toolbar">
           <label className="cc-field" style={{ maxWidth: 220 }}>
-            <span>Show</span>
+            <span>{t('wmsparts.common.show')}</span>
             <select className="cc-select" value={filter} onChange={(e) => { setFilter(e.target.value); setOpenId(null) }}>
-              {FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+              {FILTERS.map((k) => <option key={k} value={k}>{t(`wmsparts.unmatched.filter.${k}`)}</option>)}
             </select>
           </label>
         </div>
         <div className="inv-scroll">
           <KitTable compact columns={alignNumeric(columns)} rows={rows} loading={loading}
-            empty={filter === 'real' ? 'Every real stock line is linked to Material Master.' : 'No lines in this view.'}
+            empty={filter === 'real' ? t('wmsparts.unmatched.allLinked') : t('wmsparts.unmatched.noLines')}
             onRowClick={(r) => setOpenId(r.id === openId ? null : r.id)} />
         </div>
       </SectionCard>
       {open && (
-        <SectionCard title={`Proposals for ${open.description || 'this line'}`}
-          sub={`${open.site || 'No site'}, ${open.country || 'no country'}. On hand ${formatQty(open.qty_on_hand)}.${open.brands?.length ? ` Brand read from the line: ${open.brands.join(', ')}.` : ''}`}>
+        <SectionCard title={t('wmsparts.unmatched.proposalsFor', { line: open.description || t('wmsparts.unmatched.thisLine') })}
+          sub={`${t('wmsparts.unmatched.lineSub', { site: open.site || t('wmsparts.unmatched.noSite'), country: open.country || t('wmsparts.common.noCountry'), qty: formatQty(open.qty_on_hand) })}${open.brands?.length ? ` ${t('wmsparts.unmatched.brandRead', { brands: open.brands.join(', ') })}` : ''}`}>
           <Candidates key={open.id} row={open} canPropose={canPropose} canDecide={canDecide} userId={userId}
             proposals={(pq.data || []).filter((p) => p.stock_id === open.id)}
             onDone={() => { q.retry(); pq.retry() }} />
           {pq.error && <ErrorNote error={pq.error} onRetry={pq.retry} />}
-          {!pq.loading && !pq.error && pq.data === null && <Note tone="warn">Linking is not set up yet in the database. The proposals can be reviewed and exported.</Note>}
+          {!pq.loading && !pq.error && pq.data === null && <Note tone="warn">{t('wmsparts.unmatched.notSetUp')}</Note>}
         </SectionCard>
       )}
     </div>

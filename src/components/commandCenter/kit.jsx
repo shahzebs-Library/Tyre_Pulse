@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { toUserMessage } from '../../lib/safeError'
 import EnterpriseTable from '../ui/EnterpriseTable'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { EmojiGlyph, RouteEmoji } from '../ui/NavEmoji'
 import { vehiclePhoto, vehicleKind } from '../../lib/vehiclePhoto'
 import './commandCenter.css'
@@ -199,7 +200,10 @@ export function Donut({ segments, total, centerLabel, onSelect }) {
 }
 
 /** Numbered pager: "Showing 1 to 10 of 126", page buttons and a page-size select. */
-export function Pager({ page, pageSize, total, onPage, onPageSize, sizes = [10, 25, 50, 100], noun = 'rows' }) {
+export function Pager({ page, pageSize, total, onPage, onPageSize, sizes = [10, 25, 50, 100], noun }) {
+  // `ui` is a core namespace, loaded with the app shell, so the pager never
+  // shows a placeholder while a page's own dictionary is still loading.
+  const { t } = useLanguage()
   const pages = Math.max(1, Math.ceil(total / pageSize))
   const from = total ? page * pageSize + 1 : 0
   const to = Math.min(total, (page + 1) * pageSize)
@@ -210,17 +214,17 @@ export function Pager({ page, pageSize, total, onPage, onPageSize, sizes = [10, 
   }
   return (
     <div className="cc-pager">
-      <span className="cc-pager-info">Showing {fmtInt(from)} to {fmtInt(to)} of {fmtInt(total)} {noun}</span>
+      <span className="cc-pager-info">{t('ui.pager.showing', { from: fmtInt(from), to: fmtInt(to), total: fmtInt(total), noun: noun || t('ui.pager.rows') })}</span>
       <div className="cc-pager-nums">
-        <button type="button" aria-label="Previous page" disabled={page <= 0} onClick={() => onPage(page - 1)}><ChevronLeft size={15} /></button>
+        <button type="button" aria-label={t('ui.pager.previous')} disabled={page <= 0} onClick={() => onPage(page - 1)}><ChevronLeft size={15} className="rtl-flip" /></button>
         {nums.map((n, i) => n === '...'
           ? <span key={`e${i}`} className="cc-pager-gap">...</span>
           : <button key={n} type="button" aria-current={n === page ? 'page' : undefined} onClick={() => onPage(n)}>{n + 1}</button>)}
-        <button type="button" aria-label="Next page" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}><ChevronRight size={15} /></button>
+        <button type="button" aria-label={t('ui.pager.next')} disabled={page >= pages - 1} onClick={() => onPage(page + 1)}><ChevronRight size={15} className="rtl-flip" /></button>
       </div>
       {onPageSize && (
-        <select className="cc-select" aria-label="Rows per page" value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))}>
-          {sizes.map((s) => <option key={s} value={s}>{s} per page</option>)}
+        <select className="cc-select" aria-label={t('ui.pager.rowsPerPage')} value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))}>
+          {sizes.map((s) => <option key={s} value={s}>{t('ui.pager.perPage', { n: s })}</option>)}
         </select>
       )}
     </div>

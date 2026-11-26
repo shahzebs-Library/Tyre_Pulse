@@ -52,8 +52,8 @@ export function PlanningSection({ scope }) {
       </div>
       <SectionCard title={t('inventory.planning.signalsTitle')} sub={t('inventory.planning.signalsSub')}>
         <KitTable compact scroll rows={signals} loading={loading} empty={t('inventory.planning.noSignals')} columns={alignNumeric([
-          { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || r.description || <span className="cc-na">N/A</span> },
-          { key: 'site', header: t('inventory.scope.site'), cell: (r) => r.location_code || r.site || <span className="cc-na">N/A</span> },
+          { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || r.description || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+          { key: 'site', header: t('inventory.scope.site'), cell: (r) => r.location_code || r.site || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
           { key: 'available', header: t('inventory.planning.available'), numeric: true, cell: (r) => formatQty(r.available) },
           { key: 'reorder_point', header: t('inventory.planning.reorderPoint'), numeric: true, cell: (r) => formatQty(r.reorder_point) },
           { key: 'gap', header: t('inventory.planning.gap'), numeric: true, cell: (r) => formatQty(r.gap) },

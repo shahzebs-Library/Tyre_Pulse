@@ -45,7 +45,7 @@ export default function OverviewSection({ scope, can, onNavigate }) {
           label={t('inventory.overview.pendingBatches')} onClick={() => onNavigate('controls')} />
         {can('view_value') && (
           <ExplainedKpi metricId="inv_stock_value" country={scope.country} icon={Coins} tone="t-green" loading={snapLoading}
-            display={snap.data?.status === 'ok' ? formatTotals(value.totals) : 'N/A'}
+            display={snap.data?.status === 'ok' ? formatTotals(value.totals) : t('wmsfloor.common.na')}
             label={t('inventory.overview.ownedValue')} onClick={() => onNavigate('valuation')} />
         )}
       </div>

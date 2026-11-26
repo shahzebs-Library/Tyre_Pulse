@@ -49,7 +49,7 @@ function Photos({ captureId, canonicalId, t }) {
       <div className="inv-pi-photos">
         {rows.map((p) => (
           <button key={p.id} type="button" onClick={() => setOpen(p)} aria-label={`${t(`inventory.pi.photoRole.${p.photo_role}`)} - ${t(`inventory.pi.purpose.${p.purpose}`)}`}>
-            {p.thumbUrl || p.url ? <img src={p.thumbUrl || p.url} alt={t(`inventory.pi.photoRole.${p.photo_role}`)} loading="lazy" /> : <span className="cc-na">N/A</span>}
+            {p.thumbUrl || p.url ? <img src={p.thumbUrl || p.url} alt={t(`inventory.pi.photoRole.${p.photo_role}`)} loading="lazy" /> : <span className="cc-na">{t('wmsfloor.common.na')}</span>}
           </button>
         ))}
       </div>
@@ -118,8 +118,8 @@ function ReviewDrawer({ capture, onClose, onDone, t }) {
           <dt>{t('inventory.pi.common.qty')}</dt><dd>{capture.quantity} {capture.uom || ''}</dd>
           <dt>{t('inventory.pi.common.condition')}</dt><dd>{t(`inventory.pi.cond.${capture.condition}`)}</dd>
           <dt>{t('inventory.pi.common.ownership')}</dt><dd>{t(`inventory.pi.own.${capture.ownership}`)}</dd>
-          <dt>{t('inventory.pi.review.entered')}</dt><dd>{Object.entries(capture.entered_refs || {}).map(([k, v]) => `${t(`inventory.pi.ref.${k}`)}: ${v}`).join(' / ') || 'N/A'}</dd>
-          <dt>{t('inventory.pi.common.remarks')}</dt><dd>{capture.remarks || 'N/A'}</dd>
+          <dt>{t('inventory.pi.review.entered')}</dt><dd>{Object.entries(capture.entered_refs || {}).map(([k, v]) => `${t(`inventory.pi.ref.${k}`)}: ${v}`).join(' / ') || t('wmsfloor.common.na')}</dd>
+          <dt>{t('inventory.pi.common.remarks')}</dt><dd>{capture.remarks || t('wmsfloor.common.na')}</dd>
         </dl>
         <Photos captureId={capture.id} t={t} />
         {dups.length > 0 && (
@@ -168,8 +168,8 @@ function ReviewView({ scope, t }) {
   const [stamp, setStamp] = useState(0)
   const q = useInvQuery(() => listCaptures({ page, pageSize: size, status, site: scope.site, country: scope.country, search }), [page, size, status, scope.site, scope.country, search, stamp])
   const cols = [
-    { key: 'temp_ref', header: t('inventory.pi.common.ref'), cell: (r) => r.temp_ref || r.scanned_code || 'N/A' },
-    { key: 'what', header: t('inventory.pi.common.material'), cell: (r) => r.canonical_description || r.entered_refs?.description || 'N/A' },
+    { key: 'temp_ref', header: t('inventory.pi.common.ref'), cell: (r) => r.temp_ref || r.scanned_code || t('wmsfloor.common.na') },
+    { key: 'what', header: t('inventory.pi.common.material'), cell: (r) => r.canonical_description || r.entered_refs?.description || t('wmsfloor.common.na') },
     { key: 'site', header: t('inventory.scope.site') },
     { key: 'quantity', header: t('inventory.pi.common.qty'), numeric: true },
     { key: 'dups', header: t('inventory.pi.review.dupCol'), cell: (r) => (r.duplicate_candidates?.length ? <StatusPill value="dup" tone="warn" label={String(r.duplicate_candidates.length)} /> : '-') },
@@ -350,14 +350,14 @@ function CorrectionDetail({ row, onClose, onDone, userId, t }) {
       <div className="inv-hub" style={{ gap: 12 }}>
         <KitTable compact rows={diff} columns={[
           { key: 'field', header: t('inventory.pi.corr.field'), cell: (d) => (d.changed ? <strong>{d.field}</strong> : d.field) },
-          { key: 'before', header: t('inventory.pi.corr.before'), cell: (d) => (d.before == null ? 'N/A' : JSON.stringify(d.before)) },
+          { key: 'before', header: t('inventory.pi.corr.before'), cell: (d) => (d.before == null ? t('wmsfloor.common.na') : JSON.stringify(d.before)) },
           { key: 'after', header: t('inventory.pi.corr.after'), cell: (d) => {
-            const v = d.after == null ? 'N/A' : JSON.stringify(d.after)
+            const v = d.after == null ? t('wmsfloor.common.na') : JSON.stringify(d.after)
             return d.changed ? <strong>{v}</strong> : v
           } },
         ]} />
         <p><strong>{t('inventory.pi.corr.reason')}:</strong> {row.reason}</p>
-        <p><strong>{t('inventory.pi.field.evidence')}:</strong> {(row.evidence || []).map((e) => e.ref || JSON.stringify(e)).join('; ') || 'N/A'}</p>
+        <p><strong>{t('inventory.pi.field.evidence')}:</strong> {(row.evidence || []).map((e) => e.ref || JSON.stringify(e)).join('; ') || t('wmsfloor.common.na')}</p>
         {own && row.status === 'submitted' && <Note>{t('inventory.pi.corr.ownNote')}</Note>}
         {row.status === 'submitted' && <Field label={t('inventory.pi.common.note')} full><input className="inv-input" value={note} onChange={(e) => setNote(e.target.value)} /></Field>}
         <h3 className="cc-card-sub">{t('inventory.pi.corr.history')}</h3>
@@ -522,7 +522,7 @@ function SearchView({ scope, t }) {
                 {r.status !== 'active' && <StatusPill value={r.status} tone="warn" label={t(`inventory.pi.status.${r.status}`)} />}
                 <span className="cc-na"> / {t('inventory.pi.search.matchedOn')}: {(r.matched_on || []).join(', ')}</span>
               </div>
-              <div className="cc-na">{t('inventory.pi.search.erp')}: {(r.erp_skus || []).map((e) => `${e.item_code} (${e.country})`).join(', ') || 'N/A'} / {t('inventory.pi.search.refs')}: {(r.references || []).map((x) => `${x.type}: ${x.value}${x.status === 'historical' ? ` (${t('inventory.pi.search.historical')})` : ''}`).join(', ') || 'N/A'}</div>
+              <div className="cc-na">{t('inventory.pi.search.erp')}: {(r.erp_skus || []).map((e) => `${e.item_code} (${e.country})`).join(', ') || t('wmsfloor.common.na')} / {t('inventory.pi.search.refs')}: {(r.references || []).map((x) => `${x.type}: ${x.value}${x.status === 'historical' ? ` (${t('inventory.pi.search.historical')})` : ''}`).join(', ') || t('wmsfloor.common.na')}</div>
               {['genuine', 'oes', 'aftermarket', 'unknown'].map((k) => g[k].length > 0 && (
                 <div key={k}>
                   <h3 className="cc-card-sub"><StatusPill value={k} tone={classificationTone(k)} label={t(`inventory.pi.cls.${k}`)} /></h3>
@@ -577,7 +577,7 @@ function TransferRequestRow({ row, userId, onDone, t }) {
   return (
     <div className="inv-pi-result">
       <div>
-        <strong>{row.item?.item_code || 'N/A'}</strong> {row.item?.item_name || ''} <span className="cc-na">{row.qty} / {row.from_site} &rarr; {row.site} / {fmtDateTime(row.requested_at)}</span>
+        <strong>{row.item?.item_code || t('wmsfloor.common.na')}</strong> {row.item?.item_name || ''} <span className="cc-na">{row.qty} / {row.from_site} &rarr; {row.site} / {fmtDateTime(row.requested_at)}</span>
         {' '}<StatusPill value={row.status} tone={row.status === 'requested' ? 'warn' : row.status === 'approved' ? 'good' : 'muted'} label={t(`inventory.pi.transfers.status.${row.status}`)} />
       </div>
       <div className="cc-na">{t('inventory.pi.corr.reason')}: {row.reason}{row.decision_note ? ` / ${row.decision_note}` : ''}</div>

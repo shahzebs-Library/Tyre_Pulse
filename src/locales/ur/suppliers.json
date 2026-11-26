@@ -1,0 +1,258 @@
+{
+  "title": "سپلائر انتظام",
+  "subtitle": "سپلائرز، معاہدوں اور وینڈر کی کارکردگی کا انتظام کریں",
+  "actions": {
+    "import": "ڈیٹا انٹیک سینٹر کے ذریعے امپورٹ کریں",
+    "refresh": "تازہ کریں",
+    "excel": "Excel",
+    "pdf": "PDF"
+  },
+  "kpi": {
+    "totalSuppliers": "کل سپلائرز",
+    "uniqueBrands": "منفرد برانڈز",
+    "preferred": "ترجیحی",
+    "ofTotalSuppliers": "{total} سپلائرز میں سے",
+    "cpkRange": "CPK کی حد",
+    "toValue": "تا {value}",
+    "bestCpk": "بہترین CPK",
+    "worstCpk": "بدترین CPK",
+    "vsLastYear": "پچھلے سال کے مقابلے {pct}%"
+  },
+  "ratingsError": "سپلائر کی ریٹنگز/نوٹس محفوظ یا لوڈ نہیں ہو سکے: {message}",
+  "retry": "دوبارہ کوشش کریں",
+  "searchPlaceholder": "سپلائر تلاش کریں...",
+  "filters": {
+    "allCountries": "تمام ممالک",
+    "allSites": "تمام سائٹس",
+    "allRatings": "تمام ریٹنگز",
+    "clear": "صاف کریں"
+  },
+  "suppliersCount": "{count} سپلائرز",
+  "tabs": {
+    "directory": "ڈائریکٹری",
+    "performance": "کارکردگی",
+    "spendAnalysis": "اخراجات کا تجزیہ",
+    "contracts": "معاہدے",
+    "recommendations": "سفارشات",
+    "scorecard": "اسکور کارڈ"
+  },
+  "ratings": {
+    "preferred": "ترجیحی",
+    "approved": "منظور شدہ",
+    "underReview": "زیر جائزہ",
+    "probation": "آزمائشی"
+  },
+  "directory": {
+    "emptyTitle": "کوئی سپلائر نہیں ملا",
+    "emptyDesc": "یہاں سپلائرز دیکھنے کے لیے اپنے فلٹرز بدلیں یا ٹائر ریکارڈز اپ لوڈ کریں۔",
+    "spendYtd": "سال اب تک اخراجات",
+    "tyres": "ٹائر",
+    "avgCpk": "اوسط CPK",
+    "failurePct": "خرابی %",
+    "removeFromCompare": "موازنے سے ہٹائیں",
+    "addToCompare": "موازنے میں شامل کریں",
+    "viewDetails": "تفصیل دیکھیں"
+  },
+  "performance": {
+    "selectToCompare": "موازنے کے لیے سپلائرز منتخب کریں (زیادہ سے زیادہ 4)",
+    "clearSelection": "انتخاب صاف کریں",
+    "emptyTitle": "موازنے کے لیے سپلائرز منتخب کریں",
+    "emptyDesc": "ساتھ ساتھ موازنہ دیکھنے کے لیے اوپر کی فہرست سے زیادہ سے زیادہ 4 سپلائرز چنیں۔",
+    "radarTitle": "کارکردگی ریڈار موازنہ",
+    "sideBySide": "ساتھ ساتھ پیمائشیں",
+    "metric": "پیمائش",
+    "rows": {
+      "avgCpk": "اوسط CPK",
+      "avgLifeKm": "اوسط عمر (km)",
+      "failureRate": "خرابی کی شرح",
+      "tyreCount": "ٹائر کی تعداد",
+      "spendYtd": "سال اب تک اخراجات",
+      "totalSpend": "کل اخراجات",
+      "rating": "ریٹنگ"
+    }
+  },
+  "spend": {
+    "shareTitle": "سپلائر اخراجات کا حصہ",
+    "noData": "اخراجات کا کوئی ڈیٹا دستیاب نہیں",
+    "totalSpend": "کل اخراجات: ",
+    "monthlyTitle": "سپلائر کے لحاظ سے ماہانہ اخراجات (12 ماہ)",
+    "yoyTitle": "سال بہ سال لاگت میں تبدیلی",
+    "columns": {
+      "supplier": "سپلائر",
+      "thisYear": "اس سال",
+      "lastYear": "پچھلا سال",
+      "change": "تبدیلی"
+    },
+    "noYoyData": "سال بہ سال کا کوئی ڈیٹا دستیاب نہیں",
+    "na": "N/A"
+  },
+  "contracts": {
+    "searchPlaceholder": "معاہدے تلاش کریں...",
+    "add": "معاہدہ شامل کریں",
+    "loadError": "معاہدے لوڈ نہیں ہو سکے",
+    "emptyTitle": "کوئی معاہدہ نہیں ملا",
+    "emptyDesc": "میعاد اور شرائط پر نظر رکھنے کے لیے سپلائر معاہدے شامل کریں۔",
+    "columns": {
+      "supplier": "سپلائر",
+      "start": "آغاز",
+      "end": "اختتام",
+      "paymentTerms": "ادائیگی کی شرائط",
+      "pricePerUnit": "قیمت/یونٹ",
+      "minOrder": "کم از کم آرڈر",
+      "status": "حالت",
+      "actions": "کارروائیاں"
+    },
+    "statuses": {
+      "active": "فعال",
+      "expiringSoon": "جلد ختم ہونے والا",
+      "expired": "میعاد ختم"
+    },
+    "expiringBannerTitle": "جلد ختم ہونے والے معاہدے",
+    "expiringBannerDesc": "{names} - 30 دن کے اندر تجدید ضروری ہے"
+  },
+  "recommendations": {
+    "title": "AI پر مبنی خریداری کی سفارشات",
+    "basedOn": "{count} ٹائر ریکارڈز کی بنیاد پر",
+    "emptyTitle": "ابھی کوئی سفارش نہیں",
+    "emptyDesc": "خریداری انٹیلیجنس بنانے کے لیے مزید ٹائر ریکارڈز اپ لوڈ کریں۔",
+    "types": {
+      "increase": "استعمال بڑھائیں",
+      "review": "سپلائر کا جائزہ لیں",
+      "saving": "لاگت میں بچت",
+      "consolidate": "یکجا کریں",
+      "action": "کارروائی"
+    },
+    "impact": "{impact} اثر",
+    "impactLevels": {
+      "Critical": "انتہائی اہم",
+      "High": "زیادہ",
+      "Medium": "درمیانہ"
+    },
+    "messages": {
+      "increase": "{brand} کا استعمال بڑھائیں - CPK {cpk} ہے، جو فلیٹ اوسط سے {pct}% بہتر ہے",
+      "review": "{brand} کا جائزہ لیں - خرابی کی شرح {rate}% ہے، جو {threshold}% حد سے زیادہ ہے",
+      "saving": "لاگت کم کرنے کا موقع: {worstBrand} کی جگہ {bestBrand} استعمال کرنے سے تقریباً {amount}/سال بچ سکتے ہیں",
+      "consolidate": "{size} کی خریداری {brand} کے پاس یکجا کرنے پر غور کریں - اس سائز کا بہترین CPK {cpk} ہے"
+    },
+    "summaryTitle": "سپلائر کارکردگی کا خلاصہ",
+    "columns": {
+      "supplier": "سپلائر",
+      "rating": "ریٹنگ",
+      "tyres": "ٹائر",
+      "avgCpk": "اوسط CPK",
+      "avgLife": "اوسط عمر",
+      "failurePct": "خرابی %",
+      "vsBenchmark": "معیار کے مقابلے"
+    },
+    "na": "N/A"
+  },
+  "scorecard": {
+    "cards": {
+      "suppliers": "سپلائرز",
+      "tyres": "ٹائر",
+      "totalSpend": "کل اخراجات",
+      "warrantyCredit": "وارنٹی کریڈٹ"
+    },
+    "description": "مجموعی اسکور (0-100، زیادہ بہتر ہے) میں CPK، خرابی کی شرح، وارنٹی وصولی اور بروقت ڈیلیوری شامل ہیں۔ لاگت صرف اصل ہے؛ غائب ڈیٹا خارج کیا جاتا ہے، اس پر سزا نہیں دی جاتی۔ جہاں سپلائر درج نہ ہو وہاں ٹائر کا برانڈ استعمال ہوتا ہے۔",
+    "columns": {
+      "rank": "#",
+      "supplier": "سپلائر",
+      "score": "اسکور",
+      "tyres": "ٹائر",
+      "spend": "اخراجات",
+      "avgCpk": "اوسط CPK",
+      "failurePct": "خرابی %",
+      "warrantyRec": "وارنٹی وصولی",
+      "onTimePct": "بروقت %"
+    },
+    "empty": "ابھی سپلائر کا کوئی ڈیٹا نہیں۔"
+  },
+  "drawer": {
+    "tyresSuffix": "ٹائر",
+    "radarTitle": "کارکردگی ریڈار",
+    "stats": {
+      "avgCpk": "اوسط CPK",
+      "avgTyreLife": "ٹائر کی اوسط عمر",
+      "failureRate": "خرابی کی شرح",
+      "spendThisYear": "اس سال کے اخراجات",
+      "totalSpend": "کل اخراجات",
+      "sitesUsed": "استعمال شدہ سائٹس"
+    },
+    "monthlySpendTitle": "ماہانہ اخراجات (12 ماہ)",
+    "sizeDistribution": "سائز کی تقسیم",
+    "noSizeData": "سائز کا کوئی ڈیٹا نہیں",
+    "siteUsage": "سائٹ کا استعمال",
+    "noSiteData": "سائٹ کا کوئی ڈیٹا نہیں",
+    "tyreRecords": "ٹائر ریکارڈز",
+    "totalSuffix": "کل {count}",
+    "columns": {
+      "serial": "سیریل",
+      "size": "سائز",
+      "asset": "اثاثہ",
+      "site": "سائٹ",
+      "cpk": "CPK",
+      "risk": "خطرہ",
+      "date": "تاریخ"
+    },
+    "noRecords": "کوئی ریکارڈ نہیں",
+    "prev": "پچھلا",
+    "next": "اگلا",
+    "pageOf": "{page} / {total}",
+    "ratingOverride": "ریٹنگ تبدیل کریں (ایڈمن)",
+    "notes": "نوٹس",
+    "notesPlaceholder": "اس سپلائر کے بارے میں اندرونی نوٹس شامل کریں...",
+    "saving": "محفوظ ہو رہا ہے...",
+    "saved": "محفوظ ہو گیا",
+    "saveNotes": "نوٹس محفوظ کریں"
+  },
+  "radarLabels": {
+    "cpkScore": "CPK اسکور",
+    "lifeScore": "عمر کا اسکور",
+    "reliability": "قابل اعتمادی",
+    "value": "قدر",
+    "coverage": "احاطہ"
+  },
+  "monthlySpendLabel": "ماہانہ اخراجات",
+  "contractModal": {
+    "editTitle": "معاہدے میں ترمیم کریں",
+    "addTitle": "معاہدہ شامل کریں",
+    "supplierName": "سپلائر کا نام *",
+    "contractStart": "معاہدے کا آغاز",
+    "contractEnd": "معاہدے کا اختتام",
+    "paymentTerms": "ادائیگی کی شرائط",
+    "paymentTermsPlaceholder": "مثلاً Net 30",
+    "pricePerUnit": "فی یونٹ قیمت",
+    "minOrderQty": "کم از کم آرڈر مقدار",
+    "notes": "نوٹس",
+    "cancel": "منسوخ کریں",
+    "saving": "محفوظ ہو رہا ہے...",
+    "save": "معاہدہ محفوظ کریں"
+  },
+  "deleteContract": {
+    "confirmTitle": "{name} کا معاہدہ حذف کریں؟",
+    "warning": "یہ سپلائر معاہدہ مستقل طور پر ہٹا دیتا ہے۔ ٹائر اور اخراجات کے ریکارڈز متاثر نہیں ہوتے۔",
+    "defaultError": "معاہدہ حذف نہیں ہو سکا - شاید آپ کو اجازت نہیں، یا یہ پہلے ہی ہٹا دیا گیا تھا۔",
+    "deleting": "حذف ہو رہا ہے...",
+    "delete": "معاہدہ حذف کریں",
+    "cancel": "منسوخ کریں"
+  },
+  "errors": {
+    "loadFailed": "ڈیٹا لوڈ نہیں ہو سکا"
+  },
+  "detail": {
+    "back": "سپلائرز پر واپس",
+    "notFoundTitle": "سپلائر نہیں ملا",
+    "notFoundDesc": "موجودہ ملکی دائرے میں \"{brand}\" کے لیے کوئی ٹائر ریکارڈ نہیں ملا۔ ہو سکتا ہے اسے ہٹا دیا گیا ہو یا فلٹر کر دیا گیا ہو۔",
+    "tabs": {
+      "profile": "پروفائل",
+      "performance": "کارکردگی",
+      "contracts": "معاہدے",
+      "notes": "نوٹس"
+    },
+    "contracts": {
+      "emptyTitle": "اس سپلائر کے کوئی معاہدے نہیں",
+      "emptyDesc": "اس سپلائر کے نام سے کوئی معاہدہ نہیں ملتا۔ سپلائر انتظام صفحے کے معاہدے ٹیب سے معاہدے شامل یا منظم کریں۔",
+      "manageHint": "یہاں معاہدے صرف دیکھے جا سکتے ہیں۔ انہیں سپلائر انتظام صفحے کے معاہدے ٹیب سے بنائیں، ترمیم کریں یا حذف کریں۔"
+    }
+  }
+}

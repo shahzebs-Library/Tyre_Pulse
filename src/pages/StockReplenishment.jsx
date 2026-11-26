@@ -32,7 +32,7 @@ import { sortRows, nextSort } from '../lib/consoleTable'
 import { colorAt, withAlpha } from '../lib/reportColors'
 import { resolveCurrency } from '../lib/rootCauseEngineAnalytics'
 import {
-  URGENCIES, URGENCY_LABEL, loadSince, consumptionRates, avgUnitCosts, buildMatrix, filterMatrix,
+  URGENCIES, loadSince, consumptionRates, avgUnitCosts, buildMatrix, filterMatrix,
   plannedQty, summarizeMatrix, consumptionBySize, trendForSize, allSizes as listSizes, consumptionGrid,
   seasonalVariance, orderTotals, matrixExportRows, MATRIX_EXPORT_COLS, MATRIX_EXPORT_HEADERS,
 } from '../lib/stockReplenishmentAnalytics'
@@ -71,7 +71,7 @@ const CHART_OPTS = {
 function UrgencyBadge({ urgency }) {
   const { t } = useLanguage()
   const tone = URGENCY_TONE[urgency] || URGENCY_TONE.Idle
-  const label = urgency === 'Idle' ? URGENCY_LABEL.Idle : t(`stockreplenish.urgency.${urgency}`)
+  const label = urgency === 'Idle' ? t('wmsprocure.urgency.Idle') : t(`stockreplenish.urgency.${urgency}`)
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border"
       style={{ color: tone, borderColor: withAlpha(tone, 0.45), backgroundColor: withAlpha(tone, 0.1) }}>
@@ -82,11 +82,12 @@ function UrgencyBadge({ urgency }) {
 }
 
 function SortButton({ label, active, dir, onClick, align }) {
+  const { t } = useLanguage()
   const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ChevronUp : ChevronDown
   return (
     <button type="button" onClick={onClick}
       className={`inline-flex items-center gap-1 min-h-[32px] rounded ${FOCUS} ${align === 'right' ? 'flex-row-reverse' : ''} ${active ? 'text-[var(--text-primary)]' : ''}`}
-      aria-label={`Sort by ${label}${active ? `, currently ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}`}>
+      aria-label={active ? t(dir === 'asc' ? 'wmsprocure.repl.sortAsc' : 'wmsprocure.repl.sortDesc', { label }) : t('wmsprocure.repl.sortBy', { label })}>
       {label}
       <Icon size={12} aria-hidden="true" />
     </button>
@@ -178,7 +179,7 @@ export default function StockReplenishment() {
       // A failed read must never render as "no stock".
       setStockData([])
       setTyreRecords([])
-      setLoadError(toUserMessage(e, 'Replenishment data could not be loaded.'))
+      setLoadError(toUserMessage(e, t('wmsprocure.repl.loadErr')))
     } finally {
       setLoading(false)
     }
@@ -241,7 +242,7 @@ export default function StockReplenishment() {
   const trendLineData = useMemo(() => ({
     labels: trend.months.map(monthLabel),
     datasets: [{
-      label: selectedSize || 'Selected size',
+      label: selectedSize || t('wmsprocure.repl.selectedSize'),
       data: trend.data,
       borderColor: colorAt(1),
       backgroundColor: withAlpha(colorAt(1), 0.15),
@@ -250,7 +251,7 @@ export default function StockReplenishment() {
       pointRadius: 4,
       pointBackgroundColor: colorAt(1),
     }],
-  }), [trend, selectedSize, monthLabel])
+  }), [trend, selectedSize, monthLabel, t])
 
   const grid = useMemo(() => consumptionGrid(tyreRecords, now, 30), [tyreRecords, now])
   const seasonal = useMemo(() => seasonalVariance(tyreRecords, now), [tyreRecords, now])
@@ -291,7 +292,7 @@ export default function StockReplenishment() {
     }])
   }
   function clearOrder() {
-    if (orderLines.length && !window.confirm('Remove every line from this order?')) return
+    if (orderLines.length && !window.confirm(t('wmsprocure.repl.confirmClear'))) return
     setOrderLines([])
   }
 
@@ -311,7 +312,7 @@ export default function StockReplenishment() {
         reportFileName('Stock Replenishment Matrix', activeCountry, formatDate(now)),
         'Replenishment',
       )
-    } catch (e) { setActionError(toUserMessage(e, 'Could not export. Try again.')) }
+    } catch (e) { setActionError(toUserMessage(e, t('wmsprocure.repl.exportErr'))) }
   }
 
   async function exportOrderExcel() {
@@ -327,7 +328,7 @@ export default function StockReplenishment() {
       XLSX.utils.book_append_sheet(wb, ws, 'Purchase Order')
       XLSX.writeFile(wb, `${reportFileName('Replenishment PO', formatDate(new Date()))}.xlsx`)
     } catch (e) {
-      setActionError(toUserMessage(e, 'Could not export. Try again.'))
+      setActionError(toUserMessage(e, t('wmsprocure.repl.exportErr')))
     }
   }
 
@@ -382,7 +383,7 @@ export default function StockReplenishment() {
       for (let p = 1; p <= totalPages; p++) { doc.setPage(p); pdfFooter(doc, p, totalPages, company, brand) }
       doc.save(`${fileBase}.pdf`)
     } catch (e) {
-      setActionError(toUserMessage(e, 'Could not export. Try again.'))
+      setActionError(toUserMessage(e, t('wmsprocure.repl.exportErr')))
     }
   }
 
@@ -449,103 +450,103 @@ export default function StockReplenishment() {
 
   // ── Table columns ───────────────────────────────────────────────────────────
   const matrixColumns = useMemo(() => [
-    { id: 'brand', header: 'Brand', sort: r => r.brand, size: 120, firstDir: 'asc',
-      cell: r => <span className="font-medium text-[var(--text-primary)]">{r.brand || 'N/A'}</span> },
-    { id: 'size', header: 'Size', sort: r => r.size, size: 120, firstDir: 'asc',
-      cell: r => <span className="font-mono text-xs">{r.size || 'N/A'}</span> },
-    { id: 'site', header: 'Site', sort: r => r.site, size: 110, firstDir: 'asc',
-      cell: r => r.site || 'N/A' },
-    { id: 'qtyInStock', header: 'In stock', sort: r => r.qtyInStock, size: 90, align: 'right',
+    { id: 'brand', header: t('wmsprocure.repl.brand'), sort: r => r.brand, size: 120, firstDir: 'asc',
+      cell: r => <span className="font-medium text-[var(--text-primary)]">{r.brand || t('wmsprocure.repl.na')}</span> },
+    { id: 'size', header: t('wmsprocure.repl.size'), sort: r => r.size, size: 120, firstDir: 'asc',
+      cell: r => <span className="font-mono text-xs" dir="ltr">{r.size || t('wmsprocure.repl.na')}</span> },
+    { id: 'site', header: t('wmsprocure.repl.site'), sort: r => r.site, size: 110, firstDir: 'asc',
+      cell: r => r.site || t('wmsprocure.repl.na') },
+    { id: 'qtyInStock', header: t('wmsprocure.repl.inStock'), sort: r => r.qtyInStock, size: 90, align: 'right',
       cell: r => (
         <span className={`tabular-nums ${r.qtyInStock <= 0 ? 'text-red-500 font-bold' : 'text-[var(--text-primary)]'}`}>
-          {r.qtyInStock}{r.qtyInStock <= 0 && <span className="sr-only"> (stocked out)</span>}
+          {r.qtyInStock}{r.qtyInStock <= 0 && <span className="sr-only"> {t('wmsprocure.repl.stockedOutSr')}</span>}
         </span>
       ) },
-    { id: 'consumptionPerDay', header: 'Daily usage', sort: r => r.consumptionPerDay, size: 100, align: 'right',
-      cell: r => <span className="tabular-nums text-[var(--text-muted)]">{r.consumptionPerDay > 0 ? r.consumptionPerDay.toFixed(2) : 'None'}</span> },
-    { id: 'daysRemaining', header: 'Days left', sort: r => r.daysRemaining, size: 100, align: 'right', firstDir: 'asc',
+    { id: 'consumptionPerDay', header: t('wmsprocure.repl.dailyUsage'), sort: r => r.consumptionPerDay, size: 100, align: 'right',
+      cell: r => <span className="tabular-nums text-[var(--text-muted)]">{r.consumptionPerDay > 0 ? r.consumptionPerDay.toFixed(2) : t('wmsprocure.repl.none')}</span> },
+    { id: 'daysRemaining', header: t('wmsprocure.repl.daysLeft'), sort: r => r.daysRemaining, size: 100, align: 'right', firstDir: 'asc',
       cell: r => (
-        <span className="tabular-nums" title={r.daysRemaining === null ? 'No consumption in the last 90 days, so cover cannot be measured' : undefined}>
-          {r.daysRemaining === null ? 'N/A' : `${r.daysRemaining}d`}
+        <span className="tabular-nums" title={r.daysRemaining === null ? t('wmsprocure.repl.noCoverTitle') : undefined}>
+          {r.daysRemaining === null ? t('wmsprocure.repl.na') : t('wmsprocure.repl.daysShort', { days: r.daysRemaining })}
         </span>
       ) },
-    { id: 'plannedQty', header: 'Order qty', sort: r => plannedQty(r, editingQty), size: 110, align: 'right',
+    { id: 'plannedQty', header: t('wmsprocure.repl.orderQty'), sort: r => plannedQty(r, editingQty), size: 110, align: 'right',
       cell: r => (
         <input type="number" min="0" value={plannedQty(r, editingQty)}
-          aria-label={`Order quantity for ${r.brand || ''} ${r.size || ''} at ${r.site || 'site'}`}
+          aria-label={t('wmsprocure.repl.orderQtyAria', { brand: r.brand || '', size: r.size || '', site: r.site || t('wmsprocure.repl.siteWord') })}
           onChange={e => setEditingQty(prev => ({ ...prev, [r._key]: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
           className={`w-20 text-center ${CELL_INPUT}`} />
       ) },
-    { id: 'estimatedCost', header: 'Est. cost', sort: r => (moneyOk && r.unitCost !== null ? plannedQty(r, editingQty) * r.unitCost : null), size: 120, align: 'right',
+    { id: 'estimatedCost', header: t('wmsprocure.repl.estCost'), sort: r => (moneyOk && r.unitCost !== null ? plannedQty(r, editingQty) * r.unitCost : null), size: 120, align: 'right',
       cell: r => {
         const q = plannedQty(r, editingQty)
         if (!moneyOk || r.unitCost === null) {
-          return <span className="text-xs text-[var(--text-dim)]" title={r.unitCost === null ? 'No unit cost recorded for this brand and size' : 'Mixed currencies'}>N/A</span>
+          return <span className="text-xs text-[var(--text-dim)]" title={r.unitCost === null ? t('wmsprocure.repl.noUnitCost') : t('wmsprocure.repl.mixed')}>{t('wmsprocure.repl.na')}</span>
         }
         return (
-          <span className="tabular-nums text-xs text-[var(--text-secondary)]" title={r.unitCostSource === 'issues' ? 'Unit cost derived from priced tyre issues' : 'Unit cost from the stock record'}>
+          <span className="tabular-nums text-xs text-[var(--text-secondary)]" title={r.unitCostSource === 'issues' ? t('wmsprocure.repl.costFromIssues') : t('wmsprocure.repl.costFromStock')}>
             {money(q * r.unitCost)}
           </span>
         )
       } },
-    { id: 'urgency', header: 'Status', sort: r => URGENCIES.indexOf(r.urgency), size: 120, firstDir: 'asc',
+    { id: 'urgency', header: t('wmsprocure.repl.status'), sort: r => URGENCIES.indexOf(r.urgency), size: 120, firstDir: 'asc',
       cell: r => <UrgencyBadge urgency={r.urgency} /> },
     { id: 'actions', header: '', size: 110,
       cell: r => {
         const q = plannedQty(r, editingQty)
         return (
           <button type="button" onClick={() => addToOrder(r)} disabled={q <= 0}
-            aria-label={`Add ${r.brand || ''} ${r.size || ''} to order`}
+            aria-label={t('wmsprocure.repl.addAria', { brand: r.brand || '', size: r.size || '' })}
             className={`min-h-[44px] inline-flex items-center gap-1 px-3 rounded-lg text-xs font-medium border border-[var(--input-border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-40 disabled:cursor-not-allowed ${FOCUS}`}>
-            <Plus size={12} aria-hidden="true" /> Order
+            <Plus size={12} aria-hidden="true" /> {t('wmsprocure.repl.order')}
           </button>
         )
       } },
   // addToOrder closes over editingQty, which is already a dependency.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [editingQty, moneyOk, money])
+  ], [editingQty, moneyOk, money, t])
 
   const gridColumns = useMemo(() => [
-    { id: 'size', header: 'Size', sort: r => r.size, size: 130, firstDir: 'asc',
-      cell: r => <span className="font-mono text-[var(--text-primary)]">{r.size}</span> },
+    { id: 'size', header: t('wmsprocure.repl.size'), sort: r => r.size, size: 130, firstDir: 'asc',
+      cell: r => <span className="font-mono text-[var(--text-primary)]" dir="ltr">{r.size}</span> },
     ...grid.sites.map(site => ({
       id: `site:${site}`, header: site, sort: r => r[site], size: 90, align: 'right',
       cell: r => <span className={`tabular-nums ${r[site] > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-dim)]'}`}>{r[site]}</span>,
     })),
-    { id: 'total', header: 'Total', sort: r => r.total, size: 90, align: 'right',
+    { id: 'total', header: t('wmsprocure.repl.total'), sort: r => r.total, size: 90, align: 'right',
       cell: r => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{r.total}</span> },
-  ], [grid.sites])
+  ], [grid.sites, t])
 
   const indexedOrderLines = useMemo(() => orderLines.map((line, index) => ({ ...line, index })), [orderLines])
   const orderColumns = useMemo(() => [
-    { id: 'brand', header: 'Brand', size: 150,
-      cell: l => <input value={l.brand} aria-label={`Brand, line ${l.index + 1}`} placeholder="Brand"
+    { id: 'brand', header: t('wmsprocure.repl.brand'), size: 150,
+      cell: l => <input value={l.brand} aria-label={t('wmsprocure.repl.brandLine', { n: l.index + 1 })} placeholder={t('wmsprocure.repl.brand')}
         onChange={e => updateOrderLine(l.index, 'brand', e.target.value)} className={`w-full ${CELL_INPUT}`} /> },
-    { id: 'size', header: 'Size', size: 140,
-      cell: l => <input value={l.size} aria-label={`Size, line ${l.index + 1}`} placeholder="Size"
+    { id: 'size', header: t('wmsprocure.repl.size'), size: 140,
+      cell: l => <input value={l.size} aria-label={t('wmsprocure.repl.sizeLine', { n: l.index + 1 })} placeholder={t('wmsprocure.repl.size')}
         onChange={e => updateOrderLine(l.index, 'size', e.target.value)} className={`w-full font-mono ${CELL_INPUT}`} /> },
-    { id: 'site', header: 'Site', size: 130,
-      cell: l => <input value={l.site} aria-label={`Site, line ${l.index + 1}`} placeholder="Site"
+    { id: 'site', header: t('wmsprocure.repl.site'), size: 130,
+      cell: l => <input value={l.site} aria-label={t('wmsprocure.repl.siteLine', { n: l.index + 1 })} placeholder={t('wmsprocure.repl.site')}
         onChange={e => updateOrderLine(l.index, 'site', e.target.value)} className={`w-full ${CELL_INPUT}`} /> },
-    { id: 'qty', header: 'Qty', size: 90, align: 'right',
-      cell: l => <input type="number" min="1" value={l.qty} aria-label={`Quantity, line ${l.index + 1}`}
+    { id: 'qty', header: t('wmsprocure.repl.qty'), size: 90, align: 'right',
+      cell: l => <input type="number" min="1" value={l.qty} aria-label={t('wmsprocure.repl.qtyLine', { n: l.index + 1 })}
         onChange={e => updateOrderLine(l.index, 'qty', parseInt(e.target.value, 10) || 1)} className={`w-20 text-center ${CELL_INPUT}`} /> },
-    { id: 'unitCost', header: 'Unit cost', size: 130, align: 'right',
-      cell: l => <input type="number" min="0" step="0.01" value={l.unitCost} aria-label={`Unit cost, line ${l.index + 1}`}
-        onChange={e => updateOrderLine(l.index, 'unitCost', parseFloat(e.target.value) || 0)} className={`w-28 text-right ${CELL_INPUT}`} /> },
-    { id: 'totalCost', header: 'Total', size: 120, align: 'right',
+    { id: 'unitCost', header: t('wmsprocure.repl.unitCost'), size: 130, align: 'right',
+      cell: l => <input type="number" min="0" step="0.01" value={l.unitCost} aria-label={t('wmsprocure.repl.unitCostLine', { n: l.index + 1 })}
+        onChange={e => updateOrderLine(l.index, 'unitCost', parseFloat(e.target.value) || 0)} className={`w-28 text-end ${CELL_INPUT}`} /> },
+    { id: 'totalCost', header: t('wmsprocure.repl.total'), size: 120, align: 'right',
       cell: l => <span className="tabular-nums font-medium text-[var(--text-primary)] whitespace-nowrap">{fmtCurrency(l.totalCost, currency || activeCurrency)}</span> },
-    { id: 'supplier', header: 'Supplier', size: 170,
-      cell: l => <input value={l.supplier} aria-label={`Supplier, line ${l.index + 1}`} placeholder="Supplier name"
+    { id: 'supplier', header: t('wmsprocure.repl.supplier'), size: 170,
+      cell: l => <input value={l.supplier} aria-label={t('wmsprocure.repl.supplierLine', { n: l.index + 1 })} placeholder={t('wmsprocure.repl.supplierName')}
         onChange={e => updateOrderLine(l.index, 'supplier', e.target.value)} className={`w-full ${CELL_INPUT}`} /> },
     { id: 'actions', header: '', size: 60,
       cell: l => (
-        <button type="button" onClick={() => removeOrderLine(l.index)} aria-label={`Remove line ${l.index + 1}`}
+        <button type="button" onClick={() => removeOrderLine(l.index)} aria-label={t('wmsprocure.repl.removeLine', { n: l.index + 1 })}
           className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-red-500 ${FOCUS}`}>
           <X size={16} aria-hidden="true" />
         </button>
       ) },
-  ], [currency, activeCurrency])
+  ], [currency, activeCurrency, t])
 
   const noStock = !loading && !loadError && stockData.length === 0
 
@@ -563,17 +564,17 @@ export default function StockReplenishment() {
           <div className="flex flex-wrap items-center gap-2">
             {leadTimeEdit ? (
               <div className="flex items-center gap-1">
-                <label className="sr-only" htmlFor="lead-time-input">Supplier lead time in days</label>
+                <label className="sr-only" htmlFor="lead-time-input">{t('wmsprocure.repl.leadTimeLabel')}</label>
                 <input id="lead-time-input" type="number" min="1" max="365" value={leadTimeInput}
                   onChange={e => setLeadTimeInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') saveLeadTime(); if (e.key === 'Escape') setLeadTimeEdit(false) }}
                   className={`w-20 ${CTRL}`} autoFocus />
-                <span className="text-[var(--text-muted)] text-xs">days</span>
-                <button type="button" onClick={saveLeadTime} aria-label="Save lead time"
+                <span className="text-[var(--text-muted)] text-xs">{t('wmsprocure.repl.days')}</span>
+                <button type="button" onClick={saveLeadTime} aria-label={t('wmsprocure.repl.saveLeadTime')}
                   className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-[var(--accent)] text-white ${FOCUS}`}>
                   <CheckCircle size={16} aria-hidden="true" />
                 </button>
-                <button type="button" onClick={() => setLeadTimeEdit(false)} aria-label="Cancel lead time edit"
+                <button type="button" onClick={() => setLeadTimeEdit(false)} aria-label={t('wmsprocure.repl.cancelLeadTime')}
                   className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg border border-[var(--input-border)] text-[var(--text-secondary)] ${FOCUS}`}>
                   <X size={16} aria-hidden="true" />
                 </button>
@@ -582,16 +583,16 @@ export default function StockReplenishment() {
               <button type="button"
                 onClick={() => { setLeadTimeEdit(true); setLeadTimeInput(String(leadTimeDays)) }}
                 className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm ${FOCUS}`}>
-                <Clock size={14} aria-hidden="true" /> Lead time: {leadTimeDays}d <Edit2 size={12} aria-hidden="true" />
+                <Clock size={14} aria-hidden="true" /> {t('wmsprocure.repl.leadTimeBtn', { days: leadTimeDays })} <Edit2 size={12} aria-hidden="true" />
               </button>
             )}
             <button type="button" onClick={exportMatrixExcel} disabled={loading || filteredMatrix.length === 0}
               className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm disabled:opacity-50 ${FOCUS}`}>
-              <Download size={14} aria-hidden="true" /> Excel
+              <Download size={14} aria-hidden="true" /> {t('wmsprocure.repl.excel')}
             </button>
             <button type="button" onClick={load} disabled={loading}
               className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm disabled:opacity-50 ${FOCUS}`}>
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> {t('wmsprocure.repl.refresh')}
             </button>
           </div>
         }
@@ -601,11 +602,11 @@ export default function StockReplenishment() {
         <div role="alert" className="card p-4 flex flex-wrap items-center gap-3 border border-red-500/40">
           <AlertTriangle size={18} className="text-red-500 shrink-0" aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-[var(--text-primary)]">Replenishment data could not be loaded</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{t('wmsprocure.repl.loadErrTitle')}</p>
             <p className="text-sm text-[var(--text-muted)]">{loadError}</p>
           </div>
           <button type="button" onClick={load} className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm ${FOCUS}`}>
-            <RefreshCw size={14} aria-hidden="true" /> Retry
+            <RefreshCw size={14} aria-hidden="true" /> {t('wmsprocure.repl.retry')}
           </button>
         </div>
       )}
@@ -614,7 +615,7 @@ export default function StockReplenishment() {
         <div role="alert" className="card p-3 flex items-center gap-3 border border-red-500/40">
           <AlertTriangle size={16} className="text-red-500 shrink-0" aria-hidden="true" />
           <p className="text-sm text-[var(--text-secondary)] flex-1">{actionError}</p>
-          <button type="button" onClick={() => setActionError(null)} aria-label="Dismiss error"
+          <button type="button" onClick={() => setActionError(null)} aria-label={t('wmsprocure.repl.dismissError')}
             className={`min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] ${FOCUS}`}>
             <X size={16} aria-hidden="true" />
           </button>
@@ -624,35 +625,35 @@ export default function StockReplenishment() {
       {!moneyOk && !loading && stockData.length > 0 && (
         <div role="status" className="card p-3 flex items-start gap-2 border border-[var(--input-border)] text-xs text-[var(--text-secondary)]">
           <Coins size={16} className="shrink-0 mt-0.5 text-[var(--text-muted)]" aria-hidden="true" />
-          <span>Stock spans countries with different currencies, so reorder value is withheld rather than added together. Pick one country to see money figures.</span>
+          <span>{t('wmsprocure.repl.mixedNote')}</span>
         </div>
       )}
 
       {/* ── KPI strip ── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <StatTile icon={AlertTriangle} label="Needs reorder" value={loading ? '...' : kpis.needsReorder.toLocaleString()}
-          sub="Under 30 days of cover" tone={kpis.needsReorder > 0 ? 'crit' : 'neutral'} />
-        <StatTile icon={ShoppingCart} label="Reorder value" value={money(kpis.reorderValue)}
-          sub={kpis.unvaluedLines ? `${kpis.unvaluedLines} lines have no unit cost` : `${kpis.reorderUnits.toLocaleString()} units planned`} />
-        <StatTile icon={Clock} label="Avg days of cover" value={kpis.avgDays === null ? 'N/A' : `${kpis.avgDays}d`}
-          sub={kpis.measuredItems ? `${kpis.measuredItems} items with usage` : 'No usage recorded'}
+        <StatTile icon={AlertTriangle} label={t('wmsprocure.repl.kNeedsReorder')} value={loading ? '...' : kpis.needsReorder.toLocaleString()}
+          sub={t('wmsprocure.repl.kNeedsReorderSub')} tone={kpis.needsReorder > 0 ? 'crit' : 'neutral'} />
+        <StatTile icon={ShoppingCart} label={t('wmsprocure.repl.kReorderValue')} value={money(kpis.reorderValue)}
+          sub={kpis.unvaluedLines ? t('wmsprocure.repl.kUnvalued', { count: kpis.unvaluedLines }) : t('wmsprocure.repl.kUnitsPlanned', { count: kpis.reorderUnits.toLocaleString() })} />
+        <StatTile icon={Clock} label={t('wmsprocure.repl.kAvgCover')} value={kpis.avgDays === null ? t('wmsprocure.repl.na') : t('wmsprocure.repl.daysShort', { days: kpis.avgDays })}
+          sub={kpis.measuredItems ? t('wmsprocure.repl.kMeasured', { count: kpis.measuredItems }) : t('wmsprocure.repl.kNoUsage')}
           tone={kpis.avgDays !== null && kpis.avgDays < 30 ? 'crit' : 'info'} />
-        <StatTile icon={PackageX} label="Stocked out" value={kpis.stockouts.toLocaleString()}
-          sub="Zero quantity on hand" tone={kpis.stockouts > 0 ? 'crit' : 'neutral'} />
-        <StatTile icon={TrendingUp} label="Overstocked" value={kpis.overstocked.toLocaleString()} sub="Over 180 days of cover" />
-        <StatTile icon={TrendingDown} label="No usage" value={kpis.idle.toLocaleString()} sub="In stock, not issued in 90 days" />
+        <StatTile icon={PackageX} label={t('wmsprocure.repl.kStockedOut')} value={kpis.stockouts.toLocaleString()}
+          sub={t('wmsprocure.repl.kStockedOutSub')} tone={kpis.stockouts > 0 ? 'crit' : 'neutral'} />
+        <StatTile icon={TrendingUp} label={t('wmsprocure.repl.kOverstocked')} value={kpis.overstocked.toLocaleString()} sub={t('wmsprocure.repl.kOverstockedSub')} />
+        <StatTile icon={TrendingDown} label={t('wmsprocure.repl.kIdle')} value={kpis.idle.toLocaleString()} sub={t('wmsprocure.repl.kIdleSub')} />
       </div>
 
       {/* ── Tabs ── */}
-      <div role="tablist" aria-label="Replenishment views"
+      <div role="tablist" aria-label={t('wmsprocure.repl.tabsAria')}
         className="flex flex-wrap items-center gap-1 bg-[var(--surface-1)] border border-[var(--input-border)] rounded-xl p-1 w-fit max-w-full">
-        {TABS.map(({ key, label, icon: Icon }) => (
+        {TABS.map(({ key, icon: Icon }) => (
           <button key={key} type="button" role="tab" aria-selected={activeTab === key} onClick={() => setActiveTab(key)}
             className={`min-h-[44px] px-4 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${FOCUS} ${
               activeTab === key ? 'bg-[var(--accent)] text-white shadow' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}>
             <Icon size={14} aria-hidden="true" />
-            {label}
+            {t(`wmsprocure.repl.tab.${key}`)}
             {key === 'order' && orderLines.length > 0 && (
               <span className="bg-[var(--input-bg)] text-[var(--text-primary)] text-xs rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center font-bold">
                 {orderLines.length}
@@ -665,43 +666,43 @@ export default function StockReplenishment() {
       {/* ═══ TAB: MATRIX ═══ */}
       {activeTab === 'matrix' && (
         <div className="space-y-4">
-          <section className="card p-4" aria-label="Filters">
+          <section className="card p-4" aria-label={t('wmsprocure.repl.filters')}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
               <label className="block lg:col-span-2">
-                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Search</span>
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('wmsprocure.repl.search')}</span>
                 <span className="relative block">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                  <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                   <input type="search" value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder="Brand, size, site" className={`w-full pl-9 ${CTRL}`} />
+                    placeholder={t('wmsprocure.repl.searchPlaceholder')} className={`w-full ps-9 ${CTRL}`} />
                 </span>
               </label>
               <label className="block">
-                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Site</span>
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('wmsprocure.repl.site')}</span>
                 <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)} className={`w-full ${CTRL}`}>
-                  {allSites.map(s => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
+                  {allSites.map(s => <option key={s} value={s}>{s === 'All' ? t('wmsprocure.repl.allSites') : s}</option>)}
                 </select>
               </label>
               <label className="block">
-                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Status</span>
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('wmsprocure.repl.status')}</span>
                 <select value={urgencyFilter} onChange={e => setUrgencyFilter(e.target.value)} className={`w-full ${CTRL}`}>
-                  <option value="All">All statuses</option>
-                  {URGENCIES.map(u => <option key={u} value={u}>{URGENCY_LABEL[u]}</option>)}
+                  <option value="All">{t('wmsprocure.repl.allStatuses')}</option>
+                  {URGENCIES.map(u => <option key={u} value={u}>{t(`wmsprocure.urgency.${u}`)}</option>)}
                 </select>
               </label>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--text-dim)]" aria-live="polite">
-              <span>{loading ? 'Loading...' : `${filteredMatrix.length.toLocaleString()} of ${matrixRows.length.toLocaleString()} items`}</span>
+              <span>{loading ? t('wmsprocure.repl.loading') : t('wmsprocure.repl.itemsCount', { count: filteredMatrix.length.toLocaleString(), total: matrixRows.length.toLocaleString() })}</span>
               {filtersActive && (
                 <button type="button" onClick={clearFilters}
                   className={`min-h-[44px] inline-flex items-center gap-1 px-3 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${FOCUS}`}>
-                  <X size={12} aria-hidden="true" /> Clear filters
+                  <X size={12} aria-hidden="true" /> {t('wmsprocure.repl.clearFilters')}
                 </button>
               )}
-              <span className="ml-auto flex flex-wrap items-center gap-2">
+              <span className="ms-auto flex flex-wrap items-center gap-2">
                 {URGENCIES.map(u => (
                   <span key={u} className="inline-flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: URGENCY_TONE[u] }} aria-hidden="true" />
-                    {URGENCY_LABEL[u]}: {kpis.byUrgency[u] || 0}
+                    {t(`wmsprocure.urgency.${u}`)}: {kpis.byUrgency[u] || 0}
                   </span>
                 ))}
               </span>
@@ -711,8 +712,8 @@ export default function StockReplenishment() {
           {noStock ? (
             <div className="card p-12 text-center" role="status">
               <Package size={40} className="mx-auto mb-3 text-[var(--text-dim)]" aria-hidden="true" />
-              <p className="text-[var(--text-primary)] font-medium">No stock records found</p>
-              <p className="text-[var(--text-muted)] text-sm mt-1">Add stock records to see replenishment recommendations.</p>
+              <p className="text-[var(--text-primary)] font-medium">{t('wmsprocure.repl.noStock')}</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">{t('wmsprocure.repl.noStockHint')}</p>
             </div>
           ) : (
             <SortedPagedTable
@@ -723,12 +724,11 @@ export default function StockReplenishment() {
               loading={loading}
               error={loadError}
               onRetry={load}
-              emptyMessage="No stock items match these filters"
+              emptyMessage={t('wmsprocure.repl.noMatch')}
             />
           )}
           <p className="text-xs text-[var(--text-dim)]">
-            Cover uses tyres issued in the last 90 days. Suggested quantity covers 2 months of usage, net of stock on hand.
-            Items with stock but no usage show N/A cover, not an invented number.
+            {t('wmsprocure.repl.coverNote')}
           </p>
         </div>
       )}
@@ -744,25 +744,25 @@ export default function StockReplenishment() {
           )}
 
           <section className="card p-5" aria-labelledby="rep-bysize">
-            <h3 id="rep-bysize" className="text-[var(--text-primary)] font-semibold mb-4">Monthly consumption by top 5 tyre sizes (last 6 months)</h3>
+            <h3 id="rep-bysize" className="text-[var(--text-primary)] font-semibold mb-4">{t('wmsprocure.repl.bySizeTitle')}</h3>
             <div className="h-64">
               {loading ? <div className="h-full animate-pulse bg-[var(--input-bg)] rounded" aria-busy="true" />
                 : consumptionBarData.datasets.length > 0 ? (
-                  <div className="h-full" role="img" aria-label={`Stacked monthly issues for the top ${bySize.series.length} sizes, ${issuedInWindow} tyres in total.`}>
+                  <div className="h-full" role="img" aria-label={t('wmsprocure.repl.bySizeAria', { count: bySize.series.length, total: issuedInWindow })}>
                     <Bar data={consumptionBarData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { ...CHART_OPTS.plugins.legend, position: 'top' } } }} />
                   </div>
                 ) : (
-                  <p className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No tyre issue records in the last 6 months</p>
+                  <p className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">{t('wmsprocure.repl.noIssues6m')}</p>
                 )}
             </div>
           </section>
 
           <section className="card p-5" aria-labelledby="rep-trend">
             <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
-              <h3 id="rep-trend" className="text-[var(--text-primary)] font-semibold">Consumption trend by size</h3>
+              <h3 id="rep-trend" className="text-[var(--text-primary)] font-semibold">{t('wmsprocure.repl.trendTitle')}</h3>
               {sizes.length > 0 && (
                 <label className="block">
-                  <span className="sr-only">Tyre size</span>
+                  <span className="sr-only">{t('wmsprocure.repl.tyreSize')}</span>
                   <select value={selectedSize} onChange={e => setSelectedSize(e.target.value)} className={`w-auto ${CTRL}`}>
                     {sizes.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -771,17 +771,17 @@ export default function StockReplenishment() {
             </div>
             <div className="h-56">
               {selectedSize ? (
-                <div className="h-full" role="img" aria-label={`Monthly issues of ${selectedSize}: ${trend.data.join(', ')}.`}>
+                <div className="h-full" role="img" aria-label={t('wmsprocure.repl.trendAria', { size: selectedSize, data: trend.data.join(', ') })}>
                   <Line data={trendLineData} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, legend: { display: false } } }} />
                 </div>
               ) : (
-                <p className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">No size data available</p>
+                <p className="h-full flex items-center justify-center text-[var(--text-dim)] text-sm">{t('wmsprocure.repl.noSizeData')}</p>
               )}
             </div>
           </section>
 
           <section className="card p-5 space-y-3" aria-labelledby="rep-grid">
-            <h3 id="rep-grid" className="text-[var(--text-primary)] font-semibold">Size by site consumption (last 30 days)</h3>
+            <h3 id="rep-grid" className="text-[var(--text-primary)] font-semibold">{t('wmsprocure.repl.gridTitle')}</h3>
             <SortedPagedTable
               columns={gridColumns}
               rows={grid.rows}
@@ -790,7 +790,7 @@ export default function StockReplenishment() {
               loading={loading}
               error={loadError}
               onRetry={load}
-              emptyMessage="No tyre issues in the last 30 days"
+              emptyMessage={t('wmsprocure.repl.noIssues30d')}
             />
           </section>
         </div>
@@ -800,32 +800,32 @@ export default function StockReplenishment() {
       {activeTab === 'order' && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatTile icon={Coins} label="Total PO value" value={fmtCurrency(totals.total, currency || activeCurrency)} sub={`${totals.lines} line items`} />
-            <StatTile icon={Package} label="Total units" value={totals.units.toLocaleString()} sub="Tyres across all lines" />
-            <StatTile icon={Layers} label="Sites covered" value={totals.sites.toLocaleString()} sub="Unique sites" />
-            <StatTile icon={AlertTriangle} label="Lines to complete" value={(totals.unpriced + totals.missingSupplier).toLocaleString()}
-              sub={`${totals.unpriced} unpriced, ${totals.missingSupplier} without supplier`}
+            <StatTile icon={Coins} label={t('wmsprocure.repl.totalPoValue')} value={fmtCurrency(totals.total, currency || activeCurrency)} sub={t('wmsprocure.repl.lineItems', { count: totals.lines })} />
+            <StatTile icon={Package} label={t('wmsprocure.repl.totalUnits')} value={totals.units.toLocaleString()} sub={t('wmsprocure.repl.totalUnitsSub')} />
+            <StatTile icon={Layers} label={t('wmsprocure.repl.sitesCovered')} value={totals.sites.toLocaleString()} sub={t('wmsprocure.repl.uniqueSites')} />
+            <StatTile icon={AlertTriangle} label={t('wmsprocure.repl.linesToComplete')} value={(totals.unpriced + totals.missingSupplier).toLocaleString()}
+              sub={t('wmsprocure.repl.linesToCompleteSub', { unpriced: totals.unpriced, noSupplier: totals.missingSupplier })}
               tone={totals.unpriced + totals.missingSupplier > 0 ? 'warn' : 'neutral'} />
           </div>
 
           <section className="card p-0 overflow-hidden" aria-labelledby="rep-order">
             <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b border-[var(--input-border)]">
               <h3 id="rep-order" className="text-[var(--text-primary)] font-semibold flex items-center gap-2">
-                <ShoppingCart size={16} className="text-[var(--text-muted)]" aria-hidden="true" /> Purchase order lines
+                <ShoppingCart size={16} className="text-[var(--text-muted)]" aria-hidden="true" /> {t('wmsprocure.repl.poLines')}
               </h3>
               <button type="button" onClick={addBlankOrderLine}
                 className={`btn-secondary min-h-[44px] flex items-center gap-1.5 text-sm ${FOCUS}`}>
-                <Plus size={14} aria-hidden="true" /> Add line
+                <Plus size={14} aria-hidden="true" /> {t('wmsprocure.repl.addLine')}
               </button>
             </div>
             {orderLines.length === 0 ? (
               <div className="py-14 text-center px-4" role="status">
                 <ShoppingCart size={40} className="mx-auto mb-3 text-[var(--text-dim)]" aria-hidden="true" />
-                <p className="text-[var(--text-primary)] font-medium">No order lines yet</p>
-                <p className="text-[var(--text-muted)] text-sm mt-1">Choose Order in the Replenishment Matrix or add lines manually.</p>
+                <p className="text-[var(--text-primary)] font-medium">{t('wmsprocure.repl.noLines')}</p>
+                <p className="text-[var(--text-muted)] text-sm mt-1">{t('wmsprocure.repl.noLinesHint')}</p>
                 <button type="button" onClick={() => setActiveTab('matrix')}
                   className={`btn-secondary min-h-[44px] mt-4 inline-flex items-center gap-1.5 text-sm ${FOCUS}`}>
-                  <Layers size={14} aria-hidden="true" /> Go to the Replenishment Matrix
+                  <Layers size={14} aria-hidden="true" /> {t('wmsprocure.repl.goToMatrix')}
                 </button>
               </div>
             ) : (
@@ -834,14 +834,14 @@ export default function StockReplenishment() {
                   columns={orderColumns}
                   rows={indexedOrderLines}
                   getRowId={l => l._key}
-                  emptyMessage="No order lines"
+                  emptyMessage={t('wmsprocure.repl.noOrderLines')}
                 />
                 <div className="flex flex-wrap items-center justify-between gap-2 px-2 pt-3 text-sm">
                   <span className="text-[var(--text-muted)]">
-                    {totals.lines} line{totals.lines !== 1 ? 's' : ''}, {totals.units} units
+                    {t(totals.lines === 1 ? 'wmsprocure.repl.linesUnitsOne' : 'wmsprocure.repl.linesUnitsMany', { lines: totals.lines, units: totals.units })}
                   </span>
                   <span className="text-[var(--text-muted)]">
-                    Total PO value: <span className="text-[var(--text-primary)] text-lg font-bold tabular-nums">{fmtCurrency(totals.total, currency || activeCurrency)}</span>
+                    {t('wmsprocure.repl.totalPoValueColon')} <span className="text-[var(--text-primary)] text-lg font-bold tabular-nums">{fmtCurrency(totals.total, currency || activeCurrency)}</span>
                   </span>
                 </div>
               </div>
@@ -857,11 +857,11 @@ export default function StockReplenishment() {
               <span className="text-[var(--text-secondary)]">{poResult.message}</span>
               {poResult.type === 'success' && (
                 <Link to="/procurement" className={`inline-flex items-center gap-1 text-[var(--accent)] hover:underline rounded ${FOCUS}`}>
-                  <ExternalLink size={14} aria-hidden="true" /> Open Procurement
+                  <ExternalLink size={14} aria-hidden="true" /> {t('wmsprocure.repl.openProcurement')}
                 </Link>
               )}
-              <button type="button" onClick={() => setPoResult(null)} aria-label="Dismiss message"
-                className={`ml-auto min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] ${FOCUS}`}>
+              <button type="button" onClick={() => setPoResult(null)} aria-label={t('wmsprocure.repl.dismissMessage')}
+                className={`ms-auto min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-muted)] ${FOCUS}`}>
                 <X size={16} aria-hidden="true" />
               </button>
             </div>
@@ -872,23 +872,23 @@ export default function StockReplenishment() {
               <button type="button" onClick={handleCreatePurchaseOrder} disabled={creatingPO}
                 className={`btn-primary min-h-[44px] flex items-center gap-2 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS}`}>
                 {creatingPO ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <ShoppingCart size={16} aria-hidden="true" />}
-                {creatingPO ? 'Creating PO...' : 'Create Purchase Order'}
+                {creatingPO ? t('wmsprocure.repl.creatingPo') : t('wmsprocure.repl.createPo')}
               </button>
               <button type="button" onClick={exportOrderExcel}
                 className={`btn-secondary min-h-[44px] flex items-center gap-2 text-sm ${FOCUS}`}>
-                <FileSpreadsheet size={16} aria-hidden="true" /> Export PO to Excel
+                <FileSpreadsheet size={16} aria-hidden="true" /> {t('wmsprocure.repl.exportPoExcel')}
               </button>
               <button type="button" onClick={exportOrderPDF}
                 className={`btn-secondary min-h-[44px] flex items-center gap-2 text-sm ${FOCUS}`}>
-                <FileText size={16} aria-hidden="true" /> Export PO to PDF
+                <FileText size={16} aria-hidden="true" /> {t('wmsprocure.repl.exportPoPdf')}
               </button>
               <button type="button" onClick={clearOrder}
                 className={`min-h-[44px] flex items-center gap-2 px-4 rounded-lg border border-red-500/40 text-red-500 text-sm font-medium hover:bg-red-500/10 ${FOCUS}`}>
-                <X size={16} aria-hidden="true" /> Clear all lines
+                <X size={16} aria-hidden="true" /> {t('wmsprocure.repl.clearAll')}
               </button>
               <Link to="/procurement"
-                className={`ml-auto min-h-[44px] inline-flex items-center gap-1.5 text-sm text-[var(--accent)] hover:underline rounded ${FOCUS}`}>
-                <ExternalLink size={14} aria-hidden="true" /> Manage full POs in Procurement
+                className={`ms-auto min-h-[44px] inline-flex items-center gap-1.5 text-sm text-[var(--accent)] hover:underline rounded ${FOCUS}`}>
+                <ExternalLink size={14} aria-hidden="true" /> {t('wmsprocure.repl.manageInProcurement')}
               </Link>
             </div>
           )}

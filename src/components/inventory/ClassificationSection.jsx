@@ -27,7 +27,7 @@ const AXES = ['abc', 'fsn', 'ved']
 const TABS = [...AXES, 'review']
 const CLASSES = { abc: ABC_CLASSES, fsn: FSN_CLASSES, ved: VED_CLASSES }
 const TONE = { A: 'bad', B: 'warn', C: 'muted', F: 'good', S: 'warn', N: 'bad', V: 'bad', E: 'warn', D: 'muted' }
-const pct = (v) => (v === null || v === undefined ? 'N/A' : `${(v * 100).toFixed(1)}%`)
+const pct = (v, na = 'N/A') => (v === null || v === undefined ? na : `${(v * 100).toFixed(1)}%`)
 
 export default function ClassificationSection({ scope, can, tab: linkedTab, onTab }) {
   const { t } = useLanguage()
@@ -66,20 +66,20 @@ export default function ClassificationSection({ scope, can, tab: linkedTab, onTa
 
   const columns = useMemo(() => {
     const base = [
-      { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || <span className="cc-na">N/A</span> },
-      { key: 'item_name', header: t('inventory.classify.col.name'), cell: (r) => r.item_name || <span className="cc-na">N/A</span> },
-      { key: 'category', header: t('inventory.classify.col.category'), cell: (r) => r.category || <span className="cc-na">N/A</span> },
+      { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || <span className="cc-na">{t('wmsparts.common.na')}</span> },
+      { key: 'item_name', header: t('inventory.classify.col.name'), cell: (r) => r.item_name || <span className="cc-na">{t('wmsparts.common.na')}</span> },
+      { key: 'category', header: t('inventory.classify.col.category'), cell: (r) => r.category || <span className="cc-na">{t('wmsparts.common.na')}</span> },
       { key: axis, header: t(`inventory.classify.axis.${axis}`), cell: (r) => <StatusPill value={r[axis]} tone={TONE[r[axis]] || 'muted'} label={t(`inventory.classify.class.${axis}.${r[axis]}`)} /> },
     ]
     const extra = {
       abc: [
-        { key: 'consumptionValue', header: t('inventory.classify.col.consumption'), numeric: true, sortValue: (r) => r.consumptionValue ?? -1, cell: (r) => (r.consumptionValue === null ? 'N/A' : formatMoney(r.consumptionValue, r.currency)) },
-        { key: 'share', header: t('inventory.classify.col.share'), numeric: true, sortValue: (r) => r.share ?? -1, cell: (r) => pct(r.share) },
-        { key: 'cumulativeShare', header: t('inventory.classify.col.cumulative'), numeric: true, sortValue: (r) => r.cumulativeShare ?? -1, cell: (r) => pct(r.cumulativeShare) },
+        { key: 'consumptionValue', header: t('inventory.classify.col.consumption'), numeric: true, sortValue: (r) => r.consumptionValue ?? -1, cell: (r) => (r.consumptionValue === null ? t('wmsparts.common.na') : formatMoney(r.consumptionValue, r.currency)) },
+        { key: 'share', header: t('inventory.classify.col.share'), numeric: true, sortValue: (r) => r.share ?? -1, cell: (r) => pct(r.share, t('wmsparts.common.na')) },
+        { key: 'cumulativeShare', header: t('inventory.classify.col.cumulative'), numeric: true, sortValue: (r) => r.cumulativeShare ?? -1, cell: (r) => pct(r.cumulativeShare, t('wmsparts.common.na')) },
       ],
       fsn: [
         { key: 'issues', header: t('inventory.classify.col.issues'), numeric: true, cell: (r) => formatQty(r.issues) },
-        { key: 'activeMonths', header: t('inventory.classify.col.activeMonths'), numeric: true, sortValue: (r) => r.activeMonths ?? -1, cell: (r) => (r.activeMonths === null ? 'N/A' : formatQty(r.activeMonths)) },
+        { key: 'activeMonths', header: t('inventory.classify.col.activeMonths'), numeric: true, sortValue: (r) => r.activeMonths ?? -1, cell: (r) => (r.activeMonths === null ? t('wmsparts.common.na') : formatQty(r.activeMonths)) },
       ],
       ved: [
         { key: 'criticality', header: t('inventory.classify.col.criticality'), cell: (r) => r.criticality || <span className="cc-na">{t('inventory.classify.notRecorded')}</span> },
@@ -104,7 +104,7 @@ export default function ClassificationSection({ scope, can, tab: linkedTab, onTa
       const rows = filtered.map((r) => ({
         item_code: r.item_code || '', item_name: r.item_name || '', category: r.category || '',
         class: t(`inventory.classify.class.${axis}.${r[axis]}`),
-        consumption: r.consumptionValue, currency: r.currency || '', share: pct(r.share),
+        consumption: r.consumptionValue, currency: r.currency || '', share: pct(r.share, t('wmsparts.common.na')),
         activeMonths: r.activeMonths, criticality: r.criticality || '', onHand: r.onHand,
         disposition: t(`inventory.classify.disposition.${r.disposition}`), reason: reasonText(r),
       }))
@@ -283,7 +283,7 @@ function VariantReviewPanel({ can }) {
   }
 
   const columns = [
-    { key: 'sku', header: t('inventory.common.item'), cell: (r) => r.sku || <span className="cc-na">N/A</span> },
+    { key: 'sku', header: t('inventory.common.item'), cell: (r) => r.sku || <span className="cc-na">{t('wmsparts.common.na')}</span> },
     { key: 'description', header: t('inventory.classify.review.col.description'), cell: (r) => r.description },
     { key: 'brand', header: t('inventory.classify.review.col.brand'), sortValue: (r) => r.brand?.value || '', cell: (r) => proposalCell(r, 'brand') },
     { key: 'partType', header: t('inventory.classify.review.col.partType'), sortValue: (r) => r.partType?.value || '', cell: (r) => proposalCell(r, 'partType') },

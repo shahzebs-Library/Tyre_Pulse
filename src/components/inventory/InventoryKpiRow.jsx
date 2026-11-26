@@ -32,9 +32,9 @@ export default function InventoryKpiRow({ scope, onNavigate }) {
   const done = audits.data?.status === 'ok' ? auditCompletion(audits.data.rows) : null
   const loading = dash.loading && !dash.data
   const sitesLine = done?.sites?.length
-    ? done.sites.slice(0, 4).map((s) => `${s.site} ${s.pct ?? 'N/A'}%`).join(' · ')
+    ? done.sites.slice(0, 4).map((s) => `${s.site} ${s.pct ?? t('wmsfloor.common.na')}%`).join(' · ')
     : t('inventory.ui.kpi.noAudits')
-  const auditPct = done?.pct === null || done?.pct === undefined ? 'N/A' : `${done.pct}%`
+  const auditPct = done?.pct === null || done?.pct === undefined ? t('wmsfloor.common.na') : `${done.pct}%`
 
   return (
     <div className="inv-kpis" role="group" aria-label={t('inventory.ui.kpi.label')}>

@@ -36,12 +36,12 @@ export function ProcurementSection({ can }) {
         <PagedTable query={p.q} page={p.page} pageSize={p.pageSize} onPage={p.setPage} onPageSize={p.setPageSize}
           empty={t('inventory.supply.poEmpty')} what={t('inventory.objects.purchase_order_lines')} noun={t('inventory.supply.linesNoun')}
           columns={[
-            { key: 'po_number', header: t('inventory.supply.po'), cell: (r) => <span className="inv-mono">{r.po_number || 'N/A'}</span> },
-            { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || <span className="cc-na">N/A</span> },
-            { key: 'description', header: t('inventory.common.description'), cell: (r) => r.description || <span className="cc-na">N/A</span> },
+            { key: 'po_number', header: t('inventory.supply.po'), cell: (r) => <span className="inv-mono">{r.po_number || t('wmsfloor.common.na')}</span> },
+            { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+            { key: 'description', header: t('inventory.common.description'), cell: (r) => r.description || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
             { key: 'ordered_qty', header: t('inventory.supply.ordered'), numeric: true, cell: (r) => formatQty(r.ordered_qty) },
             { key: 'received_qty', header: t('inventory.supply.received'), numeric: true, cell: (r) => formatQty(r.received_qty) },
-            { key: 'outstanding', header: t('inventory.supply.outstanding'), numeric: true, cell: (r) => (r.ordered_qty == null || r.received_qty == null ? <span className="cc-na">N/A</span> : formatQty(Math.max(0, Number(r.ordered_qty) - Number(r.received_qty)))) },
+            { key: 'outstanding', header: t('inventory.supply.outstanding'), numeric: true, cell: (r) => (r.ordered_qty == null || r.received_qty == null ? <span className="cc-na">{t('wmsfloor.common.na')}</span> : formatQty(Math.max(0, Number(r.ordered_qty) - Number(r.received_qty)))) },
             ...(showValue ? [{ key: 'unit_price', header: t('inventory.supply.unitPrice'), numeric: true, cell: (r) => formatMoney(r.unit_price, r.currency) }] : []),
             { key: 'status', header: t('inventory.common.status'), cell: (r) => <StatusPill value={r.status} tone="info" /> },
           ]} />
@@ -67,9 +67,9 @@ export function ReceivingSection({ scope, can }) {
         <PagedTable query={p.q} page={p.page} pageSize={p.pageSize} onPage={p.setPage} onPageSize={p.setPageSize}
           empty={t('inventory.supply.grnEmpty')} what={t('inventory.objects.goods_receipt_lines')} noun={t('inventory.supply.linesNoun')}
           columns={[
-            { key: 'grn_number', header: t('inventory.supply.grn'), cell: (r) => <span className="inv-mono">{r.grn_number || 'N/A'}</span> },
+            { key: 'grn_number', header: t('inventory.supply.grn'), cell: (r) => <span className="inv-mono">{r.grn_number || t('wmsfloor.common.na')}</span> },
             { key: 'po_number', header: t('inventory.supply.po'), cell: (r) => r.po_number || <span className="cc-na">{t('inventory.supply.noPo')}</span> },
-            { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || <span className="cc-na">N/A</span> },
+            { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
             { key: 'received_qty', header: t('inventory.supply.received'), numeric: true, cell: (r) => formatQty(r.received_qty) },
             { key: 'accepted_qty', header: t('inventory.supply.accepted'), numeric: true, cell: (r) => formatQty(r.accepted_qty) },
             { key: 'rejected_qty', header: t('inventory.supply.rejected'), numeric: true, cell: (r) => formatQty(r.rejected_qty) },
@@ -100,8 +100,8 @@ export function SupplierSection({ scope, can }) {
         <PagedTable query={a.q} page={a.page} pageSize={a.pageSize} onPage={a.setPage} onPageSize={a.setPageSize}
           empty={t('inventory.supply.agreementsEmpty')} what={t('inventory.objects.supplier_agreements')} noun={t('inventory.supply.agreementsNoun')}
           columns={[
-            { key: 'supplier_name', header: t('inventory.supply.supplier'), cell: (r) => r.supplier_name || <span className="cc-na">N/A</span> },
-            { key: 'agreement_type', header: t('inventory.supply.agreementType'), cell: (r) => (r.agreement_type ? t(`inventory.supply.types.${r.agreement_type}`) : 'N/A') },
+            { key: 'supplier_name', header: t('inventory.supply.supplier'), cell: (r) => r.supplier_name || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+            { key: 'agreement_type', header: t('inventory.supply.agreementType'), cell: (r) => (r.agreement_type ? t(`inventory.supply.types.${r.agreement_type}`) : t('wmsfloor.common.na')) },
             { key: 'lead_time_days', header: t('inventory.supply.leadTime'), numeric: true, cell: (r) => formatQty(r.lead_time_days) },
             { key: 'min_qty', header: t('inventory.supply.minMax'), cell: (r) => `${formatQty(r.min_qty)} / ${formatQty(r.max_qty)}` },
             { key: 'expires_at', header: t('inventory.supply.expires'), cell: (r) => fmtDate(r.expires_at) },
@@ -112,8 +112,8 @@ export function SupplierSection({ scope, can }) {
         <PagedTable query={c.q} page={c.page} pageSize={c.pageSize} onPage={c.setPage} onPageSize={c.setPageSize}
           empty={t('inventory.supply.consignmentEmpty')} what={t('inventory.objects.stock_records')} noun={t('inventory.supply.linesNoun')}
           columns={[
-            { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || r.description || <span className="cc-na">N/A</span> },
-            { key: 'location_code', header: t('inventory.common.location'), cell: (r) => r.location_code || r.site || <span className="cc-na">N/A</span> },
+            { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || r.description || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+            { key: 'location_code', header: t('inventory.common.location'), cell: (r) => r.location_code || r.site || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
             { key: 'qty_on_hand', header: t('inventory.register.onHand'), numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
             ...(showValue ? [{ key: 'avg_unit_cost', header: t('inventory.supply.agreedPrice'), numeric: true, cell: (r) => formatMoney(r.avg_unit_cost, r.currency) }] : []),
           ]} />

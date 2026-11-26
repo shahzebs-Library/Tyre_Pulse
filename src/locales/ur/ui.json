@@ -1,0 +1,63 @@
+{
+  "emptyState": {
+    "title": "کوئی ڈیٹا نہیں ملا",
+    "description": "آپ کے موجودہ فلٹرز سے ملتا کوئی ریکارڈ نہیں۔"
+  },
+  "search": {
+    "placeholder": "ٹائر، گاڑیاں، ورک آرڈر، رپورٹس تلاش کریں...",
+    "quickNavigation": "فوری رسائی",
+    "pages": "صفحات",
+    "results": "{count} نتائج",
+    "noResultsFor": "اس کے لیے کوئی نتیجہ نہیں",
+    "noResultsHint": "اثاثہ نمبر، سیریل یا برانڈ سے تلاش کر کے دیکھیں",
+    "emptyPrompt": "TyrePulse کے تمام ڈیٹا میں تلاش کے لیے لکھیں",
+    "recordsFound": "{count} ریکارڈز ملے",
+    "brand": "TyrePulse تلاش"
+  },
+  "command": {
+    "placeholder": "صفحات، کارروائیاں، ریکارڈز تلاش کریں... ({key}K)",
+    "searchError": "ریکارڈ کی تلاش ابھی دستیاب نہیں۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
+    "groups": {
+      "recent": "حالیہ",
+      "actions": "کارروائیاں",
+      "navigation": "نیویگیشن",
+      "commands": "کمانڈز",
+      "favorites": "پسندیدہ"
+    }
+  },
+  "hints": {
+    "navigate": "منتقل ہوں",
+    "select": "منتخب کریں",
+    "open": "کھولیں",
+    "close": "بند کریں"
+  },
+  "filters": {
+    "clearAll": "سب صاف کریں",
+    "removeAria": "{label} فلٹر ہٹائیں"
+  },
+  "bulk": {
+    "selected": "{count} {label} منتخب",
+    "deselectAll": "سب کا انتخاب ختم کریں"
+  },
+  "table": {
+    "noRecords": "کوئی ریکارڈ نہیں ملا",
+    "pageOf": "صفحہ {page} از {total}",
+    "showingRange": "{total} میں سے {from} تا {to} دکھائے جا رہے ہیں",
+    "rowsPerPage": "فی صفحہ قطاریں",
+    "first": "پہلا صفحہ",
+    "previous": "پچھلا صفحہ",
+    "next": "اگلا صفحہ",
+    "last": "آخری صفحہ"
+  },
+  "filterBar": {
+    "searchPlaceholder": "تلاش کریں..."
+  },
+  "pager": {
+    "showing": "{total} {noun} میں سے {from} تا {to}",
+    "rows": "قطاریں",
+    "previous": "پچھلا صفحہ",
+    "next": "اگلا صفحہ",
+    "rowsPerPage": "فی صفحہ قطاریں",
+    "perPage": "{n} فی صفحہ"
+  }
+}

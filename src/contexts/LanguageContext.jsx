@@ -38,16 +38,17 @@ const loadLegacyBridge = () => import('../lib/uiTranslationMemory')
  * belongs to a lazily-routed page, which already suspends on its own larger
  * chunk, so the dictionary is in place by the time the page renders.
  *
- * Arabic switches the document to RTL (`dir="rtl"`, `lang="ar"`) so the entire
- * app mirrors; the CSS in index.css handles directional flips.
+ * Arabic and Urdu switch the document to RTL (`dir="rtl"`, `lang="ar"|"ur"`) so
+ * the entire app mirrors; the CSS in index.css handles directional flips.
  */
 
 export const LANGUAGES = [
   { code: 'en', label: 'English',  native: 'English', dir: 'ltr' },
   { code: 'ar', label: 'Arabic',   native: 'العربية', dir: 'rtl' },
+  { code: 'ur', label: 'Urdu',     native: 'اردو',    dir: 'rtl' },
 ]
 
-const RTL_LANGS = new Set(['ar'])
+const RTL_LANGS = new Set(['ar', 'ur'])
 const STORAGE_KEY = 'tp_language'
 
 const EN_CORE = {
@@ -75,7 +76,10 @@ const EN_MODULES = import.meta.glob(
   { import: 'default' },
 )
 const AR_MODULES = import.meta.glob('../locales/ar/*.json', { import: 'default' })
-const MODULES = { en: EN_MODULES, ar: AR_MODULES }
+// Urdu ships per-namespace like Arabic. A namespace with no Urdu file falls
+// back to English key by key, so Urdu can be rolled out screen by screen.
+const UR_MODULES = import.meta.glob('../locales/ur/*.json', { import: 'default' })
+const MODULES = { en: EN_MODULES, ar: AR_MODULES, ur: UR_MODULES }
 
 const nsOf = (path) => path.split('/').pop().replace('.json', '')
 
@@ -87,7 +91,7 @@ const nsOf = (path) => path.split('/').pop().replace('.json', '')
  */
 const NAMESPACES = new Set([...Object.keys(EN_CORE), ...Object.keys(EN_MODULES).map(nsOf)])
 
-const DICTS = { en: { ...EN_CORE }, ar: {} }
+const DICTS = { en: { ...EN_CORE }, ar: {}, ur: {} }
 
 /** Languages that exist but may not be loaded yet (drives setLanguage + detect). */
 const KNOWN_LANGS = new Set(LANGUAGES.map((l) => l.code))
@@ -194,7 +198,10 @@ function detectInitial() {
     if (saved && KNOWN_LANGS.has(saved)) return saved
   } catch { /* ignore */ }
   const nav = (typeof navigator !== 'undefined' && navigator.language) || 'en'
-  return nav.toLowerCase().startsWith('ar') ? 'ar' : 'en'
+  const lower = nav.toLowerCase()
+  if (lower.startsWith('ar')) return 'ar'
+  if (lower.startsWith('ur')) return 'ur'
+  return 'en'
 }
 
 export function LanguageProvider({ children }) {

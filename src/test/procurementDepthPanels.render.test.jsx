@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render as rtlRender, screen, waitFor } from '@testing-library/react'
+import { LanguageProvider } from '../contexts/LanguageContext'
+
+// The wmsprocure namespace loads lazily; the provider re-renders once it lands.
+const render = (ui) => rtlRender(<LanguageProvider>{ui}</LanguageProvider>)
 
 const state = { mode: 'empty' }
 const answer = () => {

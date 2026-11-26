@@ -13,6 +13,7 @@ import { loadStockReconcile } from '../../lib/api/stockReconcile'
 import { reconcileExportRows, isDemoLine } from '../../lib/inventory/stockReconcile'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { useInvQuery, ErrorNote, NotSetUp, Note, StatusPill, SearchBox, SectionCard, alignNumeric, fmtDateTime } from './InvUi'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const ICONS = {
   ledger_drift: Scale, stock_qty_diff: Layers, qty_no_ledger: BookX, reserved_mismatch: Ban,
@@ -21,9 +22,12 @@ const ICONS = {
 const KPI_TONE = { bad: 't-red', warning: 't-amber', muted: 't-blue' }
 const PAGE = 100
 
-const qty = (v) => (v === null || v === undefined ? <span className="cc-na">N/A</span> : formatQty(v))
-
 export default function StockReconcilePanel({ scope, can }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`wmsfloor.reconcile.${k}`, v)
+  const NA = t('wmsfloor.common.na')
+  const qty = (v) => (v === null || v === undefined ? <span className="cc-na">{NA}</span> : formatQty(v))
+  const checkText = (c, part) => (c && ICONS[c.key] ? t(`wmsfloor.reconcile.check.${c.key}.${part}`) : c?.[part])
   const q = useInvQuery(() => loadStockReconcile(scope), [scope?.country, scope?.site])
   const [active, setActive] = useState('ledger_drift')
   const [search, setSearch] = useState('')
@@ -41,7 +45,7 @@ export default function StockReconcilePanel({ scope, can }) {
   }, [check, search])
 
   if (q.error) return <ErrorNote error={q.error} onRetry={q.retry} />
-  if (q.data?.status === 'not_provisioned') return <NotSetUp what="stock lines" />
+  if (q.data?.status === 'not_provisioned') return <NotSetUp what={p('what')} />
 
   const doExport = async () => {
     if (!check) return
@@ -53,79 +57,78 @@ export default function StockReconcilePanel({ scope, can }) {
       const headers = ['Check', 'Stock line', 'Country', 'Site', 'Description', 'On hand', 'Ledger', 'Old stock qty', 'Reserved', 'Reserved in ledger', 'Unvalued qty', 'Movements', 'Difference', 'Data']
       await exportToExcel(data, keys, headers, reportFileName('Stock reconciliation', check.label, scope?.country || 'All countries'), 'Reconciliation')
     } catch {
-      setExportErr('The file could not be created. Try again.')
+      setExportErr(p('exportFailed'))
     } finally { setExporting(false) }
   }
 
   const columns = [
-    { key: 'site', header: 'Site', cell: (r) => r.site || <span className="cc-na">N/A</span> },
-    { key: 'description', header: 'Description', cell: (r) => (
-      <span>{r.description || <span className="cc-na">N/A</span>}{isDemoLine(r) && <> <StatusPill value="demo" tone="muted" label="Demo" /></>}</span>
+    { key: 'site', header: p('colSite'), cell: (r) => r.site || <span className="cc-na">{NA}</span> },
+    { key: 'description', header: p('colDescription'), cell: (r) => (
+      <span>{r.description || <span className="cc-na">{NA}</span>}{isDemoLine(r) && <> <StatusPill value="demo" tone="muted" label={p('demo')} /></>}</span>
     ) },
-    { key: 'qty_on_hand', header: 'On hand', numeric: true, cell: (r) => qty(r.qty_on_hand) },
+    { key: 'qty_on_hand', header: p('colOnHand'), numeric: true, cell: (r) => qty(r.qty_on_hand) },
     ...(active === 'ledger_drift' || active === 'qty_no_ledger' ? [
-      { key: 'ledger_qty', header: 'Ledger', numeric: true, cell: (r) => qty(r.ledger_qty) },
-      { key: 'movement_count', header: 'Movements', numeric: true, cell: (r) => qty(r.movement_count) },
+      { key: 'ledger_qty', header: p('colLedger'), numeric: true, cell: (r) => qty(r.ledger_qty) },
+      { key: 'movement_count', header: p('colMovements'), numeric: true, cell: (r) => qty(r.movement_count) },
     ] : []),
-    ...(active === 'stock_qty_diff' ? [{ key: 'stock_qty', header: 'Old stock qty', numeric: true, cell: (r) => qty(r.stock_qty) }] : []),
+    ...(active === 'stock_qty_diff' ? [{ key: 'stock_qty', header: p('colOldQty'), numeric: true, cell: (r) => qty(r.stock_qty) }] : []),
     ...(active === 'reserved_mismatch' ? [
-      { key: 'qty_reserved', header: 'Reserved', numeric: true, cell: (r) => qty(r.qty_reserved) },
-      { key: 'ledger_reserved', header: 'Reserved in ledger', numeric: true, cell: (r) => qty(r.ledger_reserved) },
+      { key: 'qty_reserved', header: p('colReserved'), numeric: true, cell: (r) => qty(r.qty_reserved) },
+      { key: 'ledger_reserved', header: p('colReservedLedger'), numeric: true, cell: (r) => qty(r.ledger_reserved) },
     ] : []),
-    ...(active === 'unvalued' ? [{ key: 'unvalued_qty', header: 'Unvalued qty', numeric: true, cell: (r) => qty(r.unvalued_qty) }] : []),
-    ...(['ledger_drift', 'stock_qty_diff'].includes(active) ? [{ key: 'difference', header: 'Difference', numeric: true, cell: (r) => qty(r.difference) }] : []),
+    ...(active === 'unvalued' ? [{ key: 'unvalued_qty', header: p('colUnvalued'), numeric: true, cell: (r) => qty(r.unvalued_qty) }] : []),
+    ...(['ledger_drift', 'stock_qty_diff'].includes(active) ? [{ key: 'difference', header: p('colDifference'), numeric: true, cell: (r) => qty(r.difference) }] : []),
   ]
 
   const loading = q.loading && !q.data
   return (
     <div className="inv-hub">
       <Note>
-        Read only. These checks compare each stock line with its own movement ledger. Nothing is corrected from here;
-        a correction is posted through a stock movement or an approved adjustment so the ledger stays the record.
+        {p('intro')}
       </Note>
       {q.data?.truncated && (
-        <Note tone="warn" title="Not every line was read">
-          The scope holds more lines than this screen reads at once. Narrow the country or site to check the rest.
+        <Note tone="warn" title={p('truncTitle')}>
+          {p('truncBody')}
         </Note>
       )}
       <div className="inv-kpis">
         {(q.data?.checks || Array.from({ length: 8 }, (_, i) => ({ key: `s${i}`, label: '...', count: 0 }))).map((c) => (
           <Kpi key={c.key} icon={ICONS[c.key] || Scale} tone={c.count ? (KPI_TONE[c.tone] || 't-amber') : 't-green'}
-            value={c.count} display={c.skipped ? 'N/A' : undefined} label={c.label} loading={loading}
-            title={c.help} onClick={c.help ? () => { setActive(c.key); setSearch(''); setShown(PAGE) } : undefined} />
+            value={c.count} display={c.skipped ? NA : undefined} label={c.label === '...' ? c.label : checkText(c, 'label')} loading={loading}
+            title={c.help ? checkText(c, 'help') : c.help} onClick={c.help ? () => { setActive(c.key); setSearch(''); setShown(PAGE) } : undefined} />
         ))}
       </div>
       {check && (
         <SectionCard
-          title={`${check.label} (${check.skipped ? 'not checked' : formatQty(check.count)})`}
-          sub={`${check.help}${q.data ? ` Lines checked: ${formatQty(q.data.total)}. Read ${fmtDateTime(q.data.generatedAt)}.` : ''}`}
+          title={`${checkText(check, 'label')} (${check.skipped ? p('notChecked') : formatQty(check.count)})`}
+          sub={`${checkText(check, 'help')}${q.data ? ` ${p('checkedAt', { total: formatQty(q.data.total), at: fmtDateTime(q.data.generatedAt) })}` : ''}`}
           action={(
             <div className="inv-actions">
               <button type="button" className="cc-btn-ghost" onClick={q.retry} disabled={q.loading}>
-                <RefreshCw size={14} aria-hidden="true" /> Refresh
+                <RefreshCw size={14} aria-hidden="true" /> {p('refresh')}
               </button>
               {canExport && (
                 <button type="button" className="cc-btn-ghost" onClick={doExport} disabled={exporting || !rows.length}>
-                  <Download size={14} aria-hidden="true" /> {exporting ? 'Preparing...' : 'Excel'}
+                  <Download size={14} aria-hidden="true" /> {exporting ? p('preparing') : 'Excel'}
                 </button>
               )}
             </div>
           )}>
           {exportErr && <ErrorNote error={exportErr} />}
           {check.skipped
-            ? <Note tone="warn">The catalogue links could not be read, so this check was not run.</Note>
+            ? <Note tone="warn">{p('skipped')}</Note>
             : (
               <>
                 <div className="inv-toolbar">
-                  <SearchBox value={search} onChange={(v) => { setSearch(v); setShown(PAGE) }} placeholder="Search site or description" />
+                  <SearchBox value={search} onChange={(v) => { setSearch(v); setShown(PAGE) }} placeholder={p('search')} />
                 </div>
                 <div className="inv-scroll">
                   <KitTable compact columns={alignNumeric(columns)} rows={rows.slice(0, shown)} loading={loading}
-                    empty={search ? 'No lines match the search.' : 'No lines fail this check.'} />
+                    empty={search ? p('noMatch') : p('allPass')} />
                 </div>
                 {rows.length > shown && (
                   <button type="button" className="cc-btn-ghost" onClick={() => setShown((n) => n + PAGE)}>
-                    Show more ({formatQty(rows.length - shown)} left)
+                    {p('showMore', { n: formatQty(rows.length - shown) })}
                   </button>
                 )}
               </>

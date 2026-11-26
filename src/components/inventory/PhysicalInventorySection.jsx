@@ -230,8 +230,8 @@ function CaptureDesk({ session, orgId, onChanged, t }) {
 
   const cols = [
     { key: 'captured_at', header: t('inventory.pi.common.when'), cell: (r) => fmtDateTime(r.captured_at) },
-    { key: 'what', header: t('inventory.pi.common.material'), cell: (r) => r.canonical_description || r.temp_ref || r.scanned_code || 'N/A' },
-    { key: 'location', header: t('inventory.pi.common.location'), cell: (r) => r.location_code || r.location_hint || 'N/A' },
+    { key: 'what', header: t('inventory.pi.common.material'), cell: (r) => r.canonical_description || r.temp_ref || r.scanned_code || t('wmsfloor.common.na') },
+    { key: 'location', header: t('inventory.pi.common.location'), cell: (r) => r.location_code || r.location_hint || t('wmsfloor.common.na') },
     { key: 'quantity', header: t('inventory.pi.common.qty'), numeric: true },
     { key: 'condition', header: t('inventory.pi.common.condition'), cell: (r) => t(`inventory.pi.cond.${r.condition}`) },
     { key: 'identification_status', header: t('inventory.pi.common.status'), cell: (r) => <StatusPill value={r.identification_status} tone={identificationTone(r.identification_status)} label={t(`inventory.pi.status.${r.identification_status}`)} /> },
@@ -418,7 +418,7 @@ function DashboardTab({ scope, t, can }) {
   return (
     <div className="inv-hub">
       <div className="inv-kpis">
-        {tiles.map((x) => <Kpi key={x.key} icon={ClipboardList} tone={x.tone || 'info'} value={x.value} display={x.value == null ? 'N/A' : undefined} label={label(x.key)} loading={d.loading && !data} />)}
+        {tiles.map((x) => <Kpi key={x.key} icon={ClipboardList} tone={x.tone || 'info'} value={x.value} display={x.value == null ? t('wmsfloor.common.na') : undefined} label={label(x.key)} loading={d.loading && !data} />)}
       </div>
       <SectionCard title={t('inventory.pi.dash.progressTitle')} sub={progress == null ? t('inventory.pi.dash.noCaptures') : t('inventory.pi.dash.progress', { pct: progress })}
         action={can('export') && rows.length > 0 && (
@@ -434,7 +434,7 @@ function DashboardTab({ scope, t, can }) {
                 <h3 className="cc-card-sub">{label(k)}</h3>
                 <ul className="inv-pi-list">
                   {Object.entries(data[k] || {}).map(([name, n]) => <li key={name}><span>{t(`inventory.pi.${ns}.${name}`)}</span><strong>{n}</strong></li>)}
-                  {Object.keys(data[k] || {}).length === 0 && <li className="cc-na">N/A</li>}
+                  {Object.keys(data[k] || {}).length === 0 && <li className="cc-na">{t('wmsfloor.common.na')}</li>}
                 </ul>
               </div>
             ))}

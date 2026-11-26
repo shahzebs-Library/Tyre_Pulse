@@ -46,13 +46,13 @@ export default function AuditReconciliation({ audit, can, userId, people = [], o
   if (q.data?.status === 'not_provisioned') return <NotSetUp what={t('inventory.objects.inventory_audits')} />
 
   const columns = [
-    { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || r.serial_no || <span className="cc-na">N/A</span> },
-    { key: 'location_code', header: t('inventory.common.location'), cell: (r) => r.location_code || <span className="cc-na">N/A</span> },
+    { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || r.serial_no || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+    { key: 'location_code', header: t('inventory.common.location'), cell: (r) => r.location_code || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
     { key: 'expected_qty', header: t('inventory.recon.expected'), numeric: true, cell: (r) => formatQty(r.expected_qty) },
     { key: 'counted_qty', header: t('inventory.recon.counted'), numeric: true, cell: (r) => formatQty(r.counted_qty) },
-    { key: 'variance', header: t('inventory.recon.variance'), numeric: true, cell: (r) => (r.variance === null ? <span className="cc-na">N/A</span> : `${r.variance > 0 ? '+' : ''}${formatQty(r.variance)}`) },
+    { key: 'variance', header: t('inventory.recon.variance'), numeric: true, cell: (r) => (r.variance === null ? <span className="cc-na">{t('wmsfloor.common.na')}</span> : `${r.variance > 0 ? '+' : ''}${formatQty(r.variance)}`) },
     ...(showValue ? [{ key: 'value_impact', header: t('inventory.recon.valueImpact'), numeric: true, cell: (r) => formatMoney(r.value_impact, r.currency) }] : []),
-    { key: 'round', header: t('inventory.recon.round'), numeric: true, cell: (r) => r.round ?? <span className="cc-na">N/A</span> },
+    { key: 'round', header: t('inventory.recon.round'), numeric: true, cell: (r) => r.round ?? <span className="cc-na">{t('wmsfloor.common.na')}</span> },
     { key: 'status', header: t('inventory.common.status'), cell: (r) => <StatusPill value={r.status} tone={STATUS_TONE[r.status]} label={t(`inventory.recon.status.${r.status}`)} /> },
     { key: 'recount', header: t('inventory.recon.recount'), cell: (r) => (needsRecount(r) ? <StatusPill value="yes" tone="warning" label={t('inventory.recon.recountNeeded')} /> : null) },
   ]
@@ -60,7 +60,7 @@ export default function AuditReconciliation({ audit, can, userId, people = [], o
   return (
     <div className="inv-hub" style={{ gap: 12 }}>
       <div className="inv-kpis">
-        <ExplainedKpi metricId="inv_accuracy_exact_line" country={audit.country} icon={Target} tone="t-green" display={sum.accuracyPct === null ? 'N/A' : `${sum.accuracyPct}%`} label={t('inventory.recon.accuracy')} />
+        <ExplainedKpi metricId="inv_accuracy_exact_line" country={audit.country} icon={Target} tone="t-green" display={sum.accuracyPct === null ? t('wmsfloor.common.na') : `${sum.accuracyPct}%`} label={t('inventory.recon.accuracy')} />
         <Kpi icon={RotateCw} tone="t-amber" value={sum.recount} label={t('inventory.recon.recountLines')} />
         <Kpi icon={HelpCircle} tone="t-blue" value={sum.byStatus.not_counted} label={t('inventory.recon.status.not_counted')} />
         {showValue && <Kpi icon={Scale} tone="t-red" display={formatTotals(sum.net.totals)} label={t('inventory.recon.netValue')} />}

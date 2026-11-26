@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Info, Loader2, Pencil, Plus, RefreshCw, Scale, Trash2, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
 import {
   NOT_SET_UP, newIdempotencyKey, listPurchaseApprovalLimits, listPurchaseApproverRoles, savePurchaseApprovalLimit,
@@ -28,6 +29,7 @@ const fmtDate = (v) => {
 export default function PurchaseApprovalLimitsPanel() {
   const { profile, isSuperAdmin } = useAuth() || {}
   const isAdmin = !!isSuperAdmin || profile?.role === 'Admin'
+  const { t } = useLanguage()
   const [st, setSt] = useState({ loading: true, error: '', notSetUp: false, rows: [], roles: [] })
   const [form, setForm] = useState(null)        // null = closed; { ...EMPTY, editing }
   const [busy, setBusy] = useState('')
@@ -40,7 +42,7 @@ export default function PurchaseApprovalLimitsPanel() {
       if (!live) return
       const notSetUp = lim.status === 'not_provisioned' || roles.status === 'not_provisioned' || roles.rows.length === 0
       setSt({ loading: false, error: '', notSetUp, rows: lim.rows, roles: roles.rows })
-    }).catch((e) => { if (live) setSt({ loading: false, error: toUserMessage(e, 'Could not load the approval limits.'), notSetUp: false, rows: [], roles: [] }) })
+    }).catch((e) => { if (live) setSt({ loading: false, error: toUserMessage(e, t('wmsprocure.limits.loadErr')), notSetUp: false, rows: [], roles: [] }) })
     return () => { live = false }
   }, [])
   useEffect(() => load(), [load])
@@ -60,19 +62,17 @@ export default function PurchaseApprovalLimitsPanel() {
     setBusy('save'); setMsg({})
     try {
       await savePurchaseApprovalLimit(limitPayload(form, true), newIdempotencyKey())
-      setMsg({ ok: `${form.role}: ${form.noUpperLimit ? 'no upper limit' : `up to ${form.currency} ${Number(form.amount).toLocaleString('en-US')}`} saved.` })
+      setMsg({ ok: form.noUpperLimit ? t('wmsprocure.limits.savedNoUpper', { role: form.role }) : t('wmsprocure.limits.savedUpTo', { role: form.role, currency: form.currency, amount: Number(form.amount).toLocaleString('en-US') }) })
       setForm(null); load()
-    } catch (e) { setMsg({ error: toUserMessage(e, 'Could not save the limit.') }) } finally { setBusy('') }
+    } catch (e) { setMsg({ error: toUserMessage(e, t('wmsprocure.limits.saveErr')) }) } finally { setBusy('') }
   }
   const remove = async (r) => {
-    if (!window.confirm(`Remove the ${r.currency} limit for ${r.role}? ${shaped.active.length === 1
-      ? 'It is the last limit, so purchase orders will have no value threshold again.'
-      : `${r.role} will then not be able to approve ${r.currency} purchase orders.`}`)) return
+    if (!window.confirm(t(shaped.active.length === 1 ? 'wmsprocure.limits.confirmRemoveLast' : 'wmsprocure.limits.confirmRemove', { currency: r.currency, role: r.role }))) return
     setBusy(r.id); setMsg({})
     try {
       await savePurchaseApprovalLimit(limitPayload({ role: r.role, currency: r.currency, amount: r.amount, noUpperLimit: r.amount === null, site: r.site }, false), newIdempotencyKey())
-      setMsg({ ok: `${r.currency} limit for ${r.role} removed.` }); load()
-    } catch (e) { setMsg({ error: toUserMessage(e, 'Could not remove the limit.') }) } finally { setBusy('') }
+      setMsg({ ok: t('wmsprocure.limits.removed', { currency: r.currency, role: r.role }) }); load()
+    } catch (e) { setMsg({ error: toUserMessage(e, t('wmsprocure.limits.removeErr')) }) } finally { setBusy('') }
   }
 
   return (
@@ -81,17 +81,17 @@ export default function PurchaseApprovalLimitsPanel() {
         <div className="flex items-start gap-2 min-w-0">
           <Scale size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-[var(--text-primary)]">Purchase approval limits</h2>
-            <p className="text-xs text-[var(--text-muted)]">The highest purchase order value each role may approve, per currency. SAR, AED and EGP are set separately and never converted.</p>
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('wmsprocure.limits.title')}</h2>
+            <p className="text-xs text-[var(--text-muted)]">{t('wmsprocure.limits.subtitle')}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="cc-btn-ghost inline-flex items-center gap-1 min-h-[44px]" onClick={load} aria-label="Refresh">
-            <RefreshCw size={14} aria-hidden="true" /> Refresh
+          <button type="button" className="cc-btn-ghost inline-flex items-center gap-1 min-h-[44px]" onClick={load} aria-label={t('wmsprocure.limits.refresh')}>
+            <RefreshCw size={14} aria-hidden="true" /> {t('wmsprocure.limits.refresh')}
           </button>
           {isAdmin && !st.notSetUp && !st.loading && !st.error && (
             <button type="button" className="cc-btn inline-flex items-center gap-1 min-h-[44px]" onClick={openAdd}>
-              <Plus size={14} aria-hidden="true" /> Add limit
+              <Plus size={14} aria-hidden="true" /> {t('wmsprocure.limits.addLimit')}
             </button>
           )}
         </div>
@@ -99,13 +99,13 @@ export default function PurchaseApprovalLimitsPanel() {
 
       <div className="rounded-lg border border-[var(--hairline)] p-3 text-xs text-[var(--text-secondary)] space-y-1" role="note">
         <p className="flex items-start gap-2"><Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <span>While no limit is set, purchase orders have no value threshold: any permitted approver other than the creator can approve them.</span></p>
+          <span>{t('wmsprocure.limits.noLimitNote')}</span></p>
         <p className="flex items-start gap-2 text-amber-300"><AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
-          <span>Once any limit exists, a role without its own limit in the order's currency cannot approve purchase orders. Add a row for every role that should approve.</span></p>
-        <p>Emergency purchases are approved after the fact by a second person, within the same limits.</p>
+          <span>{t('wmsprocure.limits.anyLimitNote')}</span></p>
+        <p>{t('wmsprocure.limits.emergencyNote')}</p>
       </div>
 
-      {!isAdmin && <p className="text-xs text-[var(--text-muted)]">Only an administrator can change these limits. You can view them.</p>}
+      {!isAdmin && <p className="text-xs text-[var(--text-muted)]">{t('wmsprocure.limits.viewOnly')}</p>}
 
       {msg.error && <p role="alert" className="flex items-start gap-2 text-sm text-red-300"><AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" />{msg.error}</p>}
       {msg.ok && <p role="status" className="text-sm text-green-300">{msg.ok}</p>}
@@ -113,39 +113,39 @@ export default function PurchaseApprovalLimitsPanel() {
       {form && isAdmin && (
         <div className="rounded-lg border border-[var(--hairline)] p-3 space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-medium">{form.editing ? 'Change limit' : 'Add limit'}</h3>
-            <button type="button" className="cc-btn-ghost min-h-[44px] min-w-[44px]" onClick={() => setForm(null)} aria-label="Close"><X size={14} /></button>
+            <h3 className="text-sm font-medium">{form.editing ? t('wmsprocure.limits.changeLimit') : t('wmsprocure.limits.addLimit')}</h3>
+            <button type="button" className="cc-btn-ghost min-h-[44px] min-w-[44px]" onClick={() => setForm(null)} aria-label={t('wmsprocure.limits.close')}><X size={14} /></button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <label className="text-xs text-[var(--text-secondary)] block">Role
+            <label className="text-xs text-[var(--text-secondary)] block">{t('wmsprocure.limits.role')}
               <select className="input w-full mt-1" value={form.role} disabled={!!form.editing}
                 onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
                 {st.roles.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </label>
-            <label className="text-xs text-[var(--text-secondary)] block">Currency
+            <label className="text-xs text-[var(--text-secondary)] block">{t('wmsprocure.limits.currency')}
               <select className="input w-full mt-1" value={form.currency} disabled={!!form.editing}
                 onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}>
-                {LIMIT_CURRENCIES.map((c) => <option key={c.currency} value={c.currency}>{c.label}</option>)}
+                {LIMIT_CURRENCIES.map((c) => <option key={c.currency} value={c.currency}>{t(`wmsprocure.limits.cur.${c.currency}`)}</option>)}
               </select>
             </label>
-            <label className="text-xs text-[var(--text-secondary)] block">Highest order value
+            <label className="text-xs text-[var(--text-secondary)] block">{t('wmsprocure.limits.highest')}
               <input className="input w-full mt-1" type="number" min="0" step="0.01" inputMode="decimal" value={form.amount}
-                disabled={form.noUpperLimit} placeholder={form.noUpperLimit ? 'No upper limit' : 'e.g. 50000'}
+                disabled={form.noUpperLimit} placeholder={form.noUpperLimit ? t('wmsprocure.limits.noUpperLimit') : t('wmsprocure.limits.amountPlaceholder')}
                 onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
             </label>
           </div>
           <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)] min-h-[44px]">
             <input type="checkbox" className="mt-0.5" checked={form.noUpperLimit}
               onChange={(e) => setForm((f) => ({ ...f, noUpperLimit: e.target.checked }))} />
-            <span>No upper limit: this role may approve any {form.currency} order value (unpriced orders included).</span>
+            <span>{t('wmsprocure.limits.noUpperHelp', { currency: form.currency })}</span>
           </label>
           {formError && <p className="text-xs text-amber-300">{formError}</p>}
           <div className="flex flex-wrap gap-2">
             <button type="button" className="cc-btn min-h-[44px]" disabled={!!formError || busy === 'save'} onClick={save}>
-              {busy === 'save' ? <Loader2 size={14} className="animate-spin" /> : 'Save limit'}
+              {busy === 'save' ? <Loader2 size={14} className="animate-spin" /> : t('wmsprocure.limits.saveLimit')}
             </button>
-            <button type="button" className="cc-btn-ghost min-h-[44px]" onClick={() => setForm(null)}>Cancel</button>
+            <button type="button" className="cc-btn-ghost min-h-[44px]" onClick={() => setForm(null)}>{t('wmsprocure.limits.cancel')}</button>
           </div>
         </div>
       )}
@@ -155,12 +155,12 @@ export default function PurchaseApprovalLimitsPanel() {
       ) : st.error ? (
         <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-red-300">
           <AlertTriangle size={15} aria-hidden="true" />{st.error}
-          <button type="button" className="underline min-h-[44px]" onClick={load}>Try again</button>
+          <button type="button" className="underline min-h-[44px]" onClick={load}>{t('wmsprocure.limits.tryAgain')}</button>
         </div>
       ) : st.notSetUp ? (
         <p className="text-xs text-amber-300" role="note">{NOT_SET_UP}</p>
       ) : !shaped.active.length ? (
-        <p className="text-sm text-[var(--text-muted)]">No purchase approval limits are set. There is no value threshold today.{isAdmin ? ' Use Add limit to set the first one.' : ''}</p>
+        <p className="text-sm text-[var(--text-muted)]">{t('wmsprocure.limits.empty')}{isAdmin ? t('wmsprocure.limits.emptyAdmin') : ''}</p>
       ) : (
         <>
           <ul className="sm:hidden space-y-2">
@@ -168,7 +168,7 @@ export default function PurchaseApprovalLimitsPanel() {
               <li key={r.id} className="rounded-lg border border-[var(--hairline)] p-3 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{r.role}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{formatLimitAmount(r)}{r.site ? `, site ${r.site}` : ''}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{formatLimitAmount(r)}{r.site ? t('wmsprocure.limits.siteSuffix', { site: r.site }) : ''}</p>
                 </div>
                 {isAdmin && <RowActions r={r} busy={busy} onEdit={openEdit} onRemove={remove} />}
               </li>
@@ -177,26 +177,26 @@ export default function PurchaseApprovalLimitsPanel() {
           <div className="hidden sm:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-xs text-[var(--text-muted)]">
-                <th className="py-2 pr-2 text-left font-medium">Role</th>
-                <th className="py-2 pr-2 text-left font-medium">Currency</th>
-                <th className="py-2 pr-2 text-right font-medium">Highest order value</th>
-                <th className="py-2 pr-2 text-left font-medium">Updated</th>
-                {isAdmin && <th className="py-2 pr-2 text-left font-medium">Action</th>}
+                <th className="py-2 pe-2 text-start font-medium">{t('wmsprocure.limits.role')}</th>
+                <th className="py-2 pe-2 text-start font-medium">{t('wmsprocure.limits.currency')}</th>
+                <th className="py-2 pe-2 text-end font-medium">{t('wmsprocure.limits.highest')}</th>
+                <th className="py-2 pe-2 text-start font-medium">{t('wmsprocure.limits.updated')}</th>
+                {isAdmin && <th className="py-2 pe-2 text-start font-medium">{t('wmsprocure.limits.action')}</th>}
               </tr></thead>
               <tbody>{shaped.active.map((r) => (
                 <tr key={r.id} className="border-t border-[var(--hairline)]">
-                  <td className="py-2 pr-2">{r.role}{r.site ? <span className="block text-xs text-[var(--text-muted)]">Site {r.site}</span> : null}</td>
-                  <td className="py-2 pr-2">{r.currency || 'N/A'}</td>
-                  <td className="py-2 pr-2 text-right tabular-nums">{formatLimitAmount(r)}</td>
-                  <td className="py-2 pr-2">{fmtDate(r.updated_at)}</td>
-                  {isAdmin && <td className="py-2 pr-2"><RowActions r={r} busy={busy} onEdit={openEdit} onRemove={remove} /></td>}
+                  <td className="py-2 pe-2">{r.role}{r.site ? <span className="block text-xs text-[var(--text-muted)]">{t('wmsprocure.limits.siteLine', { site: r.site })}</span> : null}</td>
+                  <td className="py-2 pe-2">{r.currency || t('wmsprocure.limits.na')}</td>
+                  <td className="py-2 pe-2 text-end tabular-nums">{formatLimitAmount(r)}</td>
+                  <td className="py-2 pe-2">{fmtDate(r.updated_at)}</td>
+                  {isAdmin && <td className="py-2 pe-2"><RowActions r={r} busy={busy} onEdit={openEdit} onRemove={remove} /></td>}
                 </tr>
               ))}</tbody>
             </table>
           </div>
           {missing.length > 0 && (
             <p className="text-xs text-amber-300" role="note">
-              No limit, so these roles cannot approve purchase orders now: {missing.join(', ')}.
+              {t('wmsprocure.limits.missing', { roles: missing.join(', ') })}
             </p>
           )}
         </>
@@ -206,14 +206,15 @@ export default function PurchaseApprovalLimitsPanel() {
 }
 
 function RowActions({ r, busy, onEdit, onRemove }) {
+  const { t } = useLanguage()
   return (
     <div className="flex gap-1">
-      <button type="button" className="cc-btn-ghost inline-flex items-center gap-1 min-h-[44px]" onClick={() => onEdit(r)} aria-label={`Change ${r.role} ${r.currency} limit`}>
-        <Pencil size={14} aria-hidden="true" /> Change
+      <button type="button" className="cc-btn-ghost inline-flex items-center gap-1 min-h-[44px]" onClick={() => onEdit(r)} aria-label={t('wmsprocure.limits.changeAria', { role: r.role, currency: r.currency })}>
+        <Pencil size={14} aria-hidden="true" /> {t('wmsprocure.limits.change')}
       </button>
       <button type="button" className="cc-btn-ghost inline-flex items-center gap-1 min-h-[44px]" disabled={busy === r.id}
-        onClick={() => onRemove(r)} aria-label={`Remove ${r.role} ${r.currency} limit`}>
-        {busy === r.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} aria-hidden="true" />} Remove
+        onClick={() => onRemove(r)} aria-label={t('wmsprocure.limits.removeAria', { role: r.role, currency: r.currency })}>
+        {busy === r.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} aria-hidden="true" />} {t('wmsprocure.limits.remove')}
       </button>
     </div>
   )

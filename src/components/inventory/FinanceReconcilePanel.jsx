@@ -19,10 +19,23 @@ import { useInvQuery, ErrorNote, Note, NotSetUp, SectionCard, alignNumeric } fro
 import { loadFinanceRecon } from '../../lib/api/warehouseAssets'
 import { buildFinanceRecon, stockValueBySite, financeTotals, reconFinding, monthsAgoStart } from '../../lib/inventory/warehouseAssets'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const WINDOWS = [3, 6, 12]
+// reconFinding (lib) returns fixed English sentences; translate them at render.
+const FINDING_KEY = {
+  'Issued in the ERP, not recorded as an issue in the store.': 'erpOnly',
+  'Issued in the store, not in the ERP.': 'storeOnly',
+  'Store issues include unvalued quantity; the cost is unknown, not zero.': 'unvalued',
+  'Quantities differ between the store and the ERP.': 'differ',
+  'Quantities agree.': 'agree',
+  'Receipts only this month.': 'receiptsOnly',
+}
 
 export default function FinanceReconcilePanel({ scope, can }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`wmsfloor.finance.${k}`, v)
+  const finding = (r) => { const f = reconFinding(r); return f ? (FINDING_KEY[f] ? t(`wmsfloor.finance.finding.${FINDING_KEY[f]}`) : f) : '' }
   const [months, setMonths] = useState(6)
   const fromMonth = useMemo(() => monthsAgoStart(months - 1), [months])
   const q = useInvQuery(() => loadFinanceRecon({ ...scope, fromMonth }), [scope.country, scope.site, fromMonth])
@@ -35,81 +48,80 @@ export default function FinanceReconcilePanel({ scope, can }) {
   const stockOnHand = stock.reduce((a, r) => a + r.qtyOnHand, 0)
   const loading = q.loading && !q.data
   const money = (v, cur, hidden) => {
-    if (!showValue || hidden) return <span className="cc-na">Hidden</span>
-    return v === null || v === undefined ? <span className="cc-na">None</span> : formatMoney(v, cur)
+    if (!showValue || hidden) return <span className="cc-na">{p('hidden')}</span>
+    return v === null || v === undefined ? <span className="cc-na">{p('none')}</span> : formatMoney(v, cur)
   }
 
   if (q.error) return <ErrorNote error={q.error} onRetry={q.retry} />
-  if (q.data?.status === 'not_provisioned') return <NotSetUp what="ERP reconciliation" />
+  if (q.data?.status === 'not_provisioned') return <NotSetUp what={p('what')} />
 
   const trunc = q.data?.truncated || {}
 
   return (
     <div className="inv-hub" style={{ gap: 14 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span className="cc-card-sub">Period</span>
+        <span className="cc-card-sub">{p('period')}</span>
         {WINDOWS.map((w) => (
           <button key={w} type="button" className={months === w ? 'cc-btn' : 'cc-btn-ghost'} aria-pressed={months === w} onClick={() => setMonths(w)}>
-            Last {w} months
+            {p('lastMonths', { n: w })}
           </button>
         ))}
       </div>
 
       {(trunc.erp || trunc.receipts || trunc.valuation) && (
-        <Note tone="warn" title="Not every row was read">Choose a site or a shorter period so the totals cover everything.</Note>
+        <Note tone="warn" title={p('truncTitle')}>{p('truncBody')}</Note>
       )}
-      {noCurrency > 0 && <Note tone="warn">{noCurrency} site-month rows have no currency and are left out of the totals.</Note>}
+      {noCurrency > 0 && <Note tone="warn">{p('noCurrency', { count: noCurrency })}</Note>}
 
       <div className="inv-kpis">
-        {totals.length === 0 && !loading && <Kpi icon={Coins} tone="t-blue" value={null} display="None" label="ERP issue cost in the period" />}
-        {totals.map((t) => (
-          <Kpi key={`erp-${t.currency}`} icon={PackageMinus} tone="t-orange" loading={loading}
-            display={money(t.erpValue, t.currency)} label={`ERP issue cost (${t.currency}), ${t.erpLines.toLocaleString('en-US')} lines`} />
+        {totals.length === 0 && !loading && <Kpi icon={Coins} tone="t-blue" value={null} display={p('none')} label={p('kpiErpPeriod')} />}
+        {totals.map((x) => (
+          <Kpi key={`erp-${x.currency}`} icon={PackageMinus} tone="t-orange" loading={loading}
+            display={money(x.erpValue, x.currency)} label={p('kpiErp', { currency: x.currency, lines: x.erpLines.toLocaleString('en-US') })} />
         ))}
-        {totals.map((t) => (
-          <Kpi key={`rcv-${t.currency}`} icon={Receipt} tone="t-green" loading={loading}
-            display={money(t.receiptValue, t.currency)} label={`Receipts into stock (${t.currency})`} />
+        {totals.map((x) => (
+          <Kpi key={`rcv-${x.currency}`} icon={Receipt} tone="t-green" loading={loading}
+            display={money(x.receiptValue, x.currency)} label={p('kpiReceipts', { currency: x.currency })} />
         ))}
         <Kpi icon={PackageX} tone="t-amber" loading={loading} display={formatQty(stockUnvalued)}
-          label={`Stock quantity with unknown cost, of ${formatQty(stockOnHand)} on hand`} />
+          label={p('kpiUnvalued', { onHand: formatQty(stockOnHand) })} />
       </div>
 
-      <SectionCard title="Stock value today, by site" sub="Known value per currency. Quantity with no known cost is shown separately, never as zero cost.">
+      <SectionCard title={p('stockTitle')} sub={p('stockSub')}>
         <div className="inv-scroll">
-          <KitTable compact loading={loading} rows={stock} empty="No stock in this scope."
+          <KitTable compact loading={loading} rows={stock} empty={p('stockEmpty')}
             columns={alignNumeric([
-              { key: 'site', header: 'Site', cell: (r) => r.site || 'No site' },
-              { key: 'currency', header: 'Currency', cell: (r) => r.currency || <span className="cc-na">Not set</span> },
-              { key: 'lines', header: 'Lines', numeric: true },
-              { key: 'qtyOnHand', header: 'On hand', numeric: true, cell: (r) => formatQty(r.qtyOnHand) },
-              { key: 'valuedQty', header: 'Valued qty', numeric: true, cell: (r) => formatQty(r.valuedQty) },
-              { key: 'unvaluedQty', header: 'Unvalued qty', numeric: true, cell: (r) => formatQty(r.unvaluedQty) },
-              { key: 'valuedAmount', header: 'Known value', numeric: true, cell: (r) => money(r.valuedAmount, r.currency, r.valueHidden) },
+              { key: 'site', header: p('colSite'), cell: (r) => r.site || p('noSite') },
+              { key: 'currency', header: p('colCurrency'), cell: (r) => r.currency || <span className="cc-na">{p('notSet')}</span> },
+              { key: 'lines', header: p('colLines'), numeric: true },
+              { key: 'qtyOnHand', header: p('colOnHand'), numeric: true, cell: (r) => formatQty(r.qtyOnHand) },
+              { key: 'valuedQty', header: p('colValuedQty'), numeric: true, cell: (r) => formatQty(r.valuedQty) },
+              { key: 'unvaluedQty', header: p('colUnvaluedQty'), numeric: true, cell: (r) => formatQty(r.unvaluedQty) },
+              { key: 'valuedAmount', header: p('colKnownValue'), numeric: true, cell: (r) => money(r.valuedAmount, r.currency, r.valueHidden) },
             ])} />
         </div>
       </SectionCard>
 
-      <SectionCard title="Issues and receipts by site and month" sub="ERP issue cost against what the store recorded. Each currency stands alone.">
+      <SectionCard title={p('flowTitle')} sub={p('flowSub')}>
         <div className="inv-scroll">
-          <KitTable compact loading={loading} rows={rows} empty="No issues or receipts in this period."
+          <KitTable compact loading={loading} rows={rows} empty={p('flowEmpty')}
             columns={alignNumeric([
-              { key: 'month', header: 'Month' },
-              { key: 'site', header: 'Site', cell: (r) => r.site || 'No site' },
-              { key: 'currency', header: 'Currency', cell: (r) => r.currency || <span className="cc-na">Not set</span> },
-              { key: 'erpLines', header: 'ERP lines', numeric: true },
-              { key: 'erpQty', header: 'ERP qty', numeric: true, cell: (r) => formatQty(r.erpQty) },
-              { key: 'erpValue', header: 'ERP cost', numeric: true, cell: (r) => money(r.erpValue, r.currency) },
-              { key: 'invIssueQty', header: 'Store issue qty', numeric: true, cell: (r) => formatQty(r.invIssueQty) },
-              { key: 'invIssueValue', header: 'Store issue value', numeric: true, cell: (r) => money(r.invIssueValue, r.currency, r.invIssueValueHidden) },
-              { key: 'invIssueUnvaluedQty', header: 'Issued at unknown cost', numeric: true, cell: (r) => formatQty(r.invIssueUnvaluedQty) },
-              { key: 'receiptQty', header: 'Received qty', numeric: true, cell: (r) => formatQty(r.receiptQty) },
-              { key: 'receiptValue', header: 'Received value', numeric: true, cell: (r) => money(r.receiptValue, r.currency) },
-              { key: 'finding', header: 'Finding', sortable: false, cell: (r) => reconFinding(r) || '' },
+              { key: 'month', header: p('colMonth') },
+              { key: 'site', header: p('colSite'), cell: (r) => r.site || p('noSite') },
+              { key: 'currency', header: p('colCurrency'), cell: (r) => r.currency || <span className="cc-na">{p('notSet')}</span> },
+              { key: 'erpLines', header: p('colErpLines'), numeric: true },
+              { key: 'erpQty', header: p('colErpQty'), numeric: true, cell: (r) => formatQty(r.erpQty) },
+              { key: 'erpValue', header: p('colErpCost'), numeric: true, cell: (r) => money(r.erpValue, r.currency) },
+              { key: 'invIssueQty', header: p('colStoreQty'), numeric: true, cell: (r) => formatQty(r.invIssueQty) },
+              { key: 'invIssueValue', header: p('colStoreValue'), numeric: true, cell: (r) => money(r.invIssueValue, r.currency, r.invIssueValueHidden) },
+              { key: 'invIssueUnvaluedQty', header: p('colUnknownCost'), numeric: true, cell: (r) => formatQty(r.invIssueUnvaluedQty) },
+              { key: 'receiptQty', header: p('colReceivedQty'), numeric: true, cell: (r) => formatQty(r.receiptQty) },
+              { key: 'receiptValue', header: p('colReceivedValue'), numeric: true, cell: (r) => money(r.receiptValue, r.currency) },
+              { key: 'finding', header: p('colFinding'), sortable: false, cell: (r) => finding(r) },
             ])} />
         </div>
         <p className="cc-card-sub">
-          Item-level differences are in Valuation, ERP reconciliation. Most ERP issues have no matching store issue today
-          because store issues are still recorded in the ERP, not in the app.
+          {p('footer')}
         </p>
       </SectionCard>
     </div>

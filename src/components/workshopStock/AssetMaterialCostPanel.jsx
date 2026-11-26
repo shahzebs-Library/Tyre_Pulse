@@ -12,17 +12,20 @@ import { formatQty, formatTotals } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { exportToExcel, reportFileName } from '../../lib/exportUtils'
 import { KitTable } from '../commandCenter/kit'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { Field, ErrorNote, Note, NotSetUp, SectionCard, StatusPill, alignNumeric, fmtDate } from '../inventory/InvUi'
 
-const costText = (cost) => (cost?.length ? formatTotals(cost) : 'N/A')
+const costText = (cost, na = 'N/A') => (cost?.length ? formatTotals(cost) : na)
 
 export default function AssetMaterialCostPanel({ scope, can, onNavigate }) {
+  const { t } = useLanguage()
+  const na = t('wmsissue.common.na')
   const canExport = typeof can === 'function' && can('export')
   const [asset, setAsset] = useState('')
   const [state, setState] = useState({ loading: false, error: '', data: null })
 
   const load = async () => {
-    if (!asset.trim()) { setState({ loading: false, error: 'Enter an asset number.', data: null }); return }
+    if (!asset.trim()) { setState({ loading: false, error: t('wmsissue.assetcost.enterAsset'), data: null }); return }
     setState((s) => ({ ...s, loading: true, error: '' }))
     try {
       setState({ loading: false, error: '', data: await loadAssetMaterialCost(asset, { country: scope?.country }) })
@@ -33,15 +36,15 @@ export default function AssetMaterialCostPanel({ scope, can, onNavigate }) {
   const data = state.data
 
   const columns = alignNumeric([
-    { key: 'jobCard', header: 'Job card', cell: (r) => (typeof onNavigate === 'function'
-      ? <button type="button" className="cc-btn-link" onClick={() => onNavigate('jobMaterials', { jobCard: r.jobCard })}>{r.jobCard}</button>
-      : r.jobCard) },
-    { key: 'openedAt', header: 'Opened', cell: (r) => fmtDate(r.openedAt) },
-    { key: 'issued', header: 'Issued', numeric: true, cell: (r) => formatQty(r.issued) },
-    { key: 'installed', header: 'Installed', numeric: true, cell: (r) => formatQty(r.installed) },
-    { key: 'returned', header: 'Returned', numeric: true, cell: (r) => formatQty(r.returned) },
-    { key: 'unreconciled', header: 'Unreconciled', numeric: true, cell: (r) => (r.unreconciled > 0 ? <StatusPill value="open" tone="warn" label={formatQty(r.unreconciled)} /> : formatQty(0)) },
-    { key: 'cost', header: 'Net cost', cell: (r) => (r.cost.length ? costText(r.cost) : (r.unvaluedQty > 0 ? <StatusPill value="unvalued" tone="warn" label="Unvalued" /> : <span className="cc-na">N/A</span>)) },
+    { key: 'jobCard', header: t('wmsissue.cols.jobCard'), cell: (r) => (typeof onNavigate === 'function'
+      ? <button type="button" className="cc-btn-link" dir="ltr" onClick={() => onNavigate('jobMaterials', { jobCard: r.jobCard })}>{r.jobCard}</button>
+      : <span dir="ltr">{r.jobCard}</span>) },
+    { key: 'openedAt', header: t('wmsissue.assetcost.opened'), cell: (r) => fmtDate(r.openedAt) },
+    { key: 'issued', header: t('wmsissue.jobmat.issued'), numeric: true, cell: (r) => formatQty(r.issued) },
+    { key: 'installed', header: t('wmsissue.jobmat.installed'), numeric: true, cell: (r) => formatQty(r.installed) },
+    { key: 'returned', header: t('wmsissue.jobmat.returned'), numeric: true, cell: (r) => formatQty(r.returned) },
+    { key: 'unreconciled', header: t('wmsissue.jobmat.unreconciled'), numeric: true, cell: (r) => (r.unreconciled > 0 ? <StatusPill value="open" tone="warn" label={formatQty(r.unreconciled)} /> : formatQty(0)) },
+    { key: 'cost', header: t('wmsissue.jobmat.colNetCost'), cell: (r) => (r.cost.length ? costText(r.cost, na) : (r.unvaluedQty > 0 ? <StatusPill value="unvalued" tone="warn" label={t('wmsissue.jobmat.unvalued')} /> : <span className="cc-na">{na}</span>)) },
   ])
 
   const exportExcel = () => exportToExcel(
@@ -53,29 +56,29 @@ export default function AssetMaterialCostPanel({ scope, can, onNavigate }) {
 
   return (
     <>
-      <SectionCard title="Material cost per asset" sub="Parts issued to every job card of one asset, from the stock ledger.">
+      <SectionCard title={t('wmsissue.assetcost.title')} sub={t('wmsissue.assetcost.sub')}>
         <form className="inv-form" onSubmit={(e) => { e.preventDefault(); load() }}>
-          <Field label="Asset number">
-            <input className="inv-input" maxLength={40} value={asset} onChange={(e) => setAsset(e.target.value)} placeholder="e.g. TM514" />
+          <Field label={t('wmsissue.assetcost.assetNumber')}>
+            <input className="inv-input" dir="ltr" maxLength={40} value={asset} onChange={(e) => setAsset(e.target.value)} placeholder={t('wmsissue.assetcost.assetPlaceholder')} />
           </Field>
           <div className="inv-actions">
-            <button type="submit" className="cc-btn-primary" disabled={state.loading}><Search size={14} aria-hidden="true" /> {state.loading ? 'Loading...' : 'Show cost'}</button>
+            <button type="submit" className="cc-btn-primary" disabled={state.loading}><Search size={14} aria-hidden="true" /> {state.loading ? t('wmsissue.common.loading') : t('wmsissue.assetcost.showCost')}</button>
           </div>
         </form>
         {state.error && <ErrorNote error={state.error} onRetry={asset ? load : undefined} />}
       </SectionCard>
 
-      {data?.status === 'not_provisioned' && <NotSetUp what="Asset material cost" />}
+      {data?.status === 'not_provisioned' && <NotSetUp what={t('wmsissue.assetcost.notSetUp')} />}
       {data?.status === 'ok' && (
         <SectionCard
-          title={`Asset ${data.assetNo}`}
-          sub={`Net material cost: ${costText(data.cost)}`}
-          action={canExport && data.cards.length ? <button type="button" className="cc-btn-ghost" onClick={exportExcel}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button> : null}>
-          {!data.cards.length && <Note icon={Coins}>No parts were issued from the store to a job card of this asset. Older ERP issues are in Store material issue.</Note>}
-          {data.unvaluedQty > 0 && <Note tone="warn">{formatQty(data.unvaluedQty)} issued unit(s) have no cost yet and are left out of the cost.</Note>}
-          {data.unreconciled > 0 && <Note tone="warn">{formatQty(data.unreconciled)} issued unit(s) are not yet confirmed installed or returned.</Note>}
-          {data.truncated && <Note tone="warn">Only the newest 100 job cards of this asset are read.</Note>}
-          {data.cards.length > 0 && <div className="inv-scroll"><KitTable compact rows={data.cards} columns={columns} empty="No job cards" /></div>}
+          title={t('wmsissue.assetcost.assetTitle', { asset: data.assetNo })}
+          sub={t('wmsissue.assetcost.netCost', { cost: costText(data.cost, na) })}
+          action={canExport && data.cards.length ? <button type="button" className="cc-btn-ghost" onClick={exportExcel}><FileSpreadsheet size={14} aria-hidden="true" /> {t('wmsissue.common.excel')}</button> : null}>
+          {!data.cards.length && <Note icon={Coins}>{t('wmsissue.assetcost.noParts')}</Note>}
+          {data.unvaluedQty > 0 && <Note tone="warn">{t('wmsissue.assetcost.unvalued', { qty: formatQty(data.unvaluedQty) })}</Note>}
+          {data.unreconciled > 0 && <Note tone="warn">{t('wmsissue.assetcost.unreconciled', { qty: formatQty(data.unreconciled) })}</Note>}
+          {data.truncated && <Note tone="warn">{t('wmsissue.assetcost.truncated')}</Note>}
+          {data.cards.length > 0 && <div className="inv-scroll"><KitTable compact rows={data.cards} columns={columns} empty={t('wmsissue.assetcost.noJobCards')} /></div>}
         </SectionCard>
       )}
     </>

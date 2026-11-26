@@ -50,9 +50,9 @@ function MasterReviews() {
       <PagedTable query={q} page={page} pageSize={pageSize} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(0) }}
         empty={t('inventory.controls.reviewsEmpty')} what={t('inventory.objects.material_master_reviews')} noun={t('inventory.controls.reviewNoun')}
         columns={[
-          { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || <span className="cc-na">N/A</span> },
-          { key: 'proposed_change', header: t('inventory.controls.change'), cell: (r) => (typeof r.proposed_change === 'object' ? JSON.stringify(r.proposed_change) : r.proposed_change || 'N/A') },
-          { key: 'reason', header: t('inventory.movements.reason'), cell: (r) => r.reason || <span className="cc-na">N/A</span> },
+          { key: 'item_code', header: t('inventory.common.item'), cell: (r) => r.item_code || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+          { key: 'proposed_change', header: t('inventory.controls.change'), cell: (r) => (typeof r.proposed_change === 'object' ? JSON.stringify(r.proposed_change) : r.proposed_change || t('wmsfloor.common.na')) },
+          { key: 'reason', header: t('inventory.movements.reason'), cell: (r) => r.reason || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
           { key: 'status', header: t('inventory.common.status'), cell: (r) => <StatusPill value={r.status} tone={r.status === 'approved' ? 'good' : r.status === 'rejected' ? 'muted' : 'warning'} /> },
           { key: 'created_at', header: t('inventory.common.created'), cell: (r) => fmtDateTime(r.created_at) },
         ]} />
@@ -71,11 +71,10 @@ export default function ControlsSection(props) {
         { key: 'approvals', label: t('inventory.controls.tabs.approvals') },
         { key: 'permissions', label: t('inventory.controls.tabs.permissions') },
         { key: 'opening', label: t('inventory.controls.tabs.opening') },
-        { key: 'erp_ledger', label: 'ERP stores ledger' },
+        { key: 'erp_ledger', label: t('wmsfloor.controls.erpLedger') },
         { key: 'master', label: t('inventory.controls.tabs.master') },
-        // Plain English for now; the Arabic labels follow with the locale pass.
-        { key: 'unmatched', label: 'Unmatched items' },
-        { key: 'reconcile', label: 'Stock reconciliation' },
+        { key: 'unmatched', label: t('wmsfloor.controls.unmatched') },
+        { key: 'reconcile', label: t('wmsfloor.controls.reconcile') },
       ]} />
       {tab === 'approvals' && <ApprovalsPanel {...props} />}
       {tab === 'permissions' && <Permissions can={props.can} />}

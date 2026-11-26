@@ -1,4 +1,4 @@
-import { beforeEach, afterEach, it, expect, vi } from 'vitest'
+import { beforeAll, beforeEach, afterEach, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 const h=vi.hoisted(()=>({list:vi.fn(),coverage:vi.fn(),summary:vi.fn()}))
 vi.mock('../contexts/SettingsContext',()=>({useSettings:()=>({activeCountry:'KSA'})}))
@@ -8,6 +8,12 @@ vi.mock('../components/ui/EnterpriseTable',()=>({default:({data})=><div>{data.le
 vi.mock('../lib/api/materialIssue',()=>({listSlipsFromConsumption:h.list,getMaterialIssueCoverage:h.coverage,getIssueSummary:h.summary,DEFAULT_LINE_MAX:60000,getSlipLines:vi.fn(),materialIssuesProvisioned:vi.fn(),listMaterialIssues:vi.fn(),createMaterialIssue:vi.fn(),listIssuableJobCards:vi.fn(),issueSlipPostingAvailable:vi.fn(async()=>false),postMaterialIssueSlip:vi.fn(),listSlipStockLines:vi.fn(async()=>[])}))
 import { MemoryRouter } from 'react-router-dom'
 import StoreMaterialIssue from '../pages/StoreMaterialIssue'
+import { LanguageProvider, useLanguage } from '../contexts/LanguageContext'
+
+// The wmsissue namespace loads lazily; warm it once so synchronous queries see
+// the real English strings rather than the humanised placeholder.
+function WarmLocale() { const { t } = useLanguage(); return <span>{t('wmsissue.common.na')}</span> }
+beforeAll(async () => { render(<LanguageProvider><WarmLocale /></LanguageProvider>); await screen.findByText('N/A'); cleanup() })
 beforeEach(()=>{h.list.mockReset().mockResolvedValue({slips:[],truncated:false,unslipped:0});h.coverage.mockReset().mockResolvedValue({first:'2018-09-22',last:'2026-10-17'});h.summary.mockReset().mockResolvedValue({ok:false})})
 afterEach(cleanup)
 it('offers every imported document year and loads the selected year from the server',async()=>{

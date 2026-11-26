@@ -3,7 +3,22 @@
  * 2026-11-24). The database checks every rule again (trg_po_controls); these
  * components only collect and show the fields.
  */
-import { EMERGENCY_CATEGORIES, ROUTE_REASON_MIN, justificationFields } from '../../lib/procurement/emergencyJustification'
+import { EMERGENCY_CATEGORIES, ROUTE_REASON_MIN, IMPACT_TEXT_MIN, OTHER_NOTE_MIN, justificationFields } from '../../lib/procurement/emergencyJustification'
+import { useLanguage } from '../../contexts/LanguageContext'
+
+// Field order matches justificationFields() in the lib.
+const FIELD_KEYS = ['category', 'asset', 'jobCard', 'impact', 'route', 'estimate', 'supplier', 'requestedBy', 'attachment']
+const VALUE_KEYS = { 'N/A': 'na', None: 'none', 'No estimate': 'noEstimate' }
+
+/** Translate a validateEmergency() message by its field (the lib returns English). */
+function errText(t, field, msg, currency) {
+  if (!msg) return msg
+  const min = { categoryNote: OTHER_NOTE_MIN, impact: IMPACT_TEXT_MIN, routeReason: ROUTE_REASON_MIN }[field]
+  if (field === 'estCurrency' && /^The order is in/.test(msg)) {
+    return t('wmsprocure.emergency.err.estCurrencyMismatch', { currency: String(currency || '').toUpperCase() })
+  }
+  return t(`wmsprocure.emergency.err.${field}`, min != null ? { min } : undefined)
+}
 
 const L = ({ htmlFor, children }) => <label htmlFor={htmlFor} className="text-[var(--text-secondary)] text-xs mb-1 block">{children}</label>
 const Err = ({ children }) => (children ? <p className="text-xs text-amber-300 mt-1">{children}</p> : null)
@@ -21,87 +36,90 @@ export function EmergencyJustificationFields({ value, onChange, errors = {}, sho
   const set = (k) => (e) => onChange({ ...v, [k]: e.target.value })
   const e = showErrors ? errors : {}
   const routeLen = String(v.routeReason || '').trim().length
+  const { t } = useLanguage()
+  const er = (f) => errText(t, f, e[f], currency)
   return (
-    <div className="space-y-3" role="group" aria-label="Emergency justification">
+    <div className="space-y-3" role="group" aria-label={t('wmsprocure.emergency.aria')}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <L htmlFor="em-category">Reason category</L>
+          <L htmlFor="em-category">{t('wmsprocure.emergency.reasonCategory')}</L>
           <select id="em-category" className="input w-full" value={v.category || ''} onChange={set('category')} aria-invalid={!!e.category}>
-            <option value="">Choose...</option>
-            {EMERGENCY_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+            <option value="">{t('wmsprocure.emergency.choose')}</option>
+            {EMERGENCY_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{t(`wmsprocure.emergency.cat.${c.value}`)}</option>)}
           </select>
-          <Err>{e.category}</Err>
+          <Err>{er('category')}</Err>
         </div>
         {v.category === 'other' && (
           <div>
-            <L htmlFor="em-category-note">Describe the emergency</L>
+            <L htmlFor="em-category-note">{t('wmsprocure.emergency.describe')}</L>
             <input id="em-category-note" className="input w-full" maxLength={200} value={v.categoryNote || ''} onChange={set('categoryNote')} />
-            <Err>{e.categoryNote}</Err>
+            <Err>{er('categoryNote')}</Err>
           </div>
         )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <L htmlFor="em-asset">Affected asset number</L>
+          <L htmlFor="em-asset">{t('wmsprocure.emergency.assetNo')}</L>
           <input id="em-asset" className="input w-full" maxLength={40} value={v.assetNo || ''} onChange={set('assetNo')} placeholder="e.g. TM514" autoCapitalize="characters" />
         </div>
         <div>
-          <L htmlFor="em-jobcard">Job card</L>
+          <L htmlFor="em-jobcard">{t('wmsprocure.emergency.jobCard')}</L>
           <input id="em-jobcard" className="input w-full" maxLength={60} value={v.jobCardNo || ''} onChange={set('jobCardNo')} placeholder="e.g. GCKR/JC/1324/0526" />
         </div>
       </div>
-      <p className="text-xs text-[var(--text-muted)]">Give the asset, the job card, or both. They are checked against the asset register and job cards of the order's country.</p>
-      <Err>{e.asset || e.country}</Err>
+      <p className="text-xs text-[var(--text-muted)]">{t('wmsprocure.emergency.assetHelp')}</p>
+      <Err>{er('asset') || er('country')}</Err>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <L htmlFor="em-hours">Downtime if we wait (hours)</L>
+          <L htmlFor="em-hours">{t('wmsprocure.emergency.downtime')}</L>
           <input id="em-hours" className="input w-full" type="number" min="0" step="0.5" inputMode="decimal" value={v.downtimeHours ?? ''} onChange={set('downtimeHours')} />
-          <Err>{e.downtimeHours}</Err>
+          <Err>{er('downtimeHours')}</Err>
         </div>
         <div className="sm:col-span-2">
-          <L htmlFor="em-impact">Impact of waiting</L>
-          <input id="em-impact" className="input w-full" maxLength={300} value={v.impact || ''} onChange={set('impact')} placeholder="e.g. pour at Diriyah stops, 3 trucks idle" />
-          <Err>{e.impact}</Err>
+          <L htmlFor="em-impact">{t('wmsprocure.emergency.impact')}</L>
+          <input id="em-impact" className="input w-full" maxLength={300} value={v.impact || ''} onChange={set('impact')} placeholder={t('wmsprocure.emergency.impactPlaceholder')} />
+          <Err>{er('impact')}</Err>
         </div>
       </div>
       <div>
-        <L htmlFor="em-route">Why the normal approval route could not be used</L>
+        <L htmlFor="em-route">{t('wmsprocure.emergency.routeReason')}</L>
         <textarea id="em-route" className="input w-full" rows={3} maxLength={1000} value={v.routeReason || ''} onChange={set('routeReason')} />
-        <p className={`text-xs mt-1 ${routeLen >= ROUTE_REASON_MIN ? 'text-[var(--text-muted)]' : 'text-amber-300'}`}>{routeLen} of at least {ROUTE_REASON_MIN} characters</p>
-        <Err>{e.routeReason}</Err>
+        <p className={`text-xs mt-1 ${routeLen >= ROUTE_REASON_MIN ? 'text-[var(--text-muted)]' : 'text-amber-300'}`}>{t('wmsprocure.emergency.charCount', { count: routeLen, min: ROUTE_REASON_MIN })}</p>
+        <Err>{er('routeReason')}</Err>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <L htmlFor="em-est">Estimated value</L>
+          <L htmlFor="em-est">{t('wmsprocure.emergency.estValue')}</L>
           <input id="em-est" className="input w-full" type="number" min="0" step="0.01" inputMode="decimal" value={v.estValue ?? ''} onChange={set('estValue')} />
-          <Err>{e.estValue}</Err>
+          <Err>{er('estValue')}</Err>
         </div>
         <div>
-          <L htmlFor="em-cur">Currency</L>
+          <L htmlFor="em-cur">{t('wmsprocure.emergency.currency')}</L>
           <input id="em-cur" className="input w-full" value={currency || v.estCurrency || ''} readOnly aria-readonly="true"
-            title="The estimate uses the order's currency. Currencies are not converted." />
-          <Err>{e.estCurrency}</Err>
+            title={t('wmsprocure.emergency.currencyTitle')} />
+          <Err>{er('estCurrency')}</Err>
         </div>
         <div>
-          <L htmlFor="em-attach">Attachment path (optional)</L>
+          <L htmlFor="em-attach">{t('wmsprocure.emergency.attachment')}</L>
           <input id="em-attach" className="input w-full" maxLength={500} value={v.attachmentPath || ''} onChange={set('attachmentPath')} placeholder="e.g. quotes/po-evidence.pdf" />
         </div>
       </div>
-      <Err>{e.supplier}</Err>
-      <p className="text-xs text-[var(--text-muted)]">Requested by is recorded automatically from your sign-in. Another buyer must approve this order after it is placed, within their approval limit.</p>
+      <Err>{er('supplier')}</Err>
+      <p className="text-xs text-[var(--text-muted)]">{t('wmsprocure.emergency.requestedByHelp')}</p>
     </div>
   )
 }
 
 /** Read-only full justification for a purchase order row. */
 export function EmergencyJustificationView({ po, compact = false }) {
+  const { t } = useLanguage()
   if (!po?.is_emergency) return null
   return (
     <dl className={`grid gap-x-3 gap-y-1 text-xs ${compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
-      {justificationFields(po).map(([k, val]) => (
+      {justificationFields(po).map(([k, val], i) => (
         <div key={k} className="min-w-0">
-          <dt className="text-[var(--text-muted)]">{k}</dt>
-          <dd className="text-[var(--text-primary)] break-words">{val}</dd>
+          <dt className="text-[var(--text-muted)]">{FIELD_KEYS[i] ? t(`wmsprocure.emergency.f.${FIELD_KEYS[i]}`) : k}</dt>
+          <dd className="text-[var(--text-primary)] break-words">{VALUE_KEYS[val] ? t(`wmsprocure.emergency.v.${VALUE_KEYS[val]}`) : i === 0 && po.emergency_category !== 'other' && EMERGENCY_CATEGORIES.some((c) => c.value === po.emergency_category) ? t(`wmsprocure.emergency.cat.${po.emergency_category}`) : val}</dd>
         </div>
       ))}
     </dl>

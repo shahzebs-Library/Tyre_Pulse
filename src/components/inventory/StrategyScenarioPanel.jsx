@@ -135,7 +135,7 @@ export default function StrategyScenarioPanel({ defaultCurrency }) {
             ))}
           </dl>
           <p className="cc-card-sub">{t('inventory.planning.sim.notSaving')}</p>
-          <p className="cc-card-sub">{t('inventory.planning.sim.assumptions', { fields: cmp.assumptionsUsed.map((m) => label(m)).join(', ') || 'N/A' })}</p>
+          <p className="cc-card-sub">{t('inventory.planning.sim.assumptions', { fields: cmp.assumptionsUsed.map((m) => label(m)).join(', ') || t('wmsfloor.common.na') })}</p>
         </>
       )}
     </div>

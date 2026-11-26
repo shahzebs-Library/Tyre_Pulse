@@ -306,8 +306,8 @@ export function TransfersPanel({ scope, can }) {
   const q = useInvQuery(() => listTransfers({ ...scope, page, pageSize, status }), [scope.country, scope.site, page, pageSize, status])
   const locName = useMemo(() => {
     const m = new Map(locs.rows.map((l) => [l.id, [l.site, l.code].filter(Boolean).join(' / ')]))
-    return (id) => m.get(id) || (id ? String(id).slice(0, 8) : 'N/A')
-  }, [locs.rows])
+    return (id) => m.get(id) || (id ? String(id).slice(0, 8) : t('wmsfloor.common.na'))
+  }, [locs.rows, t])
   const [dispatch, setDispatch] = useState(null)
   const [receiving, setReceiving] = useState(null)
   const [returning, setReturning] = useState(null)

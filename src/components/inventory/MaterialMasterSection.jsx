@@ -67,7 +67,7 @@ const fromCatalog = (m) => ({
 const notStated = (v, t) => (v === null || v === undefined || v === '' ? t('inventory.mm.cat.notStated') : v)
 
 function PartTypeBadge({ type, t }) {
-  if (type === null || type === undefined) return <span className="cc-na">N/A</span>
+  if (type === null || type === undefined) return <span className="cc-na">{t('wmsfloor.common.na')}</span>
   return <StatusPill value={type} tone={partTypeTone(type)} label={t(`inventory.mm.cat.type.${type}`)} />
 }
 
@@ -90,8 +90,8 @@ function Chips({ r, t }) {
 function StockSummary({ r, t }) {
   return (
     <span className="inv-mm-chips">
-      <span className="inv-chip">{r.posted ? t('inventory.mm.cat.stock.summaryPosted', { n: n(r.posted.onHand) }) : t('inventory.mm.cat.stock.summaryPosted', { n: 'N/A' })}</span>
-      {r.pending === null ? <span className="inv-chip">{t('inventory.mm.cat.stock.summaryPending', { n: 'N/A' })}</span>
+      <span className="inv-chip">{r.posted ? t('inventory.mm.cat.stock.summaryPosted', { n: n(r.posted.onHand) }) : t('inventory.mm.cat.stock.summaryPosted', { n: t('wmsfloor.common.na') })}</span>
+      {r.pending === null ? <span className="inv-chip">{t('inventory.mm.cat.stock.summaryPending', { n: t('wmsfloor.common.na') })}</span>
         : r.pending.qty > 0 ? <span className="inv-chip inv-chip-accent">{t('inventory.mm.cat.stock.summaryPending', { n: n(r.pending.qty) })}</span> : null}
     </span>
   )
@@ -371,7 +371,7 @@ function Detail({ base, scope, userId, t }) {
           <h2>{na(r.description)}</h2>
           <div className="inv-mm-sku-line">
             <span className="cc-card-sub">{t('inventory.mm.f.companySku')}</span>
-            <span className="inv-mono" dir="ltr">{r.company_sku || 'N/A'}</span>
+            <span className="inv-mono" dir="ltr">{r.company_sku || t('wmsfloor.common.na')}</span>
             <CopyButton value={r.company_sku} label={t('inventory.mm.f.companySku')} t={t} />
             <StatusPill value={r.status} tone={r.status === 'active' ? 'good' : 'warn'} label={t(`inventory.mm.status.${r.status}`)} />
           </div>

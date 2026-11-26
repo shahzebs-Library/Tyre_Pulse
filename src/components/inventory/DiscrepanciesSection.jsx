@@ -80,9 +80,9 @@ export default function DiscrepanciesSection({ scope, can, userId }) {
 
   const columns = [
     { key: 'created_at', header: t('inventory.disc.raised'), cell: (d) => fmtDateTime(d.created_at) },
-    { key: 'audit_ref', header: t('inventory.audits.ref'), cell: (d) => <span className="inv-mono">{d.audit_ref || 'N/A'}</span> },
-    { key: 'item_code', header: t('inventory.common.item'), cell: (d) => d.item_code || d.serial_no || <span className="cc-na">N/A</span> },
-    { key: 'location_code', header: t('inventory.common.location'), cell: (d) => d.location_code || <span className="cc-na">N/A</span> },
+    { key: 'audit_ref', header: t('inventory.audits.ref'), cell: (d) => <span className="inv-mono">{d.audit_ref || t('wmsfloor.common.na')}</span> },
+    { key: 'item_code', header: t('inventory.common.item'), cell: (d) => d.item_code || d.serial_no || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+    { key: 'location_code', header: t('inventory.common.location'), cell: (d) => d.location_code || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
     { key: 'variance_qty', header: t('inventory.recon.variance'), numeric: true, cell: (d) => formatQty(d.variance_qty) },
     ...(showValue ? [{ key: 'value_impact', header: t('inventory.recon.valueImpact'), numeric: true, cell: (d) => formatMoney(d.value_impact, d.currency) }] : []),
     { key: 'category', header: t('inventory.disc.category'), cell: (d) => (d.category ? t(`inventory.discCategories.${d.category}`) : <span className="cc-na">{t('inventory.disc.uncategorised')}</span>) },

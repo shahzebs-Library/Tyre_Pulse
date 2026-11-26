@@ -360,9 +360,11 @@ export default function DateField({
             if (disabled) return
             if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); setOpen(true) }
           }}
-          className="input cursor-pointer pr-16 w-full"
+          className="input cursor-pointer pe-16 w-full"
+          // "26 Nov 2026" must keep its order inside an Arabic/Urdu layout.
+          style={{ unicodeBidi: 'plaintext' }}
         />
-        <div className="absolute inset-y-0 right-2 flex items-center gap-1">
+        <div className="absolute inset-y-0 end-2 flex items-center gap-1">
           {value && !disabled && (
             <button
               type="button"

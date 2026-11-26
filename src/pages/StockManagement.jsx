@@ -106,13 +106,16 @@ const COVER_TONE = {
 }
 
 function SortButton({ label, active, dir, onClick, align }) {
+  const { t } = useLanguage()
   const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ChevronUp : ChevronDown
   return (
     <button
       type="button"
       onClick={onClick}
       className={`inline-flex items-center gap-1 min-h-[32px] rounded ${FOCUS} ${align === 'right' ? 'flex-row-reverse' : ''} ${active ? 'text-[var(--text-primary)]' : ''}`}
-      aria-label={`Sort by ${label}${active ? `, currently ${dir === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+      aria-label={active
+        ? t(dir === 'asc' ? 'wmsissue.stockreg.sortAsc' : 'wmsissue.stockreg.sortDesc', { label })
+        : t('wmsissue.stockreg.sortBy', { label })}
     >
       {label}
       <Icon size={12} aria-hidden="true" />
@@ -200,6 +203,7 @@ export default function StockManagement() {
 /** The stock register (formerly the whole /stock page). */
 function StockRegisterView({ embedded = false }) {
   const { t } = useLanguage()
+  const na = t('wmsissue.common.na')
   const { profile, isSuperAdmin, hasCapability } = useAuth()
   const [, setHubParams] = useSearchParams()
   // Owner decision 2026-11-24: count adjustments are posted only by the super
@@ -293,10 +297,12 @@ function StockRegisterView({ embedded = false }) {
     } catch (err) {
       if (stale()) return
       setTyreChangeRows([])
-      setTyreChangeError(toUserMessage(err, 'Tyre change summary could not be loaded.'))
+      setTyreChangeError(toUserMessage(err, t('wmsissue.stockreg.tyreSummaryError')))
     } finally {
       if (!stale()) setTyreChangeLoading(false)
     }
+    // t is read only for the error fallback; a language switch must not re-read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCountry, latestTyreSummary])
 
   useEffect(() => { loadTyreSummary() }, [loadTyreSummary, stockScope])
@@ -408,7 +414,7 @@ function StockRegisterView({ embedded = false }) {
   // ledger and its error was swallowed; new stock goes through Add Stock.
   async function save(e) {
     e.preventDefault()
-    if (!editId) { setError('Use Add Stock to record new stock.'); return }
+    if (!editId) { setError(t('wmsissue.stockreg.useAddStock')); return }
     setSaving(true)
     setError('')
 
@@ -467,7 +473,7 @@ function StockRegisterView({ embedded = false }) {
     let data = []
     try { data = await stock.listStockMovements(rec.id, 50) } catch (e) {
       data = []
-      setMovError(toUserMessage(e, 'Could not load movement history.'))
+      setMovError(toUserMessage(e, t('wmsissue.stockreg.historyError')))
     }
     setMovements(data || [])
     setLoadingMov(false)
@@ -486,7 +492,7 @@ function StockRegisterView({ embedded = false }) {
     setTransferMsg('')
 
     // Block the transfer post while its approval workflow is active/locked.
-    if (transferWfLocked) { setTransferError('Transfer is locked pending approval.'); return }
+    if (transferWfLocked) { setTransferError(t('wmsissue.stockreg.transferLocked')); return }
 
     const { fromSite, toSite, qty, notes } = transferForm
     const transferQty = +qty
@@ -537,11 +543,13 @@ function StockRegisterView({ embedded = false }) {
     if (stale()) return
     if (failed) {
       setTlRecords([])
-      setTlError(toUserMessage(failed, 'Could not load the stock timeline.'))
+      setTlError(toUserMessage(failed, t('wmsissue.stockreg.timelineError')))
     } else {
       setTlRecords(data ?? [])
     }
     setTlLoading(false)
+    // t is read only for the error fallback; a language switch must not re-read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCountry, latestTimeline, tlFrom, tlTo])
 
   useEffect(() => {
@@ -595,7 +603,7 @@ function StockRegisterView({ embedded = false }) {
       accessorFn: row => row.label,
       cell: ({ row: { original: r } }) => (
         <span className={r.isTotal ? 'font-semibold text-[var(--text-primary)]' : 'font-medium text-[var(--text-primary)]'}>
-          {r.label}{!r.isTotal && activeCountry === 'All' && r.country ? <span className="ml-2 text-xs font-normal text-[var(--text-muted)]">{r.country}</span> : null}
+          {r.label}{!r.isTotal && activeCountry === 'All' && r.country ? <span className="ms-2 text-xs font-normal text-[var(--text-muted)]">{r.country}</span> : null}
         </span>
       ),
     },
@@ -668,7 +676,7 @@ function StockRegisterView({ embedded = false }) {
       const { exportToExcel, reportFileName } = await loadExportUtils()
       await exportToExcel(stockExportRows(visibleStock), STOCK_EXPORT_COLS, STOCK_EXPORT_HEADERS,
         reportFileName('Stock Management', activeCountry, todayStr(now)), 'Stock')
-    } catch (e) { setLoadError(toUserMessage(e, 'Could not export. Try again.')) }
+    } catch (e) { setLoadError(toUserMessage(e, t('wmsissue.stockreg.exportError'))) }
   }
 
   async function exportPdf() {
@@ -684,7 +692,7 @@ function StockRegisterView({ embedded = false }) {
         '',
         { subtitleNote: `${visibleStock.length} of ${records.length} items` },
       )
-    } catch (e) { setLoadError(toUserMessage(e, 'Could not export. Try again.')) }
+    } catch (e) { setLoadError(toUserMessage(e, t('wmsissue.stockreg.exportError'))) }
   }
 
   async function exportTimeline() {
@@ -692,7 +700,7 @@ function StockRegisterView({ embedded = false }) {
       const { exportToExcel, reportFileName } = await loadExportUtils()
       await exportToExcel(tlDays, ['date', 'in', 'out', 'net'], ['Date', 'Items In', 'Items Out', 'Net Change'],
         reportFileName('Stock Timeline', tlFrom, 'to', tlTo), 'Timeline')
-    } catch (e) { setTlError(toUserMessage(e, 'Could not export. Try again.')) }
+    } catch (e) { setTlError(toUserMessage(e, t('wmsissue.stockreg.exportError'))) }
   }
 
   const sites = useMemo(() => [...new Set(records.map(r => r.site).filter(Boolean))].sort(), [records])
@@ -734,7 +742,7 @@ function StockRegisterView({ embedded = false }) {
 
   const stockColumns = useMemo(() => [
     { id: 'site', header: t('stock.table.columns.site'), sort: r => r.site, size: 130, firstDir: 'asc',
-      cell: r => <span className="font-medium text-[var(--text-primary)]">{r.site || 'N/A'}</span> },
+      cell: r => <span className="font-medium text-[var(--text-primary)]">{r.site || na}</span> },
     { id: 'description', header: t('stock.table.columns.item'), sort: r => r.item?.item_code || r.description, size: 320, firstDir: 'asc',
       cell: r => {
         const code = r.item?.item_code || stockItem(r).code
@@ -743,10 +751,10 @@ function StockRegisterView({ embedded = false }) {
           <div className="min-w-0">
             {code
               ? <span className="font-mono text-xs font-semibold text-[var(--text-primary)]" dir="ltr">{code}</span>
-              : <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border border-amber-500/40 text-amber-500">No item code</span>}
-            <p className="text-sm text-[var(--text-primary)] mt-0.5">{name || r.description || 'N/A'}</p>
+              : <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border border-amber-500/40 text-amber-500">{t('wmsissue.stockreg.noItemCode')}</span>}
+            <p className="text-sm text-[var(--text-primary)] mt-0.5">{name || r.description || na}</p>
             {name && r.description && !sameText(r.description, name) && (
-              <p className="text-xs text-[var(--text-muted)] mt-0.5" title="Description as loaded into stock">Stock text: {r.description}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5" title={t('wmsissue.stockreg.stockTextTitle')}>{t('wmsissue.stockreg.stockText', { text: r.description })}</p>
             )}
             {(stockItem(r).unit || r.uom || r.condition) && (
               <p className="text-xs text-[var(--text-muted)] mt-0.5">{[stockItem(r).condition || r.condition, stockItem(r).unit || r.uom, stockItem(r).bin].filter(Boolean).join(' · ')}</p>
@@ -755,28 +763,28 @@ function StockRegisterView({ embedded = false }) {
         )
       } },
     { id: 'brand', header: t('stock.table.columns.brand'), sort: r => r.cat?.brand || r.brand, size: 130, firstDir: 'asc',
-      cell: r => <span className="text-xs text-[var(--text-secondary)]">{r.cat?.brand || r.brand || <span className="text-[var(--text-dim)]">N/A</span>}</span> },
+      cell: r => <span className="text-xs text-[var(--text-secondary)]">{r.cat?.brand || r.brand || <span className="text-[var(--text-dim)]">{na}</span>}</span> },
     { id: 'partType', header: t('stock.table.columns.partType'), sort: r => r.cat?.partType, size: 120,
       cell: r => {
         const pt = r.cat?.partType
-        if (!pt || pt === 'not_stated') return <span className="text-xs text-[var(--text-dim)]">{r.cat ? 'Not stated' : 'N/A'}</span>
+        if (!pt || pt === 'not_stated') return <span className="text-xs text-[var(--text-dim)]">{r.cat ? t('wmsissue.stockreg.notStated') : na}</span>
         const tone = pt === 'genuine' || pt === 'oes' ? 'border-green-500/40 text-green-500' : 'border-amber-500/40 text-amber-500'
         return <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${tone}`}>{pt === 'oes' ? 'OES' : pt}</span>
       } },
     { id: 'category', header: t('stock.table.columns.category'), sort: r => r.cat?.category || r.item?.category, size: 130, firstDir: 'asc',
-      cell: r => <span className="text-xs text-[var(--text-secondary)]">{r.cat?.category || r.item?.category || <span className="text-[var(--text-dim)]">N/A</span>}</span> },
+      cell: r => <span className="text-xs text-[var(--text-secondary)]">{r.cat?.category || r.item?.category || <span className="text-[var(--text-dim)]">{na}</span>}</span> },
     { id: 'oem', header: t('stock.table.columns.oem'), sort: r => (r.cat?.oem || [])[0], size: 130,
       cell: r => (r.cat?.oem?.length
         ? <span className="font-mono text-xs text-[var(--text-secondary)]" dir="ltr" title={r.cat.oem.join(', ')}>{r.cat.oem[0]}{r.cat.oem.length > 1 ? ` +${r.cat.oem.length - 1}` : ''}</span>
-        : <span className="text-xs text-[var(--text-dim)]">N/A</span>) },
+        : <span className="text-xs text-[var(--text-dim)]">{na}</span>) },
     { id: 'stock_qty', header: t('stock.table.columns.stock'), sort: r => r.stock_qty, size: 90, align: 'right',
-      cell: r => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{r.stock_qty ?? 'N/A'}</span> },
+      cell: r => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{r.stock_qty ?? na}</span> },
     { id: 'min_level', header: t('stock.table.columns.min'), sort: r => r.min_level, size: 80, align: 'right',
-      cell: r => <span className="tabular-nums text-[var(--text-muted)]">{r.min_level ?? 'N/A'}</span> },
+      cell: r => <span className="tabular-nums text-[var(--text-muted)]">{r.min_level ?? na}</span> },
     { id: 'critical_level', header: t('stock.table.columns.critical'), sort: r => r.critical_level, size: 90, align: 'right',
-      cell: r => <span className="tabular-nums text-[var(--text-muted)]">{r.critical_level ?? 'N/A'}</span> },
+      cell: r => <span className="tabular-nums text-[var(--text-muted)]">{r.critical_level ?? na}</span> },
     { id: 'reorder_qty', header: t('stock.table.columns.reorderQty'), sort: r => r.reorder_qty, size: 100, align: 'right',
-      cell: r => <span className="tabular-nums text-[var(--text-muted)]">{r.reorder_qty ?? 'N/A'}</span> },
+      cell: r => <span className="tabular-nums text-[var(--text-muted)]">{r.reorder_qty ?? na}</span> },
     { id: 'status', header: t('stock.table.columns.status'), sort: r => STATUSES.indexOf(r.status), size: 100, firstDir: 'desc',
       cell: r => <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_BADGE[r.status]}`}>{t(`stock.statuses.${r.status}`)}</span> },
     { id: 'avgPerMonth', header: t('stock.table.columns.velocity'), sort: r => r.avgPerMonth, size: 100, align: 'right',
@@ -784,25 +792,25 @@ function StockRegisterView({ embedded = false }) {
         if (r.avgPerMonth > 0) {
           return (
             <span className="tabular-nums text-xs text-[var(--text-secondary)]"
-              title={r.usageScope === 'country' ? 'Issued elsewhere in the country, not at this site, in the last 12 months' : `Average issued per month at this site over ${USAGE_MONTHS} months (ERP issues)`}>
-              {r.avgPerMonth}/mo{r.usageScope === 'country' ? ' (country)' : ''}
+              title={r.usageScope === 'country' ? t('wmsissue.stockreg.velocityCountryTitle') : t('wmsissue.stockreg.velocitySiteTitle', { months: USAGE_MONTHS })}>
+              {t('wmsissue.stockreg.perMonth', { value: r.avgPerMonth })}{r.usageScope === 'country' ? ` ${t('wmsissue.stockreg.countryTag')}` : ''}
             </span>
           )
         }
-        if (r.avgPerMonth === null) return <span className="text-xs text-[var(--text-dim)]">{detailState === 'loading' ? '...' : 'N/A'}</span>
-        return <span className="text-xs text-[var(--text-dim)]">No issues in {USAGE_MONTHS} months</span>
+        if (r.avgPerMonth === null) return <span className="text-xs text-[var(--text-dim)]">{detailState === 'loading' ? '...' : na}</span>
+        return <span className="text-xs text-[var(--text-dim)]">{t('wmsissue.stockreg.noIssuesMonths', { months: USAGE_MONTHS })}</span>
       } },
     { id: 'daysRemaining', header: t('stock.table.columns.daysLeft'), sort: r => r.daysRemaining, size: 100, align: 'right', firstDir: 'asc',
       cell: r => (
         <span className={`tabular-nums text-xs ${COVER_TONE[coverBand(r.daysRemaining)]}`}
-          title={r.daysRemaining === null ? (r.usageScope === 'country' ? 'Only issued at other sites, so cover at this site cannot be measured' : 'No issues at this site, so cover cannot be measured') : undefined}>
-          {r.daysRemaining === null ? 'N/A' : `${r.daysRemaining}d`}
+          title={r.daysRemaining === null ? (r.usageScope === 'country' ? t('wmsissue.stockreg.coverCountryTitle') : t('wmsissue.stockreg.coverNoneTitle')) : undefined}>
+          {r.daysRemaining === null ? na : t('wmsissue.stockreg.days', { count: r.daysRemaining })}
         </span>
       ) },
     { id: 'action', header: t('stock.table.columns.action'), sort: r => r.management_action, size: 200,
       cell: r => (
         <div className="flex flex-col gap-1 text-xs text-[var(--text-muted)] max-w-xs">
-          {r.management_action ? <span className="truncate" title={r.management_action}>{r.management_action}</span> : (r.suggestion === null ? <span className="text-[var(--text-dim)]">N/A</span> : null)}
+          {r.management_action ? <span className="truncate" title={r.management_action}>{r.management_action}</span> : (r.suggestion === null ? <span className="text-[var(--text-dim)]">{na}</span> : null)}
           {r.suggestion !== null && (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border border-amber-500/40 text-amber-500 whitespace-nowrap w-fit">
               {t('stock.table.reorderBadge', { qty: r.suggestion })}
@@ -833,7 +841,7 @@ function StockRegisterView({ embedded = false }) {
       ) },
   // startEdit / generateReorderPdf are plain handlers over current state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, openMovement, detailState])
+  ], [t, na, openMovement, detailState])
 
   const timelineColumns = useMemo(() => [
     { id: 'date', header: t('stock.timeline.columns.date'), sort: r => r.date, size: 130,
@@ -863,23 +871,23 @@ function StockRegisterView({ embedded = false }) {
         )
       } },
     { id: 'qty_before', header: t('stock.historyModal.columns.before'), sort: m => m.qty_before, size: 80, align: 'right',
-      cell: m => <span className="tabular-nums text-[var(--text-muted)]">{m.qty_before ?? 'N/A'}</span> },
+      cell: m => <span className="tabular-nums text-[var(--text-muted)]">{m.qty_before ?? na}</span> },
     { id: 'qty_change', header: t('stock.historyModal.columns.change'), sort: m => m.qty_change, size: 80, align: 'right',
       cell: m => <span className={`tabular-nums font-medium ${m.qty_change > 0 ? 'text-green-500' : 'text-red-500'}`}>{m.qty_change > 0 ? '+' : ''}{m.qty_change}</span> },
     { id: 'qty_after', header: t('stock.historyModal.columns.after'), sort: m => m.qty_after, size: 80, align: 'right',
-      cell: m => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{m.qty_after ?? 'N/A'}</span> },
+      cell: m => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{m.qty_after ?? na}</span> },
     { id: 'reason', header: t('stock.historyModal.columns.reason'), sort: m => m.reason, size: 180,
-      cell: m => <span className="text-[var(--text-muted)]">{m.reason || 'None'}</span> },
+      cell: m => <span className="text-[var(--text-muted)]">{m.reason || t('wmsissue.stockreg.none')}</span> },
     { id: 'reference_no', header: t('stock.historyModal.columns.ref'), sort: m => m.reference_no, size: 120,
-      cell: m => <span className="text-[var(--text-muted)]">{m.reference_no || 'None'}</span> },
-  ], [t])
+      cell: m => <span className="text-[var(--text-muted)]" dir="auto">{m.reference_no || t('wmsissue.stockreg.none')}</span> },
+  ], [t, na])
 
   if (entryOpen) return <StockQuickEntry
     key={`${activeCountry}|${profile?.organisation_id || profile?.org_id}|${profile?.id}`}
     records={records.filter(r => r.country === activeCountry)}
     initialSite={selectedSiteName || (siteFilter === 'all' ? workingContext?.site || '' : siteFilter)}
     onClose={() => setEntryOpen(false)}
-    onSaved={result => { setEntryOpen(false); setEntryMessage(`${result.items.length} stock item${result.items.length === 1 ? '' : 's'} saved with movement history.`); load() }}
+    onSaved={result => { setEntryOpen(false); setEntryMessage(t(result.items.length === 1 ? 'wmsissue.stockreg.savedOne' : 'wmsissue.stockreg.savedMany', { count: result.items.length })); load() }}
   />
 
   return (
@@ -895,7 +903,7 @@ function StockRegisterView({ embedded = false }) {
           <div className="flex gap-2 flex-wrap">
             <button type="button" onClick={load} disabled={loading}
               className={`btn-secondary min-h-[44px] text-sm flex items-center gap-1.5 disabled:opacity-50 ${FOCUS}`}>
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> Refresh
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} aria-hidden="true" /> {t('wmsissue.common.refresh')}
             </button>
             <button type="button" onClick={exportExcel} disabled={loading || visibleStock.length === 0}
               className={`btn-secondary min-h-[44px] text-sm flex items-center gap-1.5 disabled:opacity-50 ${FOCUS}`}>
@@ -915,22 +923,22 @@ function StockRegisterView({ embedded = false }) {
       />
 
       {entryMessage && <p role="status" className="stock-notice">{entryMessage}</p>}
-      <p className="text-xs text-[var(--text-muted)]">Add Stock lets you search MIS / ERP and DTR items, confirm details and record what is physically in your store. New deliveries use a separate receipt entry.</p>
+      <p className="text-xs text-[var(--text-muted)]">{t('wmsissue.stockreg.addStockHelp')}</p>
       {loadError && (
         <div role="alert" className="card p-4 flex flex-wrap items-center gap-3 border border-red-500/40">
           <AlertTriangle size={18} className="text-red-500 shrink-0" aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-[var(--text-primary)]">Stock could not be loaded</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{t('wmsissue.stockreg.loadError')}</p>
             <p className="text-sm text-[var(--text-muted)]">{loadError}</p>
           </div>
           <button type="button" onClick={load} className={`btn-secondary min-h-[44px] text-sm flex items-center gap-1.5 ${FOCUS}`}>
-            <RefreshCw size={14} aria-hidden="true" /> Retry
+            <RefreshCw size={14} aria-hidden="true" /> {t('wmsissue.common.retry')}
           </button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 flex-wrap" role="tablist" aria-label="Stock views">
+      <div className="flex gap-2 flex-wrap" role="tablist" aria-label={t('wmsissue.stockreg.views')}>
         {tabs.map(([val, label]) => (
           <button
             key={val}
@@ -1003,7 +1011,7 @@ function StockRegisterView({ embedded = false }) {
                   <p className="text-sm font-semibold text-[var(--text-primary)]">{t('stock.companyTyres.changedBySize')}</p>
                   <p className="text-xs text-[var(--text-muted)]">{t('stock.companyTyres.lastSixMonths')}</p>
                 </div>
-                <button type="button" onClick={() => setActiveTab('timeline')} className={`text-xs font-medium text-[var(--accent)] ${FOCUS}`}>{t('stock.companyTyres.openTimeline')} →</button>
+                <button type="button" onClick={() => setActiveTab('timeline')} className={`text-xs font-medium text-[var(--accent)] ${FOCUS}`}>{t('stock.companyTyres.openTimeline')} <span className="inline-block rtl-flip" aria-hidden="true">→</span></button>
               </div>
               {tyreChangeLoading ? <p className="mt-4 text-sm text-[var(--text-muted)]">{t('stock.timeline.loading')}</p>
                 : tyreChangeError ? <p className="mt-4 text-xs text-amber-600">{t('stock.companyTyres.unavailable')}</p>
@@ -1018,61 +1026,61 @@ function StockRegisterView({ embedded = false }) {
 
           {/* KPI strip (covers the filtered view) */}
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-            <StatTile icon={Boxes} label="Stock items" value={loading ? '...' : kpis.items.toLocaleString()}
-              sub="Balances are shown per item and unit" />
+            <StatTile icon={Boxes} label={t('wmsissue.stockreg.stockItems')} value={loading ? '...' : kpis.items.toLocaleString()}
+              sub={t('wmsissue.stockreg.stockItemsSub')} />
             <StatTile icon={AlertTriangle} label={t('stock.statuses.Critical')} value={kpis.counts.Critical.toLocaleString()}
-              sub="At or below critical level" tone={kpis.counts.Critical > 0 ? 'crit' : 'neutral'} />
+              sub={t('wmsissue.stockreg.criticalSub')} tone={kpis.counts.Critical > 0 ? 'crit' : 'neutral'} />
             <StatTile icon={AlertTriangle} label={t('stock.statuses.Low')} value={kpis.counts.Low.toLocaleString()}
-              sub="At or below minimum level" tone={kpis.counts.Low > 0 ? 'warn' : 'neutral'} />
-            <StatTile icon={Clock} label="Avg days of cover"
-              value={kpis.avgCoverDays === null ? 'N/A' : `${kpis.avgCoverDays}d`}
-              sub={kpis.measuredCover ? `${kpis.measuredCover} items with consumption` : 'No consumption recorded'} tone="info" />
-            <StatTile icon={ShoppingCart} label="Suggested reorder" value={kpis.toReorder.toLocaleString()}
-              sub={`${kpis.atRisk} items under 30 days`} tone={kpis.atRisk > 0 ? 'warn' : 'neutral'} />
-            <StatTile icon={MapPin} label="Sites" value={kpis.sites.toLocaleString()}
-              sub={`${kpis.stockouts} stocked out`} />
+              sub={t('wmsissue.stockreg.lowSub')} tone={kpis.counts.Low > 0 ? 'warn' : 'neutral'} />
+            <StatTile icon={Clock} label={t('wmsissue.stockreg.avgCover')}
+              value={kpis.avgCoverDays === null ? na : t('wmsissue.stockreg.days', { count: kpis.avgCoverDays })}
+              sub={kpis.measuredCover ? t('wmsissue.stockreg.withConsumption', { count: kpis.measuredCover }) : t('wmsissue.stockreg.noConsumption')} tone="info" />
+            <StatTile icon={ShoppingCart} label={t('wmsissue.stockreg.suggestedReorder')} value={kpis.toReorder.toLocaleString()}
+              sub={t('wmsissue.stockreg.under30', { count: kpis.atRisk })} tone={kpis.atRisk > 0 ? 'warn' : 'neutral'} />
+            <StatTile icon={MapPin} label={t('wmsissue.stockreg.sites')} value={kpis.sites.toLocaleString()}
+              sub={t('wmsissue.stockreg.stockedOut', { count: kpis.stockouts })} />
           </div>
 
           {/* Filters */}
-          <section className="card p-4" aria-label="Filters">
+          <section className="card p-4" aria-label={t('wmsissue.stockreg.filters')}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
               <label className="block lg:col-span-2">
-                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">Search</span>
+                <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('wmsissue.filters.search')}</span>
                 <span className="relative block">
                   <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                   <input type="search" value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder="Site, item code, description or brand" className={`w-full ps-9 ${CTRL}`} />
+                    placeholder={t('wmsissue.stockreg.searchPlaceholder')} className={`w-full ps-9 ${CTRL}`} />
                 </span>
               </label>
               <label className="block">
                 <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('stock.table.columns.site')}</span>
                 <select value={siteFilter} onChange={e => setSiteFilter(e.target.value)} className={`w-full ${CTRL}`}>
-                  <option value="all">All sites</option>
+                  <option value="all">{t('wmsissue.filters.allSites')}</option>
                   {sites.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </label>
               <label className="block">
                 <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('stock.table.columns.status')}</span>
                 <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className={`w-full ${CTRL}`}>
-                  <option value="all">All statuses</option>
+                  <option value="all">{t('wmsissue.stockreg.allStatuses')}</option>
                   {STATUSES.map(st => <option key={st} value={st}>{t(`stock.statuses.${st}`)}</option>)}
                 </select>
               </label>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--text-dim)]" aria-live="polite">
-              <span>{loading ? 'Loading stock...' : `${visibleStock.length.toLocaleString()} of ${records.length.toLocaleString()} items`}</span>
+              <span>{loading ? t('wmsissue.stockreg.loadingStock') : t('wmsissue.stockreg.itemsOf', { shown: visibleStock.length.toLocaleString(), total: records.length.toLocaleString() })}</span>
               {!loading && records.length > 0 && (
                 <span>
-                  {detailState === 'loading' ? 'Loading Material Master details and usage...'
-                    : `${coverage.catalogued.toLocaleString()} linked to Material Master · ${coverage.withUsage.toLocaleString()} issued in the last ${USAGE_MONTHS} months`
-                      + (coverage.noCode ? ` · ${coverage.noCode} with no item code` : '')
-                      + (detailState === 'partial' ? ' · some details could not be loaded' : '')}
+                  {detailState === 'loading' ? t('wmsissue.stockreg.loadingDetails')
+                    : t('wmsissue.stockreg.coverage', { linked: coverage.catalogued.toLocaleString(), used: coverage.withUsage.toLocaleString(), months: USAGE_MONTHS })
+                      + (coverage.noCode ? ` · ${t('wmsissue.stockreg.coverageNoCode', { count: coverage.noCode })}` : '')
+                      + (detailState === 'partial' ? ` · ${t('wmsissue.stockreg.coveragePartial')}` : '')}
                 </span>
               )}
               {filtersActive && (
                 <button type="button" onClick={clearFilters}
                   className={`min-h-[44px] inline-flex items-center gap-1 px-3 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] ${FOCUS}`}>
-                  <X size={12} aria-hidden="true" /> Clear filters
+                  <X size={12} aria-hidden="true" /> {t('wmsissue.common.clearFilters')}
                 </button>
               )}
             </div>
@@ -1086,7 +1094,7 @@ function StockRegisterView({ embedded = false }) {
             loading={loading}
             error={loadError || null}
             onRetry={load}
-            emptyMessage={records.length === 0 ? t('stock.table.emptyTitle') : 'No stock items match these filters'}
+            emptyMessage={records.length === 0 ? t('stock.table.emptyTitle') : t('wmsissue.stockreg.noMatch')}
           />
         </>
       )}
@@ -1122,8 +1130,8 @@ function StockRegisterView({ embedded = false }) {
                   </select>
                 </label>
                 <label className="relative block min-w-56 self-end">
-                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-                  <input className={`input min-h-[44px] pl-9 ${FOCUS}`} value={siteSizeSearch} onChange={e => setSiteSizeSearch(e.target.value)} placeholder={t('stock.tyreBySite.search')} aria-label={t('stock.tyreBySite.search')} />
+                  <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+                  <input className={`input min-h-[44px] ps-9 ${FOCUS}`} value={siteSizeSearch} onChange={e => setSiteSizeSearch(e.target.value)} placeholder={t('stock.tyreBySite.search')} aria-label={t('stock.tyreBySite.search')} />
                 </label>
               </div>
             </div>
@@ -1238,11 +1246,11 @@ function StockRegisterView({ embedded = false }) {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {['from', 'to'].map(side => <label key={side} className="label">{side === 'from' ? 'Source item' : 'Destination item'}
-                  <select className="input" aria-label={side === 'from' ? 'Source item' : 'Destination item'} required
+                {['from', 'to'].map(side => <label key={side} className="label">{side === 'from' ? t('wmsissue.stockreg.sourceItem') : t('wmsissue.stockreg.destinationItem')}
+                  <select className="input" aria-label={side === 'from' ? t('wmsissue.stockreg.sourceItem') : t('wmsissue.stockreg.destinationItem')} required
                     value={transferRecord(side)?.id || ''} onChange={e => setTransferForm(f => ({ ...f, [side + 'Id']: e.target.value }))}>
-                    <option value="">Choose an item at this site</option>
-                    {records.filter(r => r.site === transferForm[side + 'Site']).map(r => <option key={r.id} value={r.id}>{stockItem(r).code ? `${stockItem(r).code} · ` : ''}{r.description || r.site} · {r.stock_qty} {stockItem(r).unit || 'units'}{stockItem(r).bin ? ` · ${stockItem(r).bin}` : ''}</option>)}
+                    <option value="">{t('wmsissue.stockreg.chooseItemAtSite')}</option>
+                    {records.filter(r => r.site === transferForm[side + 'Site']).map(r => <option key={r.id} value={r.id}>{stockItem(r).code ? `${stockItem(r).code} · ` : ''}{r.description || r.site} · {r.stock_qty} {stockItem(r).unit || t('wmsissue.quick.units')}{stockItem(r).bin ? ` · ${stockItem(r).bin}` : ''}</option>)}
                   </select>
                 </label>)}
               </div>
@@ -1287,7 +1295,7 @@ function StockRegisterView({ embedded = false }) {
                           <span>{transferForm.fromSite}</span>
                           <span>
                             <span className="text-[var(--text-muted)]">{from?.stock_qty ?? '?'}</span>
-                            <span className="text-[var(--text-dim)] mx-1" aria-hidden="true">→</span><span className="sr-only"> to </span>
+                            <span className="text-[var(--text-dim)] mx-1 inline-block rtl-flip" aria-hidden="true">→</span><span className="sr-only"> {t('wmsissue.reorder.toNew')} </span>
                             <span className={from && from.stock_qty - qty < from.critical_level ? 'text-red-400' : 'text-green-400'}>
                               {from ? from.stock_qty - qty : '?'}
                             </span>
@@ -1297,7 +1305,7 @@ function StockRegisterView({ embedded = false }) {
                           <span>{transferForm.toSite}</span>
                           <span>
                             <span className="text-[var(--text-muted)]">{to?.stock_qty ?? '?'}</span>
-                            <span className="text-[var(--text-dim)] mx-1" aria-hidden="true">→</span><span className="sr-only"> to </span>
+                            <span className="text-[var(--text-dim)] mx-1 inline-block rtl-flip" aria-hidden="true">→</span><span className="sr-only"> {t('wmsissue.reorder.toNew')} </span>
                             <span className="text-green-400">{to ? to.stock_qty + qty : '?'}</span>
                           </span>
                         </div>
@@ -1327,12 +1335,12 @@ function StockRegisterView({ embedded = false }) {
                         country: activeCountry,
                         description: fromRecord.description || transferForm.notes || null,
                       }}
-                      title="Inter-site Transfer Approval"
+                      title={t('wmsissue.stockreg.transferApproval')}
                       onStateChange={({ isActive, isLocked }) => setTransferWfLocked(!!(isActive || isLocked))}
                     />
                     {transferWfLocked && (
                       <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-                        <Lock size={12} /> Locked, in approval
+                        <Lock size={12} aria-hidden="true" /> {t('wmsissue.stockreg.locked')}
                       </div>
                     )}
                   </div>
@@ -1342,7 +1350,7 @@ function StockRegisterView({ embedded = false }) {
               <button
                 type="submit"
                 disabled={transferring || transferWfLocked || !transferForm.fromSite || !transferForm.toSite || !transferRecord('from') || !transferRecord('to') || transferForm.qty < 1}
-                title={transferWfLocked ? 'Locked, in approval' : undefined}
+                title={transferWfLocked ? t('wmsissue.stockreg.locked') : undefined}
                 className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {transferWfLocked ? <Lock size={16} /> : <ArrowLeftRight size={16} />}
@@ -1361,18 +1369,18 @@ function StockRegisterView({ embedded = false }) {
             <div className="flex flex-wrap items-end gap-3">
               <label className="block">
                 <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('stock.timeline.from')}</span>
-                <DateField className="w-44" ariaLabel={t('stock.timeline.from')} value={tlFrom} onChange={setTlFrom} placeholder="Select date" />
+                <DateField className="w-44" ariaLabel={t('stock.timeline.from')} value={tlFrom} onChange={setTlFrom} placeholder={t('wmsissue.movements.selectDate')} />
               </label>
               <label className="block">
                 <span className="text-xs text-[var(--text-dim)] mb-1.5 block">{t('stock.timeline.to')}</span>
-                <DateField className="w-44" ariaLabel={t('stock.timeline.to')} value={tlTo} onChange={setTlTo} min={tlFrom} placeholder="Select date" />
+                <DateField className="w-44" ariaLabel={t('stock.timeline.to')} value={tlTo} onChange={setTlTo} min={tlFrom} placeholder={t('wmsissue.movements.selectDate')} />
               </label>
               <button type="button" onClick={exportTimeline} disabled={tlLoading || tlDays.length === 0}
                 className={`btn-secondary min-h-[44px] text-sm flex items-center gap-1.5 disabled:opacity-50 ${FOCUS}`}>
-                <Download size={14} aria-hidden="true" /> Excel
+                <Download size={14} aria-hidden="true" /> {t('wmsissue.common.excel')}
               </button>
             </div>
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Quick ranges">
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('wmsissue.movements.quickRanges')}>
               {[
                 { label: t('stock.timeline.chips.today'),      from: todayStr(now),       to: todayStr(now) },
                 { label: t('stock.timeline.chips.yesterday'),  from: offsetDate(-1, now), to: offsetDate(-1, now) },
@@ -1398,13 +1406,13 @@ function StockRegisterView({ embedded = false }) {
             <StatTile label={t('stock.timeline.today')} value={tlSummary.todayIssues.toLocaleString()} sub={t('stock.timeline.issues')} />
             <StatTile label={t('stock.timeline.yesterday')} value={tlSummary.yesterdayIssues.toLocaleString()} sub={t('stock.timeline.issues')} />
             <StatTile label={t('stock.timeline.change')}
-              value={tlSummary.changePct === null ? 'N/A' : `${tlSummary.changePct > 0 ? '+' : ''}${tlSummary.changePct.toFixed(1)}%`}
-              sub={tlSummary.changePct === null ? 'No issues yesterday to compare' : 'Today vs yesterday'}
+              value={tlSummary.changePct === null ? na : `${tlSummary.changePct > 0 ? '+' : ''}${tlSummary.changePct.toFixed(1)}%`}
+              sub={tlSummary.changePct === null ? t('wmsissue.stockreg.noYesterday') : t('wmsissue.stockreg.todayVsYesterday')}
               tone={tlSummary.changePct > 0 ? 'warn' : 'neutral'} />
-            <StatTile label={t('stock.timeline.columns.itemsIn')} value={tlSummary.totalIn.toLocaleString()} sub="In the selected range" />
-            <StatTile label={t('stock.timeline.columns.itemsOut')} value={tlSummary.totalOut.toLocaleString()} sub="In the selected range" />
-            <StatTile label="Busiest day" value={tlSummary.busiest ? tlSummary.busiest.date : 'N/A'}
-              sub={tlSummary.busiest ? `${tlSummary.busiest.out} out` : 'No issues in range'} />
+            <StatTile label={t('stock.timeline.columns.itemsIn')} value={tlSummary.totalIn.toLocaleString()} sub={t('wmsissue.stockreg.inRange')} />
+            <StatTile label={t('stock.timeline.columns.itemsOut')} value={tlSummary.totalOut.toLocaleString()} sub={t('wmsissue.stockreg.inRange')} />
+            <StatTile label={t('wmsissue.stockreg.busiestDay')} value={tlSummary.busiest ? tlSummary.busiest.date : na}
+              sub={tlSummary.busiest ? t('wmsissue.stockreg.outCount', { count: tlSummary.busiest.out }) : t('wmsissue.stockreg.noIssuesInRange')} />
           </div>
 
           {tlError && (
@@ -1412,7 +1420,7 @@ function StockRegisterView({ embedded = false }) {
               <AlertTriangle size={18} className="text-red-500 shrink-0" aria-hidden="true" />
               <p className="text-sm text-[var(--text-muted)] flex-1 min-w-0">{tlError}</p>
               <button type="button" onClick={loadTimeline} className={`btn-secondary min-h-[44px] text-sm flex items-center gap-1.5 ${FOCUS}`}>
-                <RefreshCw size={14} aria-hidden="true" /> Retry
+                <RefreshCw size={14} aria-hidden="true" /> {t('wmsissue.common.retry')}
               </button>
             </div>
           )}
@@ -1423,7 +1431,7 @@ function StockRegisterView({ embedded = false }) {
               <CardHeader level={2} title={t('stock.timeline.chartTitle')} />
               <CardBody style={{ height: 220 }}>
                 <div className="h-full" role="img"
-                  aria-label={`Daily net stock change from ${tlFrom} to ${tlTo}. ${tlSummary.totalIn} in, ${tlSummary.totalOut} out.`}>
+                  aria-label={t('wmsissue.stockreg.chartAria', { from: tlFrom, to: tlTo, totalIn: tlSummary.totalIn, totalOut: tlSummary.totalOut })}>
                   <Bar
                     data={tlChartData}
                     options={{
@@ -1478,11 +1486,11 @@ function StockRegisterView({ embedded = false }) {
                   site: historyFor.site,
                 }}
                 onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
-                title="Stock Issuance Approval"
+                title={t('wmsissue.stockreg.issuanceApproval')}
               />
               {wfLocked && (
                 <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] mt-2">
-                  <Lock size={12} /> Locked, in approval
+                  <Lock size={12} aria-hidden="true" /> {t('wmsissue.stockreg.locked')}
                 </div>
               )}
             </div>
@@ -1524,7 +1532,7 @@ function StockRegisterView({ embedded = false }) {
                   <button
                     onClick={saveAdjustment}
                     disabled={saving || adjForm.qty_change === 0 || wfLocked}
-                    title={wfLocked ? 'Locked, in approval' : undefined}
+                    title={wfLocked ? t('wmsissue.stockreg.locked') : undefined}
                     className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
                   >
                     {wfLocked && <Lock size={12} />}
@@ -1589,7 +1597,7 @@ function StockRegisterView({ embedded = false }) {
                 <input className="input" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder={t('stock.form.descriptionPlaceholder')} />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div><label className="label">{t('stock.form.stockQty')}</label><input type="number" className="input" value={form.stock_qty} readOnly title="Use Add Stock to record a physical count or receipt." min={0} /></div>
+                <div><label className="label">{t('stock.form.stockQty')}</label><input type="number" className="input" value={form.stock_qty} readOnly title={t('wmsissue.stockreg.qtyReadOnly')} min={0} /></div>
                 <div><label className="label">{t('stock.form.minLevel')}</label><input type="number" className="input" value={form.min_level} onChange={e => setForm(f => ({ ...f, min_level: +e.target.value }))} min={0} /></div>
                 <div><label className="label">{t('stock.form.criticalLevel')}</label><input type="number" className="input" value={form.critical_level} onChange={e => setForm(f => ({ ...f, critical_level: +e.target.value }))} min={0} /></div>
               </div>

@@ -68,8 +68,8 @@ export default function OpeningBalancePanel({ scope, can, userId }) {
 
   const columns = [
     { key: 'ref', header: t('inventory.opening.ref'), cell: (b) => <span className="inv-mono">{b.ref || b.id?.slice(0, 8)}</span> },
-    { key: 'source_filename', header: t('inventory.opening.source'), cell: (b) => b.source_filename || b.source || <span className="cc-na">N/A</span> },
-    { key: 'site', header: t('inventory.scope.site'), cell: (b) => b.site || <span className="cc-na">N/A</span> },
+    { key: 'source_filename', header: t('inventory.opening.source'), cell: (b) => b.source_filename || b.source || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+    { key: 'site', header: t('inventory.scope.site'), cell: (b) => b.site || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
     { key: 'line_count', header: t('inventory.opening.lines'), numeric: true, cell: (b) => formatQty(b.line_count) },
     { key: 'missing_cost_count', header: t('inventory.opening.missingCost'), numeric: true, cell: (b) => formatQty(b.missing_cost_count) },
     { key: 'status', header: t('inventory.common.status'), cell: (b) => <StatusPill value={b.status} tone={TONE[b.status]} label={t(`inventory.opening.status.${b.status}`)} /> },
@@ -77,8 +77,8 @@ export default function OpeningBalancePanel({ scope, can, userId }) {
   ]
   const previewCols = [
     { key: 'line_no', header: '#', numeric: true },
-    { key: 'item_code', header: t('inventory.common.item'), cell: (l) => l.item_code || <span className="cc-na">N/A</span> },
-    { key: 'location_code', header: t('inventory.common.location'), cell: (l) => l.location_code || <span className="cc-na">N/A</span> },
+    { key: 'item_code', header: t('inventory.common.item'), cell: (l) => l.item_code || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+    { key: 'location_code', header: t('inventory.common.location'), cell: (l) => l.location_code || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
     { key: 'qty', header: t('inventory.count.qty'), numeric: true, cell: (l) => formatQty(l.qty) },
     { key: 'unit_cost', header: t('inventory.opening.unitCost'), numeric: true, cell: (l) => (l.missing_cost ? <StatusPill value="missing" tone="warning" label={t('inventory.opening.costMissing')} /> : formatMoney(l.unit_cost, l.currency)) },
     { key: 'issues', header: t('inventory.opening.issues'), sortable: false, cell: (l) => (l.issues?.length ? l.issues.map((i) => t(`inventory.opening.issue.${i}`)).join(', ') : <StatusPill value="ok" tone="good" label={t('inventory.opening.ready')} />) },
@@ -134,7 +134,7 @@ export default function OpeningBalancePanel({ scope, can, userId }) {
               <Kpi icon={CircleDollarSign} tone="t-amber" value={summary.missingCost} label={t('inventory.opening.missingCost')} />
               <Kpi icon={CircleDollarSign} tone="t-green" display={formatTotals(summary.value.totals)} label={t('inventory.opening.pricedValue')} />
             </div>
-            <p className="cc-card-sub">{t('inventory.opening.pricedPct', { pct: summary.pricedPct ?? 'N/A' })}</p>
+            <p className="cc-card-sub">{t('inventory.opening.pricedPct', { pct: summary.pricedPct ?? t('wmsfloor.common.na') })}</p>
             {mapped.length > PREVIEW_LIMIT && <p className="cc-card-sub">{t('inventory.opening.previewNote', { shown: PREVIEW_LIMIT, total: mapped.length })}</p>}
             <KitTable compact scroll columns={previewCols} rows={mapped.slice(0, PREVIEW_LIMIT)} empty={t('inventory.opening.noLines')} />
             {err && <ErrorNote error={err} />}
@@ -148,11 +148,11 @@ export default function OpeningBalancePanel({ scope, can, userId }) {
           <div className="inv-hub" style={{ gap: 12 }}>
             <dl className="inv-dl">
               <dt>{t('inventory.common.status')}</dt><dd><StatusPill value={open.status} tone={TONE[open.status]} label={t(`inventory.opening.status.${open.status}`)} /></dd>
-              <dt>{t('inventory.opening.source')}</dt><dd>{open.source_filename || open.source || 'N/A'}</dd>
+              <dt>{t('inventory.opening.source')}</dt><dd>{open.source_filename || open.source || t('wmsfloor.common.na')}</dd>
               <dt>{t('inventory.opening.missingCost')}</dt><dd>{formatQty(open.missing_cost_count)}</dd>
               <dt>{t('inventory.common.created')}</dt><dd>{fmtDateTime(open.created_at)}</dd>
             </dl>
-            <PagedTable query={lines} columns={previewCols.map((c) => (c.key === 'issues' ? { ...c, cell: (l) => (Array.isArray(l.issues) && l.issues.length ? l.issues.join(', ') : l.mapping_status || 'N/A') } : c))}
+            <PagedTable query={lines} columns={previewCols.map((c) => (c.key === 'issues' ? { ...c, cell: (l) => (Array.isArray(l.issues) && l.issues.length ? l.issues.join(', ') : l.mapping_status || t('wmsfloor.common.na')) } : c))}
               page={linePage} pageSize={50} onPage={setLinePage} empty={t('inventory.opening.noLines')}
               what={t('inventory.objects.opening_balance_batches')} noun={t('inventory.opening.linesNoun')} />
             {['draft', 'mapped'].includes(open.status) && open.created_by === userId && (

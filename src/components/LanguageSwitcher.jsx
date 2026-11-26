@@ -53,7 +53,7 @@ export default function LanguageSwitcher({ variant = 'pills', className = '' }) 
           aria-pressed={language === l.code}
           title={l.label}
         >
-          {l.code === 'ar' ? 'ع' : 'EN'}
+          {l.code === 'ar' ? 'ع' : l.code === 'ur' ? 'اردو' : 'EN'}
         </button>
       ))}
     </div>

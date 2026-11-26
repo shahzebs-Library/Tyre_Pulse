@@ -46,6 +46,7 @@ import { isMissingRelation } from '../lib/api/_client'
 import { listGrnLineTotals } from '../lib/api/procurementChain'
 import { summarizeGrnLines, withLineTotals } from '../lib/procurementChain'
 import { ReceiveAgainstPoPanel, useProcurementCaps } from '../components/procurement/ProcurementChainPanels'
+import PhoneReceiptsPanel from '../components/procurement/PhoneReceiptsPanel'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -302,6 +303,7 @@ export default function GoodsReceipt() {
         hint="Receipts appear once stock is received against a purchase order." />
 
       {!missing && <ReceiveAgainstPoPanel country={activeCountry} onReceived={() => load()} />}
+      {!missing && caps.receive && <PhoneReceiptsPanel country={activeCountry} onDecided={() => load()} />}
 
       {missing && (
         <div role="status" className="card border border-amber-800/50 flex items-start gap-3">

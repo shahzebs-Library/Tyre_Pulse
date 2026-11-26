@@ -232,3 +232,41 @@ export async function linkRequisitionToPo(id, poNumber) {
   if (!row) throw new ServiceError('The requisition could not be linked: it is not approved, or you do not have permission.', 'PROC_LINK_REFUSED')
   return row
 }
+
+// ── Store keeper phone receipts (inv_store_receipt_*, migration 20261126180000) ─
+//
+// A store keeper records a delivery on the phone against one open PO line;
+// nothing moves in stock until a DIFFERENT person holding "receive" approves.
+// The server refuses a self-decision and posts through inv_receive_goods at
+// the PO line price. Read through RLS (recorder, or receive holders in scope).
+
+export const STORE_RECEIPT_COLS =
+  'id,status,country,site,qty_received,qty_rejected,rejection_reason,delivery_note_no,delivery_note_path,notes,' +
+  'submitted_by,submitted_at,decided_at,decision_note,grn_id,' +
+  'purchase_orders(po_number,supplier_name,vendor_name),material_master(item_code,item_name,uom),inventory_locations(code,name)'
+
+/** Pending phone receipts the caller may see. `[]` until the migration is applied. */
+export async function listPendingStoreReceipts({ country } = {}) {
+  let q = supabase.from('inv_store_receipt_requests').select(STORE_RECEIPT_COLS)
+    .eq('status', 'pending').order('submitted_at', { ascending: true }).order('id').limit(200)
+  q = applyCountry(q, country)
+  const { data, error } = await q
+  if (error) {
+    if (isNotProvisioned(error)) return []
+    throw toServiceError(error)
+  }
+  return data || []
+}
+
+/** Approve (posts the GRN) or reject (reason required) a phone receipt. */
+export async function decideStoreReceipt(requestId, decision, note) {
+  if (!requestId) throw new ServiceError('Choose a receipt.', 'SR_NO_ID')
+  if (decision === 'reject' && !(note || '').trim()) {
+    throw new ServiceError('Say why the receipt is rejected.', 'SR_NO_REASON')
+  }
+  const { data, error } = await supabase.rpc('inv_store_receipt_decide', {
+    p_payload: { request_id: requestId, decision, note: (note || '').trim() || null },
+  })
+  if (error) throw toServiceError(error)
+  return data
+}

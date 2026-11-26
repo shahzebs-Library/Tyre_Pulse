@@ -18,6 +18,7 @@ import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
 import 'package:tyre_pulse/features/inventory/presentation/job_card_issue_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/my_audits_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/physical_inventory_screen.dart';
+import 'package:tyre_pulse/features/inventory/presentation/store_receipt_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/transfers_screen.dart';
 import 'package:tyre_pulse/features/stock_count/data/stock_count_recorder.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
@@ -298,6 +299,15 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
             icon: const Icon(Icons.history_rounded),
             onPressed: () => unawaited(
               Navigator.of(context).push(StoreHistoryScreen.route()),
+            ),
+          ),
+          // Goods received against an open PO line, sent for approval.
+          IconButton(
+            key: const Key('stock.receiveGoods'),
+            tooltip: InventoryCopy.of(context)('sr_entry'),
+            icon: const Icon(Icons.move_to_inbox_outlined),
+            onPressed: () => unawaited(
+              Navigator.of(context).push(StoreReceiptScreen.route()),
             ),
           ),
           IconButton(

@@ -57,7 +57,7 @@ export default function JobCardMaterialsPanel({ scope, can, onNavigate, initialJ
       setState({ loading: false, error: toUserMessage(e), data: null })
     }
   }
-  const reload = () => load(state.data?.jobCard || jobCard)
+  const reload = () => load(state.data?.lookupJobCard || jobCard)
   const data = state.data
   const wo = data?.workOrder
   const site = wo?.site || (scope?.site && scope.site !== 'all' ? scope.site : '')

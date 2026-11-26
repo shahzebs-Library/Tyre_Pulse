@@ -111,6 +111,9 @@ export async function loadJobCardMaterials(jobCard) {
       status: 'ok',
       // Show the job card as Work Orders records it, not as it was typed.
       jobCard: workOrder?.work_order_no || variants[0],
+      // The spelling this read searched with. Reloads must reuse it: the Work
+      // Orders spelling alone can miss materials recorded under the typed one.
+      lookupJobCard: jobCard,
       workOrder,
       rows,
       summary: summariseJobMaterials(rows, reqs.rows),

@@ -116,8 +116,26 @@ export async function createPurchaseOrderWithLines(header, lines = []) {
   return { po, ...res }
 }
 
+/** The payload one line sends to inv_po_add_line (the bulk call sends the same). */
+function poLinePayload(poId, l, i) {
+  return {
+    po_id: poId, idempotency_key: l.idempotency_key || `po:${poId}:line:${i}:${l.item_id}`,
+    item_id: l.item_id, description: l.description || null, qty_ordered: l.qty_ordered,
+    unit_price: l.unit_price ?? null, currency: l.currency || null,
+  }
+}
+
+/** Lines per bulk call (the server refuses more than 200). */
+export const PO_LINES_PER_CALL = 100
+
+// Set once the database answers that inv_po_add_lines is not installed, so
+// later saves in this session go straight to the per-line path.
+let bulkPoLinesMissing = false
+/** Test hook: forget what was learned about the bulk RPC. */
+export function _resetPoLinesBulkProbe() { bulkPoLinesMissing = false }
+
 /**
- * Add lines to an existing Draft / Submitted PO, one RPC call per line.
+ * Add lines to an existing Draft / Submitted PO.
  * Each pending line carries its own idempotency key, minted by the form when
  * the line was added (newIdempotencyKey()) and kept with the line, so every
  * retry or later edit of the same PO replays that line instead of adding it
@@ -125,19 +143,49 @@ export async function createPurchaseOrderWithLines(header, lines = []) {
  * later call adds a different line at the same index. Lines saved before keys
  * were kept with the line have none; they keep the old index-based key so a
  * re-edit of an old PO does not duplicate them.
+ *
+ * Speed: the lines go in ONE request through inv_po_add_lines (each line was a
+ * full ~400 ms round trip from Saudi Arabia). That function passes every line's
+ * payload to inv_po_add_line unchanged, in order, and reports each line's
+ * outcome, so the keys, the saved lines and the failures are the same as one
+ * call per line. When the bulk function is not installed yet (42883 /
+ * PGRST202) this falls back to one call per line, in order, as before.
  */
 export async function addPurchaseOrderLines(poId, lines = []) {
+  const list = lines || []
   const lineIds = []
   const failedLines = []
-  for (const [i, l] of (lines || []).entries()) {
-    const { data, error } = await supabase.rpc('inv_po_add_line', {
-      p_payload: {
-        po_id: poId, idempotency_key: l.idempotency_key || `po:${poId}:line:${i}:${l.item_id}`,
-        item_id: l.item_id, description: l.description || null, qty_ordered: l.qty_ordered,
-        unit_price: l.unit_price ?? null, currency: l.currency || null,
-      },
+  if (!list.length) return { lineIds, failedLines }
+  const fail = (i, l, error) =>
+    failedLines.push({ index: i, key: l.idempotency_key || null, message: toServiceError(error, 'Line not saved.').message })
+
+  let start = 0
+  while (!bulkPoLinesMissing && start < list.length) {
+    const part = list.slice(start, start + PO_LINES_PER_CALL)
+    const { data, error } = await supabase.rpc('inv_po_add_lines', {
+      p_payload: { po_id: poId, lines: part.map((l, k) => poLinePayload(poId, l, start + k)) },
     })
-    if (error) failedLines.push({ index: i, key: l.idempotency_key || null, message: toServiceError(error, 'Line not saved.').message })
+    if (error && isNotProvisioned(error)) { bulkPoLinesMissing = true; break }
+    const results = Array.isArray(data?.results) ? data.results : null
+    // The call itself failed (network, refusal) or answered in a shape we do
+    // not know: send this part and the rest one line at a time instead. Every
+    // line carries its idempotency key, so a line the bulk call did save is
+    // replayed, never added twice.
+    if (error || !results) break
+    part.forEach((l, k) => {
+      const r = results.find((x) => x && x.index === k)
+      if (r && r.ok) lineIds.push(r.result)
+      else fail(start + k, l, r ? { code: r.code, message: r.message } : new Error('Line not saved.'))
+    })
+    start += part.length
+  }
+
+  // Per-line path (bulk function missing, or a bulk call that failed): one RPC
+  // per line, in order, so the server still numbers the lines as entered.
+  for (let i = start; i < list.length; i += 1) {
+    const l = list[i]
+    const { data, error } = await supabase.rpc('inv_po_add_line', { p_payload: poLinePayload(poId, l, i) })
+    if (error) fail(i, l, error)
     else lineIds.push(data)
   }
   return { lineIds, failedLines }

@@ -10,6 +10,21 @@
  */
 import { supabase, unwrap, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { createRequestCache } from '../requestCache'
+import { configurationScope, isCacheableScope, subscribeConfigurationScope } from '../configurationStore'
+
+// The address book is read by the tenant shell on every sign-in and token
+// refresh (about 260 requests a day from Saudi Arabia, each a full round trip
+// to the database region) and changes only through the writers below. So
+// concurrent readers share one request and a settled answer is reused for
+// 60 s per signed-in identity. Every writer here drops it, and so does an
+// identity change. A failed read is never cached (unwrap throws, and a
+// rejection is not stored).
+const addressCache = createRequestCache({ ttlMs: 60000 })
+subscribeConfigurationScope(() => addressCache.clear())
+
+/** Forget cached addresses (after a change made outside this module). */
+export function invalidateCountryAddresses() { addressCache.clear() }
 
 /** Editable columns (order = form order). organisation_id/audit cols are server-set. */
 export const COUNTRY_ADDRESS_FIELDS = [
@@ -117,11 +132,17 @@ function pick(row) {
 
 /** All saved country addresses for the caller's org. */
 export async function listCountryAddresses() {
-  return unwrap(
+  const read = async () => unwrap(
     await supabase.from('country_addresses')
       .select(`id,country,${COUNTRY_ADDRESS_FIELDS.join(',')},updated_at`)
       .order('country'),
   )
+  const scope = configurationScope()
+  if (!isCacheableScope(scope)) return read()
+  const rows = await addressCache.get(scope, read)
+  // Each caller gets its own array and row objects, so an edit form can never
+  // change what another screen reads from the cache.
+  return Array.isArray(rows) ? rows.map((r) => (r && typeof r === 'object' ? { ...r } : r)) : rows
 }
 
 /**
@@ -145,17 +166,20 @@ export async function upsertCountryAddress(country, data) {
     payload.website = `https://${payload.website}`
   }
 
+  addressCache.clear()
   const { data: existing } = await supabase.from('country_addresses')
     .select('id').ilike('country', c).maybeSingle()
 
   if (existing?.id) {
     const { error } = await supabase.from('country_addresses')
       .update({ ...payload, updated_by: uid }).eq('id', existing.id)
+    addressCache.clear()
     if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     return existing.id
   }
   const { data: ins, error } = await supabase.from('country_addresses')
     .insert({ ...payload, created_by: uid, updated_by: uid }).select('id').single()
+  addressCache.clear()
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
   return ins.id
 }
@@ -164,6 +188,8 @@ export async function upsertCountryAddress(country, data) {
 export async function deleteCountryAddress(country) {
   const c = String(country ?? '').trim()
   if (!c) return
+  addressCache.clear()
   const { error } = await supabase.from('country_addresses').delete().ilike('country', c)
+  addressCache.clear()
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
 }

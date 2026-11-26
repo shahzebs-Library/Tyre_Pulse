@@ -111,7 +111,23 @@ class HandoverPayload {
     this.createdBy,
     this.country,
     this.approvalStatus,
+    this.fromDriverId,
+    this.toDriverId,
+    this.hourMeter,
+    this.site,
   });
+
+  /// `drivers.id` of the handing / receiving driver when picked from the
+  /// driver register. The server reads the signed name from the register and
+  /// refuses a sign-off by either linked driver.
+  final String? fromDriverId;
+  final String? toDriverId;
+
+  /// Engine hours at handover. Null when not read (never 0).
+  final double? hourMeter;
+
+  /// Site of the handover (site isolation applies on the server).
+  final String? site;
 
   final String assetNo;
   final HandoverType handoverType;
@@ -182,6 +198,10 @@ class HandoverPayload {
     String? approvalStatus,
   }) {
     return HandoverPayload(
+      fromDriverId: fromDriverId,
+      toDriverId: toDriverId,
+      hourMeter: hourMeter,
+      site: site,
       assetNo: assetNo ?? this.assetNo,
       handoverType: handoverType ?? this.handoverType,
       fromDriver: clearFromDriver ? null : (fromDriver ?? this.fromDriver),
@@ -232,8 +252,22 @@ class HandoverPayload {
       'notes': notes,
       'created_by': createdBy,
       'approval_status': approvalStatus,
+      if (fromDriverId != null) 'from_driver_id': fromDriverId,
+      if (toDriverId != null) 'to_driver_id': toDriverId,
+      if (hourMeter != null) 'hour_meter': hourMeter,
+      if (_trimmedOrNull(site) != null)
+        'site': _trimmedOrNull(site)!.toUpperCase(),
     };
   }
+
+  /// The authorization-paper columns [toRow] may carry. Stripped and retried
+  /// when the server has not had `20261126171000` applied yet.
+  static const List<String> authorizationKeys = <String>[
+    'from_driver_id',
+    'to_driver_id',
+    'hour_meter',
+    'site',
+  ];
 
   static String? _trimmedOrNull(String? raw) {
     final String trimmed = raw?.trim() ?? '';
@@ -258,9 +292,9 @@ List<HandoverSubmitIssue> validateHandoverForSubmit(HandoverPayload payload) {
   if (payload.conditionRating == null) {
     issues.add(HandoverSubmitIssue.missingConditionRating);
   }
-  if (payload.signatureDataUrl == null ||
-      payload.signatureDataUrl!.trim().isEmpty) {
-    issues.add(HandoverSubmitIssue.missingSignature);
-  }
+  // Signatures are no longer captured in the wizard: both drivers sign the
+  // saved draft online through `sign_handover`, which stamps the server time
+  // and location and freezes the record. A legacy single signature is only
+  // checked when a caller still supplies one.
   return issues;
 }

@@ -8817,4 +8817,392 @@ class AppLocalizationsAr extends AppLocalizations {
   String approvalsBulkProgress(int done, int total) {
     return 'جارٍ اعتماد $done من $total';
   }
+
+  @override
+  String get driverChargeSectionTitle => 'المبالغ المطلوبة مني';
+
+  @override
+  String get driverChargeNone => 'لا توجد مبالغ مسجلة على هذا السائق.';
+
+  @override
+  String driverChargeOutstanding(String amount) {
+    return 'المتبقي: $amount';
+  }
+
+  @override
+  String get driverChargeFilterAll => 'الكل';
+
+  @override
+  String get driverChargeLoadError =>
+      'تعذر تحميل المبالغ. تحقق من الاتصال وأعد المحاولة.';
+
+  @override
+  String get driverChargeLoadMore => 'تحميل المزيد';
+
+  @override
+  String driverChargeDetailTitle(String number) {
+    return 'مطالبة $number';
+  }
+
+  @override
+  String get driverChargeAmount => 'المبلغ';
+
+  @override
+  String get driverChargeDeducted => 'المخصوم حتى الآن';
+
+  @override
+  String get driverChargeStatusLabel => 'الحالة';
+
+  @override
+  String get driverChargeCategoryLabel => 'الفئة';
+
+  @override
+  String get driverChargeLinkedRecord => 'السجل المرتبط';
+
+  @override
+  String get driverChargeVehicle => 'المركبة';
+
+  @override
+  String get driverChargeIncident => 'تاريخ ووقت الواقعة';
+
+  @override
+  String get driverChargeIssuedAt => 'تاريخ الإصدار';
+
+  @override
+  String get driverChargeNotifiedAt => 'تاريخ إبلاغك';
+
+  @override
+  String get driverChargeBasis => 'السبب المكتوب للمطالبة';
+
+  @override
+  String get driverChargeEvidence => 'الأدلة';
+
+  @override
+  String get driverChargeNoEvidence =>
+      'لا توجد أدلة مدرجة. تعتمد المطالبة على السجل المرتبط.';
+
+  @override
+  String get driverChargeSignatures => 'التواقيع';
+
+  @override
+  String driverChargeSignedBy(String name, String time) {
+    return 'وقّع $name في $time (وقت الخادم)';
+  }
+
+  @override
+  String get driverChargeSignatureHidden =>
+      'صورة التوقيع غير معروضة لمستوى صلاحيتك.';
+
+  @override
+  String get driverChargeDecisions => 'المراجعات والقرارات';
+
+  @override
+  String get driverChargeNoDecisions => 'لم تسجل أي مراجعة بعد.';
+
+  @override
+  String get driverChargeSchedule => 'جدول الخصم';
+
+  @override
+  String get driverChargeNoSchedule => 'لا يوجد خصم مجدول.';
+
+  @override
+  String driverChargeInstalmentLine(
+      String month, String amount, String status) {
+    return '$month: $amount ($status)';
+  }
+
+  @override
+  String driverChargeCapLine(String percent) {
+    return 'لا يجوز أن يتجاوز أي قسط شهري $percent% من الراتب.';
+  }
+
+  @override
+  String get driverChargeAppealTitle => 'الاعتراض';
+
+  @override
+  String get driverChargeNoAppeal => 'لم يقدم أي اعتراض.';
+
+  @override
+  String driverChargeAppealFiled(String time) {
+    return 'قدم الاعتراض في $time';
+  }
+
+  @override
+  String driverChargeAppealOutcome(String outcome) {
+    return 'النتيجة: $outcome';
+  }
+
+  @override
+  String get driverChargeAppealPending =>
+      'بانتظار قرار من شخص لم يصدر هذه المطالبة ولم يراجعها.';
+
+  @override
+  String get driverChargeTimeline => 'السجل الكامل';
+
+  @override
+  String get driverChargeSharePdf => 'مشاركة الإشعار بصيغة PDF';
+
+  @override
+  String get driverChargePdfFailed => 'تعذر إنشاء ملف الإشعار. أعد المحاولة.';
+
+  @override
+  String get driverChargeRespond => 'الرد على هذه المطالبة';
+
+  @override
+  String get driverChargeAccept => 'قبول';
+
+  @override
+  String get driverChargeDispute => 'اعتراض على المطالبة';
+
+  @override
+  String get driverChargeStatementTitle => 'الإقرار الذي توقع عليه';
+
+  @override
+  String get driverChargeStatementEnglishOnly =>
+      'هذا الإقرار نص قانوني ويعرض باللغة الإنجليزية فقط. اطلب من مشرفك شرحه قبل التوقيع.';
+
+  @override
+  String get driverChargeStatementMissing =>
+      'تعذر تحميل الإقرار. حدّث الصفحة قبل التوقيع.';
+
+  @override
+  String get driverChargeAcknowledge =>
+      'قرأت هذا الإقرار وأوافق على التوقيع عليه.';
+
+  @override
+  String get driverChargeExplanation => 'لماذا تعترض على هذه المطالبة؟';
+
+  @override
+  String get driverChargeSignBelow => 'وقّع أدناه';
+
+  @override
+  String get driverChargeSubmit => 'التوقيع والإرسال';
+
+  @override
+  String get driverChargeAppealAction => 'الاعتراض على هذه المطالبة';
+
+  @override
+  String get driverChargeAppealReason => 'أسباب اعتراضك';
+
+  @override
+  String get driverChargeAppealSubmit => 'إرسال الاعتراض';
+
+  @override
+  String get driverChargeAppealOnce =>
+      'يمكنك الاعتراض على المطالبة مرة واحدة فقط. يقرر في الاعتراض شخص لم يصدرها ولم يعتمدها.';
+
+  @override
+  String get driverChargeIssueExplanation =>
+      'اكتب 10 أحرف على الأقل لتوضيح سبب اعتراضك.';
+
+  @override
+  String get driverChargeIssueAck => 'أكد أنك قرأت الإقرار.';
+
+  @override
+  String get driverChargeIssueSignature => 'وقّع قبل الإرسال.';
+
+  @override
+  String get driverChargeIssueReason =>
+      'اكتب 10 أحرف على الأقل لأسباب الاعتراض.';
+
+  @override
+  String get driverChargeOffline =>
+      'أنت غير متصل. يسجل الرد على المطالبة عبر الاتصال فقط، لذلك لم يحفظ شيء. اتصل بالإنترنت وأعد المحاولة.';
+
+  @override
+  String get driverChargeSaved => 'سجل ردك بوقت الخادم.';
+
+  @override
+  String get driverChargeAppealSaved => 'سجل اعتراضك.';
+
+  @override
+  String get driverChargeStaffReadOnly =>
+      'تسجل الإشعارات والمراجعات والجدولة والخصومات عبر الويب. تعرضها هذه الشاشة للاطلاع فقط.';
+
+  @override
+  String get driverChargeNoActions =>
+      'لا يوجد إجراء مطلوب منك على هذه المطالبة.';
+
+  @override
+  String get driverChargeStatusIssued => 'صدرت ولم ترسل إليك بعد';
+
+  @override
+  String get driverChargeStatusNotified => 'بانتظار ردك';
+
+  @override
+  String get driverChargeStatusAccepted => 'قبلها السائق';
+
+  @override
+  String get driverChargeStatusDisputed => 'اعترض عليها السائق';
+
+  @override
+  String get driverChargeStatusRefused => 'سجل الرفض بحضور شاهد';
+
+  @override
+  String get driverChargeStatusSupervisorApproved => 'اعتمدها المشرف';
+
+  @override
+  String get driverChargeStatusFinanceApproved => 'اعتمدتها المالية';
+
+  @override
+  String get driverChargeStatusUnderAppeal => 'قيد الاعتراض';
+
+  @override
+  String get driverChargeStatusScheduled => 'الخصم مجدول';
+
+  @override
+  String get driverChargeStatusDeducted => 'خصمت بالكامل';
+
+  @override
+  String get driverChargeStatusWaived => 'تم الإعفاء';
+
+  @override
+  String get driverChargeStatusCancelled => 'ألغيت لأنها صدرت خطأ';
+
+  @override
+  String get driverChargeCatTrafficFine => 'مخالفة مرورية';
+
+  @override
+  String get driverChargeCatAccidentDamage => 'ضرر حادث';
+
+  @override
+  String get driverChargeCatTyreDamage => 'ضرر إطار';
+
+  @override
+  String get driverChargeCatMissingItem => 'قطعة مفقودة';
+
+  @override
+  String get driverChargeCatHandoverDamage => 'ضرر عند التسليم';
+
+  @override
+  String get driverChargeCatOther => 'أخرى';
+
+  @override
+  String get driverChargeSrcAccident => 'ملف حادث';
+
+  @override
+  String get driverChargeSrcHandover => 'تسليم مركبة';
+
+  @override
+  String get driverChargeSrcInspection => 'فحص';
+
+  @override
+  String get driverChargeSrcChecklist => 'قائمة تحقق';
+
+  @override
+  String get driverChargeSrcTyre => 'سجل إطار';
+
+  @override
+  String get driverChargeSrcFine => 'سجل مخالفة مرورية';
+
+  @override
+  String get driverChargeSrcNone => 'لا يوجد سجل مرتبط';
+
+  @override
+  String get driverChargeReplaced =>
+      'ألغيت هذه المطالبة لأنها صدرت خطأ واستبدلت بمطالبة أخرى.';
+
+  @override
+  String get handoverAuthSignaturesTitle => 'تواقيع السائقين';
+
+  @override
+  String get handoverAuthHanding => 'المسلّم';
+
+  @override
+  String get handoverAuthReceiving => 'المستلم';
+
+  @override
+  String get handoverAuthNotSigned => 'لم يوقع';
+
+  @override
+  String handoverAuthSignedLine(String name, String time) {
+    return '$name، وقّع في $time (وقت الخادم)';
+  }
+
+  @override
+  String get handoverAuthSignHanding => 'التوقيع بصفتي السائق المسلّم';
+
+  @override
+  String get handoverAuthSignReceiving => 'التوقيع بصفتي السائق المستلم';
+
+  @override
+  String get handoverAuthSignerName => 'اسم الشخص الموقّع';
+
+  @override
+  String get handoverAuthSignerHint =>
+      'مطلوب فقط إذا لم يختر السائق من سجل السائقين.';
+
+  @override
+  String get handoverAuthHandingFirst =>
+      'يوقع السائق المسلّم أولاً ثم السائق المستلم.';
+
+  @override
+  String get handoverAuthFrozen => 'سجل موقّع. المحتوى مقفل ولا يمكن تغييره.';
+
+  @override
+  String get handoverAuthLocation => 'موقع التسليم';
+
+  @override
+  String handoverAuthLocationCaptured(String coords) {
+    return 'سجله الجهاز: $coords';
+  }
+
+  @override
+  String get handoverAuthLocationDenied => 'رفض إذن الموقع.';
+
+  @override
+  String get handoverAuthLocationUnavailable => 'تعذرت قراءة الموقع.';
+
+  @override
+  String get handoverAuthLocationNone =>
+      'لم يسجل موقع بعد. يسجل الموقع مع كل توقيع.';
+
+  @override
+  String get handoverAuthOpenMap => 'فتح في الخريطة';
+
+  @override
+  String get handoverAuthReadingLocation => 'جارٍ قراءة موقع الجهاز...';
+
+  @override
+  String get handoverAuthSignSubmit => 'تسجيل التوقيع';
+
+  @override
+  String get handoverAuthOffline =>
+      'أنت غير متصل. يسجل توقيع التسليم عبر الاتصال فقط، لذلك لم يحفظ شيء. اتصل بالإنترنت وأعد المحاولة.';
+
+  @override
+  String get handoverAuthSigned => 'سجل التوقيع بوقت الخادم.';
+
+  @override
+  String handoverAuthDocumentNo(String number) {
+    return 'رقم المستند $number';
+  }
+
+  @override
+  String get handoverAuthHourMeter => 'عداد الساعات (ساعة)';
+
+  @override
+  String get handoverAuthSite => 'الموقع';
+
+  @override
+  String get handoverAuthDriverRegister => 'اختيار من سجل السائقين';
+
+  @override
+  String get handoverAuthDriverNotListed => 'غير موجود في السجل';
+
+  @override
+  String get handoverAuthSigningStepInfo =>
+      'يوقع السائقان في صفحة التسليم بعد حفظه وأثناء الاتصال. يختم كل توقيع بوقت الخادم وموقع الجهاز، ويقفل السجل بعد التوقيع الأول.';
+
+  @override
+  String get handoverAuthOpenToSign =>
+      'حفظ التسليم كمسودة. افتحه الآن لجمع التوقيعين.';
+
+  @override
+  String get handoverAuthLegacySignature =>
+      'توقيع السائق المسجل قبل التوقيع من الطرفين';
+
+  @override
+  String get handoverAuthNotAvailable =>
+      'التوقيع من الطرفين غير متاح على الخادم بعد. اسأل المسؤول.';
 }

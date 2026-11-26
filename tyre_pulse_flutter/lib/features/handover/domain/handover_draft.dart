@@ -29,7 +29,17 @@ class HandoverDraft {
     this.photos = const <String>[],
     this.signatureDataUrl,
     this.notes = '',
+    this.fromDriverId,
+    this.toDriverId,
+    this.hourMeterText = '',
+    this.site = '',
   });
+
+  /// Driver register ids for the two parties, when picked from the register.
+  final String? fromDriverId;
+  final String? toDriverId;
+  final String hourMeterText;
+  final String site;
 
   final String assetNo;
   final HandoverType handoverType;
@@ -60,7 +70,9 @@ class HandoverDraft {
       damages.isEmpty &&
       photos.isEmpty &&
       (signatureDataUrl == null || signatureDataUrl!.isEmpty) &&
-      notes.trim().isEmpty;
+      notes.trim().isEmpty &&
+      hourMeterText.trim().isEmpty &&
+      site.trim().isEmpty;
 
   HandoverDraft copyWith({
     String? assetNo,
@@ -95,6 +107,10 @@ class HandoverDraft {
       signatureDataUrl:
           clearSignature ? null : (signatureDataUrl ?? this.signatureDataUrl),
       notes: notes ?? this.notes,
+      fromDriverId: fromDriverId,
+      toDriverId: toDriverId,
+      hourMeterText: hourMeterText,
+      site: site,
     );
   }
 
@@ -124,6 +140,10 @@ class HandoverDraft {
         'photos': List<String>.of(photos),
         'signatureDataUrl': signatureDataUrl,
         'notes': notes,
+        'fromDriverId': fromDriverId,
+        'toDriverId': toDriverId,
+        'hourMeterText': hourMeterText,
+        'site': site,
       };
 
   String toJsonString() => jsonEncode(toJson());
@@ -175,6 +195,10 @@ class HandoverDraft {
       photos: photos,
       signatureDataUrl: json['signatureDataUrl'] as String?,
       notes: json['notes'] as String? ?? '',
+      fromDriverId: json['fromDriverId'] as String?,
+      toDriverId: json['toDriverId'] as String?,
+      hourMeterText: json['hourMeterText'] as String? ?? '',
+      site: json['site'] as String? ?? '',
     );
   }
 

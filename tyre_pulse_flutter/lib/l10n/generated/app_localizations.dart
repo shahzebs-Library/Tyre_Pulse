@@ -15395,6 +15395,696 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Approving {done} of {total}'**
   String approvalsBulkProgress(int done, int total);
+
+  /// No description provided for @driverChargeSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My charges'**
+  String get driverChargeSectionTitle;
+
+  /// No description provided for @driverChargeNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No charges recorded for this driver.'**
+  String get driverChargeNone;
+
+  /// No description provided for @driverChargeOutstanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding: {amount}'**
+  String driverChargeOutstanding(String amount);
+
+  /// No description provided for @driverChargeFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get driverChargeFilterAll;
+
+  /// No description provided for @driverChargeLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Charges could not be loaded. Check your connection and try again.'**
+  String get driverChargeLoadError;
+
+  /// No description provided for @driverChargeLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get driverChargeLoadMore;
+
+  /// No description provided for @driverChargeDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Charge {number}'**
+  String driverChargeDetailTitle(String number);
+
+  /// No description provided for @driverChargeAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get driverChargeAmount;
+
+  /// No description provided for @driverChargeDeducted.
+  ///
+  /// In en, this message translates to:
+  /// **'Deducted so far'**
+  String get driverChargeDeducted;
+
+  /// No description provided for @driverChargeStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get driverChargeStatusLabel;
+
+  /// No description provided for @driverChargeCategoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get driverChargeCategoryLabel;
+
+  /// No description provided for @driverChargeLinkedRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked record'**
+  String get driverChargeLinkedRecord;
+
+  /// No description provided for @driverChargeVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get driverChargeVehicle;
+
+  /// No description provided for @driverChargeIncident.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident date and time'**
+  String get driverChargeIncident;
+
+  /// No description provided for @driverChargeIssuedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued at'**
+  String get driverChargeIssuedAt;
+
+  /// No description provided for @driverChargeNotifiedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'You were notified at'**
+  String get driverChargeNotifiedAt;
+
+  /// No description provided for @driverChargeBasis.
+  ///
+  /// In en, this message translates to:
+  /// **'Written basis for the charge'**
+  String get driverChargeBasis;
+
+  /// No description provided for @driverChargeEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence'**
+  String get driverChargeEvidence;
+
+  /// No description provided for @driverChargeNoEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'No evidence listed. The charge relies on the linked record.'**
+  String get driverChargeNoEvidence;
+
+  /// No description provided for @driverChargeSignatures.
+  ///
+  /// In en, this message translates to:
+  /// **'Signatures'**
+  String get driverChargeSignatures;
+
+  /// No description provided for @driverChargeSignedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed by {name} at {time} (server time)'**
+  String driverChargeSignedBy(String name, String time);
+
+  /// No description provided for @driverChargeSignatureHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'The signature image is not shown for your access level.'**
+  String get driverChargeSignatureHidden;
+
+  /// No description provided for @driverChargeDecisions.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviews and decisions'**
+  String get driverChargeDecisions;
+
+  /// No description provided for @driverChargeNoDecisions.
+  ///
+  /// In en, this message translates to:
+  /// **'No review recorded yet.'**
+  String get driverChargeNoDecisions;
+
+  /// No description provided for @driverChargeSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Deduction schedule'**
+  String get driverChargeSchedule;
+
+  /// No description provided for @driverChargeNoSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'No deduction scheduled.'**
+  String get driverChargeNoSchedule;
+
+  /// No description provided for @driverChargeInstalmentLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{month}: {amount} ({status})'**
+  String driverChargeInstalmentLine(String month, String amount, String status);
+
+  /// No description provided for @driverChargeCapLine.
+  ///
+  /// In en, this message translates to:
+  /// **'No monthly instalment may exceed {percent}% of the wage.'**
+  String driverChargeCapLine(String percent);
+
+  /// No description provided for @driverChargeAppealTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Appeal'**
+  String get driverChargeAppealTitle;
+
+  /// No description provided for @driverChargeNoAppeal.
+  ///
+  /// In en, this message translates to:
+  /// **'No appeal filed.'**
+  String get driverChargeNoAppeal;
+
+  /// No description provided for @driverChargeAppealFiled.
+  ///
+  /// In en, this message translates to:
+  /// **'Appeal filed at {time}'**
+  String driverChargeAppealFiled(String time);
+
+  /// No description provided for @driverChargeAppealOutcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Outcome: {outcome}'**
+  String driverChargeAppealOutcome(String outcome);
+
+  /// No description provided for @driverChargeAppealPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a decision by someone who did not issue or review this charge.'**
+  String get driverChargeAppealPending;
+
+  /// No description provided for @driverChargeTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Full timeline'**
+  String get driverChargeTimeline;
+
+  /// No description provided for @driverChargeSharePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Share notice PDF'**
+  String get driverChargeSharePdf;
+
+  /// No description provided for @driverChargePdfFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The notice PDF could not be created. Try again.'**
+  String get driverChargePdfFailed;
+
+  /// No description provided for @driverChargeRespond.
+  ///
+  /// In en, this message translates to:
+  /// **'Respond to this charge'**
+  String get driverChargeRespond;
+
+  /// No description provided for @driverChargeAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get driverChargeAccept;
+
+  /// No description provided for @driverChargeDispute.
+  ///
+  /// In en, this message translates to:
+  /// **'Dispute'**
+  String get driverChargeDispute;
+
+  /// No description provided for @driverChargeStatementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Statement you are signing'**
+  String get driverChargeStatementTitle;
+
+  /// No description provided for @driverChargeStatementEnglishOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'This statement is legal wording and is shown in English only. Ask your supervisor to explain it before you sign.'**
+  String get driverChargeStatementEnglishOnly;
+
+  /// No description provided for @driverChargeStatementMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The statement could not be loaded. Refresh before signing.'**
+  String get driverChargeStatementMissing;
+
+  /// No description provided for @driverChargeAcknowledge.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read this statement and I agree to sign it.'**
+  String get driverChargeAcknowledge;
+
+  /// No description provided for @driverChargeExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Why do you dispute this charge?'**
+  String get driverChargeExplanation;
+
+  /// No description provided for @driverChargeSignBelow.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign below'**
+  String get driverChargeSignBelow;
+
+  /// No description provided for @driverChargeSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign and submit'**
+  String get driverChargeSubmit;
+
+  /// No description provided for @driverChargeAppealAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Appeal this charge'**
+  String get driverChargeAppealAction;
+
+  /// No description provided for @driverChargeAppealReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Grounds for your appeal'**
+  String get driverChargeAppealReason;
+
+  /// No description provided for @driverChargeAppealSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit appeal'**
+  String get driverChargeAppealSubmit;
+
+  /// No description provided for @driverChargeAppealOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'You can appeal a charge only once. The appeal is decided by someone who did not issue or approve it.'**
+  String get driverChargeAppealOnce;
+
+  /// No description provided for @driverChargeIssueExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Write at least 10 characters explaining why you dispute the charge.'**
+  String get driverChargeIssueExplanation;
+
+  /// No description provided for @driverChargeIssueAck.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm that you have read the statement.'**
+  String get driverChargeIssueAck;
+
+  /// No description provided for @driverChargeIssueSignature.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign before submitting.'**
+  String get driverChargeIssueSignature;
+
+  /// No description provided for @driverChargeIssueReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Write at least 10 characters for the appeal.'**
+  String get driverChargeIssueReason;
+
+  /// No description provided for @driverChargeOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'You are offline. A charge response is recorded only online, so nothing was saved. Connect and try again.'**
+  String get driverChargeOffline;
+
+  /// No description provided for @driverChargeSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your response was recorded with the server time.'**
+  String get driverChargeSaved;
+
+  /// No description provided for @driverChargeAppealSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your appeal was recorded.'**
+  String get driverChargeAppealSaved;
+
+  /// No description provided for @driverChargeStaffReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Notices, reviews, scheduling and deductions are recorded on the web. This screen shows them read only.'**
+  String get driverChargeStaffReadOnly;
+
+  /// No description provided for @driverChargeNoActions.
+  ///
+  /// In en, this message translates to:
+  /// **'No action is waiting for you on this charge.'**
+  String get driverChargeNoActions;
+
+  /// No description provided for @driverChargeStatusIssued.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued, not yet sent to you'**
+  String get driverChargeStatusIssued;
+
+  /// No description provided for @driverChargeStatusNotified.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your response'**
+  String get driverChargeStatusNotified;
+
+  /// No description provided for @driverChargeStatusAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted by driver'**
+  String get driverChargeStatusAccepted;
+
+  /// No description provided for @driverChargeStatusDisputed.
+  ///
+  /// In en, this message translates to:
+  /// **'Disputed by driver'**
+  String get driverChargeStatusDisputed;
+
+  /// No description provided for @driverChargeStatusRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'Refusal recorded with a witness'**
+  String get driverChargeStatusRefused;
+
+  /// No description provided for @driverChargeStatusSupervisorApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved by supervisor'**
+  String get driverChargeStatusSupervisorApproved;
+
+  /// No description provided for @driverChargeStatusFinanceApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved by finance'**
+  String get driverChargeStatusFinanceApproved;
+
+  /// No description provided for @driverChargeStatusUnderAppeal.
+  ///
+  /// In en, this message translates to:
+  /// **'Under appeal'**
+  String get driverChargeStatusUnderAppeal;
+
+  /// No description provided for @driverChargeStatusScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Deduction scheduled'**
+  String get driverChargeStatusScheduled;
+
+  /// No description provided for @driverChargeStatusDeducted.
+  ///
+  /// In en, this message translates to:
+  /// **'Fully deducted'**
+  String get driverChargeStatusDeducted;
+
+  /// No description provided for @driverChargeStatusWaived.
+  ///
+  /// In en, this message translates to:
+  /// **'Waived'**
+  String get driverChargeStatusWaived;
+
+  /// No description provided for @driverChargeStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled, wrongly issued'**
+  String get driverChargeStatusCancelled;
+
+  /// No description provided for @driverChargeCatTrafficFine.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic fine'**
+  String get driverChargeCatTrafficFine;
+
+  /// No description provided for @driverChargeCatAccidentDamage.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident damage'**
+  String get driverChargeCatAccidentDamage;
+
+  /// No description provided for @driverChargeCatTyreDamage.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre damage'**
+  String get driverChargeCatTyreDamage;
+
+  /// No description provided for @driverChargeCatMissingItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing item'**
+  String get driverChargeCatMissingItem;
+
+  /// No description provided for @driverChargeCatHandoverDamage.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover damage'**
+  String get driverChargeCatHandoverDamage;
+
+  /// No description provided for @driverChargeCatOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get driverChargeCatOther;
+
+  /// No description provided for @driverChargeSrcAccident.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident case'**
+  String get driverChargeSrcAccident;
+
+  /// No description provided for @driverChargeSrcHandover.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle handover'**
+  String get driverChargeSrcHandover;
+
+  /// No description provided for @driverChargeSrcInspection.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection'**
+  String get driverChargeSrcInspection;
+
+  /// No description provided for @driverChargeSrcChecklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get driverChargeSrcChecklist;
+
+  /// No description provided for @driverChargeSrcTyre.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre record'**
+  String get driverChargeSrcTyre;
+
+  /// No description provided for @driverChargeSrcFine.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic fine record'**
+  String get driverChargeSrcFine;
+
+  /// No description provided for @driverChargeSrcNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No linked record'**
+  String get driverChargeSrcNone;
+
+  /// No description provided for @driverChargeReplaced.
+  ///
+  /// In en, this message translates to:
+  /// **'This charge was cancelled as wrongly issued and replaced by another charge.'**
+  String get driverChargeReplaced;
+
+  /// No description provided for @handoverAuthSignaturesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver signatures'**
+  String get handoverAuthSignaturesTitle;
+
+  /// No description provided for @handoverAuthHanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Handing over'**
+  String get handoverAuthHanding;
+
+  /// No description provided for @handoverAuthReceiving.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiving'**
+  String get handoverAuthReceiving;
+
+  /// No description provided for @handoverAuthNotSigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed'**
+  String get handoverAuthNotSigned;
+
+  /// No description provided for @handoverAuthSignedLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, signed {time} (server time)'**
+  String handoverAuthSignedLine(String name, String time);
+
+  /// No description provided for @handoverAuthSignHanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign as the handing driver'**
+  String get handoverAuthSignHanding;
+
+  /// No description provided for @handoverAuthSignReceiving.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign as the receiving driver'**
+  String get handoverAuthSignReceiving;
+
+  /// No description provided for @handoverAuthSignerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name of the person signing'**
+  String get handoverAuthSignerName;
+
+  /// No description provided for @handoverAuthSignerHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Needed only when the driver was not picked from the driver register.'**
+  String get handoverAuthSignerHint;
+
+  /// No description provided for @handoverAuthHandingFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'The handing driver signs first, then the receiving driver.'**
+  String get handoverAuthHandingFirst;
+
+  /// No description provided for @handoverAuthFrozen.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed record. The content is locked and can no longer be changed.'**
+  String get handoverAuthFrozen;
+
+  /// No description provided for @handoverAuthLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover location'**
+  String get handoverAuthLocation;
+
+  /// No description provided for @handoverAuthLocationCaptured.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded by the device: {coords}'**
+  String handoverAuthLocationCaptured(String coords);
+
+  /// No description provided for @handoverAuthLocationDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission was refused.'**
+  String get handoverAuthLocationDenied;
+
+  /// No description provided for @handoverAuthLocationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Location could not be read.'**
+  String get handoverAuthLocationUnavailable;
+
+  /// No description provided for @handoverAuthLocationNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No location recorded yet. It is recorded with each signature.'**
+  String get handoverAuthLocationNone;
+
+  /// No description provided for @handoverAuthOpenMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in map'**
+  String get handoverAuthOpenMap;
+
+  /// No description provided for @handoverAuthReadingLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the device location...'**
+  String get handoverAuthReadingLocation;
+
+  /// No description provided for @handoverAuthSignSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Record signature'**
+  String get handoverAuthSignSubmit;
+
+  /// No description provided for @handoverAuthOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'You are offline. A handover signature is recorded only online, so nothing was saved. Connect and try again.'**
+  String get handoverAuthOffline;
+
+  /// No description provided for @handoverAuthSigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature recorded with the server time.'**
+  String get handoverAuthSigned;
+
+  /// No description provided for @handoverAuthDocumentNo.
+  ///
+  /// In en, this message translates to:
+  /// **'Document no. {number}'**
+  String handoverAuthDocumentNo(String number);
+
+  /// No description provided for @handoverAuthHourMeter.
+  ///
+  /// In en, this message translates to:
+  /// **'Hour meter (hours)'**
+  String get handoverAuthHourMeter;
+
+  /// No description provided for @handoverAuthSite.
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get handoverAuthSite;
+
+  /// No description provided for @handoverAuthDriverRegister.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick from the driver register'**
+  String get handoverAuthDriverRegister;
+
+  /// No description provided for @handoverAuthDriverNotListed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not in the register'**
+  String get handoverAuthDriverNotListed;
+
+  /// No description provided for @handoverAuthSigningStepInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Both drivers sign on the handover page after you save it, while online. Each signature is stamped with the server time and the device location, and the record is locked after the first signature.'**
+  String get handoverAuthSigningStepInfo;
+
+  /// No description provided for @handoverAuthOpenToSign.
+  ///
+  /// In en, this message translates to:
+  /// **'The handover is saved as a draft. Open it now to collect both signatures.'**
+  String get handoverAuthOpenToSign;
+
+  /// No description provided for @handoverAuthLegacySignature.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver signature recorded before two-party signing'**
+  String get handoverAuthLegacySignature;
+
+  /// No description provided for @handoverAuthNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-party signing is not available on the server yet. Ask an administrator.'**
+  String get handoverAuthNotAvailable;
 }
 
 class _AppLocalizationsDelegate

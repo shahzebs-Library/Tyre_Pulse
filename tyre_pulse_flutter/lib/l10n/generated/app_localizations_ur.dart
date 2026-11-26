@@ -8827,4 +8827,395 @@ class AppLocalizationsUr extends AppLocalizations {
   String approvalsBulkProgress(int done, int total) {
     return '$total میں سے $done منظور ہو رہے ہیں';
   }
+
+  @override
+  String get driverChargeSectionTitle => 'میرے ذمے رقوم';
+
+  @override
+  String get driverChargeNone => 'اس ڈرائیور پر کوئی رقم درج نہیں۔';
+
+  @override
+  String driverChargeOutstanding(String amount) {
+    return 'باقی: $amount';
+  }
+
+  @override
+  String get driverChargeFilterAll => 'سب';
+
+  @override
+  String get driverChargeLoadError =>
+      'رقوم لوڈ نہیں ہو سکیں۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverChargeLoadMore => 'مزید لوڈ کریں';
+
+  @override
+  String driverChargeDetailTitle(String number) {
+    return 'واجب الادا $number';
+  }
+
+  @override
+  String get driverChargeAmount => 'رقم';
+
+  @override
+  String get driverChargeDeducted => 'اب تک کٹوتی';
+
+  @override
+  String get driverChargeStatusLabel => 'حیثیت';
+
+  @override
+  String get driverChargeCategoryLabel => 'زمرہ';
+
+  @override
+  String get driverChargeLinkedRecord => 'منسلک ریکارڈ';
+
+  @override
+  String get driverChargeVehicle => 'گاڑی';
+
+  @override
+  String get driverChargeIncident => 'واقعے کی تاریخ اور وقت';
+
+  @override
+  String get driverChargeIssuedAt => 'جاری ہونے کا وقت';
+
+  @override
+  String get driverChargeNotifiedAt => 'آپ کو مطلع کرنے کا وقت';
+
+  @override
+  String get driverChargeBasis => 'واجب الادا کی تحریری وجہ';
+
+  @override
+  String get driverChargeEvidence => 'ثبوت';
+
+  @override
+  String get driverChargeNoEvidence =>
+      'کوئی ثبوت درج نہیں۔ یہ واجب الادا منسلک ریکارڈ پر مبنی ہے۔';
+
+  @override
+  String get driverChargeSignatures => 'دستخط';
+
+  @override
+  String driverChargeSignedBy(String name, String time) {
+    return '$name نے $time پر دستخط کیے (سرور کا وقت)';
+  }
+
+  @override
+  String get driverChargeSignatureHidden =>
+      'آپ کی رسائی کی سطح پر دستخط کی تصویر نہیں دکھائی جاتی۔';
+
+  @override
+  String get driverChargeDecisions => 'جائزے اور فیصلے';
+
+  @override
+  String get driverChargeNoDecisions => 'ابھی کوئی جائزہ درج نہیں۔';
+
+  @override
+  String get driverChargeSchedule => 'کٹوتی کا شیڈول';
+
+  @override
+  String get driverChargeNoSchedule => 'کوئی کٹوتی شیڈول نہیں۔';
+
+  @override
+  String driverChargeInstalmentLine(
+      String month, String amount, String status) {
+    return '$month: $amount ($status)';
+  }
+
+  @override
+  String driverChargeCapLine(String percent) {
+    return 'کوئی ماہانہ قسط تنخواہ کے $percent% سے زیادہ نہیں ہو سکتی۔';
+  }
+
+  @override
+  String get driverChargeAppealTitle => 'اپیل';
+
+  @override
+  String get driverChargeNoAppeal => 'کوئی اپیل دائر نہیں کی گئی۔';
+
+  @override
+  String driverChargeAppealFiled(String time) {
+    return 'اپیل $time پر دائر کی گئی';
+  }
+
+  @override
+  String driverChargeAppealOutcome(String outcome) {
+    return 'نتیجہ: $outcome';
+  }
+
+  @override
+  String get driverChargeAppealPending =>
+      'ایسے شخص کے فیصلے کا انتظار ہے جس نے یہ واجب الادا جاری یا منظور نہیں کیا۔';
+
+  @override
+  String get driverChargeTimeline => 'مکمل ٹائم لائن';
+
+  @override
+  String get driverChargeSharePdf => 'نوٹس PDF شیئر کریں';
+
+  @override
+  String get driverChargePdfFailed => 'نوٹس PDF نہیں بن سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverChargeRespond => 'اس واجب الادا کا جواب دیں';
+
+  @override
+  String get driverChargeAccept => 'قبول کریں';
+
+  @override
+  String get driverChargeDispute => 'اعتراض کریں';
+
+  @override
+  String get driverChargeStatementTitle => 'وہ بیان جس پر آپ دستخط کر رہے ہیں';
+
+  @override
+  String get driverChargeStatementEnglishOnly =>
+      'یہ بیان قانونی الفاظ ہیں اور صرف انگریزی میں دکھایا جاتا ہے۔ دستخط سے پہلے اپنے سپروائزر سے اس کی وضاحت کروائیں۔';
+
+  @override
+  String get driverChargeStatementMissing =>
+      'بیان لوڈ نہیں ہو سکا۔ دستخط سے پہلے ریفریش کریں۔';
+
+  @override
+  String get driverChargeAcknowledge =>
+      'میں نے یہ بیان پڑھ لیا ہے اور اس پر دستخط سے متفق ہوں۔';
+
+  @override
+  String get driverChargeExplanation =>
+      'آپ اس واجب الادا پر اعتراض کیوں کر رہے ہیں؟';
+
+  @override
+  String get driverChargeSignBelow => 'نیچے دستخط کریں';
+
+  @override
+  String get driverChargeSubmit => 'دستخط کر کے بھیجیں';
+
+  @override
+  String get driverChargeAppealAction => 'اس واجب الادا کے خلاف اپیل کریں';
+
+  @override
+  String get driverChargeAppealReason => 'آپ کی اپیل کی بنیاد';
+
+  @override
+  String get driverChargeAppealSubmit => 'اپیل بھیجیں';
+
+  @override
+  String get driverChargeAppealOnce =>
+      'آپ ایک واجب الادا کے خلاف صرف ایک بار اپیل کر سکتے ہیں۔ اپیل کا فیصلہ وہ شخص کرتا ہے جس نے اسے جاری یا منظور نہیں کیا۔';
+
+  @override
+  String get driverChargeIssueExplanation =>
+      'اعتراض کی وجہ کم از کم 10 حروف میں لکھیں۔';
+
+  @override
+  String get driverChargeIssueAck => 'تصدیق کریں کہ آپ نے بیان پڑھ لیا ہے۔';
+
+  @override
+  String get driverChargeIssueSignature => 'بھیجنے سے پہلے دستخط کریں۔';
+
+  @override
+  String get driverChargeIssueReason => 'اپیل کے لیے کم از کم 10 حروف لکھیں۔';
+
+  @override
+  String get driverChargeOffline =>
+      'آپ آف لائن ہیں۔ واجب الادا کا جواب صرف آن لائن درج ہوتا ہے، اس لیے کچھ محفوظ نہیں ہوا۔ کنکشن جوڑ کر دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverChargeSaved => 'آپ کا جواب سرور کے وقت کے ساتھ درج ہو گیا۔';
+
+  @override
+  String get driverChargeAppealSaved => 'آپ کی اپیل درج ہو گئی۔';
+
+  @override
+  String get driverChargeStaffReadOnly =>
+      'نوٹس، جائزے، شیڈولنگ اور کٹوتیاں ویب پر درج ہوتی ہیں۔ یہ اسکرین انہیں صرف دکھاتی ہے۔';
+
+  @override
+  String get driverChargeNoActions =>
+      'اس واجب الادا پر آپ کے لیے کوئی کارروائی زیر التوا نہیں۔';
+
+  @override
+  String get driverChargeStatusIssued => 'جاری ہوا، ابھی آپ کو نہیں بھیجا گیا';
+
+  @override
+  String get driverChargeStatusNotified => 'آپ کے جواب کا انتظار';
+
+  @override
+  String get driverChargeStatusAccepted => 'ڈرائیور نے قبول کیا';
+
+  @override
+  String get driverChargeStatusDisputed => 'ڈرائیور نے اعتراض کیا';
+
+  @override
+  String get driverChargeStatusRefused => 'انکار گواہ کے ساتھ درج کیا گیا';
+
+  @override
+  String get driverChargeStatusSupervisorApproved => 'سپروائزر نے منظور کیا';
+
+  @override
+  String get driverChargeStatusFinanceApproved => 'فنانس نے منظور کیا';
+
+  @override
+  String get driverChargeStatusUnderAppeal => 'زیر اپیل';
+
+  @override
+  String get driverChargeStatusScheduled => 'کٹوتی شیڈول ہے';
+
+  @override
+  String get driverChargeStatusDeducted => 'مکمل کٹوتی ہو گئی';
+
+  @override
+  String get driverChargeStatusWaived => 'معاف کر دیا گیا';
+
+  @override
+  String get driverChargeStatusCancelled => 'غلط جاری ہونے پر منسوخ';
+
+  @override
+  String get driverChargeCatTrafficFine => 'ٹریفک جرمانہ';
+
+  @override
+  String get driverChargeCatAccidentDamage => 'حادثے کا نقصان';
+
+  @override
+  String get driverChargeCatTyreDamage => 'ٹائر کا نقصان';
+
+  @override
+  String get driverChargeCatMissingItem => 'گمشدہ چیز';
+
+  @override
+  String get driverChargeCatHandoverDamage => 'حوالگی کے وقت نقصان';
+
+  @override
+  String get driverChargeCatOther => 'دیگر';
+
+  @override
+  String get driverChargeSrcAccident => 'حادثے کا کیس';
+
+  @override
+  String get driverChargeSrcHandover => 'گاڑی کی حوالگی';
+
+  @override
+  String get driverChargeSrcInspection => 'معائنہ';
+
+  @override
+  String get driverChargeSrcChecklist => 'چیک لسٹ';
+
+  @override
+  String get driverChargeSrcTyre => 'ٹائر ریکارڈ';
+
+  @override
+  String get driverChargeSrcFine => 'ٹریفک جرمانے کا ریکارڈ';
+
+  @override
+  String get driverChargeSrcNone => 'کوئی منسلک ریکارڈ نہیں';
+
+  @override
+  String get driverChargeReplaced =>
+      'یہ واجب الادا غلط جاری ہونے پر منسوخ ہوا اور اس کی جگہ دوسرا جاری کیا گیا۔';
+
+  @override
+  String get handoverAuthSignaturesTitle => 'ڈرائیوروں کے دستخط';
+
+  @override
+  String get handoverAuthHanding => 'حوالے کرنے والا';
+
+  @override
+  String get handoverAuthReceiving => 'وصول کرنے والا';
+
+  @override
+  String get handoverAuthNotSigned => 'دستخط نہیں ہوئے';
+
+  @override
+  String handoverAuthSignedLine(String name, String time) {
+    return '$name، $time پر دستخط کیے (سرور کا وقت)';
+  }
+
+  @override
+  String get handoverAuthSignHanding =>
+      'حوالے کرنے والے ڈرائیور کے طور پر دستخط کریں';
+
+  @override
+  String get handoverAuthSignReceiving =>
+      'وصول کرنے والے ڈرائیور کے طور پر دستخط کریں';
+
+  @override
+  String get handoverAuthSignerName => 'دستخط کرنے والے کا نام';
+
+  @override
+  String get handoverAuthSignerHint =>
+      'صرف اس وقت ضروری ہے جب ڈرائیور رجسٹر سے منتخب نہ کیا گیا ہو۔';
+
+  @override
+  String get handoverAuthHandingFirst =>
+      'پہلے حوالے کرنے والا ڈرائیور دستخط کرتا ہے، پھر وصول کرنے والا۔';
+
+  @override
+  String get handoverAuthFrozen =>
+      'دستخط شدہ ریکارڈ۔ مواد مقفل ہے اور تبدیل نہیں ہو سکتا۔';
+
+  @override
+  String get handoverAuthLocation => 'حوالگی کا مقام';
+
+  @override
+  String handoverAuthLocationCaptured(String coords) {
+    return 'ڈیوائس نے درج کیا: $coords';
+  }
+
+  @override
+  String get handoverAuthLocationDenied => 'مقام کی اجازت مسترد کر دی گئی۔';
+
+  @override
+  String get handoverAuthLocationUnavailable => 'مقام نہیں پڑھا جا سکا۔';
+
+  @override
+  String get handoverAuthLocationNone =>
+      'ابھی کوئی مقام درج نہیں۔ ہر دستخط کے ساتھ مقام درج ہوتا ہے۔';
+
+  @override
+  String get handoverAuthOpenMap => 'نقشے میں کھولیں';
+
+  @override
+  String get handoverAuthReadingLocation => 'ڈیوائس کا مقام پڑھا جا رہا ہے...';
+
+  @override
+  String get handoverAuthSignSubmit => 'دستخط درج کریں';
+
+  @override
+  String get handoverAuthOffline =>
+      'آپ آف لائن ہیں۔ حوالگی کا دستخط صرف آن لائن درج ہوتا ہے، اس لیے کچھ محفوظ نہیں ہوا۔ کنکشن جوڑ کر دوبارہ کوشش کریں۔';
+
+  @override
+  String get handoverAuthSigned => 'دستخط سرور کے وقت کے ساتھ درج ہو گیا۔';
+
+  @override
+  String handoverAuthDocumentNo(String number) {
+    return 'دستاویز نمبر $number';
+  }
+
+  @override
+  String get handoverAuthHourMeter => 'آور میٹر (گھنٹے)';
+
+  @override
+  String get handoverAuthSite => 'سائٹ';
+
+  @override
+  String get handoverAuthDriverRegister => 'ڈرائیور رجسٹر سے منتخب کریں';
+
+  @override
+  String get handoverAuthDriverNotListed => 'رجسٹر میں نہیں';
+
+  @override
+  String get handoverAuthSigningStepInfo =>
+      'محفوظ کرنے کے بعد دونوں ڈرائیور آن لائن حوالگی کے صفحے پر دستخط کرتے ہیں۔ ہر دستخط پر سرور کا وقت اور ڈیوائس کا مقام لگتا ہے، اور پہلے دستخط کے بعد ریکارڈ مقفل ہو جاتا ہے۔';
+
+  @override
+  String get handoverAuthOpenToSign =>
+      'حوالگی مسودے کے طور پر محفوظ ہو گئی۔ دونوں دستخط لینے کے لیے اسے ابھی کھولیں۔';
+
+  @override
+  String get handoverAuthLegacySignature =>
+      'دو فریقی دستخط سے پہلے درج ڈرائیور کا دستخط';
+
+  @override
+  String get handoverAuthNotAvailable =>
+      'دو فریقی دستخط ابھی سرور پر دستیاب نہیں۔ منتظم سے پوچھیں۔';
 }

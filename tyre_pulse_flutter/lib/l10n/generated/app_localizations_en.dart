@@ -8807,4 +8807,396 @@ class AppLocalizationsEn extends AppLocalizations {
   String approvalsBulkProgress(int done, int total) {
     return 'Approving $done of $total';
   }
+
+  @override
+  String get driverChargeSectionTitle => 'My charges';
+
+  @override
+  String get driverChargeNone => 'No charges recorded for this driver.';
+
+  @override
+  String driverChargeOutstanding(String amount) {
+    return 'Outstanding: $amount';
+  }
+
+  @override
+  String get driverChargeFilterAll => 'All';
+
+  @override
+  String get driverChargeLoadError =>
+      'Charges could not be loaded. Check your connection and try again.';
+
+  @override
+  String get driverChargeLoadMore => 'Load more';
+
+  @override
+  String driverChargeDetailTitle(String number) {
+    return 'Charge $number';
+  }
+
+  @override
+  String get driverChargeAmount => 'Amount';
+
+  @override
+  String get driverChargeDeducted => 'Deducted so far';
+
+  @override
+  String get driverChargeStatusLabel => 'Status';
+
+  @override
+  String get driverChargeCategoryLabel => 'Category';
+
+  @override
+  String get driverChargeLinkedRecord => 'Linked record';
+
+  @override
+  String get driverChargeVehicle => 'Vehicle';
+
+  @override
+  String get driverChargeIncident => 'Incident date and time';
+
+  @override
+  String get driverChargeIssuedAt => 'Issued at';
+
+  @override
+  String get driverChargeNotifiedAt => 'You were notified at';
+
+  @override
+  String get driverChargeBasis => 'Written basis for the charge';
+
+  @override
+  String get driverChargeEvidence => 'Evidence';
+
+  @override
+  String get driverChargeNoEvidence =>
+      'No evidence listed. The charge relies on the linked record.';
+
+  @override
+  String get driverChargeSignatures => 'Signatures';
+
+  @override
+  String driverChargeSignedBy(String name, String time) {
+    return 'Signed by $name at $time (server time)';
+  }
+
+  @override
+  String get driverChargeSignatureHidden =>
+      'The signature image is not shown for your access level.';
+
+  @override
+  String get driverChargeDecisions => 'Reviews and decisions';
+
+  @override
+  String get driverChargeNoDecisions => 'No review recorded yet.';
+
+  @override
+  String get driverChargeSchedule => 'Deduction schedule';
+
+  @override
+  String get driverChargeNoSchedule => 'No deduction scheduled.';
+
+  @override
+  String driverChargeInstalmentLine(
+      String month, String amount, String status) {
+    return '$month: $amount ($status)';
+  }
+
+  @override
+  String driverChargeCapLine(String percent) {
+    return 'No monthly instalment may exceed $percent% of the wage.';
+  }
+
+  @override
+  String get driverChargeAppealTitle => 'Appeal';
+
+  @override
+  String get driverChargeNoAppeal => 'No appeal filed.';
+
+  @override
+  String driverChargeAppealFiled(String time) {
+    return 'Appeal filed at $time';
+  }
+
+  @override
+  String driverChargeAppealOutcome(String outcome) {
+    return 'Outcome: $outcome';
+  }
+
+  @override
+  String get driverChargeAppealPending =>
+      'Waiting for a decision by someone who did not issue or review this charge.';
+
+  @override
+  String get driverChargeTimeline => 'Full timeline';
+
+  @override
+  String get driverChargeSharePdf => 'Share notice PDF';
+
+  @override
+  String get driverChargePdfFailed =>
+      'The notice PDF could not be created. Try again.';
+
+  @override
+  String get driverChargeRespond => 'Respond to this charge';
+
+  @override
+  String get driverChargeAccept => 'Accept';
+
+  @override
+  String get driverChargeDispute => 'Dispute';
+
+  @override
+  String get driverChargeStatementTitle => 'Statement you are signing';
+
+  @override
+  String get driverChargeStatementEnglishOnly =>
+      'This statement is legal wording and is shown in English only. Ask your supervisor to explain it before you sign.';
+
+  @override
+  String get driverChargeStatementMissing =>
+      'The statement could not be loaded. Refresh before signing.';
+
+  @override
+  String get driverChargeAcknowledge =>
+      'I have read this statement and I agree to sign it.';
+
+  @override
+  String get driverChargeExplanation => 'Why do you dispute this charge?';
+
+  @override
+  String get driverChargeSignBelow => 'Sign below';
+
+  @override
+  String get driverChargeSubmit => 'Sign and submit';
+
+  @override
+  String get driverChargeAppealAction => 'Appeal this charge';
+
+  @override
+  String get driverChargeAppealReason => 'Grounds for your appeal';
+
+  @override
+  String get driverChargeAppealSubmit => 'Submit appeal';
+
+  @override
+  String get driverChargeAppealOnce =>
+      'You can appeal a charge only once. The appeal is decided by someone who did not issue or approve it.';
+
+  @override
+  String get driverChargeIssueExplanation =>
+      'Write at least 10 characters explaining why you dispute the charge.';
+
+  @override
+  String get driverChargeIssueAck =>
+      'Confirm that you have read the statement.';
+
+  @override
+  String get driverChargeIssueSignature => 'Sign before submitting.';
+
+  @override
+  String get driverChargeIssueReason =>
+      'Write at least 10 characters for the appeal.';
+
+  @override
+  String get driverChargeOffline =>
+      'You are offline. A charge response is recorded only online, so nothing was saved. Connect and try again.';
+
+  @override
+  String get driverChargeSaved =>
+      'Your response was recorded with the server time.';
+
+  @override
+  String get driverChargeAppealSaved => 'Your appeal was recorded.';
+
+  @override
+  String get driverChargeStaffReadOnly =>
+      'Notices, reviews, scheduling and deductions are recorded on the web. This screen shows them read only.';
+
+  @override
+  String get driverChargeNoActions =>
+      'No action is waiting for you on this charge.';
+
+  @override
+  String get driverChargeStatusIssued => 'Issued, not yet sent to you';
+
+  @override
+  String get driverChargeStatusNotified => 'Waiting for your response';
+
+  @override
+  String get driverChargeStatusAccepted => 'Accepted by driver';
+
+  @override
+  String get driverChargeStatusDisputed => 'Disputed by driver';
+
+  @override
+  String get driverChargeStatusRefused => 'Refusal recorded with a witness';
+
+  @override
+  String get driverChargeStatusSupervisorApproved => 'Approved by supervisor';
+
+  @override
+  String get driverChargeStatusFinanceApproved => 'Approved by finance';
+
+  @override
+  String get driverChargeStatusUnderAppeal => 'Under appeal';
+
+  @override
+  String get driverChargeStatusScheduled => 'Deduction scheduled';
+
+  @override
+  String get driverChargeStatusDeducted => 'Fully deducted';
+
+  @override
+  String get driverChargeStatusWaived => 'Waived';
+
+  @override
+  String get driverChargeStatusCancelled => 'Cancelled, wrongly issued';
+
+  @override
+  String get driverChargeCatTrafficFine => 'Traffic fine';
+
+  @override
+  String get driverChargeCatAccidentDamage => 'Accident damage';
+
+  @override
+  String get driverChargeCatTyreDamage => 'Tyre damage';
+
+  @override
+  String get driverChargeCatMissingItem => 'Missing item';
+
+  @override
+  String get driverChargeCatHandoverDamage => 'Handover damage';
+
+  @override
+  String get driverChargeCatOther => 'Other';
+
+  @override
+  String get driverChargeSrcAccident => 'Accident case';
+
+  @override
+  String get driverChargeSrcHandover => 'Vehicle handover';
+
+  @override
+  String get driverChargeSrcInspection => 'Inspection';
+
+  @override
+  String get driverChargeSrcChecklist => 'Checklist';
+
+  @override
+  String get driverChargeSrcTyre => 'Tyre record';
+
+  @override
+  String get driverChargeSrcFine => 'Traffic fine record';
+
+  @override
+  String get driverChargeSrcNone => 'No linked record';
+
+  @override
+  String get driverChargeReplaced =>
+      'This charge was cancelled as wrongly issued and replaced by another charge.';
+
+  @override
+  String get handoverAuthSignaturesTitle => 'Driver signatures';
+
+  @override
+  String get handoverAuthHanding => 'Handing over';
+
+  @override
+  String get handoverAuthReceiving => 'Receiving';
+
+  @override
+  String get handoverAuthNotSigned => 'Not signed';
+
+  @override
+  String handoverAuthSignedLine(String name, String time) {
+    return '$name, signed $time (server time)';
+  }
+
+  @override
+  String get handoverAuthSignHanding => 'Sign as the handing driver';
+
+  @override
+  String get handoverAuthSignReceiving => 'Sign as the receiving driver';
+
+  @override
+  String get handoverAuthSignerName => 'Name of the person signing';
+
+  @override
+  String get handoverAuthSignerHint =>
+      'Needed only when the driver was not picked from the driver register.';
+
+  @override
+  String get handoverAuthHandingFirst =>
+      'The handing driver signs first, then the receiving driver.';
+
+  @override
+  String get handoverAuthFrozen =>
+      'Signed record. The content is locked and can no longer be changed.';
+
+  @override
+  String get handoverAuthLocation => 'Handover location';
+
+  @override
+  String handoverAuthLocationCaptured(String coords) {
+    return 'Recorded by the device: $coords';
+  }
+
+  @override
+  String get handoverAuthLocationDenied => 'Location permission was refused.';
+
+  @override
+  String get handoverAuthLocationUnavailable => 'Location could not be read.';
+
+  @override
+  String get handoverAuthLocationNone =>
+      'No location recorded yet. It is recorded with each signature.';
+
+  @override
+  String get handoverAuthOpenMap => 'Open in map';
+
+  @override
+  String get handoverAuthReadingLocation => 'Reading the device location...';
+
+  @override
+  String get handoverAuthSignSubmit => 'Record signature';
+
+  @override
+  String get handoverAuthOffline =>
+      'You are offline. A handover signature is recorded only online, so nothing was saved. Connect and try again.';
+
+  @override
+  String get handoverAuthSigned => 'Signature recorded with the server time.';
+
+  @override
+  String handoverAuthDocumentNo(String number) {
+    return 'Document no. $number';
+  }
+
+  @override
+  String get handoverAuthHourMeter => 'Hour meter (hours)';
+
+  @override
+  String get handoverAuthSite => 'Site';
+
+  @override
+  String get handoverAuthDriverRegister => 'Pick from the driver register';
+
+  @override
+  String get handoverAuthDriverNotListed => 'Not in the register';
+
+  @override
+  String get handoverAuthSigningStepInfo =>
+      'Both drivers sign on the handover page after you save it, while online. Each signature is stamped with the server time and the device location, and the record is locked after the first signature.';
+
+  @override
+  String get handoverAuthOpenToSign =>
+      'The handover is saved as a draft. Open it now to collect both signatures.';
+
+  @override
+  String get handoverAuthLegacySignature =>
+      'Driver signature recorded before two-party signing';
+
+  @override
+  String get handoverAuthNotAvailable =>
+      'Two-party signing is not available on the server yet. Ask an administrator.';
 }

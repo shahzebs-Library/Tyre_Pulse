@@ -174,6 +174,10 @@ class QueuedHandover {
       'notes': p.notes,
       'createdBy': p.createdBy,
       'approvalStatus': p.approvalStatus,
+      'fromDriverId': p.fromDriverId,
+      'toDriverId': p.toDriverId,
+      'hourMeter': p.hourMeter,
+      'site': p.site,
     };
   }
 
@@ -230,6 +234,10 @@ class QueuedHandover {
       notes: json['notes'] as String? ?? '',
       createdBy: json['createdBy'] as String?,
       approvalStatus: json['approvalStatus'] as String?,
+      fromDriverId: json['fromDriverId'] as String?,
+      toDriverId: json['toDriverId'] as String?,
+      hourMeter: (json['hourMeter'] as num?)?.toDouble(),
+      site: json['site'] as String?,
     );
   }
 

@@ -1,0 +1,278 @@
+{
+  "id": "driver-charge-notice",
+  "spec_version": 1,
+  "title": "Driver Charge Notice",
+  "description": "Complete record of one charge recoverable from a driver. Web (src/lib/driverChargePdf.js) and Flutter render this same spec from the payload returned by the driver_charge_detail RPC. Renderers must not add, drop or reorder fields.",
+  "data_source": "rpc:driver_charge_detail(p_charge_id) plus generated_at (client clock, ISO 8601)",
+  "page": { "size": "A4", "orientation": "portrait", "unit": "mm", "margin": 14 },
+  "document_number": {
+    "format": "{charge.charge_no}-V{charge.version}",
+    "example": "DC-2026-00001-V7",
+    "rule": "charge_no is minted by the server as DC-YYYY-NNNNN per organisation. The version suffix changes on every recorded action, so two printouts with the same number are the same record state."
+  },
+  "header": {
+    "title": "Driver Charge Notice",
+    "lines": [
+      "Document no. {document_number}",
+      "Generated {generated_at:datetime}. Status at generation: {charge.status:enum:status}"
+    ]
+  },
+  "formats": {
+    "missing": "Not recorded",
+    "money": "{currency} {amount} with 2 decimals; amounts of different currencies are never added together",
+    "datetime": "Local date and time with the timezone offset, for example 2026-01-05 14:20 GMT+3",
+    "date": "YYYY-MM-DD",
+    "month": "Month YYYY, for example January 2026",
+    "boolean": "Yes or No",
+    "percent": "Number followed by %"
+  },
+  "enums": {
+    "category": {
+      "traffic_fine": "Traffic fine",
+      "accident_damage": "Accident damage",
+      "tyre_damage": "Tyre damage",
+      "missing_item": "Missing item",
+      "handover_damage": "Handover damage",
+      "other": "Other"
+    },
+    "source_type": {
+      "accident": "Accident case",
+      "handover_report": "Vehicle handover",
+      "inspection": "Inspection",
+      "checklist_submission": "Checklist",
+      "tyre_record": "Tyre record",
+      "driver_fine": "Traffic fine record",
+      "none": "No linked record"
+    },
+    "status": {
+      "issued": "Issued, driver not yet notified",
+      "notified": "Notified, waiting for driver",
+      "accepted": "Accepted by driver",
+      "disputed": "Disputed by driver",
+      "refused": "Driver refused to sign (witnessed)",
+      "supervisor_approved": "Approved by supervisor",
+      "finance_approved": "Approved by finance",
+      "under_appeal": "Under appeal",
+      "scheduled": "Deduction scheduled",
+      "deducted": "Fully deducted",
+      "waived": "Waived",
+      "cancelled_wrongly_issued": "Cancelled, wrongly issued"
+    },
+    "driver_response": { "accepted": "Accepted and consented", "disputed": "Disputed", "refused": "Refused to sign" },
+    "decision_stage": {
+      "supervisor": "Supervisor review",
+      "finance": "Finance review",
+      "appeal": "Appeal decision",
+      "waiver": "Waiver",
+      "reversal": "Reversal",
+      "deduction": "Payroll deduction",
+      "schedule": "Deduction schedule"
+    },
+    "decision": {
+      "approve": "Approved",
+      "return": "Returned",
+      "upheld": "Charge upheld",
+      "allowed": "Appeal allowed, charge waived",
+      "waive": "Waived",
+      "reverse": "Reversed as wrongly issued",
+      "deducted": "Deducted",
+      "scheduled": "Scheduled"
+    },
+    "reversal_code": {
+      "wrong_driver": "Wrong driver",
+      "duplicate": "Duplicate",
+      "wrong_amount": "Wrong amount",
+      "wrong_vehicle": "Wrong vehicle",
+      "misused": "Misused or improper charge",
+      "other": "Other"
+    },
+    "instalment_status": { "scheduled": "Scheduled", "deducted": "Deducted", "cancelled": "Cancelled" },
+    "appeal_outcome": { "upheld": "Charge upheld", "allowed": "Appeal allowed" },
+    "action": {
+      "charge_issue": "Charge issued",
+      "charge_correct": "Corrected before notice",
+      "charge_attach_evidence": "Evidence added",
+      "charge_notify": "Driver notified",
+      "charge_respond": "Driver responded and signed",
+      "charge_record_refusal": "Refusal recorded with witness",
+      "charge_supervisor_review": "Supervisor review",
+      "charge_finance_review": "Finance review",
+      "charge_schedule": "Deduction scheduled",
+      "charge_record_deduction": "Payroll deduction recorded",
+      "charge_waive": "Charge waived",
+      "charge_reverse": "Reversed as wrongly issued",
+      "charge_reissued_in": "Reissued from a reversed charge",
+      "charge_appeal": "Appeal filed",
+      "charge_decide_appeal": "Appeal decided"
+    },
+    "signature_kind": {
+      "driver_acceptance": "Driver written consent to deduction",
+      "driver_dispute": "Driver receipt and dispute",
+      "refusal_witness": "Witness to refusal"
+    }
+  },
+  "sections": [
+    {
+      "id": "parties",
+      "title": "1. Driver and vehicle",
+      "type": "fields",
+      "fields": [
+        { "label": "Driver", "key": "driver.driver_name" },
+        { "label": "Employee ID", "key": "driver.driver_id" },
+        { "label": "Site", "key": "charge.site" },
+        { "label": "Country", "key": "charge.country" },
+        { "label": "Vehicle", "key": "charge.asset_no" }
+      ]
+    },
+    {
+      "id": "charge",
+      "title": "2. Charge",
+      "type": "fields",
+      "fields": [
+        { "label": "Charge number", "key": "charge.charge_no" },
+        { "label": "Category", "key": "charge.category", "format": "enum:category" },
+        { "label": "Amount", "key": "charge.amount", "format": "money", "currency_key": "charge.currency" },
+        { "label": "Linked record", "key": "charge.source_type", "format": "enum:source_type" },
+        { "label": "Linked record reference", "key": "charge.source_summary.label" },
+        { "label": "Incident date and time", "key": "charge.incident_at", "format": "datetime" },
+        { "label": "Issued by", "key": "charge.issued_by_name" },
+        { "label": "Issued at", "key": "charge.created_at", "format": "datetime" },
+        { "label": "Driver notified by", "key": "charge.notified_by_name" },
+        { "label": "Driver notified at", "key": "charge.notified_at", "format": "datetime" },
+        { "label": "Status", "key": "charge.status", "format": "enum:status" },
+        { "label": "Replaces charge", "key": "charge.supersedes_charge_id" },
+        { "label": "Replaced by charge", "key": "charge.superseded_by_charge_id" },
+        { "label": "Reversal reason", "key": "charge.reversal_code", "format": "enum:reversal_code" },
+        { "label": "Closing reason", "key": "charge.close_reason" }
+      ]
+    },
+    {
+      "id": "basis",
+      "title": "3. Written basis for the charge",
+      "type": "text",
+      "key": "charge.basis"
+    },
+    {
+      "id": "evidence",
+      "title": "4. Evidence",
+      "type": "table",
+      "rows": "evidence",
+      "empty": "No evidence listed. The charge relies on the linked record.",
+      "columns": [
+        { "label": "Type", "key": "kind" },
+        { "label": "Description", "key": "label" },
+        { "label": "Reference", "key": "ref" },
+        { "label": "Added by", "key": "added_by_name" },
+        { "label": "Added at", "key": "created_at", "format": "datetime" }
+      ]
+    },
+    {
+      "id": "response",
+      "title": "5. Driver response",
+      "type": "fields",
+      "fields": [
+        { "label": "Response", "key": "charge.driver_response", "format": "enum:driver_response" },
+        { "label": "Driver explanation or refusal circumstances", "key": "charge.response_explanation" },
+        { "label": "Receipt acknowledged at", "key": "charge.acknowledged_at", "format": "datetime" }
+      ]
+    },
+    {
+      "id": "decisions",
+      "title": "6. Reviews and decisions",
+      "type": "table",
+      "rows": "decisions",
+      "empty": "No review recorded yet.",
+      "columns": [
+        { "label": "When", "key": "created_at", "format": "datetime" },
+        { "label": "Stage", "key": "stage", "format": "enum:decision_stage" },
+        { "label": "Decision", "key": "decision", "format": "enum:decision" },
+        { "label": "Decided by", "key": "decided_by_name" },
+        { "label": "Reason", "key": "reason" }
+      ]
+    },
+    {
+      "id": "appeal",
+      "title": "7. Appeal",
+      "type": "fields",
+      "when": "appeal",
+      "empty": "No appeal filed.",
+      "fields": [
+        { "label": "Filed at", "key": "appeal.filed_at", "format": "datetime" },
+        { "label": "Driver grounds", "key": "appeal.reason" },
+        { "label": "Outcome", "key": "appeal.outcome", "format": "enum:appeal_outcome" },
+        { "label": "Decided by", "key": "appeal.decided_by_name" },
+        { "label": "Decided at", "key": "appeal.decided_at", "format": "datetime" },
+        { "label": "Decision reason", "key": "appeal.decision_reason" }
+      ]
+    },
+    {
+      "id": "schedule",
+      "title": "8. Deduction schedule",
+      "type": "fields",
+      "when": "charge.scheduled_at",
+      "empty": "No deduction scheduled.",
+      "fields": [
+        { "label": "Monthly wage used for the limit", "key": "charge.schedule_monthly_wage", "format": "money", "currency_key": "charge.currency" },
+        { "label": "Limit per month (percent of wage)", "key": "charge.schedule_cap_pct", "format": "percent" },
+        { "label": "Limit per month (amount)", "key": "charge.schedule_cap_amount", "format": "money", "currency_key": "charge.currency" },
+        { "label": "Scheduled by", "key": "charge.scheduled_by_name" },
+        { "label": "Scheduled at", "key": "charge.scheduled_at", "format": "datetime" },
+        { "label": "Deducted so far", "key": "charge.deducted_amount", "format": "money", "currency_key": "charge.currency" }
+      ]
+    },
+    {
+      "id": "instalments",
+      "title": "9. Instalments",
+      "type": "table",
+      "rows": "instalments",
+      "empty": "No instalments.",
+      "columns": [
+        { "label": "No.", "key": "seq" },
+        { "label": "Month", "key": "due_month", "format": "month" },
+        { "label": "Amount", "key": "amount", "format": "money", "currency_key": "currency" },
+        { "label": "Status", "key": "status", "format": "enum:instalment_status" },
+        { "label": "Payroll reference", "key": "payroll_reference" },
+        { "label": "Deducted at", "key": "deducted_at", "format": "datetime" }
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": "10. Full timeline",
+      "type": "table",
+      "rows": "events",
+      "empty": "No recorded actions.",
+      "columns": [
+        { "label": "When", "key": "created_at", "format": "datetime" },
+        { "label": "By", "key": "actor_name" },
+        { "label": "Action", "key": "action", "format": "enum:action" },
+        { "label": "Note", "key": "details.reason" }
+      ]
+    }
+  ],
+  "signature_blocks": {
+    "title": "11. Signatures",
+    "rows": "signatures",
+    "empty": "No signature recorded.",
+    "block": {
+      "heading_key": "kind",
+      "heading_format": "enum:signature_kind",
+      "statement_key": "statement_text",
+      "statement_version_key": "statement_version",
+      "image_key": "signature",
+      "image_missing": "Signature image not shown for this access level.",
+      "fields": [
+        { "label": "Signed by", "key": "signer_name" },
+        { "label": "Signed at (server time)", "key": "signed_at", "format": "datetime" },
+        { "label": "Charge version signed", "key": "charge_version" },
+        { "label": "Recorded by", "key": "recorded_by_name" }
+      ]
+    }
+  },
+  "footer": {
+    "lines": [
+      "Every time on this notice is set by the server when the action was recorded. Records are append-only: a wrong charge is reversed and reissued, never edited after the driver is notified.",
+      "A deduction is made only after the driver gave written consent, or after a witnessed refusal or dispute was reviewed by two different people and the appeal period ended or an appeal was decided by a third person. No monthly instalment exceeds the limit shown in section 8."
+    ],
+    "page_number": "Page {page} of {pages}"
+  }
+}

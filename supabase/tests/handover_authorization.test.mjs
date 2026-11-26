@@ -17,7 +17,7 @@ const files = [
   'supabase/migrations/20261112130000_handover_two_stage_signoff.sql',
   'supabase/migrations/20261112143000_handover_signoff_forgery_guard.sql',
   'supabase/migrations/20261112155000_handover_freeze_after_supervisor_sign.sql',
-  'supabase/migrations/20261126170000_handover_authorization_paper.sql',
+  'supabase/migrations/20261126171000_handover_authorization_paper.sql',
 ]
 
 const id = (n) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`

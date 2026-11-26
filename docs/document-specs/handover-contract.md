@@ -2,7 +2,7 @@
 
 For the Flutter app (and any other client) that captures a vehicle handover and
 prints the same paper as the web. Source of truth:
-`supabase/migrations/20261126170000_handover_authorization_paper.sql` on top of
+`supabase/migrations/20261126171000_handover_authorization_paper.sql` on top of
 V181, `20261112130000`, `20261112143000` and `20261112155000`.
 PDF layout: `docs/document-specs/handover-authorization.json` (the web renderer
 `src/lib/vehicleHandoverPdf.js` reads that file; build the mobile PDF from the

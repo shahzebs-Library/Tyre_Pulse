@@ -3,7 +3,7 @@
  *
  * Pure helpers (no Supabase, no React) for the two driver signatures, the
  * location captured with them, and the freeze that follows. The database is the
- * authority (supabase/migrations/20261126170000_handover_authorization_paper.sql):
+ * authority (supabase/migrations/20261126171000_handover_authorization_paper.sql):
  * sign_handover() stamps the time and signer server side, a trigger refuses any
  * change to a signed record, and decide_handover_approval() refuses a decision
  * by either signing driver. Everything here only EXPLAINS that state so the web

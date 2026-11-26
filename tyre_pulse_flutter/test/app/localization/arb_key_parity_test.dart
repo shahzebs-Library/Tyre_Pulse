@@ -689,10 +689,14 @@ void main() {
     // Article 92 consent, open objection, window with and without the KSA
     // Article 91 wording), shown instead of a schedule the server refuses.
     // 2700 + 1 = 2701: tyreConditionNotChecked (grey question-mark wheel).
-    test('en, ar and ur each carry exactly 2701 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2701);
-      expect(_translatableKeys(ar).length, 2701);
-      expect(_translatableKeys(ur).length, 2701);
+    // 2701 + 6 = 2707: driver charge review fixes (the driver's own company
+    // rule line without the legal caveat, photos blocked / still loading,
+    // retry, open larger, and the PDF refusing to print without the Arabic
+    // and Urdu font).
+    test('en, ar and ur each carry exactly 2707 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2707);
+      expect(_translatableKeys(ar).length, 2707);
+      expect(_translatableKeys(ur).length, 2707);
     });
   });
 

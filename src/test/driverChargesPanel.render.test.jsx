@@ -14,7 +14,7 @@ const detail = {
   charge: { ...row, basis: 'Fire extinguisher missing at handover.', source_type: 'none', source_summary: {}, created_at: '2026-01-05T10:00:00Z' },
   driver: { id: 'd1', driver_name: 'Driver A' }, evidence: [], signatures: [], decisions: [], appeal: null, instalments: [], events: [],
   statements: {
-    'deduction-consent-v2': { en: 'I agree that the company may take this amount from my salary.', ar: 'أوافق على أن تخصم الشركة هذا المبلغ من راتبي.', ur: 'میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے کاٹے۔' },
+    'deduction-consent-v3': { en: 'I agree that the company may take this amount from my salary.', ar: 'أوافق على أن تخصم الشركة هذا المبلغ من راتبي.', ur: 'میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے کاٹے۔' },
     'receipt-dispute-v2': { en: 'Receipt only.', ar: 'استلام فقط.', ur: 'صرف وصولی۔' },
   },
   settings: { cap_pct: 20, appeal_window_days: 7, country_rule: { rule: 'ksa_labour_law', statutory: true }, objection_last_day: null },
@@ -49,7 +49,7 @@ describe('driver charges panel', () => {
     await waitFor(() => expect(api.driverChargeCommand).toHaveBeenCalled())
     const [action, payload] = api.driverChargeCommand.mock.calls[0]
     expect(action).toBe('charge_respond')
-    expect(payload).toMatchObject({ driver_id: 'd1', charge_id: 'c1', version: 3, response: 'accept', statement_version: 'deduction-consent-v2', statement_language: 'en', acknowledged: true })
+    expect(payload).toMatchObject({ driver_id: 'd1', charge_id: 'c1', version: 3, response: 'accept', statement_version: 'deduction-consent-v3', statement_language: 'en', acknowledged: true })
   })
 
   it('the driver sees the photos and can sign the statement in Urdu', async () => {
@@ -65,7 +65,7 @@ describe('driver charges panel', () => {
     fireEvent.click(screen.getByText('Draw signature')); fireEvent.click(screen.getByText('Confirm drawing'))
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     await waitFor(() => expect(api.driverChargeCommand).toHaveBeenCalled())
-    expect(api.driverChargeCommand.mock.calls[0][1]).toMatchObject({ statement_version: 'deduction-consent-v2', statement_language: 'ur' })
+    expect(api.driverChargeCommand.mock.calls[0][1]).toMatchObject({ statement_version: 'deduction-consent-v3', statement_language: 'ur' })
   })
 
   it('shows why a deduction cannot be scheduled instead of a Schedule button', async () => {

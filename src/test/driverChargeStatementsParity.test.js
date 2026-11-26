@@ -10,7 +10,7 @@ const read = path => readFileSync(resolve(root, path), 'utf8')
 const json = path => JSON.parse(read(path))
 const spec = json('docs/document-specs/driver-charge-statements.json')
 const sql = read('supabase/migrations/20261126170000_driver_charge_cases.sql')
-const ARB_KEYS = { 'deduction-consent-v2': 'driverChargeStatementConsent', 'receipt-dispute-v2': 'driverChargeStatementDispute', 'refusal-witness-v2': 'driverChargeStatementWitness' }
+const ARB_KEYS = { 'deduction-consent-v3': 'driverChargeStatementConsent', 'receipt-dispute-v2': 'driverChargeStatementDispute', 'refusal-witness-v2': 'driverChargeStatementWitness' }
 
 function sqlStatements() {
   const out = {}

@@ -50,7 +50,7 @@ const Set<String> driverChargeMobileActions = <String>{
 };
 
 /// Statement versions the server stores verbatim with each signature.
-const String chargeConsentStatement = 'deduction-consent-v2';
+const String chargeConsentStatement = 'deduction-consent-v3';
 const String chargeDisputeStatement = 'receipt-dispute-v2';
 const String chargeWitnessStatement = 'refusal-witness-v2';
 
@@ -75,7 +75,7 @@ final class DriverChargeCountryRule {
   final String rule;
   final bool statutory;
 
-  /// Damage and fines: at most this many days of wage a month (wage / 30).
+  /// Damage or loss: at most this many days of wage a month (wage / 30).
   int get daysPerMonth => 5;
 
   /// Days the driver has to object (KSA: working days, Sunday to Thursday).
@@ -88,21 +88,44 @@ final class DriverChargeCountryRule {
   bool get needsLegalConfirmation => !statutory;
 }
 
-DriverChargeCountryRule driverChargeCountryRule(Object? country) {
-  final String c = '${country ?? ''}'.trim().toUpperCase();
-  return const <String>{'KSA', 'SA', 'SAU', 'SAUDI ARABIA'}.contains(c)
-      ? const DriverChargeCountryRule._('ksa_labour_law', statutory: true)
-      : const DriverChargeCountryRule._('company_setting', statutory: false);
+const Map<String, Set<String>> _countryKeys = <String, Set<String>>{
+  'KSA': <String>{
+    'KSA',
+    'SA',
+    'SAU',
+    'SAUDI',
+    'SAUDIARABIA',
+    'KINGDOMOFSAUDIARABIA',
+  },
+  'UAE': <String>{'UAE', 'AE', 'ARE', 'UNITEDARABEMIRATES', 'EMIRATES'},
+  'EGYPT': <String>{'EGYPT', 'EG', 'EGY', 'ARABREPUBLICOFEGYPT'},
+};
+
+/// One spelling per country ("Saudi Arabia", "sa", "K.S.A." are all KSA).
+/// Mirror of `private.driver_charge_country_key`.
+String? driverChargeCountryKey(Object? country) {
+  final String k =
+      '${country ?? ''}'.toUpperCase().replaceAll(RegExp('[^A-Z]'), '');
+  if (k.isEmpty) return null;
+  for (final MapEntry<String, Set<String>> e in _countryKeys.entries) {
+    if (e.value.contains(k)) return e.key;
+  }
+  return k;
 }
 
-/// `damage` (Art 91), `fine` (Art 70/71) or `consent` (Art 92).
+DriverChargeCountryRule driverChargeCountryRule(Object? country) =>
+    driverChargeCountryKey(country) == 'KSA'
+        ? const DriverChargeCountryRule._('ksa_labour_law', statutory: true)
+        : const DriverChargeCountryRule._('company_setting', statutory: false);
+
+/// `damage` (Art 91) or `consent` (Art 92). A government traffic fine
+/// recovered from the driver is an Art 92 deduction: it needs his consent.
 String driverChargeBucket(Object? category) => switch ('${category ?? ''}') {
       'accident_damage' ||
       'tyre_damage' ||
       'missing_item' ||
       'handover_damage' =>
         'damage',
-      'traffic_fine' => 'fine',
       _ => 'consent',
     };
 
@@ -314,6 +337,9 @@ final class DriverChargeDetail {
   }
 
   bool get isViewer => data['access'] == 'viewer';
+
+  /// The signed-in person is the driver of this charge.
+  bool get isDriver => data['access'] == 'driver';
 
   /// The exact statement text for [version] in [language], from the server
   /// (`statements[version][language]`). Null when the server did not send it:

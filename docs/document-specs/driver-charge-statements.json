@@ -1,16 +1,16 @@
 {
   "id": "driver-charge-statements",
-  "description": "The exact statements a driver or witness signs for a driver charge. The server (private.driver_charge_statement in supabase/migrations/20261126170000_driver_charge_cases.sql) stores the chosen text verbatim with the signature. The web locale src/locales/{en,ar}/driverCharges.json, the Urdu web locale and the Flutter ARB files carry the same words; a test checks they are identical. Arabic and Urdu are plain-language drafts for low-literacy readers and need owner and legal approval before production use.",
+  "description": "The exact statements a driver or witness signs for a driver charge. The server (private.driver_charge_statement in supabase/migrations/20261126170000_driver_charge_cases.sql) stores the chosen text verbatim with the signature. The web locale src/locales/{en,ar}/driverCharges.json, the Urdu web locale and the Flutter ARB files carry the same words; a test checks they are identical. Arabic and Urdu are plain-language drafts for low-literacy readers and need owner and legal approval before production use. deduction-consent-v3 contains {amount}: the server replaces it with the charge total and currency (for example 1,250.00 SAR) before it is shown or stored.",
   "languages": [
     "en",
     "ar",
     "ur"
   ],
   "statements": {
-    "deduction-consent-v2": {
-      "en": "I am the driver named on this paper. I have seen this charge: the reason, the amount, and the evidence and photos shown with it. I agree that I must pay this charge. I agree that the company may take this amount from my salary, a part each month, as shown on the deduction plan. This agreement is only for this charge. I can still object within the time written on this paper.",
-      "ar": "أنا السائق المذكور اسمه في هذه الورقة. اطلعت على هذه المطالبة: السبب والمبلغ والأدلة والصور المرفقة بها. أوافق على أنني ملزم بدفع هذه المطالبة. وأوافق على أن تخصم الشركة هذا المبلغ من راتبي، جزءا كل شهر، كما هو موضح في خطة الخصم. هذه الموافقة تخص هذه المطالبة فقط. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.",
-      "ur": "میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ میں نے یہ چارج دیکھ لیا ہے: اس کی وجہ، رقم، اور اس کے ساتھ دکھائے گئے ثبوت اور تصویریں۔ میں مانتا ہوں کہ یہ چارج مجھے ادا کرنا ہے۔ میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے ہر مہینے کچھ حصہ کر کے کاٹے، جیسا کہ کٹوتی کے پلان میں لکھا ہے۔ یہ اجازت صرف اسی چارج کے لیے ہے۔ میں اس کاغذ پر لکھی مدت کے اندر اب بھی اعتراض کر سکتا ہوں۔"
+    "deduction-consent-v3": {
+      "en": "I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay {amount} in total for this charge. I agree that the company may take this amount from my salary in monthly parts. The amount taken in any one month will never be more than the legal monthly limit, and I will be shown the amount for each month before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.",
+      "ar": "أنا السائق المذكور اسمه في هذه الورقة. اطلعت على هذه المطالبة: السبب والأدلة والصور. أوافق على أنني ملزم بدفع مبلغ {amount} إجمالا عن هذه المطالبة. وأوافق على أن تخصم الشركة هذا المبلغ من راتبي على أجزاء شهرية. لن يزيد جزء أي شهر عن الحد الشهري الذي يسمح به النظام، وسيعرض علي مبلغ كل شهر قبل خصمه. هذه الموافقة تخص هذه المطالبة فقط. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.",
+      "ur": "میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ میں نے یہ چارج دیکھ لیا ہے: اس کی وجہ، ثبوت اور تصویریں۔ میں مانتا ہوں کہ اس چارج کے لیے مجھے کل {amount} ادا کرنے ہیں۔ میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے ماہانہ قسطوں میں کاٹے۔ کسی بھی مہینے کی قسط قانون کی ماہانہ حد سے زیادہ نہیں ہوگی، اور ہر مہینے کی رقم کاٹنے سے پہلے مجھے دکھائی جائے گی۔ یہ اجازت صرف اسی چارج کے لیے ہے۔ میں اس کاغذ پر لکھی مدت کے اندر اب بھی اعتراض کر سکتا ہوں۔"
     },
     "receipt-dispute-v2": {
       "en": "I am the driver named on this paper. I have received this charge and I have seen the reason, the evidence and the photos. I do not agree with this charge, for the reasons I wrote. My signature only shows that I received this paper. It does not mean that I agree. I can object within the time written on this paper.",

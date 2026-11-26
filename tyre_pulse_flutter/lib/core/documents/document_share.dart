@@ -5,6 +5,7 @@
 /// font, fetched once (the PDF still renders without it).
 library;
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:pdf/widgets.dart' as pw;
@@ -13,6 +14,53 @@ import 'package:tyre_pulse/core/documents/charge_document.dart';
 import 'package:tyre_pulse/core/documents/document_pdf.dart';
 import 'package:tyre_pulse/core/documents/document_spec_support.dart';
 import 'package:tyre_pulse/core/documents/handover_document.dart';
+
+/// The Arabic or Urdu font could not be loaded, so a paper with Arabic-script
+/// text (the driver notice or a signed statement) is not produced: printed
+/// without the font it would be unreadable boxes. The caller says so.
+final class ChargePdfFontUnavailable implements Exception {
+  const ChargePdfFontUnavailable();
+}
+
+final RegExp _arabicScript =
+    RegExp('[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]');
+
+/// True when the paper carries Arabic-script text that needs the font.
+bool chargeDocumentNeedsArabicFont(ChargeDocumentModel model) {
+  final List<String> texts = <String>[
+    model.driverNotice.title,
+    ...model.driverNotice.lines,
+    for (final ChargeDocumentSignature s in model.signatures) s.statement,
+  ];
+  return texts.any(_arabicScript.hasMatch);
+}
+
+/// Loads every photo at the same time, waiting at most [overall] in total.
+/// A photo not ready by then prints as "Photo could not be loaded.".
+Future<Map<String, Uint8List>> loadChargePhotos(
+  Iterable<String> references,
+  ChargePhotoLoader loadPhoto, {
+  Duration overall = const Duration(seconds: 25),
+}) async {
+  final Map<String, Uint8List> photos = <String, Uint8List>{};
+  final List<Future<void>> jobs = <Future<void>>[
+    for (final String ref in references.toSet())
+      () async {
+        try {
+          final Uint8List? bytes = await loadPhoto(ref);
+          if (bytes != null) photos[ref] = bytes;
+        } on Object {
+          // The paper prints "Photo could not be loaded." for this one.
+        }
+      }(),
+  ];
+  try {
+    await Future.wait(jobs).timeout(overall);
+  } on TimeoutException {
+    // Use the photos that arrived in time.
+  }
+  return Map<String, Uint8List>.of(photos);
+}
 
 Future<List<pw.Font>> _fallbackFonts() async {
   try {
@@ -39,6 +87,7 @@ Future<Uint8List> buildChargeNoticePdf(
   DateTime Function() clock = DateTime.now,
   String language = 'en',
   ChargePhotoLoader? loadPhoto,
+  Future<List<pw.Font>> Function()? fontLoader,
 }) async {
   final Map<String, Object?> spec =
       await loadDocumentSpec(DocumentSpecAssets.driverChargeNotice);
@@ -48,24 +97,25 @@ Future<Uint8List> buildChargeNoticePdf(
     generatedAt: clock().toUtc().toIso8601String(),
     language: language,
   );
-  final Map<String, Uint8List> photos = <String, Uint8List>{};
-  if (loadPhoto != null) {
-    for (final ChargeDocumentSection s in model.sections) {
-      for (final ChargeDocumentPhoto p
-          in s.photos ?? const <ChargeDocumentPhoto>[]) {
-        try {
-          final Uint8List? bytes =
-              await loadPhoto(p.ref).timeout(const Duration(seconds: 15));
-          if (bytes != null) photos[p.ref] = bytes;
-        } on Object {
-          // The paper prints "Photo could not be loaded." for this one.
-        }
-      }
-    }
+  final Future<List<pw.Font>> fonts = (fontLoader ?? _fallbackFonts)();
+  final Map<String, Uint8List> photos = loadPhoto == null
+      ? <String, Uint8List>{}
+      : await loadChargePhotos(
+          <String>[
+            for (final ChargeDocumentSection s in model.sections)
+              for (final ChargeDocumentPhoto p
+                  in s.photos ?? const <ChargeDocumentPhoto>[])
+                p.ref,
+          ],
+          loadPhoto,
+        );
+  final List<pw.Font> fallback = await fonts;
+  if (fallback.isEmpty && chargeDocumentNeedsArabicFont(model)) {
+    throw const ChargePdfFontUnavailable();
   }
   return renderChargeNoticePdf(
     model,
-    fontFallback: await _fallbackFonts(),
+    fontFallback: fallback,
     photoBytes: photos,
   );
 }

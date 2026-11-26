@@ -36,7 +36,7 @@ DriverRow _detail({List<String> actions = const <String>[]}) =>
       'instalments': <DriverRow>[],
       'events': <DriverRow>[],
       'statements': <String, Object?>{
-        'deduction-consent-v2': <String, Object?>{
+        'deduction-consent-v3': <String, Object?>{
           'en': 'I accept and consent.',
           'ar': 'أوافق على الخصم.',
           'ur': 'میں کٹوتی کی اجازت دیتا ہوں۔',
@@ -200,7 +200,11 @@ void main() {
     expect(driverChargeCountryRule('KSA').statutory, isTrue);
     expect(driverChargeCountryRule('UAE').needsLegalConfirmation, isTrue);
     expect(driverChargeBucket('missing_item'), 'damage');
-    expect(driverChargeBucket('traffic_fine'), 'fine');
+    expect(driverChargeBucket('traffic_fine'), 'consent');
+    expect(driverChargeCountryKey('Saudi Arabia'), 'KSA');
+    expect(driverChargeCountryKey('k.s.a.'), 'KSA');
+    expect(driverChargeCountryRule('saudi').statutory, isTrue);
+    expect(driverChargeCountryKey('United Arab Emirates'), 'UAE');
     expect(driverChargeBucket('other'), 'consent');
     expect(driverChargeNeedsPhoto('tyre_damage'), isTrue);
     expect(driverChargeNeedsPhoto('missing_item'), isFalse);
@@ -341,6 +345,72 @@ void main() {
     await tester.tap(find.text('اردو'));
     await tester.pumpAndSettle();
     expect(find.text('میں کٹوتی کی اجازت دیتا ہوں۔'), findsOneWidget);
+  });
+
+  testWidgets('a photo that failed to load blocks signing until retried',
+      (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final DriverRow data = _detail(actions: <String>['charge_respond']);
+    data['evidence'] = <DriverRow>[
+      <String, Object?>{
+        'id': 'e1',
+        'kind': 'photo',
+        'ref': 'tp-storage://tyre-photos/modules/driver-charge/u/1.jpg',
+        'label': 'Broken mirror',
+      },
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          driverChargeRepositoryProvider.overrideWithValue(_FakeRepo(data)),
+          privateStorageImageUrlProvider.overrideWith(
+            (Ref ref, String reference) async => throw StateError('offline'),
+          ),
+        ],
+        child: MaterialApp(
+          supportedLocales: TpLocalizations.supportedLocales,
+          localizationsDelegates: TpLocalizations.delegates,
+          home: DriverChargeResponseSheet(detail: DriverChargeDetail(data)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('You must see every photo'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    final Finder submit = find.widgetWithText(FilledButton, 'Sign and submit');
+    await tester.ensureVisible(submit);
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+  });
+
+  testWidgets('statement language buttons are 48dp tall and fit 360dp at 2x',
+      (WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(360, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final DriverRow data = _detail(actions: <String>['charge_respond']);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          driverChargeRepositoryProvider.overrideWithValue(_FakeRepo(data)),
+        ],
+        child: MaterialApp(
+          supportedLocales: TpLocalizations.supportedLocales,
+          localizationsDelegates: TpLocalizations.delegates,
+          builder: (BuildContext context, Widget? child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: DriverChargeResponseSheet(detail: DriverChargeDetail(data)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final Finder picker = find.byType(SegmentedButton<String>);
+    expect(tester.getSize(picker).height, greaterThanOrEqualTo(48));
+    expect(tester.getSize(picker).width, lessThanOrEqualTo(360));
+    expect(find.text('English'), findsOneWidget);
   });
 
   test('the phone only offers driver actions the server returned', () {

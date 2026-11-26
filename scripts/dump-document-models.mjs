@@ -49,7 +49,7 @@ const chargeDetail = {
   ],
   settings: { cap_pct: 20, appeal_window_days: 7, country_rule: { rule: 'ksa_labour_law', statutory: true }, objection_last_day: '2026-01-27' },
   signatures: [
-    { kind: 'driver_acceptance', signer_name: 'Driver A', statement_text: 'أوافق.', statement_version: 'deduction-consent-v2', statement_language: 'ar', signed_at: '2026-01-06T09:05:00Z', charge_version: 3, signature: 'data:image/png;base64,AAAA', recorded_by_name: 'Driver A' },
+    { kind: 'driver_acceptance', signer_name: 'Driver A', statement_text: 'أوافق.', statement_version: 'deduction-consent-v3', statement_language: 'ar', signed_at: '2026-01-06T09:05:00Z', charge_version: 3, signature: 'data:image/png;base64,AAAA', recorded_by_name: 'Driver A' },
     { kind: 'refusal_witness', signer_name: 'Witness', statement_text: '', statement_version: null, signed_at: '2026-09-06T16:45:00Z', charge_version: 2, recorded_by_name: null },
   ],
   decisions: [

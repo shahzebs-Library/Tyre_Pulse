@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildInstalmentPlan, capAmountFor, validateIssue, validateResponse, outstandingByCurrency, enumLabel, CATEGORIES, ACTION_LABELS, CHARGE_SPEC,
-  chargeCountryRule, chargeBucket, chargeNeedsPhoto, scheduleCapFor, ksaMonthlyLimits, workingDeadline, statementText, defaultStatementLanguage, scheduleBlockFor } from '../lib/driverCharges'
+  chargeCountryRule, chargeCountryKey, chargeBucket, chargeNeedsPhoto, scheduleCapFor, ksaMonthlyLimits, workingDeadline, statementText, defaultStatementLanguage, scheduleBlockFor } from '../lib/driverCharges'
 import { buildChargeDocument, getPath, formatValue, noticeLanguage, hasArabicScript } from '../lib/driverChargePdf'
 
 const detail = {
@@ -52,17 +52,19 @@ describe('country deduction rules (mirror of the server)', () => {
   it('KSA follows the Saudi Labour Law, other countries need legal confirmation', () => {
     expect(chargeCountryRule('KSA').statutory).toBe(true)
     expect(chargeCountryRule('Saudi Arabia').rule).toBe('ksa_labour_law')
+    expect(chargeCountryKey('k.s.a.')).toBe('KSA'); expect(chargeCountryKey('United Arab Emirates')).toBe('UAE'); expect(chargeCountryRule('saudi').statutory).toBe(true)
     expect(chargeCountryRule('UAE')).toMatchObject({ statutory: false, needs_legal_confirmation: true })
-    expect(chargeBucket('missing_item')).toBe('damage'); expect(chargeBucket('traffic_fine')).toBe('fine'); expect(chargeBucket('other')).toBe('consent')
+    expect(chargeBucket('missing_item')).toBe('damage'); expect(chargeBucket('traffic_fine')).toBe('consent'); expect(chargeBucket('other')).toBe('consent')
     expect(chargeNeedsPhoto('tyre_damage')).toBe(true); expect(chargeNeedsPhoto('missing_item')).toBe(false)
   })
   it('caps one charge per month like the server', () => {
     expect(scheduleCapFor({ country: 'KSA', category: 'accident_damage', monthlyWage: 3000, capPct: 20 })).toBe(500)
-    expect(scheduleCapFor({ country: 'KSA', category: 'traffic_fine', monthlyWage: 3000, capPct: 20 })).toBe(500)
+    // A traffic fine is an Art 92 deduction: with consent, only the half-wage total applies.
+    expect(scheduleCapFor({ country: 'KSA', category: 'traffic_fine', monthlyWage: 3000, capPct: 20 })).toBe(1500)
     expect(scheduleCapFor({ country: 'KSA', category: 'other', monthlyWage: 3000, capPct: 20 })).toBe(1500)
     expect(scheduleCapFor({ country: 'UAE', category: 'accident_damage', monthlyWage: 3000, capPct: 20 })).toBe(600)
     expect(scheduleCapFor({ country: 'KSA', category: 'other', monthlyWage: 0 })).toBeNull()
-    expect(ksaMonthlyLimits(1000)).toEqual({ damage: 166.67, fine: 166.67, total: 500 })
+    expect(ksaMonthlyLimits(1000)).toEqual({ damage: 166.67, total: 500 })
   })
   it('counts 15 working days Sunday to Thursday in Riyadh', () => {
     expect(workingDeadline('2026-11-26T09:00:00+03:00', 15)).toBe('2026-12-17T21:00:00.000Z')
@@ -131,5 +133,19 @@ describe('driver charge notice model', () => {
     expect(formatValue(null)).toBe('Not recorded')
     expect(getPath({ a: { b: 1 } }, 'a.b')).toBe(1)
     expect(() => buildChargeDocument({})).toThrow()
+  })
+})
+
+describe('review fixes', () => {
+  it('validation messages go through the screen translation when given', async () => {
+    const t = key => `T:${key}`
+    expect(validateResponse({ response: 'accept', acknowledged: true }, t)).toBe('T:driverCharges.validate.signature')
+    expect(validateIssue({ category: 'tyre_damage', evidence: [] }, t)).toBe('T:driverCharges.validate.photoRequired')
+  })
+  it('photos keep their shape in the PDF cell', async () => {
+    const { fitImage } = await import('../lib/driverChargePdf')
+    expect(fitImage(400, 800, 60, 45)).toEqual({ w: 22.5, h: 45, dx: 18.75, dy: 0 })
+    expect(fitImage(1600, 400, 60, 45)).toEqual({ w: 60, h: 15, dx: 0, dy: 15 })
+    expect(fitImage(0, 0, 60, 45)).toEqual({ w: 60, h: 45, dx: 0, dy: 0 })
   })
 })

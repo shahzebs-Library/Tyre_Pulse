@@ -15681,7 +15681,7 @@ abstract class AppLocalizations {
   /// No description provided for @driverChargeKsaRule.
   ///
   /// In en, this message translates to:
-  /// **'Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Fines: at most 5 days of wage. All deductions together: at most half the wage. You have 15 working days to object.'**
+  /// **'Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days to object.'**
   String get driverChargeKsaRule;
 
   /// No description provided for @driverChargeOtherRule.
@@ -15689,6 +15689,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The company limit applies to this charge. This rule still needs legal confirmation for this country.'**
   String get driverChargeOtherRule;
+
+  /// No description provided for @driverChargePdfFontFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The Arabic and Urdu letters could not be loaded, so the paper was not made. Check the internet connection and try again.'**
+  String get driverChargePdfFontFailed;
+
+  /// No description provided for @driverChargePhotoOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the photo larger'**
+  String get driverChargePhotoOpen;
+
+  /// No description provided for @driverChargePhotoRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get driverChargePhotoRetry;
+
+  /// No description provided for @driverChargePhotosWait.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait until every photo has loaded before you sign.'**
+  String get driverChargePhotosWait;
+
+  /// No description provided for @driverChargePhotosBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'A photo could not be loaded. You must see every photo before you sign. Tap Retry.'**
+  String get driverChargePhotosBlocked;
+
+  /// No description provided for @driverChargeOtherRuleDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'The company deduction limit applies to this charge.'**
+  String get driverChargeOtherRuleDriver;
 
   /// No description provided for @driverChargeObjectionUntil.
   ///
@@ -15717,8 +15753,8 @@ abstract class AppLocalizations {
   /// No description provided for @driverChargeStatementConsent.
   ///
   /// In en, this message translates to:
-  /// **'I am the driver named on this paper. I have seen this charge: the reason, the amount, and the evidence and photos shown with it. I agree that I must pay this charge. I agree that the company may take this amount from my salary, a part each month, as shown on the deduction plan. This agreement is only for this charge. I can still object within the time written on this paper.'**
-  String get driverChargeStatementConsent;
+  /// **'I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay {amount} in total for this charge. I agree that the company may take this amount from my salary in monthly parts. Each month\'s part will never be more than the legal monthly limit, and I will be shown each month\'s amount before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.'**
+  String driverChargeStatementConsent(String amount);
 
   /// No description provided for @driverChargeStatementDispute.
   ///

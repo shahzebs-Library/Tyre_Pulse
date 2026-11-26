@@ -28,62 +28,216 @@ import 'package:tyre_pulse/features/driver_workspace/domain/driver_charge.dart';
 import 'package:tyre_pulse/features/driver_workspace/domain/driver_workspace.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_charge_l10n.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_l10n.dart';
+import 'package:tyre_pulse/l10n/generated/app_localizations.dart'
+    show lookupAppLocalizations;
 import 'package:uuid/uuid.dart';
 
+/// Whether the charge photos can be relied on before signing.
+enum DriverChargePhotosState { loading, ready, failed }
+
 /// The charge photos, resolved through the authenticated private-storage
-/// resolver (short-lived signed URLs). Shown before the driver answers.
-class DriverChargePhotos extends ConsumerWidget {
-  const DriverChargePhotos({required this.photos, super.key});
+/// resolver (short-lived signed URLs). Shown before the driver answers. Tap a
+/// photo to open it larger. [onState] reports whether every photo has loaded,
+/// so a sheet can refuse a signature until the driver has seen them all.
+class DriverChargePhotos extends ConsumerStatefulWidget {
+  const DriverChargePhotos({required this.photos, this.onState, super.key});
   final List<DriverRow> photos;
+  final ValueChanged<DriverChargePhotosState>? onState;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DriverChargePhotos> createState() => _DriverChargePhotosState();
+}
+
+class _DriverChargePhotosState extends ConsumerState<DriverChargePhotos> {
+  final Map<String, DriverChargePhotosState> _states =
+      <String, DriverChargePhotosState>{};
+  int _attempt = 0;
+  DriverChargePhotosState? _reported;
+
+  List<String> get _refs => <String>[
+        for (final DriverRow p in widget.photos) '${p['ref']}',
+      ];
+
+  void _mark(String ref, DriverChargePhotosState state) {
+    if (_states[ref] == state) return;
+    _states[ref] = state;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _report();
+    });
+  }
+
+  void _report() {
+    final List<String> refs = _refs;
+    final DriverChargePhotosState overall = refs.isEmpty
+        ? DriverChargePhotosState.ready
+        : refs.any((String r) => _states[r] == DriverChargePhotosState.failed)
+            ? DriverChargePhotosState.failed
+            : refs.every(
+                (String r) => _states[r] == DriverChargePhotosState.ready,
+              )
+                ? DriverChargePhotosState.ready
+                : DriverChargePhotosState.loading;
+    if (overall != _reported) {
+      _reported = overall;
+      widget.onState?.call(overall);
+      setState(() {});
+    }
+  }
+
+  void _retry() {
+    for (final String r in _refs) {
+      ref.invalidate(privateStorageImageUrlProvider(r));
+    }
+    setState(() {
+      _states.clear();
+      _attempt++;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _report();
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _report();
+    });
+  }
+
+  Future<void> _zoom(String url, String label) => showDialog<void>(
+        context: context,
+        builder: (BuildContext context) => Dialog(
+          insetPadding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Flexible(
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 5,
+                  child: Image.network(url, semanticLabel: label),
+                ),
+              ),
+              if (label.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(label),
+                ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(
+                  MaterialLocalizations.of(context).closeButtonLabel,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _failed(AppLocalizations l10n, String ref) {
+    _mark(ref, DriverChargePhotosState.failed);
+    return Center(
+      child: Text(
+        l10n.driverChargePhotoUnavailable,
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final ThemeData theme = Theme.of(context);
-    if (photos.isEmpty) return Text(l10n.driverChargePhotosNone);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    if (widget.photos.isEmpty) return Text(l10n.driverChargePhotosNone);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        for (final DriverRow p in photos)
-          SizedBox(
-            width: 150,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            for (final DriverRow p in widget.photos)
+              SizedBox(
+                width: 150,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: SizedBox(
+                        width: 150,
+                        height: 112,
+                        child: ref
+                            .watch(
+                              privateStorageImageUrlProvider('${p['ref']}'),
+                            )
+                            .when(
+                              data: (String url) => Semantics(
+                                button: true,
+                                label: l10n.driverChargePhotoOpen,
+                                child: InkWell(
+                                  onTap: () =>
+                                      _zoom(url, '${p['label'] ?? ''}'),
+                                  child: Image.network(
+                                    url,
+                                    key: ValueKey<String>(
+                                      '${p['ref']}#$_attempt',
+                                    ),
+                                    fit: BoxFit.cover,
+                                    semanticLabel: '${p['label'] ?? ''}',
+                                    frameBuilder: (
+                                      BuildContext context,
+                                      Widget child,
+                                      int? frame,
+                                      bool sync,
+                                    ) {
+                                      if (frame != null || sync) {
+                                        _mark(
+                                          '${p['ref']}',
+                                          DriverChargePhotosState.ready,
+                                        );
+                                      }
+                                      return child;
+                                    },
+                                    errorBuilder: (_, __, ___) =>
+                                        _failed(l10n, '${p['ref']}'),
+                                  ),
+                                ),
+                              ),
+                              loading: () => const Center(
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              error: (_, __) => _failed(l10n, '${p['ref']}'),
+                            ),
+                      ),
+                    ),
+                    Text(
+                      '${p['label'] ?? ''}',
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        if (_reported == DriverChargePhotosState.failed)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
               children: <Widget>[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: SizedBox(
-                    width: 150,
-                    height: 112,
-                    child: ref
-                        .watch(privateStorageImageUrlProvider('${p['ref']}'))
-                        .when(
-                          data: (String url) => Image.network(
-                            url,
-                            fit: BoxFit.cover,
-                            semanticLabel: '${p['label'] ?? ''}',
-                            errorBuilder: (_, __, ___) => Center(
-                              child: Text(l10n.driverChargePhotoUnavailable),
-                            ),
-                          ),
-                          loading: () => const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          error: (_, __) => Center(
-                            child: Text(
-                              l10n.driverChargePhotoUnavailable,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
+                Expanded(
+                  child: Text(
+                    l10n.driverChargePhotosBlocked,
+                    style: TextStyle(color: theme.colorScheme.error),
                   ),
                 ),
-                Text(
-                  '${p['label'] ?? ''}',
-                  style: theme.textTheme.bodySmall,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                TextButton(
+                  onPressed: _retry,
+                  child: Text(l10n.driverChargePhotoRetry),
                 ),
               ],
             ),
@@ -128,12 +282,23 @@ class _StatementPicker extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(l10n.driverChargeStatementLanguage),
+        // At least 48dp tall, the three languages always fit on one row: a
+        // long label at large text size shrinks rather than overflows.
         SegmentedButton<String>(
+          expandedInsets: EdgeInsets.zero,
+          showSelectedIcon: false,
+          style: const ButtonStyle(
+            minimumSize: WidgetStatePropertyAll<Size>(Size(0, 48)),
+            tapTargetSize: MaterialTapTargetSize.padded,
+          ),
           segments: <ButtonSegment<String>>[
             for (final String lang in chargeStatementLanguages)
               ButtonSegment<String>(
                 value: lang,
-                label: Text(_languageName(l10n, lang)),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(_languageName(l10n, lang), maxLines: 1),
+                ),
               ),
           ],
           selected: <String>{language},
@@ -164,6 +329,22 @@ class _StatementPicker extends StatelessWidget {
   }
 }
 
+/// The confirmation line in the language of the statement being signed.
+String _acknowledgeIn(String language) {
+  try {
+    return lookupAppLocalizations(Locale(language)).driverChargeAcknowledge;
+  } on Object {
+    return lookupAppLocalizations(const Locale('en')).driverChargeAcknowledge;
+  }
+}
+
+Widget _acknowledgeTitle(String language) => Directionality(
+      textDirection: chargeStatementIsRtl(language)
+          ? TextDirection.rtl
+          : TextDirection.ltr,
+      child: Text(_acknowledgeIn(language)),
+    );
+
 String _blockText(AppLocalizations l10n, DriverChargeScheduleBlock block) {
   final String day = block.until ?? l10n.valueUnavailable;
   return switch (block.code) {
@@ -175,10 +356,14 @@ String _blockText(AppLocalizations l10n, DriverChargeScheduleBlock block) {
   };
 }
 
+/// The country rule in plain words. "Needs legal confirmation" is a note for
+/// staff, never shown to the driver.
 String _ruleText(AppLocalizations l10n, DriverChargeDetail detail) {
   final String rule = detail.countryRule.statutory
       ? l10n.driverChargeKsaRule
-      : l10n.driverChargeOtherRule;
+      : detail.isDriver
+          ? l10n.driverChargeOtherRuleDriver
+          : l10n.driverChargeOtherRule;
   final String? day = detail.objectionLastDay;
   return day == null ? rule : '$rule ${l10n.driverChargeObjectionUntil(day)}';
 }
@@ -407,6 +592,12 @@ class _DriverChargeDetailScreenState
           return data.buffer.asUint8List();
         },
       );
+    } on ChargePdfFontUnavailable {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.driverChargePdfFontFailed)),
+        );
+      }
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -851,6 +1042,9 @@ class _DriverChargeResponseSheetState
   DriverChargeResponse _response = DriverChargeResponse.accept;
   bool _acknowledged = false;
   String? _signature;
+  // A new key clears the signature pad: words that change must be signed again.
+  int _padGeneration = 0;
+  DriverChargePhotosState _photos = DriverChargePhotosState.loading;
   String? _message;
   String? _language;
   bool _busy = false;
@@ -869,6 +1063,14 @@ class _DriverChargeResponseSheetState
 
   Future<void> _submit() async {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    if (_photos != DriverChargePhotosState.ready) {
+      setState(
+        () => _message = _photos == DriverChargePhotosState.failed
+            ? l10n.driverChargePhotosBlocked
+            : l10n.driverChargePhotosWait,
+      );
+      return;
+    }
     final DriverChargeIssue? issue = validateChargeResponse(
       response: _response,
       explanation: _explanation.text,
@@ -933,7 +1135,16 @@ class _DriverChargeResponseSheetState
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 6),
-          DriverChargePhotos(photos: widget.detail.photos),
+          DriverChargePhotos(
+            photos: widget.detail.photos,
+            onState: (DriverChargePhotosState state) =>
+                setState(() => _photos = state),
+          ),
+          if (_photos == DriverChargePhotosState.loading)
+            Text(
+              l10n.driverChargePhotosWait,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           const SizedBox(height: 8),
           Text(
             _ruleText(l10n, widget.detail),
@@ -956,9 +1167,11 @@ class _DriverChargeResponseSheetState
                 ? null
                 : (Set<DriverChargeResponse> s) => setState(() {
                       _response = s.first;
-                      // The statement changed: confirmation must be given
-                      // again for the new wording.
+                      // The statement changed: confirmation and signature
+                      // must be given again for the new wording.
                       _acknowledged = false;
+                      _signature = null;
+                      _padGeneration++;
                     }),
           ),
           const SizedBox(height: 16),
@@ -969,8 +1182,10 @@ class _DriverChargeResponseSheetState
             enabled: !_busy,
             onLanguage: (String lang) => setState(() {
               _language = lang;
-              // New words: confirmation must be given again.
+              // New words: confirmation and signature must be given again.
               _acknowledged = false;
+              _signature = null;
+              _padGeneration++;
             }),
           ),
           CheckboxListTile(
@@ -979,7 +1194,7 @@ class _DriverChargeResponseSheetState
             onChanged: statement == null || _busy
                 ? null
                 : (bool? v) => setState(() => _acknowledged = v ?? false),
-            title: Text(l10n.driverChargeAcknowledge),
+            title: _acknowledgeTitle(_lang),
           ),
           if (_response == DriverChargeResponse.dispute)
             TextField(
@@ -994,6 +1209,7 @@ class _DriverChargeResponseSheetState
           const SizedBox(height: 8),
           Text(l10n.driverChargeSignBelow),
           InspectionApprovalSignaturePad(
+            key: ValueKey<int>(_padGeneration),
             onChanged: (InspectionApprovalSignatureCapture? capture) =>
                 setState(() => _signature = capture?.dataUrl),
           ),
@@ -1007,7 +1223,11 @@ class _DriverChargeResponseSheetState
             ),
           const SizedBox(height: 12),
           FilledButton(
-            onPressed: _busy || statement == null ? null : _submit,
+            onPressed: _busy ||
+                    statement == null ||
+                    _photos != DriverChargePhotosState.ready
+                ? null
+                : _submit,
             child: _busy
                 ? const SizedBox(
                     width: 18,
@@ -1147,6 +1367,8 @@ class _DriverChargeWitnessSheetState
   final String _requestId = const Uuid().v4();
   bool _acknowledged = false;
   String? _signature;
+  // A new key clears the signature pad: words that change must be signed again.
+  int _padGeneration = 0;
   String? _message;
   bool _busy = false;
 
@@ -1223,6 +1445,8 @@ class _DriverChargeWitnessSheetState
             onLanguage: (String lang) => setState(() {
               _language = lang;
               _acknowledged = false;
+              _signature = null;
+              _padGeneration++;
             }),
           ),
           CheckboxListTile(
@@ -1231,10 +1455,11 @@ class _DriverChargeWitnessSheetState
             onChanged: statement == null || _busy
                 ? null
                 : (bool? v) => setState(() => _acknowledged = v ?? false),
-            title: Text(l10n.driverChargeAcknowledge),
+            title: _acknowledgeTitle(_lang),
           ),
           Text(l10n.driverChargeSignBelow),
           InspectionApprovalSignaturePad(
+            key: ValueKey<int>(_padGeneration),
             onChanged: (InspectionApprovalSignatureCapture? capture) =>
                 setState(() => _signature = capture?.dataUrl),
           ),

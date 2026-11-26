@@ -9071,14 +9071,27 @@
   "driverChargePhotosNone": "No photos attached to this charge.",
   "driverChargePhotoUnavailable": "Photo could not be loaded.",
   "driverChargePhotosSeen": "Look at the photos before you answer.",
-  "driverChargeKsaRule": "Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Fines: at most 5 days of wage. All deductions together: at most half the wage. You have 15 working days to object.",
+  "driverChargeKsaRule": "Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days to object.",
   "driverChargeOtherRule": "The company limit applies to this charge. This rule still needs legal confirmation for this country.",
+  "driverChargePdfFontFailed": "The Arabic and Urdu letters could not be loaded, so the paper was not made. Check the internet connection and try again.",
+  "driverChargePhotoOpen": "Open the photo larger",
+  "driverChargePhotoRetry": "Retry",
+  "driverChargePhotosWait": "Wait until every photo has loaded before you sign.",
+  "driverChargePhotosBlocked": "A photo could not be loaded. You must see every photo before you sign. Tap Retry.",
+  "driverChargeOtherRuleDriver": "The company deduction limit applies to this charge.",
   "driverChargeObjectionUntil": "You can object until {date}.",
   "@driverChargeObjectionUntil": {"placeholders": {"date": {"type": "String"}}},
   "driverChargeLangEnglish": "English",
   "driverChargeLangArabic": "العربية",
   "driverChargeLangUrdu": "اردو",
-  "driverChargeStatementConsent": "I am the driver named on this paper. I have seen this charge: the reason, the amount, and the evidence and photos shown with it. I agree that I must pay this charge. I agree that the company may take this amount from my salary, a part each month, as shown on the deduction plan. This agreement is only for this charge. I can still object within the time written on this paper.",
+  "driverChargeStatementConsent": "I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay {amount} in total for this charge. I agree that the company may take this amount from my salary in monthly parts. The amount taken in any one month will never be more than the legal monthly limit, and I will be shown the amount for each month before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.",
+  "@driverChargeStatementConsent": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeStatementDispute": "I am the driver named on this paper. I have received this charge and I have seen the reason, the evidence and the photos. I do not agree with this charge, for the reasons I wrote. My signature only shows that I received this paper. It does not mean that I agree. I can object within the time written on this paper.",
   "driverChargeStatementWitness": "I saw this charge paper given to the driver named on it. The driver did not want to sign it or answer. The date and time of this record are set by the system.",
   "driverChargeBlockTitle": "Deduction cannot be scheduled yet",

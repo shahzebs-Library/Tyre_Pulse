@@ -4,6 +4,7 @@
  */
 import spec from '../../docs/document-specs/driver-charge-notice.json'
 import statementSpec from '../../docs/document-specs/driver-charge-statements.json'
+import enLocale from '../locales/en/driverCharges.json'
 
 export const CHARGE_SPEC = spec
 export const CATEGORIES = Object.keys(spec.enums.category)
@@ -14,7 +15,7 @@ export const EVIDENCE_KINDS = ['notice', 'photo', 'document', 'record', 'stateme
 export const TERMINAL_STATUSES = ['deducted', 'waived', 'cancelled_wrongly_issued']
 
 /** Statement versions the server stores verbatim with each signature. */
-export const STATEMENT_VERSIONS = Object.freeze({ accept: 'deduction-consent-v2', dispute: 'receipt-dispute-v2', witness: 'refusal-witness-v2' })
+export const STATEMENT_VERSIONS = Object.freeze({ accept: 'deduction-consent-v3', dispute: 'receipt-dispute-v2', witness: 'refusal-witness-v2' })
 /** Languages a driver or witness may sign in. The server accepts exactly these. */
 export const STATEMENT_LANGUAGES = statementSpec.languages
 export const STATEMENT_LANGUAGE_NAMES = Object.freeze({ en: 'English', ar: 'العربية', ur: 'اردو' })
@@ -37,20 +38,33 @@ export function defaultStatementLanguage(appLanguage) {
   return STATEMENT_LANGUAGES.includes(appLanguage) ? appLanguage : 'en'
 }
 
-// ── Country deduction rules. Mirror of private.driver_charge_country_rule()
-//    in the migration; display only, the server enforces. ───────────────────
-const KSA_NAMES = new Set(['KSA', 'SA', 'SAU', 'SAUDI ARABIA'])
+// ── Country deduction rules. Mirror of private.driver_charge_country_key()
+//    and private.driver_charge_country_rule(); display only, the server enforces.
+const COUNTRY_KEYS = {
+  KSA: ['KSA', 'SA', 'SAU', 'SAUDI', 'SAUDIARABIA', 'KINGDOMOFSAUDIARABIA'],
+  UAE: ['UAE', 'AE', 'ARE', 'UNITEDARABEMIRATES', 'EMIRATES'],
+  EGYPT: ['EGYPT', 'EG', 'EGY', 'ARABREPUBLICOFEGYPT'],
+}
+/** One spelling per country ("Saudi Arabia", "sa", "K.S.A." all become KSA). */
+export function chargeCountryKey(country) {
+  const k = String(country || '').toUpperCase().replace(/[^A-Z]/g, '')
+  if (!k) return null
+  return Object.keys(COUNTRY_KEYS).find(key => COUNTRY_KEYS[key].includes(k)) || k
+}
 export function chargeCountryRule(country) {
-  if (KSA_NAMES.has(String(country || '').trim().toUpperCase())) {
-    return { rule: 'ksa_labour_law', statutory: true, needs_legal_confirmation: false, damage_days: 5, fine_days: 5, wage_days: 30, total_pct: 50, objection_working_days: 15 }
+  if (chargeCountryKey(country) === 'KSA') {
+    return { rule: 'ksa_labour_law', statutory: true, needs_legal_confirmation: false, damage_days: 5, wage_days: 30, total_pct: 50, objection_working_days: 15 }
   }
   return { rule: 'company_setting', statutory: false, needs_legal_confirmation: true }
 }
 
-/** damage (Art 91), fine (Art 70/71) or consent (Art 92). */
+/**
+ * damage (Art 91, may be deducted without consent within limits) or consent
+ * (Art 92, only with the driver's written consent). A government traffic fine
+ * recovered from the driver is an Art 92 deduction, not an Art 70/71 penalty.
+ */
 export function chargeBucket(category) {
-  if (['accident_damage', 'tyre_damage', 'missing_item', 'handover_damage'].includes(category)) return 'damage'
-  return category === 'traffic_fine' ? 'fine' : 'consent'
+  return ['accident_damage', 'tyre_damage', 'missing_item', 'handover_damage'].includes(category) ? 'damage' : 'consent'
 }
 
 /** Physical damage needs at least one photo before the driver is notified. */
@@ -61,8 +75,8 @@ const round2 = n => Math.round(n * 100) / 100
 
 /**
  * The highest instalment one charge may take per month, exactly like the
- * server: KSA damage and fines 5 days' wage (wage / 30 * 5), other KSA
- * deductions half the wage; elsewhere the configured percent.
+ * server: KSA damage 5 days' wage (wage / 30 * 5), other KSA deductions
+ * (with consent) half the wage; elsewhere the configured percent.
  */
 export function scheduleCapFor({ country, category, monthlyWage, capPct }) {
   const wage = Number(monthlyWage)
@@ -71,7 +85,6 @@ export function scheduleCapFor({ country, category, monthlyWage, capPct }) {
   if (!rule.statutory) return capAmountFor(wage, capPct)
   const bucket = chargeBucket(category)
   if (bucket === 'damage') return round2(wage * rule.damage_days / rule.wage_days)
-  if (bucket === 'fine') return round2(wage * rule.fine_days / rule.wage_days)
   return round2(wage * rule.total_pct / 100)
 }
 
@@ -109,7 +122,7 @@ export function scheduleBlockFor(detail, now = new Date()) {
 export function ksaMonthlyLimits(monthlyWage) {
   const wage = Number(monthlyWage)
   if (!Number.isFinite(wage) || wage <= 0) return null
-  return { damage: round2(wage * 5 / 30), fine: round2(wage * 5 / 30), total: round2(wage * 0.5) }
+  return { damage: round2(wage * 5 / 30), total: round2(wage * 0.5) }
 }
 
 /**
@@ -195,26 +208,30 @@ export function buildInstalmentPlan(outstanding, capAmount, firstMonth) {
   return plan
 }
 
-export function validateIssue(values) {
-  if (chargeNeedsPhoto(values.category) && photoEvidence(values.evidence).length === 0) return 'Add at least one photo of the damage. The driver sees it before answering.'
-  if (!CATEGORIES.includes(values.category)) return 'Choose a charge category.'
-  if (values.category === 'traffic_fine' && values.source_type !== 'driver_fine') return 'A traffic fine charge must link the traffic fine record.'
-  if (values.source_type && values.source_type !== 'none' && !values.source_id) return 'Choose the linked record.'
-  if ((values.basis || '').trim().length < 10) return 'Write the basis for the charge (at least 10 characters).'
-  if (!(Number(values.amount) > 0)) return 'Amount must be greater than zero.'
-  if (!/^[A-Z]{3}$/.test(String(values.currency || '').toUpperCase())) return 'Enter a three letter currency code.'
+const VALIDATE = enLocale.validate
+/** A validation message: through the screen's t() when given, else English. */
+const vmsg = (t, key) => (typeof t === 'function' ? t(`driverCharges.validate.${key}`) : VALIDATE[key])
+
+export function validateIssue(values, t) {
+  if (chargeNeedsPhoto(values.category) && photoEvidence(values.evidence).length === 0) return vmsg(t, 'photoRequired')
+  if (!CATEGORIES.includes(values.category)) return vmsg(t, 'category')
+  if (values.category === 'traffic_fine' && values.source_type !== 'driver_fine') return vmsg(t, 'fineSource')
+  if (values.source_type && values.source_type !== 'none' && !values.source_id) return vmsg(t, 'sourceRecord')
+  if ((values.basis || '').trim().length < 10) return vmsg(t, 'basis')
+  if (!(Number(values.amount) > 0)) return vmsg(t, 'amount')
+  if (!/^[A-Z]{3}$/.test(String(values.currency || '').toUpperCase())) return vmsg(t, 'currency')
   const evidence = (values.evidence || []).filter(e => e.ref || e.label)
-  if (evidence.some(e => !e.kind || !String(e.ref || '').trim() || !String(e.label || '').trim())) return 'Each evidence row needs a type, reference and description.'
-  if ((!values.source_type || values.source_type === 'none') && evidence.length === 0) return 'Link a source record or list at least one piece of evidence.'
+  if (evidence.some(e => !e.kind || !String(e.ref || '').trim() || !String(e.label || '').trim())) return vmsg(t, 'evidenceRow')
+  if ((!values.source_type || values.source_type === 'none') && evidence.length === 0) return vmsg(t, 'evidenceOrSource')
   return null
 }
 
-export function validateResponse(values) {
-  if (!['accept', 'dispute'].includes(values.response)) return 'Choose accept or dispute.'
-  if (values.language && !STATEMENT_LANGUAGES.includes(values.language)) return 'Choose English, Arabic or Urdu.'
-  if (values.response === 'dispute' && (values.explanation || '').trim().length < 10) return 'Explain why you dispute the charge.'
-  if (!values.acknowledged) return 'Read and confirm the statement.'
-  if (!values.signature) return 'Sign before submitting.'
+export function validateResponse(values, t) {
+  if (!['accept', 'dispute'].includes(values.response)) return vmsg(t, 'response')
+  if (values.language && !STATEMENT_LANGUAGES.includes(values.language)) return vmsg(t, 'language')
+  if (values.response === 'dispute' && (values.explanation || '').trim().length < 10) return vmsg(t, 'explanation')
+  if (!values.acknowledged) return vmsg(t, 'acknowledge')
+  if (!values.signature) return vmsg(t, 'signature')
   return null
 }
 

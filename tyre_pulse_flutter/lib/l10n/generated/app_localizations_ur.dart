@@ -8992,11 +8992,33 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get driverChargeKsaRule =>
-      'اس چارج پر سعودی لیبر قانون لاگو ہے۔ نقصان یا گمشدگی: ہر مہینے زیادہ سے زیادہ 5 دن کی تنخواہ۔ جرمانے: زیادہ سے زیادہ 5 دن کی تنخواہ۔ تمام کٹوتیاں مل کر: زیادہ سے زیادہ آدھی تنخواہ۔ اعتراض کے لیے آپ کے پاس 15 کام کے دن ہیں۔';
+      'اس چارج پر سعودی لیبر قانون لاگو ہے۔ نقصان یا گمشدگی: ہر مہینے زیادہ سے زیادہ 5 دن کی تنخواہ۔ کوئی اور چارج، ٹریفک جرمانے سمیت: صرف آپ کی تحریری اجازت سے۔ تمام کٹوتیاں ملا کر: زیادہ سے زیادہ آدھی تنخواہ۔ آپ کے پاس اعتراض کے لیے 15 کام کے دن ہیں۔';
 
   @override
   String get driverChargeOtherRule =>
       'اس چارج پر کمپنی کی حد لاگو ہے۔ اس ملک کے لیے اس اصول کی ابھی قانونی تصدیق باقی ہے۔';
+
+  @override
+  String get driverChargePdfFontFailed =>
+      'عربی اور اردو حروف لوڈ نہیں ہو سکے، اس لیے کاغذ نہیں بنا۔ انٹرنیٹ کنکشن دیکھیں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverChargePhotoOpen => 'تصویر بڑی کر کے کھولیں';
+
+  @override
+  String get driverChargePhotoRetry => 'دوبارہ کوشش';
+
+  @override
+  String get driverChargePhotosWait =>
+      'دستخط سے پہلے انتظار کریں جب تک ہر تصویر لوڈ نہ ہو جائے۔';
+
+  @override
+  String get driverChargePhotosBlocked =>
+      'ایک تصویر لوڈ نہیں ہو سکی۔ دستخط سے پہلے آپ کو ہر تصویر دیکھنی ہے۔ دوبارہ کوشش پر ٹیپ کریں۔';
+
+  @override
+  String get driverChargeOtherRuleDriver =>
+      'اس چارج پر کمپنی کی کٹوتی کی حد لاگو ہے۔';
 
   @override
   String driverChargeObjectionUntil(String date) {
@@ -9013,8 +9035,9 @@ class AppLocalizationsUr extends AppLocalizations {
   String get driverChargeLangUrdu => 'اردو';
 
   @override
-  String get driverChargeStatementConsent =>
-      'میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ میں نے یہ چارج دیکھ لیا ہے: اس کی وجہ، رقم، اور اس کے ساتھ دکھائے گئے ثبوت اور تصویریں۔ میں مانتا ہوں کہ یہ چارج مجھے ادا کرنا ہے۔ میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے ہر مہینے کچھ حصہ کر کے کاٹے، جیسا کہ کٹوتی کے پلان میں لکھا ہے۔ یہ اجازت صرف اسی چارج کے لیے ہے۔ میں اس کاغذ پر لکھی مدت کے اندر اب بھی اعتراض کر سکتا ہوں۔';
+  String driverChargeStatementConsent(String amount) {
+    return 'میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ میں نے یہ چارج دیکھ لیا ہے: اس کی وجہ، ثبوت اور تصویریں۔ میں مانتا ہوں کہ اس چارج کے لیے مجھے کل $amount ادا کرنے ہیں۔ میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے ماہانہ قسطوں میں کاٹے۔ کسی بھی مہینے کی قسط قانون کی ماہانہ حد سے زیادہ نہیں ہوگی، اور ہر مہینے کی رقم کاٹنے سے پہلے مجھے دکھائی جائے گی۔ یہ اجازت صرف اسی چارج کے لیے ہے۔ میں اس کاغذ پر لکھی مدت کے اندر اب بھی اعتراض کر سکتا ہوں۔';
+  }
 
   @override
   String get driverChargeStatementDispute =>

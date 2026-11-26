@@ -206,26 +206,46 @@ export async function defaultPhotoToDataUrl(ref) {
 
 const imageFormat = dataUrl => (/^data:image\/png/i.test(dataUrl) ? 'PNG' : 'JPEG')
 
+/** Fit an image of w x h into a box, keeping its shape. */
+export function fitImage(w, h, boxW, boxH) {
+  if (!(w > 0) || !(h > 0)) return { w: boxW, h: boxH, dx: 0, dy: 0 }
+  const scale = Math.min(boxW / w, boxH / h)
+  const fw = w * scale; const fh = h * scale
+  return { w: fw, h: fh, dx: (boxW - fw) / 2, dy: (boxH - fh) / 2 }
+}
+
+export const SCRIPT_UNAVAILABLE_TEXT = 'This browser could not draw the Arabic or Urdu text. Open this PDF from Chrome, Edge or Safari to print it in that language.'
+
 export async function renderDriverChargePdf(detail, {
   generatedAt, save = true, signatureToPng, language = 'en',
   photoToDataUrl = defaultPhotoToDataUrl, scriptTextToPng = browserScriptTextToPng,
+  scriptUnavailableText = SCRIPT_UNAVAILABLE_TEXT,
 } = {}) {
   const model = buildChargeDocument(detail, { generatedAt, language })
   const { jsPDF, autoTable } = await loadPdf()
   const doc = new jsPDF({ unit: spec.page.unit, format: spec.page.size.toLowerCase(), orientation: spec.page.orientation })
   const margin = spec.page.margin
   const width = doc.internal.pageSize.getWidth(); const height = doc.internal.pageSize.getHeight()
-  const ensure = (y, need) => { if (y + need > height - 28) { doc.addPage(); return 18 } return y }
+  const bottom = height - 28
+  // Called before a page break, so a box being drawn can close on this page.
+  let beforeBreak = null
+  const ensure = (y, need) => {
+    if (y + need > bottom) { if (beforeBreak) beforeBreak(); doc.addPage(); return 18 }
+    return y
+  }
+  const canDrawScript = !!scriptTextToPng && !!scriptTextToPng('\u0627', { widthMm: 10, rtl: true })?.dataUrl
   // Writes a paragraph; Arabic-script text becomes a shaped image when the
-  // browser can draw it, otherwise it is printed as text (never dropped).
+  // browser can draw it. If it cannot, a note says so: never print Arabic or
+  // Urdu through helvetica, which turns it into unreadable symbols.
   const paragraph = (text, y, { size = 9, rtl = false } = {}) => {
-    if (hasArabicScript(text) && scriptTextToPng) {
-      const img = scriptTextToPng(text, { widthMm: width - margin * 2, rtl })
+    if (hasArabicScript(text)) {
+      const img = canDrawScript ? scriptTextToPng(text, { widthMm: width - margin * 2, rtl }) : null
       if (img?.dataUrl) {
         y = ensure(y, img.heightMm + 2)
         doc.addImage(img.dataUrl, 'PNG', margin, y, img.widthMm, img.heightMm, undefined, 'FAST')
         return y + img.heightMm + 2
       }
+      text = scriptUnavailableText
     }
     doc.setFont('helvetica', 'normal'); doc.setFontSize(size)
     const lines = doc.splitTextToSize(String(text), width - margin * 2)
@@ -237,13 +257,21 @@ export async function renderDriverChargePdf(detail, {
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
   model.headerLines.forEach((line, i) => doc.text(line, margin, 22 + i * 5))
   let y = 24 + model.headerLines.length * 5
-  // The plain-language box for the driver, in his language.
-  const notice = model.driverNotice
+  // The plain-language box for the driver, in his language. When this browser
+  // cannot draw Arabic or Urdu, the box falls back to English with a note.
+  let notice = model.driverNotice
+  const noticeFallback = notice.dir === 'rtl' && !canDrawScript
+  if (noticeFallback) notice = buildDriverNotice(detail, 'en')
   doc.setDrawColor(21, 128, 61); doc.setLineWidth(0.4)
-  const noticeTop = y
+  // The box is drawn page by page, so it stays closed when the text runs onto the next page.
+  let noticeTop = y
+  const box = toY => doc.rect(margin - 2, noticeTop, width - margin * 2 + 4, toY - noticeTop + 1)
+  beforeBreak = () => { box(bottom); noticeTop = 18 }
   y = paragraph(notice.title, y + 2, { size: 10, rtl: notice.dir === 'rtl' })
+  if (noticeFallback) y = paragraph(scriptUnavailableText, y, { size: 8 })
   for (const line of notice.lines) y = paragraph(`- ${line}`, y, { size: 9, rtl: notice.dir === 'rtl' })
-  if (y > noticeTop) doc.rect(margin - 2, noticeTop, width - margin * 2 + 4, y - noticeTop + 1)
+  beforeBreak = null
+  if (y > noticeTop) box(y)
   y += 4
   for (const section of model.sections) {
     y = ensure(y, 16)
@@ -260,7 +288,13 @@ export async function renderDriverChargePdf(detail, {
         try { data = await photoToDataUrl(photo.ref) } catch { data = null }
         doc.setFont('helvetica', 'normal'); doc.setFontSize(7)
         if (data) {
-          try { doc.addImage(data, imageFormat(data), x, y + 1, cell, cell * 0.75, undefined, 'FAST') } catch { doc.text(section.imageMissing, x, y + 6) }
+          try {
+            // Keep the photo's shape: a tall or wide photo is never stretched.
+            let props = null
+            try { props = doc.getImageProperties(data) } catch { props = null }
+            const fit = fitImage(props?.width, props?.height, cell, cell * 0.75)
+            doc.addImage(data, imageFormat(data), x + fit.dx, y + 1 + fit.dy, fit.w, fit.h, undefined, 'FAST')
+          } catch { doc.text(section.imageMissing, x, y + 6) }
         } else doc.text(section.imageMissing, x, y + 6)
         doc.text(doc.splitTextToSize(photo.caption, cell).slice(0, 2), x, y + cell * 0.75 + 4)
         col += 1
@@ -296,7 +330,7 @@ export async function renderDriverChargePdf(detail, {
   }
   const pages = doc.getNumberOfPages()
   for (let page = 1; page <= pages; page += 1) {
-    doc.setPage(page); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5)
+    doc.setPage(page); doc.setFont('helvetica', 'normal'); doc.setFontSize(7)
     const footer = doc.splitTextToSize(model.footerLines.join(' '), width - margin * 2)
     doc.text(footer, margin, height - 22)
     doc.text(model.pageNumber.replace('{page}', page).replace('{pages}', pages), width - margin, height - 6, { align: 'right' })

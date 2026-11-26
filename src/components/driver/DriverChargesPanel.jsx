@@ -58,8 +58,10 @@ export function ChargePhotos({ evidence }) {
   </div>
 }
 
-function ruleLine(t, country) {
-  return chargeCountryRule(country).statutory ? t('driverCharges.consent.ksaRule') : t('driverCharges.consent.otherRule')
+/** The country rule in plain words. "Needs legal confirmation" is a note for staff, never shown to the driver. */
+function ruleLine(t, country, isDriver = false) {
+  if (chargeCountryRule(country).statutory) return t('driverCharges.consent.ksaRule')
+  return isDriver ? t('driverCharges.consent.otherRuleDriver') : t('driverCharges.consent.otherRule')
 }
 
 /** Language picker for the statement, plus the exact server text in that language. */
@@ -67,8 +69,8 @@ function StatementBlock({ detail, version, language, onLanguage }) {
   const { t } = useLanguage()
   const text = statementText(detail, version, language)
   return <div className="space-y-2">
-    <Field label={t('driverCharges.consent.languageLabel')}><select aria-label="Statement language" className="input w-full" value={language} onChange={e => onLanguage(e.target.value)}>{STATEMENT_LANGUAGES.map(l => <option key={l} value={l}>{STATEMENT_LANGUAGE_NAMES[l]}</option>)}</select></Field>
-    <div className="rounded border border-[var(--input-border)] p-3 text-base leading-relaxed" dir={isRtlLanguage(language) ? 'rtl' : 'ltr'} lang={language}>{text || 'Statement unavailable. Refresh before signing.'}</div>
+    <Field label={t('driverCharges.consent.languageLabel')}><select aria-label={t('driverCharges.consent.languageAria')} className="input w-full" value={language} onChange={e => onLanguage(e.target.value)}>{STATEMENT_LANGUAGES.map(l => <option key={l} value={l}>{STATEMENT_LANGUAGE_NAMES[l]}</option>)}</select></Field>
+    <div className="rounded border border-[var(--input-border)] p-3 text-base leading-relaxed" dir={isRtlLanguage(language) ? 'rtl' : 'ltr'} lang={language}>{text || t('driverCharges.consent.statementUnavailable')}</div>
     <p className="text-xs text-[var(--text-muted)]">{t('driverCharges.consent.readAloud')}</p>
   </div>
 }
@@ -133,15 +135,15 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
     let payload = { driver_id: driverId, ...(charge ? { charge_id: charge.id, version: charge.version } : {}) }
     let message = null
     if (action === 'charge_issue') {
-      message = validateIssue(v)
+      message = validateIssue(v, t)
       const evidence = (v.evidence || []).filter(x => x.ref || x.label)
       if (!message && sourceNamesNoDriver && !v.link_unverified) message = 'This record does not name a driver. Confirm the link to continue.'
       payload = { ...payload, category: v.category, source_type: v.source_type, source_id: v.source_type === 'none' ? null : v.source_id, vehicle_id: v.vehicle_id || null,
         ...(sourceNamesNoDriver && v.link_unverified ? { link_unverified: true } : {}),
         incident_at: v.incident_at ? new Date(v.incident_at).toISOString() : null, basis: v.basis, amount: Number(v.amount), currency: String(v.currency || '').toUpperCase(), evidence }
     } else if (action === 'charge_respond') {
-      message = validateResponse(v)
-      if (!message && !statementText(detail, statementVersion, v.language)) message = 'Statement unavailable. Refresh before signing.'
+      message = validateResponse(v, t)
+      if (!message && !statementText(detail, statementVersion, v.language)) message = t('driverCharges.consent.statementUnavailable')
       payload = { ...payload, response: v.response, explanation: v.explanation, statement_version: statementVersion, statement_language: v.language, acknowledged: !!v.acknowledged, signature: v.signature }
     } else if (action === 'charge_record_refusal') {
       if (!v.witness_user_id) message = 'Choose the witness. They confirm the refusal from their own account.'
@@ -219,7 +221,7 @@ function ChargeActionForm({ action, driverId, driverCountry, detail, onClose, on
       {v.response === 'dispute' && <Field label="Why you dispute it"><textarea aria-label="Why you dispute it" className="input w-full" rows={4} value={v.explanation} onChange={e => set('explanation', e.target.value)} /></Field>}
       <p className="text-sm font-semibold">{t('driverCharges.consent.photosSeen')}</p>
       <ChargePhotos evidence={detail?.evidence} />
-      <p className="text-sm">{ruleLine(t, chargeCountry)}{detail?.settings?.objection_last_day ? ` ${t('driverCharges.consent.objectionUntil', { date: detail.settings.objection_last_day })}` : ''}</p>
+      <p className="text-sm">{ruleLine(t, chargeCountry, true)}{detail?.settings?.objection_last_day ? ` ${t('driverCharges.consent.objectionUntil', { date: detail.settings.objection_last_day })}` : ''}</p>
       <StatementBlock detail={detail} version={statementVersion} language={v.language} onLanguage={l => { set('language', l); set('acknowledged', false) }} />
       <label className="flex gap-3"><input type="checkbox" checked={!!v.acknowledged} disabled={!statementText(detail, statementVersion, v.language)} onChange={e => set('acknowledged', e.target.checked)} /><span>{t('driverCharges.consent.acknowledge')}</span></label>
       <button type="button" className="btn-secondary" onClick={() => setPad('signature')}>Draw signature</button>{v.signature && <img className="max-h-32 bg-white" src={signatureImage(v.signature)} alt="Your signature" />}
@@ -293,7 +295,7 @@ function ChargeDetail({ chargeId, driverId, driverCountry, onClose, onChanged })
     setExporting(true); setError('')
     try {
       const [{ renderDriverChargePdf }, { signaturePng }] = await Promise.all([import('../../lib/driverChargePdf'), import('../../lib/driverFineReports')])
-      await renderDriverChargePdf(detail, { signatureToPng: signaturePng, language })
+      await renderDriverChargePdf(detail, { signatureToPng: signaturePng, language, scriptUnavailableText: t('driverCharges.pdf.scriptUnavailable') })
     } catch (e) { setError(toUserMessage(e, 'The charge notice PDF could not be generated.')) } finally { setExporting(false) }
   }
   const c = detail?.charge
@@ -310,7 +312,7 @@ function ChargeDetail({ chargeId, driverId, driverCountry, onClose, onChanged })
       </div>
       <div><h4 className="font-semibold">Written basis</h4><p className="whitespace-pre-wrap">{c.basis}</p></div>
       <ChargePhotos evidence={detail.evidence} />
-      <p className="text-xs text-[var(--text-muted)]">{ruleLine(t, c.country)}{detail.settings?.objection_last_day ? ` ${t('driverCharges.consent.objectionUntil', { date: detail.settings.objection_last_day })}` : ''}</p>
+      <p className="text-xs text-[var(--text-muted)]">{ruleLine(t, c.country, detail.access === 'driver')}{detail.settings?.objection_last_day ? ` ${t('driverCharges.consent.objectionUntil', { date: detail.settings.objection_last_day })}` : ''}</p>
       {Number(c.deducted_amount) > 0 && !detail.appeal && <p className="text-xs text-[var(--text-muted)]">Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.</p>}
       {c.refusal_witness_id && c.status === 'notified' && <p className="text-xs text-[var(--text-muted)]">A refusal was recorded and is waiting for the named witness to confirm it.</p>}
       {c.status === 'finance_approved' && scheduleBlockFor(detail) && <p role="status" className="rounded border border-[var(--input-border)] p-2 text-sm"><strong>Deduction cannot be scheduled yet:</strong> {scheduleBlockFor(detail).message}</p>}

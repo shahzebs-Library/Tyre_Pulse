@@ -30,9 +30,12 @@
 -- KSA (2026-11-26, owner): charges on drivers in Saudi Arabia follow the Saudi
 -- Labour Law (Royal Decree M/51): Art 91 damage or loss caused by the worker
 -- may be deducted without written consent, at most 5 days' wage a month, and the
--- worker may object within 15 working days; Art 70/71 fines at most 5 days'
--- wage for one violation and 5 days' wage a month; Art 92 every other deduction
--- needs written consent; Art 93 all deductions together at most half the wage.
+-- worker may object within 15 working days; Art 92 every other deduction,
+-- including a government traffic fine recovered from the driver (a debt, not an
+-- employer penalty under Art 70/71), needs written consent; Art 93 all
+-- deductions together at most half the wage. NOTE: the 50% check only counts
+-- deductions recorded through this system; payroll deductions made elsewhere
+-- (loans, housing, GOSI) are not known here and finance must allow for them.
 -- UAE and Egypt keep the configurable cap and window until legally confirmed.
 -- This is an implementation of the owner's reading, not legal advice.
 -- Damage charges need at least one photo before the driver is notified; the
@@ -95,6 +98,9 @@ CREATE TABLE public.driver_charges (
   refusal_witness_id uuid REFERENCES public.profiles(id),
   refusal_recorded_by uuid REFERENCES public.profiles(id),
   refusal_recorded_at timestamptz,
+  -- When the driver's objection window closes. Stamped once at finance
+  -- approval (country rule + holiday calendar of that moment), never recomputed.
+  objection_deadline timestamptz,
   reversal_code text CHECK (reversal_code IN ('wrong_driver','duplicate','wrong_amount','wrong_vehicle','misused','other')),
   close_reason text,
   supersedes_charge_id uuid REFERENCES public.driver_charges(id) DEFERRABLE INITIALLY DEFERRED,
@@ -285,6 +291,9 @@ BEGIN
   IF OLD.status IN ('deducted','waived','cancelled_wrongly_issued') AND NEW.status IS DISTINCT FROM OLD.status THEN
     RAISE EXCEPTION 'This charge is closed.' USING ERRCODE='42501';
   END IF;
+  IF OLD.objection_deadline IS NOT NULL AND NEW.objection_deadline IS NOT NULL AND NEW.objection_deadline IS DISTINCT FROM OLD.objection_deadline THEN
+    RAISE EXCEPTION 'The objection deadline was fixed at finance approval and cannot be moved.' USING ERRCODE='42501';
+  END IF;
   RETURN NEW;
 END $$;
 REVOKE ALL ON FUNCTION private.driver_charge_guard() FROM PUBLIC,anon,authenticated;
@@ -371,8 +380,10 @@ BEGIN
   PERFORM set_config('request.jwt.claim.sub', p_user::text, true);
   PERFORM set_config('request.jwt.claims', jsonb_build_object('sub', p_user, 'role', 'authenticated')::text, true);
   r := private.driver_workspace_access(p_driver);
-  PERFORM set_config('request.jwt.claim.sub', coalesce(old_sub, ''), true);
-  PERFORM set_config('request.jwt.claims', coalesce(old_claims, ''), true);
+  -- Put back exactly what was there. set_config cannot store SQL NULL (it stores ''),
+  -- and auth.uid()/auth.jwt() read '' as no caller, so an unset value stays unset.
+  PERFORM set_config('request.jwt.claim.sub', old_sub, true);
+  PERFORM set_config('request.jwt.claims', old_claims, true);
   RETURN coalesce(r, 'none');
 EXCEPTION WHEN others THEN RETURN 'none';
 END $$;
@@ -395,32 +406,47 @@ REVOKE ALL ON FUNCTION private.driver_charge_country_currency(text) FROM PUBLIC,
 --   Art 91  damage or loss caused by the worker's fault: may be deducted without
 --           written consent, at most 5 days' wage per month; the worker may
 --           object within 15 working days.
---   Art 70/71 a fine for one violation at most 5 days' wage; fines deducted in
---           one month at most 5 days' wage.
---   Art 92  any other deduction needs the worker's written consent.
---   Art 93  all deductions together at most half the wage due.
+--   Art 92  any other deduction needs the worker's written consent. A traffic
+--           fine issued by the authorities and recovered from the driver is
+--           such a deduction (it is not an Art 70/71 employer penalty).
+--   Art 93  all deductions together at most half the wage due (only the
+--           deductions recorded through this system are counted).
 -- A day's wage = monthly wage / 30. Working week Sunday to Thursday (Friday and
 -- Saturday off), Asia/Riyadh. Public holidays are not excluded (not modelled).
 -- Every other country: the configurable cap and appeal window, marked as
 -- needing legal confirmation. Not legal advice.
 -- Mirrors: src/lib/driverCharges.js chargeCountryRule() and
 -- tyre_pulse_flutter/.../driver_charge.dart driverChargeCountryRule().
+-- One spelling per country, used by the rules AND the holiday calendar, so a
+-- mistyped or long-form country never falls through to the wrong rule set.
+-- Mirrors: chargeCountryKey() in src/lib/driverCharges.js, driverChargeCountryKey() in Dart.
+CREATE FUNCTION private.driver_charge_country_key(p_country text)
+RETURNS text LANGUAGE sql IMMUTABLE SET search_path='' AS $$
+  SELECT CASE
+    WHEN k IN ('KSA','SA','SAU','SAUDI','SAUDIARABIA','KINGDOMOFSAUDIARABIA') THEN 'KSA'
+    WHEN k IN ('UAE','AE','ARE','UNITEDARABEMIRATES','EMIRATES') THEN 'UAE'
+    WHEN k IN ('EGYPT','EG','EGY','ARABREPUBLICOFEGYPT') THEN 'EGYPT'
+    ELSE nullif(k,'') END
+  FROM (SELECT regexp_replace(upper(coalesce(p_country,'')), '[^A-Z]', '', 'g') AS k) x
+$$;
+REVOKE ALL ON FUNCTION private.driver_charge_country_key(text) FROM PUBLIC,anon,authenticated;
+
 CREATE FUNCTION private.driver_charge_country_rule(p_country text)
 RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path='' AS $$
-  SELECT CASE WHEN upper(btrim(coalesce(p_country,''))) IN ('KSA','SA','SAU','SAUDI ARABIA')
+  SELECT CASE WHEN private.driver_charge_country_key(p_country) = 'KSA'
     THEN jsonb_build_object('rule','ksa_labour_law','statutory',true,'needs_legal_confirmation',false,
-      'damage_days',5,'fine_days',5,'wage_days',30,'total_pct',50,'objection_working_days',15,
+      'damage_days',5,'wage_days',30,'total_pct',50,'objection_working_days',15,
       'weekend_isodow',jsonb_build_array(5,6),'timezone','Asia/Riyadh','without_consent',jsonb_build_array('damage'))
     ELSE jsonb_build_object('rule','company_setting','statutory',false,'needs_legal_confirmation',true) END
 $$;
 REVOKE ALL ON FUNCTION private.driver_charge_country_rule(text) FROM PUBLIC,anon,authenticated;
 
--- Which deduction bucket a category falls in: damage or loss (Art 91), fine
--- (Art 70/71) or a deduction that always needs consent (Art 92).
+-- Which deduction bucket a category falls in: damage or loss (Art 91), or a
+-- deduction that always needs written consent (Art 92: traffic fine, other).
 CREATE FUNCTION private.driver_charge_bucket(p_category text)
 RETURNS text LANGUAGE sql IMMUTABLE SET search_path='' AS $$
   SELECT CASE WHEN p_category IN ('accident_damage','tyre_damage','missing_item','handover_damage') THEN 'damage'
-    WHEN p_category = 'traffic_fine' THEN 'fine' ELSE 'consent' END
+    ELSE 'consent' END
 $$;
 REVOKE ALL ON FUNCTION private.driver_charge_bucket(text) FROM PUBLIC,anon,authenticated;
 
@@ -443,7 +469,44 @@ CREATE TABLE public.driver_charge_holidays (
   created_by uuid REFERENCES public.profiles(id) DEFAULT auth.uid(),
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX driver_charge_holidays_day ON public.driver_charge_holidays(organisation_id, upper(btrim(country)), holiday);
+CREATE UNIQUE INDEX driver_charge_holidays_day ON public.driver_charge_holidays(organisation_id, country, holiday);
+-- Every change is kept (append-only), and a day in the past can no longer be
+-- added, changed or removed: deadlines are stamped at finance approval, and the
+-- calendar that produced them must stay as it was.
+CREATE TABLE public.driver_charge_holiday_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organisation_id uuid NOT NULL,
+  holiday_id uuid NOT NULL,
+  action text NOT NULL CHECK (action IN ('insert','update','delete')),
+  before jsonb,
+  after jsonb,
+  actor_id uuid,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.driver_charge_holiday_events ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.driver_charge_holiday_events FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.driver_charge_holiday_events TO authenticated;
+CREATE POLICY driver_charge_holiday_events_read ON public.driver_charge_holiday_events FOR SELECT TO authenticated
+  USING (organisation_id = public.app_current_org() AND coalesce(public.app_is_active(), false));
+CREATE FUNCTION private.driver_charge_holiday_guard()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE today date := (now() AT TIME ZONE 'Asia/Riyadh')::date;
+BEGIN
+  IF TG_OP IN ('UPDATE','DELETE') AND OLD.holiday < today THEN
+    RAISE EXCEPTION 'A holiday in the past cannot be changed or removed' USING ERRCODE='42501';
+  END IF;
+  IF TG_OP IN ('INSERT','UPDATE') THEN
+    NEW.country := coalesce(private.driver_charge_country_key(NEW.country), NEW.country);
+    IF NEW.holiday < today THEN RAISE EXCEPTION 'A holiday in the past cannot be added' USING ERRCODE='22023'; END IF;
+  END IF;
+  INSERT INTO public.driver_charge_holiday_events(organisation_id, holiday_id, action, before, after, actor_id)
+    VALUES (coalesce(NEW.organisation_id, OLD.organisation_id), coalesce(NEW.id, OLD.id), lower(TG_OP),
+      CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END, CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END, auth.uid());
+  RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END $$;
+REVOKE ALL ON FUNCTION private.driver_charge_holiday_guard() FROM PUBLIC,anon,authenticated;
+CREATE TRIGGER driver_charge_holidays_guard BEFORE INSERT OR UPDATE OR DELETE ON public.driver_charge_holidays
+  FOR EACH ROW EXECUTE FUNCTION private.driver_charge_holiday_guard();
 ALTER TABLE public.driver_charge_holidays ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.driver_charge_holidays FROM PUBLIC, anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.driver_charge_holidays TO authenticated;
@@ -466,7 +529,7 @@ BEGIN
     d := d + 1; guard := guard + 1;
     IF extract(isodow FROM d) NOT IN (5,6) AND NOT EXISTS(
          SELECT 1 FROM public.driver_charge_holidays h WHERE h.organisation_id = p_org
-           AND upper(btrim(h.country)) = upper(btrim(coalesce(p_country,''))) AND h.holiday = d) THEN
+           AND h.country = private.driver_charge_country_key(p_country) AND h.holiday = d) THEN
       n := n + 1;
     END IF;
   END LOOP;
@@ -474,22 +537,28 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION private.driver_charge_working_deadline(timestamptz,integer,text,uuid) FROM PUBLIC,anon,authenticated;
 
--- When the driver's objection window closes. Counted from the finance approval
--- (the driver is notified then). NULL until finance has approved.
-CREATE FUNCTION private.driver_charge_objection_deadline(p_charge uuid)
+-- When the driver's objection window would close if finance approved at
+-- p_approved. Used ONCE, at finance approval, to stamp
+-- driver_charges.objection_deadline; reads use the stamped value.
+CREATE FUNCTION private.driver_charge_compute_deadline(p_charge uuid, p_approved timestamptz)
 RETURNS timestamptz LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
-DECLARE c_country text; c_org uuid; approved timestamptz; r jsonb;
+DECLARE c_country text; c_org uuid; r jsonb;
 BEGIN
   SELECT country, organisation_id INTO c_country, c_org FROM public.driver_charges WHERE id = p_charge;
-  IF NOT FOUND THEN RETURN NULL; END IF;
-  SELECT max(created_at) INTO approved FROM public.driver_charge_decisions WHERE charge_id = p_charge AND stage = 'finance' AND decision = 'approve';
-  IF approved IS NULL THEN RETURN NULL; END IF;
+  IF NOT FOUND OR p_approved IS NULL THEN RETURN NULL; END IF;
   r := private.driver_charge_country_rule(c_country);
   IF coalesce((r->>'statutory')::boolean, false) THEN
-    RETURN private.driver_charge_working_deadline(approved, (r->>'objection_working_days')::integer, c_country, c_org);
+    RETURN private.driver_charge_working_deadline(p_approved, (r->>'objection_working_days')::integer, c_country, c_org);
   END IF;
-  RETURN approved + make_interval(days => private.driver_charge_setting('driver_charge_appeal_window_days', 7)::integer);
+  RETURN p_approved + make_interval(days => private.driver_charge_setting('driver_charge_appeal_window_days', 7)::integer);
 END $$;
+REVOKE ALL ON FUNCTION private.driver_charge_compute_deadline(uuid,timestamptz) FROM PUBLIC,anon,authenticated;
+
+-- The stamped deadline (NULL until finance has approved).
+CREATE FUNCTION private.driver_charge_objection_deadline(p_charge uuid)
+RETURNS timestamptz LANGUAGE sql STABLE SECURITY DEFINER SET search_path='' AS $$
+  SELECT objection_deadline FROM public.driver_charges WHERE id = p_charge
+$$;
 REVOKE ALL ON FUNCTION private.driver_charge_objection_deadline(uuid) FROM PUBLIC,anon,authenticated;
 
 -- Why a deduction cannot be scheduled yet for a charge the driver did not
@@ -543,17 +612,47 @@ RETURNS boolean LANGUAGE sql IMMUTABLE SET search_path='' AS $$
 $$;
 REVOKE ALL ON FUNCTION private.driver_charge_valid_evidence(text,text,text) FROM PUBLIC,anon,authenticated;
 
+-- A charge photo (tyre-photos/modules/driver-charge/...) may be attached only by
+-- the person who uploaded it, and only to one charge (a reissue may carry the
+-- photos of the charge it replaces). This stops one charge reading another
+-- charge's photos by naming their path. Raises; returns nothing.
+CREATE FUNCTION private.driver_charge_claim_photo(p_charge uuid, p_ref text, p_actor uuid, p_supersedes uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE r text := btrim(coalesce(p_ref,'')); obj text;
+BEGIN
+  IF r NOT LIKE 'tp-storage://tyre-photos/modules/driver-charge/%' THEN RETURN; END IF;
+  obj := substr(r, length('tp-storage://tyre-photos/') + 1);
+  IF EXISTS(SELECT 1 FROM public.driver_charge_evidence e WHERE e.ref = r AND e.charge_id <> p_charge
+      AND e.charge_id IS DISTINCT FROM p_supersedes) THEN
+    RAISE EXCEPTION 'This photo is already attached to another charge. Upload it again for this charge.' USING ERRCODE='22023';
+  END IF;
+  IF p_supersedes IS NOT NULL AND EXISTS(SELECT 1 FROM public.driver_charge_evidence e WHERE e.ref = r AND e.charge_id = p_supersedes) THEN RETURN; END IF;
+  IF NOT EXISTS(SELECT 1 FROM storage.objects o WHERE o.bucket_id = 'tyre-photos' AND o.name = obj AND o.owner_id = p_actor::text) THEN
+    RAISE EXCEPTION 'Attach only photos you uploaded for this charge.' USING ERRCODE='42501';
+  END IF;
+END $$;
+REVOKE ALL ON FUNCTION private.driver_charge_claim_photo(uuid,text,uuid,uuid) FROM PUBLIC,anon,authenticated;
+
 -- The exact words a signer agreed to, in English, Arabic or Urdu. Stored
 -- verbatim with every signature. Single source of the wording:
 -- docs/document-specs/driver-charge-statements.json (a test checks this text,
 -- the web locales and the Flutter ARB files are identical). Plain words for
 -- drivers who read little. The Arabic and Urdu need owner and legal approval.
+-- deduction-consent-v3 carries {amount}: the server fills it with the charge
+-- total (driver_charge_amount_text) before showing or storing the words.
+CREATE FUNCTION private.driver_charge_amount_text(p_amount numeric, p_currency text)
+RETURNS text LANGUAGE sql IMMUTABLE SET search_path='' AS $$
+  SELECT CASE WHEN p_amount IS NULL THEN NULL
+    ELSE btrim(to_char(p_amount, 'FM999,999,999,990.00')) || ' ' || coalesce(nullif(btrim(p_currency),''), '') END
+$$;
+REVOKE ALL ON FUNCTION private.driver_charge_amount_text(numeric,text) FROM PUBLIC,anon,authenticated;
+
 CREATE FUNCTION private.driver_charge_statement(p_version text, p_language text DEFAULT 'en')
 RETURNS text LANGUAGE sql IMMUTABLE SET search_path='' AS $$
   SELECT CASE p_version || ':' || coalesce(nullif(p_language,''),'en')
-    WHEN 'deduction-consent-v2:en' THEN 'I am the driver named on this paper. I have seen this charge: the reason, the amount, and the evidence and photos shown with it. I agree that I must pay this charge. I agree that the company may take this amount from my salary, a part each month, as shown on the deduction plan. This agreement is only for this charge. I can still object within the time written on this paper.'
-    WHEN 'deduction-consent-v2:ar' THEN 'أنا السائق المذكور اسمه في هذه الورقة. اطلعت على هذه المطالبة: السبب والمبلغ والأدلة والصور المرفقة بها. أوافق على أنني ملزم بدفع هذه المطالبة. وأوافق على أن تخصم الشركة هذا المبلغ من راتبي، جزءا كل شهر، كما هو موضح في خطة الخصم. هذه الموافقة تخص هذه المطالبة فقط. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.'
-    WHEN 'deduction-consent-v2:ur' THEN 'میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ میں نے یہ چارج دیکھ لیا ہے: اس کی وجہ، رقم، اور اس کے ساتھ دکھائے گئے ثبوت اور تصویریں۔ میں مانتا ہوں کہ یہ چارج مجھے ادا کرنا ہے۔ میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے ہر مہینے کچھ حصہ کر کے کاٹے، جیسا کہ کٹوتی کے پلان میں لکھا ہے۔ یہ اجازت صرف اسی چارج کے لیے ہے۔ میں اس کاغذ پر لکھی مدت کے اندر اب بھی اعتراض کر سکتا ہوں۔'
+    WHEN 'deduction-consent-v3:en' THEN 'I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay {amount} in total for this charge. I agree that the company may take this amount from my salary in monthly parts. The amount taken in any one month will never be more than the legal monthly limit, and I will be shown the amount for each month before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.'
+    WHEN 'deduction-consent-v3:ar' THEN 'أنا السائق المذكور اسمه في هذه الورقة. اطلعت على هذه المطالبة: السبب والأدلة والصور. أوافق على أنني ملزم بدفع مبلغ {amount} إجمالا عن هذه المطالبة. وأوافق على أن تخصم الشركة هذا المبلغ من راتبي على أجزاء شهرية. لن يزيد جزء أي شهر عن الحد الشهري الذي يسمح به النظام، وسيعرض علي مبلغ كل شهر قبل خصمه. هذه الموافقة تخص هذه المطالبة فقط. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.'
+    WHEN 'deduction-consent-v3:ur' THEN 'میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ میں نے یہ چارج دیکھ لیا ہے: اس کی وجہ، ثبوت اور تصویریں۔ میں مانتا ہوں کہ اس چارج کے لیے مجھے کل {amount} ادا کرنے ہیں۔ میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے ماہانہ قسطوں میں کاٹے۔ کسی بھی مہینے کی قسط قانون کی ماہانہ حد سے زیادہ نہیں ہوگی، اور ہر مہینے کی رقم کاٹنے سے پہلے مجھے دکھائی جائے گی۔ یہ اجازت صرف اسی چارج کے لیے ہے۔ میں اس کاغذ پر لکھی مدت کے اندر اب بھی اعتراض کر سکتا ہوں۔'
     WHEN 'receipt-dispute-v2:en' THEN 'I am the driver named on this paper. I have received this charge and I have seen the reason, the evidence and the photos. I do not agree with this charge, for the reasons I wrote. My signature only shows that I received this paper. It does not mean that I agree. I can object within the time written on this paper.'
     WHEN 'receipt-dispute-v2:ar' THEN 'أنا السائق المذكور اسمه في هذه الورقة. استلمت هذه المطالبة واطلعت على السبب والأدلة والصور. لا أوافق على هذه المطالبة للأسباب التي كتبتها. توقيعي يثبت فقط أنني استلمت هذه الورقة، ولا يعني أنني موافق. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.'
     WHEN 'receipt-dispute-v2:ur' THEN 'میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ مجھے یہ چارج مل گیا ہے اور میں نے اس کی وجہ، ثبوت اور تصویریں دیکھ لی ہیں۔ میں ان وجوہات کی وجہ سے جو میں نے لکھی ہیں، اس چارج سے متفق نہیں ہوں۔ میرے دستخط صرف یہ بتاتے ہیں کہ مجھے یہ کاغذ مل گیا ہے۔ اس کا مطلب یہ نہیں کہ میں متفق ہوں۔ میں اس کاغذ پر لکھی مدت کے اندر اعتراض کر سکتا ہوں۔'
@@ -566,13 +665,15 @@ REVOKE ALL ON FUNCTION private.driver_charge_statement(text,text) FROM PUBLIC,an
 GRANT EXECUTE ON FUNCTION private.driver_charge_statement(text,text) TO authenticated;
 
 -- Every statement version in every language, for the detail payload.
-CREATE FUNCTION private.driver_charge_statements()
+CREATE FUNCTION private.driver_charge_statements(p_amount_text text DEFAULT NULL)
 RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path='' AS $$
-  SELECT jsonb_object_agg(v, jsonb_build_object('en', private.driver_charge_statement(v,'en'),
-    'ar', private.driver_charge_statement(v,'ar'), 'ur', private.driver_charge_statement(v,'ur')))
-  FROM unnest(ARRAY['deduction-consent-v2','receipt-dispute-v2','refusal-witness-v2']) v
+  SELECT jsonb_object_agg(v, jsonb_build_object(
+    'en', replace(private.driver_charge_statement(v,'en'), '{amount}', coalesce(p_amount_text,'{amount}')),
+    'ar', replace(private.driver_charge_statement(v,'ar'), '{amount}', coalesce(p_amount_text,'{amount}')),
+    'ur', replace(private.driver_charge_statement(v,'ur'), '{amount}', coalesce(p_amount_text,'{amount}'))))
+  FROM unnest(ARRAY['deduction-consent-v3','receipt-dispute-v2','refusal-witness-v2']) v
 $$;
-REVOKE ALL ON FUNCTION private.driver_charge_statements() FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION private.driver_charge_statements(text) FROM PUBLIC,anon,authenticated;
 
 -- A signature must carry real content: a PNG of at least about 1 KB, or an
 -- SVG with at least 10 drawn points. An empty or near-empty pad is refused.
@@ -693,6 +794,7 @@ BEGIN
     IF NOT private.driver_charge_valid_evidence(item->>'kind', item->>'ref', item->>'label') THEN
       RAISE EXCEPTION 'Each evidence item needs a type, reference and label. A photo must be an uploaded photo.' USING ERRCODE='22023';
     END IF;
+    PERFORM private.driver_charge_claim_photo(c.id, item->>'ref', p_actor, p_supersedes);
     INSERT INTO public.driver_charge_evidence(charge_id, driver_id, organisation_id, kind, ref, label, added_by)
       VALUES (c.id, d.id, p_org, item->>'kind', btrim(item->>'ref'), btrim(item->>'label'), p_actor);
   END LOOP;
@@ -744,7 +846,7 @@ DECLARE
   is_staff boolean; is_finance boolean; is_manager boolean; choice text; target_driver uuid; v_reason text := btrim(coalesce(p_payload->>'reason',''));
   stmt_version text; stmt text; cap_pct numeric; cap_amount numeric; wage numeric; total numeric := 0; item jsonb; seq integer := 0; last_month date;
   appeal_days numeric; approved_at timestamptz; approved_at_cap numeric; reissue jsonb; notify_driver boolean := false; signer text;
-  lang text; block jsonb; crule jsonb; statutory boolean := false; bucket text; deadline timestamptz; breach text; damage_cap numeric; fine_cap numeric; total_cap numeric;
+  lang text; block jsonb; crule jsonb; statutory boolean := false; bucket text; deadline timestamptz; breach text; damage_cap numeric; total_cap numeric;
 BEGIN
   IF actor IS NULL OR org IS NULL OR NOT coalesce(public.app_is_active(),false) THEN RAISE EXCEPTION 'Access denied' USING ERRCODE='42501'; END IF;
   IF p_request_id IS NULL OR jsonb_typeof(p_payload) IS DISTINCT FROM 'object' OR octet_length(p_payload::text) > 600000 THEN RAISE EXCEPTION 'Invalid request' USING ERRCODE='22023'; END IF;
@@ -797,6 +899,7 @@ BEGIN
   WHEN 'charge_attach_evidence' THEN
     IF NOT (is_manager OR (is_staff AND c.issued_by = actor)) OR c.status <> 'issued' THEN RAISE EXCEPTION 'Evidence can be added only before the driver is notified' USING ERRCODE='42501'; END IF;
     IF NOT private.driver_charge_valid_evidence(p_payload->>'kind', p_payload->>'ref', p_payload->>'label') THEN RAISE EXCEPTION 'Evidence needs a type, reference and label. A photo must be an uploaded photo.' USING ERRCODE='22023'; END IF;
+    PERFORM private.driver_charge_claim_photo(c.id, p_payload->>'ref', actor, c.supersedes_charge_id);
     INSERT INTO public.driver_charge_evidence(charge_id, driver_id, organisation_id, kind, ref, label, added_by)
       VALUES (c.id, d.id, org, p_payload->>'kind', btrim(p_payload->>'ref'), btrim(p_payload->>'label'), actor);
     UPDATE public.driver_charges SET version = version + 1, updated_at = now() WHERE id = c.id;
@@ -816,13 +919,13 @@ BEGIN
     IF c.status <> 'notified' THEN RAISE EXCEPTION 'This charge is not waiting for your response' USING ERRCODE='PT409'; END IF;
     choice := coalesce(p_payload->>'response','');
     IF choice NOT IN ('accept','dispute') THEN RAISE EXCEPTION 'Choose accept or dispute' USING ERRCODE='22023'; END IF;
-    stmt_version := CASE choice WHEN 'accept' THEN 'deduction-consent-v2' ELSE 'receipt-dispute-v2' END;
+    stmt_version := CASE choice WHEN 'accept' THEN 'deduction-consent-v3' ELSE 'receipt-dispute-v2' END;
     IF p_payload->>'statement_version' IS DISTINCT FROM stmt_version OR (p_payload->>'acknowledged')::boolean IS DISTINCT FROM true THEN RAISE EXCEPTION 'Read and confirm the statement before signing' USING ERRCODE='22023'; END IF;
     lang := coalesce(nullif(p_payload->>'statement_language',''),'en');
     IF lang NOT IN ('en','ar','ur') THEN RAISE EXCEPTION 'Choose the statement language: English, Arabic or Urdu' USING ERRCODE='22023'; END IF;
     IF choice = 'dispute' AND length(btrim(coalesce(p_payload->>'explanation',''))) NOT BETWEEN 10 AND 4000 THEN RAISE EXCEPTION 'Explain why you dispute the charge' USING ERRCODE='22023'; END IF;
     IF NOT private.driver_charge_valid_signature(p_payload->>'signature') THEN RAISE EXCEPTION 'Valid signature required' USING ERRCODE='22023'; END IF;
-    stmt := private.driver_charge_statement(stmt_version, lang);
+    stmt := replace(private.driver_charge_statement(stmt_version, lang), '{amount}', private.driver_charge_amount_text(c.amount, c.currency));
     SELECT full_name INTO signer FROM public.profiles WHERE id = actor;
     INSERT INTO public.driver_charge_signatures(charge_id, driver_id, organisation_id, kind, signer_id, signer_name, statement_version, statement_language, statement_text, signature, charge_version, charge_snapshot, recorded_by)
       VALUES (c.id, d.id, org, CASE choice WHEN 'accept' THEN 'driver_acceptance' ELSE 'driver_dispute' END, actor, coalesce(nullif(btrim(signer),''), d.driver_name),
@@ -895,6 +998,7 @@ BEGIN
     INSERT INTO public.driver_charge_decisions(charge_id, driver_id, organisation_id, stage, decision, reason, decided_by, charge_version, details)
       VALUES (c.id, d.id, org, 'finance', choice, v_reason, actor, c.version, detail);
     UPDATE public.driver_charges SET status = CASE choice WHEN 'approve' THEN 'finance_approved' ELSE driver_response END,
+      objection_deadline = CASE choice WHEN 'approve' THEN private.driver_charge_compute_deadline(c.id, now()) ELSE NULL END,
       refusal_witness_id = CASE choice WHEN 'return' THEN NULL ELSE refusal_witness_id END,
       refusal_recorded_by = CASE choice WHEN 'return' THEN NULL ELSE refusal_recorded_by END,
       refusal_recorded_at = CASE choice WHEN 'return' THEN NULL ELSE refusal_recorded_at END,
@@ -914,16 +1018,12 @@ BEGIN
     IF NOT private.driver_charge_finite(wage) OR wage <= 0 OR wage > 1000000 THEN RAISE EXCEPTION 'Enter the driver monthly wage (more than 0 and at most 1,000,000)' USING ERRCODE='22023'; END IF;
     IF upper(coalesce(p_payload->>'wage_currency','')) IS DISTINCT FROM c.currency THEN RAISE EXCEPTION 'State the wage in the charge currency (%)', c.currency USING ERRCODE='22023'; END IF;
     IF statutory THEN
-      -- One day's wage = monthly wage / 30. Damage 5 days, fines 5 days, all deductions half the wage.
+      -- One day's wage = monthly wage / 30. Damage 5 days; with consent up to half the wage.
       damage_cap := round(wage * (crule->>'damage_days')::numeric / (crule->>'wage_days')::numeric, 2);
-      fine_cap := round(wage * (crule->>'fine_days')::numeric / (crule->>'wage_days')::numeric, 2);
       total_cap := round(wage * (crule->>'total_pct')::numeric / 100, 2);
-      cap_amount := CASE bucket WHEN 'damage' THEN damage_cap WHEN 'fine' THEN fine_cap ELSE total_cap END;
+      cap_amount := CASE bucket WHEN 'damage' THEN damage_cap ELSE total_cap END;
       cap_pct := CASE bucket WHEN 'damage' THEN round((crule->>'damage_days')::numeric * 100 / (crule->>'wage_days')::numeric, 2)
-        WHEN 'fine' THEN round((crule->>'fine_days')::numeric * 100 / (crule->>'wage_days')::numeric, 2) ELSE (crule->>'total_pct')::numeric END;
-      IF bucket = 'fine' AND c.amount > fine_cap THEN
-        RAISE EXCEPTION 'Saudi Labour Law (Article 71): a fine for one violation may not be more than 5 days'' wage (% %). Waive the part above that.', fine_cap, c.currency USING ERRCODE='22023';
-      END IF;
+        ELSE (crule->>'total_pct')::numeric END;
     ELSE
       cap_pct := private.driver_charge_setting('driver_charge_instalment_cap_pct', 20);
       IF cap_pct <= 0 OR cap_pct > 100 THEN RAISE EXCEPTION 'Instalment limit setting is invalid' USING ERRCODE='22023'; END IF;
@@ -956,14 +1056,13 @@ BEGIN
     -- The month limit uses the LOWEST wage stated for this driver in that month,
     -- so a later schedule with a higher wage cannot raise it.
     IF statutory THEN
-      -- KSA: damage and loss within 5 days' wage, fines within 5 days' wage,
-      -- everything together within half the wage, per month across all charges.
+      -- KSA: damage and loss within 5 days' wage, everything together within
+      -- half the wage, per month across all charges recorded here.
       SELECT q.due_month, q.label, q.total, q.cap INTO last_month, breach, total, approved_at_cap FROM (
         SELECT m.due_month, b.label, b.total, b.cap, b.ord FROM (
           SELECT i.due_month,
             least(wage, coalesce(min(oc.schedule_monthly_wage) FILTER (WHERE oc.id <> c.id), wage)) AS low_wage,
             coalesce(sum(i.amount) FILTER (WHERE private.driver_charge_bucket(oc.category) = 'damage'), 0) AS damage_total,
-            coalesce(sum(i.amount) FILTER (WHERE private.driver_charge_bucket(oc.category) = 'fine'), 0) AS fine_total,
             sum(i.amount) AS all_total
           FROM public.driver_charge_instalments i JOIN public.driver_charges oc ON oc.id = i.charge_id
           WHERE i.driver_id = d.id AND i.status <> 'cancelled' AND i.currency = c.currency
@@ -971,7 +1070,6 @@ BEGIN
           GROUP BY i.due_month) m
         CROSS JOIN LATERAL (VALUES
           ('damage and loss deductions (Article 91, 5 days'' wage)', m.damage_total, round(m.low_wage * (crule->>'damage_days')::numeric / (crule->>'wage_days')::numeric, 2), 1),
-          ('fine deductions (Articles 70 and 71, 5 days'' wage)', m.fine_total, round(m.low_wage * (crule->>'fine_days')::numeric / (crule->>'wage_days')::numeric, 2), 2),
           ('total deductions (Article 93, half the wage)', m.all_total, round(m.low_wage * (crule->>'total_pct')::numeric / 100, 2), 3)) b(label, total, cap, ord)
         WHERE b.total > b.cap) q
         ORDER BY q.due_month, q.ord LIMIT 1;
@@ -1204,11 +1302,13 @@ BEGIN
     'appeal', (SELECT to_jsonb(a) || jsonb_build_object('decided_by_name', p.full_name) FROM public.driver_charge_appeals a LEFT JOIN public.profiles p ON p.id = a.decided_by WHERE a.charge_id = c.id),
     'instalments', (SELECT coalesce(jsonb_agg(to_jsonb(i) ORDER BY i.seq),'[]') FROM public.driver_charge_instalments i WHERE i.charge_id = c.id),
     'events', (SELECT coalesce(jsonb_agg(to_jsonb(e) || jsonb_build_object('actor_name', p.full_name) ORDER BY e.created_at, e.id),'[]') FROM public.driver_workspace_events e LEFT JOIN public.profiles p ON p.id = e.actor_id WHERE e.charge_id = c.id),
-    'statements', private.driver_charge_statements(),
+    'statements', private.driver_charge_statements(private.driver_charge_amount_text(c.amount, c.currency)),
     'settings', jsonb_build_object(
       'cap_pct', private.driver_charge_setting('driver_charge_instalment_cap_pct', 20),
       'appeal_window_days', private.driver_charge_setting('driver_charge_appeal_window_days', 7),
-      'country_rule', private.driver_charge_country_rule(c.country),
+      -- "Needs legal confirmation" is a note for staff only; a driver sees the rule, not the caveat.
+      'country_rule', CASE WHEN access_mode = 'driver' THEN private.driver_charge_country_rule(c.country) - 'needs_legal_confirmation'
+        ELSE private.driver_charge_country_rule(c.country) END,
       'bucket', private.driver_charge_bucket(c.category),
       'needs_photo', private.driver_charge_needs_photo(c.category),
       'objection_deadline', private.driver_charge_objection_deadline(c.id),

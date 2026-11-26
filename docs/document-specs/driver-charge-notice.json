@@ -545,7 +545,7 @@
     "lines": [
       "Every time on this notice is set by the server when the action was recorded. Records are append-only: a wrong charge is reversed and reissued, never edited after the driver is notified.",
       "A deduction is made only after the driver gave written consent, or after a witnessed refusal or dispute was reviewed by two different people and the appeal period ended or an appeal was decided by a third person. No monthly instalment exceeds the limit shown in section 8.",
-      "Charges on drivers in Saudi Arabia follow the Saudi Labour Law (Royal Decree M/51): damage or loss at most 5 days' wage a month and 15 working days to object (Article 91), a fine at most 5 days' wage (Articles 70 and 71), any other deduction only with written consent (Article 92), and all deductions together at most half the wage (Article 93)."
+      "Charges on drivers in Saudi Arabia follow the Saudi Labour Law (Royal Decree M/51): damage or loss at most 5 days' wage a month and 15 working days to object (Article 91), any other deduction, including a traffic fine, only with written consent (Article 92), and all deductions together at most half the wage (Article 93; only deductions recorded in Tyre Pulse are counted)."
     ],
     "page_number": "Page {page} of {pages}"
   },

@@ -8981,11 +8981,32 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get driverChargeKsaRule =>
-      'يطبق نظام العمل السعودي على هذه المطالبة. التلف أو الفقد: بحد أقصى أجر 5 أيام في الشهر. الغرامات: بحد أقصى أجر 5 أيام. مجموع الخصومات: بحد أقصى نصف الأجر. لديك 15 يوم عمل للاعتراض.';
+      'يطبق نظام العمل السعودي على هذه المطالبة. التلف أو الفقد: بحد أقصى أجر 5 أيام في الشهر. أي مطالبة أخرى، ومنها المخالفة المرورية: فقط بموافقتك الكتابية. مجموع الخصومات: بحد أقصى نصف الأجر. لديك 15 يوم عمل للاعتراض.';
 
   @override
   String get driverChargeOtherRule =>
       'يطبق حد الشركة على هذه المطالبة. هذه القاعدة لا تزال تحتاج إلى تأكيد قانوني في هذه الدولة.';
+
+  @override
+  String get driverChargePdfFontFailed =>
+      'تعذر تحميل الحروف العربية والأردية، لذا لم تصنع الورقة. تحقق من الاتصال بالإنترنت وحاول مرة أخرى.';
+
+  @override
+  String get driverChargePhotoOpen => 'افتح الصورة بحجم أكبر';
+
+  @override
+  String get driverChargePhotoRetry => 'إعادة المحاولة';
+
+  @override
+  String get driverChargePhotosWait => 'انتظر حتى تحمل كل الصور قبل أن توقع.';
+
+  @override
+  String get driverChargePhotosBlocked =>
+      'تعذر تحميل صورة. يجب أن ترى كل الصور قبل أن توقع. اضغط إعادة المحاولة.';
+
+  @override
+  String get driverChargeOtherRuleDriver =>
+      'يطبق حد الخصم الخاص بالشركة على هذه المطالبة.';
 
   @override
   String driverChargeObjectionUntil(String date) {
@@ -9002,8 +9023,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get driverChargeLangUrdu => 'اردو';
 
   @override
-  String get driverChargeStatementConsent =>
-      'أنا السائق المذكور اسمه في هذه الورقة. اطلعت على هذه المطالبة: السبب والمبلغ والأدلة والصور المرفقة بها. أوافق على أنني ملزم بدفع هذه المطالبة. وأوافق على أن تخصم الشركة هذا المبلغ من راتبي، جزءا كل شهر، كما هو موضح في خطة الخصم. هذه الموافقة تخص هذه المطالبة فقط. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.';
+  String driverChargeStatementConsent(String amount) {
+    return 'أنا السائق المذكور اسمه في هذه الورقة. اطلعت على هذه المطالبة: السبب والأدلة والصور. أوافق على أنني ملزم بدفع مبلغ $amount إجمالا عن هذه المطالبة. وأوافق على أن تخصم الشركة هذا المبلغ من راتبي على أجزاء شهرية. لن يزيد جزء أي شهر عن الحد الشهري الذي يسمح به النظام، وسيعرض علي مبلغ كل شهر قبل خصمه. هذه الموافقة تخص هذه المطالبة فقط. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.';
+  }
 
   @override
   String get driverChargeStatementDispute =>

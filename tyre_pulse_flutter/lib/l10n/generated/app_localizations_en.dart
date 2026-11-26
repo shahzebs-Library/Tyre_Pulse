@@ -8973,11 +8973,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get driverChargeKsaRule =>
-      'Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Fines: at most 5 days of wage. All deductions together: at most half the wage. You have 15 working days to object.';
+      'Saudi Labour Law applies to this charge. Damage or loss: at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days to object.';
 
   @override
   String get driverChargeOtherRule =>
       'The company limit applies to this charge. This rule still needs legal confirmation for this country.';
+
+  @override
+  String get driverChargePdfFontFailed =>
+      'The Arabic and Urdu letters could not be loaded, so the paper was not made. Check the internet connection and try again.';
+
+  @override
+  String get driverChargePhotoOpen => 'Open the photo larger';
+
+  @override
+  String get driverChargePhotoRetry => 'Retry';
+
+  @override
+  String get driverChargePhotosWait =>
+      'Wait until every photo has loaded before you sign.';
+
+  @override
+  String get driverChargePhotosBlocked =>
+      'A photo could not be loaded. You must see every photo before you sign. Tap Retry.';
+
+  @override
+  String get driverChargeOtherRuleDriver =>
+      'The company deduction limit applies to this charge.';
 
   @override
   String driverChargeObjectionUntil(String date) {
@@ -8994,8 +9016,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get driverChargeLangUrdu => 'اردو';
 
   @override
-  String get driverChargeStatementConsent =>
-      'I am the driver named on this paper. I have seen this charge: the reason, the amount, and the evidence and photos shown with it. I agree that I must pay this charge. I agree that the company may take this amount from my salary, a part each month, as shown on the deduction plan. This agreement is only for this charge. I can still object within the time written on this paper.';
+  String driverChargeStatementConsent(String amount) {
+    return 'I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay $amount in total for this charge. I agree that the company may take this amount from my salary in monthly parts. The amount taken in any one month will never be more than the legal monthly limit, and I will be shown the amount for each month before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.';
+  }
 
   @override
   String get driverChargeStatementDispute =>

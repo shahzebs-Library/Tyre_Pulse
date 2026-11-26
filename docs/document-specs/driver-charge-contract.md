@@ -74,7 +74,7 @@ and `version` (the version the user was looking at). Returns
 | `charge_correct` | manager, or the issuing supervisor, while `issued` | `amount?, basis?, vehicle_id?, incident_at?, reason` |
 | `charge_attach_evidence` | as above, while `issued` | `kind, ref, label`. A `photo` must be a private storage reference `tp-storage://(tyre-photos\|accident-photos\|inspection-photos)/<path>`; anything else (a public URL, a bare path) is refused. |
 | `charge_notify` | manager or supervisor | none. Stamps `notified_at` and `notified_by`; freezes the charge. A physical damage charge (`accident_damage`, `tyre_damage`, `handover_damage`) needs at least one `photo` evidence row first (`22023`). |
-| `charge_respond` | linked driver only, status `notified` | `response: accept or dispute, statement_version (deduction-consent-v2 for accept, receipt-dispute-v2 for dispute), statement_language: en, ar or ur, acknowledged: true, signature, explanation (required for dispute)`. The server stores the statement text of the chosen language and the language with the signature. |
+| `charge_respond` | linked driver only, status `notified` | `response: accept or dispute, statement_version (deduction-consent-v3 for accept, receipt-dispute-v2 for dispute), statement_language: en, ar or ur, acknowledged: true, signature, explanation (required for dispute)`. The server stores the statement text of the chosen language and the language with the signature. |
 | `charge_record_refusal` | manager or supervisor, status `notified` | `witness_user_id, reason`. Step 1 of 2: names an active account in the tenant that has access to this driver's workspace and is not the recorder, the issuer, the person who served the notice or the driver. The charge stays `notified` until the witness confirms; until then the refusal can be recorded again (for example with another witness), which replaces the pending one. A supervisor or finance return clears a pending refusal. |
 | `charge_witness_confirm` | the named witness only, signed in as themselves | `statement_version: refusal-witness-v2, statement_language: en, ar or ur, acknowledged: true, signature`. Step 2: records the witness signature and moves the charge to `refused`. |
 | `charge_supervisor_review` | manager or supervisor who did NOT issue it, serve it, record the refusal or witness it | `decision: approve or return, reason` |
@@ -133,33 +133,42 @@ Stamps `reviewed_by`, `reviewed_at`, `review_reason`. Owners may edit or delete 
 
 ## Country deduction rules
 
-Server: `private.driver_charge_country_rule(country)`, `private.driver_charge_bucket(category)`,
-`private.driver_charge_working_deadline(from, days)`, `private.driver_charge_objection_deadline(charge)`.
-Display mirrors (never the authority): `chargeCountryRule`, `chargeBucket`, `scheduleCapFor`,
-`workingDeadline` in `src/lib/driverCharges.js`; `driverChargeCountryRule`, `driverChargeBucket`,
-`chargeWorkingDeadline` in `tyre_pulse_flutter/lib/features/driver_workspace/domain/driver_charge.dart`.
+Server: `private.driver_charge_country_key(country)`, `private.driver_charge_country_rule(country)`,
+`private.driver_charge_bucket(category)`, `private.driver_charge_working_deadline(from, days, country, org)`,
+`private.driver_charge_compute_deadline(charge, approved_at)`.
+Display mirrors (never the authority): `chargeCountryKey`, `chargeCountryRule`, `chargeBucket`, `scheduleCapFor`,
+`workingDeadline` in `src/lib/driverCharges.js`; `driverChargeCountryKey`, `driverChargeCountryRule`,
+`driverChargeBucket`, `chargeWorkingDeadline` in
+`tyre_pulse_flutter/lib/features/driver_workspace/domain/driver_charge.dart`.
 
-Buckets: `damage` = accident_damage, tyre_damage, missing_item, handover_damage; `fine` = traffic_fine;
-`consent` = other.
+Country spelling: `driver_charge_country_key` reduces a country to letters only and maps every known spelling
+to one key (`KSA`, `SA`, `SAU`, `Saudi`, `Saudi Arabia` -> `KSA`; `UAE`, `AE`, `ARE`, `United Arab Emirates` ->
+`UAE`; `Egypt`, `EG`, `EGY` -> `EGYPT`). The rule AND the holiday calendar use it, so a long-form or mistyped
+country never falls through to the wrong rule set or misses its holidays.
 
-### KSA (country KSA, SA, SAU or Saudi Arabia): Saudi Labour Law, Royal Decree M/51
+Buckets: `damage` = accident_damage, tyre_damage, missing_item, handover_damage; `consent` = traffic_fine and
+other. A government traffic fine recovered from the driver is a debt he owes, not an Article 70/71 penalty the
+employer imposes, so it is an Article 92 deduction and needs his written consent.
+
+### KSA: Saudi Labour Law, Royal Decree M/51
 
 A day's wage is the monthly wage stated on the schedule divided by 30.
 
 | Article | Rule enforced on the server |
 |---|---|
 | 91 | Damage or loss caused by the worker's fault (`damage` bucket) may be deducted without the worker's written consent, but at most 5 days' wage per month across all his damage charges. The worker may object within 15 working days. |
-| 70, 71 | A fine for one violation at most 5 days' wage (a `traffic_fine` charge above that is refused at scheduling); fines deducted in one month at most 5 days' wage across all his fine charges. |
-| 92 | Any other deduction (`consent` bucket) needs the worker's written consent (`accepted`). |
-| 93 | All deductions together in one month at most half (50%) of the wage due. |
+| 92 | Any other deduction (`consent` bucket, including a traffic fine) needs the worker's written consent (`accepted`). |
+| 93 | All deductions together in one month at most half (50%) of the wage due. Only deductions recorded through this system are counted: payroll deductions made elsewhere (loans, housing, GOSI) are not known here and finance must allow for them. |
 
 Without consent (driver `disputed` or `refused`, witnessed): a KSA charge can be scheduled ONLY when it is in
 the `damage` bucket, has supervisor and then finance approval (status `finance_approved`), has no open
-objection (an appeal with no outcome), and the objection window has ended. A disputed or refused fine or
-other charge is refused (`22023`, Article 92). The objection window is 15 working days (Sunday to Thursday,
-Friday and Saturday off, Asia/Riyadh) counted from the finance approval; it closes at the end of the 15th
-working day. Public holidays listed in `driver_charge_holidays` for the charge's organisation and country
-are skipped too (see "Public holidays" below).
+objection (an appeal with no outcome), and the objection window has ended. A disputed or refused traffic
+fine or other charge is refused (`22023`, Article 92). The objection window is 15 working days (Sunday to
+Thursday, Friday and Saturday off, Asia/Riyadh) counted from the finance approval; it closes at the end of the
+15th working day. Public holidays listed in `driver_charge_holidays` for the charge's organisation and country
+are skipped too (see "Public holidays" below). The deadline is computed ONCE, when finance approves, and
+stamped on `driver_charges.objection_deadline`; later holiday or rule changes never move it (the charge guard
+refuses to change a stamped deadline).
 
 The rule lives in ONE server function, `private.driver_charge_schedule_block(charge)`, which returns
 `{code, article, until, message}` (codes `consent_required` with article 92, `open_objection`, `window_open`)
@@ -176,14 +185,15 @@ The configurable behaviour is unchanged: instalment cap `driver_charge_instalmen
 wage, per driver per month across all charges, and a deduction without consent only after
 `driver_charge_appeal_window_days` calendar days from finance approval or after an upheld appeal. The UAE
 and Egypt labour law rules have NOT been checked; `country_rule` returns `needs_legal_confirmation: true` and
-both clients say so on screen. A UAE driver case in `supabase/tests/driver_charges.test.mjs` keeps this path
+both clients say so to staff (the driver is not shown this caveat: `driver_charge_detail` drops
+`needs_legal_confirmation` for a driver, and the screens show him only the company limit). A UAE driver case in `supabase/tests/driver_charges.test.mjs` keeps this path
 covered (20% cap, 7 calendar days, a disputed "other" charge schedulable after the window).
 
 ### Legal note
 
 This is an implementation of the owner's reading of the Saudi Labour Law articles cited above. It is not
 legal advice. Have a qualified Saudi labour lawyer confirm the rules (in particular: treating a traffic
-fine recovered from the driver as an Article 70/71 fine, the 15 working day window counted from the finance
+fine recovered from the driver as an Article 92 deduction needing consent, the 15 working day window counted from the finance
 approval, and the day rate of wage / 30) before relying on it in a dispute, and confirm the UAE and Egypt
 rules before using charges there.
 
@@ -201,11 +211,18 @@ Privacy: the RESTRICTIVE storage policy `driver_charge_photos_read` (ANDed with 
 of a charge that lists the photo (`private.driver_charge_photo_readable`): the driver himself, the issuer or
 supervisor in scope, finance. Every other path in the bucket keeps the bucket rule.
 
+Attaching: `private.driver_charge_claim_photo` lets a charge photo be attached only by the person who uploaded
+it (`storage.objects.owner_id`), and only to one charge (a reissue may carry the photos of the charge it
+replaces). Naming another charge's photo path is refused, so the read policy cannot be widened that way.
+
 ## Public holidays
 
 `public.driver_charge_holidays (organisation_id, country, holiday date, label, created_by, created_at)`,
 unique per organisation, country and day. Readable by active members of the organisation; inserted, changed
-and deleted only by an organisation admin or a super admin (RLS). Seeded empty: an administrator adds each
+and deleted only by an organisation admin or a super admin (RLS). The country is stored as its
+`driver_charge_country_key`. A day in the past (Riyadh date) can no longer be added, changed or removed, and
+every insert, change and delete is kept in the append-only `driver_charge_holiday_events` (before, after,
+actor). Seeded empty: an administrator adds each
 year's announced holidays (for example Eid in KSA). `private.driver_charge_working_deadline(from, days,
 country, org)` skips Fridays, Saturdays and these dates. The JS and Dart `workingDeadline` mirrors do not know
 the holidays; the screens show the server's `objection_last_day`. No admin screen is built yet: add rows in
@@ -224,8 +241,11 @@ the database or through a later Console page.
 ## Statements (stored verbatim with each signature)
 
 Returned by `driver_charge_detail.statements` as `{ version: { en, ar, ur } }`. Versions:
-`deduction-consent-v2` (accept), `receipt-dispute-v2` (dispute, receipt only), `refusal-witness-v2`
-(witness). Plain words for drivers who read little; every screen also says to ask the supervisor to read it
+`deduction-consent-v3` (accept), `receipt-dispute-v2` (dispute, receipt only), `refusal-witness-v2`
+(witness). v3 replaced the unreleased consent v2, which mentioned "the deduction plan" that does not exist
+when the driver signs: v3 names the total (`{amount}`, filled by the server with the charge amount and
+currency, for example `1,250.00 SAR`, in both the detail and the stored signature) and says it is taken in
+monthly parts, never above the legal monthly limit, each month's amount shown before it is taken. Plain words for drivers who read little; every screen also says to ask the supervisor to read it
 aloud. v2 replaced the unreleased v1 wording because v1 said a dispute signature "does not authorise any
 deduction", which is not true for a KSA damage charge after the objection window. The Arabic and Urdu text is a
 draft: it needs owner and legal approval before production use. The web has no Urdu interface language, so

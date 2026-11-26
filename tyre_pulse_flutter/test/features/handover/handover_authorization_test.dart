@@ -14,6 +14,7 @@ import 'package:tyre_pulse/features/handover/domain/handover_draft.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_paper.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_payload.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_record.dart';
+import 'package:tyre_pulse/features/handover/domain/handover_signing.dart';
 import 'package:tyre_pulse/features/handover/handover_providers.dart';
 import 'package:tyre_pulse/features/handover/presentation/widgets/handover_signing_panel.dart';
 
@@ -35,8 +36,12 @@ HandoverRecord _row(Map<String, Object?> extra) => HandoverRecord.fromRow(
     );
 
 final class _FakeRepo implements HandoverRemoteRepository {
-  _FakeRepo({this.failure});
+  _FakeRepo({this.failure, this.myDriverId});
   final Object? failure;
+  final String? myDriverId;
+
+  @override
+  Future<String?> myLinkedDriverId(String userId) async => myDriverId;
   final List<HandoverSignInput> signed = <HandoverSignInput>[];
 
   @override
@@ -154,7 +159,8 @@ void main() {
       hourMeterText: '4500',
       site: 'JEDDAH',
     );
-    final HandoverDraft back = HandoverDraft.fromJsonString(draft.toJsonString());
+    final HandoverDraft back =
+        HandoverDraft.fromJsonString(draft.toJsonString());
     expect(back.toDriverId, 'drv-1');
     expect(back.hourMeterText, '4500');
     expect(back.site, 'JEDDAH');
@@ -181,6 +187,7 @@ void main() {
         'p_longitude': 39.2,
         'p_accuracy_m': 5.0,
         'p_location_status': null,
+        'p_on_behalf': false,
       },
     );
     expect(
@@ -205,7 +212,14 @@ void main() {
         ),
       ]),
       <List<String>>[
-        <String>['1', 'Left (position not recorded)', 'Cracked', 'Major', 'Door', ''],
+        <String>[
+          '1',
+          'Left (position not recorded)',
+          'Cracked',
+          'Major',
+          'Door',
+          '',
+        ],
       ],
     );
   });
@@ -223,6 +237,7 @@ void main() {
         repo: repo,
       ),
     );
+    await tester.pumpAndSettle();
     expect(find.text('Sign as the handing driver'), findsOneWidget);
     await tester.ensureVisible(find.text('Record signature'));
     await tester.tap(find.text('Record signature'));
@@ -286,5 +301,110 @@ void main() {
     expect(find.byIcon(Icons.lock_outline), findsOneWidget);
     expect(find.byIcon(Icons.map_outlined), findsOneWidget);
     expect(find.byType(FilledButton), findsNothing);
+  });
+
+  test('signature format follows handover_valid_signature exactly', () {
+    expect(isValidHandoverSignature(_png), isTrue);
+    expect(
+      isValidHandoverSignature(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100" '
+        'viewBox="0 0 300 100"><path d="M1 2 L3 4" fill="none" '
+        'stroke="#111111" stroke-width="2" stroke-linecap="round" '
+        'stroke-linejoin="round"/></svg>',
+      ),
+      isTrue,
+    );
+    expect(isValidHandoverSignature('data:image/jpeg;base64,AAAA'), isFalse);
+    expect(isValidHandoverSignature('<svg><script/></svg>'), isFalse);
+    expect(isValidHandoverSignature(null), isFalse);
+  });
+
+  test('signing mode: self, on behalf, or blocked for the other driver', () {
+    final HandoverRecord r = _row(<String, Object?>{
+      'from_driver_id': 'drv-from',
+      'to_driver_id': 'drv-to',
+    });
+    expect(rowSigningMode(r, HandoverParty.handing, 'drv-from'),
+        HandoverSigningMode.self,);
+    expect(rowSigningMode(r, HandoverParty.handing, 'drv-to'),
+        HandoverSigningMode.blocked,);
+    expect(rowSigningMode(r, HandoverParty.handing, null),
+        HandoverSigningMode.onBehalf,);
+    // A typed-name party can only be signed on behalf.
+    expect(
+        rowSigningMode(
+            _row(<String, Object?>{}), HandoverParty.receiving, 'drv-x',),
+        HandoverSigningMode.onBehalf,);
+  });
+
+  test('sent back means draft with a reason and no signatures, or rejected',
+      () {
+    expect(
+      isHandoverSentBack(
+        _row(<String, Object?>{'review_note': 'Wrong odometer'}),
+      ),
+      isTrue,
+    );
+    expect(isHandoverSentBack(_row(<String, Object?>{})), isFalse);
+    expect(
+      isHandoverSentBack(
+          _row(<String, Object?>{'approval_status': 'rejected'}),),
+      isTrue,
+    );
+  });
+
+  testWidgets('the other driver sees a blocked notice, not a pad',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      _app(
+        HandoverSigningPanel(
+          record: _row(<String, Object?>{
+            'from_driver_id': 'drv-from',
+            'to_driver_id': 'drv-to',
+          }),
+          onSigned: () async {},
+        ),
+        repo: _FakeRepo(myDriverId: 'drv-to'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('linked to the other driver'), findsOneWidget);
+    expect(find.text('Record signature'), findsNothing);
+  });
+
+  testWidgets('a supervisor must tick the on-behalf box',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      _app(
+        HandoverSigningPanel(
+          record: _row(<String, Object?>{'from_driver_id': 'drv-from'}),
+          onSigned: () async {},
+        ),
+        repo: _FakeRepo(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('I am signing on behalf of Yard'), findsOneWidget);
+  });
+
+  testWidgets('an on-behalf signature is labelled',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      _app(
+        HandoverSigningPanel(
+          record: _row(<String, Object?>{
+            'approval_status': 'draft',
+            'from_signature': _png,
+            'from_signed_name': 'Yard',
+            'from_signed_at': '2026-09-05T13:25:00Z',
+            'from_on_behalf': true,
+          }),
+          onSigned: () async {},
+        ),
+        repo: _FakeRepo(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Signed on their behalf by a supervisor'), findsOneWidget);
   });
 }

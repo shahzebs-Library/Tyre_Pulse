@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -3158,100 +3157,109 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String driverWsTerm(String term) {
-    String _temp0 = intl.Intl.selectLogic(term, {
-      'create_driver': 'Add verified driver',
-      'link_account': 'Link login account',
-      'assign_team': 'Assign team and vehicle',
-      'create_fine': 'Issue traffic fine',
-      'link_record': 'Link work record',
-      'respond_fine': 'Review and sign',
-      'review_fine': 'Review response / payment',
-      'correct_fine': 'Correct fine',
-      'reassign_fine': 'Reassign fine',
-      'direct_payment': 'I will pay directly',
-      'already_paid': 'Already paid',
-      'dispute': 'Dispute / incorrect assignment',
-      'company_recovery': 'Request company payment / recovery',
-      'instalments': 'Request instalments',
-      'approve': 'Approve request',
-      'return': 'Return to driver',
-      'payment': 'Record verified payment',
-      'cancel': 'Cancel fine',
-      'reopen': 'Reopen',
-      'open': 'Open',
-      'settled': 'Settled',
-      'cancelled': 'Cancelled',
-      'awaiting_response': 'Awaiting response',
-      'submitted': 'Response submitted',
-      'returned': 'Returned to driver',
-      'approved': 'Approved',
-      'driver_documents': 'Driver documents',
-      'driver_training': 'Driver training',
-      'driver_coaching': 'Driver coaching',
-      'driver_safety_events': 'Driver safety events',
-      'driver_expenses': 'Driver expenses',
-      'tyre_records': 'Tyre records',
-      'accidents': 'Accidents',
-      'wo_tasks': 'Work order tasks',
-      'checklist_submissions': 'Checklist submissions',
-      'odometer_logs': 'Odometer readings',
-      'wash_records': 'Wash records',
-      'other': '',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      term,
+      {
+        'create_driver': 'Add verified driver',
+        'link_account': 'Link login account',
+        'assign_team': 'Assign team and vehicle',
+        'create_fine': 'Issue traffic fine',
+        'link_record': 'Link work record',
+        'respond_fine': 'Review and sign',
+        'review_fine': 'Review response / payment',
+        'correct_fine': 'Correct fine',
+        'reassign_fine': 'Reassign fine',
+        'direct_payment': 'I will pay directly',
+        'already_paid': 'Already paid',
+        'dispute': 'Dispute / incorrect assignment',
+        'company_recovery': 'Request company payment / recovery',
+        'instalments': 'Request instalments',
+        'approve': 'Approve request',
+        'return': 'Return to driver',
+        'payment': 'Record verified payment',
+        'cancel': 'Cancel fine',
+        'reopen': 'Reopen',
+        'open': 'Open',
+        'settled': 'Settled',
+        'cancelled': 'Cancelled',
+        'awaiting_response': 'Awaiting response',
+        'submitted': 'Response submitted',
+        'returned': 'Returned to driver',
+        'approved': 'Approved',
+        'driver_documents': 'Driver documents',
+        'driver_training': 'Driver training',
+        'driver_coaching': 'Driver coaching',
+        'driver_safety_events': 'Driver safety events',
+        'driver_expenses': 'Driver expenses',
+        'tyre_records': 'Tyre records',
+        'accidents': 'Accidents',
+        'wo_tasks': 'Work order tasks',
+        'checklist_submissions': 'Checklist submissions',
+        'odometer_logs': 'Odometer readings',
+        'wash_records': 'Wash records',
+        'other': '',
+      },
+    );
     return '$_temp0';
   }
 
   @override
   String driverWsRecordField(String field) {
-    String _temp0 = intl.Intl.selectLogic(field, {
-      'country': 'Country',
-      'site': 'Site',
-      'asset_no': 'Asset number',
-      'driver_name': 'Driver name',
-      'title': 'Title',
-      'doc_type': 'Document type',
-      'doc_number': 'Document number',
-      'expiry_date': 'Expiry date',
-      'course_name': 'Course name',
-      'result': 'Result',
-      'completed_date': 'Completed date',
-      'coaching_status': 'Coaching status',
-      'period': 'Period',
-      'event_type': 'Event type',
-      'severity': 'Severity',
-      'event_at': 'Event time',
-      'category': 'Category',
-      'amount': 'Amount',
-      'currency': 'Currency',
-      'expense_date': 'Expense date',
-      'status': 'Status',
-      'incident_date': 'Incident date',
-      'accident_type': 'Accident type',
-      'due_date': 'Due date',
-      'created_at': 'Created at',
-      'reading_date': 'Reading date',
-      'odometer_km': 'Odometer (km)',
-      'wash_date': 'Wash date',
-      'template_name': 'Checklist name',
-      'approval_status': 'Approval status',
-      'brand': 'Brand',
-      'serial_no': 'Serial number',
-      'issue_date': 'Issue date',
-      'qty': 'Quantity',
-      'cost_per_tyre': 'Cost per tyre',
-      'other': '',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      field,
+      {
+        'country': 'Country',
+        'site': 'Site',
+        'asset_no': 'Asset number',
+        'driver_name': 'Driver name',
+        'title': 'Title',
+        'doc_type': 'Document type',
+        'doc_number': 'Document number',
+        'expiry_date': 'Expiry date',
+        'course_name': 'Course name',
+        'result': 'Result',
+        'completed_date': 'Completed date',
+        'coaching_status': 'Coaching status',
+        'period': 'Period',
+        'event_type': 'Event type',
+        'severity': 'Severity',
+        'event_at': 'Event time',
+        'category': 'Category',
+        'amount': 'Amount',
+        'currency': 'Currency',
+        'expense_date': 'Expense date',
+        'status': 'Status',
+        'incident_date': 'Incident date',
+        'accident_type': 'Accident type',
+        'due_date': 'Due date',
+        'created_at': 'Created at',
+        'reading_date': 'Reading date',
+        'odometer_km': 'Odometer (km)',
+        'wash_date': 'Wash date',
+        'template_name': 'Checklist name',
+        'approval_status': 'Approval status',
+        'brand': 'Brand',
+        'serial_no': 'Serial number',
+        'issue_date': 'Issue date',
+        'qty': 'Quantity',
+        'cost_per_tyre': 'Cost per tyre',
+        'other': '',
+      },
+    );
     return '$_temp0';
   }
 
   @override
   String driverWsEvidenceKind(String kind) {
-    String _temp0 = intl.Intl.selectLogic(kind, {
-      'payment': 'Payment receipt',
-      'supporting': 'Supporting photo',
-      'notice': 'Official notice',
-      'other': '',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      kind,
+      {
+        'payment': 'Payment receipt',
+        'supporting': 'Supporting photo',
+        'notice': 'Official notice',
+        'other': '',
+      },
+    );
     return '$_temp0';
   }
 
@@ -4876,10 +4884,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String accRegisterClaimConfirm(
-    String claimNo,
-    String insurer,
-    String policyNo,
-  ) {
+      String claimNo, String insurer, String policyNo) {
     return 'Claim $claimNo for $insurer under policy $policyNo will be registered on the case. This cannot be undone from the app.';
   }
 
@@ -5377,7 +5382,8 @@ class AppLocalizationsEn extends AppLocalizations {
       locale: localeName,
       other:
           '$count fleet results · search asset, fleet, plate, type, make, model or site',
-      one: '1 fleet result · search asset, fleet, plate, type, make, model or site',
+      one:
+          '1 fleet result · search asset, fleet, plate, type, make, model or site',
     );
     return '$_temp0';
   }
@@ -8793,11 +8799,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String approvalsBulkResultMessage(
-    int approved,
-    int skipped,
-    int decided,
-    int failed,
-  ) {
+      int approved, int skipped, int decided, int failed) {
     return 'Approved: $approved\nSkipped, tyre readings incomplete: $skipped\nAlready decided by someone else: $decided\nFailed: $failed';
   }
 
@@ -8895,10 +8897,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String driverChargeInstalmentLine(
-    String month,
-    String amount,
-    String status,
-  ) {
+      String month, String amount, String status) {
     return '$month: $amount ($status)';
   }
 
@@ -9204,4 +9203,44 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get storeHistoryCopyCatalog =>
       'historyTitle=Store history~itemTitle=Stock item~onHand=On hand~reserved=Reserved~available=Available~minLevel=Minimum~criticalLevel=Critical~levelsNote=Reorder levels are set on the web by an admin.~recent=Recent movements~fullHistory=Full history~loadMore=Load more~noMovements=No movements yet~noMovementsBody=Receipts, issues, transfers and counts for this item appear here once they are posted.~noMatch=No movements match these filters~noMatchBody=Widen the dates or clear a filter.~balanceAfter=Balance~by=By~ref=Ref~unknownUser=Not recorded~cat_receipt=Receipt~cat_issue=Issue~cat_returned=Return~cat_transfer=Transfer~cat_adjustment=Adjustment~cat_count=Count~cat_opening=Opening balance~cat_erpLedger=ERP ledger~cat_other=Other~filter_all=All types~dateRange=Dates~anyDate=Any date~allLocations=All locations~location=Location~searchItem=Search item~clearFilters=Clear filters~type=Type~stockIn=Stock in~stockOut=Stock out~net=Net change~openingsNote=Opening balances are not counted as stock in.~byMonth=By month~summaryFailed=Totals could not be loaded.~summaryCapped=Too many movements to total. Narrow the dates.~receive=Receive stock~type_receipt=Receipt (new stock)~type_returned=Return to store~quantity=Quantity~reference=Reference (GRN, job card)~reason=Note~post=Post~cancel=Cancel~postedTitle=Stock posted~postedBody=New balance~done=Done~receiveNote=Posted straight to the stock ledger. The server checks that you are allowed to post this type.~qtyRequired=Enter a quantity~qtyPositive=Quantity must be more than zero~qtyWhole=Use a whole number~qtyTooLarge=That quantity is too large~refTooLong=The reference is too long~postOffline=No connection. Nothing was posted; try again when you are online.~postFailed=The movement could not be posted.~loadFailed=Stock history could not be loaded.~openItem=Open item details';
+
+  @override
+  String handoverAuthOnBehalf(String name) {
+    return 'I am signing on behalf of $name';
+  }
+
+  @override
+  String get handoverAuthOnBehalfRequired =>
+      'Confirm that you are signing on behalf of this person.';
+
+  @override
+  String get handoverAuthBlocked =>
+      'Your account is linked to the other driver on this handover, so you cannot sign for this party. Leave this signature for the driver or a supervisor.';
+
+  @override
+  String get handoverAuthSignedOnBehalf =>
+      'Signed on their behalf by a supervisor';
+
+  @override
+  String get handoverAuthSentBack =>
+      'Sent back for correction. The signatures were cleared. Correct the handover and sign again.';
+
+  @override
+  String get handoverAuthBadSignature =>
+      'The signature could not be read. Clear it and sign again.';
+
+  @override
+  String get driverChargeWitnessConfirm => 'Confirm the refusal you witnessed';
+
+  @override
+  String get driverChargeWitnessIntro =>
+      'You were named as the witness to the driver refusing to sign this notice. Confirm only what you saw yourself.';
+
+  @override
+  String get driverChargeWitnessPending =>
+      'Refusal recorded. Waiting for the named witness to confirm it from their own account.';
+
+  @override
+  String get driverChargeWitnessSaved =>
+      'Your witness confirmation was recorded with the server time.';
 }

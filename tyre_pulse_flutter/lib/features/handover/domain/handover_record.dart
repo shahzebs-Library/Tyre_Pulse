@@ -29,7 +29,7 @@ const String handoverAuthorizationColumns = 'from_driver_id,to_driver_id,'
     'hour_meter,site,from_signature,from_signed_name,from_signed_at,'
     'from_signed_by,to_signature,to_signed_name,to_signed_at,to_signed_by,'
     'latitude,longitude,location_accuracy_m,location_status,'
-    'location_captured_at,frozen_at';
+    'location_captured_at,frozen_at,from_on_behalf,to_on_behalf';
 
 /// Which driver signs which side of the paper.
 enum HandoverParty {
@@ -101,6 +101,11 @@ class HandoverRecord {
   String? get frozenAt => _text('frozen_at');
   String? get locationStatus => _text('location_status');
   double? get hourMeter => (row['hour_meter'] as num?)?.toDouble();
+
+  /// True when a supervisor signed for that party (not the driver's own
+  /// account). Shown on screen and on the paper.
+  bool get fromOnBehalf => row['from_on_behalf'] == true;
+  bool get toOnBehalf => row['to_on_behalf'] == true;
 
   /// Locked once the first driver signed (server freeze).
   bool get isFrozen =>

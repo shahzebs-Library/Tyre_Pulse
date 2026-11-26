@@ -39,14 +39,20 @@ const List<String> driverChargeStatuses = <String>[
 /// duties screens, so the phone shows them read only.
 const String chargeActionRespond = 'charge_respond';
 const String chargeActionAppeal = 'charge_appeal';
+
+/// Step 2 of a refusal: only the named witness, signed in as themselves.
+/// Offered only when the server lists it for the caller.
+const String chargeActionWitnessConfirm = 'charge_witness_confirm';
 const Set<String> driverChargeMobileActions = <String>{
   chargeActionRespond,
   chargeActionAppeal,
+  chargeActionWitnessConfirm,
 };
 
 /// Statement versions the server stores verbatim with each signature.
 const String chargeConsentStatement = 'deduction-consent-v1';
 const String chargeDisputeStatement = 'receipt-dispute-v1';
+const String chargeWitnessStatement = 'refusal-witness-v1';
 
 /// The one statement language the server accepts today. Arabic and Urdu need
 /// owner-approved legal wording before the server adds a new version.
@@ -173,6 +179,24 @@ DriverRow chargeAppealPayload({
       'version': charge['version'],
       'reason': reason.trim(),
     };
+
+/// The `charge_witness_confirm` payload.
+DriverRow chargeWitnessPayload({
+  required DriverRow charge,
+  required String signature,
+}) =>
+    <String, Object?>{
+      'driver_id': charge['driver_id'],
+      'charge_id': charge['id'],
+      'version': charge['version'],
+      'statement_version': chargeWitnessStatement,
+      'acknowledged': true,
+      'signature': signature,
+    };
+
+/// A refusal was recorded (step 1) and waits for the witness (step 2).
+bool chargeAwaitsWitness(DriverRow charge) =>
+    charge['status'] == 'notified' && charge['refusal_witness_id'] != null;
 
 /// One charge's detail as returned by `driver_charge_detail`.
 final class DriverChargeDetail {

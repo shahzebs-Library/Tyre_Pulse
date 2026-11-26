@@ -28,6 +28,7 @@ import 'package:tyre_pulse/features/handover/domain/handover_approval.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_damage_marker.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_paper.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_record.dart';
+import 'package:tyre_pulse/features/handover/domain/handover_signing.dart';
 import 'package:tyre_pulse/features/handover/handover_providers.dart';
 import 'package:tyre_pulse/features/handover/presentation/handover_copy.dart';
 import 'package:tyre_pulse/features/handover/presentation/handover_ui.dart';
@@ -357,6 +358,32 @@ class _DetailBody extends StatelessWidget {
         _SummaryCard(record: record),
         const SizedBox(height: TpSpace.lg),
         _MetaCard(record: record),
+        if (isHandoverSentBack(record)) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          TpCard(
+            background: TpPalette.of(context).forStatus(TpStatus.critical).soft,
+            borderColor:
+                TpPalette.of(context).forStatus(TpStatus.critical).base,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  l10n.handoverAuthSentBack,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                if ((record.reviewNote ?? '').trim().isNotEmpty) ...<Widget>[
+                  const SizedBox(height: TpSpace.xs),
+                  Text(
+                    l10n.handoverReviewNoteLabel,
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  Text(record.reviewNote!.trim()),
+                ],
+              ],
+            ),
+          ),
+        ],
         if (record.damages.isNotEmpty) ...<Widget>[
           const SizedBox(height: TpSpace.lg),
           Text(
@@ -419,27 +446,6 @@ class _DetailBody extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.sm),
         _SignoffLadder(record: record),
-        if ((record.reviewNote ?? '').trim().isNotEmpty &&
-            record.approvalStatus == 'rejected') ...<Widget>[
-          const SizedBox(height: TpSpace.sm),
-          TpCard(
-            background: TpPalette.of(context).forStatus(TpStatus.critical).soft,
-            borderColor:
-                TpPalette.of(context).forStatus(TpStatus.critical).base,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  l10n.handoverReviewNoteLabel,
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: TpSpace.xs),
-                Text(record.reviewNote!.trim()),
-              ],
-            ),
-          ),
-        ],
         if (canDecide) ...<Widget>[
           const SizedBox(height: TpSpace.lg),
           _DecisionForm(

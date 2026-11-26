@@ -19,9 +19,11 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/documents/handover_document.dart'
     show handoverDocumentNumber, handoverMapUrl, handoverRowLocation;
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/handover/data/handover_location.dart';
 import 'package:tyre_pulse/features/handover/data/handover_remote_repository.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_record.dart';
+import 'package:tyre_pulse/features/handover/domain/handover_signing.dart';
 import 'package:tyre_pulse/features/handover/handover_providers.dart';
 import 'package:tyre_pulse/features/handover/presentation/handover_ui.dart';
 import 'package:tyre_pulse/features/handover/presentation/widgets/handover_signature_pad.dart';
@@ -66,6 +68,30 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
   String? _message;
   HandoverParty? _preparedFor;
 
+  /// The driver linked to this account, read once. Null while unknown or when
+  /// the account is not a driver: the screen then asks for on-behalf.
+  String? _myDriverId;
+  bool _myDriverLoaded = false;
+  bool _behalfConfirmed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadMyDriver());
+  }
+
+  Future<void> _loadMyDriver() async {
+    final String userId = ref.read(workspaceContextProvider)?.userId ?? '';
+    final String? id =
+        await ref.read(handoverRemoteRepositoryProvider).myLinkedDriverId(userId);
+    if (mounted) {
+      setState(() {
+        _myDriverId = id;
+        _myDriverLoaded = true;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -77,6 +103,7 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
     _preparedFor = party;
     _signature = null;
     _message = null;
+    _behalfConfirmed = false;
     _name.text = (party == HandoverParty.handing
             ? widget.record.fromDriver
             : widget.record.toDriver) ??
@@ -85,9 +112,23 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
 
   Future<void> _sign(HandoverParty party) async {
     final AppLocalizations l10n = AppLocalizations.of(context);
+    final HandoverSigningMode mode =
+        rowSigningMode(widget.record, party, _myDriverId);
+    if (mode == HandoverSigningMode.blocked) {
+      setState(() => _message = l10n.handoverAuthBlocked);
+      return;
+    }
     final String? signature = _signature;
     if (signature == null || signature.isEmpty) {
       setState(() => _message = l10n.driverChargeIssueSignature);
+      return;
+    }
+    if (!isValidHandoverSignature(signature)) {
+      setState(() => _message = l10n.handoverAuthBadSignature);
+      return;
+    }
+    if (mode == HandoverSigningMode.onBehalf && !_behalfConfirmed) {
+      setState(() => _message = l10n.handoverAuthOnBehalfRequired);
       return;
     }
     final bool needsName = !widget.record.partyHasRegisterDriver(party);
@@ -115,6 +156,7 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
               longitude: location.captured ? location.longitude : null,
               accuracyMeters: location.captured ? location.accuracyMeters : null,
               locationStatus: location.captured ? null : location.status,
+              onBehalf: mode == HandoverSigningMode.onBehalf,
             ),
           );
       if (!mounted) return;
@@ -149,6 +191,7 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
       String? name,
       String? signedAt,
       String? signature,
+      bool onBehalf,
     ) =>
         TpCard(
           child: Column(
@@ -165,6 +208,11 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
                     formatHandoverDateTime(signedAt) ?? l10n.valueUnavailable,
                   ),
                 ),
+                if (onBehalf)
+                  Text(
+                    l10n.handoverAuthSignedOnBehalf,
+                    style: theme.textTheme.bodySmall,
+                  ),
                 const SizedBox(height: TpSpace.xs),
                 HandoverSignaturePreview(
                   value: signature,
@@ -192,6 +240,7 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
           r.fromSignedName ?? r.fromDriver,
           r.fromSignedAt,
           r.fromSignature,
+          r.fromOnBehalf,
         ),
         const SizedBox(height: TpSpace.sm),
         partyCard(
@@ -199,6 +248,7 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
           r.toSignedName ?? r.toDriver,
           r.toSignedAt,
           r.toSignature,
+          r.toOnBehalf,
         ),
         if (r.isFrozen) ...<Widget>[
           const SizedBox(height: TpSpace.sm),
@@ -250,6 +300,12 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
           ),
           Text(l10n.handoverAuthHandingFirst, style: theme.textTheme.bodySmall),
           const SizedBox(height: TpSpace.sm),
+          if (!_myDriverLoaded)
+            const LinearProgressIndicator()
+          else if (rowSigningMode(r, next, _myDriverId) ==
+              HandoverSigningMode.blocked)
+            TpCard(child: Text(l10n.handoverAuthBlocked))
+          else ...<Widget>[
           if (!r.partyHasRegisterDriver(next)) ...<Widget>[
             TpInput(
               label: l10n.handoverAuthSignerName,
@@ -259,6 +315,25 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
             ),
             const SizedBox(height: TpSpace.sm),
           ],
+          if (rowSigningMode(r, next, _myDriverId) ==
+              HandoverSigningMode.onBehalf)
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _behalfConfirmed,
+              onChanged: _busy
+                  ? null
+                  : (bool? v) => setState(() => _behalfConfirmed = v ?? false),
+              title: Text(
+                l10n.handoverAuthOnBehalf(
+                  (r.partyHasRegisterDriver(next)
+                          ? (next == HandoverParty.handing
+                              ? r.fromDriver
+                              : r.toDriver)
+                          : _name.text.trim()) ??
+                      l10n.valueUnavailable,
+                ),
+              ),
+            ),
           TpCard(
             child: HandoverSignaturePad(
               key: ValueKey<String>('sign-${next.key}'),
@@ -292,6 +367,7 @@ class _HandoverSigningPanelState extends ConsumerState<HandoverSigningPanel> {
                 : const Icon(Icons.draw_outlined),
             label: Text(l10n.handoverAuthSignSubmit),
           ),
+          ],
         ],
       ],
     );

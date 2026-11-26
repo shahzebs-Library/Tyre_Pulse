@@ -669,10 +669,14 @@ void main() {
     // category and linked-record labels; handoverAuthSignaturesTitle ...
     // handoverAuthNotAvailable, the two-party signing panel, location line
     // and wizard fields). Fragment copies: lib/l10n/fragments/driver_legal.*.
-    test('en, ar and ur each carry exactly 2665 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2665);
-      expect(_translatableKeys(ar).length, 2665);
-      expect(_translatableKeys(ur).length, 2665);
+    // 2665 + 10 = 2675: on-behalf signing (confirm line, required notice,
+    // blocked notice, signed-on-behalf line), the sent-back banner, the
+    // signature format refusal, and the refusal witness confirm sheet
+    // (driverChargeWitness*).
+    test('en, ar and ur each carry exactly 2675 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2675);
+      expect(_translatableKeys(ar).length, 2675);
+      expect(_translatableKeys(ur).length, 2675);
     });
   });
 

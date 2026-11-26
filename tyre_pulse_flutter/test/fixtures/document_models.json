@@ -513,6 +513,8 @@
         "location_status": "captured",
         "location_captured_at": "2026-09-05T13:31:00Z",
         "frozen_at": "2026-09-05T13:25:00Z",
+        "from_on_behalf": true,
+        "to_on_behalf": false,
         "supervisor_name": null,
         "supervisor_signature": null,
         "supervisor_at": null,
@@ -617,7 +619,7 @@
             "title": "Handing over",
             "signature": "data:image/png;base64,AAAA",
             "name": "Yard Keeper",
-            "sub": "Signed: 5 Sept 2026, 16:25"
+            "sub": "Signed: 5 Sept 2026, 16:25, signed on their behalf by a supervisor"
           },
           {
             "title": "Receiving",

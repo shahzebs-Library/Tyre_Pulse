@@ -114,6 +114,11 @@ abstract interface class HandoverRemoteRepository {
   /// Records one party's signature through `sign_handover`. Online only:
   /// throws [SupabaseFailure] (cause `offline` when there is no connection).
   Future<HandoverSignResult> sign(HandoverSignInput input);
+
+  /// The driver-register id linked to the signed-in account
+  /// (`driver_account_links`), or null. Null only means the screen asks for
+  /// the on-behalf confirmation; the server decides.
+  Future<String?> myLinkedDriverId(String userId);
 }
 
 /// A driver from the register.
@@ -144,8 +149,13 @@ final class HandoverSignInput {
     this.longitude,
     this.accuracyMeters,
     this.locationStatus,
+    this.onBehalf = false,
   });
   final String handoverId;
+
+  /// Sent as `p_on_behalf`: true whenever the account is not the party's own
+  /// linked driver. Only a supervisor-level account is accepted with it.
+  final bool onBehalf;
   final HandoverParty party;
 
   /// A `data:image/png;base64,...` URL from the signature pad.
@@ -168,6 +178,7 @@ final class HandoverSignInput {
         'p_accuracy_m': accuracyMeters,
         'p_location_status':
             latitude == null || longitude == null ? locationStatus : null,
+        'p_on_behalf': onBehalf,
       };
 }
 
@@ -334,6 +345,24 @@ final class SupabaseHandoverRemoteRepository
       });
     } on Object {
       return const <HandoverDriverOption>[];
+    }
+  }
+
+  @override
+  Future<String?> myLinkedDriverId(String userId) async {
+    if (userId.isEmpty) return null;
+    try {
+      final Map<String, dynamic>? row = await guard<Map<String, dynamic>?>(
+        () => _client
+            .from('driver_account_links')
+            .select('driver_id')
+            .eq('user_id', userId)
+            .maybeSingle(),
+      );
+      final Object? id = row?['driver_id'];
+      return id == null ? null : '$id';
+    } on Object {
+      return null;
     }
   }
 

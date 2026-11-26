@@ -113,5 +113,15 @@
   "handoverAuthSigningStepInfo": "يوقع السائقان في صفحة التسليم بعد حفظه وأثناء الاتصال. يختم كل توقيع بوقت الخادم وموقع الجهاز، ويقفل السجل بعد التوقيع الأول.",
   "handoverAuthOpenToSign": "حفظ التسليم كمسودة. افتحه الآن لجمع التوقيعين.",
   "handoverAuthLegacySignature": "توقيع السائق المسجل قبل التوقيع من الطرفين",
-  "handoverAuthNotAvailable": "التوقيع من الطرفين غير متاح على الخادم بعد. اسأل المسؤول."
+  "handoverAuthNotAvailable": "التوقيع من الطرفين غير متاح على الخادم بعد. اسأل المسؤول.",
+  "handoverAuthOnBehalf": "أوقّع نيابة عن {name}",
+  "handoverAuthOnBehalfRequired": "أكد أنك توقع نيابة عن هذا الشخص.",
+  "handoverAuthBlocked": "حسابك مرتبط بالسائق الآخر في هذا التسليم، لذلك لا يمكنك التوقيع عن هذا الطرف. اترك هذا التوقيع للسائق أو للمشرف.",
+  "handoverAuthSignedOnBehalf": "وقّع عنه مشرف نيابة عنه",
+  "handoverAuthSentBack": "أعيد للتصحيح. حذفت التواقيع. صحح التسليم ووقّع مرة أخرى.",
+  "handoverAuthBadSignature": "تعذرت قراءة التوقيع. امسحه ووقّع مرة أخرى.",
+  "driverChargeWitnessConfirm": "تأكيد الرفض الذي شهدته",
+  "driverChargeWitnessIntro": "سميت شاهداً على رفض السائق التوقيع على هذا الإشعار. أكد فقط ما رأيته بنفسك.",
+  "driverChargeWitnessPending": "سجل الرفض. بانتظار تأكيد الشاهد المسمى من حسابه.",
+  "driverChargeWitnessSaved": "سجل تأكيدك كشاهد بوقت الخادم."
 }

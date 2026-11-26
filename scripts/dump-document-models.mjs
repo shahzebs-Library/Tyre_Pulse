@@ -73,7 +73,7 @@ const handoverRow = {
   from_signature: 'data:image/png;base64,AAAA', from_signed_at: '2026-09-05T13:25:00Z',
   to_signature: 'data:image/png;base64,BBBB', to_signed_at: '2026-09-05T13:31:00Z',
   latitude: 21.4858, longitude: 39.1925, location_accuracy_m: 12.6, location_status: 'captured',
-  location_captured_at: '2026-09-05T13:31:00Z', frozen_at: '2026-09-05T13:25:00Z',
+  location_captured_at: '2026-09-05T13:31:00Z', frozen_at: '2026-09-05T13:25:00Z', from_on_behalf: true, to_on_behalf: false,
   supervisor_name: null, supervisor_signature: null, supervisor_at: null,
   incharge_name: null, incharge_signature: null, incharge_at: null,
 }

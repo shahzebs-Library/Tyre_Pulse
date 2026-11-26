@@ -18,6 +18,8 @@ String driverChargeStatusLabel(AppLocalizations l10n, String? status) =>
       'deducted' => l10n.driverChargeStatusDeducted,
       'waived' => l10n.driverChargeStatusWaived,
       'cancelled_wrongly_issued' => l10n.driverChargeStatusCancelled,
+      // A status added on the server later still reads as words, never blank.
+      final String other when other.isNotEmpty => other.replaceAll('_', ' '),
       _ => l10n.valueUnavailable,
     };
 
@@ -29,6 +31,8 @@ String driverChargeCategoryLabel(AppLocalizations l10n, String? category) =>
       'missing_item' => l10n.driverChargeCatMissingItem,
       'handover_damage' => l10n.driverChargeCatHandoverDamage,
       'other' => l10n.driverChargeCatOther,
+      final String unknown when unknown.isNotEmpty =>
+        unknown.replaceAll('_', ' '),
       _ => l10n.valueUnavailable,
     };
 
@@ -40,7 +44,8 @@ String driverChargeSourceLabel(AppLocalizations l10n, String? source) =>
       'checklist_submission' => l10n.driverChargeSrcChecklist,
       'tyre_record' => l10n.driverChargeSrcTyre,
       'driver_fine' => l10n.driverChargeSrcFine,
-      _ => l10n.driverChargeSrcNone,
+      'none' || null || '' => l10n.driverChargeSrcNone,
+      final String other => other.replaceAll('_', ' '),
     };
 
 /// `YYYY-MM-DD HH:mm` in the device zone, or "not available".

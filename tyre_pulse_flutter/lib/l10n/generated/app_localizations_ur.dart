@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -3175,100 +3174,109 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String driverWsTerm(String term) {
-    String _temp0 = intl.Intl.selectLogic(term, {
-      'create_driver': 'تصدیق شدہ ڈرائیور شامل کریں',
-      'link_account': 'لاگ ان اکاؤنٹ منسلک کریں',
-      'assign_team': 'ٹیم اور گاڑی تفویض کریں',
-      'create_fine': 'ٹریفک جرمانہ درج کریں',
-      'link_record': 'کام کا ریکارڈ منسلک کریں',
-      'respond_fine': 'جائزہ لیں اور دستخط کریں',
-      'review_fine': 'جواب یا ادائیگی کا جائزہ',
-      'correct_fine': 'جرمانہ درست کریں',
-      'reassign_fine': 'جرمانہ دوبارہ تفویض کریں',
-      'direct_payment': 'میں براہ راست ادائیگی کروں گا',
-      'already_paid': 'پہلے ہی ادا کر دیا ہے',
-      'dispute': 'اعتراض یا غلط تفویض',
-      'company_recovery': 'کمپنی کی ادائیگی یا وصولی کی درخواست',
-      'instalments': 'قسطوں کی درخواست',
-      'approve': 'درخواست منظور کریں',
-      'return': 'ڈرائیور کو واپس بھیجیں',
-      'payment': 'تصدیق شدہ ادائیگی درج کریں',
-      'cancel': 'جرمانہ منسوخ کریں',
-      'reopen': 'دوبارہ کھولیں',
-      'open': 'کھلا',
-      'settled': 'ادا شدہ',
-      'cancelled': 'منسوخ',
-      'awaiting_response': 'جواب کا انتظار',
-      'submitted': 'جواب جمع ہو گیا',
-      'returned': 'ڈرائیور کو واپس',
-      'approved': 'منظور شدہ',
-      'driver_documents': 'ڈرائیور کے دستاویزات',
-      'driver_training': 'ڈرائیور کی تربیت',
-      'driver_coaching': 'ڈرائیور کی رہنمائی',
-      'driver_safety_events': 'ڈرائیور کے حفاظتی واقعات',
-      'driver_expenses': 'ڈرائیور کے اخراجات',
-      'tyre_records': 'ٹائر کے ریکارڈ',
-      'accidents': 'حادثات',
-      'wo_tasks': 'ورک آرڈر کے کام',
-      'checklist_submissions': 'جمع شدہ چیک لسٹیں',
-      'odometer_logs': 'اوڈومیٹر ریڈنگز',
-      'wash_records': 'دھلائی کے ریکارڈ',
-      'other': '',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      term,
+      {
+        'create_driver': 'تصدیق شدہ ڈرائیور شامل کریں',
+        'link_account': 'لاگ ان اکاؤنٹ منسلک کریں',
+        'assign_team': 'ٹیم اور گاڑی تفویض کریں',
+        'create_fine': 'ٹریفک جرمانہ درج کریں',
+        'link_record': 'کام کا ریکارڈ منسلک کریں',
+        'respond_fine': 'جائزہ لیں اور دستخط کریں',
+        'review_fine': 'جواب یا ادائیگی کا جائزہ',
+        'correct_fine': 'جرمانہ درست کریں',
+        'reassign_fine': 'جرمانہ دوبارہ تفویض کریں',
+        'direct_payment': 'میں براہ راست ادائیگی کروں گا',
+        'already_paid': 'پہلے ہی ادا کر دیا ہے',
+        'dispute': 'اعتراض یا غلط تفویض',
+        'company_recovery': 'کمپنی کی ادائیگی یا وصولی کی درخواست',
+        'instalments': 'قسطوں کی درخواست',
+        'approve': 'درخواست منظور کریں',
+        'return': 'ڈرائیور کو واپس بھیجیں',
+        'payment': 'تصدیق شدہ ادائیگی درج کریں',
+        'cancel': 'جرمانہ منسوخ کریں',
+        'reopen': 'دوبارہ کھولیں',
+        'open': 'کھلا',
+        'settled': 'ادا شدہ',
+        'cancelled': 'منسوخ',
+        'awaiting_response': 'جواب کا انتظار',
+        'submitted': 'جواب جمع ہو گیا',
+        'returned': 'ڈرائیور کو واپس',
+        'approved': 'منظور شدہ',
+        'driver_documents': 'ڈرائیور کے دستاویزات',
+        'driver_training': 'ڈرائیور کی تربیت',
+        'driver_coaching': 'ڈرائیور کی رہنمائی',
+        'driver_safety_events': 'ڈرائیور کے حفاظتی واقعات',
+        'driver_expenses': 'ڈرائیور کے اخراجات',
+        'tyre_records': 'ٹائر کے ریکارڈ',
+        'accidents': 'حادثات',
+        'wo_tasks': 'ورک آرڈر کے کام',
+        'checklist_submissions': 'جمع شدہ چیک لسٹیں',
+        'odometer_logs': 'اوڈومیٹر ریڈنگز',
+        'wash_records': 'دھلائی کے ریکارڈ',
+        'other': '',
+      },
+    );
     return '$_temp0';
   }
 
   @override
   String driverWsRecordField(String field) {
-    String _temp0 = intl.Intl.selectLogic(field, {
-      'country': 'ملک',
-      'site': 'مقام',
-      'asset_no': 'اثاثہ نمبر',
-      'driver_name': 'ڈرائیور کا نام',
-      'title': 'عنوان',
-      'doc_type': 'دستاویز کی قسم',
-      'doc_number': 'دستاویز نمبر',
-      'expiry_date': 'میعاد ختم ہونے کی تاریخ',
-      'course_name': 'کورس کا نام',
-      'result': 'نتیجہ',
-      'completed_date': 'تکمیل کی تاریخ',
-      'coaching_status': 'رہنمائی کی حالت',
-      'period': 'مدت',
-      'event_type': 'واقعے کی قسم',
-      'severity': 'شدت',
-      'event_at': 'واقعے کا وقت',
-      'category': 'زمرہ',
-      'amount': 'رقم',
-      'currency': 'کرنسی',
-      'expense_date': 'خرچ کی تاریخ',
-      'status': 'حالت',
-      'incident_date': 'واقعے کی تاریخ',
-      'accident_type': 'حادثے کی قسم',
-      'due_date': 'آخری تاریخ',
-      'created_at': 'بنانے کی تاریخ',
-      'reading_date': 'ریڈنگ کی تاریخ',
-      'odometer_km': 'اوڈومیٹر (کلومیٹر)',
-      'wash_date': 'دھلائی کی تاریخ',
-      'template_name': 'چیک لسٹ کا نام',
-      'approval_status': 'منظوری کی حالت',
-      'brand': 'برانڈ',
-      'serial_no': 'سیریل نمبر',
-      'issue_date': 'اجراء کی تاریخ',
-      'qty': 'مقدار',
-      'cost_per_tyre': 'فی ٹائر لاگت',
-      'other': '',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      field,
+      {
+        'country': 'ملک',
+        'site': 'مقام',
+        'asset_no': 'اثاثہ نمبر',
+        'driver_name': 'ڈرائیور کا نام',
+        'title': 'عنوان',
+        'doc_type': 'دستاویز کی قسم',
+        'doc_number': 'دستاویز نمبر',
+        'expiry_date': 'میعاد ختم ہونے کی تاریخ',
+        'course_name': 'کورس کا نام',
+        'result': 'نتیجہ',
+        'completed_date': 'تکمیل کی تاریخ',
+        'coaching_status': 'رہنمائی کی حالت',
+        'period': 'مدت',
+        'event_type': 'واقعے کی قسم',
+        'severity': 'شدت',
+        'event_at': 'واقعے کا وقت',
+        'category': 'زمرہ',
+        'amount': 'رقم',
+        'currency': 'کرنسی',
+        'expense_date': 'خرچ کی تاریخ',
+        'status': 'حالت',
+        'incident_date': 'واقعے کی تاریخ',
+        'accident_type': 'حادثے کی قسم',
+        'due_date': 'آخری تاریخ',
+        'created_at': 'بنانے کی تاریخ',
+        'reading_date': 'ریڈنگ کی تاریخ',
+        'odometer_km': 'اوڈومیٹر (کلومیٹر)',
+        'wash_date': 'دھلائی کی تاریخ',
+        'template_name': 'چیک لسٹ کا نام',
+        'approval_status': 'منظوری کی حالت',
+        'brand': 'برانڈ',
+        'serial_no': 'سیریل نمبر',
+        'issue_date': 'اجراء کی تاریخ',
+        'qty': 'مقدار',
+        'cost_per_tyre': 'فی ٹائر لاگت',
+        'other': '',
+      },
+    );
     return '$_temp0';
   }
 
   @override
   String driverWsEvidenceKind(String kind) {
-    String _temp0 = intl.Intl.selectLogic(kind, {
-      'payment': 'ادائیگی کی رسید',
-      'supporting': 'معاون تصویر',
-      'notice': 'سرکاری نوٹس',
-      'other': '',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      kind,
+      {
+        'payment': 'ادائیگی کی رسید',
+        'supporting': 'معاون تصویر',
+        'notice': 'سرکاری نوٹس',
+        'other': '',
+      },
+    );
     return '$_temp0';
   }
 
@@ -4895,10 +4903,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String accRegisterClaimConfirm(
-    String claimNo,
-    String insurer,
-    String policyNo,
-  ) {
+      String claimNo, String insurer, String policyNo) {
     return 'پالیسی $policyNo کے تحت $insurer کے لیے دعویٰ $claimNo کیس میں درج ہو جائے گا۔ ایپ سے اسے واپس نہیں لیا جا سکتا۔';
   }
 
@@ -5394,7 +5399,8 @@ class AppLocalizationsUr extends AppLocalizations {
       locale: localeName,
       other:
           '$count فلیٹ نتائج · اثاثہ، فلیٹ، پلیٹ، قسم، میک، ماڈل یا سائٹ سے تلاش کریں',
-      one: '1 فلیٹ نتیجہ · اثاثہ، فلیٹ، پلیٹ، قسم، میک، ماڈل یا سائٹ سے تلاش کریں',
+      one:
+          '1 فلیٹ نتیجہ · اثاثہ، فلیٹ، پلیٹ، قسم، میک، ماڈل یا سائٹ سے تلاش کریں',
     );
     return '$_temp0';
   }
@@ -8813,11 +8819,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String approvalsBulkResultMessage(
-    int approved,
-    int skipped,
-    int decided,
-    int failed,
-  ) {
+      int approved, int skipped, int decided, int failed) {
     return 'منظور: $approved\nٹائر ریڈنگ نامکمل، چھوڑے گئے: $skipped\nکسی اور نے پہلے فیصلہ کیا: $decided\nناکام: $failed';
   }
 
@@ -8915,10 +8917,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String driverChargeInstalmentLine(
-    String month,
-    String amount,
-    String status,
-  ) {
+      String month, String amount, String status) {
     return '$month: $amount ($status)';
   }
 
@@ -9223,4 +9222,45 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get storeHistoryCopyCatalog =>
       'historyTitle=اسٹور کی تاریخ~itemTitle=اسٹاک آئٹم~onHand=موجود~reserved=محفوظ~available=دستیاب~minLevel=کم از کم~criticalLevel=نازک حد~levelsNote=دوبارہ آرڈر کی حدیں ایڈمن ویب پر طے کرتا ہے۔~recent=حالیہ نقل و حرکت~fullHistory=مکمل تاریخ~loadMore=مزید دکھائیں~noMovements=ابھی کوئی نقل و حرکت نہیں~noMovementsBody=اس آئٹم کی وصولی، اجرا، منتقلی اور گنتی پوسٹ ہونے کے بعد یہاں نظر آئیں گی۔~noMatch=ان فلٹرز سے کوئی نقل و حرکت نہیں ملی~noMatchBody=تاریخیں بڑھائیں یا کوئی فلٹر ہٹائیں۔~balanceAfter=بیلنس~by=بذریعہ~ref=حوالہ~unknownUser=درج نہیں~cat_receipt=وصولی~cat_issue=اجرا~cat_returned=واپسی~cat_transfer=منتقلی~cat_adjustment=ایڈجسٹمنٹ~cat_count=گنتی~cat_opening=ابتدائی بیلنس~cat_erpLedger=ERP لیجر~cat_other=دیگر~filter_all=تمام اقسام~dateRange=تاریخیں~anyDate=کوئی بھی تاریخ~allLocations=تمام مقامات~location=مقام~searchItem=آئٹم تلاش کریں~clearFilters=فلٹر صاف کریں~type=قسم~stockIn=آمد~stockOut=اخراج~net=خالص تبدیلی~openingsNote=ابتدائی بیلنس آمد میں شمار نہیں ہوتے۔~byMonth=ماہانہ~summaryFailed=مجموعے لوڈ نہیں ہو سکے۔~summaryCapped=مجموعے کے لیے نقل و حرکت بہت زیادہ ہے۔ تاریخیں محدود کریں۔~receive=اسٹاک وصول کریں~type_receipt=وصولی (نیا اسٹاک)~type_returned=اسٹور میں واپسی~quantity=مقدار~reference=حوالہ (GRN، جاب کارڈ)~reason=نوٹ~post=پوسٹ کریں~cancel=منسوخ~postedTitle=اسٹاک پوسٹ ہو گیا~postedBody=نیا بیلنس~done=ہو گیا~receiveNote=سیدھا اسٹاک لیجر میں پوسٹ ہوتا ہے۔ سرور جانچتا ہے کہ آپ یہ قسم پوسٹ کر سکتے ہیں۔~qtyRequired=مقدار درج کریں~qtyPositive=مقدار صفر سے زیادہ ہونی چاہیے~qtyWhole=پورا عدد استعمال کریں~qtyTooLarge=یہ مقدار بہت زیادہ ہے~refTooLong=حوالہ بہت لمبا ہے~postOffline=کنکشن نہیں۔ کچھ پوسٹ نہیں ہوا؛ آن لائن ہونے پر دوبارہ کوشش کریں۔~postFailed=نقل و حرکت پوسٹ نہیں ہو سکی۔~loadFailed=اسٹاک کی تاریخ لوڈ نہیں ہو سکی۔~openItem=آئٹم کی تفصیل کھولیں';
+
+  @override
+  String handoverAuthOnBehalf(String name) {
+    return 'میں $name کی جانب سے دستخط کر رہا ہوں';
+  }
+
+  @override
+  String get handoverAuthOnBehalfRequired =>
+      'تصدیق کریں کہ آپ اس شخص کی جانب سے دستخط کر رہے ہیں۔';
+
+  @override
+  String get handoverAuthBlocked =>
+      'آپ کا اکاؤنٹ اس حوالگی کے دوسرے ڈرائیور سے منسلک ہے، اس لیے آپ اس فریق کے لیے دستخط نہیں کر سکتے۔ یہ دستخط ڈرائیور یا سپروائزر پر چھوڑ دیں۔';
+
+  @override
+  String get handoverAuthSignedOnBehalf =>
+      'سپروائزر نے ان کی جانب سے دستخط کیے';
+
+  @override
+  String get handoverAuthSentBack =>
+      'درستی کے لیے واپس بھیجا گیا۔ دستخط ہٹا دیے گئے۔ حوالگی درست کر کے دوبارہ دستخط کریں۔';
+
+  @override
+  String get handoverAuthBadSignature =>
+      'دستخط پڑھا نہیں جا سکا۔ اسے مٹا کر دوبارہ دستخط کریں۔';
+
+  @override
+  String get driverChargeWitnessConfirm =>
+      'جس انکار کے آپ گواہ تھے اس کی تصدیق کریں';
+
+  @override
+  String get driverChargeWitnessIntro =>
+      'آپ کو ڈرائیور کے اس نوٹس پر دستخط سے انکار کا گواہ نامزد کیا گیا ہے۔ صرف وہی تصدیق کریں جو آپ نے خود دیکھا۔';
+
+  @override
+  String get driverChargeWitnessPending =>
+      'انکار درج ہو گیا۔ نامزد گواہ کی اپنے اکاؤنٹ سے تصدیق کا انتظار ہے۔';
+
+  @override
+  String get driverChargeWitnessSaved =>
+      'آپ کی گواہی کی تصدیق سرور کے وقت کے ساتھ درج ہو گئی۔';
 }

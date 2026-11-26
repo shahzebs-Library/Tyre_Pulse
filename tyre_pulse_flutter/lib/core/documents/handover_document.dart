@@ -405,11 +405,17 @@ List<HandoverSignatureBlock> _signatureBlocks(
         final String? name = !f.blank(named) && jsTruthy(named)
             ? jsString(named)
             : (jsTruthy(fallback) ? jsString(fallback) : null);
-        final String sub = jsTruthy(at)
+        String sub = jsTruthy(at)
             ? '${b['at_label'] ?? 'Signed'}: ${f.when(at)}'
             : (jsTruthy(signature)
                 ? 'Signed'
                 : '${b['pending_text'] ?? 'Not signed'}');
+        // An on-behalf signature says so on the paper, not only in the data.
+        if (jsTruthy(signature) &&
+            b['behalf'] != null &&
+            row['${b['behalf']}'] == true) {
+          sub = '$sub, ${jsTruthy(b['behalf_text']) ? b['behalf_text'] : 'signed on behalf'}';
+        }
         return HandoverSignatureBlock(
           title: '${b['title']}',
           signature: jsTruthy(signature) ? jsString(signature) : null,

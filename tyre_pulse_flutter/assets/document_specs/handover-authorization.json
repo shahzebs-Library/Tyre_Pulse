@@ -9,7 +9,7 @@
     "column": "document_no",
     "format": "HO-<ASSET>-<YEAR>-<NNNN>",
     "fallback": "HND-<first 8 hex of id, upper case>",
-    "note": "Minted by the server at insert. Rows created before 20261126170000 keep their HND- number."
+    "note": "Minted by the server at insert. Rows created before 20261126171000 keep their HND- number."
   },
   "header": {
     "logo": "tenant branding logo, else the company name under the title",
@@ -108,7 +108,9 @@
           "name_fallback": "from_driver",
           "at": "from_signed_at",
           "at_label": "Signed",
-          "pending_text": "Not signed"
+          "pending_text": "Not signed",
+          "behalf": "from_on_behalf",
+          "behalf_text": "signed on their behalf by a supervisor"
         },
         {
           "title": "Receiving",
@@ -117,14 +119,16 @@
           "name_fallback": "to_driver",
           "at": "to_signed_at",
           "at_label": "Signed",
-          "pending_text": "Not signed"
+          "pending_text": "Not signed",
+          "behalf": "to_on_behalf",
+          "behalf_text": "signed on their behalf by a supervisor"
         }
       ],
       "legacy_block": {
         "title": "Driver",
         "signature": "signature_url",
         "name_fallback": "to_driver",
-        "when": "the row has no from_signature and no to_signature (created before 20261126170000)"
+        "when": "the row has no from_signature and no to_signature (created before 20261126171000)"
       }
     },
     {

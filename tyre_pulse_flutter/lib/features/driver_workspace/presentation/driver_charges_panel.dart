@@ -257,9 +257,12 @@ class _DriverChargeDetailScreenState
       useSafeArea: true,
       builder: (BuildContext context) => FractionallySizedBox(
         heightFactor: 0.96,
-        child: action == chargeActionRespond
-            ? DriverChargeResponseSheet(detail: detail)
-            : DriverChargeAppealSheet(detail: detail),
+        child: switch (action) {
+          chargeActionRespond => DriverChargeResponseSheet(detail: detail),
+          chargeActionWitnessConfirm =>
+            DriverChargeWitnessSheet(detail: detail),
+          _ => DriverChargeAppealSheet(detail: detail),
+        },
       ),
     );
     if (saved == true && mounted) {
@@ -406,6 +409,13 @@ class _DriverChargeDetailScreenState
               ),
             ),
           ),
+          if (chargeAwaitsWitness(c))
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(l10n.driverChargeWitnessPending),
+              ),
+            ),
           if (c['superseded_by_charge_id'] != null)
             Card(
               color: theme.colorScheme.errorContainer,
@@ -420,14 +430,19 @@ class _DriverChargeDetailScreenState
               child: FilledButton.icon(
                 onPressed: () => _act(action),
                 icon: Icon(
-                  action == chargeActionRespond
-                      ? Icons.draw_outlined
-                      : Icons.gavel_outlined,
+                  switch (action) {
+                    chargeActionRespond => Icons.draw_outlined,
+                    chargeActionWitnessConfirm => Icons.how_to_reg_outlined,
+                    _ => Icons.gavel_outlined,
+                  },
                 ),
                 label: Text(
-                  action == chargeActionRespond
-                      ? l10n.driverChargeRespond
-                      : l10n.driverChargeAppealAction,
+                  switch (action) {
+                    chargeActionRespond => l10n.driverChargeRespond,
+                    chargeActionWitnessConfirm =>
+                      l10n.driverChargeWitnessConfirm,
+                    _ => l10n.driverChargeAppealAction,
+                  },
                 ),
               ),
             ),
@@ -871,6 +886,132 @@ class _DriverChargeAppealSheetState
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Text(l10n.driverChargeAppealSubmit),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// Step 2 of a refusal: the named witness reads the server statement,
+/// confirms it and signs from their own account.
+class DriverChargeWitnessSheet extends ConsumerStatefulWidget {
+  const DriverChargeWitnessSheet({required this.detail, super.key});
+  final DriverChargeDetail detail;
+
+  @override
+  ConsumerState<DriverChargeWitnessSheet> createState() =>
+      _DriverChargeWitnessSheetState();
+}
+
+class _DriverChargeWitnessSheetState
+    extends ConsumerState<DriverChargeWitnessSheet> {
+  final String _requestId = const Uuid().v4();
+  bool _acknowledged = false;
+  String? _signature;
+  String? _message;
+  bool _busy = false;
+
+  Future<void> _submit() async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    if (!_acknowledged) {
+      setState(() => _message = l10n.driverChargeIssueAck);
+      return;
+    }
+    if (_signature == null || _signature!.isEmpty) {
+      setState(() => _message = l10n.driverChargeIssueSignature);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await ref.read(driverChargeRepositoryProvider).command(
+            chargeActionWitnessConfirm,
+            chargeWitnessPayload(
+              charge: widget.detail.charge,
+              signature: _signature!,
+            ),
+            _requestId,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.driverChargeWitnessSaved)),
+      );
+      Navigator.of(context).pop(true);
+    } on Object catch (error) {
+      if (mounted) {
+        setState(
+          () => _message = _errorText(l10n, error, l10n.driverChargeOffline),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String? statement =
+        widget.detail.statement(chargeWitnessStatement);
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.driverChargeWitnessConfirm)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: <Widget>[
+          Text(l10n.driverChargeWitnessIntro),
+          const SizedBox(height: 12),
+          Text(
+            l10n.driverChargeStatementTitle,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          Text(
+            l10n.driverChargeStatementEnglishOnly,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Directionality(
+                textDirection: TextDirection.ltr,
+                child: Text(statement ?? l10n.driverChargeStatementMissing),
+              ),
+            ),
+          ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _acknowledged,
+            onChanged: statement == null || _busy
+                ? null
+                : (bool? v) => setState(() => _acknowledged = v ?? false),
+            title: Text(l10n.driverChargeAcknowledge),
+          ),
+          Text(l10n.driverChargeSignBelow),
+          InspectionApprovalSignaturePad(
+            onChanged: (InspectionApprovalSignatureCapture? capture) =>
+                setState(() => _signature = capture?.dataUrl),
+          ),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _message!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: _busy || statement == null ? null : _submit,
+            child: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(l10n.driverChargeSubmit),
           ),
         ],
       ),

@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -3165,100 +3164,109 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String driverWsTerm(String term) {
-    String _temp0 = intl.Intl.selectLogic(term, {
-      'create_driver': 'إضافة سائق موثّق',
-      'link_account': 'ربط حساب الدخول',
-      'assign_team': 'تعيين الفريق والمركبة',
-      'create_fine': 'تسجيل مخالفة مرورية',
-      'link_record': 'ربط سجل عمل',
-      'respond_fine': 'مراجعة وتوقيع',
-      'review_fine': 'مراجعة الرد أو السداد',
-      'correct_fine': 'تصحيح المخالفة',
-      'reassign_fine': 'إعادة إسناد المخالفة',
-      'direct_payment': 'سأسدد مباشرة',
-      'already_paid': 'تم السداد بالفعل',
-      'dispute': 'اعتراض أو إسناد غير صحيح',
-      'company_recovery': 'طلب سداد الشركة أو الاسترداد',
-      'instalments': 'طلب التقسيط',
-      'approve': 'اعتماد الطلب',
-      'return': 'إعادة للسائق',
-      'payment': 'تسجيل سداد متحقق منه',
-      'cancel': 'إلغاء المخالفة',
-      'reopen': 'إعادة فتح',
-      'open': 'مفتوحة',
-      'settled': 'مسددة',
-      'cancelled': 'ملغاة',
-      'awaiting_response': 'بانتظار الرد',
-      'submitted': 'تم إرسال الرد',
-      'returned': 'أعيدت للسائق',
-      'approved': 'معتمدة',
-      'driver_documents': 'مستندات السائق',
-      'driver_training': 'تدريب السائق',
-      'driver_coaching': 'توجيه السائق',
-      'driver_safety_events': 'أحداث سلامة السائق',
-      'driver_expenses': 'مصروفات السائق',
-      'tyre_records': 'سجلات الإطارات',
-      'accidents': 'الحوادث',
-      'wo_tasks': 'مهام أوامر العمل',
-      'checklist_submissions': 'قوائم الفحص المرسلة',
-      'odometer_logs': 'قراءات عداد المسافات',
-      'wash_records': 'سجلات الغسيل',
-      'other': '',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      term,
+      {
+        'create_driver': 'إضافة سائق موثّق',
+        'link_account': 'ربط حساب الدخول',
+        'assign_team': 'تعيين الفريق والمركبة',
+        'create_fine': 'تسجيل مخالفة مرورية',
+        'link_record': 'ربط سجل عمل',
+        'respond_fine': 'مراجعة وتوقيع',
+        'review_fine': 'مراجعة الرد أو السداد',
+        'correct_fine': 'تصحيح المخالفة',
+        'reassign_fine': 'إعادة إسناد المخالفة',
+        'direct_payment': 'سأسدد مباشرة',
+        'already_paid': 'تم السداد بالفعل',
+        'dispute': 'اعتراض أو إسناد غير صحيح',
+        'company_recovery': 'طلب سداد الشركة أو الاسترداد',
+        'instalments': 'طلب التقسيط',
+        'approve': 'اعتماد الطلب',
+        'return': 'إعادة للسائق',
+        'payment': 'تسجيل سداد متحقق منه',
+        'cancel': 'إلغاء المخالفة',
+        'reopen': 'إعادة فتح',
+        'open': 'مفتوحة',
+        'settled': 'مسددة',
+        'cancelled': 'ملغاة',
+        'awaiting_response': 'بانتظار الرد',
+        'submitted': 'تم إرسال الرد',
+        'returned': 'أعيدت للسائق',
+        'approved': 'معتمدة',
+        'driver_documents': 'مستندات السائق',
+        'driver_training': 'تدريب السائق',
+        'driver_coaching': 'توجيه السائق',
+        'driver_safety_events': 'أحداث سلامة السائق',
+        'driver_expenses': 'مصروفات السائق',
+        'tyre_records': 'سجلات الإطارات',
+        'accidents': 'الحوادث',
+        'wo_tasks': 'مهام أوامر العمل',
+        'checklist_submissions': 'قوائم الفحص المرسلة',
+        'odometer_logs': 'قراءات عداد المسافات',
+        'wash_records': 'سجلات الغسيل',
+        'other': '',
+      },
+    );
     return '$_temp0';
   }
 
   @override
   String driverWsRecordField(String field) {
-    String _temp0 = intl.Intl.selectLogic(field, {
-      'country': 'الدولة',
-      'site': 'الموقع',
-      'asset_no': 'رقم الأصل',
-      'driver_name': 'اسم السائق',
-      'title': 'العنوان',
-      'doc_type': 'نوع المستند',
-      'doc_number': 'رقم المستند',
-      'expiry_date': 'تاريخ الانتهاء',
-      'course_name': 'اسم الدورة',
-      'result': 'النتيجة',
-      'completed_date': 'تاريخ الإكمال',
-      'coaching_status': 'حالة التوجيه',
-      'period': 'الفترة',
-      'event_type': 'نوع الحدث',
-      'severity': 'الخطورة',
-      'event_at': 'وقت الحدث',
-      'category': 'الفئة',
-      'amount': 'المبلغ',
-      'currency': 'العملة',
-      'expense_date': 'تاريخ المصروف',
-      'status': 'الحالة',
-      'incident_date': 'تاريخ الحادث',
-      'accident_type': 'نوع الحادث',
-      'due_date': 'تاريخ الاستحقاق',
-      'created_at': 'تاريخ الإنشاء',
-      'reading_date': 'تاريخ القراءة',
-      'odometer_km': 'عداد المسافات (كم)',
-      'wash_date': 'تاريخ الغسيل',
-      'template_name': 'اسم قائمة الفحص',
-      'approval_status': 'حالة الاعتماد',
-      'brand': 'العلامة التجارية',
-      'serial_no': 'الرقم التسلسلي',
-      'issue_date': 'تاريخ الإصدار',
-      'qty': 'الكمية',
-      'cost_per_tyre': 'التكلفة لكل إطار',
-      'other': '',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      field,
+      {
+        'country': 'الدولة',
+        'site': 'الموقع',
+        'asset_no': 'رقم الأصل',
+        'driver_name': 'اسم السائق',
+        'title': 'العنوان',
+        'doc_type': 'نوع المستند',
+        'doc_number': 'رقم المستند',
+        'expiry_date': 'تاريخ الانتهاء',
+        'course_name': 'اسم الدورة',
+        'result': 'النتيجة',
+        'completed_date': 'تاريخ الإكمال',
+        'coaching_status': 'حالة التوجيه',
+        'period': 'الفترة',
+        'event_type': 'نوع الحدث',
+        'severity': 'الخطورة',
+        'event_at': 'وقت الحدث',
+        'category': 'الفئة',
+        'amount': 'المبلغ',
+        'currency': 'العملة',
+        'expense_date': 'تاريخ المصروف',
+        'status': 'الحالة',
+        'incident_date': 'تاريخ الحادث',
+        'accident_type': 'نوع الحادث',
+        'due_date': 'تاريخ الاستحقاق',
+        'created_at': 'تاريخ الإنشاء',
+        'reading_date': 'تاريخ القراءة',
+        'odometer_km': 'عداد المسافات (كم)',
+        'wash_date': 'تاريخ الغسيل',
+        'template_name': 'اسم قائمة الفحص',
+        'approval_status': 'حالة الاعتماد',
+        'brand': 'العلامة التجارية',
+        'serial_no': 'الرقم التسلسلي',
+        'issue_date': 'تاريخ الإصدار',
+        'qty': 'الكمية',
+        'cost_per_tyre': 'التكلفة لكل إطار',
+        'other': '',
+      },
+    );
     return '$_temp0';
   }
 
   @override
   String driverWsEvidenceKind(String kind) {
-    String _temp0 = intl.Intl.selectLogic(kind, {
-      'payment': 'إيصال السداد',
-      'supporting': 'صورة داعمة',
-      'notice': 'المخالفة الرسمية',
-      'other': '',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      kind,
+      {
+        'payment': 'إيصال السداد',
+        'supporting': 'صورة داعمة',
+        'notice': 'المخالفة الرسمية',
+        'other': '',
+      },
+    );
     return '$_temp0';
   }
 
@@ -4889,10 +4897,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String accRegisterClaimConfirm(
-    String claimNo,
-    String insurer,
-    String policyNo,
-  ) {
+      String claimNo, String insurer, String policyNo) {
     return 'سيتم تسجيل المطالبة $claimNo لدى $insurer بموجب الوثيقة $policyNo في الحالة. لا يمكن التراجع عن ذلك من التطبيق.';
   }
 
@@ -5394,9 +5399,12 @@ class AppLocalizationsAr extends AppLocalizations {
           '$count نتيجة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
       few:
           '$count نتائج في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
-      two: 'نتيجتان في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
-      one: 'نتيجة واحدة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
-      zero: 'لا نتائج في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      two:
+          'نتيجتان في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      one:
+          'نتيجة واحدة في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
+      zero:
+          'لا نتائج في الأسطول · ابحث بالأصل أو الأسطول أو اللوحة أو النوع أو الصانع أو الطراز أو الموقع',
     );
     return '$_temp0';
   }
@@ -8801,11 +8809,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String approvalsBulkResultMessage(
-    int approved,
-    int skipped,
-    int decided,
-    int failed,
-  ) {
+      int approved, int skipped, int decided, int failed) {
     return 'تم الاعتماد: $approved\nتم التخطي لنقص قراءات الإطارات: $skipped\nقرّر فيها شخص آخر: $decided\nفشل: $failed';
   }
 
@@ -8903,10 +8907,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String driverChargeInstalmentLine(
-    String month,
-    String amount,
-    String status,
-  ) {
+      String month, String amount, String status) {
     return '$month: $amount ($status)';
   }
 
@@ -9208,4 +9209,41 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get storeHistoryCopyCatalog =>
       'historyTitle=سجل المخزن~itemTitle=صنف المخزون~onHand=المتوفر~reserved=المحجوز~available=المتاح~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~levelsNote=يحدد المسؤول حدود إعادة الطلب من الويب.~recent=آخر الحركات~fullHistory=السجل الكامل~loadMore=عرض المزيد~noMovements=لا توجد حركات بعد~noMovementsBody=تظهر هنا الاستلامات والصرف والتحويلات والجرد لهذا الصنف بعد ترحيلها.~noMatch=لا توجد حركات تطابق هذه المرشحات~noMatchBody=وسّع نطاق التواريخ أو امسح أحد المرشحات.~balanceAfter=الرصيد~by=بواسطة~ref=المرجع~unknownUser=غير مسجل~cat_receipt=استلام~cat_issue=صرف~cat_returned=إرجاع~cat_transfer=تحويل~cat_adjustment=تسوية~cat_count=جرد~cat_opening=رصيد افتتاحي~cat_erpLedger=دفتر ERP~cat_other=أخرى~filter_all=كل الأنواع~dateRange=التواريخ~anyDate=أي تاريخ~allLocations=كل المواقع~location=الموقع~searchItem=ابحث عن صنف~clearFilters=مسح المرشحات~type=النوع~stockIn=الوارد~stockOut=الصادر~net=صافي التغير~openingsNote=الأرصدة الافتتاحية لا تُحسب ضمن الوارد.~byMonth=حسب الشهر~summaryFailed=تعذر تحميل الإجماليات.~summaryCapped=الحركات كثيرة جداً لحساب الإجمالي. ضيّق نطاق التواريخ.~receive=استلام مخزون~type_receipt=استلام (مخزون جديد)~type_returned=إرجاع إلى المخزن~quantity=الكمية~reference=المرجع (إذن استلام، أمر عمل)~reason=ملاحظة~post=ترحيل~cancel=إلغاء~postedTitle=تم ترحيل المخزون~postedBody=الرصيد الجديد~done=تم~receiveNote=يُرحّل مباشرة إلى دفتر المخزون. يتحقق الخادم من صلاحيتك لهذا النوع.~qtyRequired=أدخل الكمية~qtyPositive=يجب أن تكون الكمية أكبر من صفر~qtyWhole=استخدم عدداً صحيحاً~qtyTooLarge=الكمية كبيرة جداً~refTooLong=المرجع طويل جداً~postOffline=لا يوجد اتصال. لم يُرحّل شيء؛ أعد المحاولة عند الاتصال.~postFailed=تعذر ترحيل الحركة.~loadFailed=تعذر تحميل سجل المخزون.~openItem=فتح تفاصيل الصنف';
+
+  @override
+  String handoverAuthOnBehalf(String name) {
+    return 'أوقّع نيابة عن $name';
+  }
+
+  @override
+  String get handoverAuthOnBehalfRequired => 'أكد أنك توقع نيابة عن هذا الشخص.';
+
+  @override
+  String get handoverAuthBlocked =>
+      'حسابك مرتبط بالسائق الآخر في هذا التسليم، لذلك لا يمكنك التوقيع عن هذا الطرف. اترك هذا التوقيع للسائق أو للمشرف.';
+
+  @override
+  String get handoverAuthSignedOnBehalf => 'وقّع عنه مشرف نيابة عنه';
+
+  @override
+  String get handoverAuthSentBack =>
+      'أعيد للتصحيح. حذفت التواقيع. صحح التسليم ووقّع مرة أخرى.';
+
+  @override
+  String get handoverAuthBadSignature =>
+      'تعذرت قراءة التوقيع. امسحه ووقّع مرة أخرى.';
+
+  @override
+  String get driverChargeWitnessConfirm => 'تأكيد الرفض الذي شهدته';
+
+  @override
+  String get driverChargeWitnessIntro =>
+      'سميت شاهداً على رفض السائق التوقيع على هذا الإشعار. أكد فقط ما رأيته بنفسك.';
+
+  @override
+  String get driverChargeWitnessPending =>
+      'سجل الرفض. بانتظار تأكيد الشاهد المسمى من حسابه.';
+
+  @override
+  String get driverChargeWitnessSaved => 'سجل تأكيدك كشاهد بوقت الخادم.';
 }

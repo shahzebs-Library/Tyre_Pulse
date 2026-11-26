@@ -36,6 +36,7 @@ DriverRow _detail({List<String> actions = const <String>[]}) =>
       'statements': <String, Object?>{
         'deduction-consent-v1': 'I accept and consent.',
         'receipt-dispute-v1': 'I received this and dispute it.',
+        'refusal-witness-v1': 'I witnessed the refusal.',
       },
       'settings': <String, Object?>{'cap_pct': 20, 'appeal_window_days': 7},
     };
@@ -91,7 +92,11 @@ void main() {
           'deducted_amount': 20,
           'status': 'scheduled',
         },
-        <String, Object?>{'currency': 'AED', 'amount': 50, 'status': 'notified'},
+        <String, Object?>{
+          'currency': 'AED',
+          'amount': 50,
+          'status': 'notified',
+        },
         <String, Object?>{'currency': 'SAR', 'amount': 70, 'status': 'waived'},
         <String, Object?>{
           'currency': 'SAR',
@@ -184,13 +189,20 @@ void main() {
       ),
     );
     expect(detail.mobileActions, <String>{'charge_respond'});
+    expect(
+      DriverChargeDetail(
+        _detail(actions: <String>['charge_witness_confirm', 'charge_waive']),
+      ).mobileActions,
+      <String>{'charge_witness_confirm'},
+    );
     expect(DriverChargeDetail(_detail()).mobileActions, isEmpty);
   });
 
   testWidgets('no respond button unless the server allows it',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      _app(_FakeRepo(_detail()), const DriverChargeDetailScreen(chargeId: 'c1')),
+      _app(
+          _FakeRepo(_detail()), const DriverChargeDetailScreen(chargeId: 'c1'),),
     );
     await tester.pumpAndSettle();
     expect(find.text('Respond to this charge'), findsNothing);
@@ -228,7 +240,8 @@ void main() {
       offline: true,
     );
     await tester.pumpWidget(
-      _app(repo, DriverChargeAppealSheet(detail: DriverChargeDetail(repo.detailData))),
+      _app(repo,
+          DriverChargeAppealSheet(detail: DriverChargeDetail(repo.detailData)),),
     );
     await tester.enterText(
       find.byType(TextField),
@@ -242,7 +255,8 @@ void main() {
     );
   });
 
-  testWidgets('section shows an honest empty state', (WidgetTester tester) async {
+  testWidgets('section shows an honest empty state',
+      (WidgetTester tester) async {
     await tester.pumpWidget(
       _app(
         _FakeRepo(_detail()),
@@ -286,5 +300,58 @@ void main() {
     );
     expect(find.text('الرد على هذه المطالبة'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  test('witness payload carries the refusal statement version', () {
+    expect(
+      chargeWitnessPayload(
+        charge: DriverChargeDetail(_detail()).charge,
+        signature: 'data:image/png;base64,AAAA',
+      ),
+      <String, Object?>{
+        'driver_id': 'd1',
+        'charge_id': 'c1',
+        'version': 3,
+        'statement_version': 'refusal-witness-v1',
+        'acknowledged': true,
+        'signature': 'data:image/png;base64,AAAA',
+      },
+    );
+    expect(
+      chargeAwaitsWitness(<String, Object?>{
+        'status': 'notified',
+        'refusal_witness_id': 'u2',
+      }),
+      isTrue,
+    );
+  });
+
+  testWidgets('witness confirm is offered only when the server allows it',
+      (WidgetTester tester) async {
+    final DriverRow data = _detail(actions: <String>['charge_witness_confirm']);
+    (data['charge']! as Map<String, Object?>)['refusal_witness_id'] = 'u2';
+    await tester.pumpWidget(
+      _app(_FakeRepo(data), const DriverChargeDetailScreen(chargeId: 'c1')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Confirm the refusal you witnessed'), findsOneWidget);
+    expect(
+        find.textContaining('Waiting for the named witness'), findsOneWidget,);
+    await tester.tap(find.text('Confirm the refusal you witnessed'));
+    await tester.pumpAndSettle();
+    expect(find.text('I witnessed the refusal.'), findsOneWidget);
+  });
+
+  testWidgets('an unknown status still reads as words',
+      (WidgetTester tester) async {
+    final DriverRow data = _detail();
+    (data['charge']! as Map<String, Object?>)['status'] =
+        'pending_payroll_lock';
+    await tester.pumpWidget(
+      _app(_FakeRepo(data), const DriverChargeDetailScreen(chargeId: 'c1')),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('pending payroll lock'), findsOneWidget);
   });
 }

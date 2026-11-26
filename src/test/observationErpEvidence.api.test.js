@@ -53,7 +53,7 @@ beforeEach(() => {
     observation_erp_link_events: [],
   }
   h.state.errors = {}; h.state.rpcError = null; h.state.calls = []
-  h.state.rules = { data: { rules_version: 'position-service-3', can_review: true, can_request_exception: true, can_approve_exception: false }, error: null }
+  h.state.rules = { data: { rules_version: ERP_RULES_VERSION, can_review: true, can_request_exception: true, can_approve_exception: false }, error: null }
   h.supabase.rpc.mockClear()
 })
 
@@ -205,7 +205,7 @@ describe('a decision is offered only when client and database run the same rules
     h.state.rules = { data: { rules_version: ERP_RULES_VERSION, can_review: true, can_request_exception: true, can_approve_exception: true }, error: null }
     expect(await api.getErpDecisionAvailability()).toMatchObject({ available: true, reason: 'ok', canReview: true, canRequestException: true, canApproveException: true })
   })
-  it.each(['position-service-2', 'position-service-4'])('version mismatch (%s): not available, whichever side is ahead', async (v) => {
+  it.each(['position-service-3', 'position-service-5'])('version mismatch (%s): not available, whichever side is ahead', async (v) => {
     h.state.rules = { data: { rules_version: v, can_review: true, can_request_exception: true, can_approve_exception: true }, error: null }
     expect(await api.getErpDecisionAvailability()).toMatchObject({ available: false, reason: 'version_mismatch', databaseVersion: v, canReview: false })
   })
@@ -221,11 +221,16 @@ describe('a decision is offered only when client and database run the same rules
     expect(s.provisioned).toBe(true)
     expect(s.decisions.available).toBe(false)
   })
-  it('the client version is the one written in the database draft', () => {
+  it('the client version is the one the latest migration writes into the database', () => {
+    // The draft set position-service-3; 20261126181000 (shared tyre map pump codes) moves both
+    // reporting functions to the next version. The client must name exactly that one.
     const sql = readFileSync(resolve(process.cwd(), 'supabase/pending_migrations/20261116091000_observation_erp_decide_on_position_service.sql'), 'utf8')
     const found = [...sql.matchAll(/'rules_version', '([^']+)'/g)].map((m) => m[1])
     expect(found.length).toBe(2)
-    expect(new Set(found)).toEqual(new Set([ERP_RULES_VERSION]))
+    expect(new Set(found)).toEqual(new Set(['position-service-3']))
+    const bump = readFileSync(resolve(process.cwd(), 'supabase/migrations/20261126181000_tyre_position_erp_spec_aliases.sql'), 'utf8')
+    expect(bump).toContain("'''position-service-3''', '''position-service-4'''")
+    expect(ERP_RULES_VERSION).toBe('position-service-4')
   })
   it('the message is the agreed wording', () => {
     expect(api.ERP_DECISIONS_UNAVAILABLE_MESSAGE).toBe('ERP confirmation is not available yet. Evidence can be reviewed, but a decision cannot be recorded until the database update is approved.')

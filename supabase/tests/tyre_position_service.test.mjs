@@ -12,6 +12,8 @@ const SQL = readFileSync(new URL('../pending_migrations/20261116090000_tyre_posi
 const fixture = JSON.parse(readFileSync(new URL('../../src/test/fixtures/tyrePositionCases.json', import.meta.url), 'utf8'))
 
 const TABLES = readFileSync(new URL('../pending_migrations/20261116085000_tyre_layout_versions_and_position_mappings.sql', import.meta.url), 'utf8')
+// The shared tyre map's pump codes and aliases (applied after the drafts, as on the live database).
+const SPEC_ALIASES = readFileSync(new URL('../migrations/20261126181000_tyre_position_erp_spec_aliases.sql', import.meta.url), 'utf8')
 
 async function createDb () {
   const db = new PGlite()
@@ -31,6 +33,7 @@ async function createDb () {
       created_at timestamptz not null default now(), updated_at timestamptz not null default now());`)
   await db.exec(TABLES)
   await db.exec(SQL)
+  await db.exec(SPEC_ALIASES)
   return db
 }
 
@@ -157,14 +160,15 @@ test('the layout reader is closed to app roles and reads the right machine', asy
     `select public.tyre_position_resolve(public.tyre_asset_layout($1, 'KSA', $2, null, null), $3, 'erp') v`, [ORG, asset, token])).rows[0].v
   assert.equal((await db.query(`select count(*)::int n from public.tyre_layout_position_mappings`)).rows[0].n, 0)
   await db.exec(`insert into public.vehicle_fleet (organisation_id, asset_no, country, vehicle_type, axle_count) values ('${ORG}', 'MP005', 'KSA', 'PUMPS', 5)`)
-  assert.equal((await res('MP005', 'LHRCO')).reason, 'erp_spelling_not_verified', 'pumps stay pending with no mapping')
+  assert.equal((await res('MP005', 'LHR3-O')).reason, 'erp_spelling_not_verified', 'a pump rear spelling the tyre map does not name stays pending with no mapping')
   await db.exec(`insert into public.tyre_layout_position_mappings (organisation_id, layout_key, erp_code, slot, evidence, verified_by)
-    values ('${ORG}', 'Concrete pump', 'lhrco', 'R1Lo', 'Checked against the axle diagram and two known replacements', '${ORG}')`)
-  const mapped = await res('MP005', 'LHRCO')
+    values ('${ORG}', 'Concrete pump', 'LHR3-O', 'R1Lo', 'Checked against the axle diagram and two known replacements', '${ORG}')`)
+  assert.equal((await res('MP005', 'LHRCO')).reason, 'tyre_map_code', 'the shared tyre map names LHRCO on the pump')
+  const mapped = await res('MP005', 'LHR3-O')
   assert.deepEqual([mapped.status, mapped.reason, mapped.slot], ['resolved', 'verified_mapping', 'R1Lo'])
-  assert.equal((await res('MP001', 'LHRCO')).status, 'ambiguous', 'the 4 axle build is another layout: no leak')
+  assert.equal((await res('MP001', 'LHR3-O')).status, 'ambiguous', 'the 4 axle build is another layout: no leak')
   await assert.rejects(db.exec(`update public.tyre_layout_position_mappings set slot = 'R2Lo'`), /cannot be rewritten/)
   await db.exec(`update public.tyre_layout_position_mappings set active = false`)
-  assert.equal((await res('MP005', 'LHRCO')).status, 'ambiguous', 'switched off: pending again')
+  assert.equal((await res('MP005', 'LHR3-O')).status, 'ambiguous', 'switched off: pending again')
   await db.close()
 })

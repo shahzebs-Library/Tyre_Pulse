@@ -42,7 +42,7 @@ import {
   LAYOUT_SLOTS, resolveLayoutKeyStrict, isTyrelessEquipment, layoutForAsset, AXLE_VARIANTS,
 } from './vehicleTyreLayout'
 import { positionsFromConfig } from './vehicleDiagram'
-import { slotForStoredPosition } from './tyreLayoutSpec'
+import { slotForStoredPosition, erpSpecSlots } from './tyreLayoutSpec'
 
 // The wheel codes ERP matching runs on. They are mirrored in SQL
 // (tyre_layout_for / tyre_position_resolve), so they leave out the shared map's
@@ -55,7 +55,7 @@ const ERP_SCOPE = { scope: 'erp' }
  * are the same: a client and a database on different rules can disagree about which wheel a
  * job card touched. CHANGE BOTH TOGETHER (pinned by observationErpEvidence.api.test.js).
  */
-export const ERP_RULES_VERSION = 'position-service-3'
+export const ERP_RULES_VERSION = 'position-service-4'
 
 export const POSITION_STATUS = Object.freeze({
   RESOLVED: 'resolved', AMBIGUOUS: 'ambiguous', UNKNOWN: 'unknown', INCONSISTENT: 'inconsistent',
@@ -228,6 +228,15 @@ function readCode(layout, token, kind) {
   if (mapped) {
     const wheel = layout.wheels.find((w) => w.slot === mapped.slot)
     if (wheel) return out(POSITION_STATUS.RESOLVED, 'verified_mapping', wheel)
+  }
+  // The shared tyre map's own code or recorded alias for a wheel of this built-in
+  // layout (the concrete pump's LHRCO / LHR1-I and its legacy LHCO / LHR2-O ...).
+  // Comparison only. Two wheels named by the same spelling stay pending.
+  if (layout.source === 'builtin') {
+    const named = erpSpecSlots(layout.key, token)
+      .map((s) => layout.wheels.find((w) => w.slot === s)).filter(Boolean)
+    if (named.length === 1) return out(POSITION_STATUS.RESOLVED, 'tyre_map_code', named[0])
+    if (named.length > 1) return out(POSITION_STATUS.AMBIGUOUS, 'tyre_map_code_ambiguous')
   }
   if (DUAL_REAR_RE.test(up(token))) return out(POSITION_STATUS.AMBIGUOUS, 'erp_spelling_not_verified')
   if (kind === 'erp' && PUMP_LAYOUT_KEYS.has(layout.key) && REAR_CODE_RE.test(up(token))) {

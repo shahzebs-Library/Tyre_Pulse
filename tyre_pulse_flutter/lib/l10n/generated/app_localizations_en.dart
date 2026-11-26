@@ -9243,4 +9243,28 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get driverChargeWitnessSaved =>
       'Your witness confirmation was recorded with the server time.';
+
+  @override
+  String get handoverAuthReceivingOtherAccount =>
+      'You gave the handing signature on this device account. The receiving signature must come from another person: the receiving driver\'s own account or a different supervisor.';
+
+  @override
+  String get handoverAuthSiteRequired =>
+      'Enter the site. This vehicle has no site in the fleet register.';
+
+  @override
+  String get handoverAuthSiteFromRegister =>
+      'Taken from the fleet register for this vehicle.';
+
+  @override
+  String get signatureSignAgain =>
+      'The signature is too short to be read. Please sign again with your full signature.';
+
+  @override
+  String get driverChargeLinkUnverified =>
+      'Link to source not confirmed by record';
+
+  @override
+  String get driverChargeAppealClosedDeducted =>
+      'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.';
 }

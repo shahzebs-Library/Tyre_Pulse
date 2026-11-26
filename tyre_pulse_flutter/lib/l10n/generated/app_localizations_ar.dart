@@ -9246,4 +9246,28 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get driverChargeWitnessSaved => 'سجل تأكيدك كشاهد بوقت الخادم.';
+
+  @override
+  String get handoverAuthReceivingOtherAccount =>
+      'قدمت توقيع التسليم من هذا الحساب. يجب أن يأتي توقيع الاستلام من شخص آخر: حساب السائق المستلم نفسه أو مشرف مختلف.';
+
+  @override
+  String get handoverAuthSiteRequired =>
+      'أدخل الموقع. لا يوجد موقع لهذه المركبة في سجل الأسطول.';
+
+  @override
+  String get handoverAuthSiteFromRegister =>
+      'مأخوذ من سجل الأسطول لهذه المركبة.';
+
+  @override
+  String get signatureSignAgain =>
+      'التوقيع قصير جداً ولا يمكن قراءته. يرجى التوقيع مرة أخرى بتوقيعك الكامل.';
+
+  @override
+  String get driverChargeLinkUnverified =>
+      'الربط بالسجل المصدر غير مؤكد من السجل';
+
+  @override
+  String get driverChargeAppealClosedDeducted =>
+      'بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي.';
 }

@@ -16151,6 +16151,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your witness confirmation was recorded with the server time.'**
   String get driverChargeWitnessSaved;
+
+  /// No description provided for @handoverAuthReceivingOtherAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'You gave the handing signature on this device account. The receiving signature must come from another person: the receiving driver\'s own account or a different supervisor.'**
+  String get handoverAuthReceivingOtherAccount;
+
+  /// No description provided for @handoverAuthSiteRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the site. This vehicle has no site in the fleet register.'**
+  String get handoverAuthSiteRequired;
+
+  /// No description provided for @handoverAuthSiteFromRegister.
+  ///
+  /// In en, this message translates to:
+  /// **'Taken from the fleet register for this vehicle.'**
+  String get handoverAuthSiteFromRegister;
+
+  /// No description provided for @signatureSignAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'The signature is too short to be read. Please sign again with your full signature.'**
+  String get signatureSignAgain;
+
+  /// No description provided for @driverChargeLinkUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'Link to source not confirmed by record'**
+  String get driverChargeLinkUnverified;
+
+  /// No description provided for @driverChargeAppealClosedDeducted.
+  ///
+  /// In en, this message translates to:
+  /// **'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.'**
+  String get driverChargeAppealClosedDeducted;
 }
 
 class _AppLocalizationsDelegate

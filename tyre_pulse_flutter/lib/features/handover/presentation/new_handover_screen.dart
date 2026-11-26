@@ -34,6 +34,7 @@ import 'package:tyre_pulse/features/handover/domain/handover_damage_marker.dart'
 import 'package:tyre_pulse/features/handover/domain/handover_draft.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_payload.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_record.dart';
+import 'package:tyre_pulse/features/handover/domain/handover_signing.dart';
 import 'package:tyre_pulse/features/handover/handover_providers.dart';
 import 'package:tyre_pulse/features/handover/presentation/handover_copy.dart';
 import 'package:tyre_pulse/features/handover/presentation/handover_ui.dart';
@@ -239,6 +240,17 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
     _scheduleSave();
   }
 
+  /// The fleet-register site of the picked asset, or null.
+  String? get _registerSite {
+    final String? site =
+        _assetFor(_assetNo, ref.read(vehicleFleetListProvider))?.site;
+    final String trimmed = (site ?? '').trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  String? get _resolvedSite =>
+      resolveHandoverSite(registerSite: _registerSite, typedSite: _site.text);
+
   // --- navigation -----------------------------------------------------------
 
   bool get _canLeaveStep {
@@ -248,7 +260,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
       case _HandoverStep.condition:
         return _condition != null &&
             (_fromDriver.text.trim().isNotEmpty ||
-                _toDriver.text.trim().isNotEmpty);
+                _toDriver.text.trim().isNotEmpty) &&
+            _resolvedSite != null;
       case _HandoverStep.photos:
       case _HandoverStep.signature:
       case _HandoverStep.review:
@@ -263,7 +276,9 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
         _HandoverStep.vehicle => l10n.handoverNeedsVehicle,
         _HandoverStep.condition => _condition == null
             ? l10n.handoverNeedsCondition
-            : l10n.handoverNeedsDriver,
+            : (_resolvedSite == null
+                ? l10n.handoverAuthSiteRequired
+                : l10n.handoverNeedsDriver),
         _ => '',
       };
       if (message.isNotEmpty) {
@@ -321,6 +336,18 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
       return;
     }
 
+    // Site is always written: the asset's fleet-register site wins, else the
+    // typed site; none at all refuses the save (web resolveHandoverSite).
+    final String? site = _resolvedSite;
+    if (site == null) {
+      await showHandoverInfoDialog(
+        context,
+        title: l10n.handoverNewTitle,
+        message: l10n.handoverAuthSiteRequired,
+      );
+      return;
+    }
+
     final String userId = _userKey;
     final HandoverPayload payload = HandoverPayload(
       assetNo: _assetNo.trim(),
@@ -344,7 +371,7 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
       fromDriverId: _fromDriverId,
       toDriverId: _toDriverId,
       hourMeter: hourMeter,
-      site: _site.text.trim().isEmpty ? null : _site.text.trim(),
+      site: site,
     );
 
     final List<HandoverSubmitIssue> issues = validateHandoverForSubmit(payload);
@@ -634,6 +661,13 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
 
   // --- step 2: condition & damage ------------------------------------------
 
+  String? _registerSiteWatched(WidgetRef ref) {
+    final String? site =
+        _assetFor(_assetNo, ref.watch(vehicleFleetListProvider))?.site;
+    final String trimmed = (site ?? '').trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
   Widget _conditionStep(AppLocalizations l10n) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -667,11 +701,20 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
           onPressed: () => unawaited(_pickDriver(handing: false)),
         ),
         const SizedBox(height: TpSpace.sm),
-        TpInput(
-          label: l10n.handoverAuthSite,
-          controller: _site,
-          textCapitalization: TextCapitalization.characters,
-        ),
+        if (_registerSiteWatched(ref) case final String registerSite)
+          TpCard(
+            child: Text(
+              '${l10n.handoverAuthSite}: ${registerSite.toUpperCase()}\n'
+              '${l10n.handoverAuthSiteFromRegister}',
+            ),
+          )
+        else
+          TpInput(
+            label: l10n.handoverAuthSite,
+            controller: _site,
+            hint: l10n.handoverAuthSiteRequired,
+            textCapitalization: TextCapitalization.characters,
+          ),
         const SizedBox(height: TpSpace.md),
         TpInput(
           label: l10n.handoverAuthHourMeter,
@@ -962,8 +1005,7 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
         ),
       (l10n.handoverDamageSectionTitle, '${_damages.length}'),
       (l10n.handoverPhotosLabel, '${_photos.length}'),
-      if (_site.text.trim().isNotEmpty)
-        (l10n.handoverAuthSite, _site.text.trim().toUpperCase()),
+      if (_resolvedSite != null) (l10n.handoverAuthSite, _resolvedSite!),
       if (_hourMeter.text.trim().isNotEmpty)
         (l10n.handoverAuthHourMeter, _hourMeter.text.trim()),
       (l10n.handoverAuthSignaturesTitle, l10n.handoverAuthNotSigned),

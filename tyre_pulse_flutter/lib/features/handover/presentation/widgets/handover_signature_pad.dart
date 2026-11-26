@@ -29,6 +29,7 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/signatures/signature_rules.dart';
 
 class HandoverSignaturePad extends StatefulWidget {
   const HandoverSignaturePad({
@@ -77,9 +78,10 @@ class _HandoverSignaturePadState extends State<HandoverSignaturePad> {
 
   Future<void> _onStrokeEnd() async {
     if (_controller.isEmpty) return;
-    final Uint8List? pngBytes = await _controller.toPngBytes();
-    if (pngBytes == null) return;
-    final String dataUrl = 'data:image/png;base64,${base64Encode(pngBytes)}';
+    // Fixed-size export: a cropped short scribble was too small for the
+    // server's signature rule (see core/signatures/signature_rules.dart).
+    final String? dataUrl = await encodeSignaturePng(_controller);
+    if (dataUrl == null) return;
     widget.onChanged?.call(dataUrl);
   }
 

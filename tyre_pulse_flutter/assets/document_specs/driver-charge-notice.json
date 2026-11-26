@@ -44,6 +44,10 @@
       "driver_fine": "Traffic fine record",
       "none": "No linked record"
     },
+    "link_check": {
+      "true": "Link to source not confirmed by record",
+      "false": "Driver named in the linked record"
+    },
     "status": {
       "issued": "Issued, driver not yet notified",
       "notified": "Notified, waiting for driver",
@@ -135,6 +139,7 @@
         { "label": "Amount", "key": "charge.amount", "format": "money", "currency_key": "charge.currency" },
         { "label": "Linked record", "key": "charge.source_type", "format": "enum:source_type" },
         { "label": "Linked record reference", "key": "charge.source_summary.label" },
+        { "label": "Link to the driver", "key": "charge.source_link_unverified", "format": "enum:link_check" },
         { "label": "Incident date and time", "key": "charge.incident_at", "format": "datetime" },
         { "label": "Issued by", "key": "charge.issued_by_name" },
         { "label": "Issued at", "key": "charge.created_at", "format": "datetime" },

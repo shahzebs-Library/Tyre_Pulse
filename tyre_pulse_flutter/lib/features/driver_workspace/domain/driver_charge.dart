@@ -222,8 +222,14 @@ final class DriverChargeDetail {
 
   /// Actions this app offers on the phone: the server list, narrowed to the
   /// driver actions. Never widened.
-  Set<String> get mobileActions =>
-      actions.intersection(driverChargeMobileActions);
+  Set<String> get mobileActions {
+    final Set<String> allowed = actions.intersection(driverChargeMobileActions);
+    // The server refuses an appeal once any deduction is recorded; never
+    // offer a button that can only fail.
+    final double deducted = _number(charge['deducted_amount']) ?? 0;
+    if (deducted > 0) allowed.remove(chargeActionAppeal);
+    return allowed;
+  }
 
   bool get isViewer => data['access'] == 'viewer';
 

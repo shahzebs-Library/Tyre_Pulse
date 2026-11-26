@@ -18,6 +18,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/core/documents/document_share.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/signatures/signature_rules.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/driver_workspace/data/driver_charge_repository.dart';
 import 'package:tyre_pulse/features/driver_workspace/domain/driver_charge.dart';
@@ -336,6 +337,7 @@ class _DriverChargeDetailScreenState
     final ThemeData theme = Theme.of(context);
     final String currency = '${c['currency'] ?? ''}';
     final Set<String> actions = detail.mobileActions;
+    final bool deductionsStarted = (num.tryParse('${c['deducted_amount'] ?? 0}') ?? 0) > 0;
     String money(Object? v) =>
         formatChargeMoney(v, currency) ?? l10n.valueUnavailable;
     String text(Object? v) =>
@@ -392,6 +394,12 @@ class _DriverChargeDetailScreenState
                       if (summary?['label'] != null) '${summary!['label']}',
                     ].join(' · '),
                   ),
+                  if (c['source_link_unverified'] == true)
+                    Text(
+                      l10n.driverChargeLinkUnverified,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.error),
+                    ),
                   fact(l10n.driverChargeVehicle, text(c['asset_no'])),
                   fact(
                     l10n.driverChargeIncident,
@@ -444,6 +452,14 @@ class _DriverChargeDetailScreenState
                     _ => l10n.driverChargeAppealAction,
                   },
                 ),
+              ),
+            ),
+          if (deductionsStarted && detail.appeal == null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                l10n.driverChargeAppealClosedDeducted,
+                style: theme.textTheme.bodySmall,
               ),
             ),
           if (actions.isEmpty)
@@ -652,6 +668,10 @@ class _DriverChargeResponseSheetState
     );
     if (issue != null) {
       setState(() => _message = _issueText(l10n, issue));
+      return;
+    }
+    if (!isAcceptedSignature(_signature)) {
+      setState(() => _message = l10n.signatureSignAgain);
       return;
     }
     setState(() {
@@ -921,6 +941,10 @@ class _DriverChargeWitnessSheetState
     }
     if (_signature == null || _signature!.isEmpty) {
       setState(() => _message = l10n.driverChargeIssueSignature);
+      return;
+    }
+    if (!isAcceptedSignature(_signature)) {
+      setState(() => _message = l10n.signatureSignAgain);
       return;
     }
     setState(() {

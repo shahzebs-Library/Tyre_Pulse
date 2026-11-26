@@ -9153,5 +9153,11 @@
   "driverChargeWitnessConfirm": "Confirm the refusal you witnessed",
   "driverChargeWitnessIntro": "You were named as the witness to the driver refusing to sign this notice. Confirm only what you saw yourself.",
   "driverChargeWitnessPending": "Refusal recorded. Waiting for the named witness to confirm it from their own account.",
-  "driverChargeWitnessSaved": "Your witness confirmation was recorded with the server time."
+  "driverChargeWitnessSaved": "Your witness confirmation was recorded with the server time.",
+  "handoverAuthReceivingOtherAccount": "You gave the handing signature on this device account. The receiving signature must come from another person: the receiving driver's own account or a different supervisor.",
+  "handoverAuthSiteRequired": "Enter the site. This vehicle has no site in the fleet register.",
+  "handoverAuthSiteFromRegister": "Taken from the fleet register for this vehicle.",
+  "signatureSignAgain": "The signature is too short to be read. Please sign again with your full signature.",
+  "driverChargeLinkUnverified": "Link to source not confirmed by record",
+  "driverChargeAppealClosedDeducted": "Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder."
 }

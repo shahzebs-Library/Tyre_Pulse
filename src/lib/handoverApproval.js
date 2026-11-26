@@ -170,6 +170,7 @@ export function statusSummary(row) {
   if (st === 'rejected') return { tone: 'bad', text: 'Sent back' }
   if (st === 'pending_incharge') return { tone: 'warn', text: 'Waiting for the fleet incharge' }
   if (st === 'pending_supervisor') return { tone: 'warn', text: 'Waiting for a supervisor' }
+  if (st === 'draft' && String(row?.review_note ?? '').trim()) return { tone: 'bad', text: 'Sent back for correction' }
   if (st === 'draft') return { tone: 'muted', text: 'Draft' }
   return { tone: 'muted', text: 'No sign-off needed' }
 }

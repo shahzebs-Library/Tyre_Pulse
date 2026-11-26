@@ -107,7 +107,9 @@ export function signatureBlocks(row = {}, section) {
     const signature = row[b.signature] || null
     const at = b.at ? row[b.at] : null
     const name = (b.name && !blank(row[b.name]) ? row[b.name] : null) || (b.name_fallback ? row[b.name_fallback] : null) || null
-    const sub = at ? `${b.at_label || 'Signed'}: ${fmtWhen(at)}` : (signature ? 'Signed' : (b.pending_text || 'Not signed'))
+    let sub = at ? `${b.at_label || 'Signed'}: ${fmtWhen(at)}` : (signature ? 'Signed' : (b.pending_text || 'Not signed'))
+    // An on-behalf signature says so on the paper, not only in the database.
+    if (signature && b.behalf && row[b.behalf] === true) sub = `${sub}, ${b.behalf_text || 'signed on behalf'}`
     return { title: b.title, signature, name, sub }
   })
 }

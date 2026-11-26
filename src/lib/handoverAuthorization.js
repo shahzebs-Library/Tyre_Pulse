@@ -3,7 +3,7 @@
  *
  * Pure helpers (no Supabase, no React) for the two driver signatures, the
  * location captured with them, and the freeze that follows. The database is the
- * authority (supabase/migrations/20261126170000_handover_authorization_paper.sql):
+ * authority (supabase/migrations/20261126171000_handover_authorization_paper.sql):
  * sign_handover() stamps the time and signer server side, a trigger refuses any
  * change to a signed record, and decide_handover_approval() refuses a decision
  * by either signing driver. Everything here only EXPLAINS that state so the web
@@ -30,8 +30,8 @@ export function partiesFor(handoverType) {
 }
 
 const COLS = {
-  [PARTY_HANDING]: { sig: 'from_signature', name: 'from_signed_name', at: 'from_signed_at', by: 'from_signed_by', driver: 'from_driver', driverId: 'from_driver_id' },
-  [PARTY_RECEIVING]: { sig: 'to_signature', name: 'to_signed_name', at: 'to_signed_at', by: 'to_signed_by', driver: 'to_driver', driverId: 'to_driver_id' },
+  [PARTY_HANDING]: { sig: 'from_signature', name: 'from_signed_name', at: 'from_signed_at', by: 'from_signed_by', driver: 'from_driver', driverId: 'from_driver_id', behalf: 'from_on_behalf' },
+  [PARTY_RECEIVING]: { sig: 'to_signature', name: 'to_signed_name', at: 'to_signed_at', by: 'to_signed_by', driver: 'to_driver', driverId: 'to_driver_id', behalf: 'to_on_behalf' },
 }
 
 /** One party's signature as stored on the row. */
@@ -47,6 +47,7 @@ export function partySignature(row, party) {
     by: row[c.by] || null,
     driverName: row[c.driver] || null,
     driverId: row[c.driverId] || null,
+    onBehalf: row[c.behalf] === true,
   }
 }
 
@@ -87,12 +88,91 @@ export function isFullySigned(row) {
   return !!(row && row.from_signed_at && row.to_signed_at)
 }
 
+/**
+ * Sent back for correction: a supervisor returned it to draft, which clears both
+ * driver signatures server side so the record can be fixed and signed again.
+ * Legacy rows (before that change) carry approval_status 'rejected'.
+ */
+export function isSentBack(row) {
+  if (!row) return false
+  if (row.approval_status === 'rejected') return true
+  return row.approval_status === 'draft' && !!String(row.review_note || '').trim() && !row.from_signed_at && !row.to_signed_at
+}
+
 /** Plain sentence for the signing state. */
 export function signingSummary(row) {
   if (!hasAuthorizationColumns(row)) return { text: row?.signature_url ? 'Signed (single signature)' : 'Not signed', tone: row?.signature_url ? 'muted' : 'warn' }
+  if (isSentBack(row) && !row.from_signed_at) return { text: 'Sent back for correction, sign again', tone: 'bad' }
   if (isFullySigned(row)) return { text: 'Signed by both drivers', tone: 'good' }
   if (row.from_signed_at) return { text: 'Waiting for the receiving driver', tone: 'warn' }
   return { text: 'Not signed yet', tone: 'warn' }
+}
+
+// ---------------------------------------------------------------- who signs
+
+/**
+ * The same signature shape the server accepts (handover_valid_signature, which
+ * mirrors the driver charge module): a PNG data URL, or the static SVG the
+ * SignatureCapture pad emits. CHANGE BOTH TOGETHER.
+ */
+const SIG_PNG = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/
+const SIG_SVG = /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="[0-9]+" height="[0-9]+" viewBox="[0-9 .]+">(<path d="[ML0-9 .-]+" fill="none" stroke="#[a-fA-F0-9]{6}" stroke-width="[0-9.]+" stroke-linecap="round" stroke-linejoin="round"\/>)+<\/svg>$/
+export function isValidSignature(sig) {
+  const s = String(sig || '')
+  return SIG_PNG.test(s) || SIG_SVG.test(s)
+}
+
+export const SIGN_SELF = 'self'
+export const SIGN_ON_BEHALF = 'on_behalf'
+export const SIGN_BLOCKED = 'blocked'
+
+/**
+ * How the signed-in account may sign for one party, mirroring sign_handover():
+ *   self       the account is linked to that party's driver
+ *   blocked    the account is linked to the OTHER driver on this handover, so
+ *              it may not sign for this party at all
+ *   on_behalf  anyone else; only a supervisor-level account is accepted by the
+ *              server, and the screen must say so before sending the flag
+ */
+export function signingMode({ partyDriverId = null, otherDriverId = null, myDriverId = null } = {}) {
+  if (myDriverId && partyDriverId && myDriverId === partyDriverId) return SIGN_SELF
+  if (myDriverId && otherDriverId && myDriverId === otherDriverId) return SIGN_BLOCKED
+  return SIGN_ON_BEHALF
+}
+
+/** signingMode() for a party of a saved row. */
+export function rowSigningMode(row, party, myDriverId) {
+  const from = row?.from_driver_id || null
+  const to = row?.to_driver_id || null
+  return party === PARTY_HANDING
+    ? signingMode({ partyDriverId: from, otherDriverId: to, myDriverId })
+    : signingMode({ partyDriverId: to, otherDriverId: from, myDriverId })
+}
+
+/** The line the screen shows before an on-behalf signature is recorded. */
+export function onBehalfPrompt(name) {
+  return `I am signing on behalf of ${String(name || '').trim() || 'this person'}`
+}
+
+/**
+ * Adjust the wizard's signature problems for the signing modes: a party this
+ * account may not sign for needs no signature now (it is collected later from
+ * the saved record), and an on-behalf signature needs the explicit confirmation
+ * box ticked. `base` is vehicleHandoverView.signatureProblems(form).
+ */
+export function wizardSigningProblems(base, form, modes = {}) {
+  const missing = {
+    [PARTY_HANDING]: 'The handing over signature is missing.',
+    [PARTY_RECEIVING]: 'The receiving signature is missing.',
+  }
+  let errs = [...(base || [])]
+  for (const party of [PARTY_HANDING, PARTY_RECEIVING]) {
+    if (modes[party] === SIGN_BLOCKED) errs = errs.filter((e) => e !== missing[party])
+    else if (modes[party] === SIGN_ON_BEHALF && !form?.[`behalf_${party}`]) {
+      errs.push(`Confirm that you are signing on behalf of the ${party === PARTY_HANDING ? 'handing' : 'receiving'} party.`)
+    }
+  }
+  return errs
 }
 
 // ---------------------------------------------------------------- location
@@ -199,6 +279,7 @@ const ACTION_LABEL = {
   decision_pending_incharge: 'Supervisor signed off',
   decision_approved: 'Approved',
   decision_rejected: 'Sent back',
+  sent_back: 'Sent back for correction, signatures cleared',
   decision_pending_supervisor: 'Submitted for sign-off',
   decision_draft: 'Returned to draft',
   deleted: 'Deleted',

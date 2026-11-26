@@ -44,10 +44,11 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import {
   listHandoverReports, getHandoverReport, createHandoverReport, updateHandoverReport, deleteHandoverReport,
-  listHandoverDrivers, uploadHandoverPhoto, signHandover,
+  listHandoverDrivers, uploadHandoverPhoto, signHandover, getMyLinkedDriverId,
 } from '../lib/api/handoverReports'
 import {
   partiesFor, captureLocation, locationArgs, isFrozen, PARTY_HANDING, PARTY_RECEIVING,
+  signingMode, wizardSigningProblems, onBehalfPrompt, SIGN_ON_BEHALF, SIGN_BLOCKED,
 } from '../lib/handoverAuthorization'
 import { brandingForPdf } from '../lib/inspectionChecklistReport'
 import { resolveStorageUrl, resolveStorageUrlMap } from '../lib/storageRefs'
@@ -239,6 +240,19 @@ export default function VehicleHandover() {
   // Device location read when the signatures are collected. The time of each
   // signature is the server's, never this device's.
   const [location, setLocation] = useState({ busy: false, reading: null })
+  // The driver linked to this account decides whether each signature is the
+  // driver's own or given on their behalf (sign_handover enforces the same rule).
+  const [myDriverId, setMyDriverId] = useState(null)
+  useEffect(() => { let live = true; getMyLinkedDriverId().then((v) => { if (live) setMyDriverId(v) }); return () => { live = false } }, [])
+  const signModes = useMemo(() => {
+    const checkout = form.handover_type !== 'checkin'
+    const handingId = (checkout ? form.other_party_id : form.driver_id) || null
+    const receivingId = (checkout ? form.driver_id : form.other_party_id) || null
+    return {
+      [PARTY_HANDING]: signingMode({ partyDriverId: handingId, otherDriverId: receivingId, myDriverId }),
+      [PARTY_RECEIVING]: signingMode({ partyDriverId: receivingId, otherDriverId: handingId, myDriverId }),
+    }
+  }, [form.handover_type, form.driver_id, form.other_party_id, myDriverId])
   const readLocation = useCallback(async () => {
     setLocation({ busy: true, reading: null })
     setLocation({ busy: false, reading: await captureLocation() })
@@ -324,7 +338,7 @@ export default function VehicleHandover() {
     setLocation({ busy: false, reading: null })
   }
   const next = () => {
-    const errs = [...validateStep(step, form, prev), ...(WIZARD_STEPS[step]?.key === 'signatures' ? signatureProblems(form) : [])]
+    const errs = [...validateStep(step, form, prev), ...(WIZARD_STEPS[step]?.key === 'signatures' ? wizardSigningProblems(signatureProblems(form), form, signModes) : [])]
     setStepErrors(errs)
     if (!errs.length) setStep((s) => Math.min(WIZARD_STEPS.length - 1, s + 1))
   }
@@ -350,7 +364,7 @@ export default function VehicleHandover() {
   const completeHandover = async () => {
     const bad = firstInvalidStep(form, prev, WIZARD_STEPS.length - 1)
     if (bad >= 0) { setStep(bad); setStepErrors(validateStep(bad, form, prev)); return }
-    const sigErrs = signatureProblems(form)
+    const sigErrs = wizardSigningProblems(signatureProblems(form), form, signModes)
     if (sigErrs.length) {
       setStep(WIZARD_STEPS.findIndex((w) => w.key === 'signatures')); setStepErrors(sigErrs); return
     }
@@ -371,8 +385,17 @@ export default function VehicleHandover() {
         row = await updateHandoverReport(row.id, { signature_url: form.sig_receiving })
       } else {
         const loc = locationArgs(location.reading || await captureLocation())
-        await signHandover(row.id, PARTY_HANDING, { signature: form.sig_handing, name: handingName, location: loc })
-        await signHandover(row.id, PARTY_RECEIVING, { signature: form.sig_receiving, name: receivingName, location: loc })
+        // A party this account may not sign for (it is the other driver) is left
+        // for that driver or a supervisor to sign from the saved record. The
+        // receiving party can only sign after the handing party.
+        const handingMode = signModes[PARTY_HANDING]
+        const receivingMode = signModes[PARTY_RECEIVING]
+        if (handingMode !== SIGN_BLOCKED) {
+          await signHandover(row.id, PARTY_HANDING, { signature: form.sig_handing, name: handingName, location: loc, onBehalf: handingMode === SIGN_ON_BEHALF })
+          if (receivingMode !== SIGN_BLOCKED) {
+            await signHandover(row.id, PARTY_RECEIVING, { signature: form.sig_receiving, name: receivingName, location: loc, onBehalf: receivingMode === SIGN_ON_BEHALF })
+          }
+        }
         row = (await getHandoverReport(row.id)) || row
       }
       setSaved(row)
@@ -811,7 +834,9 @@ export default function VehicleHandover() {
                 const nameOf = (party) => (party === parties.driverParty ? form.driver_name : form.other_party)
                 const pad = (party, key, label) => (
                   <Card key={party} title={label} sub={nameOf(party) ? `Signed by ${nameOf(party)}` : 'Name this person in the Vehicle Details step.'}>
-                    {form[key] ? (
+                    {signModes[party] === SIGN_BLOCKED ? (
+                      <p className="vh-note" data-testid={`wizard-blocked-${party}`}>You are the other driver on this handover, so {nameOf(party) || 'this person'} signs later from the saved handover, or a supervisor signs on their behalf.</p>
+                    ) : form[key] ? (
                       <div className="vh-sig">
                         <SignatureView value={form[key]} label={null} name={nameOf(party) || null} />
                         <button type="button" className="cc-btn-ghost" onClick={() => { setF(key, null); setSignKey((k) => k + 1) }}><PenLine size={14} aria-hidden="true" /> Sign again</button>
@@ -820,6 +845,12 @@ export default function VehicleHandover() {
                       <div className="vh-sig-pad">
                         <SignatureCapture key={`${key}-${signKey}`} label="Sign here" onChange={(svg) => setF(key, svg)} height={150} />
                       </div>
+                    )}
+                    {signModes[party] === SIGN_ON_BEHALF && (
+                      <label className="vh-check" data-testid={`wizard-on-behalf-${party}`}>
+                        <input type="checkbox" checked={!!form[`behalf_${party}`]} onChange={(e) => setF(`behalf_${party}`, e.target.checked)} />
+                        {onBehalfPrompt(nameOf(party))}. This is recorded on the handover. Only a supervisor may do this.
+                      </label>
                     )}
                   </Card>
                 )

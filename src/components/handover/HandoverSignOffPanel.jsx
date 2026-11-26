@@ -56,6 +56,7 @@ export default function HandoverSignOffPanel({ handover, onDecided }) {
   const stage = stageFor(handover)
   const closed = isFullyClosed(handover)
   const rejected = isRejected(handover)
+    || (handover.approval_status === 'draft' && !!String(handover.review_note || '').trim())
   const mayAct = !decided && canActOnStage(handover, opts)
   const mayReject = !decided && canReject(handover, opts)
   const oneSign = closesInOneSign(handover, opts)
@@ -86,7 +87,9 @@ export default function HandoverSignOffPanel({ handover, onDecided }) {
       setFeedback({
         kind: 'success',
         text: !approved
-          ? 'Sent back to the depot.'
+          ? (res?.signatures_cleared
+            ? 'Sent back. Both driver signatures were cleared so the handover can be corrected and signed again.'
+            : 'Sent back to the depot.')
           : reached === 'approved'
             ? 'Handover approved and closed.'
             : 'Signed off. Waiting for the fleet incharge.',
@@ -136,7 +139,7 @@ export default function HandoverSignOffPanel({ handover, onDecided }) {
       )}
       {!decided && rejected && (
         <p className="vh-signoff-note bad">
-          <XCircle size={14} aria-hidden="true" /> This handover was sent back.{handover.review_note ? ` Reason: ${handover.review_note}` : ''}
+          <XCircle size={14} aria-hidden="true" /> This handover was sent back.{handover.review_note ? ` Reason: ${handover.review_note}` : ''}{handover.approval_status === 'draft' ? ' Correct it, then collect both signatures again.' : ''}
         </p>
       )}
 

@@ -4,10 +4,11 @@ import SignatureCapture from '../checklist/SignatureCapture'
 import SignatureView from '../checklist/SignatureView'
 import HandoverLocation from './HandoverLocation'
 import { toUserMessage } from '../../lib/safeError'
-import { signHandover, listHandoverEvents } from '../../lib/api/handoverReports'
+import { signHandover, listHandoverEvents, getMyLinkedDriverId } from '../../lib/api/handoverReports'
 import {
   signatureLadder, nextPartyToSign, isFrozen, hasAuthorizationColumns, rowLocation,
   PARTY_LABEL, captureLocation, locationArgs, eventLabel, eventFields, signingSummary,
+  isSentBack, rowSigningMode, onBehalfPrompt, SIGN_ON_BEHALF, SIGN_BLOCKED,
 } from '../../lib/handoverAuthorization'
 
 function fmtWhen(v) {
@@ -32,6 +33,9 @@ export default function HandoverAuthorizationPanel({ handover, onSigned }) {
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState(null)
   const [padKey, setPadKey] = useState(0)
+  const [myDriverId, setMyDriverId] = useState(null)
+  const [behalfOk, setBehalfOk] = useState(false)
+  useEffect(() => { let live = true; getMyLinkedDriverId().then((v) => { if (live) setMyDriverId(v) }); return () => { live = false } }, [])
 
   const id = handover?.id
   const loadEvents = useCallback(async () => {
@@ -56,14 +60,17 @@ export default function HandoverAuthorizationPanel({ handover, onSigned }) {
   const dueRung = ladder.find((r) => r.party === due)
   const dueName = dueRung?.driverName || ''
   const canCollect = due && ['draft', 'pending_supervisor', null, undefined].includes(handover.approval_status)
+  const mode = due ? rowSigningMode(handover, due, myDriverId) : null
+  const sentBack = isSentBack(handover)
 
   async function collect() {
     if (!sig) { setFeedback({ kind: 'error', text: 'Draw the signature first.' }); return }
+    if (mode === SIGN_ON_BEHALF && !behalfOk) { setFeedback({ kind: 'error', text: 'Confirm that you are signing on behalf of this person.' }); return }
     setBusy(true); setFeedback(null)
     try {
       const reading = await captureLocation()
-      await signHandover(handover.id, due, { signature: sig, name: dueName || null, location: locationArgs(reading) })
-      setSig(null); setPadKey((k) => k + 1)
+      await signHandover(handover.id, due, { signature: sig, name: dueName || null, location: locationArgs(reading), onBehalf: mode === SIGN_ON_BEHALF })
+      setSig(null); setPadKey((k) => k + 1); setBehalfOk(false)
       setFeedback({ kind: 'success', text: due === 'receiving' ? 'Signed. The handover is locked and sent for sign-off.' : 'Signed. The receiving driver signs next.' })
       await loadEvents()
       onSigned?.()
@@ -83,6 +90,11 @@ export default function HandoverAuthorizationPanel({ handover, onSigned }) {
           : <span className="cc-pill warn">Editable until signed</span>}
       </div>
       {frozen && <p className="vh-hint">This handover has been signed. Damage, readings, photos and signatures can no longer be changed.</p>}
+      {sentBack && !frozen && (
+        <p className="vh-signoff-note bad" data-testid="handover-sent-back">
+          <AlertTriangle size={14} aria-hidden="true" /> Sent back for correction{handover.review_note ? `: ${handover.review_note}` : ''}. The earlier signatures were cleared. Correct the handover, then collect both signatures again.
+        </p>
+      )}
 
       <div className="vh-auth-sigs">
         {ladder.map((r) => (
@@ -91,7 +103,7 @@ export default function HandoverAuthorizationPanel({ handover, onSigned }) {
             {r.signed ? (
               <>
                 <SignatureView value={r.signature} label={null} name={null} height={70} />
-                <small>{r.name || r.driverName || 'Unnamed'}, signed {fmtWhen(r.at)} (server time)</small>
+                <small>{r.name || r.driverName || 'Unnamed'}, signed {fmtWhen(r.at)} (server time){r.onBehalf ? '. Signed on their behalf by a supervisor' : ''}</small>
               </>
             ) : (
               <small className="cc-na">{r.driverName ? `${r.driverName}, not signed yet` : 'Not signed yet'}</small>
@@ -105,12 +117,20 @@ export default function HandoverAuthorizationPanel({ handover, onSigned }) {
         <HandoverLocation location={rowLocation(handover)} status={handover.location_status} label={handover.asset_no || 'Handover'} />
       </div>
 
-      {canCollect && (
+      {canCollect && mode === SIGN_BLOCKED && (
+        <p className="vh-note" data-testid="handover-sign-blocked">You are the other driver on this handover, so this signature must be given by {dueName || 'the driver'} or collected by a supervisor.</p>
+      )}
+      {canCollect && mode !== SIGN_BLOCKED && (
         <div className="vh-signoff-act">
           <p className="vh-signoff-hint">{PARTY_LABEL[due]}: {dueName || 'the driver'} signs here. The time and your account are recorded by the server.</p>
           <SignatureCapture key={padKey} label={`${PARTY_LABEL[due]} signature`} onChange={setSig} height={140} />
+          {mode === SIGN_ON_BEHALF && (
+            <label className="vh-check" data-testid="handover-on-behalf">
+              <input type="checkbox" checked={behalfOk} onChange={(e) => setBehalfOk(e.target.checked)} /> {onBehalfPrompt(dueName)}. This is recorded on the handover. Only a supervisor may do this.
+            </label>
+          )}
           <div className="vh-signoff-btns">
-            <button type="button" className="cc-btn-primary" onClick={collect} disabled={busy || !sig}>
+            <button type="button" className="cc-btn-primary" onClick={collect} disabled={busy || !sig || (mode === SIGN_ON_BEHALF && !behalfOk)}>
               {busy ? <Loader2 size={14} className="vh-spin" aria-hidden="true" /> : <CheckCircle2 size={14} aria-hidden="true" />} Record signature
             </button>
           </div>

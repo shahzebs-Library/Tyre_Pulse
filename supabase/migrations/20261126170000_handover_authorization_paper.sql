@@ -52,8 +52,22 @@
 --   * Location is client measured (the browser or phone GPS) and stored with an
 --     honest status: captured / denied / unavailable. The TIME is never client.
 --   * Year in the document number is the UTC year of handover_at (or now()).
---   * A rejected (sent back) signed handover stays a frozen record; the fix is a
---     fresh handover, not an edit.
+--   * SENDING BACK clears both driver signatures (and any supervisor signature),
+--     the location and the freeze, and returns the record to draft with the
+--     reason in review_note; the trail records it as 'sent_back' with every
+--     cleared value. The record can then be corrected and signed again. A
+--     signed record that is waiting for sign-off stays frozen.
+--   * WHO MAY SIGN (review H4): the account linked to the named driver
+--     (driver_account_links), or a supervisor-level account signing with an
+--     explicit p_on_behalf = true, which is stored (from_on_behalf /
+--     to_on_behalf) and audited. A driver on the handover can never sign on
+--     behalf of the other party, and one account collects both signatures only
+--     when both are on behalf. The approver may not be either signing account
+--     nor the account that created the record.
+--   * Signatures must match the same strict SVG / PNG shape the driver charge
+--     module accepts (handover_valid_signature), not merely start with <svg.
+--   * Driver ids must belong to the handover's organisation (and country when
+--     both are set); a trigger refuses anything else.
 --
 -- PRE-FLIGHT
 --   Data loss: none. Additive columns, new tables, CREATE OR REPLACE functions.
@@ -87,7 +101,9 @@ alter table public.handover_reports
   add column if not exists location_accuracy_m   numeric,
   add column if not exists location_status       text,
   add column if not exists location_captured_at  timestamptz,
-  add column if not exists frozen_at             timestamptz;
+  add column if not exists frozen_at             timestamptz,
+  add column if not exists from_on_behalf        boolean,
+  add column if not exists to_on_behalf          boolean;
 
 comment on column public.handover_reports.from_driver_id is
   'Driver handing the vehicle over (drivers.id). On a check-out this is usually the yard or previous driver.';
@@ -102,7 +118,61 @@ comment on column public.handover_reports.from_signed_by is
 comment on column public.handover_reports.location_status is
   'captured / denied / unavailable. Coordinates are device measured; the time is server time.';
 comment on column public.handover_reports.frozen_at is
-  'Server time the record content froze (first driver signature).';
+  'Server time the record content froze (first driver signature). Cleared when the handover is sent back.';
+comment on column public.handover_reports.from_on_behalf is
+  'True when a supervisor-level account signed for the handing party instead of the driver''s own linked account.';
+comment on column public.handover_reports.to_on_behalf is
+  'True when a supervisor-level account signed for the receiving party instead of the driver''s own linked account.';
+
+-- ------------------------------------------------------ SIGNATURE VALIDATOR
+-- The SAME shape the driver charge module accepts
+-- (private.driver_charge_valid_signature): a PNG data URL, or the static SVG the
+-- web SignatureCapture emits (paths only, no script, no external reference).
+create or replace function public.handover_valid_signature(p text)
+returns boolean language sql immutable set search_path = '' as $fn$
+  select coalesce(p,'') ~ '^data:image/png;base64,[A-Za-z0-9+/=]+$'
+    or coalesce(p,'') ~ '^<svg xmlns="http://www.w3.org/2000/svg" width="[0-9]+" height="[0-9]+" viewBox="[0-9 .]+">(<path d="[ML0-9 .-]+" fill="none" stroke="#[a-fA-F0-9]{6}" stroke-width="[0-9.]+" stroke-linecap="round" stroke-linejoin="round"/>)+</svg>$'
+$fn$;
+revoke all on function public.handover_valid_signature(text) from public;
+revoke all on function public.handover_valid_signature(text) from anon;
+revoke all on function public.handover_valid_signature(text) from authenticated;
+
+-- ------------------------------------------------- DRIVER IDS IN THIS ORG ONLY
+-- A driver id from another organisation (or another country, when both are
+-- set) would put a foreign driver on this paper and leak that driver's name
+-- back through sign_handover. Refused at write time.
+create or replace function public.guard_handover_driver_scope()
+returns trigger language plpgsql security definer set search_path = public as $fn$
+declare
+  d record;
+  k uuid;
+begin
+  foreach k in array array[new.from_driver_id, new.to_driver_id] loop
+    continue when k is null;
+    if tg_op = 'UPDATE' and (k = old.from_driver_id or k = old.to_driver_id) then
+      continue;
+    end if;
+    select dr.organisation_id, dr.country into d from public.drivers dr where dr.id = k;
+    if not found or d.organisation_id is distinct from new.organisation_id
+       or (d.country is not null and new.country is not null
+           and lower(btrim(d.country)) <> lower(btrim(new.country))) then
+      raise exception 'That driver is not in this organisation or country.' using errcode = '22023';
+    end if;
+  end loop;
+  if new.from_driver_id is not null and new.from_driver_id = new.to_driver_id then
+    raise exception 'The handing and receiving driver must be different people.' using errcode = '22023';
+  end if;
+  return new;
+end
+$fn$;
+revoke all on function public.guard_handover_driver_scope() from public;
+revoke all on function public.guard_handover_driver_scope() from anon;
+revoke all on function public.guard_handover_driver_scope() from authenticated;
+
+drop trigger if exists trg_a1_guard_handover_driver_scope on public.handover_reports;
+create trigger trg_a1_guard_handover_driver_scope
+  before insert or update on public.handover_reports
+  for each row execute function public.guard_handover_driver_scope();
 
 do $chk$
 begin
@@ -202,7 +272,8 @@ begin
      or new.to_signed_at is not null or new.to_signed_by is not null
      or new.latitude is not null or new.longitude is not null
      or new.location_accuracy_m is not null or new.location_status is not null
-     or new.location_captured_at is not null or new.frozen_at is not null then
+     or new.location_captured_at is not null or new.frozen_at is not null
+     or new.from_on_behalf is not null or new.to_on_behalf is not null then
     raise exception 'Signatures and location are recorded through the signing step only.' using errcode = '42501';
   end if;
 
@@ -237,9 +308,12 @@ create or replace function public.guard_handover_record_integrity()
 returns trigger language plpgsql security definer set search_path = public as $fn$
 declare
   v_via      text := coalesce(current_setting('handover.via', true), '');
+  -- Set only inside decide_handover_approval's send-back branch.
+  v_sendback boolean := coalesce(current_setting('handover.sendback', true), '') = 'on';
   v_sign_cols text[] := array['from_signature','from_signed_name','from_signed_at','from_signed_by',
     'to_signature','to_signed_name','to_signed_at','to_signed_by','latitude','longitude',
-    'location_accuracy_m','location_status','location_captured_at','frozen_at'];
+    'location_accuracy_m','location_status','location_captured_at','frozen_at',
+    'from_on_behalf','to_on_behalf'];
   -- Columns that may still change on a frozen record: the sign-off ladder.
   v_open_cols text[] := array['approval_status','supervisor_name','supervisor_signature','supervisor_at',
     'supervisor_by','incharge_name','incharge_signature','incharge_at','incharge_by','review_note','updated_at'];
@@ -247,7 +321,14 @@ declare
   v_new jsonb := to_jsonb(new);
   k text;
 begin
-  if v_via <> 'sign' then
+  if v_sendback then
+    -- Sending back may only CLEAR the signing columns, never write new ones.
+    foreach k in array v_sign_cols loop
+      if (v_new -> k) is not null and v_new -> k <> 'null'::jsonb then
+        raise exception 'Sending a handover back can only clear its signatures.' using errcode = '42501';
+      end if;
+    end loop;
+  elsif v_via <> 'sign' then
     foreach k in array v_sign_cols loop
       if (v_old -> k) is distinct from (v_new -> k) then
         raise exception 'Signatures and location are recorded through the signing step only.' using errcode = '42501';
@@ -256,8 +337,9 @@ begin
   end if;
 
   if old.from_signed_at is not null or old.to_signed_at is not null then
-    if v_via = 'sign' then
-      -- The signing step may only add the signature it is recording.
+    if v_via = 'sign' or v_sendback then
+      -- The signing step may only add the signature it is recording; the
+      -- send-back step may only clear them (checked above).
       v_open_cols := v_open_cols || v_sign_cols;
     end if;
     foreach k in array v_open_cols loop
@@ -326,6 +408,18 @@ create policy handover_report_events_org_isolation on public.handover_report_eve
 drop policy if exists handover_report_events_read on public.handover_report_events;
 create policy handover_report_events_read on public.handover_report_events
   for select to authenticated using (auth.uid() is not null);
+-- Same country and site boundary as handover_reports (review M2): the trail
+-- carries field values, so it must not be readable outside the record's scope.
+drop policy if exists handover_report_events_country_isolation on public.handover_report_events;
+create policy handover_report_events_country_isolation on public.handover_report_events
+  as restrictive for select to authenticated
+  using ((country is null) or (select public.is_super_admin()) or (select public.app_sees_all_countries())
+         or (lower(btrim(country)) = any (coalesce((select public.app_country_scope()), '{}'::text[]))));
+drop policy if exists handover_report_events_site_isolation on public.handover_report_events;
+create policy handover_report_events_site_isolation on public.handover_report_events
+  as restrictive for select to authenticated
+  using ((site is null) or (btrim(site) = '') or (select public.app_sees_all_sites())
+         or (upper(btrim(site)) = any (coalesce((select public.app_site_scope()), '{}'::text[]))));
 
 create or replace function public.guard_handover_events_append_only()
 returns trigger language plpgsql set search_path = public as $fn$
@@ -380,6 +474,7 @@ begin
     end loop;
     if v_changes = '{}'::jsonb then return null; end if;
     v_action := case
+      when coalesce(current_setting('handover.sendback', true), '') = 'on' then 'sent_back'
       when old.from_signed_at is null and new.from_signed_at is not null then 'signed_handing'
       when old.to_signed_at   is null and new.to_signed_at   is not null then 'signed_receiving'
       when old.approval_status is distinct from new.approval_status then 'decision_' || coalesce(new.approval_status, 'none')
@@ -404,8 +499,17 @@ create trigger trg_zz_log_handover_event
 -- ------------------------------------------------------------------ SIGN RPC
 -- p_party: 'handing' (from_*) or 'receiving' (to_*). The handing party signs
 -- first. The time is now(); the signer account is auth.uid(); the name comes
--- from the driver register when a driver id is set. The receiving signature
--- submits the handover for supervisor sign-off.
+-- from the driver register (same organisation only) when a driver id is set.
+-- The receiving signature submits the handover for supervisor sign-off.
+--
+-- WHO MAY SIGN (review H4):
+--   * the account linked to that party's driver (driver_account_links), or
+--   * a supervisor-level account (handover_can_sign_supervisor) passing
+--     p_on_behalf = true. The flag is stored on the row and in the trail.
+--   A party with no driver id (a typed name, a yard) can only be signed on
+--   behalf. An account linked to EITHER driver on this handover may not sign on
+--   behalf of the other party, and one account may collect both signatures only
+--   when both are on behalf.
 create or replace function public.sign_handover(
   p_id uuid,
   p_party text,
@@ -414,18 +518,23 @@ create or replace function public.sign_handover(
   p_latitude double precision default null,
   p_longitude double precision default null,
   p_accuracy_m numeric default null,
-  p_location_status text default null
+  p_location_status text default null,
+  p_on_behalf boolean default false
 ) returns jsonb
 language plpgsql security definer set search_path = public as $fn$
 declare
-  v_org     uuid := public.app_current_org();
-  r         public.handover_reports;
-  v_party   text := lower(btrim(coalesce(p_party, '')));
-  v_sig     text := btrim(coalesce(p_signature, ''));
-  v_name    text;
-  v_status  text;
-  v_has_loc boolean := p_latitude is not null or p_longitude is not null;
-  v_now     timestamptz := now();
+  v_org       uuid := public.app_current_org();
+  r           public.handover_reports;
+  v_party     text := lower(btrim(coalesce(p_party, '')));
+  v_sig       text := btrim(coalesce(p_signature, ''));
+  v_name      text;
+  v_status    text;
+  v_has_loc   boolean := p_latitude is not null or p_longitude is not null;
+  v_now       timestamptz := now();
+  v_driver_id uuid;
+  v_self      boolean := false;
+  v_member    boolean := false;
+  v_behalf    boolean := false;
 begin
   if auth.uid() is null or not coalesce(public.app_is_active(), false) then
     raise exception 'Sign in with an active account to sign a handover.' using errcode = '42501';
@@ -439,8 +548,8 @@ begin
   if length(v_sig) > 200000 then
     raise exception 'The signature is too large. Clear it and sign again.' using errcode = '22023';
   end if;
-  if v_sig ~* '^<svg' and v_sig !~* '</svg>$' then
-    raise exception 'The signature is incomplete. Clear it and sign again.' using errcode = '22023';
+  if not public.handover_valid_signature(v_sig) then
+    raise exception 'The signature is not in a recognised format. Clear it and sign again.' using errcode = '22023';
   end if;
   if v_has_loc then
     if p_latitude is null or p_longitude is null
@@ -470,10 +579,7 @@ begin
     if r.from_signed_at is not null then
       raise exception 'The handing driver has already signed this handover.' using errcode = '22023';
     end if;
-    if r.from_driver_id is not null then
-      select d.driver_name into v_name from public.drivers d where d.id = r.from_driver_id;
-    end if;
-    v_name := coalesce(nullif(btrim(v_name), ''), nullif(btrim(p_signer_name), ''), nullif(btrim(r.from_driver), ''));
+    v_driver_id := r.from_driver_id;
   else
     if r.from_signed_at is null then
       raise exception 'The handing driver signs first.' using errcode = '22023';
@@ -481,9 +587,46 @@ begin
     if r.to_signed_at is not null then
       raise exception 'The receiving driver has already signed this handover.' using errcode = '22023';
     end if;
-    if r.to_driver_id is not null then
-      select d.driver_name into v_name from public.drivers d where d.id = r.to_driver_id;
+    v_driver_id := r.to_driver_id;
+  end if;
+
+  -- ---- who is holding the pen ----
+  if v_driver_id is not null then
+    select exists (select 1 from public.driver_account_links l
+                    where l.driver_id = v_driver_id and l.user_id = auth.uid()
+                      and l.organisation_id = r.organisation_id)
+      into v_self;
+  end if;
+  select exists (select 1 from public.driver_account_links l
+                  where l.user_id = auth.uid()
+                    and l.driver_id in (r.from_driver_id, r.to_driver_id))
+    into v_member;
+
+  if not v_self then
+    if not coalesce(p_on_behalf, false) then
+      raise exception 'This driver signs with their own account. A supervisor can sign on their behalf.' using errcode = '42501';
     end if;
+    if not public.handover_can_sign_supervisor() then
+      raise exception 'Only a supervisor can sign on behalf of a driver.' using errcode = '42501';
+    end if;
+    if v_member then
+      raise exception 'A driver on this handover cannot sign on behalf of the other driver.' using errcode = '42501';
+    end if;
+    v_behalf := true;
+  end if;
+
+  if v_party = 'receiving' and r.from_signed_by = auth.uid()
+     and not (v_behalf and coalesce(r.from_on_behalf, false)) then
+    raise exception 'The same account cannot sign for both drivers.' using errcode = '42501';
+  end if;
+
+  if v_driver_id is not null then
+    select d.driver_name into v_name from public.drivers d
+     where d.id = v_driver_id and d.organisation_id = r.organisation_id;
+  end if;
+  if v_party = 'handing' then
+    v_name := coalesce(nullif(btrim(v_name), ''), nullif(btrim(p_signer_name), ''), nullif(btrim(r.from_driver), ''));
+  else
     v_name := coalesce(nullif(btrim(v_name), ''), nullif(btrim(p_signer_name), ''), nullif(btrim(r.to_driver), ''));
   end if;
   if v_name is null then
@@ -496,6 +639,7 @@ begin
   if v_party = 'handing' then
     update public.handover_reports set
       from_signature = v_sig, from_signed_name = v_name, from_signed_at = v_now, from_signed_by = auth.uid(),
+      from_on_behalf = v_behalf,
       frozen_at = coalesce(frozen_at, v_now),
       latitude = case when latitude is null and v_has_loc then p_latitude else latitude end,
       longitude = case when longitude is null and v_has_loc then p_longitude else longitude end,
@@ -510,6 +654,7 @@ begin
     v_status := 'pending_supervisor';
     update public.handover_reports set
       to_signature = v_sig, to_signed_name = v_name, to_signed_at = v_now, to_signed_by = auth.uid(),
+      to_on_behalf = v_behalf,
       frozen_at = coalesce(frozen_at, v_now),
       -- The receiving moment IS the handover moment: its reading wins.
       latitude = case when v_has_loc then p_latitude else latitude end,
@@ -527,13 +672,13 @@ begin
   perform set_config('handover.via', '', true);
 
   return jsonb_build_object('ok', true, 'party', v_party, 'signed_name', v_name,
-    'signed_at', v_now, 'signed_by', auth.uid(), 'frozen', true,
+    'signed_at', v_now, 'signed_by', auth.uid(), 'on_behalf', v_behalf, 'frozen', true,
     'status', coalesce(v_status, r.approval_status));
 end
 $fn$;
-revoke all on function public.sign_handover(uuid, text, text, text, double precision, double precision, numeric, text) from public;
-revoke all on function public.sign_handover(uuid, text, text, text, double precision, double precision, numeric, text) from anon;
-grant execute on function public.sign_handover(uuid, text, text, text, double precision, double precision, numeric, text) to authenticated;
+revoke all on function public.sign_handover(uuid, text, text, text, double precision, double precision, numeric, text, boolean) from public;
+revoke all on function public.sign_handover(uuid, text, text, text, double precision, double precision, numeric, text, boolean) from anon;
+grant execute on function public.sign_handover(uuid, text, text, text, double precision, double precision, numeric, text, boolean) to authenticated;
 
 -- ---------------------------------------------- DECIDE: SIGNED + NOT THE DRIVER
 -- Anchored inserts into the live body (two anchors, each must occur once), the
@@ -543,6 +688,8 @@ declare
   v_def text;
   v_a   text := E'  if v_status = ''draft'' then';
   v_b   text := E'  -- ---- approval ----';
+  v_c   text := E'       set approval_status = ''rejected'', review_note = p_note\n';
+  v_d   text := E'    return jsonb_build_object(''ok'', true, ''decision'', ''rejected'', ''status'', ''rejected'', ''both_steps'', false);';
 begin
   select pg_get_functiondef('public.decide_handover_approval(uuid, boolean, text, text)'::regprocedure) into v_def;
   if (length(v_def) - length(replace(v_def, v_a, ''))) / length(v_a) <> 1 then
@@ -554,11 +701,21 @@ begin
   if position('signing driver' in v_def) > 0 then
     raise exception 'decide: already extended';
   end if;
+  if (length(v_def) - length(replace(v_def, v_c, ''))) / length(v_c) <> 1 then
+    raise exception 'decide: send-back update anchor not found exactly once';
+  end if;
+  if (length(v_def) - length(replace(v_def, v_d, ''))) / length(v_d) <> 1 then
+    raise exception 'decide: send-back return anchor not found exactly once';
+  end if;
   v_def := replace(v_def, v_a,
        E'  if exists (select 1 from public.handover_reports hr\n'
     || E'               join public.driver_account_links l on l.driver_id in (hr.from_driver_id, hr.to_driver_id)\n'
     || E'              where hr.id = p_id and l.user_id = auth.uid()) then\n'
     || E'    raise exception ''A signing driver cannot sign off their own handover.'' using errcode = ''42501'';\n'
+    || E'  end if;\n'
+    || E'  if exists (select 1 from public.handover_reports hr\n'
+    || E'              where hr.id = p_id and auth.uid() in (hr.from_signed_by, hr.to_signed_by, hr.created_by)) then\n'
+    || E'    raise exception ''You collected a signature on this handover or created it, so another approver must decide it.'' using errcode = ''42501'';\n'
     || E'  end if;\n\n'
     || v_a);
   v_def := replace(v_def, v_b, v_b
@@ -566,6 +723,26 @@ begin
     || E'                  where hr.id = p_id and hr.from_signed_at is not null and hr.to_signed_at is not null) then\n'
     || E'    raise exception ''Both drivers must sign the handover before it can be approved.'' using errcode = ''22023'';\n'
     || E'  end if;');
+  -- Send back (review M6): clear both driver signatures, any supervisor
+  -- signature, the location and the freeze, and return the record to draft so
+  -- it can be corrected and signed again. The reason stays in review_note and
+  -- the trail records the whole change as 'sent_back'.
+  v_def := replace(v_def, v_c,
+       E'       set approval_status = ''draft'', review_note = p_note,\n'
+    || E'           from_signature = null, from_signed_name = null, from_signed_at = null, from_signed_by = null, from_on_behalf = null,\n'
+    || E'           to_signature = null, to_signed_name = null, to_signed_at = null, to_signed_by = null, to_on_behalf = null,\n'
+    || E'           latitude = null, longitude = null, location_accuracy_m = null, location_status = null,\n'
+    || E'           location_captured_at = null, frozen_at = null,\n'
+    || E'           supervisor_name = null, supervisor_signature = null, supervisor_at = null, supervisor_by = null\n');
+  v_def := replace(v_def, E'    update public.handover_reports\n       set approval_status = ''draft'', review_note = p_note,',
+       E'    perform set_config(''handover.sendback'', ''on'', true);\n'
+    || E'    update public.handover_reports\n       set approval_status = ''draft'', review_note = p_note,');
+  v_def := replace(v_def, v_d,
+       E'    perform set_config(''handover.sendback'', '''', true);\n'
+    || E'    return jsonb_build_object(''ok'', true, ''decision'', ''rejected'', ''status'', ''draft'', ''both_steps'', false, ''signatures_cleared'', true);');
+  if position(E'set_config(''handover.sendback'', ''on'', true)' in v_def) = 0 then
+    raise exception 'decide: send-back rewrite did not apply';
+  end if;
   execute v_def;
 end
 $mig$;
@@ -575,7 +752,10 @@ $mig$;
 --   drop trigger trg_zz_log_handover_event on public.handover_reports;
 --   drop trigger trg_guard_handover_signed_delete on public.handover_reports;
 --   drop trigger trg_a2_guard_handover_record_integrity on public.handover_reports;
---   drop function public.sign_handover(uuid, text, text, text, double precision, double precision, numeric, text);
+--   drop function public.sign_handover(uuid, text, text, text, double precision, double precision, numeric, text, boolean);
+--   drop trigger trg_a1_guard_handover_driver_scope on public.handover_reports;
+--   drop function public.guard_handover_driver_scope();
+--   drop function public.handover_valid_signature(text);
 --   drop function public.log_handover_event();
 --   drop function public.guard_handover_signed_delete();
 --   drop function public.guard_handover_record_integrity();

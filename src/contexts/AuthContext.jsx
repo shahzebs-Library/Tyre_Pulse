@@ -10,6 +10,7 @@ import { resolveExportAllowed, registerExportGate } from '../lib/exportCapabilit
 import { resolveAccess, overrideToFlags } from '../lib/accessResolver'
 import { hasUnmetMfa } from '../lib/authAssurance'
 import { listModuleStatuses } from '../lib/api/modulesRegistry'
+import { loadMyAccess } from '../lib/api/accessBundle'
 import { configNum, configBool } from '../lib/api/systemConfig'
 import { checkSsoPasswordLogin } from '../lib/api/accessPolicies'
 import { signInWithIdentifier } from '../lib/api/loginGuard'
@@ -327,18 +328,18 @@ export function AuthProvider({ children }) {
     // reject and one failing read can never discard the other four. listFactors
     // in particular is documented as able to throw a non-AuthError.
     const settle = () => ({ data: null, error: true })
-    const [profileRes, permsRes, factorsRes, grantsRes, capsRes, roleCapsRes] = await Promise.all([
+    const [profileRes, access, factorsRes, roleCapsRes] = await Promise.all([
       supabase.from('profiles').select('id,full_name,username,avatar_url,role,email,employee_id,site,sites,country,approved,locked,is_super_admin,web_access,created_at').eq('id', userId).single().then(r => r, settle),
-      supabase.rpc('get_user_module_permissions').then(r => r, settle),
+      // Module map + per-user grants + per-capability overrides, in ONE request
+      // where the database has get_my_access_bundle (each part still reports
+      // its own error, so the fail-closed handling below is unchanged: any
+      // failed overlay keeps {} and never blocks login). UI-gating only; the
+      // server is the real boundary. Never rejects.
+      loadMyAccess(supabase),
       supabase.auth.mfa.listFactors().then(r => r, settle),
-      // Per-user access grants. Fail-closed: on any error keep {} — never throw
-      // and never block login on this optional overlay.
-      supabase.rpc('get_my_access_grants').then(r => r, settle),
-      // Per-user capability overrides. Same fail-closed contract: any error keeps
-      // {} and never blocks login. UI-gating only (server is the real boundary).
-      supabase.rpc('get_my_capabilities').then(r => r, settle),
       getPermissionOverrides().then(data => ({ data, error: null }), () => settle()),
     ])
+    const { perms: permsRes, grants: grantsRes, caps: capsRes } = access
 
     const p = profileRes.data
     // Enforce locked / unapproved accounts immediately on the client
@@ -405,12 +406,11 @@ export function AuthProvider({ children }) {
       // A refresh exists to pick up a change made elsewhere, so the role
       // overrides must not be served from the 60 s configuration cache.
       invalidateConfiguration('app_settings', PERMISSION_OVERRIDES_KEY)
-      const [permsRes, grantsRes, capsRes, roleCapsRes] = await Promise.all([
-        supabase.rpc('get_user_module_permissions'),
-        supabase.rpc('get_my_access_grants').then(r => r, () => ({ data: null, error: true })),
-        supabase.rpc('get_my_capabilities').then(r => r, () => ({ data: null, error: true })),
+      const [access, roleCapsRes] = await Promise.all([
+        loadMyAccess(supabase),
         getPermissionOverrides().then(data => ({ data, error: null }), () => ({ data: null, error: true })),
       ])
+      const { perms: permsRes, grants: grantsRes, caps: capsRes } = access
       if (!permsRes.error) setModulePerms(permsRes.data ?? {})
       if (!grantsRes?.error) {
         const g = grantsRes?.data

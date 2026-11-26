@@ -196,6 +196,18 @@ export function configEntry(key) {
   return { value: _cache[key] ?? null, value_text: _textCache[key] ?? null }
 }
 
+/**
+ * Record a value this browser just saved, so cached readers do not keep serving
+ * the old one until the next full read. Only touches an authoritative cache
+ * (an unknown cache stays unknown). The realtime channel in SettingsContext
+ * still re-reads the whole table, so this is a fast path, not the only one.
+ */
+export function rememberSavedConfig(key, value, valueText) {
+  if (!_full || typeof key !== 'string' || !key) return
+  _cache = { ..._cache, [key]: value ?? null }
+  if (valueText !== undefined) _textCache = { ..._textCache, [key]: valueText ?? null }
+}
+
 // ── synchronous typed getters (read the primed cache) ─────────────────────────
 export function configBool(key, dflt) {
   return coerceBool(_cache[key], dflt !== undefined ? dflt : CONFIG_DEFAULTS[key] ?? false)

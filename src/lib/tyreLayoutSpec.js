@@ -182,16 +182,21 @@ export const WEAR_CONDITION_RE = COND_RE.warning
 export const GOOD_CONDITION_RE = COND_RE.good
 
 const NEGATION_RE = new RegExp(COND.negation, 'gi')
+const NEGATED_GOOD_RE = new RegExp(COND.negatedGood, 'gi')
 
 /**
  * The condition text with every phrase that DENIES a fault ("no damage",
- * "not damaged", "without cuts", "undamaged") replaced by "ok". "Good, no
+ * "not damaged", "without cuts", "undamaged", "damage: none") replaced by
+ * "ok", and every DENIED good word ("not good", "not ok") replaced by
+ * "needsattention" (a critical word). "Good, no
  * damage" used to match "damage" and paint a healthy tyre red. Every stem test
  * on a condition word goes through this first.
  */
 export function neutraliseCondition(condition) {
   const s = condition == null ? '' : String(condition)
-  return s.replace(NEGATION_RE, ' ok ')
+  // "not good" / "not ok" first: a denied good word needs attention (red,
+  // warning picture), it must never read as Good.
+  return s.replace(NEGATED_GOOD_RE, ' needsattention ').replace(NEGATION_RE, ' ok ')
 }
 
 /** good | warning | critical | none. An unknown word is none (No data), never good. */

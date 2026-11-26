@@ -20,25 +20,23 @@ library;
 
 import 'package:flutter/foundation.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_display.dart';
 
 /// Same text the web uses for a fault with no recorded position.
 const String unknownActionPosition = 'unknown position';
 
-/// Any recorded fault (web `FAULT_RE`).
-final RegExp _faultRe = RegExp(
-  r'damage|puncture|worn|wear|flat|burst|blast|\bcut\b|bulge|separat',
-  caseSensitive: false,
-);
+/// Any recorded fault (web `FAULT_RE`): the shared tyre map's rule, so
+/// "Good, no damage" is not a fault, "not ok" is, and a missing tyre is.
+bool isActionFaultCondition(String condition) {
+  final String band = tyreConditionBand(condition);
+  return band == 'warning' || band == 'critical';
+}
 
-/// The stop-the-vehicle subset (web `SEVERE_RE`).
-final RegExp _severeRe = RegExp(
-  r'damage|puncture|flat|burst|blast|\bcut\b|bulge|separat',
-  caseSensitive: false,
-);
-
-bool isActionFaultCondition(String condition) => _faultRe.hasMatch(condition);
-bool isActionSevereCondition(String condition) => _severeRe.hasMatch(condition);
+/// The stop-the-vehicle subset (web `SEVERE_RE`): the shared critical band
+/// (flat, puncture, burst, cut, crack, missing ...), which beats wear.
+bool isActionSevereCondition(String condition) =>
+    tyreConditionBand(condition) == 'critical';
 
 /// Response time by urgency, in days (web `ACTION_SLA_DAYS`).
 const Map<String, int> actionSlaDays = <String, int>{

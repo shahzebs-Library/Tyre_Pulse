@@ -62,15 +62,16 @@ void main() {
     expect(stats.critical, 0);
   });
 
-  test('Missing condition counts as unrecorded, matching TpStatus.unknown', () {
+  test('a missing tyre is critical (stop the vehicle), like the shared map',
+      () {
     final TyreDiagramStats stats = computeTyreDiagramStats(
       const <String>['A'],
       const <String, Map<String, Object?>>{
         'A': <String, Object?>{'condition': 'Missing'},
       },
     );
-    expect(stats.unrecorded, 1);
-    expect(stats.ok + stats.monitor + stats.critical, 0);
+    expect(stats.critical, 1);
+    expect(stats.ok + stats.monitor + stats.unrecorded, 0);
   });
 
   test('every position is counted exactly once, across every band', () {

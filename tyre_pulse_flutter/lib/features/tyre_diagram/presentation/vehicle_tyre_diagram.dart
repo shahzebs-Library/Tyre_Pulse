@@ -1247,7 +1247,7 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                               child: TyreConditionGlyph(
                                 condition:
                                     wheel.isRecorded ? wheel.condition : null,
-                                size: 14,
+                                size: 16,
                                 color: Colors.white,
                                 strokeWidth: 3,
                               ),

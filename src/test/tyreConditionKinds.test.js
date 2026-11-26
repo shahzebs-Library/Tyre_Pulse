@@ -76,10 +76,16 @@ describe('kinds agree with colours', () => {
       expect(CONDITION_KIND[conditionKind(word)].band, word).toBe(conditionRisk(word))
     }
   })
-  it('three red conditions have three different pictures', () => {
+  it('the four red conditions have four different pictures', () => {
     const red = CONDITION_KINDS.filter((k) => k.band === 'critical')
-    expect(red.map((k) => k.kind)).toEqual(['puncture', 'flat', 'damaged'])
-    expect(new Set(red.map((k) => JSON.stringify(k.glyph))).size).toBe(3)
+    expect(red.map((k) => k.kind)).toEqual(['puncture', 'flat', 'damaged', 'missing'])
+    expect(new Set(red.map((k) => JSON.stringify(k.glyph))).size).toBe(4)
+  })
+  it('a denied good word is never Good, and a missing tyre is a severe flag', () => {
+    for (const w of ['Not good', 'no good', 'not ok', 'not OK']) expect(conditionRisk(w), w).toBe('critical')
+    expect(isSevereCondition('Missing')).toBe(true)
+    expect(damagedPositions({ tyre_conditions: { A: 'Missing', B: 'Good' } }).map((d) => d.position)).toEqual(['A'])
+    expect(checklistConditionTally([{ condition: 'Missing' }])).toEqual({ good: 0, wear: 0, critical: 1 })
   })
   it('a risk level from a tyre record picks the band picture', () => {
     expect(kindForWheel('Good', 'critical')).toBe('damaged')

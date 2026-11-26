@@ -55,12 +55,16 @@
     "Worn": "warning", "Wear": "warning", "wear": "warning",
     "Flat": "critical", "Damaged": "critical", "Damage": "critical", "Puncture": "critical",
     "Burst": "critical", "Sidewall cut": "critical", "Bulge": "critical",
-    "Missing": "none", "nonsense": "none", "": "none", "broken": "none",
+    "Missing": "critical", "nonsense": "none", "": "none", "broken": "none",
     "Good, no damage": "good", "Good no damage": "good", "No damage": "good", "not damaged": "good",
     "Without damage": "good", "No visible damage": "good", "Undamaged": "good", "Damage free": "good",
     "No puncture": "good", "Not flat": "good", "Worn, no damage": "warning",
     "Damaged, not punctured": "critical", "Nail in tread": "critical", "Deflated": "critical",
-    "Worn, flat": "critical", "wear + cut": "critical", "Worn, puncture": "critical", "Puncture, worn": "critical"
+    "Worn, flat": "critical", "wear + cut": "critical", "Worn, puncture": "critical", "Puncture, worn": "critical",
+    "Not good": "critical", "no good": "critical", "not ok": "critical", "not OK": "critical", "Tyre is not fine": "critical",
+    "cuts": "critical", "cut": "critical", "bulging": "critical", "bulges": "critical",
+    "cracked": "critical", "cracks": "critical", "crack": "critical", "missing tyre": "critical",
+    "Damage: none": "good", "damage - nil": "good", "damage: no": "good", "Cuts: nil": "good"
   },
   "$kinds": "The picture (and so the label) each word gets: conditions.kinds in tyre-layouts.json.",
   "kinds": {
@@ -71,6 +75,7 @@
     "Damaged": "damaged", "Damage": "damaged", "Sidewall cut": "damaged", "Bulge": "damaged",
     "Burst": "damaged", "Damaged, not punctured": "damaged",
     "Worn, flat": "flat", "wear + cut": "damaged", "Worn, puncture": "puncture",
-    "Missing": "missing", "": "none", "nonsense": "none", "Not checked": "none"
+    "Missing": "missing", "missing tyre": "missing", "Not good": "damaged", "not ok": "damaged",
+    "Damage: none": "good", "cracks": "damaged", "": "none", "nonsense": "none", "Not checked": "none"
   }
 }

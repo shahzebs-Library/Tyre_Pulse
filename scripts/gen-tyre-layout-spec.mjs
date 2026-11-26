@@ -22,7 +22,7 @@ const spec = JSON.parse(readFileSync(resolve(root, 'docs/document-specs/tyre-lay
 const out = resolve(root, 'tyre_pulse_flutter/lib/features/tyre_diagram/domain/tyre_layout_spec.g.dart')
 
 const s = (v) => `'${String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\$/g, '\\$')}'`
-const raw = (v) => `r'${v}'`
+const raw = (v) => (String(v).includes("'") ? `r"${v}"` : `r'${v}'`)
 const num = (n) => (Number.isInteger(n) ? `${n}.0` : String(n))
 const strList = (a) => `<String>[${a.map(s).join(', ')}]`
 const strMap = (m) => `<String, String>{${Object.entries(m).map(([k, v]) => `${s(k)}: ${s(v)}`).join(', ')}}`
@@ -84,6 +84,8 @@ lines.push(`const List<String> kTyreSpecConditionOrder = ${strList(spec.conditio
 lines.push(`const Map<String, String> kTyreSpecConditionPatterns = <String, String>{${Object.entries(spec.conditions.patterns).map(([k, v]) => `${s(k)}: ${raw(v)}`).join(', ')}};`)
 lines.push('/// Phrases that DENY a fault ("no damage") - replaced by "ok" before any test.')
 lines.push(`const String kTyreSpecConditionNegation = ${raw(spec.conditions.negation)};`)
+lines.push('/// Phrases that DENY a good word ("not ok") - replaced by "needsattention" first.')
+lines.push(`const String kTyreSpecConditionNegatedGood = ${raw(spec.conditions.negatedGood)};`)
 lines.push('')
 const nums = (a) => `<double>[${a.map(num).join(', ')}]`
 const numLists = (a) => `<List<double>>[${(a || []).map(nums).join(', ')}]`

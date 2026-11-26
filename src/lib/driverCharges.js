@@ -19,6 +19,7 @@ export const ACTION_LABELS = {
   charge_notify: 'Notify driver',
   charge_respond: 'Respond and sign',
   charge_record_refusal: 'Record refusal with witness',
+  charge_witness_confirm: 'Confirm refusal as witness',
   charge_supervisor_review: 'Supervisor review',
   charge_finance_review: 'Finance review',
   charge_schedule: 'Schedule deduction',

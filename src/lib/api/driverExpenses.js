@@ -89,7 +89,7 @@ export async function createExpense(values = {}) {
   // Since migration 20261126170000 the server records every new claim as
   // pending; any other status is a review and goes through the stamped RPC.
   if (created && status !== 'pending' && created.status !== status) {
-    return reviewExpense(created.id, status, values.review_reason || 'Status set when the claim was recorded')
+    return reviewExpense(created.id, status, values.review_reason || 'Status set when the claim was recorded', created.updated_at)
   }
   return created
 }
@@ -122,7 +122,7 @@ export async function updateExpense(id, patch = {}) {
     ? unwrap(await supabase.from('driver_expenses').update(clean).eq('id', id).select(COLS).single())
     : await getExpense(id)
   if (nextStatus && row && row.status !== nextStatus) {
-    row = await reviewExpense(id, nextStatus, reviewReason || 'Status updated')
+    row = await reviewExpense(id, nextStatus, reviewReason || 'Status updated', row.updated_at)
   }
   return row
 }
@@ -137,9 +137,13 @@ function isMissingFunction(error) {
  * and refuses a review of your own claim. Before the migration is applied the
  * RPC does not exist, so the legacy direct status update is used instead.
  */
-export async function reviewExpense(id, status, reason) {
+export async function reviewExpense(id, status, reason, expectedUpdatedAt) {
   if (!EXPENSE_STATUSES.includes(status) || status === 'pending') throw new Error('Choose a review decision.')
-  const { data, error } = await supabase.rpc('review_driver_expense', { p_id: id, p_status: status, p_reason: reason })
+  // expectedUpdatedAt is the claim's updated_at exactly as read (string, full
+  // precision): the server refuses the review if the claim changed since.
+  let token = expectedUpdatedAt
+  if (!token) token = (await getExpense(id))?.updated_at
+  const { data, error } = await supabase.rpc('review_driver_expense', { p_id: id, p_status: status, p_reason: reason, p_expected_updated_at: token || null })
   if (!error) return data
   if (!isMissingFunction(error)) throw toServiceError(error)
   return unwrap(await supabase.from('driver_expenses').update({ status }).eq('id', id).select(COLS).single())

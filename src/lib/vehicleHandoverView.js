@@ -51,12 +51,15 @@ export const EMPTY_WIZARD = {
   asset_no: '',
   handover_type: 'checkout',
   driver_name: '',
+  driver_id: '',
   driver_phone: '',
   other_party: '',
+  other_party_id: '',
   report_no: '',
   handover_at: '',
   odometer_km: '',
   fuel_level_pct: '',
+  hour_meter: '',
   condition_rating: 'good',
   cleanliness: 'clean',
   zones: { front: 'good', left: 'good', rear: 'good', right: 'good' },
@@ -66,6 +69,10 @@ export const EMPTY_WIZARD = {
   photos: [],
   notes: '',
   signature: null,
+  // The two driver signatures of the authorization paper. They are recorded
+  // through sign_handover() after the handover row is saved, never as columns.
+  sig_handing: null,
+  sig_receiving: null,
 }
 
 /** Finite number or null. Blank stays null (never a fabricated 0). */
@@ -155,11 +162,34 @@ export function validateStep(step, form, prev = {}) {
     const fuel = num(form.fuel_level_pct)
     if (form.fuel_level_pct !== '' && form.fuel_level_pct != null && fuel == null) errs.push('Fuel level must be a number.')
     if (fuel != null && (fuel < 0 || fuel > 100)) errs.push('Fuel level must be between 0 and 100%.')
+    const hm = num(form.hour_meter)
+    if (form.hour_meter !== '' && form.hour_meter != null && hm == null) errs.push('Hour meter must be a number.')
+    if (hm != null && hm < 0) errs.push('Hour meter cannot be negative.')
+    if (hm != null && prev.engineHours != null && hm < prev.engineHours) {
+      errs.push(`Hour meter cannot be lower than the last reading (${prev.engineHours.toLocaleString('en-US')} h).`)
+    }
   }
   if (step === 2) {
     const url = String(form.photo_url || '').trim()
     if (url && !/^https?:\/\//i.test(url)) errs.push('The photo link must start with http:// or https://.')
   }
+  return errs
+}
+
+/**
+ * What stops the two driver signatures being complete. The handing party is the
+ * other party on a check-out and the picked driver on a check-in; both must be
+ * named and both must sign before the handover is completed.
+ */
+export function signatureProblems(form) {
+  const errs = []
+  const checkout = form.handover_type !== 'checkin'
+  const handingName = String((checkout ? form.other_party : form.driver_name) || '').trim()
+  const receivingName = String((checkout ? form.driver_name : form.other_party) || '').trim()
+  if (!handingName) errs.push(checkout ? 'Name the person handing the vehicle over.' : 'Choose the driver returning the vehicle.')
+  if (!receivingName) errs.push(checkout ? 'Choose the driver receiving the vehicle.' : 'Name the person receiving the vehicle back.')
+  if (!form.sig_handing) errs.push('The handing over signature is missing.')
+  if (!form.sig_receiving) errs.push('The receiving signature is missing.')
   return errs
 }
 
@@ -177,9 +207,11 @@ export function stepState(index, current) {
 }
 
 /** Wizard form to the service payload for createHandoverReport. */
-export function buildHandoverPayload(form, { country = null } = {}) {
+export function buildHandoverPayload(form, { country = null, site = null } = {}) {
   const driver = String(form.driver_name || '').trim() || null
   const other = String(form.other_party || '').trim() || null
+  const driverId = String(form.driver_id || '').trim() || null
+  const otherId = String(form.other_party_id || '').trim() || null
   const checkout = form.handover_type !== 'checkin'
   // Numbered picture markers are the current capture; the per-side zone map is
   // only used when no marker was placed (older drafts and callers).
@@ -192,6 +224,9 @@ export function buildHandoverPayload(form, { country = null } = {}) {
     handover_type: checkout ? 'checkout' : 'checkin',
     from_driver: checkout ? other : driver,
     to_driver: checkout ? driver : other,
+    from_driver_id: checkout ? otherId : driverId,
+    to_driver_id: checkout ? driverId : otherId,
+    hour_meter: num(form.hour_meter),
     handover_at: form.handover_at ? new Date(form.handover_at).toISOString() : null,
     odometer_km: num(form.odometer_km),
     fuel_level_pct: num(form.fuel_level_pct),
@@ -204,6 +239,7 @@ export function buildHandoverPayload(form, { country = null } = {}) {
     signature_url: form.signature || null,
     notes: String(form.notes || '').trim() || null,
     country: country && country !== 'All' ? country : null,
+    site: String(site || form.site || '').trim() || null,
   }
 }
 

@@ -19,6 +19,7 @@
  * src/lib/vehicleHandoverAnalytics.js.
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Chart as ChartJS, BarElement, CategoryScale, LinearScale, Tooltip, Legend,
 } from 'chart.js'
@@ -33,6 +34,8 @@ import SignatureCapture from '../components/checklist/SignatureCapture'
 import SignatureView from '../components/checklist/SignatureView'
 import HandoverDamageMarker from '../components/handover/HandoverDamageMarker'
 import HandoverSignOffPanel from '../components/handover/HandoverSignOffPanel'
+import HandoverAuthorizationPanel from '../components/handover/HandoverAuthorizationPanel'
+import HandoverLocation from '../components/handover/HandoverLocation'
 import useHandoverArtwork from '../components/handover/useHandoverArtwork'
 import {
   Card, Kpi, PageHero, Donut, KitTable, Tabs, VehicleThumb, fmtInt,
@@ -41,8 +44,11 @@ import { useSettings } from '../contexts/SettingsContext'
 import { useTenant } from '../contexts/TenantContext'
 import {
   listHandoverReports, getHandoverReport, createHandoverReport, updateHandoverReport, deleteHandoverReport,
-  listHandoverDrivers, uploadHandoverPhoto,
+  listHandoverDrivers, uploadHandoverPhoto, signHandover,
 } from '../lib/api/handoverReports'
+import {
+  partiesFor, captureLocation, locationArgs, isFrozen, PARTY_HANDING, PARTY_RECEIVING,
+} from '../lib/handoverAuthorization'
 import { brandingForPdf } from '../lib/inspectionChecklistReport'
 import { resolveStorageUrl, resolveStorageUrlMap } from '../lib/storageRefs'
 import { statusSummary } from '../lib/handoverApproval'
@@ -56,7 +62,7 @@ import {
   vehiclesStillOut, HANDOVER_EXPORT_COLUMNS, handoverExportRows,
 } from '../lib/vehicleHandoverAnalytics'
 import {
-  WIZARD_STEPS, EMPTY_WIZARD,
+  WIZARD_STEPS, EMPTY_WIZARD, signatureProblems,
   latestHandoverFor, previousReadings, validateStep, firstInvalidStep, stepState,
   buildHandoverPayload, readingDeltas, driverOptions, matchDriver, num,
 } from '../lib/vehicleHandoverView'
@@ -230,6 +236,13 @@ export default function VehicleHandover() {
   const [saveError, setSaveError] = useState('')
   const [saved, setSaved] = useState(null)
   const [signKey, setSignKey] = useState(0)
+  // Device location read when the signatures are collected. The time of each
+  // signature is the server's, never this device's.
+  const [location, setLocation] = useState({ busy: false, reading: null })
+  const readLocation = useCallback(async () => {
+    setLocation({ busy: true, reading: null })
+    setLocation({ busy: false, reading: await captureLocation() })
+  }, [])
   // Photos: form.photos holds tp-storage:// refs; photoPreviews maps a ref to its
   // resolved signed URL for the thumbnail.
   const [photoPreviews, setPhotoPreviews] = useState({})
@@ -308,9 +321,10 @@ export default function VehicleHandover() {
     setStepErrors([]); setSaveError(''); setSaved(null); setAsset({ loading: false, row: null, error: '', looked: '' }); setHours(null)
     setSignKey((k) => k + 1)
     setPhotoPreviews({}); setPhotoError('')
+    setLocation({ busy: false, reading: null })
   }
   const next = () => {
-    const errs = validateStep(step, form, prev)
+    const errs = [...validateStep(step, form, prev), ...(WIZARD_STEPS[step]?.key === 'signatures' ? signatureProblems(form) : [])]
     setStepErrors(errs)
     if (!errs.length) setStep((s) => Math.min(WIZARD_STEPS.length - 1, s + 1))
   }
@@ -323,21 +337,51 @@ export default function VehicleHandover() {
   }
   const pickDriver = (text) => {
     const m = matchDriver(driverOpts, text)
-    setForm((f) => ({ ...f, driver_name: text, driver_phone: m ? m.phone : f.driver_phone }))
+    setForm((f) => ({ ...f, driver_name: text, driver_id: m ? m.id : '', driver_phone: m ? m.phone : f.driver_phone }))
     if (m?.asset && !form.asset_no) { setF('asset_no', m.asset); lookupAsset(m.asset) }
+  }
+  // The other party is a driver from the register when it matches one, else a
+  // typed name (a yard, a workshop, a third party).
+  const pickOther = (text) => {
+    const m = matchDriver(driverOpts, text)
+    setForm((f) => ({ ...f, other_party: text, other_party_id: m ? m.id : '' }))
   }
 
   const completeHandover = async () => {
     const bad = firstInvalidStep(form, prev, WIZARD_STEPS.length - 1)
     if (bad >= 0) { setStep(bad); setStepErrors(validateStep(bad, form, prev)); return }
+    const sigErrs = signatureProblems(form)
+    if (sigErrs.length) {
+      setStep(WIZARD_STEPS.findIndex((w) => w.key === 'signatures')); setStepErrors(sigErrs); return
+    }
     setSaving(true); setSaveError('')
+    let row = null
     try {
-      const payload = buildHandoverPayload({ ...form, artwork_stem: artStem }, { country: asset.row?.country || activeCountry })
-      const row = await createHandoverReport(payload)
-      setSaved(row || payload)
+      const payload = buildHandoverPayload(
+        { ...form, artwork_stem: artStem, signature: null },
+        { country: asset.row?.country || activeCountry, site: assetRow?.site || null },
+      )
+      row = await createHandoverReport(payload)
+      const isCheckout = form.handover_type !== 'checkin'
+      const handingName = isCheckout ? form.other_party : form.driver_name
+      const receivingName = isCheckout ? form.driver_name : form.other_party
+      if (row?._legacy) {
+        // The database has not had the authorization update yet: keep the old
+        // single signature so nothing is lost.
+        row = await updateHandoverReport(row.id, { signature_url: form.sig_receiving })
+      } else {
+        const loc = locationArgs(location.reading || await captureLocation())
+        await signHandover(row.id, PARTY_HANDING, { signature: form.sig_handing, name: handingName, location: loc })
+        await signHandover(row.id, PARTY_RECEIVING, { signature: form.sig_receiving, name: receivingName, location: loc })
+        row = (await getHandoverReport(row.id)) || row
+      }
+      setSaved(row)
       await load()
     } catch (err) {
-      setSaveError(toUserMessage(err, 'Could not save the handover.'))
+      setSaveError(row?.id
+        ? `${toUserMessage(err, 'Could not record the signatures.')} The handover ${row.document_no || ''} was saved; open it from the register to collect the missing signature.`
+        : toUserMessage(err, 'Could not save the handover.'))
+      if (row?.id) await load()
     } finally {
       setSaving(false)
     }
@@ -394,6 +438,16 @@ export default function VehicleHandover() {
 
   // ── View / edit / delete ───────────────────────────────────────────────────
   const [viewing, setViewing] = useState(null)
+  // ?view=<id> opens one handover (the PDF verification QR and the Approvals
+  // queue link here). RLS decides whether the reader may see it.
+  const [searchParams] = useSearchParams()
+  const viewParam = searchParams.get('view')
+  useEffect(() => {
+    if (!viewParam) return undefined
+    let alive = true
+    getHandoverReport(viewParam).then((r) => { if (alive && r) { setTab('register'); setViewing(r) } }).catch(() => {})
+    return () => { alive = false }
+  }, [viewParam])
   const [editing, setEditing] = useState(null)
   const [editForm, setEditForm] = useState(EMPTY_EDIT)
   const [editSaving, setEditSaving] = useState(false)
@@ -500,8 +554,8 @@ export default function VehicleHandover() {
       cell: (r) => (
         <div className="vh-row-actions">
           <button type="button" className="cc-icon-btn" onClick={() => setViewing(r)} aria-label={`View handover for ${r.asset_no || 'asset'}`}><Eye size={14} /></button>
-          <button type="button" className="cc-icon-btn" onClick={() => openEdit(r)} aria-label={`Edit handover for ${r.asset_no || 'asset'}`}><Pencil size={14} /></button>
-          <button type="button" className="cc-icon-btn" onClick={() => setConfirmDelete(r)} aria-label={`Delete handover for ${r.asset_no || 'asset'}`}><Trash2 size={14} /></button>
+          {!isFrozen(r) && <button type="button" className="cc-icon-btn" onClick={() => openEdit(r)} aria-label={`Edit handover for ${r.asset_no || 'asset'}`}><Pencil size={14} /></button>}
+          {!r.to_signed_at && <button type="button" className="cc-icon-btn" onClick={() => setConfirmDelete(r)} aria-label={`Delete handover for ${r.asset_no || 'asset'}`}><Trash2 size={14} /></button>}
         </div>
       ),
     },
@@ -562,6 +616,7 @@ export default function VehicleHandover() {
               <div className="vh-done">
                 <CheckCircle2 size={40} aria-hidden="true" />
                 <p><b>{saved.asset_no}</b> {saved.handover_type === 'checkin' ? 'checked in from' : 'checked out to'} {(saved.handover_type === 'checkin' ? saved.from_driver : saved.to_driver) || 'the driver'}.</p>
+                {saved.document_no && <p>Document no <b>{saved.document_no}</b>{saved.to_signed_at ? ', signed by both drivers and sent for sign-off.' : '.'}</p>}
                 <div className="vh-actions">
                   <button type="button" className="cc-btn-ghost" onClick={() => setTab('register')}>View register</button>
                   <button type="button" className="cc-btn-primary" onClick={() => startWizard('checkout')}><Plus size={14} aria-hidden="true" /> Start another handover</button>
@@ -626,8 +681,9 @@ export default function VehicleHandover() {
                           <input className="vh-input" value={form.driver_phone} readOnly placeholder="From the driver register" />
                         </label>
                         <label className="cc-field">
-                          <span>{checkout ? 'Handed over by (optional)' : 'Received by (optional)'}</span>
-                          <input className="vh-input" value={form.other_party} maxLength={200} onChange={(e) => setF('other_party', e.target.value)} />
+                          <span>{checkout ? 'Handed over by' : 'Received by'}</span>
+                          <input className="vh-input" list="vh-driver-list" placeholder="Driver from the register, or a name" value={form.other_party} maxLength={200} onChange={(e) => pickOther(e.target.value)} />
+                          <small className="vh-hint">{form.other_party_id ? 'Matched to the driver register.' : 'Signs the handover as the other party.'}</small>
                         </label>
                         <label className="cc-field">
                           <span>Handover date and time</span>
@@ -670,6 +726,11 @@ export default function VehicleHandover() {
                             {prev.prevHandoverAt && <small>{fmtDateTime(prev.prevHandoverAt)}</small>}
                           </div>
                         </div>
+                        <label className="cc-field">
+                          <span>Hour meter (h)</span>
+                          <input className="vh-input" type="number" min="0" step="0.1" inputMode="decimal" value={form.hour_meter} onChange={(e) => setF('hour_meter', e.target.value)} />
+                          {prev.engineHours != null && <small className="vh-hint">Last reading {fmtInt(prev.engineHours)} h</small>}
+                        </label>
                         <label className="cc-field">
                           <span>Current fuel level (%)</span>
                           <input className="vh-input" type="number" min="0" max="100" step="1" inputMode="numeric" value={form.fuel_level_pct} onChange={(e) => setF('fuel_level_pct', e.target.value)} />
@@ -745,21 +806,48 @@ export default function VehicleHandover() {
                 </div>
               )}
 
-              {step === 3 && (
-                <Card title="Driver signature" sub={`Signed by ${form.driver_name || 'the driver'}. The person recording the handover is saved automatically as its author.`}>
-                  {form.signature ? (
-                    <div className="vh-sig">
-                      <SignatureView value={form.signature} label="Driver" name={form.driver_name || null} />
-                      <button type="button" className="cc-btn-ghost" onClick={() => { setF('signature', null); setSignKey((k) => k + 1) }}><PenLine size={14} aria-hidden="true" /> Sign again</button>
+              {step === 3 && (() => {
+                const parties = partiesFor(form.handover_type)
+                const nameOf = (party) => (party === parties.driverParty ? form.driver_name : form.other_party)
+                const pad = (party, key, label) => (
+                  <Card key={party} title={label} sub={nameOf(party) ? `Signed by ${nameOf(party)}` : 'Name this person in the Vehicle Details step.'}>
+                    {form[key] ? (
+                      <div className="vh-sig">
+                        <SignatureView value={form[key]} label={null} name={nameOf(party) || null} />
+                        <button type="button" className="cc-btn-ghost" onClick={() => { setF(key, null); setSignKey((k) => k + 1) }}><PenLine size={14} aria-hidden="true" /> Sign again</button>
+                      </div>
+                    ) : (
+                      <div className="vh-sig-pad">
+                        <SignatureCapture key={`${key}-${signKey}`} label="Sign here" onChange={(svg) => setF(key, svg)} height={150} />
+                      </div>
+                    )}
+                  </Card>
+                )
+                return (
+                  <div className="vh-grid">
+                    <div className="vh-col">
+                      {pad(PARTY_HANDING, 'sig_handing', 'Handing over signature')}
+                      {pad(PARTY_RECEIVING, 'sig_receiving', 'Receiving signature')}
+                      <p className="vh-hint">Both people sign. The date and time of each signature are recorded by the server when the handover is completed, and the record is locked from then on.</p>
                     </div>
-                  ) : (
-                    <div className="vh-sig-pad">
-                      <SignatureCapture key={signKey} label="Driver signs here" onChange={(svg) => setF('signature', svg)} height={160} />
-                      <p className="vh-hint">A signature is optional but recommended; an unsigned handover is saved as not signed.</p>
+                    <div className="vh-col">
+                      <Card title="Handover location" sub="Read from this device when the handover is signed.">
+                        {location.reading ? (
+                          <HandoverLocation
+                            location={location.reading.status === 'captured' ? { lat: location.reading.lat, lng: location.reading.lng, accuracy: location.reading.accuracy } : null}
+                            status={location.reading.status}
+                            label={form.asset_no.trim().toUpperCase() || 'Handover'}
+                          />
+                        ) : <p className="vh-note">Location not read yet.</p>}
+                        {location.reading?.message && <p className="vh-hint">{location.reading.message}</p>}
+                        <button type="button" className="cc-btn-ghost" onClick={readLocation} disabled={location.busy}>
+                          {location.busy ? 'Reading location...' : location.reading ? 'Read location again' : 'Read location'}
+                        </button>
+                      </Card>
                     </div>
-                  )}
-                </Card>
-              )}
+                  </div>
+                )
+              })()}
 
               {step === 4 && (
                 <Card title="Review and complete" sub="Check the details, then complete the handover.">
@@ -775,7 +863,10 @@ export default function VehicleHandover() {
                     <InfoField label="Cleanliness" value={cap(form.cleanliness)} />
                     <InfoField label="Damage marks" value={String(form.marks.length)} />
                     <InfoField label="Photos" value={(form.photos || []).length ? `${form.photos.length} added` : null} />
-                    <InfoField label="Signature" value={form.signature ? 'Signed' : 'Not signed'} />
+                    <InfoField label="Handing over signature" value={form.sig_handing ? 'Signed' : 'Not signed'} />
+                    <InfoField label="Receiving signature" value={form.sig_receiving ? 'Signed' : 'Not signed'} />
+                    <InfoField label="Hour meter" value={num(form.hour_meter) != null ? `${fmtInt(num(form.hour_meter))} h` : null} />
+                    <InfoField label="Location" value={location.reading?.status === 'captured' ? 'Recorded' : location.reading ? 'Not available' : 'Read when completed'} />
                   </div>
                   <HandoverDamageMarker stem={artStem} views={artViews} marks={form.marks} compact />
                   {form.notes && <p className="vh-review-notes">{form.notes}</p>}
@@ -940,6 +1031,8 @@ export default function VehicleHandover() {
               <InfoField label="Cleanliness" value={viewing.cleanliness ? cap(viewing.cleanliness) : null} />
               <InfoField label="Damages" value={String(damageCount(viewing))} />
               {viewing.document_no && <InfoField label="Document no" value={viewing.document_no} />}
+              {num(viewing.hour_meter) != null && <InfoField label="Hour meter" value={`${fmtInt(num(viewing.hour_meter))} h`} />}
+              {viewing.site && <InfoField label="Site" value={viewing.site} />}
             </div>
             <SavedMarks row={viewing} country={activeCountry} />
             {viewing.notes && <p className="vh-review-notes">{viewing.notes}</p>}
@@ -953,9 +1046,12 @@ export default function VehicleHandover() {
               </button>
               {pdfError && <p className="vh-error" role="alert"><AlertTriangle size={14} aria-hidden="true" /> {pdfError}</p>}
             </div>
-            <div className="vh-view-media">
-              <SignatureView value={viewing.signature_url || null} label="Driver" name={viewing.handover_type === 'checkin' ? (viewing.from_driver || null) : (viewing.to_driver || null)} />
-            </div>
+            {viewing.signature_url && (
+              <div className="vh-view-media">
+                <SignatureView value={viewing.signature_url} label="Driver (single signature)" name={viewing.handover_type === 'checkin' ? (viewing.from_driver || null) : (viewing.to_driver || null)} />
+              </div>
+            )}
+            <HandoverAuthorizationPanel handover={viewing} onSigned={() => { load(); refreshViewing(viewing.id) }} />
             <HandoverSignOffPanel handover={viewing} onDecided={() => { load(); refreshViewing(viewing.id) }} />
           </div>
         )}

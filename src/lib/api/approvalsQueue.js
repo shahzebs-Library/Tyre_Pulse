@@ -22,7 +22,7 @@
  * a missing-relation guard so an un-provisioned table degrades to an honest
  * empty result instead of throwing. No fabricated rows — every item is real.
  */
-import { supabase, unwrap, applyCountry, toServiceError, fetchAllPages } from './_client'
+import { supabase, unwrap, applyCountry, toServiceError, fetchAllPages, isMissingColumn } from './_client'
 
 const APPROVAL_QUEUE_ROW_CAP = 5000
 
@@ -305,6 +305,45 @@ export async function decideInspection(id, { approved, reviewNote = null, signat
       p_signature: approved && signature ? String(signature) : null,
     }),
   )
+}
+
+// ─── Vehicle handover sign-off approvals ────────────────────────────────────────
+
+const HANDOVER_COLS =
+  'id,document_no,asset_no,handover_type,from_driver,to_driver,handover_at,country,' +
+  'approval_status,supervisor_name,supervisor_at,created_at'
+const HANDOVER_AUTH_COLS = ',site,from_signed_name,to_signed_name,to_signed_at'
+
+/** The handover rungs a person can still sign. */
+export const HANDOVER_WAITING_STATUSES = ['pending_supervisor', 'pending_incharge']
+
+/**
+ * Vehicle handovers waiting for the fleet supervisor or the fleet incharge,
+ * oldest first. Once the authorization update (20261126170000) is applied a
+ * handover only enters the queue after BOTH drivers signed (the receiving
+ * signature submits it), so an unsigned paper never reaches an approver. On a
+ * database without that update the signature columns are absent and the read
+ * retries without them. Decisions go through `decideHandover`
+ * (decide_handover_approval), never a direct write.
+ * @param {{ country?: string }} [opts]
+ */
+export async function listHandoverApprovals({ country } = {}) {
+  const read = (cols) => readApprovalRows((from, to) => {
+    let q = supabase.from('handover_reports').select(cols).in('approval_status', HANDOVER_WAITING_STATUSES)
+    q = applyCountry(q, country)
+    return q.order('handover_at', { ascending: true, nullsFirst: false }).order('id', { ascending: true }).range(from, to)
+  })
+  try {
+    try {
+      return await read(HANDOVER_COLS + HANDOVER_AUTH_COLS)
+    } catch (err) {
+      if (isMissingColumn(err)) return await read(HANDOVER_COLS)
+      throw err
+    }
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw toServiceError(err)
+  }
 }
 
 // ─── Data-intake pending count (deep-link only, never duplicated here) ───────────

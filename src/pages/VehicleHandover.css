@@ -208,3 +208,14 @@ span.vhm-pin { cursor: default; }
 .vh-signoff-note.bad { color: var(--cc-red); }
 .vh-spin { animation: vh-spin 0.8s linear infinite; }
 @keyframes vh-spin { to { transform: rotate(360deg); } }
+
+/* Authorization paper: both driver signatures, location, lock, history. */
+.vh-auth { margin-top: 16px; border: 1px solid var(--cc-inner-border); border-radius: 12px; padding: 14px; background: var(--cc-card-flat); }
+.vh-auth-sigs { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 10px 0; }
+.vh-auth-sig { display: flex; flex-direction: column; gap: 6px; }
+.vh-auth-sig small { color: var(--cc-ink-3); }
+.vh-auth-trail { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.vh-auth-trail li { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.vh-auth-trail small { color: var(--cc-ink-3); }
+.vh-location { display: flex; flex-direction: column; gap: 6px; }
+.vh-location a { display: inline-flex; align-items: center; gap: 3px; }

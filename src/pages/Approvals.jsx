@@ -37,6 +37,8 @@ import { canSignInspection } from '../lib/inspectionApproval'
 import { getMySignature } from '../lib/api/userSignature'
 import { isUsableSignature } from '../lib/savedSignature'
 import { templateFromSubmission, submissionAnswers } from '../lib/checklistView'
+import HandoverApprovalDrawer from '../components/handover/HandoverApprovalDrawer'
+import { canActOnStage as canActOnHandoverStage, statusSummary as handoverStatusSummary } from '../lib/handoverApproval'
 
 // ─── Source taxonomy ────────────────────────────────────────────────────────────
 // The unified queue merges the V95 workflow engine with the other real
@@ -48,6 +50,7 @@ const SOURCE = {
   checklist:        'checklist',
   inspection:       'inspection',
   signoff_gap:      'signoff_gap',
+  handover:         'handover',
 }
 
 const BULKABLE = [SOURCE.accident_closure, SOURCE.checklist, SOURCE.inspection]
@@ -58,6 +61,7 @@ const SOURCE_META = {
   checklist:        { label: 'Checklist Sign-off', short: 'Checklist', icon: ClipboardCheck, tone: 'teal' },
   inspection:       { label: 'Inspection Sign-off', short: 'Inspection', icon: ClipboardList, tone: 'amber' },
   signoff_gap:      { label: 'Missed sign-off', short: 'Missed', icon: AlertOctagon, tone: 'orange' },
+  handover:         { label: 'Vehicle Handover', short: 'Handover', icon: PenLine, tone: 'blue' },
 }
 
 // ─── Bucket + metric definitions ───────────────────────────────────────────────
@@ -230,6 +234,30 @@ function toInspectionItem(i) {
   }
 }
 
+/** Vehicle handovers waiting for the supervisor or the fleet incharge. */
+function toHandoverItem(h) {
+  const type = h.handover_type === 'checkin' ? 'Check-in' : 'Check-out'
+  const handing = h.from_signed_name || h.from_driver
+  const receiving = h.to_signed_name || h.to_driver
+  return {
+    source: SOURCE.handover,
+    id: h.id,
+    documentNo: h.document_no || null,
+    title: `Vehicle handover: ${[h.asset_no, type].filter(Boolean).join(' · ')}`,
+    subtitle: [
+      h.document_no || null,
+      handing && receiving ? `${handing} to ${receiving}` : (handing || receiving || null),
+      handoverStatusSummary(h).text,
+    ].filter(Boolean).join(' · ') || 'Awaiting sign-off',
+    note: null,
+    site: h.site || null,
+    country: h.country || null,
+    created_at: h.to_signed_at || h.handover_at || h.created_at || null,
+    status: h.approval_status || 'pending_supervisor',
+    raw: h,
+  }
+}
+
 // ─── Source badge ────────────────────────────────────────────────────────────────
 
 function SourceBadge({ source }) {
@@ -348,6 +376,9 @@ function LegacyDetailDrawer({ instance, actionable, onClose, onActed }) {
 // ─── Simple approval drawer (accident closure / checklist) ───────────────────────
 
 function SimpleApprovalDrawer({ item, canAct, onClose, onActed }) {
+  if (item.source === SOURCE.handover) {
+    return <HandoverApprovalDrawer item={item} onClose={onClose} onActed={onActed} DrawerShell={DrawerShell} />
+  }
   const legacy = <LegacySimpleApprovalDrawer item={item} canAct={canAct} onClose={onClose} onActed={onActed} />
   if (!['checklist', 'inspection'].includes(item.source)) return legacy
   return <ApprovalReview key={`${item.source}:${item.id}`} entityType={item.source} entityId={item.id}
@@ -799,6 +830,7 @@ export default function Approvals() {
   const [closures, setClosures] = useState([])
   const [checklistItems, setChecklistItems] = useState([])
   const [inspectionItems, setInspectionItems] = useState([])
+  const [handoverItems, setHandoverItems] = useState([])
   const [intakeCount, setIntakeCount] = useState(null)
   const [actionableIds, setActionableIds] = useState(() => new Set())
   const [updatedAt, setUpdatedAt] = useState(null)
@@ -824,7 +856,7 @@ export default function Approvals() {
     setWorkflowError(null)
     const country = activeCountry
 
-    const [dashR, mineR, delegatedR, closuresR, checklistR, intakeR, gapsR, inspectionsR] = await Promise.allSettled([
+    const [dashR, mineR, delegatedR, closuresR, checklistR, intakeR, gapsR, inspectionsR, handoversR] = await Promise.allSettled([
       workflows.getApprovalDashboard(),
       workflows.myPendingApprovals(),
       workflows.myDelegatedApprovals(),
@@ -833,6 +865,7 @@ export default function Approvals() {
       queue.countDataIntakePending({ country }),
       queue.listChecklistSignoffGaps({ country }),
       queue.listInspectionApprovals({ country }),
+      queue.listHandoverApprovals({ country }),
     ])
     if (current !== generation.current) return
 
@@ -845,6 +878,7 @@ export default function Approvals() {
     if (closuresR.status !== 'fulfilled') failedSources.push('Accident closures')
     if (checklistR.status !== 'fulfilled') failedSources.push('Checklist sign-offs')
     if (inspectionsR.status !== 'fulfilled') failedSources.push('Inspection sign-offs')
+    if (handoversR.status !== 'fulfilled') failedSources.push('Handover sign-offs')
     if (gapsR.status !== 'fulfilled') failedSources.push('Missed sign-offs')
     if (intakeR.status !== 'fulfilled') failedSources.push('Data intake')
     setSourceErrors(failedSources)
@@ -870,6 +904,7 @@ export default function Approvals() {
     if (closuresR.status === 'fulfilled' && closuresR.value?.truncated) cappedSources.push('Accident closures')
     if (checklistR.status === 'fulfilled' && checklistR.value?.truncated) cappedSources.push('Checklist sign-offs')
     if (inspectionsR.status === 'fulfilled' && inspectionsR.value?.truncated) cappedSources.push('Inspection sign-offs')
+    if (handoversR.status === 'fulfilled' && handoversR.value?.truncated) cappedSources.push('Handover sign-offs')
     if (gapsR.status === 'fulfilled' && gapsR.value?.truncated) cappedSources.push('Missed sign-offs')
     setIncompleteSources(cappedSources)
     if (dashboardValid) {
@@ -896,6 +931,7 @@ export default function Approvals() {
     setIntakeCount(intakeR.status === 'fulfilled' ? (intakeR.value || 0) : null)
     setSignoffGaps(gapsR.status === 'fulfilled' ? (gapsR.value || []).map(toSignoffGapItem) : [])
     setInspectionItems(inspectionsR.status === 'fulfilled' ? (inspectionsR.value || []).map(toInspectionItem) : [])
+    setHandoverItems(handoversR.status === 'fulfilled' ? (handoversR.value || []).map(toHandoverItem) : [])
 
     // Fatal only when EVERY primary source failed.
     const anyOk = [dashR, closuresR, checklistR, inspectionsR].some(r => r.status === 'fulfilled')
@@ -907,7 +943,7 @@ export default function Approvals() {
 
   useEffect(() => {
     setBuckets(EMPTY_BUCKETS); setMetricsRaw(null); setClosures([]); setChecklistItems([])
-    setInspectionItems([]); setSignoffGaps([]); setIntakeCount(null); setSourceErrors([]); setActionableIds(new Set())
+    setInspectionItems([]); setHandoverItems([]); setSignoffGaps([]); setIntakeCount(null); setSourceErrors([]); setActionableIds(new Set())
     setIncompleteSources([])
     setSelected(null); setSelectedGeneric(null); setPicked(new Set()); setBulk({ busy: false, result: null })
     setSiteFilter('all'); setUpdatedAt(null)
@@ -917,13 +953,13 @@ export default function Approvals() {
 
   // Merged pending queue: workflow pending + closures + checklists + inspections.
   const mergedPending = useMemo(() => {
-    return mergePendingApprovals(buckets.pending || [], [...closures, ...checklistItems, ...inspectionItems])
-  }, [buckets.pending, closures, checklistItems, inspectionItems])
+    return mergePendingApprovals(buckets.pending || [], [...closures, ...checklistItems, ...inspectionItems, ...handoverItems])
+  }, [buckets.pending, closures, checklistItems, inspectionItems, handoverItems])
 
   const pendingQueueUnavailable = sourceErrors.some(name =>
-    ['Workflows', 'Accident closures', 'Checklist sign-offs', 'Inspection sign-offs'].includes(name),
+    ['Workflows', 'Accident closures', 'Checklist sign-offs', 'Inspection sign-offs', 'Handover sign-offs'].includes(name),
   ) || incompleteSources.some(name =>
-    ['Workflows', 'Accident closures', 'Checklist sign-offs', 'Inspection sign-offs'].includes(name),
+    ['Workflows', 'Accident closures', 'Checklist sign-offs', 'Inspection sign-offs', 'Handover sign-offs'].includes(name),
   )
 
   const counts = useMemo(() => ({
@@ -957,9 +993,9 @@ export default function Approvals() {
   // Governed workflow projections also carry the submitted site's scope.
   const siteOptions = useMemo(() => {
     const set = new Set()
-    ;[...closures, ...checklistItems, ...inspectionItems, ...signoffGaps, ...Object.values(buckets).flat()].forEach(i => i.site && set.add(i.site))
+    ;[...closures, ...checklistItems, ...inspectionItems, ...handoverItems, ...signoffGaps, ...Object.values(buckets).flat()].forEach(i => i.site && set.add(i.site))
     return Array.from(set).sort()
-  }, [closures, checklistItems, inspectionItems, signoffGaps, buckets])
+  }, [closures, checklistItems, inspectionItems, handoverItems, signoffGaps, buckets])
 
   const q = search.trim().toLowerCase()
 
@@ -992,6 +1028,9 @@ export default function Approvals() {
     }
     if (item.source === SOURCE.inspection) {
       return canSignInspection(profile?.role, { isSuperAdmin: !!profile?.is_super_admin })
+    }
+    if (item.source === SOURCE.handover) {
+      return canActOnHandoverStage(item.raw, { role: profile?.role, isSuperAdmin: !!profile?.is_super_admin })
     }
     return false
   }, [actionableIds, canActNonWorkflow, profile?.role, profile?.is_super_admin])

@@ -30,6 +30,7 @@ vi.mock('../lib/api/approvalsQueue', () => ({
   decideChecklist: vi.fn(),
   listChecklistSignoffGaps: vi.fn(),
   listInspectionApprovals: vi.fn(),
+  listHandoverApprovals: vi.fn(),
   decideInspection: vi.fn(),
   bulkDecide: vi.fn(),
 }))
@@ -172,12 +173,28 @@ beforeEach(() => {
   queue.decideChecklist.mockResolvedValue({ ok: true, decision: 'approved', status: 'approved' })
   queue.listChecklistSignoffGaps.mockResolvedValue([])
   queue.listInspectionApprovals.mockResolvedValue([])
+  queue.listHandoverApprovals.mockResolvedValue([])
   queue.decideInspection.mockResolvedValue({ ok: true })
   queue.bulkDecide.mockResolvedValue({ ok: [], failed: [] })
   sigApi.getMySignature.mockResolvedValue(null)
 })
 
 afterEach(() => cleanup())
+
+describe('Vehicle handovers in the queue', () => {
+  it('lists a signed handover waiting for the supervisor, outside bulk actions', async () => {
+    queue.listAccidentClosures.mockResolvedValue([])
+    queue.listChecklistApprovals.mockResolvedValue([])
+    queue.listHandoverApprovals.mockResolvedValue([{
+      id: 'ho-1', document_no: 'HO-TM514-2026-0001', asset_no: 'TM514', handover_type: 'checkout',
+      from_signed_name: 'Faisal', to_signed_name: 'Dana', approval_status: 'pending_supervisor',
+      to_signed_at: '2026-11-26T08:00:00Z', country: 'KSA', site: 'JEDDAH',
+    }])
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/Vehicle handover: TM514/)).toBeInTheDocument())
+    expect(screen.getAllByText(/HO-TM514-2026-0001/).length).toBeGreaterThan(0)
+  })
+})
 
 describe('Bulk actions follow who may actually decide', () => {
   it('does not offer bulk selection for inspections a Manager cannot sign', async () => {

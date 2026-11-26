@@ -27,7 +27,7 @@ function value(value) {
   return String(value)
 }
 
-async function signaturePng(signature) {
+export async function signaturePng(signature) {
   const src = signatureImage(signature)
   if (src.startsWith('data:image/png')) return src
   return new Promise((resolve, reject) => {

@@ -37,6 +37,7 @@ import { logCommunication } from '../../lib/api/accidentCommunications'
 import { listWorkstreams } from '../../lib/api/accidentCase'
 import { listDirectoryPeople as listProfiles } from '../../lib/api/profileDirectory'
 import { isMissingColumn } from '../../lib/api/_client'
+import { driverWorkspaceOptions } from '../../lib/api/driverWorkspace'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   FAULT_TILES, faultStatusFor, PAYER_TILES, payerLabel, recoveryRequiredFor,
@@ -159,6 +160,9 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
   const [notice, setNotice] = useState('')
   const [parityProvisioned, setParityProvisioned] = useState(true)
   const [changeReason, setChangeReason] = useState('')
+  const [approveReason, setApproveReason] = useState('')
+  const [recoveryCharge, setRecoveryCharge] = useState({ driver_id: '', currency: 'SAR', amount: '' })
+  const [recoveryDrivers, setRecoveryDrivers] = useState([])
   const [safetyOpen, setSafetyOpen] = useState(false)
   const [uploadingKey, setUploadingKey] = useState('')
   const [requesting, setRequesting] = useState(false)
@@ -189,6 +193,16 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
   }, [accidentId, acc?.gcc_liability_ratio, workstreams])
 
   useEffect(() => { load() }, [load])
+
+  const needsRecoveryDriver = !!elevated && draft?.payer === 'driver_recovery' && !!assessment?.id && !assessment?.approved
+  useEffect(() => {
+    if (!needsRecoveryDriver) return undefined
+    let live = true
+    driverWorkspaceOptions('drivers', '', 0)
+      .then((rows) => { if (live) setRecoveryDrivers(Array.isArray(rows) ? rows : []) })
+      .catch((e) => { if (live) setErr(toUserMessage(e, 'Could not load drivers for recovery.')) })
+    return () => { live = false }
+  }, [needsRecoveryDriver])
 
   const usersById = useMemo(() => {
     const m = new Map()
@@ -266,8 +280,13 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
     if (!assessment?.id || saving) return
     setSaving(true); setErr('')
     try {
-      const saved = await approveLiabilityAssessment(assessment.id, me)
-      setAssessment(saved); setDraft(saved)
+      const charge = draft?.payer === 'driver_recovery'
+        ? { driver_id: recoveryCharge.driver_id || null, currency: (recoveryCharge.currency || '').toUpperCase(), ...(recoveryCharge.amount ? { amount: Number(recoveryCharge.amount) } : {}) }
+        : null
+      const saved = await approveLiabilityAssessment(assessment.id, { reason: approveReason, charge })
+      const { approval, ...row } = saved || {}
+      setAssessment(row); setDraft(row); setApproveReason('')
+      if (approval?.charge_no) setNotice(`Driver charge ${approval.charge_no} opened for driver recovery.`)
       onChanged?.()
     } catch (e) {
       setErr(toUserMessage(e, 'Could not approve the assessment.'))
@@ -558,7 +577,24 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
                 <Field label="Change reason (required to revise a locked assessment)" value={changeReason} onChange={setChangeReason} />
               )}
               {elevated && assessment?.id && !assessment.approved && (
-                <button className="btn-secondary text-xs" disabled={saving} onClick={approve}>Approve and lock</button>
+                <div className="space-y-2">
+                  <Field label="Approval reason (recorded with your name and the server time)" value={approveReason} onChange={setApproveReason} />
+                  {draft?.payer === 'driver_recovery' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="label" htmlFor="liability-recovery-driver">Driver to recover from</label>
+                        <select id="liability-recovery-driver" className="input w-full" value={recoveryCharge.driver_id} onChange={(e) => setRecoveryCharge((r) => ({ ...r, driver_id: e.target.value }))}>
+                          <option value="">Select driver</option>
+                          {recoveryDrivers.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                        </select>
+                      </div>
+                      <Field label="Amount (blank uses the repair cost)" value={recoveryCharge.amount} onChange={(v) => setRecoveryCharge((r) => ({ ...r, amount: v }))} />
+                      <Field label="Currency" value={recoveryCharge.currency} onChange={(v) => setRecoveryCharge((r) => ({ ...r, currency: v.toUpperCase().slice(0, 3) }))} />
+                      <p className="text-xs text-[var(--text-muted)] sm:col-span-3">Approving opens a driver charge linked to this accident. The driver must be notified and accept or dispute it before any deduction.</p>
+                    </div>
+                  )}
+                  <button className="btn-secondary text-xs" disabled={saving || approveReason.trim().length < 3} onClick={approve}>Approve and lock</button>
+                </div>
               )}
             </div>
           )}

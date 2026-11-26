@@ -140,21 +140,24 @@ export async function saveLiabilityAssessment(accidentId, patch, { existingId, i
   return parityProvisioned ? result : { ...result, _parityProvisioned: false }
 }
 
-/** Approve (and lock) a liability assessment. Locking is what makes a later
- *  edit require a change reason instead of silently overwriting the record. */
-export async function approveLiabilityAssessment(id, approvedBy) {
+/**
+ * Approve (and lock) a liability assessment through the server RPC
+ * approve_accident_liability (migration 20261126170000). The server stamps the
+ * approver from the session and the time from its own clock, freezes the row
+ * and writes the approval audit. When the payer is driver_recovery, `charge`
+ * ({ driver_id, currency, amount?, basis? }) opens the linked driver charge.
+ * Returns the reloaded assessment plus `approval` (the RPC result).
+ */
+export async function approveLiabilityAssessment(id, { reason, charge = null } = {}) {
   if (!id) throw new Error('A liability assessment is required.')
+  if (!reason || String(reason).trim().length < 3) throw new Error('An approval reason is required.')
+  const approval = unwrap(await supabase.rpc('approve_accident_liability', {
+    p_assessment_id: id, p_reason: String(reason).trim(), p_charge: charge,
+  }))
   const { result } = await withColumnFallback(async (cols) =>
-    unwrap(
-      await supabase
-        .from('accident_liability_assessments')
-        .update({ approved: true, approved_by: approvedBy ?? null, approved_at: new Date().toISOString(), locked: true })
-        .eq('id', id)
-        .select(cols)
-        .single(),
-    ),
+    unwrap(await supabase.from('accident_liability_assessments').select(cols).eq('id', id).single()),
   )
-  return result
+  return { ...result, approval }
 }
 
 /** Pure: merge one field's audit entry into a field_audit map (never mutates). */

@@ -132,6 +132,44 @@ export function slotForStoredPosition(layoutKey, token) {
   return slots.find((s) => aliasesFor(layoutKey, s).some((a) => up(a) === u)) || null
 }
 
+// ── ERP wheel codes the shared map defines (matching, comparison only) ──────
+//
+// Layouts whose ERP spellings the shared map (re)defines: a display-scope code
+// override (the concrete pump's LHR1-I / LHRCO / LHRRO family) or recorded
+// aliases (LHCO, LHR2-O ...). The ERP matcher reads these as the wheel they
+// name, so the new codes and the legacy aliases both compare. Never used to
+// rename a stored record. SQL MIRROR: tyre_layout_spec_erp_tokens(), generated
+// from the same JSON by scripts/gen-tyre-erp-spec-tokens.mjs (pinned by
+// src/test/tyreErpSpecTokens.test.js). Rank 1 = the map's code, 2 = an alias.
+const erpKeyHit = (key) => SPEC.positionCodes.overrides.some((o) => o.scope === 'display'
+  && o.match.some((m) => key.toLowerCase().includes(m)))
+export const ERP_SPEC_LAYOUTS = Object.freeze(Object.keys(LAYOUT_SLOT_IDS)
+  .filter((k) => SPEC.positionAliases[k] || erpKeyHit(k)))
+
+/** [{ slot, token, rank }] for one layout ([] when the map defines nothing for it). */
+export function erpSpecTokens(layoutKey) {
+  if (!ERP_SPEC_LAYOUTS.includes(layoutKey)) return []
+  const out = []
+  for (const slot of LAYOUT_SLOT_IDS[layoutKey]) {
+    out.push({ slot, token: up(positionCodeFor(layoutKey, slot)), rank: 1 })
+    for (const a of aliasesFor(layoutKey, slot)) out.push({ slot, token: up(a), rank: 2 })
+  }
+  return out
+}
+
+/**
+ * The slots an ERP token names on [layoutKey] through the shared map, best
+ * rank only (a map code outranks an alias). [] when the map does not name it.
+ */
+export function erpSpecSlots(layoutKey, token) {
+  const u = up(token)
+  if (!u) return []
+  const hits = erpSpecTokens(layoutKey).filter((t) => t.token === u)
+  if (!hits.length) return []
+  const best = Math.min(...hits.map((t) => t.rank))
+  return Array.from(new Set(hits.filter((t) => t.rank === best).map((t) => t.slot)))
+}
+
 // ── Condition -> risk band ────────────────────────────────────────────────────
 const COND = SPEC.conditions
 const COND_RE = Object.fromEntries(Object.entries(COND.patterns).map(([b, p]) => [b, new RegExp(p, 'i')]))

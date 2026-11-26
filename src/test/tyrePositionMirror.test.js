@@ -149,22 +149,36 @@ describe('tyre position service', () => {
     expect(none.changedAfterRecord).toBe(true)
   })
 
-  it('there is no built-in reading of the ERP dual-rear spelling; only a verified per-layout mapping resolves it', () => {
-    for (const type of ['PUMPS', 'TR-MIXER', 'TRAILER', 'PICKUP']) {
+  it('there is no built-in reading of the ERP dual-rear spelling; only a verified mapping or the shared tyre map resolves it', () => {
+    for (const type of ['TR-MIXER', 'TRAILER', 'PICKUP']) {
       const r = resolveWheel(resolveLayout({ vehicleType: type }), 'LHRCO', { kind: 'erp' })
       expect(r, type).toMatchObject({ status: 'ambiguous', reason: 'erp_spelling_not_verified', canonical: null })
     }
+    // Concrete pumps: the shared tyre map names their rear wheels (comparison only).
+    expect(resolveWheel(resolveLayout({ vehicleType: 'PUMPS' }), 'LHRCO', { kind: 'erp' }))
+      .toMatchObject({ status: 'resolved', reason: 'tyre_map_code', slot: 'R1Lo' })
+    expect(resolveWheel(resolveLayout({ vehicleType: 'PUMPS' }), 'LHR2-O', { kind: 'erp' }))
+      .toMatchObject({ status: 'resolved', reason: 'tyre_map_code', slot: 'R2Lo' })
+    expect(resolveWheel(resolveLayout({ vehicleType: 'PUMPS' }), 'LHR1-I', { kind: 'erp' }))
+      .toMatchObject({ status: 'resolved', reason: 'tyre_map_code', slot: 'F3L' })
     const mapped = resolveLayout({ vehicleType: 'PUMPS', positionMappings: [
-      { layout_key: 'Concrete pump', erp_code: 'LHRCO', slot: 'R1Lo' },
+      { layout_key: 'Concrete pump', erp_code: 'LHRCO', slot: 'R1Ri' },          // a verified mapping still wins
       { layout_key: 'Tri-mixer', erp_code: 'RHRCO', slot: 'R1Ro' },               // another layout: not used
-      { layout_key: 'Concrete pump', erp_code: 'RHRRO', slot: 'R2Ro', active: false },  // switched off
     ] })
-    expect(resolveWheel(mapped, 'LHRCO', { kind: 'erp' })).toMatchObject({ status: 'resolved', reason: 'verified_mapping', slot: 'R1Lo' })
-    expect(resolveWheel(mapped, 'RHRCO', { kind: 'erp' }).status).toBe('ambiguous')
-    expect(resolveWheel(mapped, 'RHRRO', { kind: 'erp' }).status).toBe('ambiguous')
-    // The 4 axle build is a different layout key: the mapping does not leak onto it.
-    const other = resolveLayout({ vehicleType: 'PUMPS', axleCount: 4, positionMappings: [{ layout_key: 'Concrete pump', erp_code: 'LHRCO', slot: 'R1Lo' }] })
-    expect(resolveWheel(other, 'LHRCO', { kind: 'erp' }).status).toBe('ambiguous')
+    expect(resolveWheel(mapped, 'LHRCO', { kind: 'erp' })).toMatchObject({ status: 'resolved', reason: 'verified_mapping', slot: 'R1Ri' })
+    expect(resolveWheel(mapped, 'RHRCO', { kind: 'erp' })).toMatchObject({ status: 'resolved', reason: 'tyre_map_code', slot: 'R1Ro' })
+    // The 4 axle build reads its own map rows.
+    const other = resolveLayout({ vehicleType: 'PUMPS', axleCount: 4 })
+    expect(resolveWheel(other, 'LHRCO', { kind: 'erp' })).toMatchObject({ status: 'resolved', slot: 'R1Lo' })
+    expect(resolveWheel(other, 'LHR1-I', { kind: 'erp' }).status).not.toBe('resolved')
+  })
+
+  it('version 3 rules ignore the shared tyre map; version 4 reads it', () => {
+    const v3 = resolveLayout({ vehicleType: 'PUMPS', rulesVersion: 'position-service-3' })
+    expect(resolveWheel(v3, 'LHRCO', { kind: 'erp' })).toMatchObject({ status: 'ambiguous', reason: 'erp_spelling_not_verified' })
+    expect(resolveWheel(v3, 'RHR1-O', { kind: 'erp' })).toMatchObject({ status: 'ambiguous', reason: 'erp_spelling_not_verified' })
+    const v4 = resolveLayout({ vehicleType: 'PUMPS', rulesVersion: 'position-service-4' })
+    expect(resolveWheel(v4, 'LHRCO', { kind: 'erp' })).toMatchObject({ status: 'resolved', reason: 'tyre_map_code', slot: 'R1Lo' })
   })
 
   it('the generated matrix in the fixture is current (the SQL mirror replays it)', () => {

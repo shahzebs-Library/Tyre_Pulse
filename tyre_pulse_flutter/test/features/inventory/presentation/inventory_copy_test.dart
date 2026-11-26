@@ -96,9 +96,11 @@ void main() {
       // (pi_*, docs/inventory/102; +7 store picker / bin label keys)
       // + 21 capture-mockup keys (connection pill, location bar, photo
       // slots, classification claim) + 36 issue / return against a job
-      // card keys (jc_*, incl. 4 reservation lines).
-      expect(c.length, 261, reason: lang);
+      // card keys (jc_*, incl. 4 reservation lines) + 42 store keeper
+      // receive-goods keys (sr_*).
+      expect(c.length, 303, reason: lang);
       expect(c.keys.where((String k) => k.startsWith('jc_')).length, 36);
+      expect(c.keys.where((String k) => k.startsWith('sr_')).length, 42);
       expect(c.keys.where((String k) => k.startsWith('pi_')).length, 89);
       expect(c['submitQueued'], contains('%n'), reason: lang);
       expect(

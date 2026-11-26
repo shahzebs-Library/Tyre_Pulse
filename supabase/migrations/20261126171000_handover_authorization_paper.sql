@@ -701,7 +701,9 @@ do $mig$
 declare
   v_def text;
   v_a   text := E'  if v_status = ''draft'' then';
-  v_b   text := E'  -- ---- approval ----';
+  -- Anchor on the signature check (the live body has no '-- ---- approval ----'
+  -- comment); the both-drivers check is inserted just before it.
+  v_b   text := E'  if coalesce(btrim(p_signature), '''') = '''' then';
   v_c   text := E'       set approval_status = ''rejected'', review_note = p_note\n';
   v_d   text := E'    return jsonb_build_object(''ok'', true, ''decision'', ''rejected'', ''status'', ''rejected'', ''both_steps'', false);';
 begin
@@ -732,11 +734,12 @@ begin
     || E'    raise exception ''You collected a signature on this handover or created it, so another approver must decide it.'' using errcode = ''42501'';\n'
     || E'  end if;\n\n'
     || v_a);
-  v_def := replace(v_def, v_b, v_b
-    || E'\n  if not exists (select 1 from public.handover_reports hr\n'
+  v_def := replace(v_def, v_b,
+       E'  if not exists (select 1 from public.handover_reports hr\n'
     || E'                  where hr.id = p_id and hr.from_signed_at is not null and hr.to_signed_at is not null) then\n'
     || E'    raise exception ''Both drivers must sign the handover before it can be approved.'' using errcode = ''22023'';\n'
-    || E'  end if;');
+    || E'  end if;\n'
+    || v_b);
   -- Send back (review M6): clear both driver signatures, any supervisor
   -- signature, the location and the freeze, and return the record to draft so
   -- it can be corrected and signed again. The reason stays in review_note and

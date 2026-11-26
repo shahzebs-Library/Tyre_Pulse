@@ -157,8 +157,8 @@ void main() {
   });
 
   group(
-      'Concrete pump: 14 positions, non-tri-mixer labelling (R1/R2 '
-      'suffixed, not centre-axle relabelled)', () {
+      'Concrete pump: 14 positions, named the way pump records are '
+      '(shared tyre map: axle 3 R1-I, rear duals RC / RR)', () {
     test('all 14 derived codes plus Spare, in layout order', () {
       final List<TyreReplacementPositionOption> options =
           tyreReplacementPositions('Concrete pump');
@@ -167,16 +167,16 @@ void main() {
         'RHF1',
         'LHF2',
         'RHF2',
-        'LHF3',
-        'RHF3',
-        'LHR1-O',
         'LHR1-I',
         'RHR1-I',
-        'RHR1-O',
-        'LHR2-O',
-        'LHR2-I',
-        'RHR2-I',
-        'RHR2-O',
+        'LHRCO',
+        'LHRCI',
+        'RHRCI',
+        'RHRCO',
+        'LHRRO',
+        'LHRRI',
+        'RHRRI',
+        'RHRRO',
         'Spare',
       ]);
     });

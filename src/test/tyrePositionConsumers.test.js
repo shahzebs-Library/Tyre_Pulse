@@ -11,6 +11,7 @@ import { positionOptionsFor } from '../lib/rotationScheduleView'
 import { legacyPositionCode, canonicalCode } from '../lib/tyrePositions'
 import { LAYOUT_SLOTS, resolveLayoutKey, layoutSlotsFor, layoutForAsset } from '../lib/vehicleTyreLayout'
 import fixture from './fixtures/tyrePositionCases.json'
+import { slotForStoredPosition } from '../lib/tyreLayoutSpec'
 
 // The implementation these consumers had before the swap, kept here verbatim as the oracle.
 function oldCanonicalToSlotId(vehicleTypeKey, positionCode) {
@@ -20,12 +21,17 @@ function oldCanonicalToSlotId(vehicleTypeKey, positionCode) {
   const rawU = String(positionCode).trim().toUpperCase()
   const exact = slots.find((slot) => slot.toUpperCase() === rawU)
   if (exact) return exact
+  // Deliberate change (owner approved, 2026-11): a spelling the shared tyre map
+  // confirms for a wheel (the concrete pump's LHRCO / LHCO / LHR1-I family)
+  // now lands on that wheel. Everything else answers exactly as before.
+  const confirmed = slotForStoredPosition(layoutKey, positionCode)
+  if (confirmed) return confirmed
   const target = canonicalCode(String(positionCode).trim())
   if (!target) return null
   const targetU = String(target).toUpperCase()
   for (const slot of slots) {
     if (slot.toUpperCase() === targetU) return slot
-    const canon = canonicalCode(legacyPositionCode(layoutKey, slot))
+    const canon = canonicalCode(legacyPositionCode(layoutKey, slot, { scope: 'erp' }))
     if (canon && String(canon).toUpperCase() === targetU) return slot
   }
   return null

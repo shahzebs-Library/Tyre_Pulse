@@ -92,7 +92,7 @@ void main() {
     expect(
       flatSemantics.any(
         (Semantics widget) =>
-            widget.properties.label?.toString() == 'Flat, Attention',
+            widget.properties.label?.toString() == 'Flat, Critical',
       ),
       isTrue,
     );

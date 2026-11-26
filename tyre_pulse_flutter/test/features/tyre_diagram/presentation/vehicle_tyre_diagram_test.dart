@@ -484,15 +484,15 @@ void main() {
             (Widget widget) =>
                 widget is TpIdentifierText && widget.value == value,
           );
-      expect(identifier('LHR1-O'), findsOneWidget);
-      expect(identifier('LHR1-I'), findsOneWidget);
-      expect(identifier('RHR1-I'), findsOneWidget);
-      expect(identifier('RHR1-O'), findsOneWidget);
+      expect(identifier('LHRCO'), findsOneWidget);
+      expect(identifier('LHRCI'), findsOneWidget);
+      expect(identifier('RHRCI'), findsOneWidget);
+      expect(identifier('RHRCO'), findsOneWidget);
 
-      final Rect leftOuter = tester.getRect(identifier('LHR1-O'));
-      final Rect leftInner = tester.getRect(identifier('LHR1-I'));
-      final Rect rightInner = tester.getRect(identifier('RHR1-I'));
-      final Rect rightOuter = tester.getRect(identifier('RHR1-O'));
+      final Rect leftOuter = tester.getRect(identifier('LHRCO'));
+      final Rect leftInner = tester.getRect(identifier('LHRCI'));
+      final Rect rightInner = tester.getRect(identifier('RHRCI'));
+      final Rect rightOuter = tester.getRect(identifier('RHRCO'));
       // One column per side, outer row first, never side by side.
       expect((leftOuter.center.dx - leftInner.center.dx).abs(), lessThan(1));
       expect((rightOuter.center.dx - rightInner.center.dx).abs(), lessThan(1));
@@ -541,7 +541,7 @@ void main() {
       // vertically (a long code narrows to the card width, never clipped).
       await _pump(tester, diagram, textScaler: const TextScaler.linear(2));
       expect(tester.takeException(), isNull);
-      for (final String value in <String>['LHF1', 'LHR1-O', 'RHR1-I']) {
+      for (final String value in <String>['LHF1', 'LHRCO', 'RHRCI']) {
         final Finder label = identifier(value);
         final Rect text = tester.getRect(label);
         final Rect row = tester.getRect(

@@ -34,6 +34,7 @@ import 'dart:ui' show PathMetric;
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_risk_colors.dart';
 
 /// Everything the painter needs to draw ONE wheel.
 @immutable
@@ -144,7 +145,7 @@ class TyreWheelPainter extends CustomPainter {
       wheel.svgW,
       wheel.svgH,
     );
-    final TpStatusColors colors = palette.forStatus(wheel.status);
+    final TpStatusColors colors = tyreRiskColors(palette, wheel.status);
     final double corner = body.shortestSide * 0.3;
     final RRect rounded = RRect.fromRectAndRadius(
       body,

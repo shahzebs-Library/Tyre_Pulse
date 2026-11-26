@@ -32,6 +32,7 @@ import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_body_painter.
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_pending.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_risk_colors.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_wheel_painter.dart';
 
 /// The interactive tyre diagram for one vehicle.
@@ -337,6 +338,13 @@ class VehicleTyreDiagram extends StatelessWidget {
     );
   }
 
+  Map<String, Object?>? _entryByStoredCode(String layoutKey, String slotId) {
+    for (final MapEntry<String, Map<String, Object?>> e in tyreData.entries) {
+      if (slotForStoredPosition(layoutKey, e.key) == slotId) return e.value;
+    }
+    return null;
+  }
+
   _ResolvedWheel _resolveWheel(
     DiagramLayout layout,
     MatchedTyreSlot tyre,
@@ -345,8 +353,11 @@ class VehicleTyreDiagram extends StatelessWidget {
     // Section 7.4's double lookup: an older record may still be stored
     // under the layout's internal id even when the caller's position list
     // carries the canonical code (or vice versa).
-    final Map<String, Object?>? entry =
-        tyreData[tyre.positionId] ?? tyreData[tyre.id];
+    // A record keyed by its position code (LHCO, RHR2-O) or a confirmed
+    // pump spelling (LHRCO) is read too, through the shared tyre map.
+    final Map<String, Object?>? entry = tyreData[tyre.positionId] ??
+        tyreData[tyre.id] ??
+        _entryByStoredCode(layout.key, tyre.id);
     // An unchecked seeded Good value is not a result. Keep the condition
     // nullable so paint, the selected summary and screen-reader semantics all
     // agree that the wheel is not measured until there is deliberate evidence.
@@ -925,15 +936,8 @@ TpStatus _captureTone(_ResolvedWheel wheel) =>
 /// outshouted the one red wheel that actually needs attention. "Not
 /// measured" still cannot be mistaken for a clean result: it keeps its own
 /// minus icon, its dashed leader, and its own words on the card.
-TpStatusColors _captureColors(TpPalette palette, TpStatus tone) {
-  if (tone != TpStatus.unknown) return palette.forStatus(tone);
-  return TpStatusColors(
-    base: palette.borderStrong,
-    soft: palette.surfaceAlt,
-    onBase: palette.textSecondary,
-    onSoft: palette.textSecondary,
-  );
-}
+TpStatusColors _captureColors(TpPalette palette, TpStatus tone) =>
+    tyreRiskColors(palette, tone);
 
 IconData _captureStatusIcon(TpStatus tone) => switch (tone) {
       TpStatus.ok => Icons.check_rounded,
@@ -1489,7 +1493,7 @@ class _SelectedTyreSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final TpStatusColors colors = palette.forStatus(wheel.status);
+    final TpStatusColors colors = tyreRiskColors(palette, wheel.status);
     final bool isImmediateAttention =
         wheel.condition == TyreCondition.puncture ||
             wheel.condition == TyreCondition.flat;

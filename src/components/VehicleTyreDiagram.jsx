@@ -10,6 +10,8 @@ import { useAxleCounts } from '../lib/api/vehicleAxles';
 import { slotStateMap } from '../lib/tyreCompleteness';
 import { riskForCondition } from '../lib/inspectionView';
 import { canonicalToSlotId } from '../lib/tyreBay';
+import { slotForPosition } from '../lib/tyrePositionService';
+import { LAYOUT_GEOMETRY, RISK_ORDER, RISK_LABEL, riskHex, shade, currentTheme } from '../lib/tyreLayoutSpec';
 
 // The vehicle-type -> layout-key mapping lives in src/lib/vehicleTyreLayout.js
 // (THE single resolver, mirrored from mobile). It used to be inlined here and
@@ -19,13 +21,15 @@ import { canonicalToSlotId } from '../lib/tyreBay';
 export { isTyrelessEquipment };
 
 // ── Risk colours ───────────────────────────────────────────────────────────────
-const RISK = {
-  good:     { rim: '#22c55e', glow: '#16a34a', dark: '#15803d', label: 'Good' },
-  warning:  { rim: '#f59e0b', glow: '#d97706', dark: '#b45309', label: 'Warning' },
-  critical: { rim: '#ef4444', glow: '#dc2626', dark: '#b91c1c', label: 'Critical' },
-  none:     { rim: '#6b7280', glow: '#4b5563', dark: '#374151', label: 'No Data' },
-};
-function rc(risk) { return RISK[risk] ?? RISK.none; }
+// ONE palette, light and dark, from the shared tyre map: the same colours the
+// PDF prints and the Flutter app paints. The theme is the app's (html.light).
+function riskColours(theme) {
+  return Object.fromEntries(RISK_ORDER.map((band) => {
+    const base = riskHex(band, theme);
+    return [band, { rim: base, glow: shade(base, 0.15), dark: shade(base, 0.35), label: RISK_LABEL[band] }];
+  }));
+}
+function rc(risk, theme = currentTheme()) { const r = riskColours(theme); return r[risk] ?? r.none; }
 
 /** Position key comparison form, shared with src/lib/tyreCompleteness.js. */
 const posKey = (v) => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1313,225 +1317,42 @@ function PhotoBody({ photo, viewH, onError }) {
 }
 
 // ── Layout definitions ─────────────────────────────────────────────────────────
-const LAYOUTS = {
-  Pickup: {
-    emoji: '🛻', viewH: 320,
-    Body: PickupBody,
-    tyres: [
-      { id: 'FL', x: 32,  y: 48,  w: 23, h: 44, label: 'FL' },
-      { id: 'FR', x: 145, y: 48,  w: 23, h: 44, label: 'FR' },
-      { id: 'RL', x: 32,  y: 192, w: 23, h: 44, label: 'RL' },
-      { id: 'RR', x: 145, y: 192, w: 23, h: 44, label: 'RR' },
-    ],
-  },
-  'Wheel loader': {
-    emoji: '🚜', viewH: 258,
-    Body: WheelLoaderBody,
-    tyres: [
-      { id: 'FL', x: 24,  y: 22,  w: 32, h: 56, label: 'FL' },
-      { id: 'FR', x: 144, y: 22,  w: 32, h: 56, label: 'FR' },
-      { id: 'RL', x: 24,  y: 155, w: 32, h: 56, label: 'RL' },
-      { id: 'RR', x: 144, y: 155, w: 32, h: 56, label: 'RR' },
-    ],
-  },
-  'Skid loader': {
-    emoji: '🚜', viewH: 258,
-    Body: WheelLoaderBody,
-    tyres: [
-      { id: 'FL', x: 24,  y: 22,  w: 32, h: 56, label: 'FL' },
-      { id: 'FR', x: 144, y: 22,  w: 32, h: 56, label: 'FR' },
-      { id: 'RL', x: 24,  y: 155, w: 32, h: 56, label: 'RL' },
-      { id: 'RR', x: 144, y: 155, w: 32, h: 56, label: 'RR' },
-    ],
-  },
-  Canter: {
-    emoji: '🚚', viewH: 310,
-    Body: CanterBody,
-    tyres: [
-      { id: 'FL',  x: 31,  y: 36,  w: 22, h: 40, label: 'FL'  },
-      { id: 'FR',  x: 147, y: 36,  w: 22, h: 40, label: 'FR'  },
-      { id: 'RLo', x: 16,  y: 170, w: 20, h: 38, label: 'RLo' },
-      { id: 'RLi', x: 38,  y: 170, w: 20, h: 38, label: 'RLi' },
-      { id: 'RRi', x: 142, y: 170, w: 20, h: 38, label: 'RRi' },
-      { id: 'RRo', x: 164, y: 170, w: 20, h: 38, label: 'RRo' },
-    ],
-  },
-  'Tri-mixer': {
-    emoji: '🚛', viewH: 360,
-    Body: TriMixerBody,
-    tyres: [
-      { id: 'F1L',  x: 29,  y: 24,  w: 22, h: 38, label: 'F1L'  },
-      { id: 'F1R',  x: 149, y: 24,  w: 22, h: 38, label: 'F1R'  },
-      { id: 'F2L',  x: 29,  y: 76,  w: 22, h: 38, label: 'F2L'  },
-      { id: 'F2R',  x: 149, y: 76,  w: 22, h: 38, label: 'F2R'  },
-      { id: 'R1Lo', x: 14,  y: 170, w: 19, h: 35, label: 'R1Lo' },
-      { id: 'R1Li', x: 35,  y: 170, w: 19, h: 35, label: 'R1Li' },
-      { id: 'R1Ri', x: 146, y: 170, w: 19, h: 35, label: 'R1Ri' },
-      { id: 'R1Ro', x: 167, y: 170, w: 19, h: 35, label: 'R1Ro' },
-      { id: 'R2Lo', x: 14,  y: 218, w: 19, h: 35, label: 'R2Lo' },
-      { id: 'R2Li', x: 35,  y: 218, w: 19, h: 35, label: 'R2Li' },
-      { id: 'R2Ri', x: 146, y: 218, w: 19, h: 35, label: 'R2Ri' },
-      { id: 'R2Ro', x: 167, y: 218, w: 19, h: 35, label: 'R2Ro' },
-    ],
-  },
-  Bus: {
-    emoji: '🚌', viewH: 330,
-    Body: BusBody,
-    tyres: [
-      { id: 'FL',  x: 14,  y: 38,  w: 22, h: 42, label: 'FL'  },
-      { id: 'FR',  x: 164, y: 38,  w: 22, h: 42, label: 'FR'  },
-      { id: 'RLo', x: 0,   y: 192, w: 20, h: 38, label: 'RLo' },
-      { id: 'RLi', x: 22,  y: 192, w: 20, h: 38, label: 'RLi' },
-      { id: 'RRi', x: 158, y: 192, w: 20, h: 38, label: 'RRi' },
-      { id: 'RRo', x: 180, y: 192, w: 20, h: 38, label: 'RRo' },
-    ],
-  },
-  Tata: {
-    emoji: '🚛', viewH: 305,
-    Body: TataBody,
-    tyres: [
-      { id: 'FL',  x: 31,  y: 32,  w: 22, h: 40, label: 'FL'  },
-      { id: 'FR',  x: 147, y: 32,  w: 22, h: 40, label: 'FR'  },
-      { id: 'RLo', x: 16,  y: 178, w: 20, h: 36, label: 'RLo' },
-      { id: 'RLi', x: 38,  y: 178, w: 20, h: 36, label: 'RLi' },
-      { id: 'RRi', x: 142, y: 178, w: 20, h: 36, label: 'RRi' },
-      { id: 'RRo', x: 164, y: 178, w: 20, h: 36, label: 'RRo' },
-    ],
-  },
-  'Ashok Leyland': {
-    emoji: '🚚', viewH: 305,
-    Body: AshokLeylandBody,
-    tyres: [
-      { id: 'FL',  x: 31,  y: 32,  w: 22, h: 40, label: 'FL'  },
-      { id: 'FR',  x: 147, y: 32,  w: 22, h: 40, label: 'FR'  },
-      { id: 'RLo', x: 16,  y: 178, w: 20, h: 36, label: 'RLo' },
-      { id: 'RLi', x: 38,  y: 178, w: 20, h: 36, label: 'RLi' },
-      { id: 'RRi', x: 142, y: 178, w: 20, h: 36, label: 'RRi' },
-      { id: 'RRo', x: 164, y: 178, w: 20, h: 36, label: 'RRo' },
-    ],
-  },
-  // Diesel / water tanker: 1 single-tyre steer axle + 1 dual-tyre drive axle
-  // = 6 tyres (fleet owner confirmed). Same chassis class as the Canter, whose
-  // geometry and body it reuses.
-  Tanker: {
-    emoji: '🚚', viewH: 310,
-    Body: CanterBody,
-    tyres: [
-      { id: 'FL',  x: 31,  y: 36,  w: 22, h: 40, label: 'FL'  },
-      { id: 'FR',  x: 147, y: 36,  w: 22, h: 40, label: 'FR'  },
-      { id: 'RLo', x: 16,  y: 170, w: 20, h: 38, label: 'RLo' },
-      { id: 'RLi', x: 38,  y: 170, w: 20, h: 38, label: 'RLi' },
-      { id: 'RRi', x: 142, y: 170, w: 20, h: 38, label: 'RRi' },
-      { id: 'RRo', x: 164, y: 170, w: 20, h: 38, label: 'RRo' },
-    ],
-  },
-  // Towed trailer: 2 dual-tyre axles and no steer axle = 8 tyres. A towed unit
-  // has no cab, so it reuses the truck body only because there is no trailer
-  // artwork; the wheel arrangement is the accurate part.
-  Trailer: {
-    emoji: '🚛', viewH: 270,
-    Body: CanterBody,
-    tyres: [
-      { id: 'R1Lo', x: 14,  y: 96,  w: 19, h: 35, label: 'R1Lo' },
-      { id: 'R1Li', x: 35,  y: 96,  w: 19, h: 35, label: 'R1Li' },
-      { id: 'R1Ri', x: 146, y: 96,  w: 19, h: 35, label: 'R1Ri' },
-      { id: 'R1Ro', x: 167, y: 96,  w: 19, h: 35, label: 'R1Ro' },
-      { id: 'R2Lo', x: 14,  y: 168, w: 19, h: 35, label: 'R2Lo' },
-      { id: 'R2Li', x: 35,  y: 168, w: 19, h: 35, label: 'R2Li' },
-      { id: 'R2Ri', x: 146, y: 168, w: 19, h: 35, label: 'R2Ri' },
-      { id: 'R2Ro', x: 167, y: 168, w: 19, h: 35, label: 'R2Ro' },
-    ],
-  },
-  // Heavy 6x4 chassis (spider pump, crane, generic truck, 8/10-wheeler):
-  // 1 steer axle + 2 dual-tyre drive axles = 10 tyres. A spider pump rides this
-  // chassis, so it must NOT borrow the concrete pump's 14 wheels.
-  'Truck 6x4': {
-    emoji: '🚛', viewH: 310,
-    Body: CanterBody,
-    tyres: [
-      { id: 'FL',   x: 31,  y: 36,  w: 22, h: 40, label: 'FL'   },
-      { id: 'FR',   x: 147, y: 36,  w: 22, h: 40, label: 'FR'   },
-      { id: 'R1Lo', x: 14,  y: 170, w: 19, h: 35, label: 'R1Lo' },
-      { id: 'R1Li', x: 35,  y: 170, w: 19, h: 35, label: 'R1Li' },
-      { id: 'R1Ri', x: 146, y: 170, w: 19, h: 35, label: 'R1Ri' },
-      { id: 'R1Ro', x: 167, y: 170, w: 19, h: 35, label: 'R1Ro' },
-      { id: 'R2Lo', x: 14,  y: 218, w: 19, h: 35, label: 'R2Lo' },
-      { id: 'R2Li', x: 35,  y: 218, w: 19, h: 35, label: 'R2Li' },
-      { id: 'R2Ri', x: 146, y: 218, w: 19, h: 35, label: 'R2Ri' },
-      { id: 'R2Ro', x: 167, y: 218, w: 19, h: 35, label: 'R2Ro' },
-    ],
-  },
-  // Line pump: 2 single-tyre steer axles + 2 dual-tyre drive axles = 12 tyres
-  // (fleet owner confirmed). It rides a shorter chassis than the truck-mounted
-  // concrete pump, which carries a THIRD steer axle, but it IS a pump and must
-  // read as one, so it keeps the pump body art.
-  'Line pump': {
-    emoji: '🏗️', viewH: 375,
-    Body: ConcretePumpBody,
-    tyres: [
-      { id: 'F1L',  x: 29,  y: 40,  w: 22, h: 38, label: 'F1L'  },
-      { id: 'F1R',  x: 149, y: 40,  w: 22, h: 38, label: 'F1R'  },
-      { id: 'F2L',  x: 29,  y: 84,  w: 22, h: 38, label: 'F2L'  },
-      { id: 'F2R',  x: 149, y: 84,  w: 22, h: 38, label: 'F2R'  },
-      { id: 'R1Lo', x: 13,  y: 258, w: 19, h: 33, label: 'R1Lo' },
-      { id: 'R1Li', x: 34,  y: 258, w: 19, h: 33, label: 'R1Li' },
-      { id: 'R1Ri', x: 147, y: 258, w: 19, h: 33, label: 'R1Ri' },
-      { id: 'R1Ro', x: 168, y: 258, w: 19, h: 33, label: 'R1Ro' },
-      { id: 'R2Lo', x: 13,  y: 300, w: 19, h: 33, label: 'R2Lo' },
-      { id: 'R2Li', x: 34,  y: 300, w: 19, h: 33, label: 'R2Li' },
-      { id: 'R2Ri', x: 147, y: 300, w: 19, h: 33, label: 'R2Ri' },
-      { id: 'R2Ro', x: 168, y: 300, w: 19, h: 33, label: 'R2Ro' },
-    ],
-  },
-  // MP concrete pump: 3 single-tyre steer axles up front, then 2 dual-tyre
-  // drive axles at the rear (14 tyres total).
-  'Concrete pump': {
-    emoji: '🏗️', viewH: 375,
-    Body: ConcretePumpBody,
-    tyres: [
-      { id: 'F1L',  x: 29,  y: 40,  w: 22, h: 38, label: 'F1L'  },
-      { id: 'F1R',  x: 149, y: 40,  w: 22, h: 38, label: 'F1R'  },
-      { id: 'F2L',  x: 29,  y: 84,  w: 22, h: 38, label: 'F2L'  },
-      { id: 'F2R',  x: 149, y: 84,  w: 22, h: 38, label: 'F2R'  },
-      { id: 'F3L',  x: 29,  y: 128, w: 22, h: 38, label: 'F3L'  },
-      { id: 'F3R',  x: 149, y: 128, w: 22, h: 38, label: 'F3R'  },
-      { id: 'R1Lo', x: 13,  y: 258, w: 19, h: 33, label: 'R1Lo' },
-      { id: 'R1Li', x: 34,  y: 258, w: 19, h: 33, label: 'R1Li' },
-      { id: 'R1Ri', x: 147, y: 258, w: 19, h: 33, label: 'R1Ri' },
-      { id: 'R1Ro', x: 168, y: 258, w: 19, h: 33, label: 'R1Ro' },
-      { id: 'R2Lo', x: 13,  y: 300, w: 19, h: 33, label: 'R2Lo' },
-      { id: 'R2Li', x: 34,  y: 300, w: 19, h: 33, label: 'R2Li' },
-      { id: 'R2Ri', x: 147, y: 300, w: 19, h: 33, label: 'R2Ri' },
-      { id: 'R2Ro', x: 168, y: 300, w: 19, h: 33, label: 'R2Ro' },
-    ],
-  },
-};
+// The wheels, their coordinates and their names come from the shared tyre map
+// (docs/document-specs/tyre-layouts.json), the SAME file the PDF and the
+// Flutter app draw from, so a machine has one layout on every surface. Only the
+// body ARTWORK is web-specific, picked by the spec's body key.
+const BODY_FOR = {
+  pickup: { Body: PickupBody, emoji: '🛻' },
+  wheelLoader: { Body: WheelLoaderBody, emoji: '🚜' },
+  skidLoader: { Body: WheelLoaderBody, emoji: '🚜' },
+  canter: { Body: CanterBody, emoji: '🚚' },
+  triMixer: { Body: TriMixerBody, emoji: '🚛' },
+  bus: { Body: BusBody, emoji: '🚌' },
+  tata: { Body: TataBody, emoji: '🚛' },
+  ashokLeyland: { Body: AshokLeylandBody, emoji: '🚚' },
+  linePump: { Body: ConcretePumpBody, emoji: '🏗️' },
+  concretePump: { Body: ConcretePumpBody, emoji: '🏗️' },
+}
 
-// 4-axle concrete pump: the same body with the third steer axle removed
-// (2 single steer + 2 twin drive = 12 tyres). Picked per machine from its
-// recorded axle_count, never from the type, which is PUMPS for both builds.
-LAYOUTS['Concrete pump 4-axle'] = {
-  ...LAYOUTS['Concrete pump'],
-  tyres: LAYOUTS['Concrete pump'].tyres.filter((t) => !t.id.startsWith('F3')).map((t) => ({ ...t })),
-};
+// Each tyre's label is the canonical GCC position code (LHF1, LHRO, RHCI ...)
+// while the internal `id` stays stable, so saved inspections and diagram
+// hit-testing continue to match.
+const LAYOUTS = Object.fromEntries(Object.entries(LAYOUT_GEOMETRY).map(([key, g]) => [key, {
+  ...(BODY_FOR[g.body] || BODY_FOR.canter),
+  viewH: g.viewH,
+  tyres: g.tyres.map((t) => ({ ...t, label: legacyPositionCode(key, t.id) })),
+}]))
 
-// Relabel every tyre's display label to the canonical GCC position code
-// (LHF1, LHRO, RHCI ...) while keeping the internal `id` stable, so saved
-// inspections and diagram hit-testing continue to match.
-Object.entries(LAYOUTS).forEach(([typeKey, layout]) => {
-  layout.tyres.forEach(t => { t.label = legacyPositionCode(typeKey, t.id) })
-});
-
-// ── Risk level mapping (checklist uses 'Low'/'Medium'/'Critical', diagram uses 'good'/'warning'/'critical') ──
+// ── Risk level mapping ─────────────────────────────────────────────────────────
+// A tyre record's risk_level (Low / Medium / High / Critical) is its own
+// vocabulary. A CONDITION word (Worn, Flat, Damaged ...) is never read here: it
+// goes through the shared rule (riskForCondition), so an unlisted word can
+// never fall to grey "No Data" on screen while the PDF shows it red.
 const LEVEL_TO_RISK = {
   good: 'good', Good: 'good', Low: 'good', low: 'good',
   warning: 'warning', Warning: 'warning', Medium: 'warning', medium: 'warning', High: 'warning', high: 'warning',
   critical: 'critical', Critical: 'critical',
   none: 'none',
-  // Inspection condition vocabulary (mobile tyre_conditions.condition)
-  Wear: 'warning', wear: 'warning',
-  Damage: 'critical', damage: 'critical',
-  Puncture: 'critical', puncture: 'critical',
 }
 
 // One shape for the card board, whichever way the caller hands its data in:
@@ -1653,17 +1474,21 @@ export default function VehicleTyreDiagram({
   // the diagram's own slot id (F1L, R2Ro). Read both, so a tyre is never left
   // off the picture just because of which name its record uses.
   const slotIds = new Set(tyres.map((t) => t.id))
-  const toSlot = (key) => (slotIds.has(key) ? key : (canonicalToSlotId(vehicleType, key) || key))
+  const toSlot = (key) => (slotIds.has(key) ? key : (customLayout ? canonicalToSlotId(vehicleType, key) : slotForPosition(resolved, key)) || key)
   const slotPositions = Array.isArray(positions)
     ? positions.map((p) => (p && p.position ? { ...p, position: toSlot(p.position) } : p))
     : positions
+  // Readings keyed by a code (LHRCO, LHCO) are moved onto their wheel the same way.
+  const slotTyreData = tyreData && typeof tyreData === 'object' && !Array.isArray(tyreData)
+    ? Object.fromEntries(Object.entries(tyreData).map(([k, v]) => [toSlot(k), v]))
+    : tyreData
 
   // Build unified riskMap: { id -> 'good'|'warning'|'critical'|'none' }
   const riskMap = {}
   if (slotPositions && Array.isArray(slotPositions)) {
     slotPositions.forEach(p => { if (p?.position) riskMap[p.position] = LEVEL_TO_RISK[p.risk_level] || riskForCondition(p.condition) })
-  } else if (tyreData && typeof tyreData === 'object') {
-    Object.entries(tyreData).forEach(([id, v]) => {
+  } else if (slotTyreData && typeof slotTyreData === 'object') {
+    Object.entries(slotTyreData).forEach(([id, v]) => {
       const token = typeof v === 'string' ? v : (v?.risk || v?.risk_level || v?.condition)
       // The field app writes Worn / Flat / Damaged, which the short map above
       // does not list; the shared condition reader bands every word the same way.
@@ -1713,7 +1538,7 @@ export default function VehicleTyreDiagram({
         viewH={viewH}
         photo={photo}
         Body={ArtBody}
-        tyreData={boardData(slotPositions, tyreData)}
+        tyreData={boardData(slotPositions, slotTyreData)}
         riskOf={(id) => riskMap[id] ?? 'none'}
         codeOf={(id) => legacyPositionCode(resolved, id) || id}
         title={displayName}
@@ -1794,7 +1619,7 @@ export default function VehicleTyreDiagram({
 
       {/* Legend */}
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
-        {Object.entries(RISK).map(([key, col]) => (
+        {Object.entries(riskColours(currentTheme())).map(([key, col]) => (
           <div key={key} className="flex items-center gap-1.5">
             <span className="inline-block w-3.5 h-3.5 rounded-full"
               style={{ background: `radial-gradient(circle at 35% 35%, ${col.rim}, ${col.dark})` }} />

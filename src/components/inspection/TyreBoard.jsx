@@ -13,6 +13,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { serialFlags, serialFlagText } from '../../lib/tyreSerialCheck'
 import './tyreBoard.css'
+import { riskCssVars } from '../../lib/tyreLayoutSpec'
 
 const TONE = { good: 'good', warning: 'warn', critical: 'bad', none: 'none' }
 const ICON = { good: '✓', warn: '!', bad: '!', none: '–' }
@@ -206,7 +207,7 @@ export default function TyreBoard({
   })
 
   return (
-    <div className="tb-scroll" ref={boxRef}><div className="tb" style={{ width: total, zoom: fit(total) }}>
+    <div className="tb-scroll" ref={boxRef}><div className="tb" style={{ width: total, zoom: fit(total), ...riskCssVars() }}>
       {title && <div className="tb-title"><b>{title}</b><span>{tyres.length} tyres{onSelect && !recordedCount ? '' : `, ${recordedCount} ${recordedLabel}`}</span></div>}
       <div className="tb-front">▲ FRONT</div>
       <div className="tb-stage" style={{ width: total, height }}>

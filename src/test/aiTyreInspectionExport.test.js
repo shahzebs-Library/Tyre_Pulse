@@ -134,7 +134,7 @@ describe('damage report rows', () => {
     })
   })
   it('uses the right vehicle map per inspection and de-duplicates severities', () => {
-    expect(rows.map(r => r.position)).toEqual(['LHCO', 'RHF1', 'LHCO', 'RHR2-O'])
+    expect(rows.map(r => r.position)).toEqual(['LHCO', 'RHF1', 'LHCO', 'RHRRO'])
     expect(rows[2].severity).toBe('moderate')
     expect(rows[2].decision).toBe('unreviewed')
     expect(rows[2].finding).toBe('bulge: x | cracking: y')
@@ -162,7 +162,7 @@ describe('damage report rows', () => {
     ])
     expect(sheets[1].rows[0]).toMatchObject({ vehicle: 'TM514', position: 'LHCO', photo_link: 'https://signed/a' })
     expect(sheets[2].rows[0]).toMatchObject({ position: 'RHF1', reviewer_note: 'glare', photo_link: 'https://signed/c' })
-    expect(sheets[3].rows[0]).toMatchObject({ vehicle: 'MP093', position: 'RHR2-O' })
+    expect(sheets[3].rows[0]).toMatchObject({ vehicle: 'MP093', position: 'RHRRO' })
     expect(sheets.slice(1).every(s => s.columns.length === s.headers.length && s.columns[0] === 'date')).toBe(true)
     expect(filename).toBe('AI damage report 22 Oct 2026')
     expect(opts.dateRange).toBe('From 2026-10-01')

@@ -161,11 +161,11 @@ void main() {
               ),
             )
             .status,
-        TpStatus.warning,
+        TpStatus.critical,
       );
       expect(
         tester.widget<TpCard>(flatCard).borderColor,
-        TpPalette.of(tester.element(flatCard)).warning.base,
+        TpPalette.of(tester.element(flatCard)).critical.base,
       );
       expect(
         tester

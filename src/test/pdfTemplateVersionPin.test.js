@@ -28,7 +28,7 @@ function inspectionGeneratorSource() {
 }
 
 const PINS = {
-  tyre_inspection: { version: 'ins-2026.11.1', hash: '95d712aa9ee84e4f' },
+  tyre_inspection: { version: 'ins-2026.11.2', hash: 'b499fa91ad75d13f' },
   tyre_observation: { version: 'obs-1.0', hash: '81cd28ea7c292bf9' },
 }
 

@@ -68,8 +68,8 @@ void main() {
   });
 
   group('tyreConditionStatus', () {
-    test('flat maps to warning, NOT critical - easy to get backwards', () {
-      expect(tyreConditionStatus(TyreCondition.flat), TpStatus.warning);
+    test('flat is critical - the shared tyre map rule (web, PDF, phone)', () {
+      expect(tyreConditionStatus(TyreCondition.flat), TpStatus.critical);
     });
 
     test('good maps to ok', () {
@@ -102,10 +102,14 @@ void main() {
     });
 
     test(
-        'null and unrecognised text default to good, matching the '
-        'production capture-form seed', () {
-      expect(normaliseCondition(null), TyreCondition.good);
-      expect(normaliseCondition('nonsense'), TyreCondition.good);
+        'null and unrecognised text are No data, never Good '
+        '(the shared tyre map rule)', () {
+      expect(normaliseCondition(null), isNull);
+      expect(normaliseCondition('nonsense'), isNull);
+      expect(
+        tyreConditionStatus(normaliseCondition('nonsense')),
+        TpStatus.unknown,
+      );
     });
   });
 

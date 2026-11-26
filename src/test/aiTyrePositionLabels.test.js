@@ -12,7 +12,9 @@ import {
   slotDisplayCode, canonicalToSlotId, displayPositionCode, inspectionTypeHint, layoutPositionsFor,
 } from '../lib/tyreBay'
 
-const CANONICAL = /^(LH|RH)(F\d|R\d|C|CO|CI|RO|RI|R\d-[IO])$|^(LH|RH)(F\d|R\d(-[IO])?|CO|CI|RO|RI)$/
+// RC / RR = the concrete pump's rear-centre and rear-rear dual axles, the
+// spelling its own records carry (shared tyre map, docs/document-specs).
+const CANONICAL = /^(LH|RH)(F\d|R\d|C|CO|CI|RO|RI|R\d-[IO]|R[CR][IO])$|^(LH|RH)(F\d|R\d(-[IO])?|CO|CI|RO|RI)$/
 
 describe('every layout: slot <-> canonical code round trip', () => {
   it('knows all layouts', () => { expect(LAYOUT_KEYS.length).toBeGreaterThanOrEqual(10) })
@@ -55,7 +57,7 @@ describe('every layout: slot <-> canonical code round trip', () => {
 describe('real fleet vehicle types and asset prefixes', () => {
   const cases = [
     ['TR-MIXER', 'TM514', 'Tri-mixer', 12, { F1L: 'LHF1', F2R: 'RHF2', R1Lo: 'LHCO', R1Ri: 'RHCI', R2Lo: 'LHRO', R2Ro: 'RHRO' }],
-    ['PUMPS', 'MP093', 'Concrete pump', 14, { F3L: 'LHF3', R1Lo: 'LHR1-O', R2Ri: 'RHR2-I' }],
+    ['PUMPS', 'MP093', 'Concrete pump', 14, { F3L: 'LHR1-I', R1Lo: 'LHRCO', R2Ri: 'RHRRI' }],
     ['SPIDER PUMP', 'SP001', 'Truck 6x4', 10, { FL: 'LHF1', FR: 'RHF1', R2Ro: 'RHR2-O' }],
     ['LINE PUMP', 'LP001', 'Line pump', 12, { F2L: 'LHF2' }],
     ['PICKUP', 'PL077', 'Pickup', 4, { FL: 'LHF1', RR: 'RHR1' }],
@@ -92,6 +94,6 @@ describe('real fleet vehicle types and asset prefixes', () => {
 
   it('the same slot id means a different wheel on a different vehicle (type aware)', () => {
     expect(displayPositionCode('TR-MIXER', 'R1Lo')).toBe('LHCO')
-    expect(displayPositionCode('PUMPS', 'R1Lo')).toBe('LHR1-O')
+    expect(displayPositionCode('PUMPS', 'R1Lo')).toBe('LHRCO')
   })
 })

@@ -138,6 +138,7 @@
     "deploymentEnabled": {
       "claude/wms-wp0-register": false,
       "claude/live-test-fixes": false,
+      "claude/flutter-qa": false,
       "claude/inventory-procurement-layout": false,
       "claude/physical-inventory-master-7rxp2t": false,
       "claude/multi-company-client-7rxp2t": false,

@@ -1,235 +1,152 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { Inbox, Clock, AlertTriangle, CheckCircle2, User, Users, MapPin, RefreshCw } from 'lucide-react'
+import { listMyAccidentTasks } from '../../lib/api/accidentOwnership'
 import {
-  Inbox, Clock, AlertTriangle, CheckCircle2, CircleDot, Users, MapPin,
-} from 'lucide-react'
+  splitTasks, taskCounts, daysLabel, slaStateLabel, workstreamName,
+} from '../../lib/accidentOwnership'
+import { toUserMessage } from '../../lib/safeError'
 
 /**
- * My team's accident cases (Phase 4 team inbox).
+ * My accident tasks (B1), built on accident_my_tasks(): the open case steps owned
+ * by me ("Assigned to me") and by my role in my country / site ("For my team").
+ * Overdue first, then due soonest, then longest in the step.
  *
- * A read-only, purely presentational inbox for a team member: it shows the case
- * workstreams routed to their team and nothing else. It fetches no data and computes
- * no completion; the parent passes a ready `items` array, so the component is inert
- * and trivially testable.
- *
- * Ordering answers "what needs me first": anything overdue (a due_at in the past)
- * sorts to the top, then everything else by a coarse status rank, so a team member
- * reads the queue top to bottom without hunting.
- *
- * Honest states: items === null is loading (nothing known yet), an empty array is a
- * genuine "no cases assigned to your team", and each row states its own status and
- * due badge from the data rather than inferring one.
+ * Pass `items` to render a ready list (tests, the Command Center card); leave it
+ * undefined and the component loads the signed-in user's tasks itself.
+ * Honest states: loading, not switched on yet, error with retry, empty.
  */
-
-// ── status vocabulary -> tone + label ────────────────────────────────────────
-// Tokens mirror the workstream status vocabulary; an unknown token still renders
-// honestly with its raw text and a neutral tone rather than being dropped.
-const STATUS_META = {
-  open: { label: 'Open', tone: 'info', rank: 1 },
-  in_progress: { label: 'In progress', tone: 'info', rank: 1 },
-  blocked: { label: 'Blocked', tone: 'danger', rank: 0 },
-  waiting: { label: 'Waiting', tone: 'warning', rank: 2 },
-  on_hold: { label: 'On hold', tone: 'warning', rank: 2 },
-  review: { label: 'In review', tone: 'warning', rank: 2 },
-  done: { label: 'Done', tone: 'good', rank: 4 },
-  closed: { label: 'Closed', tone: 'good', rank: 5 },
-}
-
-const PILL_CLASS = {
-  good: 'border-emerald-700/50 bg-emerald-950/25 text-emerald-200',
-  info: 'border-sky-700/50 bg-sky-950/25 text-sky-200',
-  warning: 'border-amber-700/50 bg-amber-950/25 text-amber-200',
+const PILL = {
   danger: 'border-red-700/50 bg-red-950/25 text-red-200',
+  warning: 'border-amber-700/50 bg-amber-950/25 text-amber-200',
+  good: 'border-emerald-700/50 bg-emerald-950/25 text-emerald-200',
   quiet: 'border-[var(--input-border)] bg-[var(--input-bg)]/40 text-[var(--text-dim)]',
 }
-
-function statusMeta(status) {
-  const key = String(status || '').toLowerCase().trim()
-  if (STATUS_META[key]) return STATUS_META[key]
-  const label = status ? String(status) : 'Unknown'
-  return { label, tone: 'quiet', rank: 3 }
+function slaTone(t) {
+  if (t.overdue) return 'danger'
+  if (t.sla_state === 'warning') return 'warning'
+  if (t.sla_state === 'running' || t.sla_state === 'met') return 'good'
+  return 'quiet'
 }
-
-// A workstream key like "insurance_claim" reads better as "Insurance claim".
-function humanizeKey(key) {
-  const raw = String(key || '').replace(/[_-]+/g, ' ').trim()
-  if (!raw) return 'Workstream'
-  return raw.charAt(0).toUpperCase() + raw.slice(1)
+function dueText(dueAt) {
+  if (!dueAt) return null
+  const d = new Date(dueAt)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
+const rowKey = (t) => t.workstream_id || `${t.accident_id}-${t.workstream_key}`
 
-function toTime(value) {
-  if (!value) return null
-  const t = new Date(value).getTime()
-  return Number.isFinite(t) ? t : null
-}
-
-// Overdue = a real due date that has already passed. No due date is never overdue.
-function isOverdue(dueAt, now) {
-  const t = toTime(dueAt)
-  return t != null && t < now
-}
-
-function dueLabel(dueAt) {
-  const t = toTime(dueAt)
-  if (t == null) return 'No due date'
-  try {
-    return new Date(t).toLocaleDateString(undefined, {
-      year: 'numeric', month: 'short', day: 'numeric',
-    })
-  } catch {
-    return 'No due date'
-  }
-}
-
-function rowKey(item, index) {
-  const parts = [item?.accident_id, item?.workstream_key].filter((p) => p != null)
-  return parts.length ? parts.join(':') : `row-${index}`
-}
-
-function DueBadge({ dueAt, overdue }) {
-  if (overdue) {
-    return (
-      <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${PILL_CLASS.danger}`}>
-        <AlertTriangle size={11} className="shrink-0" />
-        Overdue {dueLabel(dueAt)}
-      </span>
-    )
-  }
-  const has = toTime(dueAt) != null
+function TaskRow({ task }) {
+  const tone = slaTone(task)
+  const due = dueText(task.due_at)
   return (
-    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${PILL_CLASS.quiet}`}>
-      <Clock size={11} className="shrink-0" />
-      {has ? `Due ${dueLabel(dueAt)}` : 'No due date'}
-    </span>
-  )
-}
-
-function CaseRow({ item, now }) {
-  const meta = statusMeta(item?.status)
-  const overdue = isOverdue(item?.due_at, now)
-  const caseLabel = item?.case_no ? `Case ${item.case_no}` : (item?.accident_id ? `Case ${item.accident_id}` : 'Case')
-  const place = [item?.site, item?.country].filter(Boolean).join(', ')
-
-  return (
-    <li
-      className={`rounded-lg border p-3 ${
-        overdue
-          ? 'border-red-800/40 bg-red-950/15'
-          : 'border-[var(--input-border)] bg-[var(--input-bg)]/30'
-      }`}
-    >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <CircleDot size={13} className="text-orange-400 shrink-0" />
-          <span className="text-sm font-semibold text-[var(--text-primary)] truncate">{caseLabel}</span>
-          <span className="text-xs text-[var(--text-dim)] truncate">{humanizeKey(item?.workstream_key)}</span>
+    <li className="py-2.5">
+      <Link
+        to={`/accidents/${task.accident_id}?tab=workstreams`}
+        className="block rounded-lg px-2 -mx-2 py-1 hover:bg-[var(--surface-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-sm font-medium text-[var(--text-primary)]">{task.reference_no ? `Case ${task.reference_no}` : 'Case'}</span>
+          <span className="text-sm text-[var(--text-secondary)]">{task.workstream_name || workstreamName(task.workstream_key)}</span>
+          <span className={`ml-auto inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${PILL[tone]}`}>
+            {tone === 'danger' ? <AlertTriangle size={11} aria-hidden="true" /> : <Clock size={11} aria-hidden="true" />}
+            {slaStateLabel(task)}{due && !task.overdue ? ` · ${due}` : ''}
+          </span>
         </div>
-        <span
-          className={`ml-auto inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${
-            PILL_CLASS[meta.tone] || PILL_CLASS.quiet
-          }`}
-        >
-          {meta.label}
-        </span>
-        <DueBadge dueAt={item?.due_at} overdue={overdue} />
-      </div>
-
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-muted)]">
-        {(item?.team || item?.owner_role) && (
-          <span className="inline-flex items-center gap-1">
-            <Users size={11} className="shrink-0" />
-            {item?.team || item?.owner_role}
-          </span>
-        )}
-        {place && (
-          <span className="inline-flex items-center gap-1">
-            <MapPin size={11} className="shrink-0" />
-            {place}
-          </span>
-        )}
-      </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-muted)]">
+          {task.asset_no && <span>{task.asset_no}</span>}
+          {(task.site || task.country) && (
+            <span className="inline-flex items-center gap-1"><MapPin size={11} aria-hidden="true" />{[task.site, task.country].filter(Boolean).join(', ')}</span>
+          )}
+          <span>In this step {daysLabel(task.days_in_step)}</span>
+          {!task.assigned_to_me && task.owner_role && <span className="inline-flex items-center gap-1"><Users size={11} aria-hidden="true" />{task.owner_role}</span>}
+        </div>
+      </Link>
     </li>
   )
 }
 
-export default function CaseTeamInbox({ items }) {
-  const now = Date.now()
+function Section({ icon: Icon, title, tasks, emptyText }) {
+  return (
+    <div>
+      <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-dim)] mb-1">
+        <Icon size={13} aria-hidden="true" /> {title} ({tasks.length})
+      </h4>
+      {tasks.length === 0
+        ? <p className="text-xs text-[var(--text-muted)] py-2">{emptyText}</p>
+        : <ul className="divide-y divide-[var(--input-border)]">{tasks.map((t) => <TaskRow key={rowKey(t)} task={t} />)}</ul>}
+    </div>
+  )
+}
 
-  const view = useMemo(() => {
-    if (items == null) return { loading: true }
-    if (!Array.isArray(items) || items.length === 0) return { empty: true }
-    // Overdue first, then by status rank, keeping a stable order within each group.
-    const decorated = items.map((item, index) => ({
-      item,
-      index,
-      overdue: isOverdue(item?.due_at, now),
-      rank: statusMeta(item?.status).rank,
-      due: toTime(item?.due_at),
-    }))
-    decorated.sort((a, b) => {
-      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1
-      // Within overdue, the most-overdue (earliest due) first.
-      if (a.overdue && b.overdue && a.due !== b.due) return (a.due || 0) - (b.due || 0)
-      if (a.rank !== b.rank) return a.rank - b.rank
-      return a.index - b.index
-    })
-    const overdueCount = decorated.filter((d) => d.overdue).length
-    return { rows: decorated.map((d) => d.item), overdueCount }
-  }, [items, now])
+export default function CaseTeamInbox({ items, title = 'My accident tasks', compact = false }) {
+  const selfLoad = items === undefined
+  const [state, setState] = useState({ loading: selfLoad, ok: true, rows: selfLoad ? null : items })
 
-  if (view.loading) {
-    return (
-      <div className="card p-4 space-y-2" aria-busy="true">
-        <div className="flex items-center gap-2">
-          <Inbox size={16} className="text-[var(--text-muted)] shrink-0" />
-          <p className="text-sm font-semibold text-[var(--text-primary)]">My team's accident cases</p>
-        </div>
-        <div className="h-2.5 w-2/3 rounded-full bg-[var(--input-border)] animate-pulse" />
-        <div className="h-2.5 w-1/2 rounded-full bg-[var(--input-border)] animate-pulse" />
-        <p className="text-xs text-[var(--text-dim)]">Loading cases...</p>
+  const load = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, error: '' }))
+    try {
+      const res = await listMyAccidentTasks()
+      setState({ loading: false, ok: res.ok, rows: res.rows })
+    } catch (e) {
+      setState({ loading: false, ok: true, error: toUserMessage(e, 'Could not load your accident tasks.') })
+    }
+  }, [])
+  useEffect(() => { if (selfLoad) load() }, [selfLoad, load])
+  useEffect(() => { if (!selfLoad) setState({ loading: items == null, ok: true, rows: items }) }, [items, selfLoad])
+
+  const rows = state.rows
+  const groups = useMemo(() => splitTasks(rows || []), [rows])
+  const counts = useMemo(() => taskCounts(rows || []), [rows])
+
+  let body
+  if (state.loading && !rows) {
+    body = <p className="text-sm text-[var(--text-muted)] py-3">Loading your tasks...</p>
+  } else if (state.error) {
+    body = (
+      <div className="flex items-center gap-2 py-3" role="alert">
+        <AlertTriangle size={16} className="text-red-400" aria-hidden="true" />
+        <p className="text-sm text-[var(--text-primary)] flex-1">{state.error}</p>
+        <button type="button" onClick={load} className="text-sm text-[var(--accent)] hover:underline">Try again</button>
+      </div>
+    )
+  } else if (state.ok === false) {
+    body = <p className="text-sm text-[var(--text-muted)] py-3">Accident task tracking is not switched on yet.</p>
+  } else if (!rows || rows.length === 0) {
+    body = (
+      <p className="flex items-center gap-2 text-sm text-[var(--text-muted)] py-3">
+        <CheckCircle2 size={16} className="text-emerald-400" aria-hidden="true" /> Nothing waiting for you on accident cases.
+      </p>
+    )
+  } else if (compact) {
+    body = <ul className="divide-y divide-[var(--input-border)]">{[...groups.mine, ...groups.team].slice(0, 5).map((t) => <TaskRow key={rowKey(t)} task={t} />)}</ul>
+  } else {
+    body = (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Section icon={User} title="Assigned to me" tasks={groups.mine} emptyText="No steps assigned to you by name." />
+        <Section icon={Users} title="For my team" tasks={groups.team} emptyText="No steps waiting for your role." />
       </div>
     )
   }
-
-  if (view.empty) {
-    return (
-      <div className="card p-4 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <Inbox size={16} className="text-[var(--text-muted)] shrink-0" />
-          <p className="text-sm font-semibold text-[var(--text-primary)]">My team's accident cases</p>
-        </div>
-        <p className="text-sm text-[var(--text-muted)] flex items-center gap-2">
-          <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
-          No cases assigned to your team.
-        </p>
-      </div>
-    )
-  }
-
-  const { rows, overdueCount } = view
 
   return (
-    <div className="card p-4 space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="flex items-center gap-2">
-          <Inbox size={16} className="text-orange-400 shrink-0" />
-          <p className="text-sm font-semibold text-[var(--text-primary)]">My team's accident cases</p>
-        </div>
-        <span className="text-xs text-[var(--text-dim)]">
-          {rows.length} {rows.length === 1 ? 'case' : 'cases'}
-        </span>
-        {overdueCount > 0 && (
-          <span className={`ml-auto inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${PILL_CLASS.danger}`}>
-            <AlertTriangle size={11} className="shrink-0" />
-            {overdueCount} overdue
+    <section className="card" aria-label={title}>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <Inbox size={16} className="text-[var(--accent)]" aria-hidden="true" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
+        {rows && rows.length > 0 && (
+          <span className="text-xs text-[var(--text-muted)]">
+            {counts.total} open{counts.overdue ? ` · ${counts.overdue} overdue` : ''}{counts.dueSoon ? ` · ${counts.dueSoon} due soon` : ''}
           </span>
         )}
+        {selfLoad && (
+          <button type="button" onClick={load} aria-label="Refresh tasks"
+            className="ml-auto inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]">
+            <RefreshCw size={14} className={state.loading ? 'animate-spin' : ''} />
+          </button>
+        )}
       </div>
-
-      <ul className="space-y-2">
-        {rows.map((item, index) => (
-          <CaseRow key={rowKey(item, index)} item={item} now={now} />
-        ))}
-      </ul>
-    </div>
+      {body}
+    </section>
   )
 }

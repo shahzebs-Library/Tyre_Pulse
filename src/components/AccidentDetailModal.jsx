@@ -45,6 +45,7 @@ import { resolveStorageUrls } from '../lib/storageRefs'
 import CustomFieldsPanel from './CustomFieldsPanel'
 import CopilotCard from './ai/CopilotCard'
 import CaseCompletionPanel from './accidents/CaseCompletionPanel'
+import CaseOwnerHeader from './accidents/CaseOwnerHeader'
 import CaseWorkstreamsPanel from './accidents/CaseWorkstreamsPanel'
 import CaseTeamDistributionPanel from './accidents/CaseTeamDistributionPanel'
 import CasePortalShare from './accidents/CasePortalShare'
@@ -546,6 +547,14 @@ function AccidentDetail({ accidentId, onBack, onClose, onChanged, variant = 'pag
     </div>
   ) : (
     <>
+      {/* Who holds the case now, its SLA clock and what is missing (B3 / B5). */}
+      <CaseOwnerHeader
+        accident={acc}
+        workstreams={Array.isArray(caseData?.workstreams) ? caseData.workstreams : []}
+        canReassign={elevated}
+        onChanged={load}
+      />
+
       {/* Tabs */}
       <ScrollableTabStrip tabs={TABS} active={tab} onChange={setTab} />
 

@@ -26,6 +26,14 @@ vi.mock('../lib/api/accidentWorkflow', () => ({
   setAccidentEmailConfig: vi.fn(),
 }))
 
+vi.mock('../lib/api/accidentOwnership', () => ({
+  listTeamRoles: async () => ({ ok: false, rows: [] }),
+  listNotifyRules: async () => ({ ok: false, rows: [] }),
+  listAssignablePeople: async () => [],
+  previewTeamRole: async () => ({ people: 0, with_device: 0, names: [] }),
+  saveTeamRole: vi.fn(), removeTeamRole: vi.fn(), saveNotifyRule: vi.fn(), removeNotifyRule: vi.fn(),
+}))
+
 import AccidentWorkflowSettings from '../pages/AccidentWorkflowSettings'
 
 function mount(path = '/accident-workflow-settings') {
@@ -40,7 +48,9 @@ describe('AccidentWorkflowSettings page', () => {
     expect(await screen.findAllByText('1 of 1', {}, { timeout: 5000 })).toHaveLength(2)
     expect(screen.getByText('Templates ready')).toBeInTheDocument()
     expect(await screen.findByText(/reach nobody/)).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /Departments/ })).toHaveAttribute('aria-selected', 'true')
+    // Step owners is the first tab: it is what the owner sets up first.
+    expect(screen.getByRole('tab', { name: /Step Owners/ })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText('Not switched on yet')).toBeInTheDocument()
   })
 
   it('opens the tab named in ?tab= and keeps delivery OFF until confirmed', async () => {
@@ -55,7 +65,7 @@ describe('AccidentWorkflowSettings page', () => {
 
   it('renders a failed section read as an error with Retry, not as empty', async () => {
     h.deptError = { code: '42501', message: 'permission denied' }
-    mount()
+    mount('/accident-workflow-settings?tab=departments')
     expect(await screen.findByText('This section could not be loaded.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Retry/ })).toBeInTheDocument()
     expect(screen.queryByText('No departments configured yet.')).not.toBeInTheDocument()

@@ -21,8 +21,9 @@ import { useSearchParams } from 'react-router-dom'
 import {
   GitBranch, Building2, ListChecks, Mail, ToggleRight, Plus, X, Save,
   Loader2, AlertTriangle, Trash2, Pencil, RefreshCw, CheckCircle2,
-  Eye, ShieldAlert, Power, PowerOff, Info, Search, ShieldCheck,
+  Eye, ShieldAlert, Power, PowerOff, Info, Search, ShieldCheck, UserCheck, BellRing,
 } from 'lucide-react'
+import { OwnersTab, NotifyTab } from '../components/accidents/AccidentOwnershipSettings'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SharedModal from '../components/ui/Modal'
@@ -63,6 +64,8 @@ const EVENT_CHOICES = [
 const EVENT_LABEL = Object.fromEntries(EVENT_CHOICES.map((e) => [e.value, e.label]))
 
 const TABS = [
+  { id: 'owners', label: 'Step Owners & SLA', icon: UserCheck },
+  { id: 'notify', label: 'Who Is Told', icon: BellRing },
   { id: 'departments', label: 'Departments', icon: Building2 },
   { id: 'rules', label: 'Routing Rules', icon: ListChecks },
   { id: 'templates', label: 'Email Templates', icon: Mail },
@@ -89,10 +92,10 @@ export default function AccidentWorkflowSettings() {
 
   // The active tab is URL-borne so a link can open a given section.
   const [searchParams, setSearchParams] = useSearchParams()
-  const tab = TAB_IDS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'departments'
+  const tab = TAB_IDS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'owners'
   const setTab = (id) => {
     const next = new URLSearchParams(searchParams)
-    if (id === 'departments') next.delete('tab'); else next.set('tab', id)
+    if (id === 'owners') next.delete('tab'); else next.set('tab', id)
     setSearchParams(next, { replace: true })
   }
 
@@ -146,7 +149,7 @@ export default function AccidentWorkflowSettings() {
     <div className="space-y-6">
       <PageHeader
         title="Accident Workflow"
-        subtitle="Configure the accident management workflow: departments, notification routing rules, approved email templates and the master email delivery switch."
+        subtitle="Configure the accident management workflow: who owns each step and its SLA, who is told about each event, departments, notification routing rules, approved email templates and the master email delivery switch."
         icon={GitBranch}
         onRefresh={load}
         refreshing={refreshing}
@@ -189,6 +192,8 @@ export default function AccidentWorkflowSettings() {
       </div>
 
       <div role="tabpanel" id={`awf-panel-${tab}`} aria-labelledby={`awf-tab-${tab}`}>
+        {tab === 'owners' && <OwnersTab canWrite={canWrite} />}
+        {tab === 'notify' && <NotifyTab canWrite={canWrite} />}
         {tab === 'departments' && (
           <DepartmentsTab
             rows={departments} rules={rules} setRows={setDepartments} canWrite={canWrite}

@@ -1239,7 +1239,11 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                         children: <Widget>[
                           DecoratedBox(
                             decoration: BoxDecoration(
-                              color: tyreRiskBaseColor(tone, Brightness.light),
+                              // The condition's own colour, the same as the
+                              // legend and the picker (owner, 2026-11-27).
+                              color: tyreConditionSelectedFill(
+                                wheel.isRecorded ? wheel.condition : null,
+                              ),
                               shape: BoxShape.circle,
                             ),
                             child: Padding(
@@ -1569,15 +1573,6 @@ class _ConditionLegend extends StatelessWidget {
   final AppLocalizations l10n;
   final bool compact;
 
-  static const List<TyreCondition> _kOrder = <TyreCondition>[
-    TyreCondition.good,
-    TyreCondition.worn,
-    TyreCondition.damaged,
-    TyreCondition.puncture,
-    TyreCondition.flat,
-    TyreCondition.missing,
-  ];
-
   @override
   Widget build(BuildContext context) {
     if (compact) {
@@ -1640,7 +1635,7 @@ class _ConditionLegend extends StatelessWidget {
       spacing: TpSpace.md,
       runSpacing: TpSpace.xs,
       children: <Widget>[
-        for (final TyreCondition condition in _kOrder)
+        for (final TyreCondition condition in kTyreConditionDisplayOrder)
           item(condition, tyreConditionLabel(l10n, condition)),
         item(null, l10n.tyreConditionNotChecked),
       ],

@@ -15,7 +15,6 @@ import 'package:tyre_pulse/features/inspections/data/inspection_previous_tyre_re
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/tyre_position_editor_sheet.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/tyre_position_mini_map.dart';
-import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_glyph.dart';
 import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
 
 final TyreFitment _fitted = TyreFitment(
@@ -331,8 +330,8 @@ void main() {
   });
 
   testWidgets(
-    'condition tiles fall back to the glyph without a picture and show a '
-    'check badge only on the selected one',
+    'condition tiles show the condition picture and a check badge only on '
+    'the selected one',
     (WidgetTester tester) async {
       TyrePositionReading reading = const TyrePositionReading(
         position: 'R1Lo',
@@ -344,8 +343,14 @@ void main() {
         get: () => reading,
         set: (TyrePositionReading r) => reading = r,
       );
-      // One glyph per condition tile while no PNG is in the folder.
-      expect(find.byType(TyreConditionGlyph), findsNWidgets(6));
+      // One picture per condition tile, from assets/tyre_conditions/.
+      final Iterable<String> pictures = tester
+          .widgetList<Image>(find.byType(Image))
+          .map((Image i) => i.image)
+          .whereType<AssetImage>()
+          .map((AssetImage a) => a.assetName)
+          .where((String n) => n.startsWith('assets/tyre_conditions/'));
+      expect(pictures.toSet(), hasLength(6));
       expect(find.byIcon(Icons.check_rounded), findsOneWidget);
       expect(
         find.descendant(

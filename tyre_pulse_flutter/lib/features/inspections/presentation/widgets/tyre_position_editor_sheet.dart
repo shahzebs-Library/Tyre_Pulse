@@ -37,7 +37,6 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dar
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_glyph.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_position_name_labels.dart';
-import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_risk_colors.dart';
 import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
 import 'package:tyre_pulse/features/tyres/domain/tyre_lookup_record.dart';
 import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
@@ -48,6 +47,19 @@ import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
 /// folder; until then the glyph is shown.
 String tyreConditionImageAsset(TyreCondition condition) =>
     'assets/tyre_conditions/${condition.name}.png';
+
+/// The stored `TyreReadingCondition` value a picker tile writes for
+/// [condition]. The tiles are laid out in [kTyreConditionDisplayOrder]
+/// (problems first); the value each one stores never depends on its place.
+String tyreReadingConditionValue(TyreCondition condition) =>
+    switch (condition) {
+      TyreCondition.good => TyreReadingCondition.good,
+      TyreCondition.worn => TyreReadingCondition.worn,
+      TyreCondition.damaged => TyreReadingCondition.damaged,
+      TyreCondition.puncture => TyreReadingCondition.puncture,
+      TyreCondition.flat => TyreReadingCondition.flat,
+      TyreCondition.missing => TyreReadingCondition.missing,
+    };
 
 class TyrePositionEditorSheet extends ConsumerStatefulWidget {
   const TyrePositionEditorSheet({
@@ -969,18 +981,19 @@ class _ConditionGrid extends StatelessWidget {
           spacing: TpSpace.sm,
           runSpacing: TpSpace.sm,
           children: <Widget>[
-            for (final String condition in TyreReadingCondition.all)
+            // Problems first, Good last (kTyreConditionDisplayOrder). Only
+            // the order on screen changes: each tile still stores its own
+            // TyreReadingCondition value.
+            for (final TyreCondition condition in kTyreConditionDisplayOrder)
               SizedBox(
                 width: itemWidth,
                 child: _ConditionTile(
-                  condition: normaliseCondition(condition),
-                  label:
-                      tyreConditionLabel(l10n, normaliseCondition(condition)),
-                  statusLabel: statusLabel(
-                    tyreConditionStatus(normaliseCondition(condition)),
-                  ),
-                  isSelected: reading.checked && reading.condition == condition,
-                  onTap: () => onSelect(condition),
+                  condition: condition,
+                  label: tyreConditionLabel(l10n, condition),
+                  statusLabel: statusLabel(tyreConditionStatus(condition)),
+                  isSelected: reading.checked &&
+                      reading.condition == tyreReadingConditionValue(condition),
+                  onTap: () => onSelect(tyreReadingConditionValue(condition)),
                 ),
               ),
           ],
@@ -1015,10 +1028,11 @@ class _ConditionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final AppLocalizations l10n = AppLocalizations.of(context);
-    final Color band = tyreRiskBaseColor(
-      tyreConditionTone(condition),
-      palette.brightness,
-    );
+    // The condition's own colour (owner, 2026-11-27), not the shared
+    // severity band: Damaged, Puncture and Flat are all critical but each
+    // gets its own outline, tint and tick.
+    final Color band = tyreConditionAccent(condition, palette.brightness);
+    final Color tickFill = tyreConditionSelectedFill(condition);
     final bool dark = palette.brightness == Brightness.dark;
     final Color fill = isSelected
         ? Color.alphaBlend(
@@ -1050,7 +1064,7 @@ class _ConditionTile extends StatelessWidget {
             children: <Widget>[
               ConstrainedBox(
                 constraints: const BoxConstraints(
-                  minHeight: 84,
+                  minHeight: 100,
                   minWidth: double.infinity,
                 ),
                 child: Padding(
@@ -1064,7 +1078,7 @@ class _ConditionTile extends StatelessWidget {
                     children: <Widget>[
                       _ConditionPicture(
                         condition: condition,
-                        size: 36,
+                        size: 52,
                         color: band,
                       ),
                       const SizedBox(height: TpSpace.xs),
@@ -1093,7 +1107,7 @@ class _ConditionTile extends StatelessWidget {
                     message: l10n.tyreEditorConditionSelected,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: band,
+                        color: tickFill,
                         shape: BoxShape.circle,
                         border: Border.all(color: palette.surface, width: 1.5),
                       ),

@@ -4,10 +4,12 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.dart';
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
 import 'package:tyre_pulse/features/inspections/presentation/widgets/tyre_position_editor_sheet.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_glyph.dart';
 
 import '../../../core/design_system/design_system_test_support.dart';
 
@@ -58,6 +60,125 @@ void main() {
     expect(find.text('Puncture'), findsOneWidget);
   });
 
+  test('display order puts problems first and keeps stored values', () {
+    expect(kTyreConditionDisplayOrder, <TyreCondition>[
+      TyreCondition.damaged,
+      TyreCondition.worn,
+      TyreCondition.puncture,
+      TyreCondition.flat,
+      TyreCondition.missing,
+      TyreCondition.good,
+    ]);
+    // Every condition appears exactly once.
+    expect(kTyreConditionDisplayOrder.toSet(), TyreCondition.values.toSet());
+    // The stored vocabulary is unchanged and each tile stores the value
+    // that reads back as its own condition, whatever its place.
+    expect(TyreReadingCondition.all, <String>[
+      'Good',
+      'Worn',
+      'Damaged',
+      'Puncture',
+      'Flat',
+      'Missing',
+    ]);
+    for (final TyreCondition c in TyreCondition.values) {
+      expect(normaliseCondition(tyreReadingConditionValue(c)), c);
+    }
+  });
+
+  test('each condition has its own colour; critical ones no longer share red',
+      () {
+    final Set<Color> fills = <Color>{
+      for (final TyreCondition c in TyreCondition.values)
+        tyreConditionSelectedFill(c),
+    };
+    expect(fills, hasLength(TyreCondition.values.length));
+    expect(
+      tyreConditionSelectedFill(TyreCondition.puncture),
+      isNot(tyreConditionSelectedFill(TyreCondition.damaged)),
+    );
+    expect(
+      tyreConditionSelectedFill(TyreCondition.flat),
+      isNot(tyreConditionSelectedFill(TyreCondition.damaged)),
+    );
+    // Severity is unchanged: all three still sit in the critical band.
+    for (final TyreCondition c in <TyreCondition>[
+      TyreCondition.damaged,
+      TyreCondition.puncture,
+      TyreCondition.flat,
+    ]) {
+      expect(tyreConditionStatus(c), TpStatus.critical);
+    }
+  });
+
+  testWidgets('tiles are laid out problems first, Good last', (
+    WidgetTester tester,
+  ) async {
+    await _pumpEditor(tester, onChanged: (_) {});
+
+    // Reading order: top to bottom, then start to end.
+    final List<Offset> at = <Offset>[
+      for (final String label in _kShownOrder)
+        tester.getTopLeft(find.text(label)),
+    ];
+    for (int i = 1; i < at.length; i++) {
+      final Offset prev = at[i - 1];
+      final Offset cur = at[i];
+      final bool later = cur.dy > prev.dy + 1 ||
+          ((cur.dy - prev.dy).abs() <= 1 && cur.dx > prev.dx);
+      expect(
+        later,
+        isTrue,
+        reason: '${_kShownOrder[i]} after ${_kShownOrder[i - 1]}',
+      );
+    }
+  });
+
+  testWidgets('selected tile uses the condition colour for outline and tick', (
+    WidgetTester tester,
+  ) async {
+    await pumpTp(
+      tester,
+      TyrePositionEditorSheet(
+        reading: TyrePositionReading.seed('RHR1-I').copyWith(
+          condition: TyreReadingCondition.flat,
+          checked: true,
+        ),
+        onChanged: (_) {},
+        onCapturePhoto: (PhotoCaptureSource _) {},
+      ),
+    );
+
+    final Material tile = tester.widget<Material>(
+      find
+          .ancestor(
+            of: find.byKey(const ValueKey<String>('tyre-condition-Flat')),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    final RoundedRectangleBorder shape = tile.shape! as RoundedRectangleBorder;
+    expect(
+      shape.side.color,
+      tyreConditionAccent(TyreCondition.flat, Brightness.light),
+    );
+    final Iterable<DecoratedBox> ticks = tester.widgetList<DecoratedBox>(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('tyre-condition-Flat')),
+        matching: find.byType(DecoratedBox),
+      ),
+    );
+    expect(
+      ticks.any(
+        (DecoratedBox d) =>
+            d.decoration is BoxDecoration &&
+            (d.decoration as BoxDecoration).color ==
+                tyreConditionSelectedFill(TyreCondition.flat),
+      ),
+      isTrue,
+    );
+  });
+
   testWidgets('tapping Flat emits a Flat reading for the selected position', (
     WidgetTester tester,
   ) async {
@@ -87,6 +208,16 @@ void main() {
     },
   );
 }
+
+// The order on screen: problems first, Good last (owner, 2026-11-27).
+const List<String> _kShownOrder = <String>[
+  'Damaged',
+  'Worn',
+  'Puncture',
+  'Flat',
+  'Missing',
+  'Good',
+];
 
 Future<void> _pumpEditor(
   WidgetTester tester, {

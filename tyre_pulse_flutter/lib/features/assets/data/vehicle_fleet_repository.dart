@@ -47,6 +47,7 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/core/workspace/company_scope.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_axle_store.dart';
 import 'package:tyre_pulse/features/assets/domain/asset_classes.dart';
@@ -224,9 +225,15 @@ Map<String, dynamic>? firstRowForCompany(
 final class SupabaseVehicleFleetSource
     with SupabaseGateway
     implements VehicleFleetSource {
-  SupabaseVehicleFleetSource(this._client);
+  SupabaseVehicleFleetSource(this._client, {String? companyId})
+      : _companyId = companyId;
 
   final SupabaseClient _client;
+
+  /// The caller's active company. The register list is pinned to it so a
+  /// super admin (whose RLS spans every company) sees their own fleet, not a
+  /// mix with a demo company's machines. See `company_scope.dart`.
+  final String? _companyId;
 
   @override
   Future<List<Map<String, dynamic>>> fetchPage({
@@ -235,8 +242,10 @@ final class SupabaseVehicleFleetSource
     required String? country,
   }) {
     return guard(() async {
-      final query =
-          _client.from(SupabaseTables.vehicleFleet).select(vehicleFleetColumns);
+      final query = pinCompany(
+        _client.from(SupabaseTables.vehicleFleet).select(vehicleFleetColumns),
+        _companyId,
+      );
 
       // The country filter is null-safe by construction: a row whose
       // `country` is null belongs to no single country and must be visible
@@ -284,6 +293,16 @@ final class SupabaseVehicleFleetSource
 // ---------------------------------------------------------------------------
 // Pure filters
 // ---------------------------------------------------------------------------
+
+/// The `ops_status` value Home counts as "off road" (`countOffRoad`).
+const String kFleetOpsStatusOffRoad = 'breakdown';
+
+/// Whether [asset]'s `ops_status` is [opsStatus] - the exact equality the
+/// Home off-road count's `.eq('ops_status', 'breakdown')` applies, so the
+/// tile's number and the list it opens can never disagree. A null filter
+/// matches every asset.
+bool fleetOpsStatusMatches(VehicleAsset asset, String? opsStatus) =>
+    opsStatus == null || asset.opsStatus == opsStatus;
 
 /// The class-filter sentinel meaning "only classes that carry tyres".
 ///

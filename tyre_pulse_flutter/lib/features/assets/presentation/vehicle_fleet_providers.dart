@@ -36,7 +36,10 @@ import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 /// this already talks to the live [SupabaseVehicleFleetSource].
 final Provider<VehicleFleetSource> vehicleFleetSourceProvider =
     Provider<VehicleFleetSource>(
-  (ref) => SupabaseVehicleFleetSource(ref.watch(supabaseClientProvider)),
+  (ref) => SupabaseVehicleFleetSource(
+    ref.watch(supabaseClientProvider),
+    companyId: ref.watch(activeCompanyIdProvider),
+  ),
 );
 
 /// The shared fleet cache. [appDatabaseProvider] is supplied once by main.

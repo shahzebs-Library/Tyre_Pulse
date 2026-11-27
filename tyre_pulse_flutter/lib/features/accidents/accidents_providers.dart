@@ -6,12 +6,16 @@ import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_report_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_repository.dart';
 
 final accidentRemoteSourceProvider = Provider<AccidentRemoteSource>(
-  (ref) => SupabaseAccidentRemoteSource(ref.watch(supabaseClientProvider)),
+  (ref) => SupabaseAccidentRemoteSource(
+    ref.watch(supabaseClientProvider),
+    companyId: ref.watch(activeCompanyIdProvider),
+  ),
 );
 
 final accidentRepositoryProvider = Provider<AccidentRepository>(

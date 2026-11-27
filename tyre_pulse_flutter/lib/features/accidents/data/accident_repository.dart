@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/core/workspace/company_scope.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_dto.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 
@@ -28,8 +29,13 @@ abstract interface class AccidentRemoteSource {
 final class SupabaseAccidentRemoteSource
     with SupabaseGateway
     implements AccidentRemoteSource {
-  SupabaseAccidentRemoteSource(this._client);
+  SupabaseAccidentRemoteSource(this._client, {String? companyId})
+      : _companyId = companyId;
   final SupabaseClient _client;
+
+  /// The caller's active company. The register is pinned to it so a super
+  /// admin does not see another company's (e.g. a demo fleet's) cases.
+  final String? _companyId;
 
   @override
   Future<List<Map<String, dynamic>>> listPage({
@@ -39,7 +45,10 @@ final class SupabaseAccidentRemoteSource
     String? reporterId,
   }) =>
       guard(() async {
-        var query = _client.from(SupabaseTables.accidents).select();
+        var query = pinCompany(
+          _client.from(SupabaseTables.accidents).select(),
+          _companyId,
+        );
         if (reporterId != null && reporterId.trim().isNotEmpty) {
           query = query.eq('reported_by', reporterId);
         }

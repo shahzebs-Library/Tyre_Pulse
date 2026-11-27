@@ -49,6 +49,7 @@ library;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/core/workspace/company_scope.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_item.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_template_info.dart';
 import 'package:tyre_pulse/features/approvals/data/queued_checklist_approval_decision.dart';
@@ -165,9 +166,14 @@ abstract interface class ChecklistApprovalRepository {
 final class SupabaseChecklistApprovalRepository
     with SupabaseGateway
     implements ChecklistApprovalRepository {
-  SupabaseChecklistApprovalRepository(this._client);
+  SupabaseChecklistApprovalRepository(this._client, {String? companyId})
+      : _companyId = companyId;
 
   final SupabaseClient _client;
+
+  /// The caller's active company; queues are pinned to it so a super admin
+  /// does not sign another company's sheets (company_scope).
+  final String? _companyId;
 
   @override
   Future<List<ChecklistApprovalItem>> listPending({String? country}) async {
@@ -183,13 +189,15 @@ final class SupabaseChecklistApprovalRepository
       // ('pending','pending_area_manager')) AND (country condition)` -
       // both waiting states, matching `mobile/lib/checklists.ts`'s own
       // `.in('approval_status', ['pending', 'pending_area_manager'])`.
-      var query = _client
-          .from(SupabaseTables.checklistSubmissions)
-          .select(checklistApprovalListColumns)
-          .or(
-            'approval_status.eq.pending,'
-            'approval_status.eq.pending_area_manager',
-          );
+      var query = pinCompany(
+        _client
+            .from(SupabaseTables.checklistSubmissions)
+            .select(checklistApprovalListColumns),
+        _companyId,
+      ).or(
+        'approval_status.eq.pending,'
+        'approval_status.eq.pending_area_manager',
+      );
       final String? filter = checklistApprovalCountryFilter(country);
       if (filter != null) {
         query = query.or(filter);

@@ -23,14 +23,17 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_decision_queue.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_repository.dart';
 import 'package:tyre_pulse/features/approvals/data/checklist_approval_sync_engine.dart';
 
 final Provider<ChecklistApprovalRepository>
     checklistApprovalRepositoryProvider = Provider<ChecklistApprovalRepository>(
-  (ref) =>
-      SupabaseChecklistApprovalRepository(ref.watch(supabaseClientProvider)),
+  (ref) => SupabaseChecklistApprovalRepository(
+    ref.watch(supabaseClientProvider),
+    companyId: ref.watch(activeCompanyIdProvider),
+  ),
 );
 
 final Provider<ChecklistApprovalDecisionQueue>

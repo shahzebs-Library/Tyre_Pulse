@@ -10,6 +10,7 @@ library;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/core/workspace/company_scope.dart';
 import 'package:tyre_pulse/features/home/data/home_repository.dart'
     show homeCountryFilter;
 import 'package:tyre_pulse/features/preventive_maintenance/domain/maintenance_work_order.dart'
@@ -144,6 +145,17 @@ String homeIsoDay(DateTime now) => '${now.year.toString().padLeft(4, '0')}-'
     '${now.month.toString().padLeft(2, '0')}-'
     '${now.day.toString().padLeft(2, '0')}';
 
+/// The accident columns `accidentRecordIsClosed` reads, in its order.
+const List<String> homeAccidentLifecycleColumns = <String>[
+  'status',
+  'case_status',
+  'closure_status',
+  'closure_level',
+];
+
+/// The closed tokens `accidentRecordIsClosed` recognises.
+const String homeAccidentClosedTokens = 'closed,legacy_closed,fully_closed';
+
 abstract interface class HomeRoleRepository {
   Future<HomeMeterToday?> myMeterToday({
     required String userId,
@@ -155,7 +167,7 @@ abstract interface class HomeRoleRepository {
   /// Fleet rows with `ops_status = 'breakdown'` (off road).
   Future<int> countOffRoad({String? country});
 
-  /// Accidents whose status is not a closed token.
+  /// Accidents none of whose lifecycle columns is a closed token.
   Future<int> countOpenAccidents({String? country});
 
   /// Active maintenance plans whose `next_due` is before today.
@@ -187,9 +199,14 @@ abstract interface class HomeRoleRepository {
 final class SupabaseHomeRoleRepository
     with SupabaseGateway
     implements HomeRoleRepository {
-  SupabaseHomeRoleRepository(this._client);
+  SupabaseHomeRoleRepository(this._client, {String? companyId})
+      : _companyId = companyId;
 
   final SupabaseClient _client;
+
+  /// The caller's active company; every count is pinned to it so a super
+  /// admin's Home matches the lists the tiles open (company_scope).
+  final String? _companyId;
 
   static final String _terminalWo = '(${kTerminalWorkOrderStatuses.join(',')})';
 
@@ -259,8 +276,10 @@ final class SupabaseHomeRoleRepository
     String? country,
   }) =>
       guard<int>(() async {
-        PostgrestFilterBuilder<int> query =
-            build(_client.from(table).count(CountOption.exact));
+        PostgrestFilterBuilder<int> query = pinCompany(
+          build(_client.from(table).count(CountOption.exact)),
+          _companyId,
+        );
         final String? filter = homeCountryFilter(country);
         if (filter != null) query = query.or(filter);
         return await query;
@@ -276,7 +295,20 @@ final class SupabaseHomeRoleRepository
   @override
   Future<int> countOpenAccidents({String? country}) => _count(
         SupabaseTables.accidents,
-        (q) => q.not('status', 'in', '(closed,legacy_closed,fully_closed)'),
+        (q) {
+          // The SAME rule the accident register's Open filter applies
+          // (`accidentRecordIsClosed`): a case is closed when ANY of its four
+          // lifecycle columns carries a closed token, so it is open only when
+          // none does. A NULL column is not closed (`not.in` alone would drop
+          // it), hence the `is.null` arm on each.
+          PostgrestFilterBuilder<int> out = q;
+          for (final String column in homeAccidentLifecycleColumns) {
+            out = out.or(
+              '$column.is.null,$column.not.in.($homeAccidentClosedTokens)',
+            );
+          }
+          return out;
+        },
         country: country,
       );
 
@@ -314,11 +346,14 @@ final class SupabaseHomeRoleRepository
     const int page = 1000;
     final List<Map<String, dynamic>> open =
         await guard<List<Map<String, dynamic>>>(() async {
-      var query = _client
-          .from(SupabaseTables.workOrders)
-          .select('id')
-          .isFilter('assigned_owner_id', null)
-          .not('status', 'in', _terminalWo);
+      var query = pinCompany(
+        _client
+            .from(SupabaseTables.workOrders)
+            .select('id')
+            .isFilter('assigned_owner_id', null)
+            .not('status', 'in', _terminalWo),
+        _companyId,
+      );
       final String? filter = homeCountryFilter(country);
       if (filter != null) query = query.or(filter);
       return await query.order('id').limit(page);

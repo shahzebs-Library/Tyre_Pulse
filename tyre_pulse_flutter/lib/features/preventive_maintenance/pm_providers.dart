@@ -14,7 +14,10 @@ final Provider<DateTime Function()> pmClockProvider =
     Provider<DateTime Function()>((Ref ref) => DateTime.now);
 
 final Provider<PmRepository> pmRepositoryProvider = Provider<PmRepository>(
-  (Ref ref) => SupabasePmRepository(ref.watch(supabaseClientProvider)),
+  (Ref ref) => SupabasePmRepository(
+    ref.watch(supabaseClientProvider),
+    companyId: ref.watch(activeCompanyIdProvider),
+  ),
 );
 
 final FutureProvider<List<PmPlan>> activePmPlansProvider =

@@ -55,6 +55,7 @@ library;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/core/workspace/company_scope.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_item.dart';
 
 /// The `.or(...)` filter that scopes the pending queue to [country], or
@@ -193,18 +194,25 @@ abstract interface class InspectionApprovalRepository {
 final class SupabaseInspectionApprovalRepository
     with SupabaseGateway
     implements InspectionApprovalRepository {
-  SupabaseInspectionApprovalRepository(this._client);
+  SupabaseInspectionApprovalRepository(this._client, {String? companyId})
+      : _companyId = companyId;
 
   final SupabaseClient _client;
+
+  /// The caller's active company; queues are pinned to it so a super admin
+  /// does not sign another company's sheets (company_scope).
+  final String? _companyId;
 
   @override
   Future<List<InspectionApprovalItem>> listPending({String? country}) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-      var query = _client
-          .from(SupabaseTables.inspections)
-          .select(inspectionApprovalListColumns)
-          .eq('approval_status', 'pending_approval');
+      var query = pinCompany(
+        _client
+            .from(SupabaseTables.inspections)
+            .select(inspectionApprovalListColumns),
+        _companyId,
+      ).eq('approval_status', 'pending_approval');
       final String? filter = inspectionApprovalCountryFilter(country);
       if (filter != null) {
         query = query.or(filter);
@@ -224,10 +232,12 @@ final class SupabaseInspectionApprovalRepository
   }) async {
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-      var query = _client
-          .from(SupabaseTables.inspections)
-          .select(inspectionApprovalListColumns)
-          .eq('approval_status', status);
+      var query = pinCompany(
+        _client
+            .from(SupabaseTables.inspections)
+            .select(inspectionApprovalListColumns),
+        _companyId,
+      ).eq('approval_status', status);
       final String? filter = inspectionApprovalCountryFilter(country);
       if (filter != null) {
         query = query.or(filter);

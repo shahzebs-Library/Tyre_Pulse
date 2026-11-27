@@ -145,7 +145,7 @@ export default function ProtectedRoute({ children }) {
   return children
 }
 
-export function RoleRoute({ allowed, moduleKey, children }) {
+export function RoleRoute({ allowed, moduleKey, strict = false, children }) {
   const { profile, isSuperAdmin, hasPermission, grantedModules, loading } = useAuth()
   const location = useLocation()
   if (loading) return <RouteLoading />
@@ -153,6 +153,13 @@ export function RoleRoute({ allowed, moduleKey, children }) {
   // Super admins are never locked out of a role-gated route (break-glass).
   if (isSuperAdmin) return children
   if (!profile) return <AccessDenied role={undefined} allowed={allowed} />
+
+  // strict: the allow list is the whole rule. No module-matrix or per-user
+  // grant fallback, no Data Monitor routing (Devices & Integrations is
+  // Admin / super admin only, owner rule 2026-11-27).
+  if (strict) {
+    return allowed.includes(profile.role) ? children : <AccessDenied role={profile.role} allowed={allowed} />
+  }
 
   if (profile.role === 'Data Monitor Officer') {
     const key = moduleKey || governingModuleKey(location.pathname)

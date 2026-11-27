@@ -1,0 +1,13 @@
+Subject: Tyre Pulse test email
+
+Email delivery works
+
+This is a test from your Tyre Pulse email settings. No action is needed.
+
+Open Tyre Pulse: https://tyrepulse.app/
+
+You can turn the daily summary off in your notification settings.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

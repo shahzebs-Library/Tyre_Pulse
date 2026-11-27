@@ -1,0 +1,20 @@
+Subject: Overdue: accident ACC-2026-0148 needs action
+
+Accident ACC-2026-0148 is overdue
+
+Vehicle TM514 has been off the road longer than allowed.
+
+Reference: ACC-2026-0148
+Vehicle: TM514
+Site: NHC
+Severity: Major
+Stage: Repair in progress
+Next action: Workshop manager to confirm release date
+
+Open the accident: https://tyrepulse.app/accidents/sample
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
+import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
@@ -85,12 +86,24 @@ class _AccidentDashboardScreenState
     }
     try {
       final workspace = ref.read(workspaceContextProvider);
+      // C2: "Mine" also covers cases where a step is assigned to me. A failed
+      // task read falls back to "reported by me" rather than failing the list.
+      Set<String> assigned = const <String>{};
+      if (_mine) {
+        try {
+          assigned =
+              (await ref.read(accidentMyTasksProvider.future)).accidentIds;
+        } on Object {
+          assigned = const <String>{};
+        }
+      }
       final AccidentListPage page =
           await ref.read(accidentRepositoryProvider).list(
                 offset: reset ? 0 : _items.length,
                 pageSize: _pageSize,
                 country: workspace?.activeCountry,
                 reporterId: _mine ? workspace?.userId : null,
+                assignedAccidentIds: assigned,
               );
       if (!mounted) return;
       setState(() {
@@ -206,7 +219,7 @@ class _AccidentDashboardScreenState
               ),
               QueueFilterChip(
                 key: AccidentDashboardScreenKeys.reportedByMe,
-                label: copy('reportedByMe'),
+                label: AppLocalizations.of(context).accidentRegisterMine,
                 selected: _mine,
                 onSelected: () {
                   setState(() => _mine = true);

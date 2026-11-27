@@ -931,3 +931,27 @@ export function deriveCaseStatus(record, wsRows, route) {
   if (!closureReviewApproved(rec)) return 'closure_review'
   return 'closed'
 }
+
+/**
+ * Case status a workflow stage implies. Mirrors the SQL
+ * accident_case_status_for_stage() (supabase/migrations/20261127190200): change both
+ * together. A closed stage maps to 'closure_review', never 'closed' - 'closed' needs
+ * an approved closure review.
+ */
+const CASE_STATUS_FOR_STAGE = Object.freeze({
+  reported: 'submitted',
+  initial_review: 'under_fleet_validation',
+  hse_investigation: 'liability_assessment',
+  insurance_claim: 'insurance_review',
+  workshop_assessment: 'technical_assessment',
+  repair_approval: 'repair_decision_pending',
+  repair_in_progress: 'repair_in_progress',
+  final_inspection: 'fleet_inspection',
+  vehicle_release: 'operationally_completed',
+  cost_recovery: 'financial_closure_pending',
+  closed: 'closure_review',
+  cancelled: 'cancelled_duplicate',
+})
+export function caseStatusForStage(stage) {
+  return CASE_STATUS_FOR_STAGE[stage] ?? null
+}

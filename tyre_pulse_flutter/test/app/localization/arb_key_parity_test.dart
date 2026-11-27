@@ -700,10 +700,12 @@ void main() {
     // active" reply (accessBlockedCheckAgain / StillWaiting).
     // 2781 + 1 = 2782: homeRoleCopyCatalog, the per-role Home tiles and rows
     // (one catalog key, like the other *CopyCatalog keys).
-    test('en, ar and ur each carry exactly 2782 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2782);
-      expect(_translatableKeys(ar).length, 2782);
-      expect(_translatableKeys(ur).length, 2782);
+    // 2782 + 17 = 2799: My accident tasks (screen, Home row, register "Mine").
+    // 2799 + 1 = 2800: accidentTasksRoleNames, role names on task rows.
+    test('en, ar and ur each carry exactly 2800 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2800);
+      expect(_translatableKeys(ar).length, 2800);
+      expect(_translatableKeys(ur).length, 2800);
     });
   });
 

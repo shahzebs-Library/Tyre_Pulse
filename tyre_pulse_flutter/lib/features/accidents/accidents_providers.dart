@@ -9,6 +9,7 @@ import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_photo_capture.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_report_repository.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_repository.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_tasks_repository.dart';
 
 final accidentRemoteSourceProvider = Provider<AccidentRemoteSource>(
   (ref) => SupabaseAccidentRemoteSource(ref.watch(supabaseClientProvider)),
@@ -46,4 +47,15 @@ final accidentEvidenceUrlProvider =
   // A denied or malformed reference needs an honest error state and an
   // explicit user retry, rather than Riverpod repeatedly re-signing it.
   retry: (int retryCount, Object error) => null,
+);
+
+final accidentTasksRepositoryProvider = Provider<AccidentTasksRepository>(
+  (ref) => SupabaseAccidentTasksRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// The signed-in person's open accident steps (named or through their role).
+/// Shared by the My accident tasks screen, the Home row and the register's
+/// "Mine" filter, so all three agree.
+final accidentMyTasksProvider = FutureProvider.autoDispose<AccidentTasksResult>(
+  (ref) => ref.watch(accidentTasksRepositoryProvider).myTasks(),
 );

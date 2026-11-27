@@ -9625,4 +9625,70 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get syncQueueInspectionRetried =>
       'Tried to send your inspections again. The status below is up to date.';
+
+  @override
+  String get accidentTasksTitle => 'My accident tasks';
+
+  @override
+  String get accidentTasksAssignedToMe => 'Assigned to me';
+
+  @override
+  String get accidentTasksForMyTeam => 'For my team';
+
+  @override
+  String get accidentTasksEmpty => 'Nothing waiting for you on accident cases.';
+
+  @override
+  String get accidentTasksNotOn =>
+      'Accident task tracking is not switched on yet.';
+
+  @override
+  String get accidentTasksLoading => 'Loading your tasks...';
+
+  @override
+  String get accidentTasksOverdue => 'Overdue';
+
+  @override
+  String get accidentTasksDueSoon => 'Due soon';
+
+  @override
+  String get accidentTasksOnTime => 'On time';
+
+  @override
+  String get accidentTasksNoTarget => 'No target';
+
+  @override
+  String accidentTasksCase(String ref) {
+    return 'Case $ref';
+  }
+
+  @override
+  String accidentTasksInStep(String days) {
+    return '$days in this step';
+  }
+
+  @override
+  String accidentTasksDays(String count) {
+    return '$count days';
+  }
+
+  @override
+  String get accidentTasksToday => 'today';
+
+  @override
+  String accidentTasksDue(String time) {
+    return 'Due $time';
+  }
+
+  @override
+  String accidentTasksSummary(String open, String overdue) {
+    return '$open open, $overdue overdue';
+  }
+
+  @override
+  String get accidentRegisterMine => 'Mine';
+
+  @override
+  String get accidentTasksRoleNames =>
+      'admin=Admin~manager=Manager~director=Director~inspector=Inspector~tyre_man=Tyre Technician~reporter=Reporter~driver=Driver~mechanic=Mechanic~electrician=Electrician~maintenance_supervisor=Maintenance Supervisor~workshop_supervisor=Workshop Supervisor~tyre_data_collector=Tyre Data Collector~pmv_manager=PMV Manager~workshop_area_manager=Workshop Area Manager~workshop_maintenance_area_manager=Workshop Maintenance Area Manager~fleet_supervisor=Fleet Supervisor~fleet_incharge=Fleet Incharge~store_keeper=Store Keeper';
 }

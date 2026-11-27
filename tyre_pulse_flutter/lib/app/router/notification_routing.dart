@@ -39,6 +39,7 @@ class TpNotificationTarget {
     this.entityType,
     this.entityId,
     this.link,
+    this.workstreamKey,
   });
 
   /// `notifications.type`. Also the type of a local device notification.
@@ -55,6 +56,11 @@ class TpNotificationTarget {
   /// `/daily-ops/workshop`. Matched only against known web paths, never
   /// navigated to directly: a web path is not a phone route.
   final String? link;
+
+  /// The accident case step a push is about (`workstream_key` in the push
+  /// data). Present only on accident step notices; it sends the tap to the
+  /// case workstream screen instead of the accident summary.
+  final String? workstreamKey;
 
   /// The link, lowercased and trimmed. Empty when absent.
   String get linkKey => (link ?? '').toLowerCase().trim();
@@ -130,6 +136,12 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
         const VehiclesRoute(),
       _ => null,
     };
+  }
+
+  // 0c. The daily "you have N open accident tasks" digest: no single case,
+  //     so it opens the task list. Ahead of rule 6, which matches "accident".
+  if (entity == 'accident_tasks' || type == 'accident.task_digest') {
+    return const AccidentTasksRoute();
   }
 
   // 1. LOCAL device notifications, matched on the EXACT type and matched
@@ -217,9 +229,12 @@ TpRoute? notificationDestination(TpNotificationTarget target) {
   // 6. Accidents. A claim id is not an accident id, so a claim opens the
   //    register rather than a detail screen that would not find it.
   if (entity.contains('accident') || entity.contains('incident')) {
-    return id == null
-        ? const AccidentDashboardRoute()
-        : AccidentDetailRoute(accidentId: AccidentId(id));
+    if (id == null) return const AccidentDashboardRoute();
+    // A notice about one step of the case opens the case workstream screen.
+    final String step = (target.workstreamKey ?? '').trim();
+    return step.isEmpty
+        ? AccidentDetailRoute(accidentId: AccidentId(id))
+        : AccidentCaseRoute(accidentId: AccidentId(id));
   }
   if (entity.contains('claim')) return const AccidentDashboardRoute();
 

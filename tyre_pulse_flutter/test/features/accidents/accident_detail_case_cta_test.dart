@@ -63,6 +63,7 @@ final class _CaseRepository implements AccidentRepository {
     required int pageSize,
     String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   }) async =>
       const AccidentListPage(items: <AccidentRecord>[], hasMore: false);
 }

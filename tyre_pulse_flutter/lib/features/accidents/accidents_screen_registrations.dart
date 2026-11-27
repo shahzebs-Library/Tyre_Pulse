@@ -6,6 +6,7 @@ import 'package:tyre_pulse/app/router/screen_registry.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_case_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_dashboard_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_detail_screen.dart';
+import 'package:tyre_pulse/features/accidents/presentation/accident_my_tasks_screen.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_report_screen.dart';
 
 final Map<String, TpScreenBuilder> accidentsScreenRegistrations =
@@ -14,6 +15,7 @@ final Map<String, TpScreenBuilder> accidentsScreenRegistrations =
   TpRouteId.accidentReport: _report,
   TpRouteId.accidentDetail: _detail,
   TpRouteId.accidentCase: _case,
+  TpRouteId.accidentTasks: _tasks,
 };
 
 Widget _dashboard(BuildContext context, TpRoute route) =>
@@ -34,3 +36,8 @@ Widget _detail(BuildContext context, TpRoute route) =>
 Widget _case(BuildContext context, TpRoute route) => route is AccidentCaseRoute
     ? AccidentCaseScreen(route: route)
     : TpScreenNotAvailable(route: route);
+
+Widget _tasks(BuildContext context, TpRoute route) =>
+    route is AccidentTasksRoute
+        ? AccidentMyTasksScreen(route: route)
+        : TpScreenNotAvailable(route: route);

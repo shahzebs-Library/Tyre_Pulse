@@ -224,6 +224,7 @@ abstract final class TpRouteId {
 
   static const String accidentDashboard = 'accidentDashboard';
   static const String accidentReport = 'accidentReport';
+  static const String accidentTasks = 'accidentTasks';
   static const String accidentDetail = 'accidentDetail';
   static const String accidentCase = 'accidentCase';
 
@@ -311,6 +312,7 @@ abstract final class TpRoutePaths {
 
   static const String accidentDashboard = '/accidents';
   static const String accidentReport = '/accidents/report';
+  static const String accidentTasks = '/accidents/tasks';
 
   static const String meterLog = '/meter';
   static const String washing = '/washing';
@@ -1054,7 +1056,8 @@ final class NewInspectionRoute extends TpRoute {
   String get routeId => TpRouteId.newInspection;
 
   @override
-  String get location => _location(TpRoutePaths.newInspection, <String, String?>{
+  String get location =>
+      _location(TpRoutePaths.newInspection, <String, String?>{
         TpRoutePaths.qSiteName: siteName?.value,
         TpRoutePaths.qAssetNo: assetNo?.value,
         TpRoutePaths.qTyreSerial: tyreSerial?.value,
@@ -1151,6 +1154,17 @@ final class AccidentReportRoute extends TpRoute {
 
   @override
   String get location => TpRoutePaths.accidentReport;
+}
+
+/// My accident tasks: the open case steps owned by me or by my role.
+final class AccidentTasksRoute extends TpRoute {
+  const AccidentTasksRoute();
+
+  @override
+  String get routeId => TpRouteId.accidentTasks;
+
+  @override
+  String get location => TpRoutePaths.accidentTasks;
 }
 
 /// One accident.

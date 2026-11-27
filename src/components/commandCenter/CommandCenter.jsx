@@ -14,6 +14,7 @@ import {
 import * as cc from '../../lib/api/commandCenter'
 import { WORLD_LAND_PATH, WORLD_W, WORLD_H, project } from './worldLand'
 import { useCard, Card, ViewAll, CardState, Tabs, Kpi, fmtInt, fmtPct } from './kit'
+import CaseTeamInbox from '../accidents/CaseTeamInbox'
 
 /**
  * Translation helpers for this page. The engine in lib/commandCenter keeps its
@@ -548,6 +549,11 @@ export default function CommandCenter() {
         <UtilizationCard util={util} />
         <SpendCard spend={spend} />
         <ApprovalsCard pending={pending} decided={decided} />
+      </div>
+      {/* Accident steps owned by me or my role (accident_my_tasks); shows its own
+          empty / not-switched-on state, so it never adds noise. */}
+      <div className="cc-accident-tasks" style={{ marginTop: 16 }}>
+        <CaseTeamInbox compact />
       </div>
     </div>
   )

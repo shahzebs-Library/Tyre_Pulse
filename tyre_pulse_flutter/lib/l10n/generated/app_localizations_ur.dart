@@ -9964,4 +9964,42 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get labelUnicodeNote =>
       'اس لیبل پر عربی یا اردو متن صرف سسٹم پرنٹر یا PDF کے ذریعے درست پرنٹ ہوتا ہے۔';
+
+  @override
+  String syncQueuePhotoFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تصاویر اپ لوڈ نہیں ہو سکیں',
+      one: 'ایک تصویر اپ لوڈ نہیں ہو سکی',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncQueuePhotoRetry => 'تصویر دوبارہ بھیجیں';
+
+  @override
+  String get syncQueuePhotoRetried =>
+      'اگلی مطابقت پر تصویر دوبارہ بھیجی جائے گی۔';
+
+  @override
+  String get syncQueuePhotoRemove => 'اس تصویر کے بغیر بھیجیں';
+
+  @override
+  String get syncQueuePhotoRemoveTitle => 'اس تصویر کے بغیر بھیجیں؟';
+
+  @override
+  String get syncQueuePhotoRemoveMessage =>
+      'یہ تصویر ریکارڈ کا ثبوت ہے۔ اسے ہٹانے پر ریکارڈ اس کے بغیر بھیجا جائے گا اور تصویر قطار سے واپس نہیں آ سکے گی۔ ہو سکے تو ریکارڈ سے دوبارہ تصویر لیں۔';
+
+  @override
+  String get syncQueuePhotoRemoveConfirm => 'تصویر ہٹائیں';
+
+  @override
+  String get syncQueuePhotoRemoved =>
+      'تصویر ہٹا دی گئی۔ ریکارڈ اس کے بغیر بھیجا جائے گا۔';
+
+  @override
+  String get syncQueuePhotoActionFailed => 'یہ کام نہیں ہوا۔ دوبارہ کوشش کریں۔';
 }

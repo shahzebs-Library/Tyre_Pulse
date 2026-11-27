@@ -116,7 +116,11 @@ void callbackDispatcher() {
     Map<String, dynamic>? inputData,
   ) async {
     try {
-      return await _runBackgroundSync();
+      // A one-off run is the connection coming back or "Sync now": the
+      // moment to give server-refused photos one more bounded try.
+      return await _runBackgroundSync(
+        requeueFailedPhotos: taskName == backgroundSyncOneOffTaskName,
+      );
     } on Object {
       // A failure here means the run could not even complete - a local
       // database error, a Supabase client that could not start. Individual
@@ -141,7 +145,7 @@ void callbackDispatcher() {
 /// backoff schedule, which is a QUEUE concern, not a Workmanager-retry
 /// concern. Only a failure to even START a pass reaches [callbackDispatcher]'s
 /// catch block and returns false.
-Future<bool> _runBackgroundSync() async {
+Future<bool> _runBackgroundSync({bool requeueFailedPhotos = false}) async {
   final AppConfigResult configResult = AppConfig.resolve();
   if (configResult is! AppConfigValid) {
     // Nothing this headless isolate can do about a misconfigured build - the
@@ -243,6 +247,7 @@ Future<bool> _runBackgroundSync() async {
     await engine.runOnce(
       workspaceId: workspace.workspaceId,
       now: DateTime.now().toUtc(),
+      requeueFailedPhotos: requeueFailedPhotos,
     );
 
     // Physical inventory captures and photos live in their own encrypted

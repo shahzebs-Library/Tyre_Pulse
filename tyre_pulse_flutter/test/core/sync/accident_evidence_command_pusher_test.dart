@@ -229,11 +229,16 @@ void main() {
 
     expect(delegate.calls, isEmpty);
     expect(summary.synced, 0);
-    expect(summary.failed, 1);
+    // Waiting on its photo is not a failed attempt: the report goes back
+    // to pending without spending a retry, so it can never dead-letter
+    // while offline.
+    expect(summary.failed, 0);
+    expect(summary.mediaPending, 1);
     final PendingCommand? command =
         await db.queueDao.commandById('accident-command');
     expect(command, isNotNull);
-    expect(command!.status, CommandStatus.retry);
+    expect(command!.status, CommandStatus.pending);
+    expect(command.retryCount, 0);
     final PendingMediaUpload media =
         (await db.mediaDao.mediaForCommand('accident-command')).single;
     // Offline never spends the attempt budget: still queued, backed off.

@@ -210,6 +210,12 @@ final class AccidentEvidenceCommandPusher implements CommandPusher {
   }
 
   String _validateUploaded(PendingMediaUpload media) {
+    if (media.state == MediaUploadState.queued ||
+        media.state == MediaUploadState.uploading) {
+      // Still on its way (possibly backing off a transient failure): wait
+      // without spending one of the report's retries.
+      throw photoWaitFailure();
+    }
     if (media.state != MediaUploadState.uploaded &&
         media.state != MediaUploadState.verified) {
       throw _evidenceFailure(

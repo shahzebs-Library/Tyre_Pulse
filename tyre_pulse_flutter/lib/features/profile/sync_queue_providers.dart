@@ -308,3 +308,42 @@ final Provider<Future<void> Function()> syncQueueInspectionFlushProvider =
     return next;
   };
 });
+
+/// Photos that could not upload, by queued record, for the active
+/// workspace. A record waiting on one of these cannot sync until the photo
+/// uploads or the person chooses to send it without the photo.
+final StreamProvider<Map<String, List<PendingMediaUpload>>>
+    syncQueueFailedPhotosProvider =
+    StreamProvider<Map<String, List<PendingMediaUpload>>>((Ref ref) {
+  final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
+  if (workspace == null) {
+    return Stream<Map<String, List<PendingMediaUpload>>>.value(
+      const <String, List<PendingMediaUpload>>{},
+    );
+  }
+  final AppDatabase db = ref.watch(appDatabaseProvider);
+  return db.mediaDao.watchFailedMediaByCommand(
+    workspaceId: workspaceIdFor(workspace),
+  );
+});
+
+/// A person's Retry on a record's failed photos: one more try now,
+/// ignoring the backoff. Returns how many photos were put back.
+final Provider<Future<int> Function(String commandId)>
+    syncQueuePhotoRetryProvider =
+    Provider<Future<int> Function(String commandId)>((Ref ref) {
+  final AppDatabase db = ref.watch(appDatabaseProvider);
+  return (String commandId) => db.mediaDao.requeueFailedMedia(
+        commandId: commandId,
+        force: true,
+        now: DateTime.now().toUtc(),
+      );
+});
+
+/// A person's confirmed choice to send a record without one failed photo.
+final Provider<Future<bool> Function(String mediaId)>
+    syncQueuePhotoRemoveProvider =
+    Provider<Future<bool> Function(String mediaId)>((Ref ref) {
+  final AppDatabase db = ref.watch(appDatabaseProvider);
+  return db.mediaDao.removeFailedPhoto;
+});

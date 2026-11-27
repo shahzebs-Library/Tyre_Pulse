@@ -705,10 +705,12 @@ void main() {
     // 2800 + 72 = 2872: field hardware (devices*, gauge*, hidScannerReady,
     // label*) - Settings > Devices, "Read from gauge", the handheld scanner
     // line and "Print label".
-    test('en, ar and ur each carry exactly 2872 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2872);
-      expect(_translatableKeys(ar).length, 2872);
-      expect(_translatableKeys(ur).length, 2872);
+    // 2872 + 9 = 2881: the sync queue's "photo could not upload" line and
+    // its Retry / send-without-this-photo actions.
+    test('en, ar and ur each carry exactly 2881 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2881);
+      expect(_translatableKeys(ar).length, 2881);
+      expect(_translatableKeys(ur).length, 2881);
     });
   });
 

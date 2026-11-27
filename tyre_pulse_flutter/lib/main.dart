@@ -12,6 +12,7 @@ import 'package:tyre_pulse/app/router/app_router.dart';
 import 'package:tyre_pulse/app/router/module_access_resolver_impl.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
 import 'package:tyre_pulse/app/router/screen_registry.dart';
+import 'package:tyre_pulse/app/sync/photo_retry_binding.dart';
 import 'package:tyre_pulse/app/telemetry/telemetry_user_binding.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings_prefs_store.dart';
@@ -440,7 +441,9 @@ class TyrePulseApp extends ConsumerWidget {
             child: WorkforceSyncBinding(
               child: PhysicalOutboxSyncBinding(
                 child: FleetVerificationSyncBinding(
-                  child: child ?? const SizedBox.shrink(),
+                  child: PhotoRetryBinding(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),

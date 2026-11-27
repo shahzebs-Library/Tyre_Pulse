@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
+import 'package:tyre_pulse/core/database/app_database.dart';
+import 'package:tyre_pulse/core/database/database_constants.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/features/profile/presentation/sync_queue_screen.dart';
 import 'package:tyre_pulse/features/profile/sync_queue_providers.dart';
@@ -49,6 +51,8 @@ final class _Harness {
   int syncRequests = 0;
   int inspectionFlushes = 0;
   final List<String> retried = <String>[];
+  final List<String> photoRetried = <String>[];
+  final List<String> photoRemoved = <String>[];
   bool syncFails = false;
 }
 
@@ -59,6 +63,8 @@ Future<_Harness> _pump(
   SyncRunState run = const SyncRunState(),
   bool online = true,
   bool settle = true,
+  Map<String, List<PendingMediaUpload>> failedPhotos =
+      const <String, List<PendingMediaUpload>>{},
 }) async {
   final _Harness harness = _Harness();
   tester.view.physicalSize = const Size(900, 2400);
@@ -87,6 +93,18 @@ Future<_Harness> _pump(
           harness.retried.add(id);
           return true;
         }),
+        syncQueueFailedPhotosProvider.overrideWith(
+          (Ref ref) =>
+              Stream<Map<String, List<PendingMediaUpload>>>.value(failedPhotos),
+        ),
+        syncQueuePhotoRetryProvider.overrideWithValue((String id) async {
+          harness.photoRetried.add(id);
+          return 1;
+        }),
+        syncQueuePhotoRemoveProvider.overrideWithValue((String id) async {
+          harness.photoRemoved.add(id);
+          return true;
+        }),
       ],
       child: MaterialApp(
         theme: TpTheme.light,
@@ -105,7 +123,56 @@ Future<_Harness> _pump(
   return harness;
 }
 
+PendingMediaUpload _failedPhoto(String id, String commandId) =>
+    PendingMediaUpload(
+      id: id,
+      commandId: commandId,
+      orderIndex: 0,
+      localPath: '/q/$id.jpg',
+      fileName: '$id.jpg',
+      state: MediaUploadState.failed,
+      attempts: maxUploadAttempts,
+      lastError: 'You do not have permission to use that file.',
+      capturedAt: DateTime.utc(2026, 11, 20, 8),
+    );
+
 void main() {
+  testWidgets(
+      'a photo that could not upload offers Retry and a confirmed '
+      'send-without', (tester) async {
+    final _Harness h = await _pump(
+      tester,
+      items: <SyncQueueEntry>[_entry('tc', type: CommandType.tyreChange)],
+      failedPhotos: <String, List<PendingMediaUpload>>{
+        'tc': <PendingMediaUpload>[_failedPhoto('m1', 'tc')],
+      },
+    );
+    expect(find.byKey(SyncQueueScreenKeys.photoFailed('tc')), findsOneWidget);
+    expect(find.text('A photo could not upload'), findsOneWidget);
+    expect(
+      find.text('You do not have permission to use that file.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(SyncQueueScreenKeys.photoRetry('tc')));
+    await tester.pumpAndSettle();
+    expect(h.photoRetried, <String>['tc']);
+
+    // Removing asks first; cancelling removes nothing.
+    await tester.tap(find.byKey(SyncQueueScreenKeys.photoRemove('m1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Send without this photo?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(h.photoRemoved, isEmpty);
+
+    await tester.tap(find.byKey(SyncQueueScreenKeys.photoRemove('m1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove photo'));
+    await tester.pumpAndSettle();
+    expect(h.photoRemoved, <String>['m1']);
+  });
+
   testWidgets('an empty queue says everything is synced', (tester) async {
     await _pump(tester);
     expect(find.byKey(SyncQueueScreenKeys.empty), findsOneWidget);

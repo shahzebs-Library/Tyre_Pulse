@@ -3915,5 +3915,14 @@
   "labelChoosePrinter": "لیبل اس پر پرنٹ کریں",
   "labelPrintPdf": "سسٹم پرنٹر یا PDF",
   "labelPrinted": "لیبل {printer} کو بھیج دیا گیا۔",
-  "labelUnicodeNote": "اس لیبل پر عربی یا اردو متن صرف سسٹم پرنٹر یا PDF کے ذریعے درست پرنٹ ہوتا ہے۔"
+  "labelUnicodeNote": "اس لیبل پر عربی یا اردو متن صرف سسٹم پرنٹر یا PDF کے ذریعے درست پرنٹ ہوتا ہے۔",
+  "syncQueuePhotoFailed": "{count, plural, =1{ایک تصویر اپ لوڈ نہیں ہو سکی} other{{count} تصاویر اپ لوڈ نہیں ہو سکیں}}",
+  "syncQueuePhotoRetry": "تصویر دوبارہ بھیجیں",
+  "syncQueuePhotoRetried": "اگلی مطابقت پر تصویر دوبارہ بھیجی جائے گی۔",
+  "syncQueuePhotoRemove": "اس تصویر کے بغیر بھیجیں",
+  "syncQueuePhotoRemoveTitle": "اس تصویر کے بغیر بھیجیں؟",
+  "syncQueuePhotoRemoveMessage": "یہ تصویر ریکارڈ کا ثبوت ہے۔ اسے ہٹانے پر ریکارڈ اس کے بغیر بھیجا جائے گا اور تصویر قطار سے واپس نہیں آ سکے گی۔ ہو سکے تو ریکارڈ سے دوبارہ تصویر لیں۔",
+  "syncQueuePhotoRemoveConfirm": "تصویر ہٹائیں",
+  "syncQueuePhotoRemoved": "تصویر ہٹا دی گئی۔ ریکارڈ اس کے بغیر بھیجا جائے گا۔",
+  "syncQueuePhotoActionFailed": "یہ کام نہیں ہوا۔ دوبارہ کوشش کریں۔"
 }

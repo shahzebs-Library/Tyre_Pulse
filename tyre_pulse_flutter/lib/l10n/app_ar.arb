@@ -3915,5 +3915,14 @@
   "labelChoosePrinter": "طباعة الملصق على",
   "labelPrintPdf": "طابعة النظام أو PDF",
   "labelPrinted": "أُرسل الملصق إلى {printer}.",
-  "labelUnicodeNote": "النص العربي أو الأردي على هذا الملصق يُطبع بشكل صحيح فقط عبر طابعة النظام أو PDF."
+  "labelUnicodeNote": "النص العربي أو الأردي على هذا الملصق يُطبع بشكل صحيح فقط عبر طابعة النظام أو PDF.",
+  "syncQueuePhotoFailed": "{count, plural, =1{تعذّر رفع صورة} other{تعذّر رفع {count} صور}}",
+  "syncQueuePhotoRetry": "إعادة رفع الصورة",
+  "syncQueuePhotoRetried": "ستُعاد محاولة رفع الصورة في المزامنة التالية.",
+  "syncQueuePhotoRemove": "إرسال بدون هذه الصورة",
+  "syncQueuePhotoRemoveTitle": "الإرسال بدون هذه الصورة؟",
+  "syncQueuePhotoRemoveMessage": "هذه الصورة دليل على السجل. إذا أزلتها فسيُرسل السجل بدونها ولا يمكن استعادتها من القائمة. التقطها من جديد من السجل إن أمكن.",
+  "syncQueuePhotoRemoveConfirm": "إزالة الصورة",
+  "syncQueuePhotoRemoved": "أُزيلت الصورة. سيُرسل السجل بدونها.",
+  "syncQueuePhotoActionFailed": "لم ينجح ذلك. حاول مرة أخرى."
 }

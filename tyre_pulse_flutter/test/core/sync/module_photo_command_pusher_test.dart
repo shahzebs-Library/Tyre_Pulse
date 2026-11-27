@@ -435,22 +435,30 @@ void main() {
     );
   });
 
-  test('a transient failure that never clears stops at the cap', () async {
-    await _seed(
-      db,
-      type: CommandType.washRecord,
-      photo: _washPhoto,
-      key: 'wash_cap',
-      routed: true,
-    );
-    final _InsertPusher insert = _InsertPusher();
-    final _Uploader uploader = _Uploader()
-      ..always = _http('503', SupabaseFailureCause.serverError);
-    await runs(db, insert, uploader, kModulePhotoWaitCap);
-    expect(insert.payloads, isEmpty);
-    await runs(db, insert, uploader, 2, from: kModulePhotoWaitCap);
-    expect(insert.payloads.single['photos'], isNull);
-    expect(await db.queueDao.commandByIdempotencyKey('wash_cap'), isNull);
+  test('a 5xx or 429 that never clears never drops the photo', () async {
+    for (final (String key, SupabaseFailure failure) in <(
+      String,
+      SupabaseFailure,
+    )>[
+      ('wash_5xx_forever', _http('503', SupabaseFailureCause.serverError)),
+      ('wash_429_forever', _http('429', SupabaseFailureCause.rateLimited)),
+    ]) {
+      final String id = await _seed(
+        db,
+        type: CommandType.washRecord,
+        photo: '/data/user/0/app/files/wash_photos/$key.jpg',
+        key: key,
+        routed: true,
+      );
+      final _InsertPusher insert = _InsertPusher();
+      final _Uploader uploader = _Uploader()..always = failure;
+      await runs(db, insert, uploader, 12);
+      expect(insert.payloads, isEmpty, reason: key);
+      final PendingCommand? row = await db.queueDao.commandById(id);
+      expect(row!.retryCount, 0, reason: 'a photo wait counts no retry');
+      final media = (await db.mediaDao.mediaForCommand(id)).single;
+      expect(media.state, MediaUploadState.queued, reason: key);
+    }
   });
 
   test('replay after the row landed still prunes the record', () async {

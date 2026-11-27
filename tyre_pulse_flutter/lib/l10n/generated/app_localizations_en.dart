@@ -9944,4 +9944,42 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get labelUnicodeNote =>
       'Arabic or Urdu text on this label prints correctly only through the system printer or PDF.';
+
+  @override
+  String syncQueuePhotoFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos could not upload',
+      one: 'A photo could not upload',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncQueuePhotoRetry => 'Retry photo';
+
+  @override
+  String get syncQueuePhotoRetried =>
+      'The photo will be tried again on the next sync.';
+
+  @override
+  String get syncQueuePhotoRemove => 'Send without this photo';
+
+  @override
+  String get syncQueuePhotoRemoveTitle => 'Send without this photo?';
+
+  @override
+  String get syncQueuePhotoRemoveMessage =>
+      'This photo is evidence for the record. If you remove it, the record is sent without it and the photo cannot be recovered from the queue. Retake it from the record if you can.';
+
+  @override
+  String get syncQueuePhotoRemoveConfirm => 'Remove photo';
+
+  @override
+  String get syncQueuePhotoRemoved =>
+      'Photo removed. The record will be sent without it.';
+
+  @override
+  String get syncQueuePhotoActionFailed => 'That did not work. Try again.';
 }

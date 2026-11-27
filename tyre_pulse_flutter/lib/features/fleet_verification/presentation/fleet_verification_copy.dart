@@ -30,6 +30,7 @@ final class FleetVerificationCopy {
   static const Map<String, Map<String, String>> values =
       <String, Map<String, String>>{
     'en': <String, String>{
+      'retry': 'Retry',
       'waitingFor': 'Waiting to send for this machine',
       'stateWaiting': 'Waiting to send (tries: {n})',
       'stateFailed': 'Not sent: {reason}',
@@ -89,6 +90,7 @@ final class FleetVerificationCopy {
       'r.chassis_changed': 'chassis differs from file',
     },
     'ar': <String, String>{
+      'retry': 'إعادة المحاولة',
       'waitingFor': 'بانتظار الإرسال لهذه المعدة',
       'stateWaiting': 'بانتظار الإرسال (المحاولات: {n})',
       'stateFailed': 'لم يرسل: {reason}',
@@ -145,6 +147,7 @@ final class FleetVerificationCopy {
       'r.chassis_changed': 'الشاصي يختلف عن السجل',
     },
     'ur': <String, String>{
+      'retry': 'دوبارہ کوشش',
       'waitingFor': 'اس مشین کے لیے بھیجنے کا انتظار',
       'stateWaiting': 'بھیجنے کا انتظار (کوششیں: {n})',
       'stateFailed': 'نہیں بھیجا گیا: {reason}',

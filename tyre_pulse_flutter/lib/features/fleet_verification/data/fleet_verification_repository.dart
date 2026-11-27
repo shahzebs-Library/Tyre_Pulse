@@ -458,9 +458,30 @@ final class FleetVerificationService {
         return o;
       }
       return _retry(item, o);
-    } on Object {
+    } on StorageException {
+      // The storage server answered (it refused or failed the upload).
       return _retry(item, SendOutcome.retryLater);
+    } on Object {
+      // Offline, DNS, timeout: the server never answered, so this is not an
+      // attempt and never counts toward giving up.
+      return SendOutcome.retryLater;
     }
+  }
+
+  /// Puts a failed check back in the queue and tries it once now.
+  Future<SendOutcome> retry(String id) async {
+    final QueuedVerification? item =
+        _outbox.read().where((QueuedVerification q) => q.id == id).firstOrNull;
+    if (item == null) return SendOutcome.sent;
+    final QueuedVerification fresh = QueuedVerification.fromJson(
+      <String, dynamic>{
+        ...item.toJson(),
+        'attempts': 0,
+        'failedMessage': null,
+      },
+    );
+    await _outbox.replace(fresh);
+    return sendOne(fresh);
   }
 
   Future<SendOutcome> _retry(QueuedVerification item, SendOutcome o) async {

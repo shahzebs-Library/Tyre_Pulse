@@ -83,14 +83,34 @@ void main() {
     expect(s.waiting().single.failedMessage, failedPhotoMissing);
   });
 
-  test('offline keeps it waiting, and gives up after the cap', () async {
+  test('offline never counts as an attempt', () async {
     final _Remote r = _Remote((_) async => throw const SocketException('off'));
     final FleetVerificationService s = await service(r);
     expect(await s.save(_item()), SendOutcome.retryLater);
+    for (int i = 0; i < maxVerificationAttempts + 5; i++) {
+      await s.flush();
+    }
+    expect(s.waiting().single.attempts, 0);
+    expect(s.waiting().single.failed, isFalse);
+  });
+
+  test('server errors count and give up after the cap; Retry resets', () async {
+    bool down = true;
+    final _Remote r = _Remote((_) async {
+      if (down) {
+        throw const PostgrestException(message: 'boom', code: '500');
+      }
+      return <String, dynamic>{};
+    });
+    final FleetVerificationService s = await service(r);
+    await s.save(_item());
     for (int i = 0; i < maxVerificationAttempts; i++) {
       await s.flush();
     }
     expect(s.waiting().single.failedMessage, failedRetryLimit);
+    down = false;
+    expect(await s.retry('id-1'), SendOutcome.sent);
+    expect(s.waiting(), isEmpty);
   });
 
   test('PT409 id already used is a permanent failure with the reason',

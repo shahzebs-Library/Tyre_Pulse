@@ -93,6 +93,13 @@ class _FleetVerificationScreenState
     await _loadWaiting();
   }
 
+  Future<void> _retry(String id) async {
+    final FleetVerificationService? service =
+        await ref.read(fleetVerificationServiceProvider.future);
+    await service?.retry(id);
+    await _loadWaiting();
+  }
+
   Future<void> _sendNow() async {
     final FleetVerificationService? service =
         await ref.read(fleetVerificationServiceProvider.future);
@@ -259,6 +266,7 @@ class _FleetVerificationScreenState
                 items: _waiting,
                 copy: copy,
                 onDiscard: _discard,
+                onRetry: _retry,
                 onSendNow: _sendNow,
               ),
               const SizedBox(height: TpSpace.lg),
@@ -456,12 +464,14 @@ class _WaitingList extends StatelessWidget {
     required this.items,
     required this.copy,
     required this.onDiscard,
+    required this.onRetry,
     required this.onSendNow,
   });
 
   final List<QueuedVerification> items;
   final FleetVerificationCopy copy;
   final Future<void> Function(String id) onDiscard;
+  final Future<void> Function(String id) onRetry;
   final Future<void> Function() onSendNow;
 
   String _reason(String raw) => raw.startsWith('@') ? copy(raw) : raw;
@@ -501,6 +511,11 @@ class _WaitingList extends StatelessWidget {
                             ),
                     ),
                   ),
+                  if (q.failed)
+                    TpButton.text(
+                      label: copy('retry'),
+                      onPressed: () => onRetry(q.id),
+                    ),
                   if (q.failed)
                     TpButton.text(
                       label: copy('discard'),

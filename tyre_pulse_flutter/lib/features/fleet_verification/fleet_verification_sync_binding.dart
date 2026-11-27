@@ -56,6 +56,11 @@ class _FleetVerificationSyncBindingState
     if (!mounted || _flushing) return;
     _flushing = true;
     try {
+      final List<ConnectivityResult> net =
+          await Connectivity().checkConnectivity();
+      if (net.every((ConnectivityResult r) => r == ConnectivityResult.none)) {
+        return; // Offline: nothing to try; reconnect triggers the next flush.
+      }
       final FleetVerificationService? service =
           await ref.read(fleetVerificationServiceProvider.future);
       if (service != null) await service.flush();

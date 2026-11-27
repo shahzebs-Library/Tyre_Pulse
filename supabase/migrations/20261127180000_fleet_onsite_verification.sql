@@ -36,6 +36,17 @@
 --   * Replay with another machine or another user -> PT409; a concurrent save
 --     of the same id is answered as a replay. Length caps; absurd GPS dropped.
 --   * plate_key folds Arabic-Indic digits.
+--   * Photo path must end .jpg/.jpeg/.png/.webp. An auto-applied check or an
+--     approval writes admin_row_changes even when only the stamp moved.
+--
+-- Apply-role check (2026-11-27, SELECT-equivalent, nothing persisted)
+--   storage.objects is owned by supabase_storage_admin with RLS on. Run as
+--   postgres (the migration role) inside a DO block that ended in RAISE:
+--     create policy fv_apply_probe on storage.objects as restrictive for update
+--       to authenticated using (...);  raise exception 'FV_PROBE_OK ...';
+--   Result: "FV_PROBE_OK: policy created by postgres, rolled back"; afterwards
+--   pg_policies has 0 rows named fv_apply_probe. So the two storage policies
+--   in section 5b can be created by the apply role.
 --
 -- Rules followed
 --   * Writes only through SECURITY DEFINER RPCs; the table has NO client
@@ -406,7 +417,7 @@ begin
       || upper(public._fv_path_segment(v_old.asset_no, 'NO-ASSET')) || '/verify/'
       || lower(p_client_uuid::text) || '.';
     if left(v_photo, length(v_expected_prefix)) <> v_expected_prefix
-       or v_photo !~ '^[A-Za-z0-9_/.-]+$' or v_photo like '%..%' then
+       or v_photo !~ '^[A-Za-z0-9_/.-]+\.(jpg|jpeg|png|webp)$' or v_photo like '%..%' then
       raise exception 'Photo path does not belong to this verification' using errcode = '22023';
     end if;
     select o.owner, o.metadata->>'eTag', o.updated_at
@@ -514,7 +525,9 @@ begin
     returning * into v_new;
   end if;
 
-  if cardinality(v_applied) > 0 then
+  -- Audit every change to the machine row, including an auto-applied check
+  -- that only moved the verification stamp.
+  if cardinality(v_applied) > 0 or v_status = 'auto_applied' then
     perform public._fleet_verification_audit(v_old.organisation_id, v_old.id, to_jsonb(v_old), to_jsonb(v_new));
   end if;
 
@@ -666,7 +679,7 @@ begin
     applied_fields = case when p_approve then applied_fields || v_applied else applied_fields end
   where id = v_ver.id;
 
-  if cardinality(v_applied) > 0 then
+  if cardinality(v_applied) > 0 or p_approve then
     perform public._fleet_verification_audit(v_old.organisation_id, v_old.id, to_jsonb(v_old), to_jsonb(v_new));
   end if;
 

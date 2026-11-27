@@ -105,6 +105,7 @@ final class _FakeSource implements AccidentRemoteSource {
     required int to,
     required String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   }) async {
     lastFrom = from;
     lastTo = to;

@@ -3825,5 +3825,22 @@
   "profileDraftDiscardMessage": "سيُحذف كل ما سُجِّل في هذه المسودة من هذا الهاتف، بما في ذلك الصور والتواقيع. لا يمكن التراجع عن ذلك.",
   "profileDraftDiscarded": "تم تجاهل المسودة.",
   "profileDraftDiscardFailed": "تعذّر تجاهل المسودة. حاول مرة أخرى.",
-  "syncQueueInspectionRetried": "تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة."
+  "syncQueueInspectionRetried": "تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة.",
+  "accidentTasksTitle": "مهام الحوادث الخاصة بي",
+  "accidentTasksAssignedToMe": "مسندة إليّ",
+  "accidentTasksForMyTeam": "لفريقي",
+  "accidentTasksEmpty": "لا يوجد ما ينتظرك في حالات الحوادث.",
+  "accidentTasksNotOn": "تتبع مهام الحوادث غير مفعّل بعد.",
+  "accidentTasksLoading": "جارٍ تحميل مهامك...",
+  "accidentTasksOverdue": "متأخرة",
+  "accidentTasksDueSoon": "مستحقة قريبًا",
+  "accidentTasksOnTime": "في الوقت",
+  "accidentTasksNoTarget": "بلا هدف زمني",
+  "accidentTasksCase": "الحالة {ref}",
+  "accidentTasksInStep": "{days} في هذه الخطوة",
+  "accidentTasksDays": "{count} يوم",
+  "accidentTasksToday": "اليوم",
+  "accidentTasksDue": "مستحقة {time}",
+  "accidentTasksSummary": "{open} مفتوحة، {overdue} متأخرة",
+  "accidentRegisterMine": "الخاصة بي"
 }

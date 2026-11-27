@@ -16793,6 +16793,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tried to send your inspections again. The status below is up to date.'**
   String get syncQueueInspectionRetried;
+
+  /// Title of the screen listing the open accident case steps owned by the signed-in person or their role.
+  ///
+  /// In en, this message translates to:
+  /// **'My accident tasks'**
+  String get accidentTasksTitle;
+
+  /// Section: steps assigned to the person by name.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned to me'**
+  String get accidentTasksAssignedToMe;
+
+  /// Section: steps owned by the person's role in their country and site.
+  ///
+  /// In en, this message translates to:
+  /// **'For my team'**
+  String get accidentTasksForMyTeam;
+
+  /// Empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing waiting for you on accident cases.'**
+  String get accidentTasksEmpty;
+
+  /// Shown when the server does not have the task list yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident task tracking is not switched on yet.'**
+  String get accidentTasksNotOn;
+
+  /// Loading state.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading your tasks...'**
+  String get accidentTasksLoading;
+
+  /// SLA badge: the target time has passed.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get accidentTasksOverdue;
+
+  /// SLA badge: past the warning point.
+  ///
+  /// In en, this message translates to:
+  /// **'Due soon'**
+  String get accidentTasksDueSoon;
+
+  /// SLA badge: running and on time.
+  ///
+  /// In en, this message translates to:
+  /// **'On time'**
+  String get accidentTasksOnTime;
+
+  /// SLA badge: the owner has not set a target time for this step.
+  ///
+  /// In en, this message translates to:
+  /// **'No target'**
+  String get accidentTasksNoTarget;
+
+  /// Row title with the case reference.
+  ///
+  /// In en, this message translates to:
+  /// **'Case {ref}'**
+  String accidentTasksCase(String ref);
+
+  /// How long the step has been open, e.g. '3.5 days in this step'.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} in this step'**
+  String accidentTasksInStep(String days);
+
+  /// A number of days, e.g. '3.5 days'.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days'**
+  String accidentTasksDays(String count);
+
+  /// Less than a day.
+  ///
+  /// In en, this message translates to:
+  /// **'today'**
+  String get accidentTasksToday;
+
+  /// Due date and time of the step.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {time}'**
+  String accidentTasksDue(String time);
+
+  /// Counts on the Home row and screen header.
+  ///
+  /// In en, this message translates to:
+  /// **'{open} open, {overdue} overdue'**
+  String accidentTasksSummary(String open, String overdue);
+
+  /// Register filter: cases I reported or that have a step assigned to me.
+  ///
+  /// In en, this message translates to:
+  /// **'Mine'**
+  String get accidentRegisterMine;
 }
 
 class _AppLocalizationsDelegate

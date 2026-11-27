@@ -216,6 +216,7 @@ abstract final class TpRouteGuards {
 
     // Accidents. Filing one is a separate module from reading the register.
     TpRouteId.accidentDashboard: ModuleGuarded(RouteModule.accidents),
+    TpRouteId.accidentTasks: ModuleGuarded(RouteModule.accidents),
     TpRouteId.accidentDetail: ModuleGuarded(RouteModule.accidents),
     TpRouteId.accidentCase: ModuleGuarded(RouteModule.accidents),
     TpRouteId.accidentReport: ModuleGuarded(RouteModule.reportAccident),

@@ -520,6 +520,11 @@ List<RouteBase> _buildRoutes() => <RouteBase>[
                     (TpRouteParameters _) => const AccidentReportRoute(),
                   ),
                   _route(
+                    'tasks',
+                    TpRouteId.accidentTasks,
+                    (TpRouteParameters _) => const AccidentTasksRoute(),
+                  ),
+                  _route(
                     ':${TpRoutePaths.pAccidentId}',
                     TpRouteId.accidentDetail,
                     AccidentDetailRoute.parse,

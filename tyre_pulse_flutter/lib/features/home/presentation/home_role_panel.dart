@@ -142,6 +142,29 @@ class _RoleHomePanel extends ConsumerWidget {
             onTap: () => context.go(const AccidentDashboardRoute().location),
           )
         : null;
+    // C1: my open accident steps. Shown only when there is something to do,
+    // so a person with no accident work never sees an empty row.
+    _RoleRowData? accidentTasks() {
+      if (!can(ModuleKey.accidents)) return null;
+      final AsyncValue<AccidentTasksResult> tasks =
+          ref.watch(accidentMyTasksProvider);
+      final AccidentTasksResult? value = tasks.asData?.value;
+      if (value == null || !value.available || value.tasks.isEmpty) return null;
+      return _RoleRowData(
+        id: 'accidentTasks',
+        title: l10n.accidentTasksTitle,
+        value: '${value.tasks.length}',
+        note: value.overdueCount > 0
+            ? l10n.accidentTasksSummary(
+                '${value.tasks.length}',
+                '${value.overdueCount}',
+              )
+            : null,
+        danger: value.overdueCount > 0,
+        onTap: () => context.push(const AccidentTasksRoute().location),
+      );
+    }
+
     _RoleRowData? maintenanceDue() => can(ModuleKey.pm)
         ? countRow<int>(
             id: 'maintenanceDue',
@@ -166,6 +189,7 @@ class _RoleHomePanel extends ConsumerWidget {
             : null;
     List<_RoleRowData> exceptionRows() => <_RoleRowData>[
           for (final _RoleRowData? r in <_RoleRowData?>[
+            accidentTasks(),
             offRoad(),
             openAccidents(),
             maintenanceDue(),

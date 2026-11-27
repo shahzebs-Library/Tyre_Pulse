@@ -97,6 +97,8 @@ import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_tasks_repository.dart';
 import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';

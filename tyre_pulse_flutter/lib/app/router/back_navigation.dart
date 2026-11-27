@@ -118,6 +118,7 @@ abstract final class TpBackFallbacks {
     // Accidents. `accidentCase` is computed - see [forRoute].
     TpRouteId.accidentDetail: TpRoutePaths.accidentDashboard,
     TpRouteId.accidentReport: TpRoutePaths.accidentDashboard,
+    TpRouteId.accidentTasks: TpRoutePaths.accidentDashboard,
 
     // Work orders. New surface: spec section 5 draws Back as
     // Work Order, Workshop, Home, and the list is this screen's real parent.

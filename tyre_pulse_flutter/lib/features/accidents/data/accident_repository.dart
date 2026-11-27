@@ -17,6 +17,7 @@ abstract interface class AccidentRemoteSource {
     required int to,
     required String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   });
   Future<Map<String, dynamic>?> byId(String id);
   Future<List<Map<String, dynamic>>> workstreams({
@@ -37,11 +38,19 @@ final class SupabaseAccidentRemoteSource
     required int to,
     required String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   }) =>
       guard(() async {
         var query = _client.from(SupabaseTables.accidents).select();
         if (reporterId != null && reporterId.trim().isNotEmpty) {
-          query = query.eq('reported_by', reporterId);
+          // "Mine" = reported by me OR a step of the case is assigned to me.
+          final List<String> ids = assignedAccidentIds
+              .where((String id) => RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(id))
+              .take(200)
+              .toList();
+          query = ids.isEmpty
+              ? query.eq('reported_by', reporterId)
+              : query.or('reported_by.eq.$reporterId,id.in.(${ids.join(',')})');
         }
         if (country != null && country.trim().isNotEmpty) {
           query = query.or('country.eq.$country,country.is.null');
@@ -84,6 +93,7 @@ abstract interface class AccidentRepository {
     required int pageSize,
     String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   });
   Future<AccidentRecord?> byId(String id);
   Future<AccidentCaseSnapshot?> caseById(String id, {String? country});
@@ -99,6 +109,7 @@ final class SupabaseAccidentRepository implements AccidentRepository {
     required int pageSize,
     String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   }) async {
     final int safeSize = pageSize.clamp(1, 100);
     final List<Map<String, dynamic>> rows = await _source.listPage(
@@ -106,6 +117,7 @@ final class SupabaseAccidentRepository implements AccidentRepository {
       to: offset + safeSize,
       country: country,
       reporterId: reporterId,
+      assignedAccidentIds: assignedAccidentIds,
     );
     final bool hasMore = rows.length > safeSize;
     final Iterable<Map<String, dynamic>> page =

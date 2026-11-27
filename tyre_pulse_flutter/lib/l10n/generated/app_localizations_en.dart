@@ -9625,4 +9625,66 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get syncQueueInspectionRetried =>
       'Tried to send your inspections again. The status below is up to date.';
+
+  @override
+  String get accidentTasksTitle => 'My accident tasks';
+
+  @override
+  String get accidentTasksAssignedToMe => 'Assigned to me';
+
+  @override
+  String get accidentTasksForMyTeam => 'For my team';
+
+  @override
+  String get accidentTasksEmpty => 'Nothing waiting for you on accident cases.';
+
+  @override
+  String get accidentTasksNotOn =>
+      'Accident task tracking is not switched on yet.';
+
+  @override
+  String get accidentTasksLoading => 'Loading your tasks...';
+
+  @override
+  String get accidentTasksOverdue => 'Overdue';
+
+  @override
+  String get accidentTasksDueSoon => 'Due soon';
+
+  @override
+  String get accidentTasksOnTime => 'On time';
+
+  @override
+  String get accidentTasksNoTarget => 'No target';
+
+  @override
+  String accidentTasksCase(String ref) {
+    return 'Case $ref';
+  }
+
+  @override
+  String accidentTasksInStep(String days) {
+    return '$days in this step';
+  }
+
+  @override
+  String accidentTasksDays(String count) {
+    return '$count days';
+  }
+
+  @override
+  String get accidentTasksToday => 'today';
+
+  @override
+  String accidentTasksDue(String time) {
+    return 'Due $time';
+  }
+
+  @override
+  String accidentTasksSummary(String open, String overdue) {
+    return '$open open, $overdue overdue';
+  }
+
+  @override
+  String get accidentRegisterMine => 'Mine';
 }

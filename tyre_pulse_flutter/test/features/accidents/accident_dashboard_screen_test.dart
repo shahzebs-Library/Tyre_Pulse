@@ -66,6 +66,7 @@ final class _DashboardRepository implements AccidentRepository {
     required int pageSize,
     String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   }) async {
     listCalls++;
     offsets.add(offset);

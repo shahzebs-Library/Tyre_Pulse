@@ -9646,4 +9646,67 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get syncQueueInspectionRetried =>
       'آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔';
+
+  @override
+  String get accidentTasksTitle => 'میرے حادثے کے کام';
+
+  @override
+  String get accidentTasksAssignedToMe => 'مجھے سونپے گئے';
+
+  @override
+  String get accidentTasksForMyTeam => 'میری ٹیم کے لیے';
+
+  @override
+  String get accidentTasksEmpty =>
+      'حادثے کے کیسز میں آپ کے لیے کچھ زیر التوا نہیں۔';
+
+  @override
+  String get accidentTasksNotOn =>
+      'حادثے کے کاموں کی ٹریکنگ ابھی فعال نہیں ہوئی۔';
+
+  @override
+  String get accidentTasksLoading => 'آپ کے کام لوڈ ہو رہے ہیں...';
+
+  @override
+  String get accidentTasksOverdue => 'تاخیر شدہ';
+
+  @override
+  String get accidentTasksDueSoon => 'جلد واجب';
+
+  @override
+  String get accidentTasksOnTime => 'وقت پر';
+
+  @override
+  String get accidentTasksNoTarget => 'کوئی ہدف نہیں';
+
+  @override
+  String accidentTasksCase(String ref) {
+    return 'کیس $ref';
+  }
+
+  @override
+  String accidentTasksInStep(String days) {
+    return 'اس مرحلے میں $days';
+  }
+
+  @override
+  String accidentTasksDays(String count) {
+    return '$count دن';
+  }
+
+  @override
+  String get accidentTasksToday => 'آج';
+
+  @override
+  String accidentTasksDue(String time) {
+    return 'واجب $time';
+  }
+
+  @override
+  String accidentTasksSummary(String open, String overdue) {
+    return '$open کھلے، $overdue تاخیر شدہ';
+  }
+
+  @override
+  String get accidentRegisterMine => 'میرے';
 }

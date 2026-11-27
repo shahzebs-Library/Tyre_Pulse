@@ -3825,5 +3825,22 @@
   "profileDraftDiscardMessage": "اس مسودے میں درج سب کچھ، بشمول تصاویر اور دستخط، اس فون سے ہٹا دیا جائے گا۔ اسے واپس نہیں کیا جا سکتا۔",
   "profileDraftDiscarded": "مسودہ ختم کر دیا گیا۔",
   "profileDraftDiscardFailed": "مسودہ ختم نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
-  "syncQueueInspectionRetried": "آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔"
+  "syncQueueInspectionRetried": "آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔",
+  "accidentTasksTitle": "میرے حادثے کے کام",
+  "accidentTasksAssignedToMe": "مجھے سونپے گئے",
+  "accidentTasksForMyTeam": "میری ٹیم کے لیے",
+  "accidentTasksEmpty": "حادثے کے کیسز میں آپ کے لیے کچھ زیر التوا نہیں۔",
+  "accidentTasksNotOn": "حادثے کے کاموں کی ٹریکنگ ابھی فعال نہیں ہوئی۔",
+  "accidentTasksLoading": "آپ کے کام لوڈ ہو رہے ہیں...",
+  "accidentTasksOverdue": "تاخیر شدہ",
+  "accidentTasksDueSoon": "جلد واجب",
+  "accidentTasksOnTime": "وقت پر",
+  "accidentTasksNoTarget": "کوئی ہدف نہیں",
+  "accidentTasksCase": "کیس {ref}",
+  "accidentTasksInStep": "اس مرحلے میں {days}",
+  "accidentTasksDays": "{count} دن",
+  "accidentTasksToday": "آج",
+  "accidentTasksDue": "واجب {time}",
+  "accidentTasksSummary": "{open} کھلے، {overdue} تاخیر شدہ",
+  "accidentRegisterMine": "میرے"
 }

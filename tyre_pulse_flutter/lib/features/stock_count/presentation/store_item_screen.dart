@@ -32,6 +32,7 @@ import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/inventory/inventory_providers.dart';
+import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
 import 'package:tyre_pulse/features/inventory/presentation/transfers_screen.dart';
 import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_dialog.dart';
 import 'package:tyre_pulse/features/stock_count/data/store_item_repository.dart';
@@ -49,11 +50,17 @@ import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
 import 'package:tyre_pulse/features/stock_count/store_item_providers.dart';
 
 class StoreItemScreen extends ConsumerStatefulWidget {
-  const StoreItemScreen({required this.item, super.key});
+  const StoreItemScreen({required this.item, this.countPanel, super.key});
   final StockItem item;
 
-  static Route<void> route(StockItem item) => MaterialPageRoute<void>(
-        builder: (_) => StoreItemScreen(item: item),
+  /// The count actions for this line (Matches / Doesn't match, genuine, job
+  /// card issue). Stock Count passes them in so its one-line list stays
+  /// compact; they show above everything else and do not wait for the card.
+  final WidgetBuilder? countPanel;
+
+  static Route<void> route(StockItem item, {WidgetBuilder? countPanel}) =>
+      MaterialPageRoute<void>(
+        builder: (_) => StoreItemScreen(item: item, countPanel: countPanel),
         settings: const RouteSettings(name: 'stock/storeItem'),
       );
 
@@ -336,7 +343,9 @@ class _StoreItemScreenState extends ConsumerState<StoreItemScreen> {
             _content(copy, value, perms),
           AsyncError<StoreItemCard>(:final error) => ListView(
               physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(TpSpace.lg),
               children: <Widget>[
+                if (widget.countPanel != null) widget.countPanel!(context),
                 TpErrorState(
                   key: const Key('storeItem.error'),
                   error: switch (error) {
@@ -350,6 +359,16 @@ class _StoreItemScreenState extends ConsumerState<StoreItemScreen> {
                   },
                   onRetry: () =>
                       ref.invalidate(storeItemCardProvider(widget.item)),
+                ),
+              ],
+            ),
+          _ when widget.countPanel != null => ListView(
+              padding: const EdgeInsets.all(TpSpace.lg),
+              children: <Widget>[
+                widget.countPanel!(context),
+                const SizedBox(
+                  height: 160,
+                  child: TpLoadingState(key: Key('storeItem.loading')),
                 ),
               ],
             ),
@@ -398,6 +417,10 @@ class _StoreItemScreenState extends ConsumerState<StoreItemScreen> {
         TpSpace.xxxl,
       ),
       children: <Widget>[
+        if (widget.countPanel != null) ...<Widget>[
+          widget.countPanel!(context),
+          const SizedBox(height: TpSpace.md),
+        ],
         _Photos(
           photos: card.photos,
           copy: copy,
@@ -620,9 +643,13 @@ class _Photos extends ConsumerWidget {
             itemCount: photos.length,
             itemBuilder: (BuildContext context, int i) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: _SignedImage(reference: photos[i]),
+              child: GestureDetector(
+                onTap: () =>
+                    unawaited(showStorePhotoViewer(context, photos[i])),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _SignedImage(reference: photos[i]),
+                ),
               ),
             ),
           ),
@@ -637,8 +664,13 @@ class _Photos extends ConsumerWidget {
 }
 
 class _SignedImage extends ConsumerWidget {
-  const _SignedImage({required this.reference, super.key});
+  const _SignedImage({
+    required this.reference,
+    this.fit = BoxFit.cover,
+    super.key,
+  });
   final String reference;
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -646,7 +678,7 @@ class _SignedImage extends ConsumerWidget {
     return ref.watch(privateStorageImageUrlProvider(reference)).when(
           data: (String url) => Image.network(
             url,
-            fit: BoxFit.cover,
+            fit: fit,
             errorBuilder: (_, __, ___) => _broken(palette),
           ),
           loading: () => ColoredBox(
@@ -773,9 +805,12 @@ class _Bins extends StatelessWidget {
                           style: text.titleSmall,
                         ),
                         Text(
-                          <String?>[b.site, b.condition]
-                              .whereType<String>()
-                              .join(' · '),
+                          <String?>[
+                            b.site,
+                            if ((b.condition ?? '').isNotEmpty)
+                              InventoryCopy.of(context)
+                                  .label('pi_cond_', b.condition!),
+                          ].whereType<String>().join(' · '),
                           style: text.bodySmall
                               ?.copyWith(color: palette.textSecondary),
                         ),
@@ -889,14 +924,49 @@ class StockItemThumb extends ConsumerWidget {
                   color: palette.textSecondary,
                 ),
               )
-            : _SignedImage(
-                key: Key('stock.thumb.photo.${item.id}'),
-                reference: photo,
+            : GestureDetector(
+                // The photo opens full screen; the rest of the line opens
+                // the item card.
+                onTap: () => unawaited(showStorePhotoViewer(context, photo)),
+                child: _SignedImage(
+                  key: Key('stock.thumb.photo.${item.id}'),
+                  reference: photo,
+                ),
               ),
       ),
     );
   }
 }
+
+/// A full screen, zoomable view of one item photo.
+Future<void> showStorePhotoViewer(BuildContext context, String reference) =>
+    showDialog<void>(
+      context: context,
+      useSafeArea: false,
+      barrierColor: Colors.black,
+      builder: (BuildContext context) => Scaffold(
+        key: const Key('storeItem.photoViewer'),
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          leading: IconButton(
+            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: InteractiveViewer(
+          maxScale: 5,
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: 4 / 3,
+              child: _SignedImage(reference: reference, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
 
 /// The brand for one stock line from the same batch read, or null.
 String? stockItemBrand(WidgetRef ref, StockItem item, {String? facesKey}) {

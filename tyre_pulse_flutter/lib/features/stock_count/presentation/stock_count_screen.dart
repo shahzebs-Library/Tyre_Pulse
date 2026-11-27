@@ -105,8 +105,26 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
 
   /// The item card: photo, where it is, part numbers, brand, movements;
   /// levels and receiving stay one tap further on its app bar.
-  Future<void> _open(StockItem item) async {
-    await Navigator.of(context).push(StoreItemScreen.route(item));
+  Future<void> _open(
+    StockItem item, {
+    required StockCountCopy copy,
+    required bool canAdjust,
+  }) async {
+    await Navigator.of(context).push(
+      StoreItemScreen.route(
+        item,
+        countPanel: (BuildContext context) => _CountPanel(
+          item: item,
+          canAdjust: canAdjust,
+          initialGenuine: _genuine[item.id],
+          onGenuine: (bool? value) => _genuine[item.id] = value,
+          onMatches: () => _matches(item, copy),
+          onCount: () => _count(item, copy),
+          onAdjust: (int delta) => _adjust(item, delta, copy),
+          onMove: (JobCardMove move) => _move(item, move),
+        ),
+      ),
+    );
     if (mounted) ref.invalidate(stockItemsProvider);
   }
 
@@ -496,18 +514,26 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
           ],
           // Equal-height tiles: a label that wraps (e.g. "Need reorder") must
           // not push its tile out of line with the others.
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Expanded(
-                  child: _Metric(value: rows.length, label: copy('items')),
-                ),
-                const SizedBox(width: TpSpace.sm),
-                Expanded(child: _Metric(value: low, label: copy('reorder'))),
-                const SizedBox(width: TpSpace.sm),
-                Expanded(child: _Metric(value: stale, label: copy('notToday'))),
-              ],
+          // Summary tiles hold a number and a short label: text is capped at
+          // 1.5x here so "Need reorder" is not cut to "Need reo..." at 2x;
+          // the list below follows the full setting.
+          MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 1.5,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Expanded(
+                    child: _Metric(value: rows.length, label: copy('items')),
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(child: _Metric(value: low, label: copy('reorder'))),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: _Metric(value: stale, label: copy('notToday')),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: TpSpace.md),
@@ -532,24 +558,26 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
             ),
           ),
           const SizedBox(height: TpSpace.sm),
-          SegmentedButton<StockCountFilter>(
-            segments: <ButtonSegment<StockCountFilter>>[
-              ButtonSegment<StockCountFilter>(
-                value: StockCountFilter.all,
-                label: Text(copy('all')),
-              ),
-              ButtonSegment<StockCountFilter>(
-                value: StockCountFilter.low,
-                label: Text(copy('low')),
-              ),
-              ButtonSegment<StockCountFilter>(
-                value: StockCountFilter.stale,
-                label: Text(copy('stale')),
-              ),
+          // Chips, not a segmented bar: at large text each label wraps
+          // inside its own chip instead of being clipped by the bar.
+          Wrap(
+            key: const Key('stock.filters'),
+            spacing: TpSpace.xs,
+            runSpacing: TpSpace.xs,
+            children: <Widget>[
+              for (final (StockCountFilter f, String label)
+                  in <(StockCountFilter, String)>[
+                (StockCountFilter.all, copy('all')),
+                (StockCountFilter.low, copy('low')),
+                (StockCountFilter.stale, copy('stale')),
+              ])
+                ChoiceChip(
+                  key: Key('stock.filter.${f.name}'),
+                  label: Text(label),
+                  selected: _filter == f,
+                  onSelected: (_) => setState(() => _filter = f),
+                ),
             ],
-            selected: <StockCountFilter>{_filter},
-            onSelectionChanged: (Set<StockCountFilter> value) =>
-                setState(() => _filter = value.single),
           ),
           const SizedBox(height: TpSpace.md),
           if (visible.isEmpty)
@@ -562,26 +590,29 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
               ),
             )
           else
-            for (final StockItem item in visible) ...<Widget>[
-              _StockCard(
-                item: item,
-                copy: copy,
-                canAdjust: canAdjust,
-                countedToday: counted(item),
-                genuine: _genuine[item.id],
-                onGenuine: (bool? value) =>
-                    setState(() => _genuine[item.id] = value),
-                onMatches: () => unawaited(_matches(item, copy)),
-                onCount: () => unawaited(_count(item, copy)),
-                busy: _busyId == item.id,
-                onAdjust: (int delta) => unawaited(_adjust(item, delta, copy)),
-                onMove: (JobCardMove move) => unawaited(_move(item, move)),
-                onOpen: () => unawaited(_open(item)),
-                facesKey: facesKey,
-                inventoryCopy: InventoryCopy.of(context),
+            // One compact line per item (owner, 2026-11-27): thumbnail, name
+            // and brand / bin, quantity and a status dot. Counting, genuine,
+            // SKU, bins and part numbers are on the item card a tap away.
+            TpCard(
+              key: const Key('stock.list'),
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: <Widget>[
+                  for (int i = 0; i < visible.length; i++) ...<Widget>[
+                    if (i > 0) const Divider(height: 1),
+                    _StockRow(
+                      item: visible[i],
+                      copy: copy,
+                      countedToday: counted(visible[i]),
+                      facesKey: facesKey,
+                      onOpen: () => unawaited(
+                        _open(visible[i], copy: copy, canAdjust: canAdjust),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(height: TpSpace.sm),
-            ],
+            ),
         ],
       ),
     );
@@ -847,59 +878,184 @@ class _Metric extends StatelessWidget {
       );
 }
 
-class _StockCard extends StatelessWidget {
-  const _StockCard({
+/// One stock line in the list: thumbnail (tap = photo), name with brand and
+/// bin as muted text, quantity and a status dot. At least 56dp tall, so the
+/// whole line is a comfortable tap target; at large text the name may take a
+/// second line, never more.
+class _StockRow extends ConsumerWidget {
+  const _StockRow({
     required this.item,
     required this.copy,
-    required this.canAdjust,
     required this.countedToday,
-    required this.genuine,
+    required this.facesKey,
+    required this.onOpen,
+  });
+  final StockItem item;
+  final StockCountCopy copy;
+  final bool countedToday;
+  final String facesKey;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final String status = stockStatus(
+      item.quantity,
+      item.minimum,
+      item.critical,
+    );
+    final String? brand = stockItemBrand(ref, item, facesKey: facesKey);
+    final String muted = <String>[
+      if (brand != null) brand,
+      if ((item.locationCode ?? '').isNotEmpty) item.locationCode!,
+    ].join(' · ');
+    final bool large = MediaQuery.textScalerOf(context).scale(14) > 14 * 1.3;
+    // The dot says what needs attention: stock level first, then whether it
+    // was counted today. A fine line counted today has a quiet green dot.
+    final (Color dot, bool hollow, String dotLabel) = switch (status) {
+      'Critical' => (palette.critical.base, false, copy('Critical')),
+      'Low' => (palette.warning.base, false, copy('Low')),
+      _ when !countedToday => (palette.textSecondary, true, copy('stale')),
+      _ => (palette.ok.base, false, copy('countedToday')),
+    };
+    return Semantics(
+      button: true,
+      label: '${item.description ?? copy('stockItem')}, '
+          '${item.quantity} ${copy('onHand')}, $dotLabel',
+      excludeSemantics: true,
+      child: InkWell(
+        key: Key('stock.item.${item.id}'),
+        onTap: onOpen,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TpSpace.md,
+              vertical: TpSpace.xs,
+            ),
+            child: Row(
+              children: <Widget>[
+                StockItemThumb(item: item, facesKey: facesKey, size: 40),
+                const SizedBox(width: TpSpace.md),
+                Expanded(
+                  child: Text.rich(
+                    TextSpan(
+                      children: <InlineSpan>[
+                        TextSpan(
+                          text: item.description ?? copy('stockItem'),
+                          style: text.bodyLarge
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        if (muted.isNotEmpty)
+                          TextSpan(
+                            text: '  $muted',
+                            style: text.bodySmall
+                                ?.copyWith(color: palette.textSecondary),
+                          ),
+                      ],
+                    ),
+                    key: Key('stock.name.${item.id}'),
+                    maxLines: large ? 2 : 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Text(
+                  '${item.quantity}',
+                  key: Key('stock.qty.${item.id}'),
+                  style: text.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const <FontFeature>[
+                      FontFeature.tabularFigures(),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: TpSpace.sm),
+                Container(
+                  key: Key('stock.dot.${item.id}'),
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: hollow ? null : dot,
+                    border: hollow ? Border.all(color: dot, width: 2) : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The count actions for one line, shown at the top of its item card:
+/// on hand and status, Matches / Doesn't match with the genuine mark (or
+/// +/- and Count for an approver), and issue / return to a job card. Holds
+/// its own busy and genuine state because it lives on the pushed card route;
+/// the work itself is done by Stock Count (the same recorder and dialogs).
+class _CountPanel extends ConsumerStatefulWidget {
+  const _CountPanel({
+    required this.item,
+    required this.canAdjust,
+    required this.initialGenuine,
     required this.onGenuine,
     required this.onMatches,
     required this.onCount,
     required this.onAdjust,
     required this.onMove,
-    required this.inventoryCopy,
-    required this.busy,
-    required this.facesKey,
-    this.onOpen,
   });
   final StockItem item;
-  final VoidCallback? onOpen;
-
-  /// [stockFacesKey] of the list, so every card shares one photo/brand read.
-  final String facesKey;
-  final StockCountCopy copy;
-  final InventoryCopy inventoryCopy;
-
-  /// True for someone the server lets post a count difference (+/-).
   final bool canAdjust;
-  final bool countedToday;
-  final bool? genuine;
+  final bool? initialGenuine;
   final ValueChanged<bool?> onGenuine;
-  final VoidCallback onMatches;
-  final VoidCallback onCount;
-  final ValueChanged<int> onAdjust;
-  final ValueChanged<JobCardMove> onMove;
-  final bool busy;
+  final Future<void> Function() onMatches;
+  final Future<void> Function() onCount;
+  final Future<void> Function(int delta) onAdjust;
+  final Future<void> Function(JobCardMove move) onMove;
 
-  /// What tells this line apart from another with the same description:
-  /// bin, item code, condition, ownership and unit.
-  String? _identity() {
-    final List<String> parts = <String>[
-      if ((item.locationCode ?? '').isNotEmpty)
-        '${copy('bin')} ${item.locationCode}',
-      if ((item.itemCode ?? '').isNotEmpty) '${copy('code')} ${item.itemCode}',
-      if ((item.condition ?? '').isNotEmpty) item.condition!,
-      if ((item.ownership ?? '').isNotEmpty) item.ownership!,
-      if ((item.uom ?? '').isNotEmpty) item.uom!,
-    ];
-    return parts.isEmpty ? null : parts.join(' · ');
+  @override
+  ConsumerState<_CountPanel> createState() => _CountPanelState();
+}
+
+class _CountPanelState extends ConsumerState<_CountPanel> {
+  late bool? _genuine = widget.initialGenuine;
+  bool _busy = false;
+  bool _matching = false;
+
+  Future<void> _run(
+    Future<void> Function() action, {
+    bool matching = false,
+  }) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _matching = matching;
+    });
+    try {
+      await action();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _matching = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
+    final StockCountCopy copy = StockCountCopy.of(context);
+    final InventoryCopy inventoryCopy = InventoryCopy.of(context);
+    final StockItem item = widget.item;
+    final bool counted = stockLineCountedToday(
+      item,
+      DateTime.now(),
+      ref.watch(stockCountedTodayProvider),
+    );
     final String status = stockStatus(
       item.quantity,
       item.minimum,
@@ -910,187 +1066,126 @@ class _StockCard extends StatelessWidget {
       'Low' => TpStatus.warning,
       _ => TpStatus.ok,
     };
-    final String? identity = _identity();
-    final Widget moves = PopupMenuButton<JobCardMove>(
-      key: Key('stock.moves.${item.id}'),
-      tooltip: inventoryCopy('jc_menu'),
-      enabled: !busy,
-      onSelected: onMove,
-      icon: const Icon(Icons.more_vert_rounded),
-      itemBuilder: (BuildContext context) => <PopupMenuEntry<JobCardMove>>[
-        PopupMenuItem<JobCardMove>(
-          key: Key('stock.issue.${item.id}'),
-          value: JobCardMove.issue,
-          child: Text(inventoryCopy('jc_issueTitle')),
-        ),
-        PopupMenuItem<JobCardMove>(
-          key: Key('stock.return.${item.id}'),
-          value: JobCardMove.issueReturn,
-          child: Text(inventoryCopy('jc_returnTitle')),
-        ),
-      ],
-    );
-    final Widget details = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          item.description ?? copy('stockItem'),
-          style: Theme.of(context)
-              .textTheme
-              .titleSmall
-              ?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        _BrandLine(item: item, facesKey: facesKey),
-        if (item.site != null)
-          Text(
-            item.site!,
-            style: TextStyle(color: palette.textSecondary),
-          ),
-        if (identity != null)
-          Text(
-            identity,
-            key: Key('stock.identity.${item.id}'),
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: palette.textSecondary),
-          ),
-        const SizedBox(height: TpSpace.xs),
-        Wrap(
-          spacing: TpSpace.xs,
-          runSpacing: TpSpace.xs,
-          children: <Widget>[
-            TpStatusChip(status: tpStatus, label: copy(status)),
-            if (countedToday)
-              TpStatusChip(
-                key: Key('stock.countedToday.${item.id}'),
-                status: TpStatus.info,
-                label: copy('countedToday'),
-              ),
-          ],
-        ),
-      ],
-    );
-    // The item's photo when the catalogue has one, else the stock icon.
-    final Widget icon = StockItemThumb(item: item, facesKey: facesKey);
-
-    if (canAdjust) {
-      // An approver keeps +/- (each tap is an audited movement) and Count.
-      return TpCard(
-        key: Key('stock.item.${item.id}'),
-        onTap: onOpen,
-        padding: const EdgeInsets.all(TpSpace.md),
-        child: Row(
-          children: <Widget>[
-            icon,
-            const SizedBox(width: TpSpace.md),
-            Expanded(child: details),
-            const SizedBox(width: TpSpace.sm),
-            Column(
-              children: <Widget>[
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    IconButton(
-                      key: Key('stock.decrease.${item.id}'),
-                      tooltip: copy('decrease'),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: busy || item.quantity <= 0
-                          ? null
-                          : () => onAdjust(-1),
-                      icon: const Icon(Icons.remove_circle_outline_rounded),
-                    ),
-                    Text(
-                      '${item.quantity}',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    IconButton(
-                      key: Key('stock.increase.${item.id}'),
-                      tooltip: copy('increase'),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: busy ? null : () => onAdjust(1),
-                      icon: const Icon(Icons.add_circle_outline_rounded),
-                    ),
-                  ],
-                ),
-                Text(copy('onHand')),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    TextButton(
-                      key: Key('stock.count.${item.id}'),
-                      onPressed: onCount,
-                      child: Text(copy('count')),
-                    ),
-                    moves,
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Everyone else counts: the shelf either matches the system or it does
-    // not. A +/- here would always be refused by the server (WP5).
+    final TextTheme text = Theme.of(context).textTheme;
     return TpCard(
-      key: Key('stock.item.${item.id}'),
-      onTap: onOpen,
+      key: Key('stock.panel.${item.id}'),
       padding: const EdgeInsets.all(TpSpace.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Text(
+            item.description ?? copy('stockItem'),
+            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          Wrap(
+            spacing: TpSpace.sm,
+            runSpacing: TpSpace.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
-              icon,
-              const SizedBox(width: TpSpace.md),
-              Expanded(child: details),
-              const SizedBox(width: TpSpace.sm),
-              Column(
-                children: <Widget>[
-                  Text(
-                    '${item.quantity}',
-                    key: Key('stock.qty.${item.id}'),
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  Text(copy('onHand')),
-                ],
+              if (widget.canAdjust) ...<Widget>[
+                IconButton(
+                  key: Key('stock.decrease.${item.id}'),
+                  tooltip: copy('decrease'),
+                  onPressed: _busy || item.quantity <= 0
+                      ? null
+                      : () => _run(() => widget.onAdjust(-1)),
+                  icon: const Icon(Icons.remove_circle_outline_rounded),
+                ),
+              ],
+              Text(
+                '${item.quantity}',
+                style:
+                    text.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
               ),
-              moves,
+              if (widget.canAdjust)
+                IconButton(
+                  key: Key('stock.increase.${item.id}'),
+                  tooltip: copy('increase'),
+                  onPressed:
+                      _busy ? null : () => _run(() => widget.onAdjust(1)),
+                  icon: const Icon(Icons.add_circle_outline_rounded),
+                ),
+              Text(copy('onHand')),
+              TpStatusChip(status: tpStatus, label: copy(status)),
+              if (counted)
+                TpStatusChip(
+                  key: Key('stock.countedToday.${item.id}'),
+                  status: TpStatus.info,
+                  label: copy('countedToday'),
+                ),
             ],
           ),
           const SizedBox(height: TpSpace.sm),
-          _GenuineChoice(
-            keyPrefix: 'stock.genuine.${item.id}',
-            copy: copy,
-            value: genuine,
-            onChanged: busy ? null : onGenuine,
-          ),
-          const SizedBox(height: TpSpace.sm),
+          if (widget.canAdjust)
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: OutlinedButton.icon(
+                key: Key('stock.count.${item.id}'),
+                onPressed: _busy ? null : () => _run(widget.onCount),
+                icon: const Icon(Icons.edit_note_rounded),
+                label: Text(copy('count')),
+              ),
+            )
+          else ...<Widget>[
+            _GenuineChoice(
+              keyPrefix: 'stock.genuine.${item.id}',
+              copy: copy,
+              value: _genuine,
+              onChanged: _busy
+                  ? null
+                  : (bool? v) {
+                      setState(() => _genuine = v);
+                      widget.onGenuine(v);
+                    },
+            ),
+            const SizedBox(height: TpSpace.sm),
+            Wrap(
+              spacing: TpSpace.sm,
+              runSpacing: TpSpace.sm,
+              alignment: WrapAlignment.end,
+              children: <Widget>[
+                FilledButton.tonalIcon(
+                  key: Key('stock.matches.${item.id}'),
+                  onPressed: _busy
+                      ? null
+                      : () => _run(widget.onMatches, matching: true),
+                  icon: _matching
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2.2),
+                        )
+                      : const Icon(Icons.check_circle_outline_rounded),
+                  label: Text(copy('matches')),
+                ),
+                OutlinedButton.icon(
+                  key: Key('stock.notMatch.${item.id}'),
+                  onPressed: _busy ? null : () => _run(widget.onCount),
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: Text(copy('notMatch')),
+                ),
+              ],
+            ),
+          ],
+          const Divider(height: TpSpace.lg),
           Wrap(
             spacing: TpSpace.sm,
-            runSpacing: TpSpace.sm,
-            alignment: WrapAlignment.end,
             children: <Widget>[
-              FilledButton.tonalIcon(
-                key: Key('stock.matches.${item.id}'),
-                onPressed: busy ? null : onMatches,
-                icon: busy
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2.2),
-                      )
-                    : const Icon(Icons.check_circle_outline_rounded),
-                label: Text(copy('matches')),
+              TextButton.icon(
+                key: Key('stock.issue.${item.id}'),
+                onPressed: _busy
+                    ? null
+                    : () => unawaited(widget.onMove(JobCardMove.issue)),
+                icon: const Icon(Icons.outbox_outlined),
+                label: Text(inventoryCopy('jc_issueTitle')),
               ),
-              OutlinedButton.icon(
-                key: Key('stock.notMatch.${item.id}'),
-                onPressed: busy ? null : onCount,
-                icon: const Icon(Icons.edit_note_rounded),
-                label: Text(copy('notMatch')),
+              TextButton.icon(
+                key: Key('stock.return.${item.id}'),
+                onPressed: _busy
+                    ? null
+                    : () => unawaited(widget.onMove(JobCardMove.issueReturn)),
+                icon: const Icon(Icons.move_to_inbox_outlined),
+                label: Text(inventoryCopy('jc_returnTitle')),
               ),
             ],
           ),
@@ -1350,27 +1445,6 @@ class _ListBannerView extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// The brand from the company catalogue (or the ERP item), when known.
-class _BrandLine extends ConsumerWidget {
-  const _BrandLine({required this.item, required this.facesKey});
-  final StockItem item;
-  final String facesKey;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final String? brand = stockItemBrand(ref, item, facesKey: facesKey);
-    if (brand == null) return const SizedBox.shrink();
-    return Text(
-      brand,
-      key: Key('stock.brand.${item.id}'),
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: TpPalette.of(context).textSecondary,
-            fontWeight: FontWeight.w700,
-          ),
     );
   }
 }

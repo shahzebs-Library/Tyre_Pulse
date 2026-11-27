@@ -5,6 +5,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -25,9 +26,14 @@ import 'package:tyre_pulse/features/inventory/data/physical_inventory_repository
 import 'package:tyre_pulse/features/inventory/domain/physical_capture.dart';
 import 'package:tyre_pulse/features/inventory/inventory_providers.dart';
 import 'package:tyre_pulse/features/stock_count/data/stock_count_recorder.dart';
+import 'package:tyre_pulse/features/stock_count/data/stock_history_repository.dart';
+import 'package:tyre_pulse/features/stock_count/data/store_item_repository.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
+import 'package:tyre_pulse/features/stock_count/domain/stock_movement.dart';
+import 'package:tyre_pulse/features/stock_count/domain/store_item_card.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/stock_count_screen.dart';
 import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
+import 'package:tyre_pulse/features/stock_count/store_item_providers.dart';
 
 final class _Store extends SecureKeyValueStore {
   final Map<String, String> values = <String, String>{};
@@ -94,6 +100,38 @@ final class _Repo implements PhysicalInventoryRepository {
   Future<void> attachPhoto(Map<String, Object?> payload) async {}
 }
 
+final class _NoHistory implements StockHistoryRepository {
+  @override
+  Future<List<StockMovement>> page(
+    StockHistoryQuery query, {
+    required int offset,
+    required int limit,
+  }) async =>
+      const <StockMovement>[];
+
+  @override
+  Future<MovementSummary> summary(StockHistoryQuery query) async =>
+      summarizeMovements(const <StockMovement>[]);
+
+  @override
+  Future<StockPostResult> post({
+    required StockItem item,
+    required StockPostType type,
+    required int quantity,
+    String? reference,
+    String? reason,
+  }) async =>
+      StockPostResult(after: item.quantity);
+}
+
+/// Opens a line's item card, where the count actions are.
+Future<void> _openLine(WidgetTester tester, String id) async {
+  await tester.ensureVisible(find.byKey(Key('stock.item.$id')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(Key('stock.item.$id')));
+  await tester.pumpAndSettle();
+}
+
 const StockItem _binA = StockItem(
   id: 'line-a',
   site: 'DEMO YARD',
@@ -150,6 +188,22 @@ List<Override> _overrides(
         stockItemsProvider
             .overrideWith((Ref ref) async => const <StockItem>[_binA, _binB]),
     inventoryDeviceIdProvider.overrideWith((Ref ref) async => 'device-1'),
+    // The item card a line opens (count actions sit on it).
+    storeItemCardProvider.overrideWith(
+      (Ref ref, StockItem item) async => StoreItemCard(
+        stockId: item.id,
+        name: item.description ?? '',
+        bins: <StoreItemBin>[
+          StoreItemBin(stockId: item.id, quantity: item.quantity),
+        ],
+      ),
+    ),
+    storeItemPermissionsProvider
+        .overrideWith((Ref ref) async => const StoreItemPermissions()),
+    stockItemFacesProvider.overrideWith(
+      (Ref ref, String key) async => const <String, StockItemFace>{},
+    ),
+    stockHistoryRepositoryProvider.overrideWithValue(_NoHistory()),
     stockCountRecorderProvider.overrideWithValue(
       StockCountRecorder(
         repository: repo,
@@ -180,6 +234,7 @@ void main() {
     final _Repo repo = _Repo();
     await tester.pumpWidget(_app(_overrides(repo)));
     await tester.pumpAndSettle();
+    await _openLine(tester, 'line-a');
 
     await tester.tap(find.byKey(const Key('stock.notMatch.line-a')));
     await tester.pumpAndSettle();
@@ -215,11 +270,16 @@ void main() {
     final _Repo repo = _Repo();
     await tester.pumpWidget(_app(_overrides(repo)));
     await tester.pumpAndSettle();
+    await _openLine(tester, 'line-b');
 
-    await tester.ensureVisible(find.byKey(const Key('stock.matches.line-b')));
+    await tester.ensureVisible(
+      find.byKey(const Key('stock.genuine.line-b.yes')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('stock.genuine.line-b.yes')));
     await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('stock.matches.line-b')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('stock.matches.line-b')));
     await tester.pumpAndSettle();
 
@@ -236,10 +296,13 @@ void main() {
       find.byKey(const Key('stock.countedToday.line-b')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const Key('stock.countedToday.line-a')),
-      findsNothing,
-    );
+    // Back on the list, the line's dot no longer says "not counted".
+    tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await tester.pumpAndSettle();
+    final BoxDecoration dot = tester
+        .widget<Container>(find.byKey(const Key('stock.dot.line-b')))
+        .decoration! as BoxDecoration;
+    expect(dot.border, isNull);
   });
 
   testWidgets(
@@ -247,19 +310,24 @@ void main() {
       'server always refuses', (WidgetTester tester) async {
     await tester.pumpWidget(_app(_overrides(_Repo())));
     await tester.pumpAndSettle();
+    // The list itself carries no actions; the card does.
+    expect(find.byKey(const Key('stock.matches.line-a')), findsNothing);
+    await _openLine(tester, 'line-a');
 
     expect(find.byKey(const Key('stock.matches.line-a')), findsOneWidget);
     expect(find.byKey(const Key('stock.notMatch.line-a')), findsOneWidget);
     expect(find.byKey(const Key('stock.increase.line-a')), findsNothing);
     expect(find.byKey(const Key('stock.decrease.line-a')), findsNothing);
-    // The overflow menu (issue or return) stays.
-    expect(find.byKey(const Key('stock.moves.line-a')), findsOneWidget);
+    // Issue to / return from a job card stays.
+    expect(find.byKey(const Key('stock.issue.line-a')), findsOneWidget);
+    expect(find.byKey(const Key('stock.return.line-a')), findsOneWidget);
   });
 
   testWidgets('an Admin keeps the +/- adjustment buttons and Count',
       (WidgetTester tester) async {
     await tester.pumpWidget(_app(_overrides(_Repo(), role: RoleId.admin)));
     await tester.pumpAndSettle();
+    await _openLine(tester, 'line-a');
 
     expect(find.byKey(const Key('stock.increase.line-a')), findsOneWidget);
     expect(find.byKey(const Key('stock.decrease.line-a')), findsOneWidget);
@@ -275,11 +343,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Bin DEMO-WH-A · Code DEMO-Q-001'),
+      find.textContaining('DEMO-WH-A', findRichText: true),
       findsOneWidget,
     );
     expect(
-      find.textContaining('Bin DEMO-WH-B · Code DEMO-Q-001'),
+      find.textContaining('DEMO-WH-B', findRichText: true),
       findsOneWidget,
     );
     final EditableText search = tester.widget<EditableText>(
@@ -320,6 +388,59 @@ void main() {
     expect(find.byKey(const Key('stock.add.save')), findsNothing);
     expect(repo.captures, hasLength(1));
     expect(repo.captures.single['kind'], 'proposed_new');
+  });
+
+  testWidgets('each line is one compact row, at most two lines at 2x text',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const StockItem long = StockItem(
+      id: 'line-long',
+      site: 'DEMO YARD',
+      description: 'DEMO Hydraulic return line filter element with gasket kit',
+      quantity: 1234,
+      minimum: 2,
+      country: 'KSA',
+      itemId: 'item-9',
+      locationCode: 'DEMO-WH-RACK-12-BIN-04',
+    );
+    for (final double scale in <double>[1, 2]) {
+      await tester.pumpWidget(
+        MediaQuery(
+          data: MediaQueryData(
+            size: const Size(360, 800),
+            textScaler: TextScaler.linear(scale),
+          ),
+          child: _app(
+            _overrides(
+              _Repo(),
+              items: stockItemsProvider.overrideWith(
+                (Ref ref) async => const <StockItem>[long, _binA],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final double h =
+          tester.getSize(find.byKey(const Key('stock.item.line-a'))).height;
+      expect(h, greaterThanOrEqualTo(48), reason: 'tap target');
+      if (scale == 1) expect(h, lessThanOrEqualTo(64));
+      final RenderParagraph name = tester.renderObject<RenderParagraph>(
+        find.byKey(const Key('stock.name.line-long')),
+      );
+      final double lineHeight = name.getFullHeightForCaret(
+        const TextPosition(offset: 0),
+      );
+      expect(
+        name.size.height,
+        lessThanOrEqualTo(lineHeight * 2 + 1),
+        reason: 'never more than two lines at ${scale}x',
+      );
+      expect(name.didExceedMaxLines, isTrue, reason: 'long name is cut');
+    }
   });
 
   testWidgets('the cards fit a small phone without overflow',
@@ -421,11 +542,9 @@ void main() {
 
     expect(
       tester
-          .widget<SegmentedButton<StockCountFilter>>(
-            find.byType(SegmentedButton<StockCountFilter>),
-          )
+          .widget<ChoiceChip>(find.byKey(const Key('stock.filter.low')))
           .selected,
-      <StockCountFilter>{StockCountFilter.low},
+      isTrue,
     );
     expect(
       find.byKey(const Key('stock.item.line-c'), skipOffstage: false),

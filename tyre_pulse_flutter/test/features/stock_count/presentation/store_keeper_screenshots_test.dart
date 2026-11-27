@@ -50,7 +50,6 @@ import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_movement.dart';
 import 'package:tyre_pulse/features/stock_count/domain/store_item_card.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/stock_count_screen.dart';
-import 'package:tyre_pulse/features/stock_count/presentation/store_item_screen.dart';
 import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
 import 'package:tyre_pulse/features/stock_count/store_item_providers.dart';
 
@@ -418,6 +417,26 @@ void main() {
       await settle(tester);
       expect(find.byKey(const Key('stock.banner.offline')), findsOneWidget);
       await save(tester, shot, '01_stock_count_offline_$tag');
+      // The same list at 2x text: a line may wrap to two lines, never more.
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(
+            size: Size(360, 800),
+            textScaler: TextScaler.linear(2),
+          ),
+          child: wrap(
+            shot,
+            c,
+            b,
+            l,
+            const StockCountScreen(route: StockCountRoute()),
+          ),
+        ),
+      );
+      await settle(tester);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
+      await settle(tester);
+      await save(tester, shot, '01b_stock_count_text2x_$tag');
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 5));
     });
@@ -483,17 +502,28 @@ void main() {
     testWidgets('store item $tag', skip: !enabled, (WidgetTester tester) async {
       phone(tester);
       final String base = await serve(tester);
-      final ProviderContainer c = ProviderContainer(overrides: common(base));
+      final ProviderContainer c = ProviderContainer(
+        overrides: <Override>[
+          ...common(base),
+          stockItemsProvider.overrideWith((Ref ref) async => _rows),
+        ],
+      );
       addTearDown(c.dispose);
       final GlobalKey shot = GlobalKey();
+      // Opened from the Stock Count list, so the count actions are on it.
       await tester.pumpWidget(
-        wrap(shot, c, b, l, const StoreItemScreen(item: _filter)),
+        wrap(shot, c, b, l, const StockCountScreen(route: StockCountRoute())),
       );
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('stock.item.line-a')));
       await settle(tester);
       await save(tester, shot, '03a_store_item_top_$tag');
       await tester.drag(find.byType(Scrollable).first, const Offset(0, -560));
       await settle(tester);
-      await save(tester, shot, '03b_store_item_parts_movements_$tag');
+      await save(tester, shot, '03b_store_item_parts_$tag');
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -900));
+      await settle(tester);
+      await save(tester, shot, '03c_store_item_movements_$tag');
 
       await tester.ensureVisible(
         find.byKey(const Key('storeItem.addPartNumber')),

@@ -19,6 +19,24 @@
 --   * an odometer / engine-hours insert that hits ON CONFLICT DO NOTHING is
 --     recorded in the ledger as 'duplicate', never as accepted with no target.
 --
+-- Second review fixes (2026-11-28):
+--   * odometer_logs / engine_hours_logs carry GLOBAL unique indexes on
+--     client_uuid (odometer_logs_client_uuid_upsert_idx,
+--     engine_hours_logs_client_uuid_upsert_idx). The id written there is
+--     'dev:<org>:<key>:<message id>' so one org's (or one key's) message id
+--     can never suppress another's reading. ON CONFLICT (client_uuid).
+--   * the idempotency key is scoped per ingest key, not per org. With no
+--     message_id it is md5 of the payload, plus a one-minute receive bucket
+--     when the payload has no recorded_at, so a legit repeat is not lost.
+--   * keys carry countries: a country-scoped Admin can only mint keys for,
+--     list, dry-run against, match into, or revoke within their countries.
+--     NULL countries (all) only for a super admin or an 'ALL' profile.
+--   * any unexpected error in one message rejects that message only
+--     ('processing_error'); the batch, the loop and the rate counter go on.
+--   * a key bound to a device only ever updates that device's last_seen_at.
+--   * device_ingest_purge(days) trims old usage minutes and rejected ledger
+--     rows (service_role only, not scheduled; run from a cron when wanted).
+--
 -- What this adds (additive only, no existing row is changed):
 --   * device_ingest_keys      one hashed key per device or per integration,
 --                             scoped to the data types it may send, revocable.
@@ -71,8 +89,9 @@
 --     public.device_ingest_overview(), public.device_ingest_unmatched_list(int),
 --     public.device_ingest_resolve_unmatched(uuid,uuid), public.device_ingest_dismiss_unmatched(uuid),
 --     public.device_ingest_dry_run(jsonb), public.device_ingest_save_settings(jsonb),
---     public._device_ingest_process(uuid,uuid,jsonb,boolean,uuid), public._device_resolve_asset(uuid,uuid,jsonb,uuid),
---     public._device_alert(uuid,text,text,text,text,uuid), public._device_ingest_require_admin(),
+--     public._device_ingest_process(uuid,uuid,jsonb,boolean,uuid), public._device_resolve_asset(uuid,uuid,jsonb,uuid,text[]),
+--     public._device_admin_countries(), public._device_countries_visible(text[]), public.device_ingest_purge(int),
+--     public._device_alert(uuid,text,text,text,text,uuid,text), public._device_ingest_require_admin(),
 --     public._device_norm(text);
 --   drop table if exists public.device_alert_notices, public.device_ingest_unmatched,
 --     public.device_ingest_messages, public.device_ingest_usage, public.device_ingest_settings,
@@ -99,6 +118,29 @@ begin
   return v_org;
 end $$;
 
+-- Countries the calling admin may act in. NULL = every country (super admin
+-- or a profile carrying 'ALL'); otherwise the profile's own country list,
+-- matching public.app_can_see_country.
+create or replace function public._device_admin_countries()
+returns text[] language sql stable security definer set search_path = public as $$
+  select case
+    when public.is_super_admin() then null
+    when exists (select 1 from public.profiles pr, unnest(coalesce(pr.country, '{}'::text[])) x
+                  where pr.id = auth.uid() and lower(btrim(x)) = 'all') then null
+    else coalesce((select array_agg(distinct upper(btrim(x))) from public.profiles pr, unnest(coalesce(pr.country, '{}'::text[])) x
+                    where pr.id = auth.uid() and btrim(x) <> ''), '{}'::text[])
+  end
+$$;
+
+-- True when the calling admin may see everything a key with these countries
+-- can touch. A NULL (all countries) key needs an all-country admin.
+create or replace function public._device_countries_visible(p_countries text[])
+returns boolean language sql stable security definer set search_path = public as $$
+  select public._device_admin_countries() is null
+      or (p_countries is not null and cardinality(p_countries) > 0
+          and not exists (select 1 from unnest(p_countries) x where not public.app_can_see_country(x)))
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -112,6 +154,7 @@ create table if not exists public.device_ingest_keys (
   key_prefix       text not null unique,
   key_hash         text not null,
   data_types       text[] not null,
+  countries        text[],          -- NULL = every country (super admin / ALL only)
   rate_per_minute  integer not null default 600 check (rate_per_minute between 1 and 6000),
   active           boolean not null default true,
   expires_at       timestamptz,
@@ -263,7 +306,8 @@ end $rls$;
 -- Alerts: org-scoped in-app notice to Admins + super admins, deduped.
 -- (notify_elevated_users is not org scoped, so it is not used here.)
 -- ---------------------------------------------------------------------------
-create or replace function public._device_alert(p_org uuid, p_key text, p_type text, p_title text, p_body text, p_entity uuid)
+create or replace function public._device_alert(p_org uuid, p_key text, p_type text, p_title text, p_body text, p_entity uuid,
+  p_country text default null)
 returns boolean language plpgsql security definer set search_path = public as $$
 declare
   v_hours int;
@@ -282,7 +326,11 @@ begin
     from public.profiles p
    where (p.org_id = p_org or p.organisation_id = p_org)
      and coalesce(p.approved, false) and not coalesce(p.locked, false)
-     and (coalesce(p.is_super_admin, false) or lower(coalesce(p.role, '')) = 'admin');
+     and (coalesce(p.is_super_admin, false) or lower(coalesce(p.role, '')) = 'admin')
+     -- a country-scoped Admin only hears about assets in their countries
+     and (coalesce(p.is_super_admin, false) or p_country is null
+          or exists (select 1 from unnest(coalesce(p.country, '{}'::text[])) x
+                      where lower(btrim(x)) in ('all', lower(btrim(p_country)))));
   return true;
 end $$;
 
@@ -290,9 +338,12 @@ end $$;
 -- Asset resolution. Returns {status:'ok'|'unknown'|'ambiguous', asset_no,
 -- country, site, candidates}.
 -- ---------------------------------------------------------------------------
-create or replace function public._device_resolve_asset(p_org uuid, p_device_row uuid, p_msg jsonb, p_force_vehicle uuid default null)
+create or replace function public._device_resolve_asset(p_org uuid, p_device_row uuid, p_msg jsonb, p_force_vehicle uuid default null,
+  p_countries text[] default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare
+  -- countries the key may write to (NULL = all), lower-cased once
+  v_cl text[] := (select array_agg(lower(btrim(x))) from unnest(p_countries) x);
   v_a jsonb := coalesce(p_msg->'asset', '{}'::jsonb);
   v_country text := nullif(btrim(coalesce(v_a->>'country', '')), '');
   v_dev text := public._device_norm(coalesce(p_msg->>'device_id', v_a->>'imei'));
@@ -301,7 +352,8 @@ declare
 begin
   if p_force_vehicle is not null then
     select jsonb_agg(jsonb_build_object('asset_no', asset_no, 'country', country, 'site', site)) into v_rows
-      from public.vehicle_fleet where id = p_force_vehicle and organisation_id = p_org;
+      from public.vehicle_fleet where id = p_force_vehicle and organisation_id = p_org
+       and (v_cl is null or country is null or lower(country) = any (v_cl));
   end if;
 
   -- 1. key bound to a registered device: that device's asset and nothing
@@ -319,6 +371,7 @@ begin
         on vf.organisation_id = p_org
        and public._device_norm(vf.asset_no) = public._device_norm(td.asset_no)
        and (td.country is null or vf.country is null or lower(vf.country) = lower(td.country))
+       and (v_cl is null or vf.country is null or lower(vf.country) = any (v_cl))
      where td.id = p_device_row and td.organisation_id = p_org;
     v_n := coalesce(jsonb_array_length(v_rows), 0);
     if v_n = 1 then
@@ -338,7 +391,8 @@ begin
        and public._device_norm(vf.asset_no) = public._device_norm(td.asset_no)
        and (td.country is null or vf.country is null or lower(vf.country) = lower(td.country))
      where td.organisation_id = p_org and td.status <> 'decommissioned' and td.asset_no is not null
-       and public._device_norm(td.device_id) = v_dev;
+       and public._device_norm(td.device_id) = v_dev
+       and (v_cl is null or vf.country is null or lower(vf.country) = any (v_cl));
   end if;
 
   -- 3. asset code, 4. VIN / chassis, 5. registration plate
@@ -346,20 +400,23 @@ begin
     select jsonb_agg(jsonb_build_object('asset_no', asset_no, 'country', country, 'site', site)) into v_rows
       from public.vehicle_fleet
      where organisation_id = p_org and public._device_norm(asset_no) = public._device_norm(v_a->>'asset_no')
-       and (v_country is null or lower(country) = lower(v_country));
+       and (v_country is null or lower(country) = lower(v_country))
+       and (v_cl is null or country is null or lower(country) = any (v_cl));
   end if;
   if v_rows is null and public._device_norm(coalesce(v_a->>'vin', v_a->>'chassis_no')) is not null then
     select jsonb_agg(jsonb_build_object('asset_no', asset_no, 'country', country, 'site', site)) into v_rows
       from public.vehicle_fleet
      where organisation_id = p_org
        and public._device_norm(coalesce(v_a->>'vin', v_a->>'chassis_no')) in (public._device_norm(vin), public._device_norm(chassis_no))
-       and (v_country is null or lower(country) = lower(v_country));
+       and (v_country is null or lower(country) = lower(v_country))
+       and (v_cl is null or country is null or lower(country) = any (v_cl));
   end if;
   if v_rows is null and public._device_norm(v_a->>'registration_no') is not null then
     select jsonb_agg(jsonb_build_object('asset_no', asset_no, 'country', country, 'site', site)) into v_rows
       from public.vehicle_fleet
      where organisation_id = p_org and public._device_norm(registration_no) = public._device_norm(v_a->>'registration_no')
-       and (v_country is null or lower(country) = lower(v_country));
+       and (v_country is null or lower(country) = lower(v_country))
+       and (v_cl is null or country is null or lower(country) = any (v_cl));
   end if;
 
   v_n := coalesce(jsonb_array_length(v_rows), 0);
@@ -382,7 +439,8 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_type text := p_msg->>'type';
   v_d jsonb := coalesce(p_msg->'data', '{}'::jsonb);
-  v_idem text := coalesce(nullif(btrim(p_msg->>'message_id'), ''), md5((p_msg - 'message_id')::text));
+  v_idem text;      -- per-key idempotency key, set below
+  v_countries text[];
   v_at timestamptz;
   v_dev_row uuid;
   v_dev_txt text := nullif(btrim(coalesce(p_msg->>'device_id', '')), '');
@@ -412,8 +470,21 @@ begin
   end if;
 
   if p_key_id is not null then
-    select device_row_id into v_dev_row from public.device_ingest_keys where id = p_key_id;
+    select device_row_id, countries into v_dev_row, v_countries from public.device_ingest_keys where id = p_key_id;
+  else
+    v_countries := public._device_admin_countries();   -- admin dry run
   end if;
+
+  -- Idempotency key, scoped to the ingest key. A replay from the unmatched
+  -- list reuses the stored '_idem'. Without a message_id it is the payload
+  -- hash; without recorded_at a one-minute receive bucket is added so the
+  -- same reading sent again later is a new reading, not a lost one.
+  v_idem := coalesce(nullif(p_msg->>'_idem', ''),
+    coalesce(p_key_id::text, 'admin') || ':' || coalesce(
+      'm:' || nullif(btrim(p_msg->>'message_id'), ''),
+      'h:' || md5((p_msg - 'message_id' - '_idem')::text
+        || case when nullif(btrim(coalesce(p_msg->>'recorded_at', '')), '') is null
+                then ':' || to_char(date_trunc('minute', now()) at time zone 'UTC', 'YYYYMMDDHH24MI') else '' end)));
 
   if not p_dry and p_force_vehicle is null then
     if exists (select 1 from public.device_ingest_messages where organisation_id = p_org and idem_key = v_idem) then
@@ -429,7 +500,7 @@ begin
   if p_force_vehicle is null and v_at < now() - make_interval(days => v_max_age) then
     v_reason := 'stale_reading'; v_short := 'stale';
   else
-    v_res := public._device_resolve_asset(p_org, v_dev_row, p_msg, p_force_vehicle);
+    v_res := public._device_resolve_asset(p_org, v_dev_row, p_msg, p_force_vehicle, v_countries);
     if v_res->>'status' <> 'ok' then
       v_short := v_res->>'status';
       v_reason := case v_short when 'unassigned' then 'unassigned_device' else v_short || '_asset' end;
@@ -450,7 +521,7 @@ begin
     insert into public.device_ingest_unmatched (organisation_id, key_id, message_id, msg_type, reason, identifiers, candidates, payload)
     values (p_org, p_key_id, v_msg_id, v_type, v_reason,
             jsonb_build_object('device_id', p_msg->>'device_id') || coalesce(p_msg->'asset', '{}'::jsonb),
-            v_res->'candidates', p_msg);
+            v_res->'candidates', p_msg || jsonb_build_object('_idem', v_idem));
     return jsonb_build_object('status', 'quarantined', 'reason', v_short);
   end if;
 
@@ -493,8 +564,8 @@ begin
   elsif v_type = 'odometer' then
     insert into public.odometer_logs (organisation_id, country, asset_no, odometer_km, reading_date, source, site, notes, client_uuid)
     values (p_org, v_country, v_asset, (v_d->>'odometer_km')::numeric, (v_at at time zone 'UTC')::date, 'telematics', v_site,
-            'device ingest', 'dev:' || v_idem)
-    on conflict do nothing
+            'device ingest', 'dev:' || p_org::text || ':' || v_idem)
+    on conflict (client_uuid) do nothing
     returning id into v_tid;
     if v_tid is null then
       -- the same reading is already stored (client_uuid): record it as a
@@ -509,8 +580,8 @@ begin
   elsif v_type = 'engine_hours' then
     insert into public.engine_hours_logs (organisation_id, country, asset_no, engine_hours, reading_date, source, site, notes, client_uuid)
     values (p_org, v_country, v_asset, (v_d->>'engine_hours')::numeric, (v_at at time zone 'UTC')::date, 'telematics', v_site,
-            'device ingest', 'dev:' || v_idem)
-    on conflict do nothing
+            'device ingest', 'dev:' || p_org::text || ':' || v_idem)
+    on conflict (client_uuid) do nothing
     returning id into v_tid;
     if v_tid is null then
       -- the same reading is already stored (client_uuid): record it as a
@@ -552,7 +623,7 @@ begin
         'Tyre pressure ' || case v_status when 'under' then 'low' when 'over' then 'high' else 'critical' end
           || ' on ' || v_asset || coalesce(' ' || (v_d->>'position'), ''),
         coalesce(v_p::text || ' psi', 'pressure unknown') || coalesce(', target ' || v_target::text || ' psi', '')
-          || coalesce(', ' || v_t::text || ' C', '') || '.', v_tid);
+          || coalesce(', ' || v_t::text || ' C', '') || '.', v_tid, v_country);
     end if;
 
   elsif v_type = 'tread' then
@@ -593,7 +664,7 @@ begin
     if v_sev = 'critical' then
       perform public._device_alert(p_org, 'dtc:' || v_asset || ':' || upper(coalesce(v_d->>'code', '')), 'dtc_alert',
         'Critical fault code ' || coalesce(v_d->>'code', '') || ' on ' || v_asset,
-        coalesce(v_d->>'description', 'No description from the device') || '.', v_tid);
+        coalesce(v_d->>'description', 'No description from the device') || '.', v_tid, v_country);
     end if;
 
   elsif v_type = 'rfid' then
@@ -621,17 +692,21 @@ begin
     returning id into v_tid;
     if v_d->>'event_type' = 'collision' or v_d->>'severity' = 'critical' then
       perform public._device_alert(p_org, 'dashcam:' || v_tid::text, 'dashcam_alert',
-        'Dashcam ' || coalesce(v_d->>'event_type', 'event') || ' on ' || v_asset, 'Review the clip in Video Telematics.', v_tid);
+        'Dashcam ' || coalesce(v_d->>'event_type', 'event') || ' on ' || v_asset, 'Review the clip in Video Telematics.', v_tid, v_country);
     end if;
   end if;
 
   if v_msg_id is not null then
     update public.device_ingest_messages set target_id = v_tid where id = v_msg_id;
   end if;
-  if v_dev_row is not null or v_dev_txt is not null then
+  -- A bound key only ever touches its own device; an unbound key may name one.
+  if v_dev_row is not null then
     update public.telematics_devices set last_seen_at = greatest(coalesce(last_seen_at, v_at), v_at)
-     where organisation_id = p_org
-       and ((v_dev_row is not null and id = v_dev_row) or (v_dev_txt is not null and public._device_norm(device_id) = public._device_norm(v_dev_txt)));
+     where organisation_id = p_org and id = v_dev_row;
+  elsif v_dev_txt is not null then
+    update public.telematics_devices set last_seen_at = greatest(coalesce(last_seen_at, v_at), v_at)
+     where organisation_id = p_org and public._device_norm(device_id) = public._device_norm(v_dev_txt)
+       and (v_countries is null or country is null or lower(country) = any (select lower(btrim(x)) from unnest(v_countries) x));
   end if;
   return jsonb_build_object('status', 'accepted', 'target_table', v_table, 'asset_no', v_asset);
 exception
@@ -640,6 +715,11 @@ exception
     -- this exception block undoes its partial writes, including the ledger
     -- row, so a corrected retry with the same message id is still accepted.
     return jsonb_build_object('status', 'rejected', 'error', 'invalid_value');
+  when others then
+    -- Anything unexpected rejects this one message only (the savepoint undoes
+    -- its writes, ledger claim included). The batch, its loop and the rate
+    -- counter carry on; the caller sees a generic reason, never internals.
+    return jsonb_build_object('status', 'rejected', 'error', 'processing_error');
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -688,7 +768,7 @@ begin
   end if;
   update public.device_ingest_keys set last_used_at = now() where id = k.id;
 
-  for m in select value from jsonb_array_elements(p_messages) loop
+  for m in select value - '_idem' from jsonb_array_elements(p_messages) loop
     if nullif(m->>'_rejected', '') is not null then
       -- the edge function found the message malformed; record it for monitoring
       v_r := jsonb_build_object('status', 'rejected', 'error', left(m->>'_rejected', 200));
@@ -721,19 +801,32 @@ declare
   v_secret text := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
   v_key text;
   v_id uuid;
+  v_countries text[] := public._device_admin_countries();
+  v_dev_country text;
 begin
   if coalesce(btrim(p_name), '') = '' then
     raise exception 'A name is required' using errcode = '22023';
   end if;
-  if p_device_row is not null and not exists (select 1 from public.telematics_devices where id = p_device_row and organisation_id = v_org) then
-    raise exception 'Device not found' using errcode = '22023';
+  if v_countries is not null and cardinality(v_countries) = 0 then
+    raise exception 'No country is assigned to your account' using errcode = '42501';
+  end if;
+  if p_device_row is not null then
+    select td.country into v_dev_country from public.telematics_devices td
+     where td.id = p_device_row and td.organisation_id = v_org;
+    if not found or not public.app_can_see_country(v_dev_country) then
+      raise exception 'Device not found' using errcode = '22023';
+    end if;
+    -- a device in a known country only ever writes there
+    if v_dev_country is not null then
+      v_countries := array[upper(btrim(v_dev_country))];
+    end if;
   end if;
   v_key := v_prefix || '.' || v_secret;
   insert into public.device_ingest_keys (organisation_id, name, kind, vendor, device_row_id, key_prefix, key_hash, data_types,
-    rate_per_minute, expires_at, created_by)
+    countries, rate_per_minute, expires_at, created_by)
   values (v_org, btrim(p_name), case when p_device_row is null then 'integration' else 'device' end, coalesce(p_vendor, 'generic'),
     p_device_row, v_prefix, encode(sha256(convert_to(v_key, 'UTF8')), 'hex'), p_data_types,
-    coalesce(p_rate, 600), p_expires_at, auth.uid())
+    v_countries, coalesce(p_rate, 600), p_expires_at, auth.uid())
   returning id into v_id;
   return jsonb_build_object('id', v_id, 'key', v_key, 'prefix', v_prefix);
 end $$;
@@ -743,7 +836,7 @@ returns void language plpgsql security definer set search_path = public as $$
 declare v_org uuid := public._device_ingest_require_admin();
 begin
   update public.device_ingest_keys set active = false, revoked_at = now(), revoked_by = auth.uid(), revoke_reason = left(p_reason, 500)
-   where id = p_id and organisation_id = v_org and revoked_at is null;
+   where id = p_id and organisation_id = v_org and revoked_at is null and public._device_countries_visible(countries);
   if not found then
     raise exception 'Key not found or already revoked' using errcode = '22023';
   end if;
@@ -764,7 +857,7 @@ begin
          (select count(*) from public.device_ingest_messages m where m.key_id = k.id and m.status = 'quarantined' and m.received_at > now() - interval '24 hours')
     from public.device_ingest_keys k
     left join public.telematics_devices td on td.id = k.device_row_id
-   where k.organisation_id = v_org
+   where k.organisation_id = v_org and public._device_countries_visible(k.countries)
    order by k.created_at desc;
 end $$;
 
@@ -793,9 +886,11 @@ returns setof public.device_ingest_unmatched
 language plpgsql stable security definer set search_path = public as $$
 declare v_org uuid := public._device_ingest_require_admin();
 begin
-  return query select * from public.device_ingest_unmatched
-   where organisation_id = v_org and status = 'open'
-   order by created_at desc limit least(greatest(coalesce(p_limit, 100), 1), 500);
+  return query select u.* from public.device_ingest_unmatched u
+    left join public.device_ingest_keys k on k.id = u.key_id
+   where u.organisation_id = v_org and u.status = 'open'
+     and public._device_countries_visible(k.countries)
+   order by u.created_at desc limit least(greatest(coalesce(p_limit, 100), 1), 500);
 end $$;
 
 -- One-click match: replay the stored message against the chosen asset.
@@ -807,10 +902,11 @@ declare
   v_r jsonb;
 begin
   select * into u from public.device_ingest_unmatched where id = p_id and organisation_id = v_org and status = 'open' for update;
-  if not found then
+  if not found or not public._device_countries_visible((select countries from public.device_ingest_keys where id = u.key_id)) then
     raise exception 'Reading not found or already handled' using errcode = '22023';
   end if;
-  if not exists (select 1 from public.vehicle_fleet where id = p_vehicle_id and organisation_id = v_org) then
+  if not exists (select 1 from public.vehicle_fleet where id = p_vehicle_id and organisation_id = v_org
+                   and public.app_can_see_country(country)) then
     raise exception 'Asset not found' using errcode = '22023';
   end if;
   v_r := public._device_ingest_process(v_org, u.key_id, u.payload, false, p_vehicle_id);
@@ -828,8 +924,9 @@ create or replace function public.device_ingest_dismiss_unmatched(p_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_org uuid := public._device_ingest_require_admin();
 begin
-  update public.device_ingest_unmatched set status = 'dismissed', resolved_by = auth.uid(), resolved_at = now()
-   where id = p_id and organisation_id = v_org and status = 'open';
+  update public.device_ingest_unmatched u set status = 'dismissed', resolved_by = auth.uid(), resolved_at = now()
+   where u.id = p_id and u.organisation_id = v_org and u.status = 'open'
+     and public._device_countries_visible((select k.countries from public.device_ingest_keys k where k.id = u.key_id));
 end $$;
 
 -- "Send test payload": runs the exact matching path, writes nothing.
@@ -871,6 +968,20 @@ begin
     alert_repeat_hours = excluded.alert_repeat_hours, max_reading_age_days = excluded.max_reading_age_days, updated_by = excluded.updated_by, updated_at = now();
 end $$;
 
+-- Retention: usage minutes are only needed for the current minute; rejected
+-- ledger rows are monitoring only. Not scheduled here; call from a cron job.
+create or replace function public.device_ingest_purge(p_days int default 90)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_u int; v_r int;
+begin
+  delete from public.device_ingest_usage where minute < now() - interval '1 day';
+  get diagnostics v_u = row_count;
+  delete from public.device_ingest_messages
+   where status = 'rejected' and received_at < now() - make_interval(days => least(greatest(coalesce(p_days, 90), 7), 3650));
+  get diagnostics v_r = row_count;
+  return jsonb_build_object('usage_rows', v_u, 'rejected_rows', v_r);
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- Grants. Order is load-bearing (V500): grant the intended role first, then
 -- revoke PUBLIC, then revoke anon by name.
@@ -896,8 +1007,11 @@ begin
     'public.device_ingest_key_lookup(text)',
     'public.device_ingest_submit(uuid,jsonb)',
     'public._device_ingest_process(uuid,uuid,jsonb,boolean,uuid)',
-    'public._device_resolve_asset(uuid,uuid,jsonb,uuid)',
-    'public._device_alert(uuid,text,text,text,text,uuid)',
+    'public._device_resolve_asset(uuid,uuid,jsonb,uuid,text[])',
+    'public._device_admin_countries()',
+    'public._device_countries_visible(text[])',
+    'public.device_ingest_purge(int)',
+    'public._device_alert(uuid,text,text,text,text,uuid,text)',
     'public._device_ingest_require_admin()'] loop
     execute format('revoke execute on function %s from public', f);
     execute format('revoke execute on function %s from anon', f);
@@ -905,6 +1019,7 @@ begin
   end loop;
   execute 'grant execute on function public.device_ingest_key_lookup(text) to service_role';
   execute 'grant execute on function public.device_ingest_submit(uuid,jsonb) to service_role';
+  execute 'grant execute on function public.device_ingest_purge(int) to service_role';
 end $g$;
 
 commit;

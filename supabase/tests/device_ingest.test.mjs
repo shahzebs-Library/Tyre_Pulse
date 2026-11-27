@@ -11,6 +11,7 @@ const OTHER = '00000000-0000-0000-0000-000000000099'
 const ADMIN = '00000000-0000-0000-0000-0000000000a1'
 const MANAGER = '00000000-0000-0000-0000-0000000000a2'
 const STORE = '00000000-0000-0000-0000-0000000000a3'
+const KSA_ADMIN = '00000000-0000-0000-0000-0000000000a4'
 
 async function setup() {
   const db = new PGlite()
@@ -18,15 +19,21 @@ async function setup() {
     CREATE SCHEMA auth; CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
     GRANT USAGE ON SCHEMA public, auth TO authenticated, service_role, anon;
     CREATE TABLE profiles(id uuid PRIMARY KEY, org_id uuid, organisation_id uuid, role text, is_super_admin boolean DEFAULT false,
-      approved boolean DEFAULT true, locked boolean DEFAULT false);
-    INSERT INTO profiles VALUES ('${ADMIN}','${ORG}','${ORG}','Admin',false,true,false),
-      ('${MANAGER}','${ORG}','${ORG}','Manager',false,true,false),('${STORE}','${ORG}','${ORG}','Store Keeper',false,true,false);
+      approved boolean DEFAULT true, locked boolean DEFAULT false, country text[]);
+    INSERT INTO profiles VALUES ('${ADMIN}','${ORG}','${ORG}','Admin',false,true,false,'{ALL}'),
+      ('${MANAGER}','${ORG}','${ORG}','Manager',false,true,false,'{KSA}'),('${STORE}','${ORG}','${ORG}','Store Keeper',false,true,false,'{KSA}'),
+      ('${KSA_ADMIN}','${ORG}','${ORG}','Admin',false,true,false,'{KSA}');
     GRANT SELECT ON profiles TO authenticated;
     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('test.uid', true),'')::uuid $$;
     CREATE FUNCTION app_current_org() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT org_id FROM profiles WHERE id = auth.uid() $$;
     CREATE FUNCTION is_super_admin() RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT coalesce((SELECT is_super_admin FROM profiles WHERE id = auth.uid()), false) $$;
     CREATE FUNCTION app_role() RETURNS text LANGUAGE sql STABLE AS $$ SELECT lower(replace(coalesce(role,'reporter'),' ','_')) FROM profiles WHERE id = auth.uid() $$;
     CREATE FUNCTION app_is_org_admin() RETURNS boolean LANGUAGE sql STABLE AS $$ SELECT is_super_admin() OR app_role() = 'admin' $$;
+    -- same body as the live public.app_can_see_country (staging baseline)
+    CREATE FUNCTION app_can_see_country(p_country text) RETURNS boolean LANGUAGE sql STABLE AS $$
+      SELECT p_country IS NULL OR is_super_admin() OR EXISTS (SELECT 1 FROM profiles pr WHERE pr.id = auth.uid()
+        AND pr.country IS NOT NULL AND cardinality(pr.country) > 0
+        AND EXISTS (SELECT 1 FROM unnest(pr.country) x WHERE lower(btrim(x)) = 'all' OR lower(btrim(x)) = lower(btrim(p_country)))) $$;
     CREATE TABLE notifications(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid, type text, title text, body text,
       entity_type text, entity_id uuid, read boolean, created_at timestamptz DEFAULT now());
     CREATE TABLE vehicle_fleet(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organisation_id uuid, asset_no text, country text, site text,
@@ -43,13 +50,18 @@ async function setup() {
       latitude numeric, longitude numeric, speed_kmh numeric, heading numeric, altitude_m numeric, ignition boolean, odometer_km numeric,
       recorded_at timestamptz, notes text);
     CREATE TABLE odometer_logs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organisation_id uuid, country text, asset_no text NOT NULL,
-      odometer_km numeric, reading_date date, source text, site text, notes text, client_uuid text UNIQUE);
+      odometer_km numeric, reading_date date, source text, site text, notes text, client_uuid text);
+    -- the live shapes: a GLOBAL unique index on client_uuid plus a partial one
+    CREATE UNIQUE INDEX odometer_logs_client_uuid_upsert_idx ON odometer_logs (client_uuid);
+    CREATE UNIQUE INDEX ux_odometer_logs_client_uuid ON odometer_logs (client_uuid) WHERE client_uuid IS NOT NULL;
     CREATE FUNCTION sync_km() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
       UPDATE vehicle_fleet SET current_km = NEW.odometer_km WHERE organisation_id = NEW.organisation_id AND asset_no = NEW.asset_no
         AND country IS NOT DISTINCT FROM NEW.country AND (current_km IS NULL OR NEW.odometer_km >= current_km); RETURN NEW; END $$;
     CREATE TRIGGER trg_sync AFTER INSERT ON odometer_logs FOR EACH ROW EXECUTE FUNCTION sync_km();
     CREATE TABLE engine_hours_logs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organisation_id uuid, country text, asset_no text NOT NULL,
-      engine_hours numeric, reading_date date, source text, site text, notes text, client_uuid text UNIQUE);
+      engine_hours numeric, reading_date date, source text, site text, notes text, client_uuid text);
+    CREATE UNIQUE INDEX engine_hours_logs_client_uuid_upsert_idx ON engine_hours_logs (client_uuid);
+    CREATE UNIQUE INDEX ux_engine_hours_logs_client_uuid ON engine_hours_logs (client_uuid) WHERE client_uuid IS NOT NULL;
     CREATE TABLE tpms_readings(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), organisation_id uuid, country text, site text, asset_no text,
       tyre_position text, tyre_serial text, pressure numeric, temperature numeric, target_pressure numeric,
       status text CHECK (status IN ('optimal','under','over','critical')), recorded_at timestamptz, source text, notes text);
@@ -169,17 +181,18 @@ test('device ingest: admin-only management, idempotent ingest, quarantine, alert
     await db.exec('RESET ROLE')
     assert.equal((await one(db, `SELECT status FROM tpms_readings LIMIT 1`)).status, 'critical')
     const n = (await db.query(`SELECT user_id, type FROM notifications`)).rows
-    assert.deepEqual(n.map((x) => x.user_id), [ADMIN, ADMIN])
-    assert.deepEqual(n.map((x) => x.type).sort(), ['dtc_alert', 'tpms_alert'])
+    // TM514 is a KSA asset, so the KSA-only Admin hears about it too
+    assert.deepEqual(n.map((x) => x.user_id).sort(), [ADMIN, ADMIN, KSA_ADMIN, KSA_ADMIN])
+    assert.deepEqual(n.map((x) => x.type).sort(), ['dtc_alert', 'dtc_alert', 'tpms_alert', 'tpms_alert'])
   })
 
   await t.test('odometer clash on client_uuid is ledgered as duplicate, not accepted with no target', async () => {
     await db.exec('RESET ROLE')
-    await db.exec(`INSERT INTO odometer_logs(organisation_id, country, asset_no, odometer_km, client_uuid) VALUES ('${ORG}','KSA','TM514',1,'dev:clash1')`)
+    await db.exec(`INSERT INTO odometer_logs(organisation_id, country, asset_no, odometer_km, client_uuid) VALUES ('${ORG}','KSA','TM514',1,'dev:${ORG}:${keyId}:m:clash1')`)
     const r = await submit([{ type: 'odometer', message_id: 'clash1', asset: { asset_no: 'TM514' }, data: { odometer_km: 150200 } }])
     assert.equal(r.results[0].status, 'duplicate')
     await db.exec('RESET ROLE')
-    const m = await one(db, `SELECT status, target_id FROM device_ingest_messages WHERE idem_key='clash1'`)
+    const m = await one(db, `SELECT status, target_id FROM device_ingest_messages WHERE idem_key=$1`, [`${keyId}:m:clash1`])
     assert.equal(m.status, 'duplicate')
     assert.equal(m.target_id, null)
   })
@@ -220,6 +233,97 @@ test('device ingest: admin-only management, idempotent ingest, quarantine, alert
     assert.equal(r.error, 'rate_limited')
     await db.exec('RESET ROLE')
     assert.equal((await one(db, `SELECT count::int n FROM device_ingest_usage WHERE key_id=$1`, [rk.id])).n, 11)
+  })
+
+  await t.test('two orgs (and two keys) sending the same message id both land', async () => {
+    await db.exec('RESET ROLE')
+    const other = await one(db, `INSERT INTO device_ingest_keys(organisation_id, name, key_prefix, key_hash, data_types)
+      VALUES ('${OTHER}','other org','tpd_other00001','x',array['odometer']) RETURNING id`)
+    const second = await one(db, `INSERT INTO device_ingest_keys(organisation_id, name, key_prefix, key_hash, data_types)
+      VALUES ('${ORG}','second key','tpd_second0001','x',array['odometer']) RETURNING id`)
+    const msg = [{ type: 'odometer', message_id: 'shared-1', asset: { asset_no: 'TM514' }, data: { odometer_km: 150300 } }]
+    const a = await submit(msg)
+    await as(db, '', 'service_role')
+    const b = (await one(db, `SELECT device_ingest_submit($1, $2::jsonb) r`, [other.id,
+      JSON.stringify([{ ...msg[0], asset: { asset_no: 'TM999' } }])])).r
+    const c = (await one(db, `SELECT device_ingest_submit($1, $2::jsonb) r`, [second.id, JSON.stringify(msg)])).r
+    assert.deepEqual([a, b, c].map((x) => x.results[0].status), ['accepted', 'accepted', 'accepted'])
+    await db.exec('RESET ROLE')
+    assert.equal((await one(db, `SELECT count(*)::int n FROM odometer_logs WHERE client_uuid LIKE '%:m:shared-1'`)).n, 3)
+  })
+
+  await t.test('without message_id or recorded_at, the same reading a minute later is new; within the minute it is a duplicate', async () => {
+    const msg = { type: 'gps', asset: { asset_no: 'TM514' }, data: { lat: 3, lon: 3 } }
+    const r1 = await submit([msg, msg])
+    assert.deepEqual(r1.results.map((x) => x.status), ['accepted', 'duplicate'])
+  })
+
+  await t.test('an unexpected error rejects that one message; the rest of the batch still lands', async () => {
+    await db.exec('RESET ROLE')
+    await db.exec(`CREATE FUNCTION boom() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.latitude = 99 THEN RAISE EXCEPTION 'boom'; END IF; RETURN NEW; END $$;
+      CREATE TRIGGER trg_boom BEFORE INSERT ON gps_positions FOR EACH ROW EXECUTE FUNCTION boom();`)
+    const r = await submit([
+      { type: 'gps', message_id: 'boom1', asset: { asset_no: 'TM514' }, data: { lat: 99, lon: 1 } },
+      { type: 'gps', message_id: 'ok1', asset: { asset_no: 'TM514' }, data: { lat: 4, lon: 4 } }])
+    assert.equal(r.ok, true)
+    assert.deepEqual(r.results.map((x) => [x.status, x.error ?? null]), [['rejected', 'processing_error'], ['accepted', null]])
+    await db.exec('RESET ROLE')
+    assert.equal((await one(db, `SELECT count(*)::int n FROM device_ingest_messages WHERE idem_key LIKE '%:m:boom1'`)).n, 0)
+    await db.exec('DROP TRIGGER trg_boom ON gps_positions')
+  })
+
+  await t.test('a KSA-only Admin cannot reach UAE assets or all-country keys', async () => {
+    await as(db, KSA_ADMIN)
+    const k = (await one(db, `SELECT device_ingest_key_create('KSA feed', array['gps']) k`)).k
+    await db.exec('RESET ROLE')
+    assert.deepEqual((await one(db, `SELECT countries FROM device_ingest_keys WHERE id=$1`, [k.id])).countries, ['KSA'])
+    await as(db, KSA_ADMIN)
+    // GN103 exists in KSA and UAE; a KSA admin's dry run only sees the KSA one
+    const dry = (await one(db, `SELECT device_ingest_dry_run($1::jsonb) r`, [JSON.stringify([
+      { type: 'gps', asset: { asset_no: 'GN103' }, data: { lat: 1, lon: 1 } }])])).r
+    assert.equal(dry.results[0].country, 'KSA')
+    // the earlier keys are all-country keys: their payloads and the keys themselves are hidden
+    const seen = (await db.query(`SELECT key_id FROM device_ingest_unmatched_list(50)`)).rows
+    assert.ok(seen.every((x) => x.key_id !== keyId), 'payloads from the all-country key stay hidden')
+    // KSA keys (its own, and the one bound to a KSA device) show; the all-country 'Fleet feed' does not
+    assert.deepEqual((await db.query(`SELECT name FROM device_ingest_keys_list()`)).rows.map((x) => x.name).sort(), ['Bound', 'KSA feed'])
+    await db.exec('RESET ROLE')
+    const uae = await one(db, `SELECT id FROM vehicle_fleet WHERE asset_no='GN103' AND country='UAE'`)
+    const open = await one(db, `SELECT id FROM device_ingest_unmatched WHERE status='open' LIMIT 1`)
+    await as(db, KSA_ADMIN)
+    await assert.rejects(db.query(`SELECT device_ingest_resolve_unmatched($1,$2)`, [open.id, uae.id]), (e) => e.code === '22023')
+    // the key it minted cannot write to UAE even when the payload names a UAE asset
+    await as(db, '', 'service_role')
+    const w = (await one(db, `SELECT device_ingest_submit($1, $2::jsonb) r`, [k.id,
+      JSON.stringify([{ type: 'gps', message_id: 'ksa1', asset: { asset_no: 'GN103', country: 'UAE' }, data: { lat: 1, lon: 1 } }])])).r
+    assert.equal(w.results[0].status, 'quarantined')
+    assert.equal(w.results[0].reason, 'unknown')
+  })
+
+  await t.test('a bound key only updates its own device last_seen', async () => {
+    await db.exec('RESET ROLE')
+    const mine = await one(db, `INSERT INTO telematics_devices(organisation_id, country, device_id, asset_no) VALUES ('${ORG}','KSA','IMEI-MINE','TM514') RETURNING id`)
+    const before = (await one(db, `SELECT last_seen_at FROM telematics_devices WHERE device_id='IMEI-GN103-UAE'`)).last_seen_at
+    await as(db, ADMIN)
+    const bk = (await one(db, `SELECT device_ingest_key_create('Mine', array['gps'], $1) k`, [mine.id])).k
+    await as(db, '', 'service_role')
+    await one(db, `SELECT device_ingest_submit($1, $2::jsonb) r`, [bk.id,
+      JSON.stringify([{ type: 'gps', message_id: 'ls1', device_id: 'IMEI-GN103-UAE', data: { lat: 5, lon: 5 } }])])
+    await db.exec('RESET ROLE')
+    assert.ok((await one(db, `SELECT last_seen_at FROM telematics_devices WHERE id=$1`, [mine.id])).last_seen_at)
+    assert.deepEqual((await one(db, `SELECT last_seen_at FROM telematics_devices WHERE device_id='IMEI-GN103-UAE'`)).last_seen_at, before)
+  })
+
+  await t.test('purge is service-role only and trims old usage and rejected rows', async () => {
+    await as(db, ADMIN)
+    await assert.rejects(db.query(`SELECT device_ingest_purge(30)`), (e) => e.code === '42501')
+    await db.exec('RESET ROLE')
+    await db.exec(`UPDATE device_ingest_usage SET minute = now() - interval '2 days'`)
+    await db.exec(`UPDATE device_ingest_messages SET received_at = now() - interval '100 days' WHERE status='rejected'`)
+    await as(db, '', 'service_role')
+    const r = (await one(db, `SELECT device_ingest_purge(90) r`)).r
+    assert.ok(r.usage_rows > 0 && r.rejected_rows > 0)
   })
 
   await t.test('revoked key refuses everything', async () => {

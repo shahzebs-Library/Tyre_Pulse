@@ -80,6 +80,10 @@ import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_360_panels.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
+import 'package:tyre_pulse/features/fleet_verification/fleet_verification_providers.dart';
+import 'package:tyre_pulse/features/fleet_verification/presentation/fleet_verification_copy.dart';
+import 'package:tyre_pulse/features/fleet_verification/presentation/fleet_verification_screen.dart';
+import 'package:tyre_pulse/features/fleet_verification/presentation/vehicle_uploaded_photo.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_record.dart';
 import 'package:tyre_pulse/features/report_issue/presentation/report_issue_copy.dart';
@@ -512,6 +516,23 @@ class _DetailViewState extends ConsumerState<_DetailView> {
                             draft: draft,
                             l10n: l10n,
                           ),
+                          if (ref.watch(canVerifyOnSiteProvider)) ...<Widget>[
+                            const SizedBox(height: TpSpace.md),
+                            TpButton.secondary(
+                              label:
+                                  FleetVerificationCopy.of(context)('action'),
+                              icon: Icons.fact_check_outlined,
+                              isFullWidth: true,
+                              onPressed: () => FleetVerificationScreen.open(
+                                context,
+                                asset,
+                              ).then(
+                                (_) => ref.invalidate(
+                                  vehicleImagePathProvider(asset.id),
+                                ),
+                              ),
+                            ),
+                          ],
                           if (serviceDue != null ||
                               (tyreActions != null &&
                                   tyreActions > 0)) ...<Widget>[
@@ -1001,51 +1022,59 @@ class _HeroPhoto extends StatelessWidget {
     // A soft sky wash behind the illustration, so the vehicle sits on the
     // card the way the mock's hero photograph does rather than floating on
     // flat white.
-    return Container(
-      key: VehicleDetailScreenKeys.heroPhoto,
+    // The machine's own photo (image_path, e.g. from an on-site
+    // verification) wins over the class artwork.
+    return VehicleUploadedPhoto(
+      vehicleId: asset.id,
       width: width,
       height: height,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(TpRadius.lg),
-        gradient: RadialGradient(
-          center: const Alignment(0, -0.15),
-          radius: 0.85,
-          colors: <Color>[
-            glow.soft,
-            glow.soft.withValues(alpha: 0.35),
-            palette.surface.withValues(alpha: 0),
-          ],
-          stops: const <double>[0, 0.6, 1],
+      semanticLabel: asset.displayIdentity,
+      fallback: Container(
+        key: VehicleDetailScreenKeys.heroPhoto,
+        width: width,
+        height: height,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(TpRadius.lg),
+          gradient: RadialGradient(
+            center: const Alignment(0, -0.15),
+            radius: 0.85,
+            colors: <Color>[
+              glow.soft,
+              glow.soft.withValues(alpha: 0.35),
+              palette.surface.withValues(alpha: 0),
+            ],
+            stops: const <double>[0, 0.6, 1],
+          ),
         ),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: <Widget>[
-          if (image == null)
-            Container(
-              width: height * 0.62,
-              height: height * 0.62,
-              decoration: BoxDecoration(
-                color: palette.primarySoft,
-                shape: BoxShape.circle,
+        child: Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            if (image == null)
+              Container(
+                width: height * 0.62,
+                height: height * 0.62,
+                decoration: BoxDecoration(
+                  color: palette.primarySoft,
+                  shape: BoxShape.circle,
+                ),
+                child: vehicleFallbackGlyph(
+                  asset,
+                  size: height * 0.36,
+                  color: palette.primary,
+                ),
+              )
+            else
+              Image.asset(
+                image,
+                width: width,
+                height: height,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+                semanticLabel: asset.displayIdentity,
               ),
-              child: vehicleFallbackGlyph(
-                asset,
-                size: height * 0.36,
-                color: palette.primary,
-              ),
-            )
-          else
-            Image.asset(
-              image,
-              width: width,
-              height: height,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
-              semanticLabel: asset.displayIdentity,
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

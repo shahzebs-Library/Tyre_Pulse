@@ -139,12 +139,6 @@
   "drawer": {
     "original": "What the driver wrote",
     "originalLang": "Original language: {lang}",
-    "translation": "Machine translation",
-    "machineNote": "Machine translation by {model}. The original above is the record.",
-    "translateTo": "Translate to",
-    "translate": "Translate",
-    "translating": "Translating...",
-    "translateFailed": "Translation is not available right now.",
     "outcome": "Answer to the driver",
     "proposal": "Proposed solution",
     "timeline": "Timeline",

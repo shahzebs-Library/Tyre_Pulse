@@ -184,11 +184,6 @@ export function summarize(rows, now = new Date()) {
   }
 }
 
-/** Pick the translation for `lang` of a source, or null. Never the original. */
-export function translationFor(translations, source, sourceId, lang) {
-  return (translations || []).find(t => t.source === source && String(t.source_id || '') === String(sourceId || '') && t.target_lang === lang) || null
-}
-
 /** Storage path for an evidence photo: <org>/<uploader uid>/<client uuid>/<n>.jpg */
 export function photoPath(orgId, userId, clientUuid, index, ext = 'jpg') {
   return `${orgId}/${userId}/${clientUuid}/${index}.${ext}`

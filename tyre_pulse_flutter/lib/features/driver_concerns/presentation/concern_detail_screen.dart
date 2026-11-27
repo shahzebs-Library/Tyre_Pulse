@@ -1,5 +1,5 @@
-/// One concern: what was written, the answer in the driver's own language
-/// (machine translation, labelled, the original one tap away), the mandatory
+/// One concern: what was written and the answer, both shown exactly as written
+/// (never machine-translated), the mandatory
 /// "I have seen this" step, then a signature and Accept / Not accepted.
 /// Not accepted moves the case up a level; the driver keeps the right to go to
 /// the labour office and the screen says so. Withdraw and reopen (inside the
@@ -22,7 +22,6 @@ abstract final class ConcernDetailKeys {
   static const Key notAccept = Key('dc.detail.notAccept');
   static const Key withdraw = Key('dc.detail.withdraw');
   static const Key reopen = Key('dc.detail.reopen');
-  static const Key translate = Key('dc.detail.translate');
 }
 
 class ConcernDetailScreen extends ConsumerStatefulWidget {
@@ -38,12 +37,10 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
   ConcernDetail? _detail;
   Object? _error;
   bool _busy = false;
-  bool _showOriginalOutcome = false;
   String? _signature;
   bool _driverPresent = false;
   final TextEditingController _reason = TextEditingController();
   final TextEditingController _note = TextEditingController();
-  final Map<String, String> _fresh = <String, String>{};
   List<String> _photoUrls = const <String>[];
 
   DriverConcernRepository get _repo =>
@@ -74,36 +71,9 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
         _error = null;
         _photoUrls = urls.whereType<String>().toList();
       });
-      unawaited(_autoTranslateOutcome(d));
     } on Object catch (e) {
       if (mounted) setState(() => _error = e);
     }
-  }
-
-  /// The driver reads the answer in their own language without asking.
-  Future<void> _autoTranslateOutcome(ConcernDetail d) async {
-    final String lang = DriverConcernsCopy.of(context).language;
-    final String? text = d.concern.outcomeText;
-    if (!d.isDriver || text == null || d.concern.outcomeLang == lang) return;
-    if (d.translationFor('outcome', lang) != null) return;
-    final String? t =
-        await _repo.translate(d.concern.id, 'outcome', text, lang);
-    if (t != null && mounted) setState(() => _fresh['outcome'] = t);
-  }
-
-  Future<void> _translateMine(String lang) async {
-    final ConcernDetail? d = _detail;
-    final String? text = d?.concern.originalText;
-    if (d == null || text == null) return;
-    setState(() => _busy = true);
-    final String? t =
-        await _repo.translate(d.concern.id, 'concern', text, lang);
-    if (!mounted) return;
-    setState(() {
-      _busy = false;
-      if (t != null) _fresh['concern'] = t;
-    });
-    if (t == null) _snack(DriverConcernsCopy.of(context)('translateFailed'));
   }
 
   void _snack(String m) =>
@@ -230,12 +200,7 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
       userId: _currentUserId(),
     );
     final String lang = c.language;
-    final String? concernTr =
-        _fresh['concern'] ?? d.translationFor('concern', lang)?.text;
-    final String? outcomeTr =
-        _fresh['outcome'] ?? d.translationFor('outcome', lang)?.text;
-    final String? outcomeShown =
-        (_showOriginalOutcome || outcomeTr == null) ? k.outcomeText : outcomeTr;
+    final String? outcomeShown = k.outcomeText;
 
     Widget section(String title, List<Widget> children) => Padding(
           padding: const EdgeInsets.only(top: 16),
@@ -283,20 +248,6 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
                   k.originalText ?? '',
                   textDirection: _dirOf(k.originalText),
                 ),
-                if (!d.isDriver) ...<Widget>[
-                  const SizedBox(height: 6),
-                  if (concernTr != null) ...<Widget>[
-                    Text(concernTr, textDirection: _dirOf(concernTr)),
-                    Text(c('machine'), style: theme.textTheme.labelSmall),
-                  ] else
-                    TextButton.icon(
-                      key: ConcernDetailKeys.translate,
-                      onPressed: () => _translateMine(lang),
-                      icon: const Icon(Icons.translate),
-                      label:
-                          Text(_busy ? c('translating') : c('showTranslation')),
-                    ),
-                ],
                 if (_photoUrls.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -325,26 +276,6 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
                     style: theme.textTheme.bodyLarge,
                     textDirection: _dirOf(outcomeShown),
                   ),
-                  if (outcomeTr != null)
-                    Row(
-                      children: <Widget>[
-                        Text(
-                          _showOriginalOutcome ? '' : c('machine'),
-                          style: theme.textTheme.labelSmall,
-                        ),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: () => setState(
-                            () => _showOriginalOutcome = !_showOriginalOutcome,
-                          ),
-                          child: Text(
-                            _showOriginalOutcome
-                                ? c('showTranslation')
-                                : c('showOriginal'),
-                          ),
-                        ),
-                      ],
-                    ),
                 ]),
               if (can.contains('view_outcome') && k.outcomeSeenAt == null)
                 Padding(
@@ -552,8 +483,12 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
     }
   }
 
+  /// Text is shown exactly as written, so its direction follows its own
+  /// script, not the interface language.
   static TextDirection? _dirOf(String? t) {
-    if (t == null) return null;
-    return RegExp(r'[֐-ࣿﭐ-﻿]').hasMatch(t) ? TextDirection.rtl : null;
+    if (t == null || t.trim().isEmpty) return null;
+    return RegExp(r'[֐-ࣿﭐ-﻿]').hasMatch(t)
+        ? TextDirection.rtl
+        : TextDirection.ltr;
   }
 }

@@ -139,12 +139,6 @@
   "drawer": {
     "original": "ما كتبه السائق",
     "originalLang": "اللغة الأصلية: {lang}",
-    "translation": "ترجمة آلية",
-    "machineNote": "ترجمة آلية بواسطة {model}. النص الأصلي أعلاه هو السجل.",
-    "translateTo": "ترجم إلى",
-    "translate": "ترجم",
-    "translating": "جارٍ الترجمة...",
-    "translateFailed": "الترجمة غير متاحة الآن.",
     "outcome": "الرد على السائق",
     "proposal": "الحل المقترح",
     "timeline": "السجل الزمني",

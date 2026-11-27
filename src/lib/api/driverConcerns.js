@@ -4,8 +4,6 @@
  * org, visibility (sensitive cases never reach the fleet pool) and the rung.
  */
 import { supabase, unwrap, toServiceError, isNotProvisioned } from './_client'
-import { invokeChatAI } from './uploads'
-import { CONCERN_LANGS } from '../driverConcerns'
 
 const COLS = [
   'id', 'case_no', 'driver_id', 'category', 'subtype', 'sensitive', 'status', 'level',
@@ -74,46 +72,3 @@ export async function signedPhotoUrl(path, seconds = 300) {
   return data?.signedUrl || null
 }
 
-const MODEL = 'claude-haiku-4-5' // chat-ai locks the model server-side; recorded for the label
-
-/**
- * Machine translation through the chat-ai edge function. Returns
- * { text, detectedLang, model } or null. The original is never touched.
- */
-export async function translateText(text, targetLang) {
-  if (!text || !CONCERN_LANGS.includes(targetLang)) return null
-  const system = 'You translate short workplace messages. Reply with JSON only: {"detected":"<iso code>","text":"<translation>"}. Use one of: en, ar, ur, hi, bn, ps, ne, tl for detected. Keep names, numbers and dates unchanged. Do not add anything.'
-  const user = `Translate into ${targetLang}:\n${text}`
-  const res = await invokeChatAI({ system, user, max_tokens: 800 })
-  if (res?.error || res?.data?.error) return null
-  const raw = String(res?.data?.content || '')
-  const start = raw.indexOf('{'); const end = raw.lastIndexOf('}')
-  if (start < 0 || end <= start) return null
-  try {
-    const parsed = JSON.parse(raw.slice(start, end + 1))
-    if (!parsed?.text) return null
-    const detected = CONCERN_LANGS.includes(parsed.detected) ? parsed.detected : null
-    return { text: String(parsed.text), detectedLang: detected, model: res?.data?.model || MODEL }
-  } catch {
-    return null
-  }
-}
-
-export async function saveTranslation(id, { source, sourceId = '', targetLang, text, model, modelVersion = null, detectedLang = null }) {
-  return unwrap(await supabase.rpc('driver_concern_add_translation', {
-    p_id: id, p_source: source, p_source_id: sourceId, p_target_lang: targetLang,
-    p_text: text, p_model: model, p_model_version: modelVersion, p_detected_lang: detectedLang,
-  }))
-}
-
-/** Translate and store, best-effort. Returns the saved row shape or null. */
-export async function translateAndSave(id, source, sourceId, text, targetLang) {
-  const out = await translateText(text, targetLang)
-  if (!out) return null
-  try {
-    await saveTranslation(id, { source, sourceId, targetLang, text: out.text, model: out.model, detectedLang: out.detectedLang })
-  } catch {
-    return null
-  }
-  return { source, source_id: sourceId, target_lang: targetLang, text: out.text, model: out.model, generated_at: new Date().toISOString() }
-}

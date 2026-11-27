@@ -4,7 +4,7 @@ import path from 'node:path'
 import {
   CATEGORIES, isValidSubtype, isSensitiveCategory, nextLevel, levelRank, slaHours,
   deadlineState, canReopen, allowedActions, sortInbox, filterConcerns, summarize,
-  translationFor, photoPath,
+  photoPath,
 } from '../lib/driverConcerns'
 import { buildConcernDocument, needsScriptImage, isRtlText } from '../lib/driverConcernPdf'
 import en from '../locales/en/driverConcerns.json'
@@ -130,10 +130,7 @@ describe('inbox', () => {
   it('summary', () => {
     expect(summarize(rows, NOW)).toEqual({ total: 4, open: 3, overdue: 1, awaitingApproval: 1, awaitingDriver: 0, sensitive: 1 })
   })
-  it('translations are picked by source and language, and the path is scoped', () => {
-    const tr = [{ source: 'concern', source_id: '', target_lang: 'ar', text: 'x' }]
-    expect(translationFor(tr, 'concern', '', 'ar').text).toBe('x')
-    expect(translationFor(tr, 'concern', '', 'ur')).toBeNull()
+  it('the photo path is scoped', () => {
     expect(photoPath('org', 'uid', 'cu', 0)).toBe('org/uid/cu/0.jpg')
   })
 })
@@ -146,10 +143,12 @@ describe('outcome PDF model', () => {
     translations: [{ source: 'concern', source_id: '', target_lang: 'en', text: 'My salary is late', model: 'claude-haiku-4-5', generated_at: h(-3) }],
     events: [{ created_at: h(-4), event_type: 'raised', actor_role: 'Driver', note: null }],
   }
-  it('keeps the original, labels the machine translation and states the labour-office right', () => {
-    const m = buildConcernDocument(detail, { readerLang: 'en' })
+  it('prints the original only, never a translation, and states the labour-office right', () => {
+    const m = buildConcernDocument(detail)
     expect(m.original.text).toBe('راتبي متأخر')
-    expect(m.translation).toMatchObject({ text: 'My salary is late', model: 'claude-haiku-4-5' })
+    expect(m.translation).toBeUndefined()
+    expect(m.outcome).toEqual({ text: 'Paid on 30 Nov' })
+    expect(JSON.stringify(m)).not.toMatch(/My salary is late|claude/)
     expect(m.decision.decision).toBe('Accepted')
     expect(m.labourOffice).toMatch(/labour office/)
     expect(m.timeline).toHaveLength(1)

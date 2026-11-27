@@ -204,14 +204,6 @@ abstract interface class DriverConcernRepository {
     int? expectedVersion,
   });
 
-  /// Machine translation, stored on the case. Null when unavailable.
-  Future<String?> translate(
-    String id,
-    String source,
-    String text,
-    String targetLang,
-  );
-
   Future<String?> signedPhotoUrl(String path);
 }
 
@@ -397,57 +389,6 @@ final class SupabaseDriverConcernRepository implements DriverConcernRepository {
           },
         ),
       );
-
-  @override
-  Future<String?> translate(
-    String id,
-    String source,
-    String text,
-    String targetLang,
-  ) async {
-    if (!concernLanguages.contains(targetLang) || text.trim().isEmpty) {
-      return null;
-    }
-    try {
-      final FunctionResponse res = await _client.functions.invoke(
-        'chat-ai',
-        body: <String, Object?>{
-          'system':
-              'You translate short workplace messages. Reply with JSON only: {"detected":"<iso code>","text":"<translation>"}. Use one of: en, ar, ur, hi, bn, ps, ne, tl for detected. Keep names, numbers and dates unchanged.',
-          'user': 'Translate into $targetLang:\n$text',
-          'max_tokens': 800,
-        },
-      ).timeout(const Duration(seconds: 30));
-      final Object? data = res.data;
-      if (data is! Map) return null;
-      final String raw = '${data['content'] ?? ''}';
-      final int a = raw.indexOf('{');
-      final int b = raw.lastIndexOf('}');
-      if (a < 0 || b <= a) return null;
-      final Map<String, Object?> parsed =
-          Map<String, Object?>.from(jsonDecode(raw.substring(a, b + 1)) as Map);
-      final String? translated = parsed['text'] as String?;
-      if (translated == null || translated.isEmpty) return null;
-      final String? detected = concernLanguages.contains(parsed['detected'])
-          ? parsed['detected'] as String?
-          : null;
-      await _client.rpc<Object?>(
-        'driver_concern_add_translation',
-        params: <String, Object?>{
-          'p_id': id,
-          'p_source': source,
-          'p_source_id': '',
-          'p_target_lang': targetLang,
-          'p_text': translated,
-          'p_model': '${data['model'] ?? 'claude-haiku-4-5'}',
-          'p_detected_lang': detected,
-        },
-      );
-      return translated;
-    } on Object {
-      return null;
-    }
-  }
 
   @override
   Future<String?> signedPhotoUrl(String path) async {

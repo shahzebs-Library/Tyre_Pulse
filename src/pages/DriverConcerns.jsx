@@ -6,7 +6,7 @@
  * write (PT409).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { MessageSquareWarning, ShieldAlert, AlertTriangle, Clock, Languages, FileDown, Link2 } from 'lucide-react'
+import { MessageSquareWarning, ShieldAlert, AlertTriangle, Clock, FileDown, Link2 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SideDrawer from '../components/ui/SideDrawer'
@@ -14,12 +14,12 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useAuth } from '../contexts/AuthContext'
 import { toUserMessage } from '../lib/safeError'
 import {
-  CATEGORIES, CONCERN_LANGS, LANG_NAMES, LEVELS, STATUSES,
+  CATEGORIES, LANG_NAMES, LEVELS, STATUSES,
   allowedActions, deadlineState, filterConcerns, hoursLeft, isTerminal,
-  sortInbox, summarize, translationFor,
+  sortInbox, summarize,
 } from '../lib/driverConcerns'
 import {
-  listConcerns, getConcern, concernCommand, isStale, translateAndSave,
+  listConcerns, getConcern, concernCommand, isStale,
   setConcernPdf, signedPhotoUrl,
 } from '../lib/api/driverConcerns'
 
@@ -162,8 +162,6 @@ function ConcernDrawer({ id, t, language, onClose, onChanged }) {
   const [proposal, setProposal] = useState('')
   const [linkCase, setLinkCase] = useState('')
   const [linkKind, setLinkKind] = useState('related')
-  const [targetLang, setTargetLang] = useState(CONCERN_LANGS.includes(language) ? language : 'en')
-  const [translating, setTranslating] = useState(false)
   const [photoUrls, setPhotoUrls] = useState([])
 
   const reload = useCallback(async () => {
@@ -200,14 +198,6 @@ function ConcernDrawer({ id, t, language, onClose, onChanged }) {
     } finally { setBusy(false) }
   }
 
-  const translate = async () => {
-    setTranslating(true); setMsg(null)
-    const saved = await translateAndSave(id, 'concern', '', c.original_text, targetLang)
-    if (!saved) setMsg(t('driverConcerns.drawer.translateFailed'))
-    await reload()
-    setTranslating(false)
-  }
-
   const pdf = async () => {
     setBusy(true)
     try {
@@ -218,7 +208,7 @@ function ConcernDrawer({ id, t, language, onClose, onChanged }) {
         status: v => t(`driverConcerns.statuses.${v}`),
         event: v => t(`driverConcerns.events.${v}`),
       }
-      const { sha256 } = await renderDriverConcernPdf(detail, { labels, readerLang: targetLang })
+      const { sha256 } = await renderDriverConcernPdf(detail, { labels })
       await setConcernPdf(id, sha256)
       setMsg(t('driverConcerns.drawer.pdfSaved'))
       await reload()
@@ -234,8 +224,6 @@ function ConcernDrawer({ id, t, language, onClose, onChanged }) {
     run('link', { target_id: data.id, kind: linkKind })
   }
 
-  const tr = c ? translationFor(detail?.translations, 'concern', '', targetLang) : null
-  const outcomeTr = c ? translationFor(detail?.translations, 'outcome', '', targetLang) : null
   const can = a => actions.has(a)
 
   return (
@@ -261,20 +249,6 @@ function ConcernDrawer({ id, t, language, onClose, onChanged }) {
             <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>{t('driverConcerns.drawer.originalLang', { lang: LANG_NAMES[c.original_lang] || '?' })}</p>
           </section>
 
-          <section className="rounded p-3" style={{ background: 'var(--surface-raised, rgba(0,0,0,0.04))' }}>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Languages className="w-4 h-4" />
-              <span className="font-semibold">{t('driverConcerns.drawer.translation')}</span>
-              <select className="input text-xs" value={targetLang} onChange={e => setTargetLang(e.target.value)} aria-label={t('driverConcerns.drawer.translateTo')}>
-                {CONCERN_LANGS.map(l => <option key={l} value={l}>{LANG_NAMES[l]}</option>)}
-              </select>
-              {!tr && <button type="button" className="btn-secondary text-xs" disabled={translating} onClick={translate}>{translating ? t('driverConcerns.drawer.translating') : t('driverConcerns.drawer.translate')}</button>}
-            </div>
-            {tr && <>
-              <p className="whitespace-pre-wrap mt-2" dir="auto">{tr.text}</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>{t('driverConcerns.drawer.machineNote', { model: tr.model })}</p>
-            </>}
-          </section>
 
           <section>
             <h3 className="font-semibold mb-1">{t('driverConcerns.drawer.photos')}</h3>
@@ -289,7 +263,6 @@ function ConcernDrawer({ id, t, language, onClose, onChanged }) {
             <section>
               <h3 className="font-semibold mb-1">{t('driverConcerns.drawer.outcome')}</h3>
               <p className="whitespace-pre-wrap" dir="auto">{c.outcome_text}</p>
-              {outcomeTr && <p className="whitespace-pre-wrap mt-1 text-xs" dir="auto">{outcomeTr.text} <em>({t('driverConcerns.drawer.machineNote', { model: outcomeTr.model })})</em></p>}
               {c.outcome_seen_at && <p className="text-xs mt-1">{t('driverConcerns.drawer.seen', { at: String(c.outcome_seen_at).slice(0, 16).replace('T', ' ') })}</p>}
             </section>
           )}

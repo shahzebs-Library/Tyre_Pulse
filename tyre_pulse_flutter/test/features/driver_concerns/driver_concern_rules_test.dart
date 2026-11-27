@@ -59,7 +59,6 @@ void main() {
     ConcernDetail d(Map<String, Object?> extra) => ConcernDetail(
           concern: _c(<String, Object?>{'status': 'outcome_shared', ...extra}),
           events: const <ConcernEvent>[],
-          translations: const <ConcernTranslation>[],
           isDriver: true,
           myRank: 0,
         );
@@ -77,7 +76,6 @@ void main() {
     final ConcernDetail d = ConcernDetail(
       concern: _c(<String, Object?>{'level': 'incharge'}),
       events: const <ConcernEvent>[],
-      translations: const <ConcernTranslation>[],
       isDriver: false,
       myRank: 1,
     );

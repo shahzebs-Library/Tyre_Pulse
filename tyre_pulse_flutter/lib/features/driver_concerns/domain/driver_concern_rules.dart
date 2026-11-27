@@ -222,37 +222,11 @@ final class ConcernEvent {
   final DateTime? at;
 }
 
-final class ConcernTranslation {
-  const ConcernTranslation({
-    required this.source,
-    required this.sourceId,
-    required this.lang,
-    required this.text,
-    required this.model,
-  });
-
-  factory ConcernTranslation.fromJson(Map<String, Object?> j) =>
-      ConcernTranslation(
-        source: '${j['source'] ?? ''}',
-        sourceId: '${j['source_id'] ?? ''}',
-        lang: '${j['target_lang'] ?? ''}',
-        text: '${j['text'] ?? ''}',
-        model: '${j['model'] ?? ''}',
-      );
-
-  final String source;
-  final String sourceId;
-  final String lang;
-  final String text;
-  final String model;
-}
-
 /// The payload of `driver_concern_get`.
 final class ConcernDetail {
   const ConcernDetail({
     required this.concern,
     required this.events,
-    required this.translations,
     required this.isDriver,
     required this.myRank,
     this.driverName,
@@ -269,14 +243,6 @@ final class ConcernDetail {
                   ConcernEvent.fromJson(Map<String, Object?>.from(m)),
             )
             .toList(growable: false),
-        translations:
-            ((j['translations'] as List<Object?>?) ?? const <Object?>[])
-                .whereType<Map<Object?, Object?>>()
-                .map(
-                  (Map<Object?, Object?> m) =>
-                      ConcernTranslation.fromJson(Map<String, Object?>.from(m)),
-                )
-                .toList(growable: false),
         isDriver: j['is_driver'] == true,
         myRank: (j['my_rank'] as num?)?.toInt() ?? 0,
         driverName: j['driver_name'] as String?,
@@ -284,17 +250,9 @@ final class ConcernDetail {
 
   final DriverConcern concern;
   final List<ConcernEvent> events;
-  final List<ConcernTranslation> translations;
   final bool isDriver;
   final int myRank;
   final String? driverName;
-
-  ConcernTranslation? translationFor(String source, String lang) {
-    for (final ConcernTranslation t in translations) {
-      if (t.source == source && t.sourceId.isEmpty && t.lang == lang) return t;
-    }
-    return null;
-  }
 }
 
 /// Null for a closed case or one with no deadline: "no deadline" is not

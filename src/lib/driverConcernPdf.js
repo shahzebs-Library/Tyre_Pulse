@@ -1,6 +1,6 @@
 /**
- * Driver Concern outcome PDF: the original words, the machine translation (and
- * which model made it), the outcome, the driver's signature and the full
+ * Driver Concern outcome PDF: the original words exactly as written (never
+ * translated), the outcome, the driver's signature and the full
  * timeline. buildConcernDocument() is pure (tested); renderDriverConcernPdf()
  * lays it out on A4 and returns { blob, sha256 } so the hash can be stored
  * through driver_concern_set_pdf.
@@ -11,7 +11,6 @@
  */
 import { loadPdf } from './pdfEngine'
 import { browserScriptTextToPng } from './driverChargePdf'
-import { translationFor } from './driverConcerns'
 
 const NON_LATIN = /[֐-ࣿऀ-෿ﭐ-﻿]/
 const RTL = /[֐-ࣿﭐ-﻿]/
@@ -28,11 +27,9 @@ const fmt = v => {
  * @param detail payload of driver_concern_get
  * @param labels { category, subtype, status, event } label functions (English)
  */
-export function buildConcernDocument(detail, { labels = {}, readerLang = 'en', generatedAt = new Date().toISOString() } = {}) {
+export function buildConcernDocument(detail, { labels = {}, generatedAt = new Date().toISOString() } = {}) {
   const c = detail?.concern || {}
   const lab = (fn, v) => (typeof fn === 'function' ? fn(v) : v) || v || 'Not recorded'
-  const tr = translationFor(detail?.translations, 'concern', '', readerLang)
-  const outcomeTr = translationFor(detail?.translations, 'outcome', '', readerLang)
   return {
     title: `Driver concern ${c.case_no || ''}`.trim(),
     generatedAt,
@@ -48,8 +45,7 @@ export function buildConcernDocument(detail, { labels = {}, readerLang = 'en', g
       ['Closed', fmt(c.closed_at)],
     ],
     original: { text: c.original_text || '', lang: c.original_lang || 'unknown' },
-    translation: tr ? { text: tr.text, lang: tr.target_lang, model: tr.model, generatedAt: tr.generated_at } : null,
-    outcome: c.outcome_text ? { text: c.outcome_text, translation: outcomeTr?.text || null, model: outcomeTr?.model || null } : null,
+    outcome: c.outcome_text ? { text: c.outcome_text } : null,
     decision: c.driver_decision ? {
       decision: c.driver_decision === 'accepted' ? 'Accepted' : 'Not accepted',
       seenAt: fmt(c.outcome_seen_at), signedAt: fmt(c.signed_at),
@@ -67,8 +63,8 @@ async function sha256Hex(buffer) {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-export async function renderDriverConcernPdf(detail, { labels, readerLang = 'en', save = true, scriptTextToPng = browserScriptTextToPng } = {}) {
-  const model = buildConcernDocument(detail, { labels, readerLang })
+export async function renderDriverConcernPdf(detail, { labels, save = true, scriptTextToPng = browserScriptTextToPng } = {}) {
+  const model = buildConcernDocument(detail, { labels })
   const { jsPDF, autoTable } = await loadPdf()
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
   const margin = 14
@@ -104,17 +100,9 @@ export async function renderDriverConcernPdf(detail, { labels, readerLang = 'en'
 
   y = heading(`What the driver wrote (original, ${model.original.lang})`, y)
   y = para(model.original.text, y)
-  if (model.translation) {
-    y = heading(`Machine translation (${model.translation.lang}, ${model.translation.model})`, y)
-    y = para(model.translation.text, y)
-  }
   if (model.outcome) {
     y = heading('Answer approved by the manager', y)
     y = para(model.outcome.text, y)
-    if (model.outcome.translation) {
-      y = heading(`Machine translation for the driver (${model.outcome.model || 'model'})`, y)
-      y = para(model.outcome.translation, y)
-    }
   }
   if (model.decision) {
     y = heading(`Driver decision: ${model.decision.decision}`, y)

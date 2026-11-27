@@ -144,7 +144,12 @@ export function isTransientSnapshotError(err) {
   const msg = String(err?.cause?.message ?? err?.message ?? '').toLowerCase()
   if (code === '57014' || code === 'PGRST003' || code === '20') return true
   if (name === 'AbortError' || name === 'TimeoutError') return true
-  return /timeout|timed out|canceling statement|failed to fetch|network|load failed|aborted|502|503|504/.test(msg)
+  const status = Number(err?.status ?? err?.cause?.status)
+  if (status === 502 || status === 503 || status === 504) return true
+  if (/timeout|timed out|canceling statement|failed to fetch|network|load failed|aborted|bad gateway|service unavailable|gateway time-?out/.test(msg)) return true
+  // A bare 502/503/504 counts only as a status code (start of the message, or
+  // after "status" / "http" / "code"), never as part of another number or id.
+  return /(?:^|\b(?:status|http|code)\s*(?:code)?\s*[:=]?\s*)50[234](?!\d)/.test(msg)
 }
 
 /** First-open ceilings: a normal attempt, then one longer attempt. */

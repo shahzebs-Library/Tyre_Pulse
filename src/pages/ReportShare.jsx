@@ -153,47 +153,58 @@ function sparkOption(series, idx) {
 function comboOption(labels, spend, accidents) {
   const cSpend = colorAt(0)
   const cAcc = colorAt(3)
+  // No spend series (e.g. several currencies in scope): drop the spend axis and
+  // bars so the chart is not left with an empty, half-labelled axis.
+  const hasSpend = someNonZero(spend)
+  const accAxis = {
+    type: 'value', name: 'Accidents',
+    nameTextStyle: { color: P.muted, fontSize: 12, align: hasSpend ? 'right' : 'left' },
+    axisLabel: { color: P.muted, fontSize: 12 },
+    splitLine: { show: !hasSpend, lineStyle: { color: P.splitLine } }, minInterval: 1,
+  }
+  const accSeries = {
+    name: 'Accidents', type: 'line', yAxisIndex: hasSpend ? 1 : 0, data: accidents,
+    smooth: true, symbol: 'circle', symbolSize: 7,
+    lineStyle: { width: 3, color: cAcc }, itemStyle: { color: cAcc },
+    areaStyle: { color: withAlpha(cAcc, 0.1) },
+  }
   return {
     backgroundColor: 'transparent',
     tooltip: { ...TOOLTIP, trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { top: 0, textStyle: { color: P.subText, fontSize: 14 }, itemGap: 20 },
-    grid: { left: 10, right: 12, top: 44, bottom: 8, containLabel: true },
+    // containLabel does not count the axis name, so leave room for it.
+    grid: { left: 24, right: 24, top: 48, bottom: 8, containLabel: true },
     xAxis: {
       type: 'category', data: labels,
       axisLabel: { color: P.muted, fontSize: 13 },
       axisLine: { lineStyle: { color: P.axisLine } },
       axisTick: { show: false },
     },
-    yAxis: [
-      {
-        type: 'value', name: 'Spend', nameTextStyle: { color: P.muted, fontSize: 12 },
-        axisLabel: { color: P.muted, fontSize: 12, formatter: (v) => fmtCompact(v) },
-        splitLine: { lineStyle: { color: P.splitLine } },
-      },
-      {
-        type: 'value', name: 'Accidents', nameTextStyle: { color: P.muted, fontSize: 12 },
-        axisLabel: { color: P.muted, fontSize: 12 },
-        splitLine: { show: false }, minInterval: 1,
-      },
-    ],
-    series: [
-      {
-        name: 'Tyre Spend', type: 'bar', data: spend, barMaxWidth: 36,
-        itemStyle: { color: cSpend, borderRadius: [5, 5, 0, 0] },
-        markPoint: {
-          symbol: 'pin', symbolSize: 46,
-          data: [{ type: 'max', name: 'Max' }],
-          itemStyle: { color: withAlpha(cSpend, 0.9) },
-          label: { color: '#ffffff', fontSize: 11, formatter: (d) => fmtCompact(d.value) },
-        },
-      },
-      {
-        name: 'Accidents', type: 'line', yAxisIndex: 1, data: accidents,
-        smooth: true, symbol: 'circle', symbolSize: 7,
-        lineStyle: { width: 3, color: cAcc }, itemStyle: { color: cAcc },
-        areaStyle: { color: withAlpha(cAcc, 0.1) },
-      },
-    ],
+    yAxis: hasSpend
+      ? [
+          {
+            type: 'value', name: 'Spend', nameTextStyle: { color: P.muted, fontSize: 12, align: 'left' },
+            axisLabel: { color: P.muted, fontSize: 12, formatter: (v) => fmtCompact(v) },
+            splitLine: { lineStyle: { color: P.splitLine } },
+          },
+          accAxis,
+        ]
+      : [accAxis],
+    series: hasSpend
+      ? [
+          {
+            name: 'Tyre Spend', type: 'bar', data: spend, barMaxWidth: 36,
+            itemStyle: { color: cSpend, borderRadius: [5, 5, 0, 0] },
+            markPoint: {
+              symbol: 'pin', symbolSize: 46,
+              data: [{ type: 'max', name: 'Max' }],
+              itemStyle: { color: withAlpha(cSpend, 0.9) },
+              label: { color: '#ffffff', fontSize: 11, formatter: (d) => fmtCompact(d.value) },
+            },
+          },
+          accSeries,
+        ]
+      : [accSeries],
   }
 }
 
@@ -539,11 +550,34 @@ function tyreSpendByCountry(snapshot) {
 function tyreSpendIsMixed(snapshot) {
   return snapshot?.kpis?.tyre_spend == null && tyreSpendByCountry(snapshot).length > 1
 }
+// Money tiles that can arrive per country instead of as one figure: the
+// per-country list and the field holding each country's amount.
+const PER_COUNTRY_MONEY = {
+  tyre_spend: ['tyre_spend_by_country', 'value'],
+  claims_claimed: ['claims_by_country', 'claimed'],
+  claims_recovered: ['claims_by_country', 'recovered'],
+}
 function perCountryLines(tile, kpis) {
-  if (tile.key !== 'tyre_spend' || kpis?.tyre_spend != null) return null
-  const rows = arr(kpis?.tyre_spend_by_country).filter((r) => r && r.country)
+  const spec = PER_COUNTRY_MONEY[tile.key]
+  if (!spec || kpis?.[tile.key] != null) return null
+  const [listKey, field] = spec
+  const rows = arr(kpis?.[listKey]).filter((r) => r && r.country)
   if (!rows.length) return null
-  return rows.map((r) => ({ key: r.country, text: `${r.currency || r.country} ${GROUP.format(Math.round(Number(r.value) || 0))}`, label: r.country }))
+  return rows.map((r) => ({ key: r.country, text: `${r.currency || r.country} ${GROUP.format(Math.round(Number(r[field]) || 0))}`, label: r.country }))
+}
+// Accident claims are money in the country's own currency. When the claims in
+// scope span more than one currency the server sends no combined trend.
+function claimsTrendIsMixed(snapshot) {
+  const t = snapshot?.trends || {}
+  return t.claims_claimed == null && arr(t.claims_by_country).filter((r) => r && r.country).length > 1
+}
+function claimsSubtitle(snapshot, base) {
+  return claimsTrendIsMixed(snapshot)
+    ? 'Claims are reported per country in its own currency: choose a country to chart them.'
+    : base
+}
+function claimsEmptyText(snapshot) {
+  return claimsTrendIsMixed(snapshot) ? 'Choose a country to chart claims.' : undefined
 }
 function spendSubtitle(snapshot, base) {
   return tyreSpendIsMixed(snapshot)
@@ -1287,7 +1321,7 @@ function CostClaimsPage({ snapshot }) {
     <div className="rs-page">
       <TileStrip snapshot={snapshot} keys={['tyre_spend', 'claims_claimed', 'claims_recovered', 'accidents']} />
       <div className="rs-page-row">
-        <ChartCard title="Claimed vs recovered" subtitle="Monthly claimed value against recovered value" icon={Activity} empty={claimsEmpty} height="34vh">
+        <ChartCard title="Claimed vs recovered" subtitle={claimsSubtitle(snapshot, 'Monthly claimed value against recovered value')} emptyText={claimsEmptyText(snapshot)} icon={Activity} empty={claimsEmpty} height="34vh">
           <EChart option={claimsOption(labels, claimed, recovered)} ariaLabel="Claims claimed versus recovered" />
         </ChartCard>
         <ChartCard title="Tyre spend and accidents" subtitle={spendSubtitle(snapshot, 'Monthly tyre spend against accident count')} icon={TrendingUp} empty={spendEmpty} height="34vh">
@@ -1515,7 +1549,7 @@ function TrendsPage({ snapshot }) {
       <div className="rs-page-row">
         <ChartCard
           title="Claims: claimed vs recovered"
-          subtitle="Monthly claimed value against recovered value"
+          subtitle={claimsSubtitle(snapshot, 'Monthly claimed value against recovered value')} emptyText={claimsEmptyText(snapshot)}
           icon={Activity}
           empty={claimsEmpty}
           height="30vh"
@@ -1685,7 +1719,7 @@ function ClaimsDeskPage({ snapshot }) {
           <EChart option={hbarOption(claimStatus)} ariaLabel="Claims by status" />
         </ChartCard>
       </div>
-      <ChartCard wide title="Claimed vs recovered" subtitle="Monthly claimed value against recovered value" icon={Activity} empty={claimsEmpty} height="34vh">
+      <ChartCard wide title="Claimed vs recovered" subtitle={claimsSubtitle(snapshot, 'Monthly claimed value against recovered value')} emptyText={claimsEmptyText(snapshot)} icon={Activity} empty={claimsEmpty} height="34vh">
         <EChart option={claimsOption(labels, claimed, recovered)} ariaLabel="Claims claimed versus recovered" />
       </ChartCard>
     </div>

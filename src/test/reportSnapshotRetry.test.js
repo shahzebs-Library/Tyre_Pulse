@@ -72,3 +72,56 @@ describe('tyre spend on a custom board block', () => {
     expect(r.perCountry).toEqual([])
   })
 })
+
+describe('bare 5xx numbers in an error message', () => {
+  it('retries a gateway status code', () => {
+    expect(isTransientSnapshotError({ message: '502 Bad Gateway' })).toBe(true)
+    expect(isTransientSnapshotError({ message: 'HTTP 504' })).toBe(true)
+    expect(isTransientSnapshotError({ message: 'status code: 503' })).toBe(true)
+    expect(isTransientSnapshotError({ status: 503, message: '' })).toBe(true)
+  })
+  it('does not retry when 502-504 is only part of another number', () => {
+    expect(isTransientSnapshotError({ code: '23505', message: 'duplicate key value 15030 for asset TM503A' })).toBe(false)
+    expect(isTransientSnapshotError({ message: 'invalid input value 5021' })).toBe(false)
+  })
+})
+
+describe('claims money across currencies', () => {
+  const mixed = {
+    labels: ['Oct', 'Nov'],
+    kpis: {
+      claims_claimed: null,
+      claims_recovered: null,
+      claims_by_country: [
+        { country: 'KSA', currency: 'SAR', claimed: 213476, recovered: 9174 },
+        { country: 'UAE', currency: 'AED', claimed: 5000, recovered: 1000 },
+      ],
+    },
+    trends: {
+      claims_claimed: null,
+      claims_recovered: null,
+      claims_by_country: [
+        { country: 'KSA', currency: 'SAR', claimed: [0, 1], recovered: [0, 1] },
+        { country: 'UAE', currency: 'AED', claimed: [1, 0], recovered: [0, 0] },
+      ],
+    },
+  }
+  it('lists claimed and recovered per country on a kpi block', () => {
+    const c = resolveBlock({ type: 'kpi', source: 'kpi.claims_claimed' }, mixed)
+    expect(c.perCountry.map((x) => `${x.currency} ${x.value}`)).toEqual(['SAR 213476', 'AED 5000'])
+    const r = resolveBlock({ type: 'kpi', source: 'kpi.claims_recovered' }, mixed)
+    expect(r.perCountry.map((x) => `${x.currency} ${x.value}`)).toEqual(['SAR 9174', 'AED 1000'])
+  })
+  it('marks the claimed-vs-recovered chart as mixed and empty', () => {
+    const r = resolveBlock({ type: 'chart', source: 'claims.claimed_recovered' }, mixed)
+    expect(r.mixed).toBe(true)
+    expect(r.empty).toBe(true)
+  })
+  it('keeps the single figure when one currency is in scope', () => {
+    const one = { kpis: { claims_claimed: 213476, claims_by_country: [{ country: 'KSA', currency: 'SAR', claimed: 213476, recovered: 9174 }] }, trends: { claims_claimed: [1], claims_by_country: [{ country: 'KSA' }] } }
+    const r = resolveBlock({ type: 'kpi', source: 'kpi.claims_claimed' }, one)
+    expect(r.value).toBe(213476)
+    expect(r.perCountry).toEqual([])
+    expect(resolveBlock({ type: 'chart', source: 'claims.claimed_recovered' }, one).mixed).toBe(false)
+  })
+})

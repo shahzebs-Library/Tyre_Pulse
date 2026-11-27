@@ -4,6 +4,12 @@
 --
 -- STATUS: AUTHORED, NOT APPLIED. The main session applies it.
 --
+-- VERSION: 20261127195000. It was first written as 20261127120000, which
+-- collided with 20261127120000_count_line_genuine.sql (that file was applied
+-- live under version 20261127164136 and keeps its file name). Renamed to sort
+-- after the last applied migration (20261127185215) and the pending
+-- 20261127190000 / 20261127191000 files.
+--
 -- WHAT WAS WRONG (live, measured 2026-11-27 on the only active share,
 -- "Shared report", no country/site restriction = all three countries)
 --   1. "Tyre spend 0". kpis.tyre_spend is cost.tyre_cost from
@@ -57,16 +63,21 @@
 --        is in scope; trends.tyre_spend_by_country carries one 12-month series
 --        per country with its currency. accidents / claims_claimed /
 --        claims_recovered / inspections are as V279 (bounded to the window).
+--     f. CORRECTION 3: claims are never added across currencies. Accident
+--        claims carry no currency column, so a claim's currency is its
+--        country's (public.currency_for_country over country_currency: KSA
+--        SAR, UAE AED, Egypt EGP; a country with no row = unknown).
+--        kpis.claims_by_country = [{country, currency, claimed, recovered}]
+--        and trends.claims_by_country = [{country, currency, claimed[12],
+--        recovered[12]}]. When the claim rows in scope span more than one
+--        currency (an unknown currency counts as its own), kpis.claims_claimed
+--        / claims_recovered and trends.claims_claimed / claims_recovered are
+--        NULL. With one currency (or no rows) they are exactly as before.
+--        The kpi flag reads the kpi window, the trend flag the 12-month window.
 --   Every other key is byte-identical: proven by md5 of the payload minus
---   generated_at, trends and kpis.tyre_spend_by_country, old vs new, in one
+--   generated_at, trends, kpis.tyre_spend_by_country and kpis.claims_by_country, old vs new, in one
 --   rolled-back transaction (see VERIFY). Security, token, password,
 --   allowed_country/site and view_count behaviour are copied verbatim.
---
--- KNOWN, NOT CHANGED HERE: kpis.claims_claimed / claims_recovered and the
--- claims trends still add accident claim amounts across countries under the
--- all-countries scope (as before this migration). Accident claims carry no
--- currency column; fixing it needs a decision on how a claim's currency is
--- known.
 --
 -- TIMING, measured in one rolled-back transaction as anon, real token, same
 -- warm cache, six scopes (all / KSA / UAE / KSA+NHC / 2026 YTD / Egypt from
@@ -75,7 +86,8 @@
 -- 23.2 s, dominated by the four full work_orders scans now removed.
 --
 -- PARITY (same transaction): every key of the payload except generated_at,
--- the new trends object and the new kpis.tyre_spend_by_country is
+-- the new trends object and the new kpis.tyre_spend_by_country /
+-- kpis.claims_by_country is
 -- byte-identical for UAE, KSA+NHC and Egypt. For the all / KSA / YTD scopes
 -- the ONLY text differences are ops.wo_by_site (the 8th slot, where several
 -- sites tie on 1 open job card: old picked RIY-MET arbitrarily, new picks
@@ -261,6 +273,8 @@ DECLARE
   v_wo_open bigint; v_wo_by_status jsonb; v_wo_by_site jsonb; v_wo_by_type jsonb;
   v_wo_heatmap jsonb; v_open_cards jsonb;
   v_tyre_by jsonb; v_tyre_trend jsonb; v_tyre_trend_by jsonb;
+  v_claims_by jsonb; v_claims_claimed numeric; v_claims_recovered numeric;
+  v_claims_trend_by jsonb; v_claims_trend_c jsonb; v_claims_trend_r jsonb;
   result jsonb;
 BEGIN
   SELECT * INTO t FROM public.report_shares WHERE token = p_token;
@@ -331,6 +345,51 @@ BEGIN
     INTO v_tyre_trend_by, v_tyre_trend
     FROM by_c;
 
+  -- Accident claims per country, each in its country's currency. The
+  -- scalars are only sent when one currency is in scope.
+  WITH ck AS MATERIALIZED (
+    SELECT country, claim_amount, recovered_amount
+      FROM public.accidents
+     WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country)
+       AND (v_from IS NULL OR incident_date>=v_from) AND (v_to IS NULL OR incident_date<=v_to)
+  ), cg AS (
+    SELECT country, public.currency_for_country(country) AS currency,
+           round(coalesce(sum(claim_amount),0)) AS claimed,
+           round(coalesce(sum(recovered_amount),0)) AS recovered
+      FROM ck GROUP BY country
+  )
+  SELECT coalesce(jsonb_agg(jsonb_build_object('country', country, 'currency', currency,
+                                               'claimed', claimed, 'recovered', recovered) ORDER BY country), '[]'::jsonb),
+         CASE WHEN count(DISTINCT coalesce(currency,'?')) <= 1
+              THEN (SELECT round(coalesce(sum(claim_amount),0)) FROM ck) END,
+         CASE WHEN count(DISTINCT coalesce(currency,'?')) <= 1
+              THEN (SELECT round(coalesce(sum(recovered_amount),0)) FROM ck) END
+    INTO v_claims_by, v_claims_claimed, v_claims_recovered
+    FROM cg;
+
+  WITH ct AS MATERIALIZED (
+    SELECT country, to_char(incident_date,'YYYY-MM') k, claim_amount, recovered_amount
+      FROM public.accidents
+     WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND incident_date>=v_m0d
+  ), cc AS (
+    SELECT country, public.currency_for_country(country) AS currency FROM (SELECT DISTINCT country FROM ct) d
+  )
+  SELECT coalesce(jsonb_agg(jsonb_build_object(
+           'country', cc.country, 'currency', cc.currency,
+           'claimed',   (SELECT jsonb_agg(coalesce(s.v,0) ORDER BY m.k) FROM unnest(v_months) m(k)
+                           LEFT JOIN (SELECT k, round(sum(claim_amount)) v FROM ct WHERE ct.country IS NOT DISTINCT FROM cc.country GROUP BY k) s ON s.k=m.k),
+           'recovered', (SELECT jsonb_agg(coalesce(s.v,0) ORDER BY m.k) FROM unnest(v_months) m(k)
+                           LEFT JOIN (SELECT k, round(sum(recovered_amount)) v FROM ct WHERE ct.country IS NOT DISTINCT FROM cc.country GROUP BY k) s ON s.k=m.k)
+         ) ORDER BY cc.country), '[]'::jsonb),
+         CASE WHEN count(DISTINCT coalesce(cc.currency,'?')) <= 1 THEN
+           (SELECT jsonb_agg(coalesce(s.v,0) ORDER BY m.k) FROM unnest(v_months) m(k)
+              LEFT JOIN (SELECT k, round(sum(claim_amount)) v FROM ct GROUP BY k) s ON s.k=m.k) END,
+         CASE WHEN count(DISTINCT coalesce(cc.currency,'?')) <= 1 THEN
+           (SELECT jsonb_agg(coalesce(s.v,0) ORDER BY m.k) FROM unnest(v_months) m(k)
+              LEFT JOIN (SELECT k, round(sum(recovered_amount)) v FROM ct GROUP BY k) s ON s.k=m.k) END
+    INTO v_claims_trend_by, v_claims_trend_c, v_claims_trend_r
+    FROM cc;
+
   -- Open work orders, read once.
   WITH o AS MATERIALIZED (
     SELECT status, site, work_type, work_order_no, asset_no, priority, coalesce(opened_at,created_at) AS ts
@@ -361,8 +420,9 @@ BEGIN
       'tyre_spend_by_country', v_tyre_by,
       'accidents',        (SELECT count(*) FROM public.accidents WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND (v_from IS NULL OR incident_date>=v_from) AND (v_to IS NULL OR incident_date<=v_to)),
       'open_accidents',   (SELECT count(*) FROM public.accidents WHERE organisation_id=v_org AND release_date IS NULL AND lower(coalesce(status,'')) NOT IN ('closed','released') AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND (v_from IS NULL OR incident_date>=v_from) AND (v_to IS NULL OR incident_date<=v_to)),
-      'claims_claimed',   (SELECT round(coalesce(sum(claim_amount),0)) FROM public.accidents WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND (v_from IS NULL OR incident_date>=v_from) AND (v_to IS NULL OR incident_date<=v_to)),
-      'claims_recovered', (SELECT round(coalesce(sum(recovered_amount),0)) FROM public.accidents WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND (v_from IS NULL OR incident_date>=v_from) AND (v_to IS NULL OR incident_date<=v_to)),
+      'claims_claimed',   v_claims_claimed,
+      'claims_recovered', v_claims_recovered,
+      'claims_by_country', v_claims_by,
       'inspections',      (SELECT count(*) FROM public.inspections WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND (v_from IS NULL OR inspection_date>=v_from) AND (v_to IS NULL OR inspection_date<=v_to)),
       'work_orders_open', v_wo_open
     ),
@@ -371,8 +431,9 @@ BEGIN
       'tyre_spend',            v_tyre_trend,
       'tyre_spend_by_country', v_tyre_trend_by,
       'accidents',        (SELECT jsonb_agg(coalesce(s.v,0) ORDER BY m.k) FROM unnest(v_months) m(k) LEFT JOIN (SELECT to_char(incident_date,'YYYY-MM') k, count(*) v FROM public.accidents WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND incident_date>=v_m0d GROUP BY 1) s ON s.k=m.k),
-      'claims_claimed',   (SELECT jsonb_agg(coalesce(s.v,0) ORDER BY m.k) FROM unnest(v_months) m(k) LEFT JOIN (SELECT to_char(incident_date,'YYYY-MM') k, round(sum(claim_amount)) v FROM public.accidents WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND incident_date>=v_m0d GROUP BY 1) s ON s.k=m.k),
-      'claims_recovered', (SELECT jsonb_agg(coalesce(s.v,0) ORDER BY m.k) FROM unnest(v_months) m(k) LEFT JOIN (SELECT to_char(incident_date,'YYYY-MM') k, round(sum(recovered_amount)) v FROM public.accidents WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND incident_date>=v_m0d GROUP BY 1) s ON s.k=m.k),
+      'claims_claimed',   v_claims_trend_c,
+      'claims_recovered', v_claims_trend_r,
+      'claims_by_country', v_claims_trend_by,
       'inspections',      (SELECT jsonb_agg(coalesce(s.v,0) ORDER BY m.k) FROM unnest(v_months) m(k) LEFT JOIN (SELECT to_char(inspection_date,'YYYY-MM') k, count(*) v FROM public.inspections WHERE organisation_id=v_org AND (v_site IS NULL OR site=v_site) AND (v_country IS NULL OR country=v_country) AND inspection_date>=v_m0d GROUP BY 1) s ON s.k=m.k)
     ),
     'breakdowns', jsonb_build_object(

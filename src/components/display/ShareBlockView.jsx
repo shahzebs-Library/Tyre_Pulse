@@ -133,10 +133,14 @@ function TextBlock({ r }) {
 }
 
 // ── Chart card wrapper ──────────────────────────────────────────────────────────
-function ChartCard({ title, showTitle, empty, emptyText, option, aria }) {
+// Money trends are sent per country when several currencies are in scope.
+const MIXED_TEXT = 'Reported per country in its own currency: choose a country to chart it.'
+
+function ChartCard({ title, showTitle, empty, emptyText, note, option, aria }) {
   return (
     <div style={CARD}>
       {showTitle && title && <div style={{ ...TITLE, marginBottom: 8 }}>{title}</div>}
+      {note && <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{note}</div>}
       {empty ? <Empty text={emptyText} /> : (
         <div style={BODY}>
           <EChart option={option} ariaLabel={aria || title || 'chart'} style={{ height: '100%', minHeight: 0 }} />
@@ -161,13 +165,13 @@ export default function ShareBlockView({ block, snapshot }) {
     case 'table':
       return <TableBlock r={r} title={block?.showTitle === false ? '' : (block?.title || (r.which === 'pm' ? 'Maintenance Due' : 'Open Job Cards'))} />
     case 'series':
-      return <ChartCard title={title} showTitle={block?.showTitle !== false} empty={r.empty} option={seriesOption(r.labels, r.data, r.viz, r.accent)} aria={title} />
+      return <ChartCard title={title} showTitle={block?.showTitle !== false} empty={r.empty} emptyText={r.mixed ? MIXED_TEXT : undefined} option={seriesOption(r.labels, r.data, r.viz, r.accent)} aria={title} />
     case 'breakdown':
       return <ChartCard title={title} showTitle={block?.showTitle !== false} empty={r.empty} option={breakdownOption(r.items, r.viz)} aria={title} />
     case 'combo':
-      return <ChartCard title={title} showTitle={block?.showTitle !== false} empty={r.empty} option={comboOption(r.labels, r.spend, r.accidents)} aria={title} />
+      return <ChartCard title={title} showTitle={block?.showTitle !== false} empty={r.empty} note={r.mixed ? 'Tyre spend is per country: choose a country to chart it.' : null} option={comboOption(r.labels, r.spend, r.accidents)} aria={title} />
     case 'claims':
-      return <ChartCard title={title} showTitle={block?.showTitle !== false} empty={r.empty} option={claimsOption(r.labels, r.claimed, r.recovered)} aria={title} />
+      return <ChartCard title={title} showTitle={block?.showTitle !== false} empty={r.empty || r.mixed} emptyText={r.mixed ? MIXED_TEXT : undefined} option={claimsOption(r.labels, r.claimed, r.recovered)} aria={title} />
     case 'heatmap':
       return <ChartCard title={title} showTitle={block?.showTitle !== false} empty={r.empty} emptyText="No incidents to map." option={heatmapOption(r.rows)} aria={title} />
     case 'gauge':

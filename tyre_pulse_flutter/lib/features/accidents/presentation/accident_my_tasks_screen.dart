@@ -159,25 +159,29 @@ class _TaskRow extends StatelessWidget {
     final String? due = task.dueAt == null
         ? null
         : MaterialLocalizations.of(context).formatShortMonthDay(task.dueAt!);
+    final String step =
+        workstreamLabel(AccidentCopy.of(context), task.workstreamKey);
     return QueueListRow(
       key: AccidentMyTasksScreenKeys.row(task.workstreamId),
       icon: Icons.assignment_outlined,
       status: sla.status,
       title: task.referenceNo == null
-          ? (task.workstreamName ?? task.workstreamKey)
+          ? step
           : l10n.accidentTasksCase(TpDirection.isolateLtr(task.referenceNo!)),
       titleMaxLines: 2,
       time: due == null ? null : l10n.accidentTasksDue(due),
       tags: <Widget>[QueueStatusTag(label: sla.label, status: sla.status)],
       details: <String>[
-        task.workstreamName ?? task.workstreamKey,
+        step,
         <String>[
           if (task.assetNo != null) TpDirection.isolateLtr(task.assetNo!),
-          if (task.site != null) task.site!,
-          l10n.accidentTasksInStep(
-            accidentTaskDaysLabel(l10n, task.daysInStep),
-          ),
+          if (task.site != null) TpDirection.isolateLtr(task.site!),
         ].join(' • '),
+        // Its own line: a Latin asset code in the same line would let the
+        // bidi algorithm split "2 days" apart in Arabic.
+        l10n.accidentTasksInStep(
+          accidentTaskDaysLabel(l10n, task.daysInStep),
+        ),
         if (!task.assignedToMe && task.ownerRole != null) task.ownerRole!,
       ],
       isFirst: isFirst,

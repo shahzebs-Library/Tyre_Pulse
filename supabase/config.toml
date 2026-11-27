@@ -43,3 +43,8 @@ verify_jwt = false
 # Cron uses its own high-entropy worker secret; user calls verify auth.getUser.
 [functions.ai-tyre-inspection]
 verify_jwt = false
+
+# Devices have no Supabase session: the hashed per-device / per-integration
+# ingest key (x-device-key) is the credential, checked in constant time.
+[functions.device-ingest]
+verify_jwt = false

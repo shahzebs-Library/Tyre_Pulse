@@ -42,6 +42,7 @@ import { toUserMessage } from '../lib/safeError'
 import { safeImageSrc } from '../lib/safeUrl'
 import { resolveStorageUrls } from '../lib/storageRefs'
 import { useAuth } from '../contexts/AuthContext'
+import useWedgeScanner from '../hooks/useWedgeScanner'
 import { scrapTyreBySerial, unscrapTyreBySerial, getScrapMark, listScrapMarks, listScrappedTyres, updateScrapReason, getScrapPermissions } from '../lib/api/tyreExchange'
 import { COUNTRY_CURRENCY } from '../lib/api/assetMaster'
 import {
@@ -145,6 +146,14 @@ export default function SerialTracker() {
   // because a role string cannot see a per-user capability grant, and a button
   // shown on a guess is a button the RPC then refuses.
   const [perms, setPerms] = useState({ canScrap: false, canUndo: false })
+  // USB / keyboard-wedge scanner anywhere on the page (admin only, owner rule
+  // 2026-11-27): a scan made with no field focused opens that serial.
+  useWedgeScanner((code) => {
+    const v = cleanSerial(code)
+    if (!v) return
+    setActiveTab('register')
+    openSerial(v)
+  }, { enabled: isSuperAdmin || profile?.role === 'Admin' })
   useEffect(() => {
     let cancelled = false
     getScrapPermissions()

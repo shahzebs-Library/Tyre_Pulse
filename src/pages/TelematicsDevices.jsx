@@ -29,6 +29,8 @@ import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
+import DeviceIngestPanel from '../components/devices/DeviceIngestPanel'
 import {
   listDevicesWithMeta, createDevice, updateDevice, deleteDevice, countFleetAssets,
 } from '../lib/api/telematicsDevices'
@@ -254,6 +256,10 @@ function ChartCard({ title, icon: Icon, children, hint }) {
 // --- Page -----------------------------------------------------------------
 export default function TelematicsDevices() {
   const { activeCountry } = useSettings()
+  const { t } = useLanguage()
+  // 'registry' = the device list below; 'ingest' = keys, data feed, unmatched
+  // readings, test payload, alert settings (admin only, as is this whole page).
+  const [view, setView] = useState('registry')
   const [rows, setRows] = useState(null)
   const [fleetTotal, setFleetTotal] = useState(null)
   const [error, setError] = useState('')
@@ -444,8 +450,8 @@ export default function TelematicsDevices() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Telematics Devices"
-        subtitle="GPS/telematics device registry and fleet connectivity intelligence: hardware-to-asset mapping, heartbeat health, coverage and install pipeline."
+        title={t('devices.title')}
+        subtitle={t('devices.subtitle')}
         icon={Router}
         onRefresh={load}
         refreshing={refreshing}
@@ -465,6 +471,16 @@ export default function TelematicsDevices() {
         }
       />
 
+      <div role="tablist" aria-label={t('devices.title')} className="flex flex-wrap gap-2">
+        {['registry', 'ingest'].map((k) => (
+          <button key={k} type="button" role="tab" aria-selected={view === k} onClick={() => setView(k)}
+            className={`min-h-[44px] px-4 rounded-lg text-sm border ${view === k ? 'border-emerald-500 bg-emerald-500/10 text-[var(--text-primary)]' : 'border-[var(--border)] text-[var(--text-muted)]'}`}>
+            {t(`devices.tabs.${k}`)}
+          </button>
+        ))}
+      </div>
+
+      {view === 'ingest' ? <DeviceIngestPanel devices={rows || []} /> : (<>
       {missing && (
         <div className="card border border-amber-500/40 flex items-start gap-3" role="status">
           <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
@@ -645,6 +661,8 @@ export default function TelematicsDevices() {
           <Clock size={12} aria-hidden="true" /> Devices with no contact in the selected window are shown as offline. {conn.never > 0 ? `${conn.never} device(s) have never reported in.` : ''}
         </p>
       )}
+
+      </>)}
 
       <DeviceModal
         open={modalOpen}

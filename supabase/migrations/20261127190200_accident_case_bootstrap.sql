@@ -19,8 +19,9 @@
 --     The JS mirror is caseStatusForStage() in src/lib/accidentCase.js.
 -- Workstream satisfied (completed / not_required / cancelled) closes its timer.
 -- Backfill: case_status for every row that has none; workstreams + owner for open
--- cases that are past 'reported' (the 21 stuck 'reported' cases are handled by the
--- separate legacy-close data migration 20261127190250).
+-- cases, except 'reported' cases older than 30 days (those are closed as legacy by
+-- the separate data migration 20261127190250). The 2 recent reported cases
+-- (ACC-2026-0041, ACC-2026-0043) get their steps and owners here.
 --
 -- VERIFY RESULT (run live 2026-11-27, rolled back): new test case got 7 steps
 --   (route minor_no_insurance) with owners (reporter = Fleet Supervisor owns the 4
@@ -260,18 +261,15 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_zz_accident_case_sync on public.accidents;
-create trigger trg_zz_accident_case_sync
+create or replace trigger trg_zz_accident_case_sync
   before insert or update on public.accidents
   for each row execute function public._accident_case_sync();
 
-drop trigger if exists trg_accident_zz_bootstrap_after on public.accidents;
-create trigger trg_accident_zz_bootstrap_after
+create or replace trigger trg_accident_zz_bootstrap_after
   after insert on public.accidents
   for each row execute function public._accident_bootstrap_after();
 
-drop trigger if exists trg_accident_ws_close_sla on public.accident_case_workstreams;
-create trigger trg_accident_ws_close_sla
+create or replace trigger trg_accident_ws_close_sla
   after update on public.accident_case_workstreams
   for each row execute function public._accident_ws_close_sla();
 
@@ -302,12 +300,14 @@ update public.accidents a
          (select o.owner_id from public.accident_resolve_ws_owner(
             a.organisation_id, 'incident_evidence', a.country, a.site, a.reported_by) o))
  where coalesce(a.closure_level, 'open') = 'open'
-   and a.workflow_stage not in ('reported','closed','cancelled')
+   and a.workflow_stage not in ('closed','cancelled')
+   and (a.workflow_stage <> 'reported' or a.created_at >= now() - interval '30 days')
    and (a.route_key is null or a.responsible_owner_id is null);
 
 select public._accident_bootstrap_workstreams(a.id)
   from public.accidents a
  where coalesce(a.closure_level, 'open') = 'open'
-   and a.workflow_stage not in ('reported','closed','cancelled');
+   and a.workflow_stage not in ('closed','cancelled')
+   and (a.workflow_stage <> 'reported' or a.created_at >= now() - interval '30 days');
 
 commit;

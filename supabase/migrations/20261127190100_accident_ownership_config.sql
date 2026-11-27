@@ -8,6 +8,9 @@
 --   20261127190300_accident_owner_notify.sql
 --   20261127190400_accident_my_tasks_scan.sql
 --
+-- WRITES: only an Admin or a super admin (app_is_org_admin) changes who owns a
+-- step or who is told; every active user can read the settings.
+--
 -- WHAT IT ADDS
 --   accident_team_roles   - per workstream (optionally per country / site) who owns
 --                           the step: a role and/or named people, plus the SLA target
@@ -85,24 +88,20 @@ create unique index if not exists accident_team_roles_scope_uidx
 
 alter table public.accident_team_roles enable row level security;
 
-drop policy if exists accident_team_roles_org_isolation on public.accident_team_roles;
 create policy accident_team_roles_org_isolation on public.accident_team_roles
   as restrictive for all to authenticated
   using ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin()))
   with check ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin()));
 
-drop policy if exists accident_team_roles_select on public.accident_team_roles;
 create policy accident_team_roles_select on public.accident_team_roles
   for select to authenticated using ((select public.app_is_active()));
 
-drop policy if exists accident_team_roles_write on public.accident_team_roles;
 create policy accident_team_roles_write on public.accident_team_roles
   for all to authenticated
-  using ((select public.app_is_elevated()))
-  with check ((select public.app_is_elevated()));
+  using ((select public.app_is_org_admin()))
+  with check ((select public.app_is_org_admin()));
 
-drop trigger if exists set_updated_at_accident_team_roles on public.accident_team_roles;
-create trigger set_updated_at_accident_team_roles
+create or replace trigger set_updated_at_accident_team_roles
   before update on public.accident_team_roles
   for each row execute function public.set_updated_at();
 
@@ -140,24 +139,20 @@ create index if not exists accident_notify_rules_org_event_idx
 
 alter table public.accident_notify_rules enable row level security;
 
-drop policy if exists accident_notify_rules_org_isolation on public.accident_notify_rules;
 create policy accident_notify_rules_org_isolation on public.accident_notify_rules
   as restrictive for all to authenticated
   using ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin()))
   with check ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin()));
 
-drop policy if exists accident_notify_rules_select on public.accident_notify_rules;
 create policy accident_notify_rules_select on public.accident_notify_rules
   for select to authenticated using ((select public.app_is_active()));
 
-drop policy if exists accident_notify_rules_write on public.accident_notify_rules;
 create policy accident_notify_rules_write on public.accident_notify_rules
   for all to authenticated
-  using ((select public.app_is_elevated()))
-  with check ((select public.app_is_elevated()));
+  using ((select public.app_is_org_admin()))
+  with check ((select public.app_is_org_admin()));
 
-drop trigger if exists set_updated_at_accident_notify_rules on public.accident_notify_rules;
-create trigger set_updated_at_accident_notify_rules
+create or replace trigger set_updated_at_accident_notify_rules
   before update on public.accident_notify_rules
   for each row execute function public.set_updated_at();
 
@@ -271,7 +266,7 @@ declare
   v_org uuid := public.app_current_org();
   v_ids uuid[];
 begin
-  if not public.app_is_active() then
+  if not public.app_is_org_admin() then
     raise exception 'Not permitted.' using errcode = '42501';
   end if;
   select coalesce(array_agg(x), '{}') into v_ids
@@ -287,7 +282,7 @@ begin
 end;
 $$;
 
-revoke all on function public._accident_is_test_profile(uuid) from public, anon;
+revoke all on function public._accident_is_test_profile(uuid) from public, anon, authenticated;
 revoke all on function public.accident_people_for(uuid,text[],uuid[],text,text) from public, anon, authenticated;
 revoke all on function public.accident_resolve_ws_owner(uuid,text,text,text,uuid) from public, anon, authenticated;
 revoke all on function public.accident_notify_configured(uuid,text) from public, anon;

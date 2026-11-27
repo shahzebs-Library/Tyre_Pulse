@@ -93,12 +93,24 @@ begin
 end;
 $$;
 
+-- Elevated users, or anyone who holds an open accident step (by name or role).
+-- Drivers never own a step, so they never pass.
+create or replace function public._accident_can_see_tasks()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(public.app_is_elevated(), false) or exists (
+    select 1 from public.accident_case_workstreams w
+      join public.profiles p on p.id = auth.uid()
+     where w.organisation_id = public.app_current_org()
+       and w.status not in ('completed','not_required','cancelled')
+       and (w.owner_id = p.id or (w.owner_id is null and w.owner_role = p.role)));
+$$;
+
 create or replace function public.accident_task_holdings()
 returns table (holder_id uuid, holder_name text, holder_role text, open_count integer,
                overdue_count integer, oldest_days numeric, no_owner boolean)
 language plpgsql stable security definer set search_path = public as $$
 begin
-  if not public.app_is_active() then
+  if not public.app_is_active() or not public._accident_can_see_tasks() then
     raise exception 'Not permitted.' using errcode = '42501';
   end if;
   return query
@@ -209,6 +221,8 @@ $$;
 revoke all on function public._accident_open_tasks(uuid) from public, anon, authenticated;
 revoke all on function public._accident_stalled_scan() from public, anon, authenticated;
 revoke all on function public._accident_task_digest() from public, anon, authenticated;
+revoke all on function public._accident_can_see_tasks() from public, anon;
+grant execute on function public._accident_can_see_tasks() to authenticated;
 revoke all on function public.accident_my_tasks() from public, anon;
 revoke all on function public.accident_task_holdings() from public, anon;
 grant execute on function public.accident_my_tasks() to authenticated;

@@ -14,7 +14,7 @@ void main() {
   test('a loaded snapshot shows its open count, 0 included', () {
     expect(
       profileAssignedTasksCount(AsyncData<MyWorkSnapshot>(empty)),
-      (value: '0', failed: false),
+      (value: '0', failed: false, stale: false),
     );
   });
 
@@ -50,5 +50,32 @@ void main() {
       profileAssignedTasksCount(const AsyncLoading<MyWorkSnapshot>()).value,
       '…',
     );
+  });
+
+  test('a failed refresh keeps the old count but marks it stale', () async {
+    int calls = 0;
+    final FutureProvider<MyWorkSnapshot> provider =
+        FutureProvider<MyWorkSnapshot>((Ref ref) {
+      calls++;
+      return calls == 1
+          ? Future<MyWorkSnapshot>.value(empty)
+          : Future<MyWorkSnapshot>.error(Exception('offline'));
+    }, retry: (int _, Object __) => null);
+    final ProviderContainer container = ProviderContainer();
+    addTearDown(container.dispose);
+    final ProviderSubscription<AsyncValue<MyWorkSnapshot>> sub =
+        container.listen(provider, (_, __) {});
+    addTearDown(sub.close);
+    await container.read(provider.future);
+    container.invalidate(provider);
+    for (int i = 0; i < 5 && !container.read(provider).hasError; i++) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    final AsyncValue<MyWorkSnapshot> after = container.read(provider);
+    final ({String value, bool failed, bool stale}) shown =
+        profileAssignedTasksCount(after);
+    expect(shown.value, '0');
+    expect(shown.stale, isTrue);
+    expect(shown.failed, isTrue);
   });
 }

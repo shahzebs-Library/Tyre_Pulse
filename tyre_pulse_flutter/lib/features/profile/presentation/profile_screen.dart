@@ -852,19 +852,26 @@ String _countText(AsyncValue<int> value) {
 /// Never a permanent dash: a snapshot already read keeps showing while a
 /// refresh runs (Riverpod's reloading state still carries the value), a read
 /// that is genuinely still running shows an ellipsis, and a failed read says
-/// so and becomes tap-to-retry. `loadMyWork` bounds every source with a
-/// timeout, so "still running" always ends.
+/// so and becomes tap-to-retry. When a REFRESH fails but an older count is
+/// held, the old number stays but is marked [stale] (and [failed], so the
+/// tile offers retry) instead of silently passing as current. `loadMyWork`
+/// bounds every source with a timeout, so "still running" always ends.
 @visibleForTesting
-({String value, bool failed}) profileAssignedTasksCount(
+({String value, bool failed, bool stale}) profileAssignedTasksCount(
   AsyncValue<MyWorkSnapshot> work,
 ) {
   final MyWorkSnapshot? snapshot = work.value;
   if (snapshot != null) {
     final int n = snapshot.items.where((item) => item.isOpen).length;
-    return (value: snapshot.partial ? '$n+' : '$n', failed: false);
+    final bool stale = work.hasError;
+    return (
+      value: snapshot.partial ? '$n+' : '$n',
+      failed: stale,
+      stale: stale,
+    );
   }
-  if (work.hasError) return (value: '-', failed: true);
-  return (value: '…', failed: false);
+  if (work.hasError) return (value: '-', failed: true, stale: false);
+  return (value: '…', failed: false, stale: false);
 }
 
 class _ProfileStatusStrip extends StatelessWidget {

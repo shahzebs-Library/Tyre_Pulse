@@ -26,18 +26,24 @@ final RegExp _uuid = RegExp(
 bool isCompanyId(String? value) =>
     value != null && _uuid.hasMatch(value.trim());
 
-/// The company the caller's data rows carry: `profiles.organisation_id`
-/// ([WorkspaceContext.companyId]), falling back to `profiles.org_id`
-/// ([WorkspaceContext.tenantId]) - the two agree on every healthy profile
-/// (V311). Null when neither is a real company id.
+/// The company list reads are pinned to, or null for no pin.
+///
+/// Prefers `profiles.org_id` ([WorkspaceContext.tenantId]): that is the
+/// column `app_current_org()` reads, i.e. the company the RESTRICTIVE RLS
+/// layer already scopes an ordinary user to, so the pin can never show a
+/// company RLS would not. Falls back to `profiles.organisation_id`
+/// ([WorkspaceContext.companyId]) when org_id is absent.
+///
+/// When BOTH are real ids and they DISAGREE (the V311 data-quality case,
+/// `WorkspaceProfile.organisationIdsDiffer`), no pin is applied: picking one
+/// would silently hide the other company's rows, so RLS alone decides.
 String? activeCompanyIdFor(WorkspaceContext? workspace) {
-  for (final String? candidate in <String?>[
-    workspace?.companyId,
-    workspace?.tenantId,
-  ]) {
-    if (isCompanyId(candidate)) return candidate!.trim();
-  }
-  return null;
+  final String? tenant =
+      isCompanyId(workspace?.tenantId) ? workspace!.tenantId!.trim() : null;
+  final String? company =
+      isCompanyId(workspace?.companyId) ? workspace!.companyId!.trim() : null;
+  if (tenant != null && company != null && tenant != company) return null;
+  return tenant ?? company;
 }
 
 /// Narrows [query] to [companyId] when it is a real company id; otherwise

@@ -68,14 +68,36 @@ class _AccidentDashboardScreenState
     super.initState();
     // Home's "Open accidents" tile opens this register on the Open filter,
     // the same closed-token rule its count uses (`accidentRecordIsClosed`).
-    if (ref.read(listDrilldownProvider).take(ListDrilldown.openAccidents)) {
-      _status = _StatusFilter.open;
-    }
+    // This screen is a shell branch root kept alive by the indexed stack, so
+    // it must react to EVERY tap while mounted, not only the first build.
+    _drilldown = ListDrilldownController.watch(
+      ref,
+      ListDrilldown.openAccidents,
+      _applyOpenDrilldown,
+    );
+    _initialised = true;
     unawaited(_load(reset: true));
+  }
+
+  ProviderSubscription<ListDrilldownRequest?>? _drilldown;
+  bool _initialised = false;
+
+  void _applyOpenDrilldown() {
+    void apply() {
+      _status = _StatusFilter.open;
+      _search.clear();
+    }
+
+    if (!_initialised) {
+      apply(); // fired immediately from initState: no setState yet
+      return;
+    }
+    if (mounted) setState(apply);
   }
 
   @override
   void dispose() {
+    _drilldown?.close();
     _search.dispose();
     super.dispose();
   }

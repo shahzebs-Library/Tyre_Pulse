@@ -49,7 +49,7 @@ class _PreventiveMaintenanceScreenState
   void initState() {
     super.initState();
     if (ref
-        .read(listDrilldownProvider)
+        .read(listDrilldownProvider.notifier)
         .take(ListDrilldown.maintenanceOverdue)) {
       overdueOnly = true;
     }

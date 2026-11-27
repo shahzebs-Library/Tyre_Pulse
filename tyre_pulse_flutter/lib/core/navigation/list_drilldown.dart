@@ -4,14 +4,26 @@
 /// records it counted - not the whole register with the filter left for the
 /// user to find. The typed routes carry no filter parameter (and the router
 /// wiring files are not edited from feature code), so the tile records the
-/// filter here immediately before navigating and the destination screen
-/// TAKES it once, in `initState`.
+/// request here immediately before navigating and the destination consumes
+/// it exactly once.
 ///
-/// A plain mutable box rather than a notifier on purpose: nothing listens to
-/// it, and taking it from `initState` must not mutate provider state while
-/// the tree is building. A request the destination never takes is harmless:
-/// it is overwritten by the next tile tap and only ever matches its own kind.
+/// Two kinds of destination exist:
+///
+/// * a PUSHED screen (fleet list, maintenance) is built fresh each time, so
+///   it consumes in `initState` via [ListDrilldownController.take];
+/// * a SHELL BRANCH root (the accident register sits in the indexed-stack
+///   shell) is built once and kept alive, so `initState` runs on the first
+///   visit only. It must also observe requests made while it is mounted:
+///   [ListDrilldownController.watch] registers a manual listener that fires
+///   immediately (a request made before the first build) and on every later
+///   request.
+///
+/// No request can survive: consuming clears it, and a request nobody
+/// consumes expires after [kListDrilldownTtl], so a later NORMAL visit is
+/// never pre-filtered by a stale tap.
 library;
+
+import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,20 +39,80 @@ enum ListDrilldown {
   maintenanceOverdue,
 }
 
-/// Holds at most one pending [ListDrilldown].
-final class ListDrilldownBox {
-  ListDrilldown? _pending;
+/// How long an unconsumed request stays valid. Navigation completes within a
+/// frame or two; anything older is a leftover and is ignored and cleared.
+const Duration kListDrilldownTtl = Duration(seconds: 5);
 
-  /// Records [kind] for the next screen that takes it.
-  void request(ListDrilldown kind) => _pending = kind;
+/// One pending request. Compared by identity, never by value, so two taps of
+/// the same tile are two distinct requests.
+final class ListDrilldownRequest {
+  ListDrilldownRequest(this.kind, this.at);
 
-  /// True (and clears the request) when the pending request is [kind].
-  bool take(ListDrilldown kind) {
-    if (_pending != kind) return false;
-    _pending = null;
-    return true;
-  }
+  final ListDrilldown kind;
+  final DateTime at;
 }
 
-final Provider<ListDrilldownBox> listDrilldownProvider =
-    Provider<ListDrilldownBox>((Ref ref) => ListDrilldownBox());
+/// The clock requests are stamped and expired against. Overridden in tests.
+final Provider<DateTime Function()> listDrilldownClockProvider =
+    Provider<DateTime Function()>((Ref ref) => DateTime.now);
+
+final NotifierProvider<ListDrilldownController, ListDrilldownRequest?>
+    listDrilldownProvider =
+    NotifierProvider<ListDrilldownController, ListDrilldownRequest?>(
+  ListDrilldownController.new,
+);
+
+final class ListDrilldownController extends Notifier<ListDrilldownRequest?> {
+  ListDrilldownRequest? _consumed;
+
+  @override
+  ListDrilldownRequest? build() => null;
+
+  DateTime _now() => ref.read(listDrilldownClockProvider)();
+
+  /// Records [kind] for the destination the caller is about to open. Call
+  /// from a tap handler, never during build.
+  void request(ListDrilldown kind) {
+    state = ListDrilldownRequest(kind, _now());
+  }
+
+  /// Consumes the pending request when it is a fresh, unconsumed [kind].
+  ///
+  /// Safe to call from `initState` or a listener: the request is marked
+  /// consumed at once (a second take returns false) and the provider is
+  /// cleared in a microtask, so it never notifies while the tree builds. A
+  /// stale request of any kind is cleared the same way.
+  bool take(ListDrilldown kind) {
+    final ListDrilldownRequest? r = state;
+    if (r == null || identical(r, _consumed)) return false;
+    final bool stale = _now().difference(r.at) > kListDrilldownTtl;
+    final bool ok = !stale && r.kind == kind;
+    if (ok) _consumed = r;
+    if (ok || stale) {
+      scheduleMicrotask(() {
+        if (identical(state, r)) state = null;
+      });
+    }
+    return ok;
+  }
+
+  /// For a destination that stays mounted (a shell branch root): calls
+  /// [onRequest] for a fresh [kind] request already pending now and for
+  /// every later one, consuming each. Call from `initState`; close the
+  /// returned subscription in `dispose`.
+  static ProviderSubscription<ListDrilldownRequest?> watch(
+    WidgetRef ref,
+    ListDrilldown kind,
+    void Function() onRequest,
+  ) =>
+      ref.listenManual<ListDrilldownRequest?>(
+        listDrilldownProvider,
+        (ListDrilldownRequest? _, ListDrilldownRequest? next) {
+          if (next == null) return;
+          if (ref.read(listDrilldownProvider.notifier).take(kind)) {
+            onRequest();
+          }
+        },
+        fireImmediately: true,
+      );
+}

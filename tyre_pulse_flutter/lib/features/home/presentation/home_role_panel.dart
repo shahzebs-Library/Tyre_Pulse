@@ -96,7 +96,8 @@ class _RoleHomePanel extends ConsumerWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     String c(String key) => _catalogLabel(l10n.homeRoleCopyCatalog, key);
     bool can(ModuleKey m) => ref.watch(canAccessModuleProvider(m));
-    final ListDrilldownBox drill = ref.read(listDrilldownProvider);
+    final ListDrilldownController drill =
+        ref.read(listDrilldownProvider.notifier);
     final DateTime now = ref.watch(homeHeaderClockProvider)();
     final bool canSign = can(ModuleKey.approvals) &&
         ref.watch(homeCanSignInspectionApprovalsProvider);

@@ -885,8 +885,9 @@ void main() {
           ),
         ),
         extra: <Override>[
-          listDrilldownProvider.overrideWithValue(
-            ListDrilldownBox()..request(ListDrilldown.offRoad),
+          listDrilldownProvider.overrideWithBuild(
+            (Ref ref, ListDrilldownController notifier) =>
+                ListDrilldownRequest(ListDrilldown.offRoad, DateTime.now()),
           ),
         ],
       );

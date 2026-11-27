@@ -145,16 +145,41 @@ String homeIsoDay(DateTime now) => '${now.year.toString().padLeft(4, '0')}-'
     '${now.month.toString().padLeft(2, '0')}-'
     '${now.day.toString().padLeft(2, '0')}';
 
-/// The accident columns `accidentRecordIsClosed` reads, in its order.
-const List<String> homeAccidentLifecycleColumns = <String>[
-  'status',
-  'case_status',
-  'closure_status',
-  'closure_level',
+/// The closed tokens `accidentRecordIsClosed` recognises (it trims and
+/// lowercases before comparing).
+const List<String> homeAccidentClosedTokens = <String>[
+  'closed',
+  'legacy_closed',
+  'fully_closed',
 ];
 
-/// The closed tokens `accidentRecordIsClosed` recognises.
-const String homeAccidentClosedTokens = 'closed,legacy_closed,fully_closed';
+/// The `.or(...)` filters, one per lifecycle column `accidentRecordIsClosed`
+/// reads, that together mean "open": no column holds a closed token. A NULL
+/// column is not closed (`not.in` alone would drop it), hence `is.null`.
+///
+/// Case agreement with the register's trim + lowercase, checked against the
+/// live schema (2026-11-28): `status`, `case_status` and `closure_level` are
+/// CHECK-constrained to lowercase tokens (`chk_status`,
+/// `chk_accident_case_status`, `chk_accident_closure_level`), so an exact
+/// `not.in` is equivalent. `closure_status` is unconstrained free text
+/// (live value today: only `open`), so it is compared with `not.ilike` per
+/// token - case-insensitive equality, no wildcards. Leading/trailing
+/// whitespace on that one column is the only variant the server cannot
+/// match; none exists today.
+List<String> homeOpenAccidentFilters() {
+  final String inList = homeAccidentClosedTokens.join(',');
+  String strict(String column) => '$column.is.null,$column.not.in.($inList)';
+  final String loose = <String>[
+    for (final String t in homeAccidentClosedTokens)
+      'closure_status.not.ilike.$t',
+  ].join(',');
+  return <String>[
+    strict('status'),
+    strict('case_status'),
+    'closure_status.is.null,and($loose)',
+    strict('closure_level'),
+  ];
+}
 
 abstract interface class HomeRoleRepository {
   Future<HomeMeterToday?> myMeterToday({
@@ -302,10 +327,8 @@ final class SupabaseHomeRoleRepository
           // none does. A NULL column is not closed (`not.in` alone would drop
           // it), hence the `is.null` arm on each.
           PostgrestFilterBuilder<int> out = q;
-          for (final String column in homeAccidentLifecycleColumns) {
-            out = out.or(
-              '$column.is.null,$column.not.in.($homeAccidentClosedTokens)',
-            );
+          for (final String filter in homeOpenAccidentFilters()) {
+            out = out.or(filter);
           }
           return out;
         },

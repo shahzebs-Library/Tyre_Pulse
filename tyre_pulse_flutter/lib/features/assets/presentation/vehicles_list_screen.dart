@@ -133,7 +133,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     final String initial = widget.initialSearchTerm?.trim() ?? '';
     _searchController = TextEditingController(text: initial);
     _searchTerm = initial;
-    if (ref.read(listDrilldownProvider).take(ListDrilldown.offRoad)) {
+    if (ref.read(listDrilldownProvider.notifier).take(ListDrilldown.offRoad)) {
       _opsStatusFilter = kFleetOpsStatusOffRoad;
     }
   }

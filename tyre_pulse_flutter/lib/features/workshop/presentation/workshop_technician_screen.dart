@@ -24,6 +24,14 @@
 /// That table cannot be replayed from the queue (no `client_uuid`), so it is
 /// sent online only and a failure is said out loud.
 ///
+/// Complete opens the completion sheet (`workshop_completion_sheet.dart`):
+/// what was done, parts used, at least one AFTER photo, meters and the
+/// technician's signature. Submitting queues `JOB_COMPLETION`, which sends
+/// the job to Quality Inspection for a supervisor - the card then reads
+/// "Waiting for supervisor approval" and offers no work actions until the
+/// supervisor passes it or sends it back ("Returned by supervisor"). The
+/// technician never approves their own job; the database enforces that.
+///
 /// Rules carried over from mobile, each enforced in [_onAction]:
 /// - no job selected -> "Select a job"; not checked in -> "Check in first";
 /// - a job split into tasks must name the task for Start / Complete;
@@ -55,12 +63,15 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_completion_service.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_offline.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_capture.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_uploader.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
+import 'package:tyre_pulse/features/workshop/domain/workshop_completion.dart';
 import 'package:tyre_pulse/features/workshop/domain/workshop_evidence.dart';
 import 'package:tyre_pulse/features/workshop/domain/workshop_live.dart';
+import 'package:tyre_pulse/features/workshop/presentation/workshop_completion_sheet.dart';
 import 'package:tyre_pulse/features/workshop/presentation/workshop_copy.dart';
 import 'package:tyre_pulse/features/workshop/workshop_providers.dart';
 
@@ -71,6 +82,8 @@ abstract final class WorkshopTechnicianKeys {
   static Key action(String key) => ValueKey<String>('workshop.action.$key');
   static const Key productivity = ValueKey<String>('workshop.productivity');
   static const Key moreToggle = ValueKey<String>('workshop.more');
+  static const Key awaitingApproval =
+      ValueKey<String>('workshop.awaiting-approval');
   static const Key offlineBanner = ValueKey<String>('workshop.offline');
   static Key pauseReason(String r) =>
       ValueKey<String>('workshop.pause-reason.$r');
@@ -136,6 +149,14 @@ class _WorkshopTechnicianScreenState
   String? _busyKey;
   bool _showMore = false;
 
+  /// Completions still in the offline queue (or just sent), by job.
+  final Map<String, WorkshopPendingCompletion> _pendingCompletions =
+      <String, WorkshopPendingCompletion>{};
+
+  /// A half-filled completion survives closing the sheet, by job.
+  final Map<String, WorkshopCompletionDraft> _completionDrafts =
+      <String, WorkshopCompletionDraft>{};
+
   /// When set, the screen is showing the cached snapshot from this time
   /// because the live read failed.
   DateTime? _offlineSince;
@@ -177,6 +198,8 @@ class _WorkshopTechnicianScreenState
     });
     final String userId = _userId;
     final List<WorkshopEventRecord> pending = await _readPending(userId);
+    final Map<String, WorkshopPendingCompletion> completions =
+        await _readPendingCompletions(userId);
     List<WorkshopJob> jobs;
     List<WorkshopEventRecord> events;
     DateTime? offlineSince;
@@ -215,6 +238,9 @@ class _WorkshopTechnicianScreenState
       _jobs = jobs;
       _serverEvents = events;
       _offlineSince = offlineSince;
+      _pendingCompletions
+        ..clear()
+        ..addAll(completions);
       _localEvents.addAll(<WorkshopEventRecord>[
         for (final WorkshopEventRecord e in pending)
           if (e.clientUuid == null || !known.contains(e.clientUuid)) e,
@@ -223,6 +249,16 @@ class _WorkshopTechnicianScreenState
     });
     if (keep != _selectedJobId || _tasks.isEmpty) {
       await _selectJob(keep);
+    }
+  }
+
+  Future<Map<String, WorkshopPendingCompletion>> _readPendingCompletions(
+    String userId,
+  ) async {
+    try {
+      return await ref.read(workshopPendingCompletionsProvider)(userId);
+    } on Object {
+      return const <String, WorkshopPendingCompletion>{};
     }
   }
 
@@ -259,6 +295,21 @@ class _WorkshopTechnicianScreenState
       // Tasks refine the job-level flow; a job whose tasks cannot be read
       // still records job-level events, exactly as a job with no tasks.
     }
+  }
+
+  _JobPhase _phaseOf(WorkshopJob job) {
+    final WorkshopPendingCompletion? pending = _pendingCompletions[job.id];
+    if (pending != null) {
+      // A refused completion is back in the technician's hands.
+      return pending.error == null
+          ? _JobPhase.awaitingApproval
+          : _JobPhase.normal;
+    }
+    if (isWorkshopJobAwaitingQc(job.status, job.qcStatus)) {
+      return _JobPhase.awaitingApproval;
+    }
+    if (isWorkshopJobReturned(job.qcStatus)) return _JobPhase.returned;
+    return _JobPhase.normal;
   }
 
   List<WorkshopEventRecord> get _events =>
@@ -386,6 +437,10 @@ class _WorkshopTechnicianScreenState
       await _info(copy('selectTaskTitle'), copy('selectTaskMsg'));
       return;
     }
+    if (action.event == 'complete_task') {
+      await _openCompletion(job, copy);
+      return;
+    }
     if (action.confirm) {
       final bool? ok = await showDialog<bool>(
         context: context,
@@ -459,6 +514,106 @@ class _WorkshopTechnicianScreenState
       jobId: job.id,
       reason: action.reason,
     );
+  }
+
+  /// The completion sheet, then: upload photos (the after photo is required,
+  /// so a failed upload stops here and keeps the draft), queue
+  /// `JOB_COMPLETION`, and record the `complete_task` event so productivity
+  /// counts the finish. The job then waits for a supervisor.
+  Future<void> _openCompletion(WorkshopJob job, WorkshopCopy copy) async {
+    final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
+    if (workspace == null || _busyKey != null) return;
+    final WorkshopCompletionService service =
+        ref.read(workshopCompletionServiceProvider);
+    final WorkshopPhotoPicker picker = ref.read(workshopPhotoPickerProvider);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    final WorkshopCompletionDraft? draft = await showWorkshopCompletionSheet(
+      context: context,
+      copy: copy,
+      job: job,
+      picker: picker,
+      requestedParts: service.jobPartsRequests(job.id),
+      meters: service.assetMeters(job.assetNo),
+      initial: _completionDrafts[job.id] ?? const WorkshopCompletionDraft(),
+      onDraftChanged: (WorkshopCompletionDraft d) =>
+          _completionDrafts[job.id] = d,
+    );
+    if (draft == null || !mounted) return;
+    setState(() => _busyKey = 'complete_task');
+    try {
+      messenger.showSnackBar(SnackBar(content: Text(copy('c_uploading'))));
+      final WorkshopPhotoUploader uploader =
+          ref.read(workshopPhotoUploaderProvider);
+      final WorkshopPhotoResolution after = await resolveWorkshopPhotos(
+        uploader: uploader,
+        photos: draft.afterPhotos,
+        userId: workspace.userId,
+      );
+      final WorkshopPhotoResolution before = draft.beforePhotos.isEmpty
+          ? const WorkshopPhotoResolution(refs: <String>[], dropped: 0)
+          : await resolveWorkshopPhotos(
+              uploader: uploader,
+              photos: draft.beforePhotos,
+              userId: workspace.userId,
+            );
+      // Every after photo must be on the server: it is the evidence the
+      // supervisor approves against. Anything less keeps the draft here.
+      if (after.dropped > 0 || after.refs.isEmpty) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(content: Text(copy('c_photosNeedSignal'))),
+          );
+        return;
+      }
+      await service.submit(
+        workspace: workspace,
+        job: job,
+        taskId: _selectedTaskId,
+        workDone: draft.effectiveWorkDone((String p) => copy('qp_$p')),
+        draft: draft.copyWith(
+          afterPhotos: after.refs,
+          beforePhotos: before.refs,
+        ),
+      );
+      for (final String path in <String>[
+        ...after.uploadedLocalPaths,
+        ...before.uploadedLocalPaths,
+      ]) {
+        unawaited(picker.discard(path));
+      }
+      final WorkshopEventRecord local =
+          await ref.read(workshopRepositoryProvider).recordEvent(
+                workspace: workspace,
+                input: RecordWorkshopEventInput(
+                  eventType: 'complete_task',
+                  jobId: job.id,
+                  taskId: _selectedTaskId,
+                  assetNo: job.assetNo,
+                  site: job.site ?? workspace.legacySite,
+                  country: workspace.activeCountry,
+                  device: 'mobile:${defaultTargetPlatform.name.toLowerCase()}',
+                  gps: _gps,
+                ),
+              );
+      if (!mounted) return;
+      setState(() {
+        _completionDrafts.remove(job.id);
+        _pendingCompletions[job.id] = WorkshopPendingCompletion(jobId: job.id);
+        _localEvents.add(local);
+        _showMore = false;
+      });
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(copy('c_sent'))));
+    } on Object {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(copy('saveFailed'))));
+    } finally {
+      if (mounted) setState(() => _busyKey = null);
+    }
   }
 
   /// Files the online-only `parts_requests` row. The `request_parts` event
@@ -575,8 +730,18 @@ class _WorkshopTechnicianScreenState
       now: _now,
     );
 
-    final WorkshopActionPlan? plan =
+    final _JobPhase phase = job == null ? _JobPhase.normal : _phaseOf(job);
+    final WorkshopActionPlan? basePlan =
         jobStatus == null ? null : workshopActionsFor(jobStatus);
+    // With the supervisor: nothing to start, pause or finish until they
+    // pass it or send it back.
+    final WorkshopActionPlan? plan =
+        basePlan == null || phase != _JobPhase.awaitingApproval
+            ? basePlan
+            : WorkshopActionPlan(
+                primary: const <WorkshopTechAction>[],
+                more: basePlan.more,
+              );
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -629,6 +794,8 @@ class _WorkshopTechnicianScreenState
                 copy: copy,
                 selected: j.id == _selectedJobId,
                 status: j.id == _selectedJobId ? jobStatus : null,
+                phase: _phaseOf(j),
+                refusal: _pendingCompletions[j.id]?.error,
                 onTap: () => unawaited(_selectJob(j.id)),
               ),
           if (job != null && _tasks.isNotEmpty) ...<Widget>[
@@ -1121,6 +1288,9 @@ class _ProductivityCard extends StatelessWidget {
   }
 }
 
+/// Where the job stands with the supervisor.
+enum _JobPhase { normal, awaitingApproval, returned }
+
 class _JobCard extends StatelessWidget {
   const _JobCard({
     required this.job,
@@ -1128,6 +1298,8 @@ class _JobCard extends StatelessWidget {
     required this.selected,
     required this.status,
     required this.onTap,
+    this.phase = _JobPhase.normal,
+    this.refusal,
   });
 
   final WorkshopJob job;
@@ -1135,6 +1307,11 @@ class _JobCard extends StatelessWidget {
   final bool selected;
   final WorkshopStatus? status;
   final VoidCallback onTap;
+  final _JobPhase phase;
+
+  /// The server's refusal of a queued completion, shown verbatim (it is the
+  /// sync engine's already-safe sentence).
+  final String? refusal;
 
   @override
   Widget build(BuildContext context) {
@@ -1157,7 +1334,7 @@ class _JobCard extends StatelessWidget {
                   style: text.titleSmall,
                 ),
               ),
-              if (s != null)
+              if (phase == _JobPhase.normal && s != null)
                 TpStatusChip(
                   status: _statusTone(s),
                   label: copy('s_${s.token}'),
@@ -1165,6 +1342,24 @@ class _JobCard extends StatelessWidget {
                 ),
             ],
           ),
+          // The supervisor state gets its own line: it is the one thing the
+          // technician needs to read, and it must never be cut off.
+          if (phase == _JobPhase.awaitingApproval) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            TpStatusChip(
+              key: WorkshopTechnicianKeys.awaitingApproval,
+              status: TpStatus.info,
+              label: copy('waitingApproval'),
+              isCompact: true,
+            ),
+          ] else if (phase == _JobPhase.returned) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            TpStatusChip(
+              status: TpStatus.warning,
+              label: copy('returned'),
+              isCompact: true,
+            ),
+          ],
           const SizedBox(height: TpSpace.xs),
           Text(
             <String>[
@@ -1176,6 +1371,13 @@ class _JobCard extends StatelessWidget {
             ].join(' | '),
             style: text.bodySmall?.copyWith(color: palette.textSecondary),
           ),
+          if (refusal != null) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Text(
+              '${copy('notAccepted')} $refusal',
+              style: text.bodySmall?.copyWith(color: palette.critical.base),
+            ),
+          ],
         ],
       ),
     );

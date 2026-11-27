@@ -128,6 +128,16 @@ enum CommandType {
   /// lines have no client write grant). Idempotent on the line's
   /// `client_uuid`, which is also the command's idempotency key.
   inventoryCountLine,
+
+  /// A technician's job completion, sent through the
+  /// `submit_job_completion` RPC (migration
+  /// `20261127150000_workshop_job_completion.sql`). It records what was done,
+  /// parts, photos, meters and the technician's signature, and moves the job
+  /// to Quality Inspection for a SUPERVISOR to pass or return - never straight
+  /// to closed. Idempotent on `client_uuid` (the command's idempotency key).
+  /// Photos are uploaded before the command is queued, so the payload only
+  /// carries `tp-storage://` references.
+  jobCompletion,
 }
 
 /// `pending_commands.commandType` values.
@@ -168,6 +178,8 @@ extension CommandTypeWireName on CommandType {
         return 'WORKSHOP_EVENT';
       case CommandType.inventoryCountLine:
         return 'INVENTORY_COUNT_LINE';
+      case CommandType.jobCompletion:
+        return 'JOB_COMPLETION';
     }
   }
 }
@@ -595,6 +607,31 @@ abstract final class CommandRegistry {
       // its photos are uploaded (or it has none); a line with local photos
       // stays in the encrypted draft for the manual Send.
       fieldAllowList: <String>{'audit_id', 'device_id', 'lines'},
+    ),
+    CommandType.jobCompletion: CommandSpec(
+      type: CommandType.jobCompletion,
+      // The RPC writes `work_order_completions` and moves `work_orders` to
+      // Quality Inspection; the entity this command changes is the job.
+      table: SupabaseTables.workOrders,
+      operation: CommandOperation.rpc,
+      rpc: 'submit_job_completion',
+      fieldAllowList: <String>{
+        'client_uuid',
+        'job_id',
+        'task_id',
+        'asset_no',
+        'site',
+        'country',
+        'work_done',
+        'quick_picks',
+        'parts_used',
+        'before_photos',
+        'after_photos',
+        'km',
+        'engine_hours',
+        'signature',
+        'completed_at',
+      },
     ),
     CommandType.workOrderStatus: CommandSpec(
       type: CommandType.workOrderStatus,

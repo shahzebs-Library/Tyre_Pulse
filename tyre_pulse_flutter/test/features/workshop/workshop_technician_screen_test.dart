@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:signature/signature.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
@@ -10,11 +11,14 @@ import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_completion_service.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_offline.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_capture.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_uploader.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
+import 'package:tyre_pulse/features/workshop/domain/workshop_completion.dart';
 import 'package:tyre_pulse/features/workshop/domain/workshop_evidence.dart';
+import 'package:tyre_pulse/features/workshop/presentation/workshop_completion_sheet.dart';
 import 'package:tyre_pulse/features/workshop/presentation/workshop_screen.dart';
 import 'package:tyre_pulse/features/workshop/presentation/workshop_technician_screen.dart';
 import 'package:tyre_pulse/features/workshop/workshop_providers.dart';
@@ -29,20 +33,23 @@ const WorkspaceContext _tyreMan = WorkspaceContext(
 );
 
 final class _FakeRepo implements WorkshopRepository {
-  _FakeRepo({this.online = true});
+  _FakeRepo({this.online = true, this.status = 'In Progress', this.qc});
 
   final bool online;
+  final String status;
+  final String? qc;
   final List<RecordWorkshopEventInput> recorded = <RecordWorkshopEventInput>[];
 
   @override
   Future<List<WorkshopJob>> listMyJobs(String userId) async {
     if (!online) throw StateError('offline');
-    return const <WorkshopJob>[
+    return <WorkshopJob>[
       WorkshopJob(
         id: 'wo-1',
         workOrderNo: 'GCKR/JC/1001/0926',
         assetNo: 'TM514',
-        status: 'In Progress',
+        status: status,
+        qcStatus: qc,
         site: 'NHC',
       ),
     ];
@@ -133,6 +140,32 @@ final class _MemoryCache implements WorkshopOfflineCache {
   Future<void> clear() async => snapshot = null;
 }
 
+final class _FakeCompletion implements WorkshopCompletionService {
+  final List<WorkshopCompletionDraft> submitted = <WorkshopCompletionDraft>[];
+  final List<String> workDone = <String>[];
+
+  @override
+  Future<List<WorkshopPartUsed>> jobPartsRequests(String jobId) async =>
+      const <WorkshopPartUsed>[];
+
+  @override
+  Future<WorkshopAssetMeters> assetMeters(String? assetNo) async =>
+      WorkshopAssetMeters.unknown;
+
+  @override
+  Future<String> submit({
+    required WorkspaceContext workspace,
+    required WorkshopJob job,
+    required WorkshopCompletionDraft draft,
+    required String workDone,
+    String? taskId,
+  }) async {
+    submitted.add(draft);
+    this.workDone.add(workDone);
+    return 'jobdone_1';
+  }
+}
+
 final class _FakeParts implements WorkshopPartsRequester {
   _FakeParts({this.online = true});
 
@@ -154,6 +187,7 @@ Future<void> _pump(
   WorkshopLocator? locator,
   _MemoryCache? cache,
   _FakeParts? parts,
+  _FakeCompletion? completion,
   List<WorkshopEventRecord> pending = const <WorkshopEventRecord>[],
 }) async {
   await tester.binding.setSurfaceSize(const Size(390, 1400));
@@ -171,6 +205,11 @@ Future<void> _pump(
         workshopPartsRequesterProvider.overrideWithValue(parts ?? _FakeParts()),
         workshopPendingEventsProvider
             .overrideWithValue((String userId) async => pending),
+        workshopCompletionServiceProvider
+            .overrideWithValue(completion ?? _FakeCompletion()),
+        workshopPendingCompletionsProvider.overrideWithValue(
+          (String userId) async => const <String, WorkshopPendingCompletion>{},
+        ),
       ],
       child: MaterialApp(
         theme: TpTheme.light,
@@ -482,6 +521,103 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(seen, isTrue);
+  });
+
+  testWidgets('a job with the supervisor waits: chip, no work actions', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _FakeRepo(status: 'Quality Inspection', qc: 'pending'));
+    expect(find.byKey(WorkshopTechnicianKeys.awaitingApproval), findsOneWidget);
+    expect(find.text('Waiting for supervisor approval'), findsOneWidget);
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('start_job')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a returned job says so and can be started again', (
+    WidgetTester tester,
+  ) async {
+    await _pump(tester, _FakeRepo(qc: 'failed'));
+    expect(find.text('Returned by supervisor'), findsOneWidget);
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('start_job')),
+      findsOneWidget,
+    );
+  });
+
+  Future<void> openCompletion(WidgetTester tester) async {
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.checkToggle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.action('start_job')));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(WorkshopTechnicianKeys.action('complete_task')));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> fillCompletion(WidgetTester tester) async {
+    await tester.enterText(
+      find.byKey(WorkshopCompletionKeys.workDone),
+      'Replaced hub seal',
+    );
+    await tester.ensureVisible(find.byKey(WorkshopCompletionKeys.afterCamera));
+    await tester.tap(find.byKey(WorkshopCompletionKeys.afterCamera));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byType(Signature));
+    await tester.drag(find.byType(Signature), const Offset(120, 20));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('Complete opens the sheet; a full completion goes to approval', (
+    WidgetTester tester,
+  ) async {
+    final _FakeRepo repo = _FakeRepo();
+    final _FakeCompletion completion = _FakeCompletion();
+    await _pump(tester, repo, completion: completion);
+    await openCompletion(tester);
+    expect(find.byKey(WorkshopCompletionKeys.sheet), findsOneWidget);
+    expect(completion.submitted, isEmpty);
+
+    await fillCompletion(tester);
+    expect(find.byKey(WorkshopCompletionKeys.missing), findsNothing);
+    await tester.tap(find.byKey(WorkshopCompletionKeys.submit));
+    await tester.pumpAndSettle();
+
+    expect(completion.submitted, hasLength(1));
+    expect(completion.workDone.single, 'Replaced hub seal');
+    expect(
+      completion.submitted.single.afterPhotos.single,
+      startsWith('tp-storage://'),
+    );
+    expect(completion.submitted.single.signature, startsWith('data:image/png'));
+    expect(repo.recorded.last.eventType, 'complete_task');
+    expect(find.text('Waiting for supervisor approval'), findsOneWidget);
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('pause_job')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('no signal for the after photo: nothing is sent', (
+    WidgetTester tester,
+  ) async {
+    final _FakeCompletion completion = _FakeCompletion();
+    await _pump(
+      tester,
+      _FakeRepo(),
+      completion: completion,
+      uploader: _FakeUploader(online: false),
+    );
+    await openCompletion(tester);
+    await fillCompletion(tester);
+    await tester.tap(find.byKey(WorkshopCompletionKeys.submit));
+    await tester.pumpAndSettle();
+    expect(completion.submitted, isEmpty);
+    expect(find.byKey(WorkshopTechnicianKeys.awaitingApproval), findsNothing);
   });
 
   test('only field trades get the technician screen', () {

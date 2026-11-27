@@ -13,6 +13,7 @@ import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_gps_source.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_completion_service.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_offline.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_capture.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_uploader.dart';
@@ -84,4 +85,27 @@ final Provider<Future<List<WorkshopEventRecord>> Function(String userId)>
 final Provider<WorkshopPartsRequester> workshopPartsRequesterProvider =
     Provider<WorkshopPartsRequester>(
   (ref) => SupabaseWorkshopPartsRequester(ref.watch(supabaseClientProvider)),
+);
+
+/// Job completion: parts picks, meter lookup and the queued submit.
+final Provider<WorkshopCompletionService> workshopCompletionServiceProvider =
+    Provider<WorkshopCompletionService>(
+  (ref) => SupabaseWorkshopCompletionService(
+    ref.watch(supabaseClientProvider),
+    ref.watch(workshopQueuedCommandRepositoryProvider),
+  ),
+);
+
+/// This user's completions still waiting in the offline queue, by job.
+final Provider<
+        Future<Map<String, WorkshopPendingCompletion>> Function(String userId)>
+    workshopPendingCompletionsProvider = Provider<
+        Future<Map<String, WorkshopPendingCompletion>> Function(String userId)>(
+  (ref) {
+    final AppDatabase db = ref.watch(appDatabaseProvider);
+    return (String userId) async => workshopPendingCompletions(
+          await db.queueDao.outstandingCommands(),
+          userId: userId,
+        );
+  },
 );

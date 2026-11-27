@@ -16,9 +16,9 @@ void main() {
     });
 
     test(
-        'there are exactly 15 commands - 16 minus the two excluded, plus '
-        'INVENTORY_COUNT_LINE', () {
-      expect(CommandType.values, hasLength(15));
+        'there are exactly 16 commands - 16 minus the two excluded, plus '
+        'INVENTORY_COUNT_LINE and JOB_COMPLETION', () {
+      expect(CommandType.values, hasLength(16));
     });
 
     test('CHECKLIST_APPROVAL and REPAIR_REQUEST cannot be expressed', () {
@@ -52,6 +52,7 @@ void main() {
         CommandType.washRecord: 'WASH_RECORD',
         CommandType.workshopEvent: 'WORKSHOP_EVENT',
         CommandType.inventoryCountLine: 'INVENTORY_COUNT_LINE',
+        CommandType.jobCompletion: 'JOB_COMPLETION',
       };
 
       expect(expected, hasLength(CommandType.values.length));
@@ -91,6 +92,7 @@ void main() {
         CommandType.washRecord: SupabaseTables.washRecords,
         CommandType.workshopEvent: SupabaseTables.techActivityEvents,
         CommandType.inventoryCountLine: SupabaseTables.inventoryCountLines,
+        CommandType.jobCompletion: SupabaseTables.workOrders,
       };
 
       for (final MapEntry<CommandType, String> entry in expected.entries) {
@@ -123,7 +125,8 @@ void main() {
     test('every other command is an insert with no match column', () {
       for (final CommandType type in CommandType.values) {
         if (updateTypes.contains(type) ||
-            type == CommandType.inventoryCountLine) {
+            type == CommandType.inventoryCountLine ||
+            type == CommandType.jobCompletion) {
           continue;
         }
         final CommandSpec spec = CommandRegistry.specFor(type);
@@ -236,6 +239,20 @@ void main() {
       expect(fields.contains('tyre_position'), isTrue);
     });
 
+    test('JOB_COMPLETION goes through submit_job_completion and carries its '
+        'own client_uuid (the RPC answer is matched on it)', () {
+      final CommandSpec spec =
+          CommandRegistry.specFor(CommandType.jobCompletion);
+      expect(spec.operation, CommandOperation.rpc);
+      expect(spec.rpc, 'submit_job_completion');
+      expect(spec.fieldAllowList, contains('client_uuid'));
+      expect(spec.fieldAllowList, contains('signature'));
+      expect(spec.fieldAllowList, contains('after_photos'));
+      // Never a status: the server decides where the job goes.
+      expect(spec.fieldAllowList, isNot(contains('status')));
+      expect(spec.fieldAllowList, isNot(contains('qc_status')));
+    });
+
     test('WORKSHOP_EVENT carries the local tap time', () {
       expect(
         CommandRegistry.specFor(CommandType.workshopEvent)
@@ -266,7 +283,7 @@ void main() {
   });
 
   group('inventory (docs/inventory_reserved_patch.md)', () {
-    test('INVENTORY_COUNT_LINE is the one RPC command, on inv_count_submit',
+    test('INVENTORY_COUNT_LINE is an RPC command, on inv_count_submit',
         () {
       final CommandSpec spec =
           CommandRegistry.specFor(CommandType.inventoryCountLine);
@@ -275,7 +292,10 @@ void main() {
       expect(spec.matchColumn, isNull);
       expect(spec.fieldAllowList, <String>{'audit_id', 'device_id', 'lines'});
       for (final CommandType t in CommandType.values) {
-        if (t == CommandType.inventoryCountLine) continue;
+        if (t == CommandType.inventoryCountLine ||
+            t == CommandType.jobCompletion) {
+          continue;
+        }
         expect(
           CommandRegistry.specFor(t).operation,
           isNot(CommandOperation.rpc),

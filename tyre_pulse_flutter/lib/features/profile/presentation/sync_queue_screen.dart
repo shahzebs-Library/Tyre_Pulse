@@ -85,6 +85,9 @@ String syncQueueTypeLabel(AppLocalizations l10n, CommandType? type) {
     CommandType.washRecord => l10n.syncTypeWashRecord,
     CommandType.workshopEvent => l10n.syncTypeWorkshopEvent,
     CommandType.inventoryCountLine => l10n.syncTypeInventoryCountLine,
+    // A job completion changes the job's status; reuse that label until a
+    // dedicated "Job completion" string is added to the ARB catalog.
+    CommandType.jobCompletion => l10n.syncTypeWorkOrderStatus,
   };
 }
 
@@ -93,7 +96,8 @@ IconData _typeIcon(CommandType? type) {
     null => Icons.help_outline_rounded,
     CommandType.tyreChange => Icons.tire_repair_outlined,
     CommandType.workOrder ||
-    CommandType.workOrderStatus =>
+    CommandType.workOrderStatus ||
+    CommandType.jobCompletion =>
       Icons.build_outlined,
     CommandType.rca => Icons.account_tree_outlined,
     CommandType.reportIssue ||

@@ -67,6 +67,7 @@ final class WorkshopJob {
     this.targetCompletion,
     this.site,
     this.role,
+    this.qcStatus,
   });
 
   final String id;
@@ -81,6 +82,10 @@ final class WorkshopJob {
   /// an assignment.
   final String? role;
 
+  /// `work_orders.qc_status`: `pending` while a supervisor reviews a
+  /// completion, `failed` when they sent it back, `passed` when approved.
+  final String? qcStatus;
+
   static WorkshopJob? fromRow(Map<String, dynamic> row, {String? role}) {
     final String? id = _text(row['id']);
     if (id == null) return null;
@@ -93,6 +98,7 @@ final class WorkshopJob {
       targetCompletion: _text(row['target_completion']),
       site: _text(row['site']),
       role: role,
+      qcStatus: _text(row['qc_status']),
     );
   }
 
@@ -106,6 +112,7 @@ final class WorkshopJob {
         'target_completion': targetCompletion,
         'site': site,
         'role': role,
+        'qc_status': qcStatus,
       };
 }
 
@@ -266,7 +273,8 @@ abstract interface class WorkshopRepository {
 }
 
 const String _woColumns =
-    'id,work_order_no,asset_no,status,priority,target_completion,site';
+    'id,work_order_no,asset_no,status,priority,target_completion,site,'
+    'qc_status';
 const String _eventColumns = 'id,job_id,event_type,reason_code,at,client_uuid';
 
 final class SupabaseWorkshopRepository

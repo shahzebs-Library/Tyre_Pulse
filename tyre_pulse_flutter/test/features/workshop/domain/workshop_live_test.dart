@@ -166,4 +166,59 @@ void main() {
       'ws_b',
     ]);
   });
+
+  group('workshopActionsFor - only state-valid moves', () {
+    List<String> keys(List<WorkshopTechAction> a) =>
+        a.map((WorkshopTechAction x) => x.key).toList();
+
+    test('working: Pause and Finish, never Start or Resume', () {
+      final WorkshopActionPlan p = workshopActionsFor(WorkshopStatus.working);
+      expect(keys(p.primary), <String>['pause_job', 'complete_task']);
+      expect(keys(p.more), isNot(contains('start_job')));
+    });
+
+    test('waiting or on break: Resume only', () {
+      for (final WorkshopStatus s in <WorkshopStatus>[
+        WorkshopStatus.waitingParts,
+        WorkshopStatus.waitingApproval,
+        WorkshopStatus.waitingTools,
+        WorkshopStatus.waitingVehicle,
+        WorkshopStatus.onBreak,
+      ]) {
+        expect(keys(workshopActionsFor(s).primary), <String>['resume_job']);
+      }
+      expect(
+        keys(workshopActionsFor(WorkshopStatus.onBreak).more),
+        contains('end_break'),
+      );
+    });
+
+    test('not working: Start', () {
+      expect(
+        keys(workshopActionsFor(WorkshopStatus.available).primary),
+        <String>['start_job'],
+      );
+      expect(
+        keys(workshopActionsFor(WorkshopStatus.awaitingInspection).primary),
+        <String>['start_job'],
+      );
+    });
+
+    test('pause reasons map onto the status engine', () {
+      WorkshopStatus after(String reason) => workshopStatusFromEvents(
+            <WorkshopEventLike>[
+              _e('start_job', 0),
+              _e('pause_job', 5, reason: reason),
+            ],
+            present: true,
+          );
+      expect(after('parts'), WorkshopStatus.waitingParts);
+      expect(after('approval'), WorkshopStatus.waitingApproval);
+      expect(after('vehicle'), WorkshopStatus.waitingVehicle);
+      expect(after('tools'), WorkshopStatus.waitingTools);
+      expect(after('break'), WorkshopStatus.onBreak);
+      expect(after('other'), WorkshopStatus.available);
+      expect(kWorkshopPauseReasons, hasLength(6));
+    });
+  });
 }

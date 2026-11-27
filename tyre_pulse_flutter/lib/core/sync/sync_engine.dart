@@ -23,10 +23,14 @@
 /// predicate a partial index needs for conflict inference, so an upsert can
 /// throw 42P10 even when the row genuinely already exists. A plain insert
 /// enforces the same uniqueness correctly regardless, and throws 23505 on a
-/// genuine duplicate. [_pushOne] resolves what a 23505 means using the
-/// CLAIMED command's own `retryCount`: zero means this is the first attempt
-/// and the conflict is real; more than zero means an earlier attempt already
-/// landed and this is a successful replay, not a failure.
+/// genuine duplicate. [_pushOne] resolves what a 23505 means using TWO
+/// facts: the CLAIMED command's own `retryCount` (zero means this is the
+/// first attempt and the conflict is real), and WHICH constraint refused it
+/// ([isClientUuidReplay]). A 23505 counts as a successful replay only when it
+/// names the command's `client_uuid` uniqueness. Business guards raise 23505
+/// too - `guard_tyre_active_fitment` refuses a second active tyre on one
+/// wheel with that code - and treating such a refusal as "already landed"
+/// deleted real, never-written work from the queue as synced.
 ///
 /// **A command's SET-clause payload is filtered against
 /// `CommandSpec.fieldAllowList` again here, at push time**, even though
@@ -82,6 +86,28 @@ CommandType? commandTypeFromWire(String wire) {
 /// before editing under this exact key inside the payload it hands to
 /// `QueuedCommandRepository.enqueue`.
 const String expectedPriorStatusPayloadKey = '_expectedPriorStatus';
+
+/// True when [failure] is a unique violation on the command's idempotency
+/// key (`client_uuid`), i.e. the row an earlier attempt wrote is already on
+/// the server.
+///
+/// Every `client_uuid` uniqueness in the live schema is named after the
+/// column (`ux_tyre_records_client_uuid`, `tech_activity_events_client_uuid_
+/// uidx`, `wo_cost_entries_client_uidx`, and Postgres' own default
+/// `<table>_client_uuid_key`), and Postgres puts the constraint name in the
+/// message: `duplicate key value violates unique constraint "<name>"`. Any
+/// other 23505 - a trigger guard raising with that code, a unique business
+/// key - is a genuine refusal and must surface as a failure.
+bool isClientUuidReplay(SupabaseFailure failure) {
+  if (!failure.isIdempotentReplay) {
+    return false;
+  }
+  final String raw = (failure.rawMessage ?? '').toLowerCase();
+  if (!raw.contains('unique constraint')) {
+    return false;
+  }
+  return raw.contains('client_uuid') || raw.contains('client_uid');
+}
 
 /// What [SyncEngine] needs to push one command's business row to the server.
 ///
@@ -275,8 +301,7 @@ final class SyncEngine {
         }
       }
 
-      final List<String> filesToDelete =
-          await _queueDao.pruneSyncedCommands();
+      final List<String> filesToDelete = await _queueDao.pruneSyncedCommands();
       await _deleteFiles(filesToDelete);
 
       return SyncRunSummary(
@@ -453,7 +478,9 @@ final class SyncEngine {
       for (final MapEntry<String, Object?> entry in decoded.entries)
         if (entry.key != expectedPriorStatusPayloadKey &&
             entry.key != spec.matchColumn &&
-            spec.fieldAllowList.contains(entry.key))
+            spec.fieldAllowList.contains(entry.key) &&
+            !(generatedColumnsByTable[spec.table]?.contains(entry.key) ??
+                false))
           entry.key: entry.value,
     };
     if (spec.operation == CommandOperation.insert) {
@@ -494,9 +521,10 @@ final class SyncEngine {
       // The idempotency judgement: a duplicate key on a RETRY of an
       // idempotent write means the earlier attempt already landed. A
       // duplicate key on the FIRST attempt (retryCount == 0) is a genuine
-      // conflict unrelated to retrying, and falls through to the failure
-      // path below like any other refusal.
-      if (failure.isIdempotentReplay && command.retryCount > 0) {
+      // conflict unrelated to retrying, and so is ANY duplicate key that
+      // does not name the client_uuid uniqueness (a trigger guard, a unique
+      // business key): both fall through to the failure path below.
+      if (command.retryCount > 0 && isClientUuidReplay(failure)) {
         await _markCommandSynced(command, spec: spec, now: now);
         return _CommandOutcome.synced;
       }

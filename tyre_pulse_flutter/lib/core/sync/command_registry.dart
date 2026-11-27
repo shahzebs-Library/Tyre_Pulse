@@ -272,10 +272,22 @@ final class CommandSpec {
   final bool requiresOptimisticStatusMatch;
 }
 
+/// Columns the database computes itself (`GENERATED ALWAYS AS ...`), per
+/// table. Postgres refuses any INSERT or UPDATE that names one (SQLSTATE
+/// 428C9), and that refusal fails the WHOLE write, so the sync engine strips
+/// these from every payload immediately before the push - whatever an
+/// allow-list or an older queued row says.
+///
+/// `tyre_records.fitment_date` always equals `issue_date`;
+/// `work_orders.total_cost` is computed from the cost columns.
+const Map<String, Set<String>> generatedColumnsByTable = <String, Set<String>>{
+  SupabaseTables.tyreRecords: <String>{'fitment_date'},
+  SupabaseTables.workOrders: <String>{'total_cost'},
+};
+
 /// The single table-name registry. See the library comment.
 abstract final class CommandRegistry {
-  static const Map<CommandType, CommandSpec> specs =
-      <CommandType, CommandSpec>{
+  static const Map<CommandType, CommandSpec> specs = <CommandType, CommandSpec>{
     // ---- Inserts (observations - safe to queue outright) ----
     CommandType.tyreChange: CommandSpec(
       type: CommandType.tyreChange,
@@ -301,7 +313,8 @@ abstract final class CommandRegistry {
         'tread_depth',
         'removal_reason',
         'removal_date',
-        'fitment_date',
+        // NOT 'fitment_date': it is a GENERATED column (= issue_date) and
+        // naming it in an insert fails the whole write with 428C9.
         'issue_date',
         'status',
         'risk_level',
@@ -546,6 +559,10 @@ abstract final class CommandRegistry {
         'country',
         'foreman_confirmed',
         'confirmed_by',
+        // The local TAP time (ISO UTC). Without it an event captured offline
+        // is stamped by the server default at SYNC time, so productive time
+        // and pauses are measured from when the phone reconnected.
+        'at',
       },
     ),
 

@@ -10,6 +10,7 @@ import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_offline.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_capture.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_uploader.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
@@ -28,19 +29,24 @@ const WorkspaceContext _tyreMan = WorkspaceContext(
 );
 
 final class _FakeRepo implements WorkshopRepository {
+  _FakeRepo({this.online = true});
+
+  final bool online;
   final List<RecordWorkshopEventInput> recorded = <RecordWorkshopEventInput>[];
 
   @override
-  Future<List<WorkshopJob>> listMyJobs(String userId) async =>
-      const <WorkshopJob>[
-        WorkshopJob(
-          id: 'wo-1',
-          workOrderNo: 'GCKR/JC/1001/0926',
-          assetNo: 'TM514',
-          status: 'In Progress',
-          site: 'NHC',
-        ),
-      ];
+  Future<List<WorkshopJob>> listMyJobs(String userId) async {
+    if (!online) throw StateError('offline');
+    return const <WorkshopJob>[
+      WorkshopJob(
+        id: 'wo-1',
+        workOrderNo: 'GCKR/JC/1001/0926',
+        assetNo: 'TM514',
+        status: 'In Progress',
+        site: 'NHC',
+      ),
+    ];
+  }
 
   @override
   Future<List<WorkshopEventRecord>> listMyRecentEvents(
@@ -99,12 +105,56 @@ final class _FakeUploader implements WorkshopPhotoUploader {
   }
 }
 
+final class _MemoryCache implements WorkshopOfflineCache {
+  WorkshopOfflineSnapshot? snapshot;
+  int saves = 0;
+
+  @override
+  Duration get maxAge => const Duration(days: 7);
+
+  @override
+  Future<void> save({
+    required String userId,
+    required List<WorkshopJob> jobs,
+    required List<WorkshopEventRecord> events,
+  }) async {
+    saves++;
+    snapshot = WorkshopOfflineSnapshot(
+      jobs: jobs,
+      events: events,
+      cachedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<WorkshopOfflineSnapshot?> load(String userId) async => snapshot;
+
+  @override
+  Future<void> clear() async => snapshot = null;
+}
+
+final class _FakeParts implements WorkshopPartsRequester {
+  _FakeParts({this.online = true});
+
+  final bool online;
+  final List<WorkshopPartsRequestInput> sent = <WorkshopPartsRequestInput>[];
+
+  @override
+  Future<void> request(WorkshopPartsRequestInput input) async {
+    if (!online) throw StateError('offline');
+    sent.add(input);
+  }
+}
+
 Future<void> _pump(
   WidgetTester tester,
   _FakeRepo repo, {
   WorkshopPhotoPicker? picker,
   WorkshopPhotoUploader? uploader,
   WorkshopLocator? locator,
+  _MemoryCache? cache,
+  _FakeParts? parts,
+  List<WorkshopEventRecord> pending = const <WorkshopEventRecord>[],
 }) async {
   await tester.binding.setSurfaceSize(const Size(390, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -117,6 +167,10 @@ Future<void> _pump(
         workshopPhotoUploaderProvider
             .overrideWithValue(uploader ?? _FakeUploader()),
         workshopLocatorProvider.overrideWithValue(locator ?? () async => null),
+        workshopOfflineCacheProvider.overrideWithValue(cache ?? _MemoryCache()),
+        workshopPartsRequesterProvider.overrideWithValue(parts ?? _FakeParts()),
+        workshopPendingEventsProvider
+            .overrideWithValue((String userId) async => pending),
       ],
       child: MaterialApp(
         theme: TpTheme.light,
@@ -172,6 +226,11 @@ void main() {
   Future<void> checkInAndOpen(WidgetTester tester, String action) async {
     await tester.tap(find.byKey(WorkshopTechnicianKeys.checkToggle));
     await tester.pumpAndSettle();
+    if (find.byKey(WorkshopTechnicianKeys.action(action)).evaluate().isEmpty) {
+      await tester.ensureVisible(find.byKey(WorkshopTechnicianKeys.moreToggle));
+      await tester.tap(find.byKey(WorkshopTechnicianKeys.moreToggle));
+      await tester.pumpAndSettle();
+    }
     await tester.ensureVisible(
       find.byKey(WorkshopTechnicianKeys.action(action)),
     );
@@ -270,6 +329,159 @@ void main() {
     expect(repo.recorded.single.gps, isNull);
     // Let the 15 s guard expire so no timer outlives the test.
     await tester.pump(const Duration(seconds: 16));
+  });
+
+  testWidgets('only state-valid actions: Start first, then Pause / Finish', (
+    WidgetTester tester,
+  ) async {
+    final _FakeRepo repo = _FakeRepo();
+    await _pump(tester, repo);
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('start_job')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('pause_job')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('resume_job')),
+      findsNothing,
+    );
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.checkToggle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.action('start_job')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('start_job')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('pause_job')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('complete_task')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Pause asks why and records the reason', (
+    WidgetTester tester,
+  ) async {
+    final _FakeRepo repo = _FakeRepo();
+    await _pump(tester, repo);
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.checkToggle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.action('start_job')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.action('pause_job')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.pauseReason('vehicle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.pauseSubmit));
+    await tester.pumpAndSettle();
+
+    final RecordWorkshopEventInput e = repo.recorded.last;
+    expect(e.eventType, 'pause_job');
+    expect(e.reasonCode, 'vehicle');
+    expect(find.text('Waiting for Vehicle'), findsOneWidget);
+    expect(
+      find.byKey(WorkshopTechnicianKeys.action('resume_job')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('opened offline: cached jobs + unsynced taps, no error page', (
+    WidgetTester tester,
+  ) async {
+    final _MemoryCache cache = _MemoryCache()
+      ..snapshot = WorkshopOfflineSnapshot(
+        jobs: const <WorkshopJob>[
+          WorkshopJob(id: 'wo-9', workOrderNo: 'GCKR/JC/0009', assetNo: 'TM9'),
+        ],
+        events: <WorkshopEventRecord>[
+          WorkshopEventRecord(
+            eventType: 'check_in',
+            at: DateTime.now().subtract(const Duration(hours: 1)),
+          ),
+        ],
+        cachedAt: DateTime.now().subtract(const Duration(hours: 1)),
+      );
+    await _pump(
+      tester,
+      _FakeRepo(online: false),
+      cache: cache,
+      pending: <WorkshopEventRecord>[
+        WorkshopEventRecord(
+          eventType: 'start_job',
+          jobId: 'wo-9',
+          clientUuid: 'ws_pending',
+          localAt: DateTime.now().subtract(const Duration(minutes: 5)),
+        ),
+      ],
+    );
+    expect(find.byKey(WorkshopTechnicianKeys.offlineBanner), findsOneWidget);
+    expect(find.text('GCKR/JC/0009'), findsOneWidget);
+    expect(find.text('Working'), findsOneWidget);
+  });
+
+  testWidgets('a live load is cached for next time', (
+    WidgetTester tester,
+  ) async {
+    final _MemoryCache cache = _MemoryCache();
+    await _pump(tester, _FakeRepo(), cache: cache);
+    expect(cache.saves, 1);
+    expect(cache.snapshot?.jobs.single.id, 'wo-1');
+    expect(find.byKey(WorkshopTechnicianKeys.offlineBanner), findsNothing);
+  });
+
+  testWidgets('Request Parts also files a parts request', (
+    WidgetTester tester,
+  ) async {
+    final _FakeRepo repo = _FakeRepo();
+    final _FakeParts parts = _FakeParts();
+    await _pump(tester, repo, parts: parts);
+    await checkInAndOpen(tester, 'request_parts');
+    await tester.enterText(
+      find.byKey(WorkshopTechnicianKeys.partName),
+      'Brake pad set',
+    );
+    await tester.enterText(find.byKey(WorkshopTechnicianKeys.partQty), '2');
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.noteSubmit));
+    await tester.pumpAndSettle();
+
+    expect(repo.recorded.last.eventType, 'request_parts');
+    expect(parts.sent.single.partName, 'Brake pad set');
+    expect(parts.sent.single.qty, 2);
+    expect(parts.sent.single.jobId, 'wo-1');
+    expect(parts.sent.single.requestedBy, 'tech-1');
+  });
+
+  testWidgets('a parts request that cannot be sent is said out loud', (
+    WidgetTester tester,
+  ) async {
+    final _FakeRepo repo = _FakeRepo();
+    await _pump(tester, repo, parts: _FakeParts(online: false));
+    await checkInAndOpen(tester, 'request_parts');
+    await tester.enterText(
+      find.byKey(WorkshopTechnicianKeys.partName),
+      'Air filter',
+    );
+    await tester.tap(find.byKey(WorkshopTechnicianKeys.noteSubmit));
+    await tester.pumpAndSettle();
+    expect(repo.recorded.last.eventType, 'request_parts');
+    // SnackBars queue: wait until this one reaches the screen.
+    bool seen = false;
+    for (int i = 0; i < 10 && !seen; i++) {
+      seen = find
+          .textContaining('the parts request could not be sent')
+          .evaluate()
+          .isNotEmpty;
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+    }
+    expect(seen, isTrue);
   });
 
   test('only field trades get the technician screen', () {

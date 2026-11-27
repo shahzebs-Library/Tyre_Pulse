@@ -81,6 +81,8 @@ const SupabaseFailure _duplicateFailure = SupabaseFailure(
   ),
   cause: SupabaseFailureCause.uniqueViolation,
   code: '23505',
+  rawMessage: 'duplicate key value violates unique constraint '
+      '"ux_accidents_client_uuid"',
 );
 
 String _localPath(String fileName) =>

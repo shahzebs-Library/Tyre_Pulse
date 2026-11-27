@@ -9,9 +9,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_gps_source.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_offline.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_capture.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_uploader.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
@@ -57,3 +59,29 @@ final Provider<WorkshopLocator> workshopLocatorProvider =
     return WorkshopGpsReading.tryCreate(fix.latitude, fix.longitude);
   };
 });
+
+/// Last loaded jobs + events, shown when the screen opens without a
+/// connection. Encrypted, owner-stamped, 7 days max.
+final Provider<WorkshopOfflineCache> workshopOfflineCacheProvider =
+    Provider<WorkshopOfflineCache>(
+  (ref) => WorkshopOfflineCache(ref.watch(secureStoreProvider)),
+);
+
+/// This user's unsynced workshop taps from the shared offline queue.
+final Provider<Future<List<WorkshopEventRecord>> Function(String userId)>
+    workshopPendingEventsProvider =
+    Provider<Future<List<WorkshopEventRecord>> Function(String userId)>(
+  (ref) {
+    final AppDatabase db = ref.watch(appDatabaseProvider);
+    return (String userId) async => workshopEventsFromQueue(
+          await db.queueDao.outstandingCommands(),
+          userId: userId,
+        );
+  },
+);
+
+/// Online-only "Request parts" row (`parts_requests` has no `client_uuid`).
+final Provider<WorkshopPartsRequester> workshopPartsRequesterProvider =
+    Provider<WorkshopPartsRequester>(
+  (ref) => SupabaseWorkshopPartsRequester(ref.watch(supabaseClientProvider)),
+);

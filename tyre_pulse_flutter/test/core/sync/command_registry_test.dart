@@ -226,10 +226,22 @@ void main() {
     // the web incident form) is considerably wider than TYRE_CHANGE
     // (25 fields). This test pins the measured counts rather than the
     // artifact's prose claim - see the final report for this finding.
-    test('TYRE_CHANGE has 25 allow-listed fields', () {
+    test(
+        'TYRE_CHANGE has 24 allow-listed fields and never the generated '
+        'fitment_date', () {
+      final Set<String> fields =
+          CommandRegistry.specFor(CommandType.tyreChange).fieldAllowList;
+      expect(fields.length, 24);
+      expect(fields.contains('fitment_date'), isFalse);
+      expect(fields.contains('tyre_position'), isTrue);
+    });
+
+    test('WORKSHOP_EVENT carries the local tap time', () {
       expect(
-        CommandRegistry.specFor(CommandType.tyreChange).fieldAllowList.length,
-        25,
+        CommandRegistry.specFor(CommandType.workshopEvent)
+            .fieldAllowList
+            .contains('at'),
+        isTrue,
       );
     });
 

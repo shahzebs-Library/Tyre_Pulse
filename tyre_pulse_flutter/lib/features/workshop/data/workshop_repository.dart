@@ -23,10 +23,10 @@
 /// queue (`CommandType.workshopEvent`, allow-list in
 /// `lib/core/sync/command_registry.dart`). The sync engine stamps the
 /// command's idempotency key into `client_uuid`, so a retry never duplicates
-/// a row. `at` is NOT sent - it is a server default, exactly as on mobile -
-/// which means an event queued offline is timestamped when it syncs; the
-/// screen keeps its own device-time copy until then (see
-/// [WorkshopEventRecord.localAt]).
+/// a row. `at` IS sent: the local tap time in ISO UTC. Leaving it to the
+/// server default stamped an event queued offline with the SYNC time, so a
+/// job started at 08:00 in a dead spot and synced at 11:00 measured three
+/// hours of productive time that never happened.
 ///
 /// # Evidence (photos + GPS)
 ///
@@ -95,6 +95,18 @@ final class WorkshopJob {
       role: role,
     );
   }
+
+  /// The row shape [fromRow] reads, for the offline cache.
+  Map<String, Object?> toRow() => <String, Object?>{
+        'id': id,
+        'work_order_no': workOrderNo,
+        'asset_no': assetNo,
+        'status': status,
+        'priority': priority,
+        'target_completion': targetCompletion,
+        'site': site,
+        'role': role,
+      };
 }
 
 /// One step of a job (`wo_tasks`).
@@ -174,6 +186,17 @@ final class WorkshopEventRecord {
       clientUuid: _text(row['client_uuid']),
     );
   }
+
+  /// The row shape [fromRow] reads, for the offline cache. A local copy's
+  /// device time is stored as `at` so a cached event still orders correctly.
+  Map<String, Object?> toRow() => <String, Object?>{
+        'id': id,
+        'job_id': jobId,
+        'event_type': eventType,
+        'reason_code': reasonCode,
+        'at': (at ?? localAt)?.toUtc().toIso8601String(),
+        'client_uuid': clientUuid,
+      };
 }
 
 /// Merges server rows with local copies still waiting to sync, dropping a
@@ -371,6 +394,7 @@ final class SupabaseWorkshopRepository
         'gps_lng': input.gps?.lng,
         'site': _text(input.site),
         'country': input.country,
+        'at': now.toUtc().toIso8601String(),
       },
       workspace: workspace,
       now: now,

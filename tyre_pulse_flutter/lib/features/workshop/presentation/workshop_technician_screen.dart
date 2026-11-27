@@ -8,6 +8,22 @@
 /// `tech_activity_events` row queued offline-safe (`WORKSHOP_EVENT`,
 /// idempotent on `client_uuid`); see `workshop_repository.dart`.
 ///
+/// Only the moves valid for the selected job's live status are offered
+/// (`workshopActionsFor`): Start, or Pause + Finish while working, or Resume
+/// while paused; Request Parts / Assistance / Report Problem sit under More.
+/// Pause asks WHY (parts, approval, vehicle, tools, break, other) and records
+/// that as the `pause_job` reason, which is what separates blocked time from
+/// idle time on the foreman board.
+///
+/// Offline: the last loaded jobs and events are cached (encrypted, owner
+/// stamped) and still-unsynced taps are read back from the offline queue,
+/// so opening the screen in a dead spot shows the technician's jobs and live
+/// status instead of a full-screen error.
+///
+/// Request Parts additionally files a `parts_requests` row (part + qty).
+/// That table cannot be replayed from the queue (no `client_uuid`), so it is
+/// sent online only and a failure is said out loud.
+///
 /// Rules carried over from mobile, each enforced in [_onAction]:
 /// - no job selected -> "Select a job"; not checked in -> "Check in first";
 /// - a job split into tasks must name the task for Start / Complete;
@@ -39,6 +55,7 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_offline.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_capture.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_uploader.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
@@ -53,6 +70,13 @@ abstract final class WorkshopTechnicianKeys {
   static Key task(String id) => ValueKey<String>('workshop.task.$id');
   static Key action(String key) => ValueKey<String>('workshop.action.$key');
   static const Key productivity = ValueKey<String>('workshop.productivity');
+  static const Key moreToggle = ValueKey<String>('workshop.more');
+  static const Key offlineBanner = ValueKey<String>('workshop.offline');
+  static Key pauseReason(String r) =>
+      ValueKey<String>('workshop.pause-reason.$r');
+  static const Key pauseSubmit = ValueKey<String>('workshop.pause-submit');
+  static const Key partName = ValueKey<String>('workshop.part-name');
+  static const Key partQty = ValueKey<String>('workshop.part-qty');
   static const Key noteField = ValueKey<String>('workshop.note-field');
   static const Key noteSubmit = ValueKey<String>('workshop.note-submit');
   static const Key photoCamera = ValueKey<String>('workshop.photo-camera');
@@ -110,6 +134,11 @@ class _WorkshopTechnicianScreenState
   List<WorkshopTask> _tasks = const <WorkshopTask>[];
   String? _selectedTaskId;
   String? _busyKey;
+  bool _showMore = false;
+
+  /// When set, the screen is showing the cached snapshot from this time
+  /// because the live read failed.
+  DateTime? _offlineSince;
   Timer? _clock;
   DateTime _now = DateTime.now();
 
@@ -146,29 +175,71 @@ class _WorkshopTechnicianScreenState
       _loading = true;
       _error = null;
     });
+    final String userId = _userId;
+    final List<WorkshopEventRecord> pending = await _readPending(userId);
+    List<WorkshopJob> jobs;
+    List<WorkshopEventRecord> events;
+    DateTime? offlineSince;
     try {
       final WorkshopRepository repo = ref.read(workshopRepositoryProvider);
-      final List<WorkshopJob> jobs = await repo.listMyJobs(_userId);
-      final List<WorkshopEventRecord> events =
-          await repo.listMyRecentEvents(_userId);
-      if (!mounted) return;
-      final String? keep = jobs.any((WorkshopJob j) => j.id == _selectedJobId)
-          ? _selectedJobId
-          : (jobs.isEmpty ? null : jobs.first.id);
-      setState(() {
-        _jobs = jobs;
-        _serverEvents = events;
-        _loading = false;
-      });
-      if (keep != _selectedJobId || _tasks.isEmpty) {
-        await _selectJob(keep);
-      }
+      jobs = await repo.listMyJobs(userId);
+      events = await repo.listMyRecentEvents(userId);
+      unawaited(
+        ref
+            .read(workshopOfflineCacheProvider)
+            .save(userId: userId, jobs: jobs, events: events),
+      );
     } on Object catch (error) {
+      final WorkshopOfflineSnapshot? snapshot = await _readCache(userId);
       if (!mounted) return;
-      setState(() {
-        _error = error;
-        _loading = false;
-      });
+      if (snapshot == null) {
+        setState(() {
+          _error = error;
+          _loading = false;
+        });
+        return;
+      }
+      jobs = snapshot.jobs;
+      events = snapshot.events;
+      offlineSince = snapshot.cachedAt;
+    }
+    if (!mounted) return;
+    final String? keep = jobs.any((WorkshopJob j) => j.id == _selectedJobId)
+        ? _selectedJobId
+        : (jobs.isEmpty ? null : jobs.first.id);
+    final Set<String> known = <String>{
+      for (final WorkshopEventRecord e in _localEvents)
+        if (e.clientUuid != null) e.clientUuid!,
+    };
+    setState(() {
+      _jobs = jobs;
+      _serverEvents = events;
+      _offlineSince = offlineSince;
+      _localEvents.addAll(<WorkshopEventRecord>[
+        for (final WorkshopEventRecord e in pending)
+          if (e.clientUuid == null || !known.contains(e.clientUuid)) e,
+      ]);
+      _loading = false;
+    });
+    if (keep != _selectedJobId || _tasks.isEmpty) {
+      await _selectJob(keep);
+    }
+  }
+
+  /// Best effort: a queue that cannot be read shows nothing extra.
+  Future<List<WorkshopEventRecord>> _readPending(String userId) async {
+    try {
+      return await ref.read(workshopPendingEventsProvider)(userId);
+    } on Object {
+      return const <WorkshopEventRecord>[];
+    }
+  }
+
+  Future<WorkshopOfflineSnapshot?> _readCache(String userId) async {
+    try {
+      return await ref.read(workshopOfflineCacheProvider).load(userId);
+    } on Object {
+      return null;
     }
   }
 
@@ -204,7 +275,7 @@ class _WorkshopTechnicianScreenState
     return null;
   }
 
-  Future<void> _record({
+  Future<bool> _record({
     required String eventType,
     required String busyKey,
     String? jobId,
@@ -213,7 +284,7 @@ class _WorkshopTechnicianScreenState
     List<String> photos = const <String>[],
   }) async {
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
-    if (workspace == null || _busyKey != null) return;
+    if (workspace == null || _busyKey != null) return false;
     final WorkshopCopy copy = WorkshopCopy.of(context);
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     final WorkshopJob? job = jobId == null ? null : _selectedJob;
@@ -252,8 +323,11 @@ class _WorkshopTechnicianScreenState
       for (final String path in photoResult.uploadedLocalPaths) {
         unawaited(picker.discard(path));
       }
-      if (!mounted) return;
-      setState(() => _localEvents.add(local));
+      if (!mounted) return true;
+      setState(() {
+        _localEvents.add(local);
+        _showMore = false;
+      });
       messenger.showSnackBar(
         SnackBar(
           content: Text(
@@ -261,9 +335,11 @@ class _WorkshopTechnicianScreenState
           ),
         ),
       );
+      return true;
     } on Object {
-      if (!mounted) return;
+      if (!mounted) return false;
       messenger.showSnackBar(SnackBar(content: Text(copy('saveFailed'))));
+      return false;
     } finally {
       if (mounted) setState(() => _busyKey = null);
     }
@@ -337,11 +413,28 @@ class _WorkshopTechnicianScreenState
       );
       return;
     }
+    if (action.event == 'pause_job') {
+      final _PauseResult? pause = await showModalBottomSheet<_PauseResult>(
+        context: context,
+        isScrollControlled: true,
+        builder: (BuildContext sheetContext) => _PauseReasonSheet(copy: copy),
+      );
+      if (pause == null) return; // cancelled
+      final String note = pause.note.trim();
+      await _record(
+        eventType: action.event,
+        busyKey: action.key,
+        jobId: job.id,
+        reason: pause.reason,
+        note: note.isEmpty ? null : note,
+      );
+      return;
+    }
     if (action.needsNote) {
       final _NoteResult? result = await _askNote(copy, action);
       if (result == null) return; // cancelled
       final String note = result.note.trim();
-      await _record(
+      final bool recorded = await _record(
         eventType: action.event,
         busyKey: action.key,
         jobId: job.id,
@@ -349,6 +442,15 @@ class _WorkshopTechnicianScreenState
         note: note.isEmpty ? null : note,
         photos: result.photos,
       );
+      final String part = result.partName.trim();
+      if (recorded && action.event == 'request_parts' && part.isNotEmpty) {
+        await _requestParts(
+          job: job,
+          partName: part,
+          qty: result.qty,
+          note: note.isEmpty ? null : note,
+        );
+      }
       return;
     }
     await _record(
@@ -357,6 +459,41 @@ class _WorkshopTechnicianScreenState
       jobId: job.id,
       reason: action.reason,
     );
+  }
+
+  /// Files the online-only `parts_requests` row. The `request_parts` event
+  /// is already queued; this only tells the store. A failure is said out
+  /// loud - it is never queued, because the table cannot be replayed safely.
+  Future<void> _requestParts({
+    required WorkshopJob job,
+    required String partName,
+    required num qty,
+    String? note,
+  }) async {
+    final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
+    if (workspace == null) return;
+    final WorkshopCopy copy = WorkshopCopy.of(context);
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    String message;
+    try {
+      await ref.read(workshopPartsRequesterProvider).request(
+            WorkshopPartsRequestInput(
+              partName: partName,
+              qty: qty,
+              requestedBy: workspace.userId,
+              jobId: job.id,
+              assetNo: job.assetNo,
+              site: job.site ?? workspace.legacySite,
+              country: workspace.activeCountry,
+              notes: note,
+            ),
+          );
+      message = copy('partsSent');
+    } on Object {
+      message = copy('partsNotSent');
+    }
+    if (!mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Returns the note ('' when left blank) plus any attached photos, or
@@ -372,6 +509,7 @@ class _WorkshopTechnicianScreenState
         copy: copy,
         action: action,
         withPhotos: workshopActionAllowsPhoto(action),
+        withPart: action.event == 'request_parts',
         picker: ref.read(workshopPhotoPickerProvider),
       ),
     );
@@ -414,15 +552,19 @@ class _WorkshopTechnicianScreenState
     final List<WorkshopEventRecord> events = _events;
     final bool checkedIn = _checkedIn;
     final WorkshopJob? job = _selectedJob;
+    // Off duty, a job has no live status of its own - "Absent" on a job
+    // card read as an accusation, not a state.
     final WorkshopStatus? jobStatus = job == null
         ? null
-        : workshopStatusFromEvents(
-            <WorkshopEventLike>[
-              for (final WorkshopEventRecord e in events)
-                if (e.jobId == job.id) e.asLike,
-            ],
-            present: checkedIn,
-          );
+        : !checkedIn
+            ? WorkshopStatus.offDuty
+            : workshopStatusFromEvents(
+                <WorkshopEventLike>[
+                  for (final WorkshopEventRecord e in events)
+                    if (e.jobId == job.id) e.asLike,
+                ],
+                present: checkedIn,
+              );
     final DateTime startOfDay = DateTime(_now.year, _now.month, _now.day);
     final WorkshopProductivity productivity = workshopProductivityToday(
       <WorkshopEventLike>[
@@ -432,6 +574,9 @@ class _WorkshopTechnicianScreenState
       ],
       now: _now,
     );
+
+    final WorkshopActionPlan? plan =
+        jobStatus == null ? null : workshopActionsFor(jobStatus);
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -444,6 +589,19 @@ class _WorkshopTechnicianScreenState
           TpSpace.xxl,
         ),
         children: <Widget>[
+          if (_offlineSince != null) ...<Widget>[
+            TpCard(
+              key: WorkshopTechnicianKeys.offlineBanner,
+              child: Row(
+                children: <Widget>[
+                  const Icon(Icons.cloud_off_outlined),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(child: Text(copy('offlineBanner'))),
+                ],
+              ),
+            ),
+            const SizedBox(height: TpSpace.md),
+          ],
           _CheckCard(
             copy: copy,
             checkedIn: checkedIn,
@@ -500,14 +658,14 @@ class _WorkshopTechnicianScreenState
               ],
             ),
           ],
-          if (job != null) ...<Widget>[
+          if (job != null && plan != null) ...<Widget>[
             const SizedBox(height: TpSpace.lg),
             Wrap(
               spacing: TpSpace.sm,
               runSpacing: TpSpace.sm,
               children: <Widget>[
-                for (final WorkshopTechAction a in kWorkshopTechActions)
-                  TpButton.secondary(
+                for (final WorkshopTechAction a in plan.primary)
+                  TpButton.primary(
                     key: WorkshopTechnicianKeys.action(a.key),
                     label: copy('a_${a.key}'),
                     icon: _actionIcon(a.key),
@@ -515,8 +673,35 @@ class _WorkshopTechnicianScreenState
                     onPressed:
                         _busyKey == null ? () => unawaited(_onAction(a)) : null,
                   ),
+                TpButton.secondary(
+                  key: WorkshopTechnicianKeys.moreToggle,
+                  label: _showMore ? copy('fewer') : copy('more'),
+                  icon: _showMore
+                      ? Icons.expand_less_rounded
+                      : Icons.more_horiz_rounded,
+                  onPressed: () => setState(() => _showMore = !_showMore),
+                ),
               ],
             ),
+            if (_showMore) ...<Widget>[
+              const SizedBox(height: TpSpace.sm),
+              Wrap(
+                spacing: TpSpace.sm,
+                runSpacing: TpSpace.sm,
+                children: <Widget>[
+                  for (final WorkshopTechAction a in plan.more)
+                    TpButton.secondary(
+                      key: WorkshopTechnicianKeys.action(a.key),
+                      label: copy('a_${a.key}'),
+                      icon: _actionIcon(a.key),
+                      isBusy: _busyKey == a.key,
+                      onPressed: _busyKey == null
+                          ? () => unawaited(_onAction(a))
+                          : null,
+                    ),
+                ],
+              ),
+            ],
           ],
         ],
       ),
@@ -532,11 +717,15 @@ class _WorkshopNoteDialog extends StatefulWidget {
     required this.action,
     required this.withPhotos,
     required this.picker,
+    this.withPart = false,
   });
 
   final WorkshopCopy copy;
   final WorkshopTechAction action;
   final bool withPhotos;
+
+  /// Request Parts also asks which part and how many (for `parts_requests`).
+  final bool withPart;
   final WorkshopPhotoPicker picker;
 
   @override
@@ -545,6 +734,8 @@ class _WorkshopNoteDialog extends StatefulWidget {
 
 class _WorkshopNoteDialogState extends State<_WorkshopNoteDialog> {
   final TextEditingController _controller = TextEditingController();
+  final TextEditingController _part = TextEditingController();
+  final TextEditingController _qty = TextEditingController(text: '1');
   final List<String> _photos = <String>[];
   bool _capturing = false;
   bool _submitted = false;
@@ -552,6 +743,8 @@ class _WorkshopNoteDialogState extends State<_WorkshopNoteDialog> {
   @override
   void dispose() {
     _controller.dispose();
+    _part.dispose();
+    _qty.dispose();
     if (!_submitted) {
       // Cancelled or dismissed: the photos belong to no event.
       for (final String p in _photos) {
@@ -592,10 +785,27 @@ class _WorkshopNoteDialogState extends State<_WorkshopNoteDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            if (widget.withPart) ...<Widget>[
+              TextField(
+                key: WorkshopTechnicianKeys.partName,
+                controller: _part,
+                maxLength: 120,
+                decoration: InputDecoration(labelText: copy('partName')),
+              ),
+              TextField(
+                key: WorkshopTechnicianKeys.partQty,
+                controller: _qty,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(labelText: copy('partQty')),
+              ),
+              const SizedBox(height: TpSpace.sm),
+            ],
             TextField(
               key: WorkshopTechnicianKeys.noteField,
               controller: _controller,
-              autofocus: true,
+              autofocus: !widget.withPart,
               maxLines: 3,
               maxLength: 500,
               decoration: InputDecoration(hintText: copy('noteHint')),
@@ -665,6 +875,8 @@ class _WorkshopNoteDialogState extends State<_WorkshopNoteDialog> {
                     _NoteResult(
                       note: _controller.text,
                       photos: List<String>.unmodifiable(_photos),
+                      partName: _part.text,
+                      qty: _parsedQty(_qty.text),
                     ),
                   );
                 },
@@ -675,11 +887,131 @@ class _WorkshopNoteDialogState extends State<_WorkshopNoteDialog> {
   }
 }
 
+/// A blank, unreadable or non-positive quantity is 1 - the column default.
+num _parsedQty(String raw) {
+  final num? v = num.tryParse(raw.trim().replaceAll(',', '.'));
+  return v == null || !v.isFinite || v <= 0 ? 1 : v;
+}
+
 final class _NoteResult {
-  const _NoteResult({required this.note, required this.photos});
+  const _NoteResult({
+    required this.note,
+    required this.photos,
+    this.partName = '',
+    this.qty = 1,
+  });
 
   final String note;
   final List<String> photos;
+  final String partName;
+  final num qty;
+}
+
+final class _PauseResult {
+  const _PauseResult({required this.reason, required this.note});
+
+  final String reason;
+  final String note;
+}
+
+/// "Why are you pausing?" - one reason (required) plus an optional note.
+class _PauseReasonSheet extends StatefulWidget {
+  const _PauseReasonSheet({required this.copy});
+
+  final WorkshopCopy copy;
+
+  @override
+  State<_PauseReasonSheet> createState() => _PauseReasonSheetState();
+}
+
+class _PauseReasonSheetState extends State<_PauseReasonSheet> {
+  final TextEditingController _note = TextEditingController();
+  String? _reason;
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  IconData _icon(String r) => switch (r) {
+        'parts' => Icons.inventory_2_outlined,
+        'approval' => Icons.verified_user_outlined,
+        'vehicle' => Icons.directions_car_outlined,
+        'tools' => Icons.construction_outlined,
+        'break' => Icons.coffee_outlined,
+        _ => Icons.more_horiz_rounded,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final WorkshopCopy copy = widget.copy;
+    final EdgeInsets inset = MediaQuery.viewInsetsOf(context);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          TpSpace.lg,
+          TpSpace.lg,
+          TpSpace.lg,
+          TpSpace.lg + inset.bottom,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                copy('pauseTitle'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: TpSpace.sm),
+              for (final String r in kWorkshopPauseReasons)
+                ListTile(
+                  key: WorkshopTechnicianKeys.pauseReason(r),
+                  leading: Icon(_icon(r)),
+                  title: Text(copy('r_$r')),
+                  trailing: _reason == r
+                      ? const Icon(Icons.check_circle_rounded)
+                      : null,
+                  selected: _reason == r,
+                  onTap: () => setState(() => _reason = r),
+                ),
+              const SizedBox(height: TpSpace.sm),
+              TextField(
+                controller: _note,
+                maxLines: 2,
+                maxLength: 500,
+                decoration: InputDecoration(hintText: copy('noteHint')),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text(copy('cancel')),
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  TpButton.primary(
+                    key: WorkshopTechnicianKeys.pauseSubmit,
+                    label: copy('a_pause_job'),
+                    icon: Icons.pause_circle_outline,
+                    onPressed: _reason == null
+                        ? null
+                        : () => Navigator.of(context).pop(
+                              _PauseResult(
+                                reason: _reason!,
+                                note: _note.text,
+                              ),
+                            ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CheckCard extends StatelessWidget {
@@ -741,11 +1073,16 @@ class _ProductivityCard extends StatelessWidget {
             children: <Widget>[
               Text(value, style: text.titleMedium),
               const SizedBox(height: TpSpace.xs),
-              Text(
-                label,
-                style: text.labelSmall,
-                textAlign: TextAlign.center,
-                maxLines: 2,
+              // Scale a long label down instead of breaking it mid-word
+              // ("Unassigne / d") on a 360 dp phone.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  style: text.labelSmall,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                ),
               ),
             ],
           ),

@@ -48,7 +48,7 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('My drivers lists the team with vehicle and counts',
+  testWidgets('Drivers lists the whole pool with vehicle and counts',
       (WidgetTester tester) async {
     await _pump(tester, const MyDriversScreen(), FakeFleetTeamRepository());
     expect(find.text('ADIL ABBAS SYED'), findsOneWidget);
@@ -57,23 +57,37 @@ void main() {
     expect(find.text('Open fines: 2'), findsOneWidget);
   });
 
-  testWidgets('switching to Add drivers shows drivers without a supervisor',
+  testWidgets('every driver in the pool is listed, nobody owns one',
       (WidgetTester tester) async {
     await _pump(tester, const MyDriversScreen(), FakeFleetTeamRepository());
-    await tester.tap(find.text('Add drivers'));
-    await tester.pumpAndSettle();
+    expect(find.text('ADIL ABBAS SYED'), findsOneWidget);
     expect(find.text('SARFARAJ TASLIM'), findsOneWidget);
-    expect(find.text('No vehicle'), findsOneWidget);
+    expect(find.text('Responsible: Firozuddin Kayal'), findsOneWidget);
+    await tester.tap(find.text('No vehicle').first);
+    await tester.pumpAndSettle();
+    expect(find.text('ADIL ABBAS SYED'), findsNothing);
+    expect(find.text('SARFARAJ TASLIM'), findsOneWidget);
   });
 
-  testWidgets('an empty team says what to do next',
+  testWidgets('driver type filter is sent to the server',
       (WidgetTester tester) async {
+    final FakeFleetTeamRepository repo = FakeFleetTeamRepository();
+    await _pump(tester, const MyDriversScreen(), repo);
+    await tester.tap(find.byKey(MyDriversKeys.filterType));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Transit mixer driver').last);
+    await tester.pumpAndSettle();
+    expect(repo.lastCategory, 'Transit mixer driver');
+    expect(find.text('SARFARAJ TASLIM'), findsNothing);
+  });
+
+  testWidgets('an empty pool says so', (WidgetTester tester) async {
     await _pump(
       tester,
       const MyDriversScreen(),
-      FakeFleetTeamRepository(mine: const []),
+      FakeFleetTeamRepository(mine: const [], available: const []),
     );
-    expect(find.text('No drivers on your team yet'), findsOneWidget);
+    expect(find.text('No drivers here'), findsOneWidget);
   });
 
   testWidgets('a refused role sees a reason, not a spinner',
@@ -96,24 +110,38 @@ void main() {
     expect(find.textContaining('No connection'), findsWidgets);
   });
 
-  testWidgets('a driver not on the team offers only Add to my team',
+  testWidgets('any driver offers every action; type and region are saved',
       (WidgetTester tester) async {
     final FakeFleetTeamRepository repo = FakeFleetTeamRepository();
     await _pump(
       tester,
-      const FleetDriverDetailScreen(driver: sarfaraj, onTeam: false),
+      const FleetDriverDetailScreen(driver: sarfaraj),
       repo,
     );
-    expect(find.byKey(FleetDriverKeys.take), findsOneWidget);
-    expect(find.byKey(FleetDriverKeys.charge), findsNothing);
-    await tester.tap(find.byKey(FleetDriverKeys.take));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).last, 'Joins my team');
-    await tester.tap(find.text('Add to my team').last);
-    await tester.pumpAndSettle();
-    expect(repo.commands.single.$1, 'take_driver');
-    expect(repo.commands.single.$2['reason'], 'Joins my team');
+    expect(find.byKey(FleetDriverKeys.assign), findsOneWidget);
     expect(find.byKey(FleetDriverKeys.charge), findsOneWidget);
+    expect(find.byKey(FleetDriverKeys.fine), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(FleetDriverKeys.profile),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byKey(FleetDriverKeys.profile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pump driver'));
+    await tester.enterText(
+      find.byKey(const Key('fleetSup.profile.region')),
+      'Western',
+    );
+    await tester.enterText(
+      find.byKey(const Key('fleetSup.profile.reason')),
+      'Moved to pumps',
+    );
+    await tester.tap(find.byKey(const Key('fleetSup.profile.save')));
+    await tester.pumpAndSettle();
+    expect(repo.commands.single.$1, 'set_driver_profile');
+    expect(repo.commands.single.$2['driver_category'], 'Pump driver');
+    expect(repo.commands.single.$2['region'], 'Western');
   });
 
   testWidgets('assigning a held vehicle asks before moving it',
@@ -122,7 +150,7 @@ void main() {
         FakeFleetTeamRepository(conflictFirst: true);
     await _pump(
       tester,
-      const FleetDriverDetailScreen(driver: sarfaraj, onTeam: true),
+      const FleetDriverDetailScreen(driver: sarfaraj),
       repo,
     );
     await tester.tap(find.byKey(FleetDriverKeys.assign));
@@ -203,7 +231,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await _pump(
       tester,
-      const FleetDriverDetailScreen(driver: adil, onTeam: true),
+      const FleetDriverDetailScreen(driver: adil),
       FakeFleetTeamRepository(),
       textScale: 2,
       locale: const Locale('ar'),

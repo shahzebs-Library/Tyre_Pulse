@@ -1,4 +1,4 @@
-/// Reads and writes the supervisor's team through the server RPCs only.
+/// Reads and writes the shared driver pool through the server RPCs only.
 ///
 /// Every write is ONLINE ONLY, on purpose. A vehicle assignment decides who is
 /// liable for that vehicle from that moment, and a charge or fine is a legal
@@ -33,7 +33,11 @@ abstract interface class FleetTeamRepository {
     required FleetTeamView view,
     String search = '',
     int offset = 0,
+    String? category,
+    String? region,
   });
+
+  Future<FleetFilterOptions> filters();
 
   Future<List<FleetAssignment>> history(String driverId);
 
@@ -94,6 +98,8 @@ final class SupabaseFleetTeamRepository implements FleetTeamRepository {
     required FleetTeamView view,
     String search = '',
     int offset = 0,
+    String? category,
+    String? region,
   }) =>
       _call(() async {
         final Object? result = await _client.rpc<Object?>(
@@ -102,9 +108,18 @@ final class SupabaseFleetTeamRepository implements FleetTeamRepository {
             'p_view': view.wire,
             'p_search': search.trim(),
             'p_offset': offset,
+            'p_category': category,
+            'p_region': region,
           },
         );
         return FleetTeamPage.fromResult(result);
+      });
+
+  @override
+  Future<FleetFilterOptions> filters() => _call(() async {
+        final Object? result =
+            await _client.rpc<Object?>('fleet_supervisor_driver_filters');
+        return FleetFilterOptions.fromResult(result);
       });
 
   @override

@@ -4,8 +4,10 @@
 -- as TEXT while public.notifications.entity_id is UUID.
 --
 -- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's yes. Apply this
--- BEFORE or together with 20261127140000_fleet_supervisor_driver_management:
+-- BEFORE or together with 20261127171000_fleet_supervisor_driver_management:
 -- without it a supervisor gets access but every fine and charge still fails.
+-- RENUMBERED 2026-11-27 from 20261127141000 (that timestamp is already taken by
+-- the applied 20261127141000_checklist_targeting_and_workshop_drafts).
 --
 -- PROOF (live, 2026-11-27, rolled back): a Fleet Supervisor with an open team
 -- assignment ('supervisor' access) and a driver site set:

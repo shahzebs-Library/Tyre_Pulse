@@ -3,6 +3,49 @@ import 'package:tyre_pulse/features/fleet_supervisor/domain/fleet_team.dart';
 import 'package:tyre_pulse/features/fleet_supervisor/presentation/fleet_supervisor_copy.dart';
 
 void main() {
+  test('the pool views and actions match the server, no ownership actions', () {
+    expect(
+      FleetTeamView.values.map((FleetTeamView v) => v.wire),
+      <String>['all', 'with_vehicle', 'without_vehicle'],
+    );
+    expect(FleetTeamAction.all, <String>{
+      'assign_vehicle',
+      'unassign_vehicle',
+      'set_responsible',
+      'set_driver_profile',
+    });
+    expect(FleetTeamAction.all.contains('take_driver'), isFalse);
+  });
+
+  test('a row reads type, region and the responsible label', () {
+    final FleetTeamDriver d = FleetTeamDriver.fromRow(<String, Object?>{
+      'id': 'd1',
+      'driver_id': '100',
+      'driver_name': 'A',
+      'driver_category': ' Transit mixer driver ',
+      'region': 'Central',
+      'responsible_name': 'Firoz',
+    });
+    expect(d.category, 'Transit mixer driver');
+    expect(d.region, 'Central');
+    expect(d.responsibleName, 'Firoz');
+    final FleetTeamDriver cleared = d.withProfile(category: null, region: 'W');
+    expect(cleared.category, isNull);
+    expect(cleared.region, 'W');
+    expect(cleared.responsibleName, 'Firoz');
+  });
+
+  test('filter options are sorted and drop blanks', () {
+    final FleetFilterOptions f =
+        FleetFilterOptions.fromResult(<String, Object?>{
+      'categories': <Object?>['Pump driver', '', 'Bus driver', null],
+      'regions': <Object?>['Western', 'Central'],
+    });
+    expect(f.categories, <String>['Bus driver', 'Pump driver']);
+    expect(f.regions, <String>['Central', 'Western']);
+    expect(() => FleetFilterOptions.fromResult(null), throwsFormatException);
+  });
+
   group('FleetTeamPage', () {
     test('parses rows and treats 101 rows as another page', () {
       final List<Map<String, Object?>> rows = <Map<String, Object?>>[

@@ -1,23 +1,35 @@
 /**
- * Fleet Supervisor team: the supervisor's drivers, the vehicle each one drives,
- * and the assignment history. Server contract: migration
- * 20261127140000_fleet_supervisor_driver_management (fleet_supervisor_drivers,
+ * The shared driver pool: every Fleet Supervisor, Fleet Foreman and Fleet
+ * Incharge in scope sees and manages any driver there. Nobody owns a driver;
+ * driver type and region are filters, the responsible supervisor only a label.
+ * Server contract: migration 20261127171000_fleet_supervisor_driver_management
+ * (fleet_supervisor_drivers, fleet_supervisor_driver_filters,
  * fleet_supervisor_assignment_history, fleet_supervisor_command). Mirrors the
  * Flutter `features/fleet_supervisor` lane; charges and fines keep using the
  * existing driver workspace (charge_issue, create_fine).
  */
 import { supabase, unwrap, toServiceError } from './_client'
 
-export const TEAM_ACTIONS = Object.freeze(['take_driver', 'assign_vehicle', 'unassign_vehicle', 'release_driver'])
+export const TEAM_ACTIONS = Object.freeze(['assign_vehicle', 'unassign_vehicle', 'set_responsible', 'set_driver_profile'])
+export const TEAM_VIEWS = Object.freeze(['all', 'with_vehicle', 'without_vehicle'])
+export const SUGGESTED_CATEGORIES = Object.freeze(['Transit mixer driver', 'Pump driver', 'Bus driver', 'Light vehicle driver', 'Heavy equipment operator'])
 const PAGE = 100
 
-/** One page of the caller's team ('mine') or drivers they may add ('available'). */
-export async function listTeam(view = 'mine', search = '', offset = 0) {
+/** One page of the pool: view 'all' | 'with_vehicle' | 'without_vehicle', optional type and region filters. */
+export async function listTeam(view = 'all', search = '', offset = 0, { category = null, region = null } = {}) {
   const result = unwrap(await supabase.rpc('fleet_supervisor_drivers', {
     p_view: view, p_search: String(search || '').trim(), p_offset: offset,
+    p_category: category || null, p_region: region || null,
   }))
-  if (!result || !Array.isArray(result.rows)) throw new Error('Team list is unavailable.')
+  if (!result || !Array.isArray(result.rows)) throw new Error('Driver list is unavailable.')
   return { rows: result.rows.slice(0, PAGE), hasMore: result.rows.length > PAGE }
+}
+
+/** Driver types, regions and sites present in scope, for the filters. */
+export async function driverFilters() {
+  const result = unwrap(await supabase.rpc('fleet_supervisor_driver_filters'))
+  const list = v => (Array.isArray(v) ? v.filter(x => typeof x === 'string' && x.trim()).sort() : [])
+  return { categories: list(result?.categories), regions: list(result?.regions), sites: list(result?.sites) }
 }
 
 export async function assignmentHistory(driverId) {

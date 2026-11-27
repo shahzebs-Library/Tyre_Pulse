@@ -166,3 +166,149 @@ class _ReasonSheetState extends State<_ReasonSheet> {
     );
   }
 }
+
+/// What the driver type and region sheet returns.
+final class FleetProfileChoice {
+  const FleetProfileChoice({
+    required this.category,
+    required this.region,
+    required this.reason,
+  });
+
+  /// Null clears the value.
+  final String? category;
+  final String? region;
+  final String reason;
+}
+
+/// Driver type and region: filters only, never ownership.
+class FleetProfileSheet extends StatefulWidget {
+  const FleetProfileSheet({
+    required this.categories,
+    this.category,
+    this.region,
+    super.key,
+  });
+
+  final String? category;
+  final String? region;
+
+  /// Suggested types; the field also takes free text.
+  final List<String> categories;
+
+  @override
+  State<FleetProfileSheet> createState() => _FleetProfileSheetState();
+}
+
+class _FleetProfileSheetState extends State<FleetProfileSheet> {
+  late final TextEditingController _category =
+      TextEditingController(text: widget.category ?? '');
+  late final TextEditingController _region =
+      TextEditingController(text: widget.region ?? '');
+  final TextEditingController _reason = TextEditingController();
+  bool _tried = false;
+
+  @override
+  void dispose() {
+    _category.dispose();
+    _region.dispose();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  bool get _valid =>
+      _category.text.trim().length <= 60 &&
+      _region.text.trim().length <= 60 &&
+      _reason.text.trim().length >= 3;
+
+  void _submit() {
+    if (!_valid) {
+      setState(() => _tried = true);
+      return;
+    }
+    String? v(TextEditingController c) =>
+        c.text.trim().isEmpty ? null : c.text.trim();
+    Navigator.of(context).pop(
+      FleetProfileChoice(
+        category: v(_category),
+        region: v(_region),
+        reason: _reason.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final FleetSupervisorCopy copy = FleetSupervisorCopy.of(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: TpSpace.xl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            copy('profileHint'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: TpSpace.md),
+          TpInput(
+            key: const Key('fleetSup.profile.category'),
+            label: copy('categoryLabel'),
+            controller: _category,
+            maxLength: 60,
+            errorText: _tried && _category.text.trim().length > 60
+                ? copy('profileTooLong')
+                : null,
+          ),
+          const SizedBox(height: TpSpace.xs),
+          Wrap(
+            spacing: TpSpace.xs,
+            runSpacing: TpSpace.xs,
+            children: <Widget>[
+              for (final String c in widget.categories)
+                ActionChip(
+                  label: Text(c),
+                  onPressed: () => setState(() => _category.text = c),
+                ),
+            ],
+          ),
+          const SizedBox(height: TpSpace.md),
+          TpInput(
+            key: const Key('fleetSup.profile.region'),
+            label: copy('regionLabel'),
+            controller: _region,
+            maxLength: 60,
+            errorText: _tried && _region.text.trim().length > 60
+                ? copy('profileTooLong')
+                : null,
+          ),
+          const SizedBox(height: TpSpace.md),
+          TpInput(
+            key: const Key('fleetSup.profile.reason'),
+            label: copy('reasonLabel'),
+            controller: _reason,
+            isRequired: true,
+            maxLength: 300,
+            errorText: _tried && _reason.text.trim().length < 3
+                ? copy('reasonInvalid')
+                : null,
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: TpSpace.md),
+          TpButton.primary(
+            key: const Key('fleetSup.profile.save'),
+            label: copy('save'),
+            onPressed: _submit,
+            isFullWidth: true,
+          ),
+          const SizedBox(height: TpSpace.sm),
+          TpButton.text(
+            label: copy('cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+            isFullWidth: true,
+          ),
+        ],
+      ),
+    );
+  }
+}

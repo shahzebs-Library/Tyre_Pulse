@@ -8,6 +8,9 @@ const FleetTeamDriver adil = FleetTeamDriver(
   name: 'ADIL ABBAS SYED',
   country: 'KSA',
   site: 'QIDDIYA-UPPER PLATEAU',
+  region: 'Central',
+  category: 'Transit mixer driver',
+  responsibleName: 'Firozuddin Kayal',
   status: 'active',
   loginLinked: true,
   vehicleId: 'v-tm655',
@@ -63,21 +66,37 @@ final class FakeFleetTeamRepository implements FleetTeamRepository {
     required FleetTeamView view,
     String search = '',
     int offset = 0,
+    String? category,
+    String? region,
   }) async {
     if (failWith != null) throw failWith!;
-    final List<FleetTeamDriver> src =
-        view == FleetTeamView.mine ? mine : available;
+    lastCategory = category;
+    lastRegion = region;
+    final List<FleetTeamDriver> pool = <FleetTeamDriver>[...mine, ...available];
     return FleetTeamPage(
-      rows: src
+      rows: pool
           .where(
             (FleetTeamDriver d) =>
-                search.isEmpty ||
-                d.name.toLowerCase().contains(search.toLowerCase()),
+                (view == FleetTeamView.all ||
+                    (view == FleetTeamView.withVehicle) == d.hasVehicle) &&
+                (category == null || d.category == category) &&
+                (region == null || d.region == region) &&
+                (search.isEmpty ||
+                    d.name.toLowerCase().contains(search.toLowerCase())),
           )
           .toList(),
       hasMore: false,
     );
   }
+
+  String? lastCategory;
+  String? lastRegion;
+
+  @override
+  Future<FleetFilterOptions> filters() async => const FleetFilterOptions(
+        categories: <String>['Transit mixer driver'],
+        regions: <String>['Central'],
+      );
 
   @override
   Future<List<FleetAssignment>> history(String driverId) async =>
@@ -94,7 +113,7 @@ final class FakeFleetTeamRepository implements FleetTeamRepository {
           id: 'a1',
           startsAt: DateTime(2026, 11, 20),
           endsAt: DateTime(2026, 11, 27),
-          reason: 'Joins my team',
+          reason: 'First vehicle on the roster',
           supervisorName: 'Firozuddin Kayal',
           assignedByName: 'Firozuddin Kayal',
         ),

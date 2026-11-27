@@ -1,7 +1,8 @@
-/// One driver on (or joining) the supervisor's team.
+/// One driver from the shared pool.
 ///
-/// Actions: add to team, assign / change / take back the vehicle, issue a
-/// charge, record a traffic fine, start a vehicle handover, remove from team.
+/// Actions: assign / change / take back the vehicle, issue a charge, record a
+/// traffic fine, start a vehicle handover, record the driver type and region.
+/// Any Fleet Supervisor, Foreman or Incharge in scope may do all of them.
 /// Every change closes the open assignment row and opens a new one on the
 /// server, so the history below is never rewritten.
 library;
@@ -26,25 +27,19 @@ import 'package:tyre_pulse/features/fleet_supervisor/presentation/my_drivers_scr
 import 'package:uuid/uuid.dart';
 
 abstract final class FleetDriverKeys {
-  static const Key take = Key('fleetSup.take');
   static const Key assign = Key('fleetSup.assign');
   static const Key unassign = Key('fleetSup.unassign');
   static const Key charge = Key('fleetSup.charge');
   static const Key fine = Key('fleetSup.fine');
   static const Key handover = Key('fleetSup.handover');
-  static const Key release = Key('fleetSup.release');
+  static const Key profile = Key('fleetSup.profile');
   static Key vehicle(String id) => Key('fleetSup.vehicle.$id');
 }
 
 class FleetDriverDetailScreen extends ConsumerStatefulWidget {
-  const FleetDriverDetailScreen({
-    required this.driver,
-    required this.onTeam,
-    super.key,
-  });
+  const FleetDriverDetailScreen({required this.driver, super.key});
 
   final FleetTeamDriver driver;
-  final bool onTeam;
 
   @override
   ConsumerState<FleetDriverDetailScreen> createState() =>
@@ -55,7 +50,6 @@ class _FleetDriverDetailScreenState
     extends ConsumerState<FleetDriverDetailScreen> {
   static const Uuid _uuid = Uuid();
   late FleetTeamDriver _driver = widget.driver;
-  late bool _onTeam = widget.onTeam;
   List<FleetAssignment>? _history;
   Object? _historyError;
   String? _busy;
@@ -82,6 +76,7 @@ class _FleetDriverDetailScreenState
     String action,
     Map<String, Object?> payload, {
     FleetVehicleOption? vehicle,
+    FleetTeamDriver? updated,
   }) async {
     final FleetSupervisorCopy copy = FleetSupervisorCopy.of(context);
     setState(() => _busy = action);
@@ -114,14 +109,12 @@ class _FleetDriverDetailScreenState
       if (!mounted) return true;
       setState(() {
         switch (action) {
-          case FleetTeamAction.take:
-            _onTeam = true;
-          case FleetTeamAction.release:
-            _onTeam = false;
           case FleetTeamAction.assignVehicle:
             _driver = _driver.withVehicle(vehicle);
           case FleetTeamAction.unassignVehicle:
             _driver = _driver.withVehicle(null);
+          default:
+            if (updated != null) _driver = updated;
         }
       });
       fleetSnack(context, copy('saved'));
@@ -133,20 +126,6 @@ class _FleetDriverDetailScreenState
     } finally {
       if (mounted) setState(() => _busy = null);
     }
-  }
-
-  Future<void> _take() async {
-    final FleetSupervisorCopy copy = FleetSupervisorCopy.of(context);
-    final String? reason = await askFleetReason(
-      context,
-      title: copy.fill('takeTitle', <String, String>{'name': _driver.name}),
-      confirmLabel: copy('takeDriver'),
-    );
-    if (reason == null || !mounted) return;
-    await _send(
-      FleetTeamAction.take,
-      <String, Object?>{'driver_id': _driver.id, 'reason': reason},
-    );
   }
 
   Future<void> _assign() async {
@@ -192,19 +171,39 @@ class _FleetDriverDetailScreenState
     );
   }
 
-  Future<void> _release() async {
+  Future<void> _editProfile() async {
     final FleetSupervisorCopy copy = FleetSupervisorCopy.of(context);
-    final String? reason = await askFleetReason(
-      context,
-      title: copy.fill('releaseTitle', <String, String>{'name': _driver.name}),
-      message: copy('releaseMessage'),
-      confirmLabel: copy('releaseDriver'),
-      destructive: true,
+    List<String> categories = fleetSuggestedCategories;
+    try {
+      final FleetFilterOptions f =
+          await ref.read(fleetTeamRepositoryProvider).filters();
+      categories =
+          <String>{...f.categories, ...fleetSuggestedCategories}.toList();
+    } on Object {
+      // Suggestions only.
+    }
+    if (!mounted) return;
+    final FleetProfileChoice? choice =
+        await TpBottomSheet.show<FleetProfileChoice>(
+      context: context,
+      title: copy.fill('profileTitle', <String, String>{'name': _driver.name}),
+      builder: (_) => FleetProfileSheet(
+        category: _driver.category,
+        region: _driver.region,
+        categories: categories,
+      ),
     );
-    if (reason == null || !mounted) return;
+    if (choice == null || !mounted) return;
     await _send(
-      FleetTeamAction.release,
-      <String, Object?>{'driver_id': _driver.id, 'reason': reason},
+      FleetTeamAction.setDriverProfile,
+      <String, Object?>{
+        'driver_id': _driver.id,
+        'driver_category': choice.category,
+        'region': choice.region,
+        'reason': choice.reason,
+      },
+      updated:
+          _driver.withProfile(category: choice.category, region: choice.region),
     );
   }
 
@@ -247,83 +246,69 @@ class _FleetDriverDetailScreenState
           children: <Widget>[
             FleetDriverRow(driver: _driver),
             const SizedBox(height: TpSpace.lg),
-            if (!_onTeam) ...<Widget>[
-              Text(copy('notOnTeam'), style: text.bodyMedium),
-              const SizedBox(height: TpSpace.sm),
-              TpButton.primary(
-                key: FleetDriverKeys.take,
-                label: copy('takeDriver'),
-                icon: Icons.group_add_outlined,
-                isBusy: _busy == FleetTeamAction.take,
-                isFullWidth: true,
-                onPressed: _busy == null ? () => unawaited(_take()) : null,
+            TpButton.primary(
+              key: FleetDriverKeys.assign,
+              label: copy(
+                _driver.hasVehicle ? 'reassignVehicle' : 'assignVehicle',
               ),
-            ] else ...<Widget>[
-              TpButton.primary(
-                key: FleetDriverKeys.assign,
-                label: copy(
-                  _driver.hasVehicle ? 'reassignVehicle' : 'assignVehicle',
-                ),
-                icon: Icons.local_shipping_outlined,
-                isBusy: _busy == FleetTeamAction.assignVehicle,
-                isFullWidth: true,
-                onPressed: _busy == null ? () => unawaited(_assign()) : null,
+              icon: Icons.local_shipping_outlined,
+              isBusy: _busy == FleetTeamAction.assignVehicle,
+              isFullWidth: true,
+              onPressed: _busy == null ? () => unawaited(_assign()) : null,
+            ),
+            const SizedBox(height: TpSpace.sm),
+            TpButton.secondary(
+              key: FleetDriverKeys.charge,
+              label: copy('issueCharge'),
+              icon: Icons.receipt_long_outlined,
+              isFullWidth: true,
+              onPressed: _busy == null
+                  ? () => unawaited(_issue(FleetIssueMode.charge))
+                  : null,
+            ),
+            const SizedBox(height: TpSpace.sm),
+            TpButton.secondary(
+              key: FleetDriverKeys.fine,
+              label: copy('issueFine'),
+              icon: Icons.local_police_outlined,
+              isFullWidth: true,
+              onPressed: _busy == null
+                  ? () => unawaited(_issue(FleetIssueMode.fine))
+                  : null,
+            ),
+            const SizedBox(height: TpSpace.sm),
+            TpButton.secondary(
+              key: FleetDriverKeys.handover,
+              label: copy('handOver'),
+              icon: Icons.swap_horiz,
+              isFullWidth: true,
+              onPressed: _busy == null ? _handover : null,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
+              child: Text(
+                copy('handoverHint'),
+                style: text.bodySmall
+                    ?.copyWith(color: TpPalette.of(context).textMuted),
               ),
-              const SizedBox(height: TpSpace.sm),
-              TpButton.secondary(
-                key: FleetDriverKeys.charge,
-                label: copy('issueCharge'),
-                icon: Icons.receipt_long_outlined,
-                isFullWidth: true,
-                onPressed: _busy == null
-                    ? () => unawaited(_issue(FleetIssueMode.charge))
-                    : null,
-              ),
-              const SizedBox(height: TpSpace.sm),
-              TpButton.secondary(
-                key: FleetDriverKeys.fine,
-                label: copy('issueFine'),
-                icon: Icons.local_police_outlined,
-                isFullWidth: true,
-                onPressed: _busy == null
-                    ? () => unawaited(_issue(FleetIssueMode.fine))
-                    : null,
-              ),
-              const SizedBox(height: TpSpace.sm),
-              TpButton.secondary(
-                key: FleetDriverKeys.handover,
-                label: copy('handOver'),
-                icon: Icons.swap_horiz,
-                isFullWidth: true,
-                onPressed: _busy == null ? _handover : null,
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
-                child: Text(
-                  copy('handoverHint'),
-                  style: text.bodySmall
-                      ?.copyWith(color: TpPalette.of(context).textMuted),
-                ),
-              ),
-              if (_driver.hasVehicle)
-                TpButton.text(
-                  key: FleetDriverKeys.unassign,
-                  label: copy('unassignVehicle'),
-                  icon: Icons.assignment_return_outlined,
-                  isBusy: _busy == FleetTeamAction.unassignVehicle,
-                  isFullWidth: true,
-                  onPressed:
-                      _busy == null ? () => unawaited(_unassign()) : null,
-                ),
+            ),
+            if (_driver.hasVehicle)
               TpButton.text(
-                key: FleetDriverKeys.release,
-                label: copy('releaseDriver'),
-                icon: Icons.person_remove_outlined,
-                isBusy: _busy == FleetTeamAction.release,
+                key: FleetDriverKeys.unassign,
+                label: copy('unassignVehicle'),
+                icon: Icons.assignment_return_outlined,
+                isBusy: _busy == FleetTeamAction.unassignVehicle,
                 isFullWidth: true,
-                onPressed: _busy == null ? () => unawaited(_release()) : null,
+                onPressed: _busy == null ? () => unawaited(_unassign()) : null,
               ),
-            ],
+            TpButton.text(
+              key: FleetDriverKeys.profile,
+              label: copy('editProfile'),
+              icon: Icons.badge_outlined,
+              isBusy: _busy == FleetTeamAction.setDriverProfile,
+              isFullWidth: true,
+              onPressed: _busy == null ? () => unawaited(_editProfile()) : null,
+            ),
             const SizedBox(height: TpSpace.lg),
             Text(copy('history'), style: text.titleMedium),
             const SizedBox(height: TpSpace.sm),

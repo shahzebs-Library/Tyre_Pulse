@@ -1,11 +1,16 @@
-/// The Fleet Supervisor's team: their drivers, the vehicle each one drives,
-/// and the charges and fines they issue.
+/// Fleet supervisors share one pool of drivers: every Fleet Supervisor, Fleet
+/// Foreman and Fleet Incharge in scope sees and manages any driver there. There
+/// is no "my team" that locks the others out. Driver type and region are
+/// filters, never ownership; a responsible supervisor is only a label.
 ///
-/// Server contract (migration `20261127140000_fleet_supervisor_driver_management`):
-///   * `fleet_supervisor_drivers(p_view 'mine'|'available', p_search, p_offset)`
+/// Server contract (migration `20261127171000_fleet_supervisor_driver_management`):
+///   * `fleet_supervisor_drivers(p_view 'all'|'with_vehicle'|'without_vehicle',
+///     p_search, p_offset, p_category, p_region)`
+///   * `fleet_supervisor_driver_filters()`
 ///   * `fleet_supervisor_assignment_history(p_driver_id)`
 ///   * `fleet_supervisor_command(p_action, p_payload, p_request_id)` with
-///     `take_driver`, `assign_vehicle`, `unassign_vehicle`, `release_driver`.
+///     `assign_vehicle`, `unassign_vehicle`, `set_responsible`,
+///     `set_driver_profile`.
 /// Charges and fines go through the existing `driver_workspace_command`
 /// (`charge_issue`, `create_fine`). The server enforces every rule again; the
 /// checks here only stop an obviously incomplete form being sent.
@@ -13,32 +18,69 @@
 /// Everything in this file is pure.
 library;
 
-/// Which list the supervisor is looking at.
+/// Which slice of the driver pool is on screen.
 enum FleetTeamView {
-  /// Drivers whose open assignment names this supervisor.
-  mine('mine'),
-
-  /// Active drivers in scope with no supervisor yet.
-  available('available');
+  all('all'),
+  withVehicle('with_vehicle'),
+  withoutVehicle('without_vehicle');
 
   const FleetTeamView(this.wire);
   final String wire;
 }
 
-/// The four team actions the server accepts.
+/// The team actions the server accepts.
 abstract final class FleetTeamAction {
-  static const String take = 'take_driver';
   static const String assignVehicle = 'assign_vehicle';
   static const String unassignVehicle = 'unassign_vehicle';
-  static const String release = 'release_driver';
+  static const String setResponsible = 'set_responsible';
+  static const String setDriverProfile = 'set_driver_profile';
 
   static const Set<String> all = <String>{
-    take,
     assignVehicle,
     unassignVehicle,
-    release,
+    setResponsible,
+    setDriverProfile,
   };
 }
+
+/// The values the pool filters offer (`fleet_supervisor_driver_filters`).
+final class FleetFilterOptions {
+  const FleetFilterOptions({
+    this.categories = const <String>[],
+    this.regions = const <String>[],
+  });
+
+  factory FleetFilterOptions.fromResult(Object? result) {
+    if (result is! Map) {
+      throw const FormatException('Filters are unavailable.');
+    }
+    List<String> list(Object? v) => <String>[
+          if (v is List)
+            for (final Object? x in v)
+              if (_s(x) != null) _s(x)!,
+        ]..sort();
+    return FleetFilterOptions(
+      categories: list(result['categories']),
+      regions: list(result['regions']),
+    );
+  }
+
+  final List<String> categories;
+  final List<String> regions;
+}
+
+/// Driver types offered when none is recorded yet. Free text on the server;
+/// these only seed the picker.
+const List<String> fleetSuggestedCategories = <String>[
+  'Transit mixer driver',
+  'Pump driver',
+  'Bus driver',
+  'Light vehicle driver',
+  'Heavy equipment operator',
+];
+
+/// Driver type and region are 1..60 characters or empty (server CHECK).
+bool fleetProfileValueValid(String value) => value.trim().length <= 60;
 
 String? _s(Object? v) {
   if (v == null) return null;
@@ -60,6 +102,9 @@ final class FleetTeamDriver {
     required this.name,
     this.phone,
     this.site,
+    this.region,
+    this.category,
+    this.responsibleName,
     this.country,
     this.status,
     this.loginLinked = false,
@@ -80,6 +125,9 @@ final class FleetTeamDriver {
         name: _s(row['driver_name']) ?? '',
         phone: _s(row['phone']),
         site: _s(row['site']),
+        region: _s(row['region']),
+        category: _s(row['driver_category']),
+        responsibleName: _s(row['responsible_name']),
         country: _s(row['country']),
         status: _s(row['status']),
         loginLinked: row['login_linked'] == true,
@@ -99,6 +147,11 @@ final class FleetTeamDriver {
   final String name;
   final String? phone;
   final String? site;
+  final String? region;
+  final String? category;
+
+  /// Optional label only; it never decides who may act on the driver.
+  final String? responsibleName;
   final String? country;
   final String? status;
   final bool loginLinked;
@@ -114,12 +167,39 @@ final class FleetTeamDriver {
 
   bool get hasVehicle => vehicleId != null;
 
+  FleetTeamDriver withProfile({String? category, String? region}) =>
+      FleetTeamDriver(
+        id: id,
+        employeeId: employeeId,
+        name: name,
+        phone: phone,
+        site: site,
+        region: region,
+        category: category,
+        responsibleName: responsibleName,
+        country: country,
+        status: status,
+        loginLinked: loginLinked,
+        assignedSince: assignedSince,
+        vehicleId: vehicleId,
+        assetNo: assetNo,
+        registrationNo: registrationNo,
+        vehicleType: vehicleType,
+        openCharges: openCharges,
+        openFines: openFines,
+        lastKm: lastKm,
+        lastKmDate: lastKmDate,
+      );
+
   FleetTeamDriver withVehicle(FleetVehicleOption? v) => FleetTeamDriver(
         id: id,
         employeeId: employeeId,
         name: name,
         phone: phone,
         site: site ?? v?.site,
+        region: region,
+        category: category,
+        responsibleName: responsibleName,
         country: country,
         status: status,
         loginLinked: loginLinked,
@@ -138,7 +218,7 @@ final class FleetTeamDriver {
 final class FleetTeamPage {
   factory FleetTeamPage.fromResult(Object? result) {
     if (result is! Map || result['rows'] is! List) {
-      throw const FormatException('Team list is unavailable.');
+      throw const FormatException('Driver list is unavailable.');
     }
     final List<FleetTeamDriver> all = <FleetTeamDriver>[
       for (final Object? r in result['rows'] as List<Object?>)

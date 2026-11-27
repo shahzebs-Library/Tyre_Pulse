@@ -480,8 +480,12 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
         )..where((t) => t.commandId.equals(command.id)))
             .get();
 
+        // Abandoned photos are final too: the record went out without them
+        // and the reason was kept until now.
         final bool allVerified = media.every(
-          (PendingMediaUpload m) => m.state == MediaUploadState.verified,
+          (PendingMediaUpload m) =>
+              m.state == MediaUploadState.verified ||
+              m.state == MediaUploadState.abandoned,
         );
         if (!allVerified) {
           continue;

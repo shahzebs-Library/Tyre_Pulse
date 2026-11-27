@@ -208,14 +208,30 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
     );
   }
 
-  /// Gives up on a queued photo that can never be sent (its local file is
-  /// gone), keeping [messageSafe] as the visible reason.
+  /// Gives up on a queued photo for good (its file is gone, the server
+  /// refused it, or it could not upload in time), keeping [messageSafe] as
+  /// the visible reason. [MediaUploadState.abandoned] is final, so the
+  /// queue can prune the record once it is synced without this photo.
   Future<void> abandonMedia(String id, {required String messageSafe}) async {
     await (update(pendingMediaUploads)..where((t) => t.id.equals(id))).write(
       PendingMediaUploadsCompanion(
-        state: const Value<String>(MediaUploadState.failed),
+        state: const Value<String>(MediaUploadState.abandoned),
         attempts: const Value<int>(maxUploadAttempts),
         lastError: Value<String?>(messageSafe),
+      ),
+    );
+  }
+
+  /// Puts a claimed photo back without counting an attempt. The drain uses
+  /// this so one sync pass tries each photo at most once.
+  Future<int> releaseUploadClaim(String id) {
+    return (update(pendingMediaUploads)
+          ..where(
+            (t) => t.id.equals(id) & t.state.equals(MediaUploadState.uploading),
+          ))
+        .write(
+      const PendingMediaUploadsCompanion(
+        state: Value<String>(MediaUploadState.queued),
       ),
     );
   }

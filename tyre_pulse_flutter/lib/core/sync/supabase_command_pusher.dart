@@ -20,6 +20,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/sync_engine.dart';
@@ -126,6 +127,33 @@ final class SupabaseMediaUploader extends SupabaseGateway
     required String bucket,
     required String localPath,
     required String fileName,
+  }) async {
+    String? remotePath;
+    try {
+      return await _upload(
+        bucket: bucket,
+        localPath: localPath,
+        fileName: fileName,
+        onPath: (String path) => remotePath = path,
+      );
+    } on SupabaseFailure catch (failure) {
+      // A 409 on a retry means an earlier attempt landed but its answer was
+      // lost: the object is already there under this exact name.
+      final MediaUploadResult? landed = alreadyUploadedResult(
+        failure,
+        bucket: bucket,
+        remotePath: remotePath,
+      );
+      if (landed != null) return landed;
+      rethrow;
+    }
+  }
+
+  Future<MediaUploadResult> _upload({
+    required String bucket,
+    required String localPath,
+    required String fileName,
+    required void Function(String path) onPath,
   }) {
     return guard(() async {
       final String remotePath = storageObjectPath(
@@ -133,6 +161,7 @@ final class SupabaseMediaUploader extends SupabaseGateway
         fileName: fileName,
         userId: _client.auth.currentUser?.id,
       );
+      onPath(remotePath);
       await _client.storage.from(bucket).upload(
             remotePath,
             File(localPath),
@@ -147,6 +176,26 @@ final class SupabaseMediaUploader extends SupabaseGateway
       );
     });
   }
+}
+
+/// The result for an upload refused with 409 "already exists": every queued
+/// object name is unique to one photo, so the object is that photo, stored by
+/// an earlier attempt whose answer was lost. Null for any other failure.
+@visibleForTesting
+MediaUploadResult? alreadyUploadedResult(
+  SupabaseFailure failure, {
+  required String bucket,
+  required String? remotePath,
+}) {
+  if (remotePath == null || remotePath.isEmpty) return null;
+  if (failure.code != '409' &&
+      failure.cause != SupabaseFailureCause.uniqueViolation) {
+    return null;
+  }
+  return MediaUploadResult(
+    remotePath: remotePath,
+    remoteRef: 'tp-storage://$bucket/$remotePath',
+  );
 }
 
 /// Bucket of queued job completion photos.

@@ -330,6 +330,12 @@ final class SyncEngine {
   }) async {
     int uploaded = 0;
     int failed = 0;
+    // One try per photo per pass: a failed attempt goes back to `queued`,
+    // and re-claiming it in the same pass would spend its whole attempt
+    // budget in seconds (offline included), long before the connection
+    // returns. A photo seen again this pass is released untouched and waits
+    // for the next sync.
+    final Set<String> attempted = <String>{};
 
     for (int round = 0; round < _maxMediaClaimRounds; round++) {
       final List<PendingMediaUpload> claimed =
@@ -337,8 +343,14 @@ final class SyncEngine {
       if (claimed.isEmpty) {
         break;
       }
+      bool sawNew = false;
 
       for (final PendingMediaUpload media in claimed) {
+        if (!attempted.add(media.id)) {
+          await _mediaDao.releaseUploadClaim(media.id);
+          continue;
+        }
+        sawNew = true;
         final String? bucket = media.bucket;
         if (bucket == null || bucket.isEmpty) {
           // A media row with nowhere to go is a data problem, not a
@@ -375,6 +387,7 @@ final class SyncEngine {
           failed++;
         }
       }
+      if (!sawNew) break;
     }
 
     return (uploaded, failed);

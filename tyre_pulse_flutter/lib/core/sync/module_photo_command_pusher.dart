@@ -14,12 +14,13 @@
 /// photo must never hold the record back for good. So:
 ///
 /// - a photo that already uploaded is sent as its reference;
-/// - a photo still waiting is uploaded here (one at a time). With no
-///   connection the record waits, exactly like any offline record; if the
-///   server keeps refusing the photo, once its attempt budget is spent the
-///   photo is marked failed with a visible reason and the record is sent
-///   without it;
-/// - a photo whose local file is gone is marked failed with a visible reason
+/// - a photo still waiting is uploaded by the drain, one try per sync; the
+///   record waits for it (no connection, 5xx, 429, an expired session) for
+///   up to [kModulePhotoWaitCap] syncs, then goes out without it with a
+///   visible reason;
+/// - a photo the server refuses for good (403, 413, 400, missing bucket) is
+///   marked abandoned with a visible reason and the record goes without it;
+/// - a photo whose local file is gone is marked abandoned with a reason
 ///   and the record is sent without it;
 /// - a photo an older build queued with no upload destination is given one
 ///   (same bucket and namespace) and uploaded like a new one.
@@ -52,9 +53,14 @@ const Map<CommandType, String> kModulePhotoPrefixes = <CommandType, String>{
 const String kModulePhotoMissingMessage =
     'This photo is no longer on this phone, so the record was sent without it.';
 
-/// The visible reason left on a photo the server kept refusing.
+/// The visible reason left on a photo the server refused.
 const String kModulePhotoRefusedMessage =
-    'This photo could not be uploaded, so the record was sent without it.';
+    'The server refused this photo, so the record was sent without it.';
+
+/// The visible reason left on a photo that kept failing until the cap.
+const String kModulePhotoTimedOutMessage =
+    'This photo could not be uploaded in time, so the record was sent '
+    'without it.';
 
 /// The upload object name for a module photo: prefix + a unique part + the
 /// local basename. Safe as one storage basename.
@@ -125,12 +131,24 @@ final class ModulePhotoCommandPusher implements CommandPusher {
       );
     }
 
-    final List<Map<String, Object?>> rows = await _delegate.push(
-      spec: spec,
-      payload: resolved,
-      matchValue: matchValue,
-      expectedPriorStatus: expectedPriorStatus,
-    );
+    final List<Map<String, Object?>> rows;
+    try {
+      rows = await _delegate.push(
+        spec: spec,
+        payload: resolved,
+        matchValue: matchValue,
+        expectedPriorStatus: expectedPriorStatus,
+      );
+    } on SupabaseFailure catch (failure) {
+      // A lost-response replay: the engine will mark the command synced, so
+      // its photos must be final too or the queue never prunes it.
+      if (command != null &&
+          command.retryCount > 0 &&
+          isClientUuidReplay(failure)) {
+        await _mediaDao.markCommandMediaVerified(command.id);
+      }
+      rethrow;
+    }
     // The row now carries the references, so the uploaded copies are
     // delivered and the local files may be cleaned up with the command.
     if (command != null) {
@@ -190,7 +208,11 @@ final class ModulePhotoCommandPusher implements CommandPusher {
       // than write a device path to the server.
       if (match == null) continue;
       consumed.add(match.id);
-      final String? ref = await _refFor(match, prefix);
+      final String? ref = await _refFor(
+        match,
+        prefix,
+        atCap: (command?.retryCount ?? 0) >= kModulePhotoWaitCap,
+      );
       if (ref != null) refs.add(ref);
     }
 
@@ -201,7 +223,17 @@ final class ModulePhotoCommandPusher implements CommandPusher {
   /// The uploaded reference for [media], or null when the record should be
   /// sent without this photo. Throws a retryable failure when the record
   /// should wait for the photo.
-  Future<String?> _refFor(PendingMediaUpload media, String prefix) async {
+  ///
+  /// The drain uploads queued photos (one try per sync). This method only
+  /// uploads a photo itself when the drain cannot: it has no destination yet
+  /// (an older build), its attempt budget is spent, or the record has waited
+  /// [kModulePhotoWaitCap] syncs ([atCap]). It never counts an attempt, so a
+  /// transient error cannot spend a photo's budget.
+  Future<String?> _refFor(
+    PendingMediaUpload media,
+    String prefix, {
+    required bool atCap,
+  }) async {
     if (media.state == MediaUploadState.uploaded ||
         media.state == MediaUploadState.verified) {
       final String? ref = media.remoteRef;
@@ -210,6 +242,7 @@ final class ModulePhotoCommandPusher implements CommandPusher {
       }
       return null;
     }
+    if (media.state == MediaUploadState.abandoned) return null;
 
     if (!_fileExists(media.localPath)) {
       await _mediaDao.abandonMedia(
@@ -220,10 +253,8 @@ final class ModulePhotoCommandPusher implements CommandPusher {
     }
 
     final bool unrouted = media.bucket == null || media.bucket!.isEmpty;
-    // The drain may already have spent this photo's attempts (it retries a
-    // photo several times in one pass, offline included), so an exhausted
-    // photo whose file is still here gets one more try per push.
-    final bool exhausted = media.state == MediaUploadState.failed && !unrouted;
+    final bool spent = media.state == MediaUploadState.failed;
+    if (!unrouted && !spent && !atCap) throw _waiting();
 
     String bucket = media.bucket ?? '';
     String fileName = media.fileName;
@@ -256,43 +287,64 @@ final class ModulePhotoCommandPusher implements CommandPusher {
       );
       return result.remoteRef;
     } on SupabaseFailure catch (failure) {
-      // No connection: the row could not be written either, so it waits
-      // with its photo exactly like any offline record.
-      if (failure.cause == SupabaseFailureCause.offline ||
-          failure.cause == SupabaseFailureCause.timeout) {
-        if (!exhausted) {
-          await _mediaDao.markUploadAttemptFailed(
-            media.id,
-            messageSafe: failure.error.message,
-          );
-        }
-        throw _failure(
-          'A photo of this record has not finished uploading.',
-          cause: failure,
+      if (isDefinitivePhotoRefusal(failure)) {
+        await _mediaDao.abandonMedia(
+          media.id,
+          messageSafe: kModulePhotoRefusedMessage,
         );
+        return null;
       }
-      final bool spent = exhausted ||
-          (await _mediaDao.markUploadAttemptFailed(
-                media.id,
-                messageSafe: failure.error.message,
-              ))
-                  .state ==
-              MediaUploadState.failed;
-      if (!spent) {
-        throw _failure(
-          'A photo of this record has not finished uploading.',
-          cause: failure,
+      // Transient (no connection, 5xx, 429, an expired session): keep the
+      // photo and wait, until the record has waited long enough.
+      if (atCap && !isConnectivityFailure(failure)) {
+        await _mediaDao.abandonMedia(
+          media.id,
+          messageSafe: kModulePhotoTimedOutMessage,
         );
+        return null;
       }
-      // The server keeps refusing this photo: never hold the record back.
-      await _mediaDao.abandonMedia(
-        media.id,
-        messageSafe: kModulePhotoRefusedMessage,
-      );
-      return null;
+      throw _waiting(cause: failure);
     }
   }
 }
+
+/// How many syncs a record waits for a photo that keeps failing for a
+/// transient reason before it is sent without it. Below the queue's own
+/// retry limit, so the record itself is never dead-lettered for a photo.
+const int kModulePhotoWaitCap = 5;
+
+/// A refusal that will not change on retry: forbidden, too large, invalid,
+/// or the destination does not exist.
+bool isDefinitivePhotoRefusal(SupabaseFailure failure) {
+  switch (failure.code) {
+    case '400':
+    case '403':
+    case '404':
+    case '413':
+      return true;
+  }
+  switch (failure.cause) {
+    case SupabaseFailureCause.forbidden:
+    case SupabaseFailureCause.rowLevelSecurity:
+    case SupabaseFailureCause.checkViolation:
+    case SupabaseFailureCause.invalidInput:
+    case SupabaseFailureCause.storageNotFound:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// No usable connection: nothing can be learned about the photo, and the
+/// record could not be written either.
+bool isConnectivityFailure(SupabaseFailure failure) =>
+    failure.cause == SupabaseFailureCause.offline ||
+    failure.cause == SupabaseFailureCause.timeout;
+
+SupabaseFailure _waiting({Object? cause}) => _failure(
+      'A photo of this record has not finished uploading.',
+      cause: cause,
+    );
 
 SupabaseFailure _failure(String technical, {Object? cause}) => SupabaseFailure(
       error: AppError(

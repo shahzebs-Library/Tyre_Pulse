@@ -272,6 +272,8 @@ describe('Inspections.jsx wires the tiles to the filtered rows', () => {
  */
 describe('Inspections.jsx sign-off', () => {
   const src = readFileSync(join(process.cwd(), 'src/pages/Inspections.jsx'), 'utf8').replace(/\r\n/g, '\n')
+  // User-facing text now lives in the locale file; the page references the key.
+  const insEn = readFileSync(join(process.cwd(), 'src/locales/en/inspections.json'), 'utf8')
 
   it('offers the sign-off controls only to someone allowed to sign', () => {
     // CONTRACT CHANGED, deliberately. This used to pin a local
@@ -312,7 +314,8 @@ describe('Inspections.jsx sign-off', () => {
   })
 
   it('shows the signing account read-only rather than an editable name box', () => {
-    expect(src).toMatch(/Signing as <strong/)
+    expect(src).toMatch(/\{t\('inspections\.page\.approval\.signingAs'\)\} <strong/)
+    expect(insEn).toMatch(/"signingAs": "Signing as"/)
   })
 
   it('re-reads the decided row instead of echoing what it hoped was written', () => {
@@ -342,14 +345,17 @@ describe('Inspections.jsx sign-off', () => {
   it('shows the stored signature on an approved record instead of offering the pad again', () => {
     expect(src).toMatch(/approveTarget\.approval_status === 'approved' \? \(/)
     expect(src).toMatch(/src=\{approveTarget\.approver_signature\}/)
-    expect(src).toMatch(/Signed off on \$\{formatDate\(approveTarget\.approved_at\)\}/)
+    expect(src).toMatch(/t\('inspections\.page\.approval\.signedOn', \{ date: formatDate\(approveTarget\.approved_at\) \}\)/)
+    expect(insEn).toMatch(/"signedOn": "Signed off on \{date\}"/)
   })
 
   it('reports a failed decision instead of announcing success', () => {
     // The write used to be wrapped in `catch { }` and then always claimed it worked.
     expect(src).not.toMatch(/catch \{ \/\* mirror prior fire-and-forget: surface result regardless \*\/ \}/)
-    expect(src).toMatch(/Could not save the approval\. The inspection is unchanged\./)
-    expect(src).toMatch(/Could not record the rejection\. Nothing was saved\./)
+    expect(src).toMatch(/toUserMessage\(err, t\('inspections\.page\.err\.approve'\)\)/)
+    expect(src).toMatch(/toUserMessage\(err, t\('inspections\.page\.err\.reject'\)\)/)
+    expect(insEn).toMatch(/Could not save the approval\. The inspection is unchanged\./)
+    expect(insEn).toMatch(/Could not record the rejection\. Nothing was saved\./)
   })
 })
 

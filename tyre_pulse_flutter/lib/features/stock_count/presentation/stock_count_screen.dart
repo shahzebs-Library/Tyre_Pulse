@@ -43,6 +43,10 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
   _StockFilter _filter = _StockFilter.all;
   String? _busyId;
 
+  /// The genuine / not genuine mark chosen on a line before "Matches" (and
+  /// the starting choice in the count dialog). Null = not stated.
+  final Map<String, bool?> _genuine = <String, bool?>{};
+
   /// Quick +/- (Expo `quickAdjust`): one audited movement per tap.
   Future<void> _adjust(StockItem item, int delta, StockCountCopy copy) async {
     if (_busyId != null) return;
@@ -104,147 +108,156 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
         if ((row.site ?? '').trim().isNotEmpty) row.site!.trim(),
     }.toList()
       ..sort();
-    final TextEditingController size = TextEditingController();
-    final TextEditingController description = TextEditingController();
-    final TextEditingController site = TextEditingController();
-    final TextEditingController quantity = TextEditingController();
     bool saving = false;
     String? problem;
     String? outcome;
     await showDialog<bool>(
       context: context,
-      builder: (BuildContext dialogContext) => StatefulBuilder(
-        builder: (BuildContext context, StateSetter setDialogState) =>
-            // While a capture is being sent the dialog cannot be dismissed
-            // (back or barrier), so it cannot be reopened and sent twice.
-            PopScope(
-          canPop: !saving,
-          child: AlertDialog(
-            title: Text(copy('addTitle')),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  TextField(
-                    key: const Key('stock.add.size'),
-                    controller: size,
-                    autofocus: true,
-                    decoration: InputDecoration(labelText: copy('size')),
-                  ),
-                  TextField(
-                    key: const Key('stock.add.description'),
-                    controller: description,
-                    decoration: InputDecoration(labelText: copy('description')),
-                  ),
-                  TextField(
-                    key: const Key('stock.add.site'),
-                    controller: site,
-                    decoration: InputDecoration(labelText: copy('site')),
-                  ),
-                  if (sites.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: TpSpace.xs),
-                    Wrap(
-                      spacing: TpSpace.xs,
-                      runSpacing: TpSpace.xs,
-                      children: <Widget>[
-                        for (final String option in sites)
-                          ActionChip(
-                            label: Text(option),
-                            onPressed: () =>
-                                setDialogState(() => site.text = option),
-                          ),
+      // The dialog route owns its controllers (disposed only once the route
+      // has finished animating out; see [_CountDialog] for the crash this
+      // avoids).
+      builder: (BuildContext dialogContext) => _OwnedControllers(
+        count: 4,
+        builder: (BuildContext context, List<TextEditingController> c) {
+          final TextEditingController size = c[0];
+          final TextEditingController description = c[1];
+          final TextEditingController site = c[2];
+          final TextEditingController quantity = c[3];
+          return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) =>
+                // While a capture is being sent the dialog cannot be dismissed
+                // (back or barrier), so it cannot be reopened and sent twice.
+                PopScope(
+              canPop: !saving,
+              child: AlertDialog(
+                title: Text(copy('addTitle')),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      TextField(
+                        key: const Key('stock.add.size'),
+                        controller: size,
+                        autofocus: true,
+                        decoration: InputDecoration(labelText: copy('size')),
+                      ),
+                      TextField(
+                        key: const Key('stock.add.description'),
+                        controller: description,
+                        decoration:
+                            InputDecoration(labelText: copy('description')),
+                      ),
+                      TextField(
+                        key: const Key('stock.add.site'),
+                        controller: site,
+                        decoration: InputDecoration(labelText: copy('site')),
+                      ),
+                      if (sites.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: TpSpace.xs),
+                        Wrap(
+                          spacing: TpSpace.xs,
+                          runSpacing: TpSpace.xs,
+                          children: <Widget>[
+                            for (final String option in sites)
+                              ActionChip(
+                                label: Text(option),
+                                onPressed: () =>
+                                    setDialogState(() => site.text = option),
+                              ),
+                          ],
+                        ),
                       ],
-                    ),
-                  ],
-                  TextField(
-                    key: const Key('stock.add.quantity'),
-                    controller: quantity,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: false),
-                    decoration: InputDecoration(labelText: copy('quantity')),
+                      TextField(
+                        key: const Key('stock.add.quantity'),
+                        controller: quantity,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: false,
+                        ),
+                        decoration:
+                            InputDecoration(labelText: copy('quantity')),
+                      ),
+                      const SizedBox(height: TpSpace.sm),
+                      Text(
+                        copy('addNote'),
+                        key: const Key('stock.add.note'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      if (problem != null) ...<Widget>[
+                        const SizedBox(height: TpSpace.sm),
+                        Text(
+                          problem!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: TpSpace.sm),
-                  Text(
-                    copy('addNote'),
-                    key: const Key('stock.add.note'),
-                    style: Theme.of(context).textTheme.bodySmall,
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed:
+                        saving ? null : () => Navigator.pop(context, false),
+                    child: Text(copy('cancel')),
                   ),
-                  if (problem != null) ...<Widget>[
-                    const SizedBox(height: TpSpace.sm),
-                    Text(
-                      problem!,
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
-                  ],
+                  FilledButton(
+                    key: const Key('stock.add.save'),
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            // In-flight guard: a second tap that lands before the
+                            // rebuild disables the button would otherwise record
+                            // a second capture (each send mints its own key).
+                            if (saving) return;
+                            final int? qty = int.tryParse(quantity.text.trim());
+                            final String? issue = size.text.trim().isEmpty
+                                ? copy('sizeRequired')
+                                : site.text.trim().isEmpty
+                                    ? copy('siteRequired')
+                                    : (qty == null || qty < 0)
+                                        ? copy('invalid')
+                                        : null;
+                            if (issue != null) {
+                              setDialogState(() => problem = issue);
+                              return;
+                            }
+                            setDialogState(() {
+                              saving = true;
+                              problem = null;
+                            });
+                            final _AddOutcome result = await _recordNew(
+                              size: size.text,
+                              description: description.text,
+                              site: site.text,
+                              quantity: qty!,
+                              copy: copy,
+                            );
+                            if (result.done) {
+                              outcome = result.message;
+                              if (context.mounted) Navigator.pop(context, true);
+                            } else {
+                              setDialogState(() {
+                                saving = false;
+                                problem = result.message;
+                              });
+                            }
+                          },
+                    child: saving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2.5),
+                          )
+                        : Text(copy('add')),
+                  ),
                 ],
               ),
             ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: saving ? null : () => Navigator.pop(context, false),
-                child: Text(copy('cancel')),
-              ),
-              FilledButton(
-                key: const Key('stock.add.save'),
-                onPressed: saving
-                    ? null
-                    : () async {
-                        // In-flight guard: a second tap that lands before the
-                        // rebuild disables the button would otherwise record
-                        // a second capture (each send mints its own key).
-                        if (saving) return;
-                        final int? qty = int.tryParse(quantity.text.trim());
-                        final String? issue = size.text.trim().isEmpty
-                            ? copy('sizeRequired')
-                            : site.text.trim().isEmpty
-                                ? copy('siteRequired')
-                                : (qty == null || qty < 0)
-                                    ? copy('invalid')
-                                    : null;
-                        if (issue != null) {
-                          setDialogState(() => problem = issue);
-                          return;
-                        }
-                        setDialogState(() {
-                          saving = true;
-                          problem = null;
-                        });
-                        final _AddOutcome result = await _recordNew(
-                          size: size.text,
-                          description: description.text,
-                          site: site.text,
-                          quantity: qty!,
-                          copy: copy,
-                        );
-                        if (result.done) {
-                          outcome = result.message;
-                          if (context.mounted) Navigator.pop(context, true);
-                        } else {
-                          setDialogState(() {
-                            saving = false;
-                            problem = result.message;
-                          });
-                        }
-                      },
-                child: saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2.5),
-                      )
-                    : Text(copy('add')),
-              ),
-            ],
-          ),
-        ),
+          );
+        },
       ),
     );
-    size.dispose();
-    description.dispose();
-    site.dispose();
-    quantity.dispose();
     if (outcome != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(outcome!)),
@@ -379,20 +392,26 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
 
   Widget _content(StockCountCopy copy, List<StockItem> rows) {
     final DateTime now = DateTime.now();
+    final Map<String, DateTime> local = ref.watch(stockCountedTodayProvider);
+    final bool canAdjust = ref.watch(canPostCountDifferenceProvider);
+    bool counted(StockItem row) => stockLineCountedToday(row, now, local);
     final int low = rows.where((StockItem row) => row.needsReorder).length;
-    final int stale =
-        rows.where((StockItem row) => !row.countedToday(now)).length;
+    final int stale = rows.where((StockItem row) => !counted(row)).length;
     final String term = _search.text.trim().toLowerCase();
     final List<StockItem> visible = rows.where((StockItem row) {
       final bool filterMatch = switch (_filter) {
         _StockFilter.all => true,
         _StockFilter.low => row.needsReorder,
-        _StockFilter.stale => !row.countedToday(now),
+        _StockFilter.stale => !counted(row),
       };
       if (!filterMatch) return false;
       if (term.isEmpty) return true;
-      return (row.description ?? '').toLowerCase().contains(term) ||
-          (row.site ?? '').toLowerCase().contains(term);
+      return <String?>[
+        row.description,
+        row.site,
+        row.locationCode,
+        row.itemCode,
+      ].any((String? v) => (v ?? '').toLowerCase().contains(term));
     }).toList(growable: false);
 
     return RefreshIndicator(
@@ -402,6 +421,8 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
+        // A scroll puts the keyboard away so it never covers the list.
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(
           TpSpace.lg,
           TpSpace.md,
@@ -429,6 +450,11 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
           TextField(
             key: const Key('stock.search'),
             controller: _search,
+            // Never opens the keyboard on entry; a tap outside closes it.
+            autofocus: false,
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            textInputAction: TextInputAction.search,
+            onSubmitted: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.search_rounded),
@@ -476,6 +502,12 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
               _StockCard(
                 item: item,
                 copy: copy,
+                canAdjust: canAdjust,
+                countedToday: counted(item),
+                genuine: _genuine[item.id],
+                onGenuine: (bool? value) =>
+                    setState(() => _genuine[item.id] = value),
+                onMatches: () => unawaited(_matches(item, copy)),
                 onCount: () => unawaited(_count(item, copy)),
                 busy: _busyId == item.id,
                 onAdjust: (int delta) => unawaited(_adjust(item, delta, copy)),
@@ -490,84 +522,58 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     );
   }
 
+  /// "Doesn't match" (and Count for an approver): the person types what is
+  /// on the shelf. The dialog owns its text controllers (see [_CountDialog]),
+  /// so nothing it renders is disposed while its route is still animating
+  /// out.
   Future<void> _count(StockItem item, StockCountCopy copy) async {
-    // Empty on purpose: the counter types what is on the shelf, not what
-    // the system says.
-    final TextEditingController quantity = TextEditingController();
-    final TextEditingController reason = TextEditingController();
-    bool saving = false;
-    await showDialog<bool>(
+    final String? message = await showDialog<String>(
       context: context,
-      builder: (BuildContext dialogContext) => StatefulBuilder(
-        builder: (BuildContext context, StateSetter setDialogState) =>
-            AlertDialog(
-          title: Text(copy('count')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(item.description ?? copy('stockItem')),
-              const SizedBox(height: TpSpace.sm),
-              Text(
-                copy('countNote'),
-                key: const Key('stock.countNote'),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: TpSpace.md),
-              TextField(
-                key: const Key('stock.quantity'),
-                controller: quantity,
-                autofocus: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: false),
-                decoration: InputDecoration(labelText: copy('physicalCount')),
-              ),
-              TextField(
-                key: const Key('stock.reason'),
-                controller: reason,
-                decoration: InputDecoration(labelText: copy('reason')),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(context, false),
-              child: Text(copy('cancel')),
-            ),
-            FilledButton(
-              key: const Key('stock.save'),
-              onPressed: saving
-                  ? null
-                  : () async {
-                      final num? value = num.tryParse(quantity.text.trim());
-                      if (value == null || value < 0) {
-                        ScaffoldMessenger.of(this.context).showSnackBar(
-                          SnackBar(content: Text(copy('invalid'))),
-                        );
-                        return;
-                      }
-                      setDialogState(() => saving = true);
-                      final String text = await _record(
-                        item: item,
-                        count: value,
-                        reason: reason.text,
-                        copy: copy,
-                      );
-                      if (context.mounted) Navigator.pop(context, true);
-                      if (mounted) {
-                        ScaffoldMessenger.of(this.context).showSnackBar(
-                          SnackBar(content: Text(text)),
-                        );
-                      }
-                    },
-              child: Text(copy('save')),
-            ),
-          ],
-        ),
+      builder: (BuildContext dialogContext) => _CountDialog(
+        item: item,
+        copy: copy,
+        initialGenuine: _genuine[item.id],
+        onSave: (_CountInput input) async {
+          _genuine[item.id] = input.genuine;
+          final _CountOutcome outcome = await _record(
+            item: item,
+            count: input.count,
+            reason: input.reason,
+            genuine: input.genuine,
+            genuineNote: input.genuineNote,
+            copy: copy,
+          );
+          return outcome.message;
+        },
       ),
     );
-    quantity.dispose();
-    reason.dispose();
+    if (message != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
     // The balance does not change from a count; nothing to reload.
+  }
+
+  /// "Matches": one tap records a physical count equal to the system
+  /// quantity, through the same path as the count dialog.
+  Future<void> _matches(StockItem item, StockCountCopy copy) async {
+    if (_busyId != null) return;
+    setState(() => _busyId = item.id);
+    final _CountOutcome outcome = await _record(
+      item: item,
+      count: item.quantity,
+      reason: null,
+      genuine: _genuine[item.id],
+      genuineNote: null,
+      copy: copy,
+      matches: true,
+    );
+    if (!mounted) return;
+    setState(() => _busyId = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(outcome.message)),
+    );
   }
 
   /// Records a new stock line for approval and returns what to show. Never
@@ -631,14 +637,17 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
   /// Records the count as physical count evidence and returns the sentence
   /// to show. Never throws: every outcome is a message, and the count is kept
   /// on the phone whenever it could be saved at all.
-  Future<String> _record({
+  Future<_CountOutcome> _record({
     required StockItem item,
     required num count,
-    required String reason,
+    required String? reason,
+    required bool? genuine,
+    required String? genuineNote,
     required StockCountCopy copy,
+    bool matches = false,
   }) async {
     final workspace = ref.read(workspaceContextProvider);
-    if (workspace == null) return copy('saveFailed');
+    if (workspace == null) return _CountOutcome.failed(copy('saveFailed'));
     String? device;
     try {
       device = await ref.read(inventoryDeviceIdProvider.future);
@@ -657,26 +666,91 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                 orgId: workspace.tenantId ?? workspace.companyId,
                 fallbackCountry: workspace.activeCountry,
                 deviceId: device,
+                genuine: genuine,
+                genuineNote: genuineNote,
               );
-      return switch (r) {
-        StockCountRecordResult.sent => copy('countRecorded'),
-        StockCountRecordResult.savedOnPhone => copy('countSavedOnPhone'),
-      };
+      // Saved (sent, or on the phone): this line has been counted today.
+      if (mounted) {
+        ref
+            .read(stockCountedTodayProvider.notifier)
+            .mark(item.id, DateTime.now());
+      }
+      return _CountOutcome.saved(
+        switch (r) {
+          StockCountRecordResult.sent =>
+            copy(matches ? 'matchesRecorded' : 'countRecorded'),
+          StockCountRecordResult.savedOnPhone =>
+            copy(matches ? 'matchesSavedOnPhone' : 'countSavedOnPhone'),
+        },
+      );
     } on StockCountRecordFailure catch (f) {
-      return switch (f.problem) {
-        StockCountRecordProblem.noPlace => copy('countNoPlace'),
-        StockCountRecordProblem.needsConnectionForSession =>
-          copy('countNeedsConnection'),
-        StockCountRecordProblem.storage => copy('saveFailed'),
-      };
+      return _CountOutcome.failed(
+        switch (f.problem) {
+          StockCountRecordProblem.noPlace => copy('countNoPlace'),
+          StockCountRecordProblem.needsConnectionForSession =>
+            copy('countNeedsConnection'),
+          StockCountRecordProblem.storage => copy('saveFailed'),
+        },
+      );
     } on StockCountRefused catch (r) {
-      return '${copy('countRefused')} ${r.message}';
+      return _CountOutcome.failed('${copy('countRefused')} ${r.message}');
     } on SupabaseFailure catch (f) {
-      return f.error.message;
+      return _CountOutcome.failed(f.error.message);
     } on Object {
-      return copy('saveFailed');
+      return _CountOutcome.failed(copy('saveFailed'));
     }
   }
+}
+
+/// Creates [count] text controllers for a dialog and disposes them with the
+/// dialog's own element, after its route has finished animating out.
+class _OwnedControllers extends StatefulWidget {
+  const _OwnedControllers({required this.count, required this.builder});
+  final int count;
+  final Widget Function(BuildContext, List<TextEditingController>) builder;
+
+  @override
+  State<_OwnedControllers> createState() => _OwnedControllersState();
+}
+
+class _OwnedControllersState extends State<_OwnedControllers> {
+  late final List<TextEditingController> _controllers =
+      List<TextEditingController>.generate(
+    widget.count,
+    (_) => TextEditingController(),
+  );
+
+  @override
+  void dispose() {
+    for (final TextEditingController c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _controllers);
+}
+
+final class _CountOutcome {
+  const _CountOutcome.saved(this.message) : saved = true;
+  const _CountOutcome.failed(this.message) : saved = false;
+  final String message;
+  final bool saved;
+}
+
+/// What the count dialog hands back on Save.
+final class _CountInput {
+  const _CountInput({
+    required this.count,
+    required this.reason,
+    required this.genuine,
+    required this.genuineNote,
+  });
+  final num count;
+  final String reason;
+  final bool? genuine;
+  final String? genuineNote;
 }
 
 final class _AddOutcome {
@@ -712,6 +786,11 @@ class _StockCard extends StatelessWidget {
   const _StockCard({
     required this.item,
     required this.copy,
+    required this.canAdjust,
+    required this.countedToday,
+    required this.genuine,
+    required this.onGenuine,
+    required this.onMatches,
     required this.onCount,
     required this.onAdjust,
     required this.onMove,
@@ -723,10 +802,31 @@ class _StockCard extends StatelessWidget {
   final VoidCallback? onOpen;
   final StockCountCopy copy;
   final InventoryCopy inventoryCopy;
+
+  /// True for someone the server lets post a count difference (+/-).
+  final bool canAdjust;
+  final bool countedToday;
+  final bool? genuine;
+  final ValueChanged<bool?> onGenuine;
+  final VoidCallback onMatches;
   final VoidCallback onCount;
   final ValueChanged<int> onAdjust;
   final ValueChanged<JobCardMove> onMove;
   final bool busy;
+
+  /// What tells this line apart from another with the same description:
+  /// bin, item code, condition, ownership and unit.
+  String? _identity() {
+    final List<String> parts = <String>[
+      if ((item.locationCode ?? '').isNotEmpty)
+        '${copy('bin')} ${item.locationCode}',
+      if ((item.itemCode ?? '').isNotEmpty) '${copy('code')} ${item.itemCode}',
+      if ((item.condition ?? '').isNotEmpty) item.condition!,
+      if ((item.ownership ?? '').isNotEmpty) item.ownership!,
+      if ((item.uom ?? '').isNotEmpty) item.uom!,
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -741,99 +841,391 @@ class _StockCard extends StatelessWidget {
       'Low' => TpStatus.warning,
       _ => TpStatus.ok,
     };
+    final String? identity = _identity();
+    final Widget moves = PopupMenuButton<JobCardMove>(
+      key: Key('stock.moves.${item.id}'),
+      tooltip: inventoryCopy('jc_menu'),
+      enabled: !busy,
+      onSelected: onMove,
+      icon: const Icon(Icons.more_vert_rounded),
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<JobCardMove>>[
+        PopupMenuItem<JobCardMove>(
+          key: Key('stock.issue.${item.id}'),
+          value: JobCardMove.issue,
+          child: Text(inventoryCopy('jc_issueTitle')),
+        ),
+        PopupMenuItem<JobCardMove>(
+          key: Key('stock.return.${item.id}'),
+          value: JobCardMove.issueReturn,
+          child: Text(inventoryCopy('jc_returnTitle')),
+        ),
+      ],
+    );
+    final Widget details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          item.description ?? copy('stockItem'),
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        if (item.site != null)
+          Text(
+            item.site!,
+            style: TextStyle(color: palette.textSecondary),
+          ),
+        if (identity != null)
+          Text(
+            identity,
+            key: Key('stock.identity.${item.id}'),
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: palette.textSecondary),
+          ),
+        const SizedBox(height: TpSpace.xs),
+        Wrap(
+          spacing: TpSpace.xs,
+          runSpacing: TpSpace.xs,
+          children: <Widget>[
+            TpStatusChip(status: tpStatus, label: copy(status)),
+            if (countedToday)
+              TpStatusChip(
+                key: Key('stock.countedToday.${item.id}'),
+                status: TpStatus.info,
+                label: copy('countedToday'),
+              ),
+          ],
+        ),
+      ],
+    );
+    final Widget icon = DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.all(TpSpace.md),
+        child: Icon(Icons.inventory_2_outlined),
+      ),
+    );
+
+    if (canAdjust) {
+      // An approver keeps +/- (each tap is an audited movement) and Count.
+      return TpCard(
+        key: Key('stock.item.${item.id}'),
+        onTap: onOpen,
+        padding: const EdgeInsets.all(TpSpace.md),
+        child: Row(
+          children: <Widget>[
+            icon,
+            const SizedBox(width: TpSpace.md),
+            Expanded(child: details),
+            const SizedBox(width: TpSpace.sm),
+            Column(
+              children: <Widget>[
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    IconButton(
+                      key: Key('stock.decrease.${item.id}'),
+                      tooltip: copy('decrease'),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: busy || item.quantity <= 0
+                          ? null
+                          : () => onAdjust(-1),
+                      icon: const Icon(Icons.remove_circle_outline_rounded),
+                    ),
+                    Text(
+                      '${item.quantity}',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    IconButton(
+                      key: Key('stock.increase.${item.id}'),
+                      tooltip: copy('increase'),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: busy ? null : () => onAdjust(1),
+                      icon: const Icon(Icons.add_circle_outline_rounded),
+                    ),
+                  ],
+                ),
+                Text(copy('onHand')),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    TextButton(
+                      key: Key('stock.count.${item.id}'),
+                      onPressed: onCount,
+                      child: Text(copy('count')),
+                    ),
+                    moves,
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Everyone else counts: the shelf either matches the system or it does
+    // not. A +/- here would always be refused by the server (WP5).
     return TpCard(
       key: Key('stock.item.${item.id}'),
       onTap: onOpen,
       padding: const EdgeInsets.all(TpSpace.md),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: palette.surfaceAlt,
-              borderRadius: BorderRadius.circular(TpRadius.md),
-            ),
-            child: const Padding(
-              padding: EdgeInsets.all(TpSpace.md),
-              child: Icon(Icons.inventory_2_outlined),
-            ),
-          ),
-          const SizedBox(width: TpSpace.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  item.description ?? copy('stockItem'),
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleSmall
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                if (item.site != null)
-                  Text(
-                    item.site!,
-                    style: TextStyle(color: palette.textSecondary),
-                  ),
-                const SizedBox(height: TpSpace.xs),
-                TpStatusChip(status: tpStatus, label: copy(status)),
-              ],
-            ),
-          ),
-          const SizedBox(width: TpSpace.sm),
-          Column(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              icon,
+              const SizedBox(width: TpSpace.md),
+              Expanded(child: details),
+              const SizedBox(width: TpSpace.sm),
+              Column(
                 children: <Widget>[
-                  IconButton(
-                    key: Key('stock.decrease.${item.id}'),
-                    tooltip: copy('decrease'),
-                    visualDensity: VisualDensity.compact,
-                    onPressed:
-                        busy || item.quantity <= 0 ? null : () => onAdjust(-1),
-                    icon: const Icon(Icons.remove_circle_outline_rounded),
-                  ),
                   Text(
                     '${item.quantity}',
+                    key: Key('stock.qty.${item.id}'),
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                  IconButton(
-                    key: Key('stock.increase.${item.id}'),
-                    tooltip: copy('increase'),
-                    visualDensity: VisualDensity.compact,
-                    onPressed: busy ? null : () => onAdjust(1),
-                    icon: const Icon(Icons.add_circle_outline_rounded),
-                  ),
+                  Text(copy('onHand')),
                 ],
               ),
-              Text(copy('onHand')),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  TextButton(onPressed: onCount, child: Text(copy('count'))),
-                  PopupMenuButton<JobCardMove>(
-                    key: Key('stock.moves.${item.id}'),
-                    tooltip: inventoryCopy('jc_menu'),
-                    enabled: !busy,
-                    onSelected: onMove,
-                    icon: const Icon(Icons.more_vert_rounded),
-                    itemBuilder: (BuildContext context) =>
-                        <PopupMenuEntry<JobCardMove>>[
-                      PopupMenuItem<JobCardMove>(
-                        key: Key('stock.issue.${item.id}'),
-                        value: JobCardMove.issue,
-                        child: Text(inventoryCopy('jc_issueTitle')),
-                      ),
-                      PopupMenuItem<JobCardMove>(
-                        key: Key('stock.return.${item.id}'),
-                        value: JobCardMove.issueReturn,
-                        child: Text(inventoryCopy('jc_returnTitle')),
-                      ),
-                    ],
-                  ),
-                ],
+              moves,
+            ],
+          ),
+          const SizedBox(height: TpSpace.sm),
+          _GenuineChoice(
+            keyPrefix: 'stock.genuine.${item.id}',
+            copy: copy,
+            value: genuine,
+            onChanged: busy ? null : onGenuine,
+          ),
+          const SizedBox(height: TpSpace.sm),
+          Wrap(
+            spacing: TpSpace.sm,
+            runSpacing: TpSpace.sm,
+            alignment: WrapAlignment.end,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                key: Key('stock.matches.${item.id}'),
+                onPressed: busy ? null : onMatches,
+                icon: busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2.2),
+                      )
+                    : const Icon(Icons.check_circle_outline_rounded),
+                label: Text(copy('matches')),
+              ),
+              OutlinedButton.icon(
+                key: Key('stock.notMatch.${item.id}'),
+                onPressed: busy ? null : onCount,
+                icon: const Icon(Icons.edit_note_rounded),
+                label: Text(copy('notMatch')),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Genuine / Not genuine, both optional: tapping the chosen one again clears
+/// it (not stated).
+class _GenuineChoice extends StatelessWidget {
+  const _GenuineChoice({
+    required this.keyPrefix,
+    required this.copy,
+    required this.value,
+    required this.onChanged,
+  });
+  final String keyPrefix;
+  final StockCountCopy copy;
+  final bool? value;
+  final ValueChanged<bool?>? onChanged;
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+        spacing: TpSpace.xs,
+        runSpacing: TpSpace.xs,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: <Widget>[
+          Text(
+            copy('genuineQuestion'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          ChoiceChip(
+            key: Key('$keyPrefix.yes'),
+            label: Text(copy('genuine')),
+            selected: value == true,
+            onSelected: onChanged == null
+                ? null
+                : (bool on) => onChanged!(on ? true : null),
+          ),
+          ChoiceChip(
+            key: Key('$keyPrefix.no'),
+            label: Text(copy('notGenuine')),
+            selected: value == false,
+            onSelected: onChanged == null
+                ? null
+                : (bool on) => onChanged!(on ? false : null),
+          ),
+        ],
+      );
+}
+
+/// The count dialog. It OWNS its controllers and disposes them in its own
+/// [State.dispose], which runs only after the route has finished animating
+/// out.
+///
+/// Root cause of the "Save count" crash (framework.dart
+/// `_dependents.isEmpty`): the controllers used to be created by the screen,
+/// and disposed on the line after `await showDialog(...)`. That future
+/// completes as soon as `Navigator.pop` is called, while the dialog's
+/// TextFields are still mounted for the exit transition, so the next frame
+/// rebuilt EditableText against a disposed controller and the element tree
+/// was torn down mid-failure.
+class _CountDialog extends StatefulWidget {
+  const _CountDialog({
+    required this.item,
+    required this.copy,
+    required this.initialGenuine,
+    required this.onSave,
+  });
+  final StockItem item;
+  final StockCountCopy copy;
+  final bool? initialGenuine;
+
+  /// Records the count and returns the sentence to show. Never throws.
+  final Future<String> Function(_CountInput input) onSave;
+
+  @override
+  State<_CountDialog> createState() => _CountDialogState();
+}
+
+class _CountDialogState extends State<_CountDialog> {
+  // Empty on purpose: the counter types what is on the shelf, not what the
+  // system says.
+  final TextEditingController _quantity = TextEditingController();
+  final TextEditingController _reason = TextEditingController();
+  final TextEditingController _note = TextEditingController();
+  late bool? _genuine = widget.initialGenuine;
+  bool _saving = false;
+  String? _problem;
+
+  @override
+  void dispose() {
+    _quantity.dispose();
+    _reason.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    // In-flight guard: a second tap before the rebuild must not record twice.
+    if (_saving) return;
+    final num? value = num.tryParse(_quantity.text.trim());
+    if (value == null || value < 0) {
+      setState(() => _problem = widget.copy('invalid'));
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _saving = true;
+      _problem = null;
+    });
+    final String message = await widget.onSave(
+      _CountInput(
+        count: value,
+        reason: _reason.text,
+        genuine: _genuine,
+        genuineNote: _note.text,
+      ),
+    );
+    if (!mounted) return;
+    Navigator.of(context).pop(message);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final StockCountCopy copy = widget.copy;
+    return PopScope(
+      // While the count is being sent the dialog cannot be dismissed.
+      canPop: !_saving,
+      child: AlertDialog(
+        title: Text(copy('count')),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(widget.item.description ?? copy('stockItem')),
+              const SizedBox(height: TpSpace.sm),
+              Text(
+                copy('countNote'),
+                key: const Key('stock.countNote'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: TpSpace.md),
+              TextField(
+                key: const Key('stock.quantity'),
+                controller: _quantity,
+                autofocus: true,
+                enabled: !_saving,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: false),
+                decoration: InputDecoration(
+                  labelText: copy('physicalCount'),
+                  errorText: _problem,
+                ),
+              ),
+              TextField(
+                key: const Key('stock.reason'),
+                controller: _reason,
+                enabled: !_saving,
+                decoration: InputDecoration(labelText: copy('reason')),
+              ),
+              const SizedBox(height: TpSpace.md),
+              _GenuineChoice(
+                keyPrefix: 'stock.dialog.genuine',
+                copy: copy,
+                value: _genuine,
+                onChanged:
+                    _saving ? null : (bool? v) => setState(() => _genuine = v),
+              ),
+              if (_genuine != null)
+                TextField(
+                  key: const Key('stock.genuineNote'),
+                  controller: _note,
+                  enabled: !_saving,
+                  decoration: InputDecoration(labelText: copy('genuineNote')),
+                ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: _saving ? null : () => Navigator.of(context).pop(),
+            child: Text(copy('cancel')),
+          ),
+          FilledButton(
+            key: const Key('stock.save'),
+            onPressed: _saving ? null : () => unawaited(_save()),
+            child: _saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : Text(copy('save')),
           ),
         ],
       ),

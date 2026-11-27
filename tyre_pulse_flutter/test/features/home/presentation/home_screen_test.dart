@@ -41,14 +41,30 @@ import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
+import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
 
 import '../../../core/database/database_test_support.dart';
 
-const AccessState _admin = AccessState(role: UserRole.known(RoleId.admin));
+/// Reaches every module on the ORIGINAL Home layout. A super admin whose own
+/// role (Director) has no per-role plan keeps that layout
+/// (`domain/home_role_plan.dart`); a plain Admin now gets the Admin plan, so
+/// the original-layout tests below run as this person instead.
+const AccessState _admin = AccessState(
+  role: UserRole.known(RoleId.director),
+  isSuperAdmin: true,
+);
+
+/// Reaches only the handover queue and has no per-role plan: the original
+/// layout with no Today's-work source at all.
+const AccessState _noWorkSource =
+    AccessState(role: UserRole.known(RoleId.fleetIncharge));
 const AccessState _tyreMan = AccessState(role: UserRole.known(RoleId.tyreMan));
 const AccessState _director =
     AccessState(role: UserRole.known(RoleId.director));
 const AccessState _driver = AccessState(role: UserRole.known(RoleId.driver));
+const AccessState _storeKeeper =
+    AccessState(role: UserRole.known(RoleId.storeKeeper));
 
 /// The clock every timeline "N minutes ago" is measured against.
 final DateTime _now = DateTime(2026, 8, 28, 9, 30);
@@ -94,6 +110,7 @@ Future<void> _pumpHome(
   Future<HomePendingApprovals> Function()? approvals,
   Future<List<HomeRecentAsset>> Function()? recent,
   Future<MyWorkSnapshot> Function()? plan,
+  Future<List<StockItem>> Function()? stock,
   GoRouter? router,
   Widget Function(Widget home)? wrap,
 }) async {
@@ -152,6 +169,11 @@ Future<void> _pumpHome(
               MyWorkSnapshot(items: const <MyWorkItem>[], loadedAt: _now),
             )
           : plan(),
+    ),
+    stockItemsProvider.overrideWith(
+      (Ref ref) => stock == null
+          ? Future<List<StockItem>>.value(const <StockItem>[])
+          : stock(),
     ),
     homeRecentAssetsProvider.overrideWith(
       (Ref ref) => recent == null
@@ -427,13 +449,19 @@ void main() {
     'a role scoped to some modules keeps the header and its permitted '
     'actions, and More is always reachable',
     (WidgetTester tester) async {
+      // A Tyre Man has a per-role plan: the header, ONE big New inspection
+      // tile, and More as a chip.
       await _pumpHome(tester, access: _tyreMan);
 
       expect(tester.takeException(), isNull);
       expect(find.text('Mohammed'), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.newInspection), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('more')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.rolePanel), findsOneWidget);
+      expect(
+        find.byKey(HomeScreenKeys.roleBig('newInspection')),
+        findsOneWidget,
+      );
+      expect(find.byKey(HomeScreenKeys.roleChip('more')), findsOneWidget);
     },
   );
 
@@ -733,7 +761,7 @@ void main() {
     testWidgets(
       'a role with no work source says so instead of "Nothing needs you"',
       (WidgetTester tester) async {
-        await _pumpHome(tester, access: _driver);
+        await _pumpHome(tester, access: _noWorkSource);
         await tester.pumpAndSettle();
 
         expect(find.byKey(HomeScreenKeys.workRow('none')), findsOneWidget);
@@ -1090,6 +1118,86 @@ void main() {
         find.byKey(HomeScreenKeys.summaryTile('approvals')),
         findsNothing,
       );
+    });
+  });
+
+  group('a Store Keeper\'s Home leads with the store', () {
+    final List<StockItem> rows = <StockItem>[
+      StockItem(id: 'a', quantity: 2, minimum: 4, updatedAt: _now),
+      const StockItem(id: 'b', quantity: 9, minimum: 4),
+      const StockItem(id: 'c', quantity: 1, minimum: 1),
+    ];
+
+    testWidgets('store actions and store figures sit on Home, More stays', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(360, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      await _pumpHome(
+        tester,
+        access: _storeKeeper,
+        stock: () async => rows,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(HomeScreenKeys.action('stockCount')), findsOneWidget);
+      expect(
+        find.byKey(HomeScreenKeys.action('receiveGoods')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(HomeScreenKeys.action('storeHistory')),
+        findsOneWidget,
+      );
+      expect(find.byKey(HomeScreenKeys.action('more')), findsOneWidget);
+      // Nothing the Store Keeper cannot open.
+      expect(find.byKey(HomeScreenKeys.action('scanner')), findsNothing);
+      expect(find.byKey(HomeScreenKeys.newInspection), findsNothing);
+
+      Finder valueIn(String id) => find.descendant(
+            of: find.byKey(HomeScreenKeys.summaryTile(id)),
+            matching: find.byType(Text),
+          );
+      expect(find.byKey(HomeScreenKeys.summaryTile('stockItems')), findsOne);
+      expect(
+        valueIn('stockItems')
+            .evaluate()
+            .map((Element e) => (e.widget as Text).data),
+        contains('3'),
+      );
+      // a (2 <= 4) and c (1 <= 1) need reorder.
+      expect(
+        valueIn('stockReorder')
+            .evaluate()
+            .map((Element e) => (e.widget as Text).data),
+        contains('2'),
+      );
+      // Only a was counted today.
+      expect(
+        valueIn('stockNotCounted')
+            .evaluate()
+            .map((Element e) => (e.widget as Text).data),
+        contains('2'),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a field role\'s Home is unchanged (no store tools)', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = const Size(360, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      for (final AccessState access in <AccessState>[_tyreMan, _admin]) {
+        await _pumpHome(tester, access: access, stock: () async => rows);
+        await tester.pumpAndSettle();
+        expect(find.byKey(HomeScreenKeys.action('stockCount')), findsNothing);
+        expect(
+          find.byKey(HomeScreenKeys.summaryTile('stockItems')),
+          findsNothing,
+        );
+      }
     });
   });
 }

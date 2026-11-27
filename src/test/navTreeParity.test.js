@@ -264,6 +264,7 @@ const ROUTES_ADDED_SINCE_REGROUP = [
   '/repair-requests',
   '/store-material-issue',
   '/driver-workspace',
+  '/driver-concerns',
   '/request-access',
   '/daily-ops/workshop',
   '/workforce-daily',

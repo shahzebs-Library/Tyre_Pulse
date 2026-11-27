@@ -26,6 +26,25 @@ void main() {
       );
     });
 
+    test('files job completion photos under the workshop namespace', () {
+      expect(
+        storageObjectPath(
+          bucket: 'tyre-photos',
+          fileName: 'jobdone_abc_after_0.jpg',
+          userId: '12345678-abcd-4321-abcd-123456789abc',
+        ),
+        'modules/workshop/12345678/jobdone_abc_after_0.jpg',
+      );
+      expect(
+        () => storageObjectPath(
+          bucket: 'tyre-photos',
+          fileName: 'jobdone_abc_after_0.jpg',
+          userId: null,
+        ),
+        throwsStateError,
+      );
+    });
+
     test('requires an authenticated owner for accident evidence', () {
       expect(
         () => storageObjectPath(

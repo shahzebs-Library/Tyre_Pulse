@@ -189,6 +189,13 @@ class AppLocalizationsUr extends AppLocalizations {
       'آپ کا اکاؤنٹ منظوری کا منتظر ہے یا مقفل کر دیا گیا ہے۔ آپ کا ایڈمن اسے درست کر سکتا ہے۔';
 
   @override
+  String get accessBlockedCheckAgain => 'دوبارہ چیک کریں';
+
+  @override
+  String get accessBlockedStillWaiting =>
+      'آپ کا اکاؤنٹ ابھی تک فعال نہیں۔ اپنے ایڈمن سے اسے منظور کرنے کو کہیں۔';
+
+  @override
   String get routeNotFoundTitle => 'یہ اسکرین موجود نہیں';
 
   @override
@@ -2175,6 +2182,10 @@ class AppLocalizationsUr extends AppLocalizations {
   String get homeStatUnavailableCaption => 'جانچ نہیں ہو سکی';
 
   @override
+  String get homeRoleCopyCatalog =>
+      'meterTitle=آج کا میٹر درج کریں~meterNotLogged=آج درج نہیں ہوا~meterLogged=%time% درج ہوا~problemTitle=مسئلہ یا خرابی رپورٹ کریں~problemHint=ورکشاپ کو بتائیں کیا خراب ہے~exceptionsTitle=آج کے استثنات~offRoad=سڑک سے باہر~openAccidents=کھلے حادثات~maintenanceOverdue=تاخیر شدہ مرمت~tyresAttention=توجہ طلب ٹائر~handoverTitle=آپ کے دستخط کے منتظر حوالگیاں~reportAccident=حادثہ رپورٹ کریں~approvalsTitle=آپ کی منتظر منظوریاں~approvalsSplit=%a% معائنے • %b% چیک لسٹیں~issueTitle=مسئلہ رپورٹ کریں~issueHint=کچھ خراب یا غیر محفوظ ہے~teamTitle=ٹیم ابھی~working=کام پر~waiting=انتظار میں~free=فارغ~teamNote=فارغ کا مطلب حاضری لگائی اور کام نہیں کر رہا۔ غیر حاضری نہیں گنی جا سکتی: حاضری درج نہیں ہوتی۔~assignTitle=کام سونپیں~assignHint=%count% کھلے جاب کارڈ جن پر کوئی مقرر نہیں~assignGap=جاب کارڈ کی فہرست کھلتی ہے۔ فون سے کام سونپنا ابھی دستیاب نہیں۔~myJobsTitle=میرے کام~myJobsCount=%count% کھلے~myJobsNone=کوئی کھلا کام نہیں~plantTitle=آج کے پلانٹ چیک~sheetsDue=%count% شیٹس واجب~allDone=آج سب مکمل~dailyTitle=ورکشاپ ڈیلی~dueToday=آج واجب~signTitle=دستخط کے لیے منظوریاں~signHint=%count% آپ کے دستخط کے منتظر~tyresDueTitle=تبدیلی کے لیے واجب ٹائر~myVehicle=میری گاڑی~noVehicle=ابھی کوئی میٹر درج نہیں~wash=دھلائی درج کریں~washDays=آخری دھلائی %count% دن پہلے~washToday=آج دھلی~washNever=کوئی دھلائی درج نہیں~dailyChecklist=روزانہ چیک لسٹ~charges=میرے جرمانے اور چارجز~chargesHint=جرمانے، چارجز اور آپ کے دستخط~summary=روزانہ خلاصہ اور رپورٹس~alerts=الرٹس~plan=آج کا منصوبہ~planOpen=آج %count% کھلے~repair=مرمت کی درخواست~meter=میٹر لاگ~inspectionsDue=آج کے واجب معائنے~checklistsToSign=دستخط کے لیے چیک لسٹیں~waitingParts=پرزوں کے انتظار میں~blocked=30 منٹ سے زیادہ رکا ہوا~requestParts=پرزے منگوائیں~recent=حالیہ معائنے~reorder=دوبارہ آرڈر کے لیے اسٹاک~sync=ہم آہنگی باقی~more=مزید~open=کھولیں';
+
+  @override
   String get homeNoQuickActionsMessage =>
       'ابھی آپ کے لیے یہاں کچھ دستیاب نہیں ہے۔ اگر آپ کو کسی فیچر تک رسائی درکار ہو تو اپنے منتظم سے رابطہ کریں۔';
 
@@ -2905,7 +2916,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی~myCounts=میری گنتیاں~transfers=منتقلیاں~needsApproval=گنتی کے فرق کے لیے منظوری درکار ہے۔ شیلف پر موجود مقدار درج کرنے کے لیے گنتی استعمال کریں؛ منظور کنندہ تبدیلی درج کرے گا۔~countNote=آپ کی گنتی جائزے کے لیے درج ہوتی ہے۔ اسٹاک بیلنس صرف تب بدلتا ہے جب منظور کنندہ فرق درج کرے۔~countRecorded=گنتی جائزے کے لیے درج ہو گئی۔~countSavedOnPhone=گنتی اس فون پر محفوظ ہو گئی۔ کنکشن بحال ہونے پر بھیجی جائے گی۔~countNoPlace=اس اسٹاک لائن کا کوئی اسٹور یا ملک نہیں، اس لیے گنتی درج نہیں ہو سکتی۔~countNeedsConnection=اس اسٹور میں پہلی گنتی کے لیے سیشن کھولنے کو کنکشن ضروری ہے۔~countRefused=گنتی قبول نہیں ہوئی:';
+      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی~myCounts=میری گنتیاں~transfers=منتقلیاں~needsApproval=گنتی کے فرق کے لیے منظوری درکار ہے۔ شیلف پر موجود مقدار درج کرنے کے لیے گنتی استعمال کریں؛ منظور کنندہ تبدیلی درج کرے گا۔~countNote=آپ کی گنتی جائزے کے لیے درج ہوتی ہے۔ اسٹاک بیلنس صرف تب بدلتا ہے جب منظور کنندہ فرق درج کرے۔~countRecorded=گنتی جائزے کے لیے درج ہو گئی۔~countSavedOnPhone=گنتی اس فون پر محفوظ ہو گئی۔ کنکشن بحال ہونے پر بھیجی جائے گی۔~countNoPlace=اس اسٹاک لائن کا کوئی اسٹور یا ملک نہیں، اس لیے گنتی درج نہیں ہو سکتی۔~countNeedsConnection=اس اسٹور میں پہلی گنتی کے لیے سیشن کھولنے کو کنکشن ضروری ہے۔~countRefused=گنتی قبول نہیں ہوئی:~matches=مطابق ہے~notMatch=مطابق نہیں~matchesRecorded=درج ہو گیا: شیلف سسٹم سے مطابق ہے۔~matchesSavedOnPhone=اس فون پر محفوظ ہو گیا: شیلف سسٹم سے مطابق ہے۔ کنکشن بحال ہونے پر بھیجا جائے گا۔~genuineQuestion=کیا پرزہ اصلی ہے؟~genuine=اصلی~notGenuine=اصلی نہیں~genuineNote=پرزے کے بارے میں نوٹ (اختیاری)~countedToday=آج گنا گیا~bin=خانہ~code=کوڈ';
 
   @override
   String get calendarCopyCatalog =>
@@ -3024,7 +3035,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get workshopCopyCatalog =>
-      'title=میرے کام~onDuty=ڈیوٹی پر~offDuty=ڈیوٹی سے باہر~checkIn=حاضری لگائیں~checkOut=چھٹی لگائیں~checkInHint=کام درج کرنے سے پہلے اپنی شفٹ کی حاضری لگائیں۔~myJobs=میرے کام~emptyTitle=کوئی کھلا کام نہیں~emptyMessage=اس وقت آپ کو کوئی کھلا کام تفویض نہیں ہے۔~loadError=آپ کے کام ابھی لوڈ نہیں ہو سکے۔~selectJobTitle=کام منتخب کریں~selectJobMsg=پہلے اپنا ایک کام منتخب کریں۔~checkInFirstTitle=پہلے حاضری لگائیں~selectTaskTitle=مرحلہ منتخب کریں~selectTaskMsg=پہلے وہ مرحلہ منتخب کریں جس پر آپ کام کر رہے ہیں۔~tasks=مراحل~confirmTitle=مرحلہ مکمل کریں؟~confirmMsg=یہ مرحلے کو مکمل درج کر کے معائنے کے لیے بھیج دے گا۔~cancel=منسوخ~noteHint=نوٹ شامل کریں (اختیاری)~record=درج کریں~queued=اس ڈیوائس پر محفوظ ہے۔ یہ خود بخود ہم آہنگ ہو جائے گا۔~saveFailed=سرگرمی اس ڈیوائس پر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~todayTitle=آج میری کارکردگی~productive=پیداواری~blocked=رکا ہوا~unassigned=غیر تفویض~breakTime=وقفہ~completed=مکمل مراحل~due=مقررہ~ok=ٹھیک ہے~a_start_job=کام شروع کریں~a_pause_job=کام روکیں~a_resume_job=کام دوبارہ شروع کریں~a_complete_task=مرحلہ مکمل کریں~a_request_parts=پرزے طلب کریں~a_request_assistance=مدد طلب کریں~a_waiting_approval=منظوری کا انتظار~a_waiting_vehicle=گاڑی کا انتظار~a_waiting_tools=اوزار کا انتظار~a_start_break=وقفہ شروع کریں~a_end_break=وقفہ ختم کریں~a_report_problem=مسئلہ رپورٹ کریں~s_working=کام جاری~s_available=دستیاب~s_waiting_parts=پرزوں کا انتظار~s_waiting_approval=منظوری کا انتظار~s_waiting_tools=اوزار کا انتظار~s_waiting_vehicle=گاڑی کا انتظار~s_on_break=وقفے پر~s_training=تربیت~s_awaiting_inspection=معائنے کا انتظار~s_off_duty=ڈیوٹی سے باہر~s_absent=غیر حاضر~photoLabel=تصویر (اختیاری)~takePhoto=کیمرہ~pickPhoto=گیلری~removePhoto=تصویر ہٹائیں~photoLimit=زیادہ سے زیادہ 3 تصاویر~photoNotAttached=درج ہو گیا۔ کنکشن کے بغیر تصویر منسلک نہیں ہو سکی۔';
+      'title=میرے کام~onDuty=ڈیوٹی پر~offDuty=ڈیوٹی سے باہر~checkIn=حاضری لگائیں~checkOut=چھٹی لگائیں~checkInHint=کام درج کرنے سے پہلے اپنی شفٹ کی حاضری لگائیں۔~myJobs=میرے کام~emptyTitle=کوئی کھلا کام نہیں~emptyMessage=اس وقت آپ کو کوئی کھلا کام تفویض نہیں ہے۔~loadError=آپ کے کام ابھی لوڈ نہیں ہو سکے۔~selectJobTitle=کام منتخب کریں~selectJobMsg=پہلے اپنا ایک کام منتخب کریں۔~checkInFirstTitle=پہلے حاضری لگائیں~selectTaskTitle=مرحلہ منتخب کریں~selectTaskMsg=پہلے وہ مرحلہ منتخب کریں جس پر آپ کام کر رہے ہیں۔~tasks=مراحل~confirmTitle=مرحلہ مکمل کریں؟~confirmMsg=یہ مرحلے کو مکمل درج کر کے معائنے کے لیے بھیج دے گا۔~cancel=منسوخ~noteHint=نوٹ شامل کریں (اختیاری)~record=درج کریں~queued=اس ڈیوائس پر محفوظ ہے۔ یہ خود بخود ہم آہنگ ہو جائے گا۔~saveFailed=سرگرمی اس ڈیوائس پر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~todayTitle=آج میری کارکردگی~productive=پیداواری~blocked=رکا ہوا~unassigned=غیر تفویض~breakTime=وقفہ~completed=مکمل مراحل~due=مقررہ~ok=ٹھیک ہے~a_start_job=کام شروع کریں~a_pause_job=کام روکیں~a_resume_job=کام دوبارہ شروع کریں~a_complete_task=مرحلہ مکمل کریں~a_request_parts=پرزے طلب کریں~a_request_assistance=مدد طلب کریں~a_waiting_approval=منظوری کا انتظار~a_waiting_vehicle=گاڑی کا انتظار~a_waiting_tools=اوزار کا انتظار~a_start_break=وقفہ شروع کریں~a_end_break=وقفہ ختم کریں~a_report_problem=مسئلہ رپورٹ کریں~s_working=کام جاری~s_available=دستیاب~s_waiting_parts=پرزوں کا انتظار~s_waiting_approval=منظوری کا انتظار~s_waiting_tools=اوزار کا انتظار~s_waiting_vehicle=گاڑی کا انتظار~s_on_break=وقفے پر~s_training=تربیت~s_awaiting_inspection=معائنے کا انتظار~s_off_duty=ڈیوٹی سے باہر~s_absent=غیر حاضر~photoLabel=تصویر (اختیاری)~takePhoto=کیمرہ~pickPhoto=گیلری~removePhoto=تصویر ہٹائیں~photoLimit=زیادہ سے زیادہ 3 تصاویر~photoNotAttached=درج ہو گیا۔ کنکشن کے بغیر تصویر منسلک نہیں ہو سکی۔~c_whatDone=کیا کام کیا گیا~c_parts=استعمال شدہ پرزے~c_meters=میٹر ریڈنگ~c_km=اوڈومیٹر (کلومیٹر)~c_hours=آور میٹر~c_before=کام سے پہلے کی تصاویر (اختیاری)~c_after=کام کے بعد کی تصاویر~c_signature=آپ کے دستخط~returned=سپروائزر نے واپس کر دیا~waitingApproval=سپروائزر کی منظوری کا انتظار~notAccepted=قبول نہیں ہوا:~c_queued=اس فون پر محفوظ ہو گیا۔ سگنل ملتے ہی سپروائزر کو بھیج دیا جائے گا۔~c_stateQueued=اس فون پر قطار میں~c_stateFailed=ناکام، نہیں بھیجا گیا~c_stateSynced=بھیج دیا گیا، سپروائزر کی منظوری کا انتظار~jc_title=جانچنے کے کام~jc_tabToCheck=جانچنا ہے~jc_tabReturned=واپس کیے گئے~jc_emptyToCheck=کوئی مکمل کام آپ کا انتظار نہیں کر رہا۔~jc_emptyReturned=کوئی واپس کیا گیا کام نہیں۔~jc_loadError=کام لوڈ نہیں ہو سکے۔~jc_extra=اضافی ثبوت~jc_waiting=آپ کا انتظار~jc_by=مکمل کرنے والا~jc_returnReason=واپسی کی وجہ:~jc_noParts=کوئی پرزہ درج نہیں~jc_noMeters=کوئی میٹر ریڈنگ نہیں~jc_photoUnavailable=تصویر دستیاب نہیں~jc_pass=منظور کریں~jc_return=کام واپس کریں~jc_returnTitle=کیوں واپس کیا جا رہا ہے؟~jc_returnHint=بتائیں کہ ابھی کیا ٹھیک کرنا باقی ہے~jc_returnSend=کام واپس کریں~jc_passed=کام منظور اور بند ہو گیا۔~jc_returnedOk=کام واپس کر دیا گیا۔ ڈیٹا ڈیسک اسے دوبارہ تفویض کرے گا۔~jc_decideError=محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~jc_signature=ٹیکنیشن کے دستخط';
 
   @override
   String get homeTodaysWork => 'آج کا کام';
@@ -9408,4 +9419,231 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'کٹوتیاں شروع ہو چکی ہیں، اس لیے اب یہاں اس واجب الادا کے خلاف اپیل نہیں ہو سکتی۔ مینیجر یا فنانس باقی رقم معاف کر سکتے ہیں۔';
+
+  @override
+  String get profileSyncQueueTitle => 'سنک قطار';
+
+  @override
+  String get syncQueueStatPending => 'زیرِ التوا';
+
+  @override
+  String get syncQueueStatAttention => 'توجہ درکار';
+
+  @override
+  String get syncQueueStatSent => 'بھیج دیا گیا';
+
+  @override
+  String get syncQueueStatSentCaption => 'ابھی اس ڈیوائس پر';
+
+  @override
+  String syncQueueLastAttempt(String time) {
+    return 'آخری سنک کوشش: $time';
+  }
+
+  @override
+  String get syncQueueNoAttempt =>
+      'اس ڈیوائس پر ابھی تک کوئی سنک کوشش ریکارڈ نہیں ہوئی';
+
+  @override
+  String get syncQueueRunning => 'سنک ابھی چل رہا ہے';
+
+  @override
+  String get syncQueueSyncNow => 'ابھی سنک کریں';
+
+  @override
+  String get syncQueueOfflineReason =>
+      'آپ آف لائن ہیں۔ آپ کا کام اس فون پر محفوظ ہے اور آن لائن ہوتے ہی بھیج دیا جائے گا۔';
+
+  @override
+  String get syncQueueNothingToSend => 'بھیجنے کے لیے کچھ زیرِ التوا نہیں ہے۔';
+
+  @override
+  String get syncQueueRequested =>
+      'سنک کی درخواست کر دی گئی۔ اشیاء بھیجے جانے کے ساتھ یہ فہرست اپ ڈیٹ ہوتی رہے گی۔';
+
+  @override
+  String get syncQueueRequestFailed =>
+      'سنک شروع نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueEmptyTitle => 'سب کچھ سنک ہو چکا ہے';
+
+  @override
+  String get syncQueueEmptyMessage =>
+      'اس ڈیوائس سے کچھ بھی بھیجے جانے کا منتظر نہیں ہے۔';
+
+  @override
+  String get syncQueueLoadFailedTitle => 'سنک قطار پڑھی نہیں جا سکی';
+
+  @override
+  String get syncQueueLoadFailedMessage =>
+      'آپ کا قطار میں موجود کام ابھی اس فون پر ہے۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueSectionItems => 'قطار میں موجود اشیاء';
+
+  @override
+  String syncTypeInspection(String asset) {
+    return 'معائنہ $asset';
+  }
+
+  @override
+  String syncQueueItemQueued(String time) {
+    return 'قطار میں شامل $time';
+  }
+
+  @override
+  String syncQueueAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count کوششیں',
+      one: '1 کوشش',
+      zero: 'ابھی کوشش نہیں ہوئی',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncQueueNextAttempt(String time) {
+    return 'اگلی کوشش $time';
+  }
+
+  @override
+  String get syncQueueStateWaiting => 'بھیجے جانے کا منتظر';
+
+  @override
+  String get syncQueueStateSending => 'ابھی بھیجا جا رہا ہے';
+
+  @override
+  String get syncQueueStateRetrying => 'دوبارہ کوشش کی جائے گی';
+
+  @override
+  String get syncQueueStateOnHold => 'روکا گیا';
+
+  @override
+  String get syncQueueStateNeedsAttention => 'توجہ درکار';
+
+  @override
+  String get syncQueueStateSent => 'بھیج دیا گیا';
+
+  @override
+  String get syncQueueRetry => 'دوبارہ کوشش';
+
+  @override
+  String get syncQueueRetried => 'دوبارہ قطار میں ڈال دیا گیا۔';
+
+  @override
+  String get syncQueueRetryNotNeeded =>
+      'یہ چیز اب دوبارہ کوشش کی منتظر نہیں ہے۔';
+
+  @override
+  String get syncQueueRetryFailed =>
+      'اس چیز کی دوبارہ کوشش نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueErrorFallback => 'یہ چیز بھیجی نہیں جا سکی۔';
+
+  @override
+  String get syncTypeTyreChange => 'ٹائر کی تبدیلی';
+
+  @override
+  String get syncTypeWorkOrder => 'ورک آرڈر';
+
+  @override
+  String get syncTypeRca => 'بنیادی وجہ کا تجزیہ';
+
+  @override
+  String get syncTypeReportIssue => 'رپورٹ کردہ مسئلہ';
+
+  @override
+  String get syncTypeStockAdjust => 'اسٹاک گنتی';
+
+  @override
+  String get syncTypeWorkOrderStatus => 'ورک آرڈر کی حالت';
+
+  @override
+  String get syncTypeCorrectiveActionStatus => 'اصلاحی اقدام کی حالت';
+
+  @override
+  String get syncTypeChecklistSubmission => 'چیک لسٹ';
+
+  @override
+  String get syncTypeChecklistAssignmentStatus => 'چیک لسٹ تفویض';
+
+  @override
+  String get syncTypeOdometerLog => 'اوڈومیٹر ریڈنگ';
+
+  @override
+  String get syncTypeEngineHoursLog => 'انجن گھنٹوں کی ریڈنگ';
+
+  @override
+  String get syncTypeReportAccident => 'حادثے کی رپورٹ';
+
+  @override
+  String get syncTypeWashRecord => 'گاڑی کی دھلائی';
+
+  @override
+  String get syncTypeWorkshopEvent => 'ورکشاپ سرگرمی';
+
+  @override
+  String get syncTypeInventoryCountLine => 'انوینٹری گنتی کی لائن';
+
+  @override
+  String get syncTypeUnknown => 'نامعلوم اندراج';
+
+  @override
+  String get profileDraftsTitle => 'مسودے';
+
+  @override
+  String get profileDraftsEmptyTitle => 'کوئی مسودہ نہیں';
+
+  @override
+  String get profileDraftsEmptyMessage =>
+      'اس فون پر شروع کی گئی نامکمل چیک لسٹیں اور معائنے یہاں نظر آتے ہیں۔';
+
+  @override
+  String get profileDraftsLoadFailedTitle => 'آپ کے مسودے پڑھے نہیں جا سکے';
+
+  @override
+  String get profileDraftsLoadFailedMessage =>
+      'آپ کے مسودے ابھی اس فون پر ہیں۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get profileDraftKindChecklist => 'چیک لسٹ';
+
+  @override
+  String get profileDraftKindInspection => 'معائنہ';
+
+  @override
+  String profileDraftEdited(String time) {
+    return 'آخری ترمیم $time';
+  }
+
+  @override
+  String get profileDraftNoAsset => 'ابھی کوئی اثاثہ منتخب نہیں ہوا';
+
+  @override
+  String get profileDraftResume => 'دوبارہ شروع کریں';
+
+  @override
+  String get profileDraftDiscard => 'ختم کریں';
+
+  @override
+  String get profileDraftDiscardTitle => 'کیا یہ مسودہ ختم کرنا ہے؟';
+
+  @override
+  String get profileDraftDiscardMessage =>
+      'اس مسودے میں درج سب کچھ، بشمول تصاویر اور دستخط، اس فون سے ہٹا دیا جائے گا۔ اسے واپس نہیں کیا جا سکتا۔';
+
+  @override
+  String get profileDraftDiscarded => 'مسودہ ختم کر دیا گیا۔';
+
+  @override
+  String get profileDraftDiscardFailed =>
+      'مسودہ ختم نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueInspectionRetried =>
+      'آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔';
 }

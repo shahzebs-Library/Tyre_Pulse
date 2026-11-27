@@ -48,7 +48,11 @@ import 'package:tyre_pulse/core/database/dao/queue_dao.dart'
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
+import 'package:tyre_pulse/core/sync/module_photo_command_pusher.dart'
+    show modulePhotoFileName;
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
+import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart'
+    show moduleMediaBucket, washMediaPrefix;
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:uuid/uuid.dart';
@@ -272,8 +276,17 @@ final class SupabaseWashRepository
         for (int i = 0; i < photos.length; i++)
           QueuedMediaAttachment(
             localPath: photos[i],
-            fileName: _basename(photos[i]),
+            // Lands under tyre-photos/modules/wash/<user>/ - the same place
+            // the web app uploads wash photos - and the payload's local path
+            // is swapped for its tp-storage reference at push time
+            // (`ModulePhotoCommandPusher`).
+            fileName: modulePhotoFileName(
+              prefix: washMediaPrefix,
+              unique: _uuid.v4(),
+              localName: _basename(photos[i]),
+            ),
             orderIndex: i,
+            bucket: moduleMediaBucket,
           ),
       ],
       country: input.country ?? workspace.activeCountry,

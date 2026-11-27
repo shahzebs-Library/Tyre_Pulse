@@ -251,6 +251,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/driver-management',      label: 'Driver Intelligence', icon: Users, adminOnly: A },
       { to: '/driver-workspace',       label: 'Driver workspace', icon: Users, roles: ['Driver', 'Manager', 'Director'] },
+      { to: '/driver-concerns',        label: 'Driver Concerns',  icon: ShieldAlert, roles: ['Fleet Supervisor', 'Fleet Foreman', 'Fleet Incharge', 'HR Officer', 'Manager', 'Director'] },
       { to: '/driver-safety',          label: 'Driver Safety',       icon: ShieldAlert, adminOnly: A },
       { to: '/driver-training',        label: 'Driver Training',     icon: GraduationCap, adminOnly: A },
       { to: '/driver-coaching',        label: 'Driver Coaching',     icon: Award, adminOnly: A },

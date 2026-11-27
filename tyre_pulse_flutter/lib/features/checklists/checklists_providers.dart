@@ -103,6 +103,9 @@ final Provider<ChecklistHistoryRepository> checklistHistoryRepositoryProvider =
     loadCompleted: (String submittedBy) => ref
         .read(checklistRemoteRepositoryProvider)
         .myHistory(submittedBy: submittedBy),
+    loadCompletedCount: (String submittedBy) => ref
+        .read(checklistRemoteRepositoryProvider)
+        .myHistoryCount(submittedBy: submittedBy),
   );
 });
 

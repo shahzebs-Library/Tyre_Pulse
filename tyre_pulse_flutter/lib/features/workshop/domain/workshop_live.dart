@@ -400,3 +400,65 @@ bool isOpenWorkshopJob(String? status) {
       (status ?? '').trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
   return s.isEmpty || !_closedStatuses.contains(s);
 }
+
+/// Why a job is paused - the reason sheet behind "Pause". Each value is
+/// written to `reason_code` on a `pause_job` event, which is exactly how
+/// [workshopStatusFromEvents] and [workshopProductivityToday] already read a
+/// pause: the five named reasons count as BLOCKED (or break) time, `other`
+/// counts as available time rather than inventing a blocked reason.
+const List<String> kWorkshopPauseReasons = <String>[
+  'parts',
+  'approval',
+  'vehicle',
+  'tools',
+  'break',
+  'other',
+];
+
+/// The actions that make sense for a job in one live status: a short list
+/// of big primary buttons and everything else behind "More".
+final class WorkshopActionPlan {
+  const WorkshopActionPlan({required this.primary, required this.more});
+
+  final List<WorkshopTechAction> primary;
+  final List<WorkshopTechAction> more;
+}
+
+WorkshopTechAction _actionByKey(String key) =>
+    kWorkshopTechActions.firstWhere((WorkshopTechAction a) => a.key == key);
+
+/// Only the moves that are valid from [status]:
+///
+/// - working -> Pause, Complete (Finish);
+/// - waiting for anything / on break -> Resume;
+/// - anything else (available, awaiting inspection, off duty...) -> Start.
+///
+/// More always carries Request Parts, Request Assistance and Report Problem
+/// (annotations, valid in any state), plus End Break while on a break. The
+/// separate "Waiting for ..." and "Start Break" buttons are not offered: the
+/// Pause reason sheet records the same `pause_job` reasons with one tap
+/// fewer and no chance of recording "waiting" while not working at all.
+WorkshopActionPlan workshopActionsFor(WorkshopStatus status) {
+  final List<String> primary = switch (status) {
+    WorkshopStatus.working => const <String>['pause_job', 'complete_task'],
+    WorkshopStatus.waitingParts ||
+    WorkshopStatus.waitingApproval ||
+    WorkshopStatus.waitingTools ||
+    WorkshopStatus.waitingVehicle ||
+    WorkshopStatus.onBreak =>
+      const <String>['resume_job'],
+    _ => const <String>['start_job'],
+  };
+  final List<String> more = <String>[
+    'request_parts',
+    'request_assistance',
+    'report_problem',
+    if (status == WorkshopStatus.onBreak) 'end_break',
+  ];
+  return WorkshopActionPlan(
+    primary: <WorkshopTechAction>[
+      for (final String k in primary) _actionByKey(k),
+    ],
+    more: <WorkshopTechAction>[for (final String k in more) _actionByKey(k)],
+  );
+}

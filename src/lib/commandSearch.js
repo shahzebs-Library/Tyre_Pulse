@@ -110,6 +110,7 @@ export const NAV_COMMANDS = [
   { id: 'alerts',         label: 'Alerts',               path: '/alerts',       icon: 'Bell',       adminOnly: true },
   { id: 'driver-management', label: 'Driver Intelligence', path: '/driver-management', icon: 'Users', adminOnly: true, moduleKey: 'fleet_master' },
   { id: 'driver-workspace', label: 'Driver Workspace', path: '/driver-workspace', icon: 'Users' },
+  { id: 'driver-concerns', label: 'Driver Concerns', path: '/driver-concerns', icon: 'ShieldAlert', keywords: ['grievance', 'complaint', 'driver concern', 'hr'] },
   { id: 'retread',        label: 'Retread Management',   path: '/retread',      icon: 'RefreshCw',  adminOnly: true },
   // Accident & Insurance
   { id: 'accidents',      label: 'Accidents',            path: '/accidents',    icon: 'AlertTriangle' },

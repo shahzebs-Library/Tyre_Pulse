@@ -12,7 +12,10 @@
  *
  * items: [label, value, accent, focusKey][]
  */
+import { useLanguage } from '../../contexts/LanguageContext'
+
 export default function OverviewSlide({ title, items, footer = null, activeFocus = 'all', onFocus = null, caption = null }) {
+  const { t } = useLanguage()
   return (
     <section className="card flex-1 min-w-[260px]" aria-label={title}>
       <h2 className={`text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] ${caption ? 'mb-1' : 'mb-3'}`}>{title}</h2>
@@ -26,12 +29,12 @@ export default function OverviewSlide({ title, items, footer = null, activeFocus
           const body = (
             <>
               <div className="text-2xl font-bold tabular-nums" style={{ color: tone }}>
-                {value == null ? 'N/A' : value}
+                {value == null ? t('inspections.overviewSlide.na') : value}
               </div>
               <div className="text-xs text-[var(--text-secondary)]">
                 {label}
                 {/* Colour is never the only signal: an alerting tile says so in words for screen readers. */}
-                {alert && <span className="sr-only"> (needs attention)</span>}
+                {alert && <span className="sr-only"> {t('inspections.overviewSlide.needsAttention')}</span>}
               </div>
             </>
           )
@@ -44,7 +47,7 @@ export default function OverviewSlide({ title, items, footer = null, activeFocus
               type="button"
               onClick={() => onFocus(on ? 'all' : focusKey)}
               aria-pressed={on}
-              title={on ? 'Show all inspections again' : `Show only the inspections behind ${label}`}
+              title={on ? t('inspections.overviewSlide.showAll') : t('inspections.overviewSlide.showOnly', { label })}
               className={`text-left min-h-[44px] rounded-lg -mx-1.5 -my-1 px-1.5 py-1 transition-all ${on ? 'ring-2' : 'hover:bg-[var(--surface-2)]'}`}
               style={on ? { boxShadow: `0 0 0 2px ${tone}`, background: 'var(--surface-2)' } : undefined}
             >

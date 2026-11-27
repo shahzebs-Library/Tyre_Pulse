@@ -190,6 +190,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your account is waiting for approval or has been locked. Your administrator can put this right.';
 
   @override
+  String get accessBlockedCheckAgain => 'Check again';
+
+  @override
+  String get accessBlockedStillWaiting =>
+      'Your account is still not active. Ask your administrator to approve it.';
+
+  @override
   String get routeNotFoundTitle => 'That screen does not exist';
 
   @override
@@ -2163,6 +2170,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeStatUnavailableCaption => 'Could not check';
 
   @override
+  String get homeRoleCopyCatalog =>
+      'meterTitle=Log today\'s meter~meterNotLogged=Not logged today~meterLogged=Logged %time%~problemTitle=Report a problem or breakdown~problemHint=Tell the workshop what is wrong~exceptionsTitle=Today\'s exceptions~offRoad=Off road~openAccidents=Open accidents~maintenanceOverdue=Maintenance overdue~tyresAttention=Tyres need attention~handoverTitle=Handovers awaiting your sign-off~reportAccident=Report an accident~approvalsTitle=Approvals waiting on you~approvalsSplit=%a% inspections • %b% checklists~issueTitle=Report an issue~issueHint=Something broken or unsafe~teamTitle=Team now~working=Working~waiting=Waiting~free=Free~teamNote=Free means checked in and not working. Absent cannot be counted: no attendance is recorded.~assignTitle=Assign jobs~assignHint=%count% open job cards with nobody assigned~assignGap=Opens the job card list. Assigning from the phone is not built yet.~myJobsTitle=My jobs~myJobsCount=%count% open~myJobsNone=No open jobs~plantTitle=Today\'s plant checks~sheetsDue=%count% sheets due~allDone=All done today~dailyTitle=Workshop Daily~dueToday=Due today~signTitle=Approvals to sign~signHint=%count% awaiting your signature~tyresDueTitle=Tyres due for replacement~myVehicle=My vehicle~noVehicle=No meter logged yet~wash=Record a wash~washDays=Last washed %count% days ago~washToday=Washed today~washNever=No wash recorded~dailyChecklist=Daily checklist~charges=My fines & charges~chargesHint=Fines, charges and your own sign-offs~summary=Daily summary & reports~alerts=Alerts~plan=Today\'s plan~planOpen=%count% open today~repair=Repair request~meter=Meter log~inspectionsDue=Inspections due today~checklistsToSign=Checklists to sign~waitingParts=Waiting for parts~blocked=Blocked over 30 minutes~requestParts=Request parts~recent=Recent inspections~reorder=Stock to reorder~sync=Pending sync~more=More~open=Open';
+
+  @override
   String get homeNoQuickActionsMessage =>
       'Nothing is available to you here yet. Contact your administrator if you need access to a feature.';
 
@@ -2888,7 +2899,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease~myCounts=My counts~transfers=Transfers~needsApproval=A count difference needs approval. Use Count to record what is on the shelf; an approver posts the change.~countNote=Your count is recorded for review. The stock balance changes only when an approver posts the difference.~countRecorded=Count recorded for review.~countSavedOnPhone=Count saved on this phone. It is sent when the connection is back.~countNoPlace=This stock line has no store or country, so the count cannot be recorded.~countNeedsConnection=The first count in this store needs a connection to open a count session.~countRefused=The count was not accepted:';
+      'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease~myCounts=My counts~transfers=Transfers~needsApproval=A count difference needs approval. Use Count to record what is on the shelf; an approver posts the change.~countNote=Your count is recorded for review. The stock balance changes only when an approver posts the difference.~countRecorded=Count recorded for review.~countSavedOnPhone=Count saved on this phone. It is sent when the connection is back.~countNoPlace=This stock line has no store or country, so the count cannot be recorded.~countNeedsConnection=The first count in this store needs a connection to open a count session.~countRefused=The count was not accepted:~matches=Matches~notMatch=Doesn\'t match~matchesRecorded=Recorded: the shelf matches the system.~matchesSavedOnPhone=Saved on this phone: the shelf matches the system. It is sent when the connection is back.~genuineQuestion=Is the part genuine?~genuine=Genuine~notGenuine=Not genuine~genuineNote=Note on the part (optional)~countedToday=Counted today~bin=Bin~code=Code';
 
   @override
   String get calendarCopyCatalog =>
@@ -3007,7 +3018,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get workshopCopyCatalog =>
-      'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.';
+      'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.~c_whatDone=What was done~c_parts=Parts used~c_meters=Meter readings~c_km=Odometer (km)~c_hours=Hour meter~c_before=Before photos (optional)~c_after=After photos~c_signature=Your signature~returned=Returned by supervisor~waitingApproval=Waiting for supervisor approval~notAccepted=Not accepted:~c_queued=Saved on this phone. It is sent to the supervisor as soon as there is signal.~c_stateQueued=Queued on this phone~c_stateFailed=Failed, not sent~c_stateSynced=Sent, waiting for supervisor approval~jc_title=Jobs to check~jc_tabToCheck=To check~jc_tabReturned=Returned~jc_emptyToCheck=No finished job is waiting for you.~jc_emptyReturned=No returned job.~jc_loadError=The jobs could not be loaded.~jc_extra=Extra evidence~jc_waiting=Waiting for you~jc_by=Finished by~jc_returnReason=Returned because:~jc_noParts=No parts recorded~jc_noMeters=No meter reading~jc_photoUnavailable=Photo not available~jc_pass=Pass and close~jc_return=Return the job~jc_returnTitle=Why is it returned?~jc_returnHint=Tell them what still needs fixing~jc_returnSend=Return the job~jc_passed=Job passed and closed.~jc_returnedOk=Job returned. The data desk will reassign it.~jc_decideError=This could not be saved. Try again.~jc_signature=Technician\'s signature';
 
   @override
   String get homeTodaysWork => 'Today\'s work';
@@ -9389,4 +9400,229 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.';
+
+  @override
+  String get profileSyncQueueTitle => 'Sync queue';
+
+  @override
+  String get syncQueueStatPending => 'Pending';
+
+  @override
+  String get syncQueueStatAttention => 'Needs attention';
+
+  @override
+  String get syncQueueStatSent => 'Sent';
+
+  @override
+  String get syncQueueStatSentCaption => 'Still on this device';
+
+  @override
+  String syncQueueLastAttempt(String time) {
+    return 'Last sync attempt: $time';
+  }
+
+  @override
+  String get syncQueueNoAttempt =>
+      'No sync attempt recorded on this device yet';
+
+  @override
+  String get syncQueueRunning => 'A sync is running now';
+
+  @override
+  String get syncQueueSyncNow => 'Sync now';
+
+  @override
+  String get syncQueueOfflineReason =>
+      'You are offline. Your work is safe on this phone and will be sent when you are back online.';
+
+  @override
+  String get syncQueueNothingToSend => 'Nothing is waiting to be sent.';
+
+  @override
+  String get syncQueueRequested =>
+      'Sync requested. This list updates as items are sent.';
+
+  @override
+  String get syncQueueRequestFailed => 'Could not start a sync. Try again.';
+
+  @override
+  String get syncQueueEmptyTitle => 'Everything is synced';
+
+  @override
+  String get syncQueueEmptyMessage =>
+      'Nothing from this device is waiting to be sent.';
+
+  @override
+  String get syncQueueLoadFailedTitle => 'Could not read the sync queue';
+
+  @override
+  String get syncQueueLoadFailedMessage =>
+      'Your queued work is still on this phone. Try again.';
+
+  @override
+  String get syncQueueSectionItems => 'Queued items';
+
+  @override
+  String syncTypeInspection(String asset) {
+    return 'Inspection $asset';
+  }
+
+  @override
+  String syncQueueItemQueued(String time) {
+    return 'Queued $time';
+  }
+
+  @override
+  String syncQueueAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count attempts',
+      one: '1 attempt',
+      zero: 'Not tried yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncQueueNextAttempt(String time) {
+    return 'Next try $time';
+  }
+
+  @override
+  String get syncQueueStateWaiting => 'Waiting to send';
+
+  @override
+  String get syncQueueStateSending => 'Sending now';
+
+  @override
+  String get syncQueueStateRetrying => 'Will try again';
+
+  @override
+  String get syncQueueStateOnHold => 'On hold';
+
+  @override
+  String get syncQueueStateNeedsAttention => 'Needs attention';
+
+  @override
+  String get syncQueueStateSent => 'Sent';
+
+  @override
+  String get syncQueueRetry => 'Retry';
+
+  @override
+  String get syncQueueRetried => 'Put back in the queue.';
+
+  @override
+  String get syncQueueRetryNotNeeded =>
+      'This item is no longer waiting for a retry.';
+
+  @override
+  String get syncQueueRetryFailed => 'Could not retry this item. Try again.';
+
+  @override
+  String get syncQueueErrorFallback => 'This item could not be sent.';
+
+  @override
+  String get syncTypeTyreChange => 'Tyre change';
+
+  @override
+  String get syncTypeWorkOrder => 'Work order';
+
+  @override
+  String get syncTypeRca => 'Root cause analysis';
+
+  @override
+  String get syncTypeReportIssue => 'Reported issue';
+
+  @override
+  String get syncTypeStockAdjust => 'Stock count';
+
+  @override
+  String get syncTypeWorkOrderStatus => 'Work order status';
+
+  @override
+  String get syncTypeCorrectiveActionStatus => 'Corrective action status';
+
+  @override
+  String get syncTypeChecklistSubmission => 'Checklist';
+
+  @override
+  String get syncTypeChecklistAssignmentStatus => 'Checklist assignment';
+
+  @override
+  String get syncTypeOdometerLog => 'Odometer reading';
+
+  @override
+  String get syncTypeEngineHoursLog => 'Engine hours reading';
+
+  @override
+  String get syncTypeReportAccident => 'Accident report';
+
+  @override
+  String get syncTypeWashRecord => 'Vehicle wash';
+
+  @override
+  String get syncTypeWorkshopEvent => 'Workshop activity';
+
+  @override
+  String get syncTypeInventoryCountLine => 'Inventory count line';
+
+  @override
+  String get syncTypeUnknown => 'Unrecognised entry';
+
+  @override
+  String get profileDraftsTitle => 'Drafts';
+
+  @override
+  String get profileDraftsEmptyTitle => 'No drafts';
+
+  @override
+  String get profileDraftsEmptyMessage =>
+      'Unfinished checklists and inspections you start on this phone appear here.';
+
+  @override
+  String get profileDraftsLoadFailedTitle => 'Could not read your drafts';
+
+  @override
+  String get profileDraftsLoadFailedMessage =>
+      'Your drafts are still on this phone. Try again.';
+
+  @override
+  String get profileDraftKindChecklist => 'Checklist';
+
+  @override
+  String get profileDraftKindInspection => 'Inspection';
+
+  @override
+  String profileDraftEdited(String time) {
+    return 'Last edited $time';
+  }
+
+  @override
+  String get profileDraftNoAsset => 'No asset picked yet';
+
+  @override
+  String get profileDraftResume => 'Resume';
+
+  @override
+  String get profileDraftDiscard => 'Discard';
+
+  @override
+  String get profileDraftDiscardTitle => 'Discard this draft?';
+
+  @override
+  String get profileDraftDiscardMessage =>
+      'Everything recorded in this draft, including its photos and signatures, is removed from this phone. This cannot be undone.';
+
+  @override
+  String get profileDraftDiscarded => 'Draft discarded.';
+
+  @override
+  String get profileDraftDiscardFailed =>
+      'Could not discard the draft. Try again.';
+
+  @override
+  String get syncQueueInspectionRetried =>
+      'Tried to send your inspections again. The status below is up to date.';
 }

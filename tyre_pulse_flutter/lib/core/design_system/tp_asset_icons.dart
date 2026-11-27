@@ -314,7 +314,13 @@ enum TpGemSpec {
   more(TpAssetIconKind.more, TpGemTone.slate),
   pump(TpAssetIconKind.pump, TpGemTone.amber),
   pressure(TpAssetIconKind.gauge, TpGemTone.violet),
-  tyre(TpAssetIconKind.tyre, TpGemTone.tyre);
+  tyre(TpAssetIconKind.tyre, TpGemTone.tyre),
+
+  /// Store work on Home for a person whose job is the store: count the
+  /// shelf, receive goods in, look back at the movements.
+  stockCount(TpAssetIconKind.inspection, TpGemTone.green),
+  receiveGoods(TpAssetIconKind.scan, TpGemTone.teal),
+  storeHistory(TpAssetIconKind.sync, TpGemTone.blue);
 
   const TpGemSpec(this.glyph, this.tone);
 

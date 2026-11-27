@@ -233,6 +233,26 @@ final class AuthController extends Notifier<AuthState> {
     await _fetchAndApplyProfile(userId, myGeneration, hardFailOnError: true);
   }
 
+  /// Re-reads the profile on demand, unthrottled, without ever turning a
+  /// failed read into [ProfileStatus.failed].
+  ///
+  /// For the "Your account is not active" gate: a self-registered person
+  /// waits there until an administrator approves them, and the only other
+  /// re-read is the throttled foreground revalidation, so an approved person
+  /// stayed stuck until the app restarted. A lost signal keeps the gate as it
+  /// was (the person sees the same screen and can try again); it never
+  /// replaces it with a "profile unavailable" error.
+  Future<void> recheckProfile() async {
+    if (state.sessionPhase != AuthSessionPhase.authenticated) {
+      return;
+    }
+    final String? userId = state.userId;
+    if (userId == null || state.mfaStatus == MfaStatus.required) {
+      return;
+    }
+    await _fetchAndApplyProfile(userId, _generation, hardFailOnError: false);
+  }
+
   /// Ends the session. Works from any state, including [AuthSessionPhase.timedOut]
   /// and every [TpShellGate] - see the library comment for exactly what this
   /// does and does not touch.

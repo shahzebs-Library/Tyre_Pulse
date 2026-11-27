@@ -53,6 +53,56 @@ const List<String> kChecklistTradeRoles = <String>[
   'Maintenance Supervisor',
 ];
 
+/// Workshop trades whose work is PLANT (ice plants, chillers, batching
+/// plants), by `profiles.role` title. Home shows these people "Today's plant
+/// checks" first. Every other trade in [kVehicleTradeRoles] works on
+/// vehicles and sees "My jobs" first.
+///
+/// OWNER HAS NOT CONFIRMED THIS SPLIT YET (2026-11-27). It lives here, as one
+/// list next to [kChecklistTradeRoles], so moving a title between the two
+/// groups is a one-line change. Compared with [normaliseRoleKey].
+const List<String> kPlantTradeRoles = <String>[
+  'Ice Plant Technician',
+  'Helper Ice Plant',
+  'Senior Plant Technician',
+  'Senior Plant & Chiller Technician',
+  'Plant Mechanic',
+  'Assistant Plant Mechanic',
+  'Plant Electrician',
+  'Helper Plant',
+];
+
+/// Workshop trades that work on VEHICLES. See [kPlantTradeRoles].
+const List<String> kVehicleTradeRoles = <String>[
+  'Diesel Mechanic',
+  'Hydraulic Mechanic',
+  'Auto Electrician',
+  'Welder',
+  'Welder Cum Fabricator',
+  'Painter',
+  'Denter',
+  'Concrete Breaker',
+  'Helper Workshop',
+  'Helper PMV',
+  'Senior Technician',
+  'Mechanic',
+  'Electrician',
+];
+
+/// True when [role] is one of [kPlantTradeRoles].
+bool isPlantTradeRole(Object? role) {
+  final String key = normaliseRoleKey(role);
+  return key.isNotEmpty &&
+      kPlantTradeRoles.any((String r) => normaliseRoleKey(r) == key);
+}
+
+/// True when [role] is one of [kVehicleTradeRoles].
+bool isVehicleTradeRole(Object? role) {
+  final String key = normaliseRoleKey(role);
+  return key.isNotEmpty &&
+      kVehicleTradeRoles.any((String r) => normaliseRoleKey(r) == key);
+}
+
 /// Roles that see every checklist regardless of targeting: they run and
 /// review the programme rather than being assigned by it.
 const List<String> kChecklistOversightRoles = <String>[

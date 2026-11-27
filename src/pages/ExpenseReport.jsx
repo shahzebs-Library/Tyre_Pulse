@@ -76,23 +76,24 @@ ChartJS.register(
 )
 
 const LS_KEY = 'expenseReport.sections.v1'
+// Labels live in the `expense.section.<key>` locale entries.
 const SECTIONS = [
-  ['kpis', 'KPIs', Wallet],
-  ['compare', 'vs Last Period', ArrowRight],
-  ['cpk', 'Cost per vehicle km', Gauge],
-  ['why', 'Why It Changed', Sparkles],
-  ['movers', 'What Moved', TrendingUp],
-  ['categories', 'Categories', PieChart],
-  ['sites', 'Stores', Building2],
-  ['bysite', 'By Site', MapPin],
-  ['assets', 'Assets', Truck],
-  ['items', 'Top Items', Package],
-  ['trend', 'Trend', TrendingUp],
-  ['forecast', 'Tyre Forecast', Sparkles],
-  ['builder', 'Chart Builder', BarChart3],
-  ['fleetcpk', 'Fleet CPK', Gauge],
-  ['evidence', 'Certainty', ShieldCheck],
-  ['status', 'Cost Status', ShieldCheck],
+  ['kpis', Wallet],
+  ['compare', ArrowRight],
+  ['cpk', Gauge],
+  ['why', Sparkles],
+  ['movers', TrendingUp],
+  ['categories', PieChart],
+  ['sites', Building2],
+  ['bysite', MapPin],
+  ['assets', Truck],
+  ['items', Package],
+  ['trend', TrendingUp],
+  ['forecast', Sparkles],
+  ['builder', BarChart3],
+  ['fleetcpk', Gauge],
+  ['evidence', ShieldCheck],
+  ['status', ShieldCheck],
 ]
 const SECTION_DEFAULTS = {
   kpis: true, compare: true, cpk: true, why: true, movers: true, categories: true, sites: true,
@@ -184,11 +185,7 @@ const nullLastSort = (rowA, rowB, id) => {
   return compareValues(a, b)
 }
 
-const MAPPING_FILTERS = [
-  ['all', 'All sites'],
-  ['mapped', 'Mapped'],
-  ['unmapped', 'Unmapped'],
-]
+const MAPPING_FILTERS = ['all', 'mapped', 'unmapped']
 
 /** Small summary tile used above the site register. */
 function MiniStat({ label, value, sub }) {
@@ -203,6 +200,8 @@ function MiniStat({ label, value, sub }) {
 
 /** One country's (or the single active scope's) per-site expense register. */
 function SiteTable({ group, canMap, onSave }) {
+  const { t } = useLanguage()
+  const pb = (k, v) => t(`expense.bySite.${k}`, v)
   const money = useMemo(() => moneyIn(group.currency), [group.currency])
   const [mapping, setMapping] = useState('all')
   const rows = useMemo(() => siteTableRows(group.rows), [group.rows])
@@ -211,7 +210,7 @@ function SiteTable({ group, canMap, onSave }) {
 
   const columns = useMemo(() => [
     {
-      id: 'site', header: 'Site', accessorFn: (r) => r.label, size: 260, sortingFn: nullLastSort,
+      id: 'site', header: pb('col.site'), accessorFn: (r) => r.label, size: 260, sortingFn: nullLastSort,
       cell: ({ row }) => {
         const r = row.original
         return r.unmapped ? (
@@ -226,39 +225,40 @@ function SiteTable({ group, canMap, onSave }) {
           <span className="text-[var(--text-primary)] font-medium">{r.site}</span>
         )
       },
-      meta: { exportValue: (r) => (r.unmapped ? `Unmapped: ${r.storeCode}` : r.site) },
+      meta: { exportValue: (r) => (r.unmapped ? pb('unmappedExport', { code: r.storeCode }) : r.site) },
     },
-    ...[['tyre', 'Tyre'], ['spare', 'Spare'], ['oil', 'Oil']].map(([id, header]) => ({
-      id, header, accessorFn: (r) => r[id], size: 120, sortingFn: nullLastSort,
+    ...['tyre', 'spare', 'oil'].map((id) => ({
+      id, header: pb(`col.${id}`), accessorFn: (r) => r[id], size: 120, sortingFn: nullLastSort,
       meta: { align: 'right', exportValue: (r) => r[id] ?? '' },
       cell: ({ row }) => <span className="tabular-nums text-[var(--text-secondary)]">{money(row.original[id])}</span>,
     })),
     {
-      id: 'total', header: 'Total', accessorFn: (r) => r.total, size: 130, sortingFn: nullLastSort,
+      id: 'total', header: pb('col.total'), accessorFn: (r) => r.total, size: 130, sortingFn: nullLastSort,
       meta: { align: 'right', exportValue: (r) => r.total ?? '' },
       cell: ({ row }) => <span className="tabular-nums font-semibold text-[var(--text-primary)]">{money(row.original.total)}</span>,
     },
     {
-      id: 'lines', header: 'Lines', accessorFn: (r) => r.lines, size: 90, sortingFn: nullLastSort,
+      id: 'lines', header: pb('col.lines'), accessorFn: (r) => r.lines, size: 90, sortingFn: nullLastSort,
       meta: { align: 'right', exportValue: (r) => r.lines ?? '' },
       cell: ({ row }) => <span className="tabular-nums text-[var(--text-muted)]">{num(row.original.lines)}</span>,
     },
-  ], [money, group.country, group.siteOptions, canMap, onSave])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [money, group.country, group.siteOptions, canMap, onSave, t])
 
   return (
     <Card className="space-y-3 min-w-0">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <MiniStat label="Sites" value={num(summary.sites)} sub={`${num(summary.lines)} lines`} />
-        <MiniStat label="Total spend" value={money(summary.total)} sub={group.currency} />
-        <MiniStat label="Top site" value={summary.topSite || 'N/A'} sub={summary.topSpend != null ? money(summary.topSpend) : undefined} />
+        <MiniStat label={pb('stat.sites')} value={num(summary.sites)} sub={pb('stat.lines', { n: num(summary.lines) })} />
+        <MiniStat label={pb('stat.totalSpend')} value={money(summary.total)} sub={group.currency} />
+        <MiniStat label={pb('stat.topSite')} value={summary.topSite || t('expense.common.na')} sub={summary.topSpend != null ? money(summary.topSpend) : undefined} />
         <MiniStat
-          label="Unmapped stores"
+          label={pb('stat.unmapped')}
           value={num(summary.unmapped)}
-          sub={summary.unmappedShare == null ? 'N/A' : `${(summary.unmappedShare * 100).toFixed(1)}% of spend`}
+          sub={summary.unmappedShare == null ? t('expense.common.na') : pb('stat.ofSpend', { pct: (summary.unmappedShare * 100).toFixed(1) })}
         />
       </div>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter sites by mapping">
-        {MAPPING_FILTERS.map(([key, label]) => (
+      <div className="flex flex-wrap gap-2" role="group" aria-label={pb('filterAria')}>
+        {MAPPING_FILTERS.map((key) => (
           <button
             key={key}
             type="button"
@@ -270,7 +270,7 @@ function SiteTable({ group, canMap, onSave }) {
                 : 'border-[var(--hairline)] text-[var(--text-secondary)]'
             }`}
           >
-            {label}
+            {pb(`filter.${key}`)}
           </button>
         ))}
       </div>
@@ -280,9 +280,9 @@ function SiteTable({ group, canMap, onSave }) {
         getRowId={(r) => r.key}
         enableColumnFilters={false}
         enableExport={false}
-        searchPlaceholder="Search sites or store codes"
+        searchPlaceholder={pb('search')}
         initialPageSize={25}
-        emptyMessage={mapping === 'all' ? 'No per-site expense for the selected filters.' : 'No sites match this mapping filter.'}
+        emptyMessage={mapping === 'all' ? pb('empty') : pb('emptyFilter')}
       />
     </Card>
   )
@@ -297,24 +297,26 @@ function SiteTable({ group, canMap, onSave }) {
  * total then rolls up under that site on refresh.
  */
 function BySitePanel({ groups, canMap, onSave, error, onRetry }) {
+  const { t } = useLanguage()
+  const pb = (k, v) => t(`expense.bySite.${k}`, v)
   const list = (Array.isArray(groups) ? groups : []).filter((g) => (g?.rows || []).length > 0)
   const multi = list.length > 1
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-        <MapPin size={15} /> Spend by site
+        <MapPin size={15} /> {pb('title')}
       </h2>
       <p className="text-xs text-[var(--text-tertiary)]">
-        Store codes from the expense grid are mapped to sites. Rows marked "Unmapped" are store codes without a site mapping yet
-        {canMap ? '; pick a site and Save to map them.' : '.'}
-        {multi ? ' Each country is listed separately in its own currency and is never summed with another country.' : ''}
+        {pb('intro')}
+        {canMap ? pb('introCanMap') : '.'}
+        {multi ? ` ${pb('introMulti')}` : ''}
       </p>
       {error && (
         <Card tone="crit" className="text-sm flex flex-wrap items-center justify-between gap-3" role="alert">
           <span className="text-red-400">{error}</span>
           {onRetry && (
             <button type="button" onClick={onRetry} className="btn-secondary min-h-[44px] px-3 text-xs inline-flex items-center gap-1">
-              <RefreshCw size={12} aria-hidden="true" /> Retry
+              <RefreshCw size={12} aria-hidden="true" /> {t('expense.common.retry')}
             </button>
           )}
         </Card>
@@ -324,14 +326,14 @@ function BySitePanel({ groups, canMap, onSave, error, onRetry }) {
           className="text-center text-[var(--text-muted)]"
           style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}
         >
-          No per-site expense for the selected filters.
+          {pb('empty')}
         </Card>
       ) : (
         list.map((g) => (
           <div key={g.country || 'scope'} className="space-y-2">
             {multi && (
               <h3 className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-2">
-                {g.country || 'N/A'}
+                {g.country || t('expense.common.na')}
                 <span className="text-[11px] px-2 py-0.5 rounded bg-[var(--panel-2)] text-[var(--text-tertiary)]">{g.currency}</span>
               </h3>
             )}
@@ -345,6 +347,8 @@ function BySitePanel({ groups, canMap, onSave, error, onRetry }) {
 
 /** Inline "Unmapped: <store_code>" cell with a site picker + Save (elevated only). */
 function UnmappedCell({ storeCode, country, canMap, siteOptions, onSave }) {
+  const { t } = useLanguage()
+  const pb = (k, v) => t(`expense.bySite.${k}`, v)
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const listId = `sites-${country || 'all'}-${storeCode}`
@@ -355,7 +359,7 @@ function UnmappedCell({ storeCode, country, canMap, siteOptions, onSave }) {
   }
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">Unmapped</span>
+      <span className="text-xs px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">{pb('filter.unmapped')}</span>
       <span className="text-[var(--text-secondary)]">{storeCode}</span>
       {canMap && (
         <>
@@ -363,9 +367,9 @@ function UnmappedCell({ storeCode, country, canMap, siteOptions, onSave }) {
             list={listId}
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="Map to site"
+            placeholder={pb('mapPlaceholder')}
             className="bg-[var(--input-bg)] border border-[var(--input-border)] rounded-lg text-xs px-2 py-1 text-[var(--text-secondary)] w-40"
-            aria-label={`Map ${storeCode} to a site`}
+            aria-label={pb('mapAria', { code: storeCode })}
           />
           <datalist id={listId}>
             {(siteOptions || []).map((s) => <option key={s} value={s} />)}
@@ -375,7 +379,7 @@ function UnmappedCell({ storeCode, country, canMap, siteOptions, onSave }) {
             disabled={saving || !value.trim()}
             className="btn-secondary text-xs px-2 py-1 inline-flex items-center gap-1 disabled:opacity-50"
           >
-            <Save size={12} /> {saving ? 'Saving...' : 'Save'}
+            <Save size={12} /> {saving ? pb('saving') : pb('save')}
           </button>
         </>
       )}
@@ -410,36 +414,38 @@ function CountryReport({
   country, currency, snap, overview, variance, sections, moverDim, onMoverDim,
   refreshing, from, to, showHeading, setRef,
 }) {
+  const { t } = useLanguage()
+  const pr = (k, v) => t(`expense.report.${k}`, v)
   const money = useMemo(() => moneyIn(currency), [currency])
   const k = snap?.ok ? snap.kpis : null
 
   const categoryChart = useMemo(() => {
     const rows = snap?.ok ? (snap.by_category || []) : []
-    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
-  }, [snap])
+    return { labels: rows.map((r) => r.label), datasets: [{ label: t('expense.series.spend'), data: rows.map((r) => Number(r.spend) || 0) }] }
+  }, [snap, t])
   const storeChart = useMemo(() => {
     const rows = (snap?.ok ? (snap.by_store || []) : []).slice(0, 15)
-    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
-  }, [snap])
+    return { labels: rows.map((r) => r.label), datasets: [{ label: t('expense.series.spend'), data: rows.map((r) => Number(r.spend) || 0) }] }
+  }, [snap, t])
   const assetChart = useMemo(() => {
     const rows = (snap?.ok ? (snap.by_asset || []) : []).slice(0, 15)
-    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
-  }, [snap])
+    return { labels: rows.map((r) => r.label), datasets: [{ label: t('expense.series.spend'), data: rows.map((r) => Number(r.spend) || 0) }] }
+  }, [snap, t])
   const itemChart = useMemo(() => {
     const rows = (snap?.ok ? (snap.top_items || []) : []).slice(0, 15)
-    return { labels: rows.map((r) => r.label), datasets: [{ label: 'Spend', data: rows.map((r) => Number(r.spend) || 0) }] }
-  }, [snap])
+    return { labels: rows.map((r) => r.label), datasets: [{ label: t('expense.series.spend'), data: rows.map((r) => Number(r.spend) || 0) }] }
+  }, [snap, t])
   const trendChart = useMemo(() => {
     const rows = snap?.ok ? (snap.monthly || []) : []
     return {
       labels: rows.map((r) => monthLabel(r.m)),
       datasets: [
-        { label: 'Tyres', data: rows.map((r) => Number(r.tyre) || 0) },
-        { label: 'Spare Parts', data: rows.map((r) => Number(r.spare) || 0) },
-        { label: 'Oil', data: rows.map((r) => Number(r.oil) || 0) },
+        { label: t('expense.series.tyres'), data: rows.map((r) => Number(r.tyre) || 0) },
+        { label: t('expense.series.spare'), data: rows.map((r) => Number(r.spare) || 0) },
+        { label: t('expense.series.oil'), data: rows.map((r) => Number(r.oil) || 0) },
       ],
     }
-  }, [snap])
+  }, [snap, t])
 
   const hasSnap = !!(k && (Number(k.total_expense) || Number(k.lines)))
 
@@ -459,18 +465,18 @@ function CountryReport({
           className="text-center text-[var(--text-muted)] text-sm"
           style={{ paddingTop: 'var(--space-6)', paddingBottom: 'var(--space-6)' }}
         >
-          No expense lines for {country} in this period.
+          {pr('noLines', { country })}
         </Card>
       )}
 
       {sections.kpis && k && hasSnap && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <Kpi label="Total expense" value={money(k.total_expense)} accent={ACCENTS.primary} />
-          <Kpi label="Tyres" value={money(k.tyre_expense)} accent={ACCENTS.info} />
-          <Kpi label="Spare parts" value={money(k.spare_expense)} accent={ACCENTS.watch} />
-          <Kpi label="Oil" value={money(k.oil_expense)} accent={ACCENTS.good} />
-          <Kpi label="Lines" value={num(k.lines)} accent={ACCENTS.neutral} />
-          <Kpi label="Tyres issued" value={num(k.tyres_issued)} accent={ACCENTS.risk} sub={`${num(k.reassigned_tyres)} reassigned`} />
+          <Kpi label={pr('kpi.total')} value={money(k.total_expense)} accent={ACCENTS.primary} />
+          <Kpi label={pr('kpi.tyres')} value={money(k.tyre_expense)} accent={ACCENTS.info} />
+          <Kpi label={pr('kpi.spare')} value={money(k.spare_expense)} accent={ACCENTS.watch} />
+          <Kpi label={pr('kpi.oil')} value={money(k.oil_expense)} accent={ACCENTS.good} />
+          <Kpi label={pr('kpi.lines')} value={num(k.lines)} accent={ACCENTS.neutral} />
+          <Kpi label={pr('kpi.tyresIssued')} value={num(k.tyres_issued)} accent={ACCENTS.risk} sub={pr('kpi.reassigned', { n: num(k.reassigned_tyres) })} />
         </div>
       )}
 
@@ -485,19 +491,19 @@ function CountryReport({
 
       {sections.categories && hasSnap && (
         <section className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><PieChart size={15} /> Spend by category</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><PieChart size={15} /> {pr('byCategory')}</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <ChartCard title="Tyres vs Spare Parts vs Oil" refCb={setRef('category')}><Doughnut data={stylize(categoryChart, 'doughnut')} options={DOUGHNUT_OPTS} /></ChartCard>
+            <ChartCard title={pr('chart.category')} refCb={setRef('category')}><Doughnut data={stylize(categoryChart, 'doughnut')} options={DOUGHNUT_OPTS} /></ChartCard>
           </div>
         </section>
       )}
 
       {(sections.sites || sections.assets) && hasSnap && (
         <section className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Building2 size={15} /> Spend by store and asset</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Building2 size={15} /> {pr('byStoreAsset')}</h3>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {sections.sites && <ChartCard title="Top stores by spend" refCb={setRef('store')}><Bar data={stylize(storeChart, 'bar')} options={chartBase(false)} /></ChartCard>}
-            {sections.assets && <ChartCard title="Top assets by spend" refCb={setRef('asset')}><Bar data={stylize(assetChart, 'bar')} options={chartBase(false)} /></ChartCard>}
+            {sections.sites && <ChartCard title={pr('chart.stores')} refCb={setRef('store')}><Bar data={stylize(storeChart, 'bar')} options={chartBase(false)} /></ChartCard>}
+            {sections.assets && <ChartCard title={pr('chart.assets')} refCb={setRef('asset')}><Bar data={stylize(assetChart, 'bar')} options={chartBase(false)} /></ChartCard>}
           </div>
         </section>
       )}
@@ -510,18 +516,18 @@ function CountryReport({
 
       {sections.items && hasSnap && (
         <section className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Package size={15} /> Top items</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><Package size={15} /> {pr('topItems')}</h3>
           <div className="grid grid-cols-1 gap-4">
-            <ChartCard title="Top items by spend" refCb={setRef('item')}><Bar data={stylize(itemChart, 'bar')} options={H_BAR_OPTS} /></ChartCard>
+            <ChartCard title={pr('chart.items')} refCb={setRef('item')}><Bar data={stylize(itemChart, 'bar')} options={H_BAR_OPTS} /></ChartCard>
           </div>
         </section>
       )}
 
       {sections.trend && hasSnap && (
         <section className="space-y-3">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><TrendingUp size={15} /> Monthly expense trend</h3>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2"><TrendingUp size={15} /> {pr('monthlyTrend')}</h3>
           <div className="grid grid-cols-1 gap-4">
-            <ChartCard title="Tyres, spare parts and oil by month" refCb={setRef('trend')}><Line data={stylize(trendChart, 'line')} options={chartBase(true)} /></ChartCard>
+            <ChartCard title={pr('chart.trend')} refCb={setRef('trend')}><Line data={stylize(trendChart, 'line')} options={chartBase(true)} /></ChartCard>
           </div>
         </section>
       )}
@@ -546,29 +552,32 @@ function CountryReport({
  * null instead of guessing, and the three CPK sources are simply absent.
  */
 export function buildStudioCatalog({
-  snap, currency = 'SAR', fleetCpk = null, tyreAgg = null, tyreForecast = null, yearly = null,
+  snap, currency = 'SAR', fleetCpk = null, tyreAgg = null, tyreForecast = null, yearly = null, t = null,
 } = {}) {
   const activeCurrency = currency
+  // `t` is optional so the pure catalog stays testable without a provider; the
+  // English text is only the fallback when no translator is handed in.
+  const L = (key, en, vars) => (t ? t(`expense.studio.${key}`, vars) : en)
   if (!snap?.ok) return []
   const flat = (key, label) => ({
     key, label, kind: 'flat', valueKind: 'money',
     rows: (snap[key] || []).map((r) => ({ label: r.label, value: Number(r.spend) || 0 })),
   })
   const out = [
-    flat('by_asset', 'Asset'),
-    flat('by_store', 'Site / store'),
-    flat('by_category', 'Category'),
-    flat('top_items', 'Item'),
+    flat('by_asset', L('asset', 'Asset')),
+    flat('by_store', L('store', 'Site / store')),
+    flat('by_category', L('category', 'Category')),
+    flat('top_items', L('item', 'Item')),
   ]
   const m = snap.monthly || []
   if (m.length) {
     out.push({
-      key: 'monthly', label: 'Month', kind: 'series', valueKind: 'money', allowTotal: true,
+      key: 'monthly', label: L('month', 'Month'), kind: 'series', valueKind: 'money', allowTotal: true,
       labels: m.map((r) => monthLabel(r.m)),
       series: [
-        { name: 'Tyres', data: m.map((r) => Number(r.tyre) || 0) },
-        { name: 'Spare Parts', data: m.map((r) => Number(r.spare) || 0) },
-        { name: 'Oil', data: m.map((r) => Number(r.oil) || 0) },
+        { name: L('tyres', 'Tyres'), data: m.map((r) => Number(r.tyre) || 0) },
+        { name: L('spare', 'Spare Parts'), data: m.map((r) => Number(r.spare) || 0) },
+        { name: L('oil', 'Oil'), data: m.map((r) => Number(r.oil) || 0) },
       ],
     })
   }
@@ -578,11 +587,11 @@ export function buildStudioCatalog({
   if (mixTotal > 0) {
     const pct = (v) => Math.round(((Number(v) || 0) / mixTotal) * 1000) / 10
     out.push({
-      key: 'cost_mix_pct', label: 'Cost mix (%)', kind: 'flat', valueKind: 'percent',
+      key: 'cost_mix_pct', label: L('costMix', 'Cost mix (%)'), kind: 'flat', valueKind: 'percent',
       rows: [
-        { label: 'Tyres', value: pct(kp.tyre_expense) },
-        { label: 'Spare Parts', value: pct(kp.spare_expense) },
-        { label: 'Oil', value: pct(kp.oil_expense) },
+        { label: L('tyres', 'Tyres'), value: pct(kp.tyre_expense) },
+        { label: L('spare', 'Spare Parts'), value: pct(kp.spare_expense) },
+        { label: L('oil', 'Oil'), value: pct(kp.oil_expense) },
       ],
     })
   }
@@ -594,27 +603,27 @@ export function buildStudioCatalog({
     .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_tyre) || 0 }))
   const hrRows = byType.filter((r) => r.unit === 'engine_hours' && r.cpk_total != null)
     .map((r) => ({ label: r.vehicle_type || 'N/A', value: Number(r.cpk_total) || 0 }))
-  if (kmRows.length) out.push({ key: 'cpk_km', label: 'Tyre spend ratio by type (per tyre km)', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency} per tyre km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(4)} per tyre km`, rows: kmRows })
-  if (hrRows.length) out.push({ key: 'cpk_hr', label: 'Operating cost per engine hour by type', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/hr`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/hr`, rows: hrRows })
+  if (kmRows.length) out.push({ key: 'cpk_km', label: L('cpkKm', 'Tyre spend ratio by type (per tyre km)'), kind: 'flat', valueKind: 'rate', unitLabel: L('perTyreKmUnit', `${activeCurrency} per tyre km`, { cur: activeCurrency }), format: (v) => L('perTyreKmValue', `${activeCurrency} ${Number(v).toFixed(4)} per tyre km`, { cur: activeCurrency, value: Number(v).toFixed(4) }), rows: kmRows })
+  if (hrRows.length) out.push({ key: 'cpk_hr', label: L('cpkHr', 'Operating cost per engine hour by type'), kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/hr`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/hr`, rows: hrRows })
 
   // Overall fleet CPK (one bar per unit) from the fleet-level tiles.
   const tiles = fleetTiles(fleetCpk?.fleet)
   const cpkOverall = tiles
     .filter((t) => t.rate != null)
     .map((t) => ({ label: t.rateLabel, value: Number(t.rate) || 0 }))
-  if (cpkOverall.length) out.push({ key: 'cpk_overall', label: 'Tyre spend ratio and cost per engine hour', kind: 'flat', valueKind: 'rate', unitLabel: activeCurrency, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}`, rows: cpkOverall })
+  if (cpkOverall.length) out.push({ key: 'cpk_overall', label: L('cpkOverall', 'Tyre spend ratio and cost per engine hour'), kind: 'flat', valueKind: 'rate', unitLabel: activeCurrency, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}`, rows: cpkOverall })
 
   // Tyre quantity + tyre CPK by site (from the loaded tyre records).
   if (tyreAgg) {
-    if (tyreAgg.bySite.length) out.push({ key: 'tyre_qty_site', label: 'Tyres used by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySite })
-    if (tyreAgg.bySize.length) out.push({ key: 'tyre_qty_size', label: 'Tyres used by size', kind: 'flat', valueKind: 'count', rows: tyreAgg.bySize })
-    if (tyreAgg.byBrand.length) out.push({ key: 'tyre_qty_brand', label: 'Tyres used by brand', kind: 'flat', valueKind: 'count', rows: tyreAgg.byBrand })
-    if (tyreAgg.avgCostByBrand.length) out.push({ key: 'tyre_avgcost_brand', label: 'Average cost per tyre by brand', kind: 'flat', valueKind: 'money', rows: tyreAgg.avgCostByBrand })
-    if (tyreAgg.avgKmByBrand.length) out.push({ key: 'tyre_avgkm_brand', label: 'Average km per tyre by brand', kind: 'flat', valueKind: 'count', unitLabel: 'km', format: (v) => `${Math.round(v).toLocaleString('en-US')} km`, rows: tyreAgg.avgKmByBrand })
-    if (tyreAgg.cpkSite.length) out.push({ key: 'tyre_cpk_site', label: 'Tyre cost per km by site', kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: tyreAgg.cpkSite })
-    if (tyreAgg.monthLabels.length) out.push({ key: 'tyre_qty_month', label: 'Tyres used by month', kind: 'series', valueKind: 'count', labels: tyreAgg.monthLabels, series: [{ name: 'Tyres', data: tyreAgg.monthQty }] })
-    if (tyreAgg.removalBySite.length) out.push({ key: 'tyre_rem_site', label: 'Tyre removals by site', kind: 'flat', valueKind: 'count', rows: tyreAgg.removalBySite })
-    if (tyreAgg.remMonthLabels.length) out.push({ key: 'tyre_rem_month', label: 'Tyre removals by month', kind: 'series', valueKind: 'count', labels: tyreAgg.remMonthLabels, series: [{ name: 'Removals', data: tyreAgg.remMonthQty }] })
+    if (tyreAgg.bySite.length) out.push({ key: 'tyre_qty_site', label: L('tyresBySite', 'Tyres used by site'), kind: 'flat', valueKind: 'count', rows: tyreAgg.bySite })
+    if (tyreAgg.bySize.length) out.push({ key: 'tyre_qty_size', label: L('tyresBySize', 'Tyres used by size'), kind: 'flat', valueKind: 'count', rows: tyreAgg.bySize })
+    if (tyreAgg.byBrand.length) out.push({ key: 'tyre_qty_brand', label: L('tyresByBrand', 'Tyres used by brand'), kind: 'flat', valueKind: 'count', rows: tyreAgg.byBrand })
+    if (tyreAgg.avgCostByBrand.length) out.push({ key: 'tyre_avgcost_brand', label: L('avgCostBrand', 'Average cost per tyre by brand'), kind: 'flat', valueKind: 'money', rows: tyreAgg.avgCostByBrand })
+    if (tyreAgg.avgKmByBrand.length) out.push({ key: 'tyre_avgkm_brand', label: L('avgKmBrand', 'Average km per tyre by brand'), kind: 'flat', valueKind: 'count', unitLabel: 'km', format: (v) => `${Math.round(v).toLocaleString('en-US')} km`, rows: tyreAgg.avgKmByBrand })
+    if (tyreAgg.cpkSite.length) out.push({ key: 'tyre_cpk_site', label: L('tyreCpkSite', 'Tyre cost per km by site'), kind: 'flat', valueKind: 'rate', unitLabel: `${activeCurrency}/km`, format: (v) => `${activeCurrency} ${Number(v).toFixed(3)}/km`, rows: tyreAgg.cpkSite })
+    if (tyreAgg.monthLabels.length) out.push({ key: 'tyre_qty_month', label: L('tyresByMonth', 'Tyres used by month'), kind: 'series', valueKind: 'count', labels: tyreAgg.monthLabels, series: [{ name: L('tyres', 'Tyres'), data: tyreAgg.monthQty }] })
+    if (tyreAgg.removalBySite.length) out.push({ key: 'tyre_rem_site', label: L('removalsBySite', 'Tyre removals by site'), kind: 'flat', valueKind: 'count', rows: tyreAgg.removalBySite })
+    if (tyreAgg.remMonthLabels.length) out.push({ key: 'tyre_rem_month', label: L('removalsByMonth', 'Tyre removals by month'), kind: 'series', valueKind: 'count', labels: tyreAgg.remMonthLabels, series: [{ name: L('removals', 'Removals'), data: tyreAgg.remMonthQty }] })
   }
 
   // Tyre demand FORECAST by size (next 3 months) from the fitment history.
@@ -622,15 +631,15 @@ export function buildStudioCatalog({
     const fcSizes = tyreForecast.sizes.filter((s) => s.forecastTotal > 0 || s.total > 0)
     if (fcSizes.length) {
       out.push({
-        key: 'tyre_forecast_size', label: 'Tyre forecast by size (next 3 months)', kind: 'flat', valueKind: 'count',
-        unitLabel: 'tyres', rows: fcSizes.map((s) => ({ label: s.size, value: s.forecastTotal })),
+        key: 'tyre_forecast_size', label: L('forecastSize', 'Tyre forecast by size (next 3 months)'), kind: 'flat', valueKind: 'count',
+        unitLabel: L('tyresUnit', 'tyres'), rows: fcSizes.map((s) => ({ label: s.size, value: s.forecastTotal })),
       })
       // History + forecast on one monthly axis (actual, then the projected months).
       const labels = [...tyreForecast.monthLabels, ...tyreForecast.forecastLabels]
       const hist = tyreForecast.totals.history
       const fc = tyreForecast.totals.forecast
       out.push({
-        key: 'tyre_forecast_month', label: 'Tyre demand: actual + forecast', kind: 'series', valueKind: 'count',
+        key: 'tyre_forecast_month', label: L('forecastMonth', 'Tyre demand: actual + forecast'), kind: 'series', valueKind: 'count',
         // No trend line here, for two reasons. The forecast months are ALREADY
         // a fitted projection, so a trend across them regresses on a
         // regression while looking like independent evidence. And each series
@@ -640,8 +649,8 @@ export function buildStudioCatalog({
         ordered: false,
         labels,
         series: [
-          { name: 'Actual', data: [...hist, ...fc.map(() => 0)] },
-          { name: 'Forecast', data: [...hist.map(() => 0), ...fc] },
+          { name: L('actual', 'Actual'), data: [...hist, ...fc.map(() => 0)] },
+          { name: L('forecast', 'Forecast'), data: [...hist.map(() => 0), ...fc] },
         ],
       })
     }
@@ -651,12 +660,12 @@ export function buildStudioCatalog({
   const yr = Array.isArray(yearly) ? [...yearly].sort((a, b) => String(a.year ?? a.period).localeCompare(String(b.year ?? b.period))) : []
   if (yr.length) {
     out.push({
-      key: 'yearly', label: 'Year', kind: 'series', valueKind: 'money', allowTotal: true,
+      key: 'yearly', label: L('year', 'Year'), kind: 'series', valueKind: 'money', allowTotal: true,
       labels: yr.map((r) => String(r.year ?? r.period)),
       series: [
-        { name: 'Tyres', data: yr.map((r) => Number(r.tyre) || 0) },
-        { name: 'Spare Parts', data: yr.map((r) => Number(r.spare) || 0) },
-        { name: 'Oil', data: yr.map((r) => Number(r.lubricant ?? r.oil) || 0) },
+        { name: L('tyres', 'Tyres'), data: yr.map((r) => Number(r.tyre) || 0) },
+        { name: L('spare', 'Spare Parts'), data: yr.map((r) => Number(r.spare) || 0) },
+        { name: L('oil', 'Oil'), data: yr.map((r) => Number(r.lubricant ?? r.oil) || 0) },
       ],
     })
   }
@@ -694,14 +703,6 @@ export default function ExpenseReport() {
   // exports, the Chart Builder and the Tyre Forecast still key off it.
   const { appSettings, reportingScope, allowedScopeCountries } = useSettings()
   const { t } = useLanguage()
-  // `t(key, vars)` takes INTERPOLATION VARS, not a fallback, and a key missing
-  // from a loaded namespace renders as the raw dotted path. This wrapper keeps
-  // the English sentence as the last resort so a locale gap degrades to a
-  // readable line rather than to `expense.scope.builderOneCountry` on screen.
-  const tx = useCallback((key, fallback) => {
-    const v = t(key)
-    return v && v !== key ? v : fallback
-  }, [t])
   const scopeKey = useMemo(
     () => scopeQueryKey(scopeRequestCountries(reportingScope, allowedScopeCountries)),
     [reportingScope, allowedScopeCountries],
@@ -854,7 +855,7 @@ export default function ExpenseReport() {
           setByCountryErr('')
         } catch (e) {
           if (stale()) return
-          setByCountryErr(toUserMessage(e, 'Could not load the per-country totals.'))
+          setByCountryErr(toUserMessage(e, t('expense.page.errCountryTotals')))
         }
         // BOUND TO THE REPORTING SCOPE. This RPC takes no country and returns
         // every country RLS allows, so without this filter a scope of two
@@ -892,7 +893,7 @@ export default function ExpenseReport() {
       }))
       if (stale()) return
       setSiteGroups(groups)
-      if (siteFailure) setBySiteErr(toUserMessage(siteFailure, 'Could not load spend by site.'))
+      if (siteFailure) setBySiteErr(toUserMessage(siteFailure, t('expense.page.errBySite')))
 
       // Tyre quantity, tyre CPK by site and the demand forecast - ONE READ PER
       // COUNTRY IN SCOPE, run in parallel. Each country is aggregated on its own
@@ -934,10 +935,11 @@ export default function ExpenseReport() {
         .catch(() => { if (!stale()) setYearly(null) })
       setUpdatedAt(new Date())
     } catch (e) {
-      if (!stale()) setError(toUserMessage(e, 'Could not load the expense report.'))
+      if (!stale()) setError(toUserMessage(e, t('expense.page.errLoad')))
     } finally {
       if (!stale()) { setLoading(false); setRefreshing(false) }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasScope, isAll, activeCountry, activeCurrency, from, to, scopeCountryList, latestLoad])
 
   useEffect(() => { load() }, [load])
@@ -979,7 +981,7 @@ export default function ExpenseReport() {
   const cpkTypeStats = useMemo(() => cpkTypeSummary(cpkByType), [cpkByType])
   const cpkTypeColumns = useMemo(() => [
     {
-      id: 'vehicle_type', header: 'Asset Type', accessorFn: (r) => r.vehicle_type, size: 200, sortingFn: nullLastSort,
+      id: 'vehicle_type', header: t('expense.fleetCpk.col.type'), accessorFn: (r) => r.vehicle_type, size: 200, sortingFn: nullLastSort,
       cell: ({ row }) => (
         <span className="font-medium text-[var(--text-secondary)]">
           {row.original.vehicle_type}
@@ -987,19 +989,19 @@ export default function ExpenseReport() {
         </span>
       ),
     },
-    { id: 'unit', header: 'Unit', accessorFn: (r) => unitSuffix(r.unit).replace('/', ''), size: 80 },
+    { id: 'unit', header: t('expense.fleetCpk.col.unit'), accessorFn: (r) => unitSuffix(r.unit).replace('/', ''), size: 80 },
     {
-      id: 'distance', header: 'Distance / Hours', accessorFn: (r) => r.distance_or_hours, size: 140, sortingFn: nullLastSort,
+      id: 'distance', header: t('expense.fleetCpk.col.distance'), accessorFn: (r) => r.distance_or_hours, size: 140, sortingFn: nullLastSort,
       meta: { align: 'right', exportValue: (r) => r.distance_or_hours ?? '' },
       cell: ({ row }) => <span className="tabular-nums">{fmtDistance(row.original.distance_or_hours, row.original.unit)}</span>,
     },
-    ...[['tyre_cost', 'Tyre Cost'], ['total_cost', 'Total Cost']].map(([id, header]) => ({
-      id, header, accessorFn: (r) => r[id], size: 130, sortingFn: nullLastSort,
+    ...['tyre_cost', 'total_cost'].map((id) => ({
+      id, header: t(`expense.fleetCpk.col.${id}`), accessorFn: (r) => r[id], size: 130, sortingFn: nullLastSort,
       meta: { align: 'right', exportValue: (r) => r[id] ?? '' },
       cell: ({ row }) => <span className="tabular-nums">{fmtCpkMoney(row.original[id], row.original.currency)}</span>,
     })),
-    ...[['cpk_tyre', 'Tyre spend ratio (per tyre km) or tyre cost per hour'], ['cpk_total', 'Operating cost per hour (hour assets)']].map(([id, header]) => ({
-      id, header, accessorFn: (r) => r[id], size: 150, sortingFn: nullLastSort,
+    ...['cpk_tyre', 'cpk_total'].map((id) => ({
+      id, header: t(`expense.fleetCpk.col.${id}`), accessorFn: (r) => r[id], size: 150, sortingFn: nullLastSort,
       meta: { align: 'right', exportValue: (r) => r[id] ?? '' },
       cell: ({ row }) => (
         <span className={row.original[id] == null ? 'text-[var(--text-muted)]' : 'tabular-nums font-medium text-[var(--text-primary)]'}>
@@ -1007,7 +1009,7 @@ export default function ExpenseReport() {
         </span>
       ),
     })),
-  ], [])
+  ], [t])
 
   // If this month has no expense rows yet, fall back to the most recent month
   // that does - and say so. An empty current month reads as lost data otherwise.
@@ -1099,7 +1101,8 @@ export default function ExpenseReport() {
     yearly: Array.isArray(yearly)
       ? yearly.filter((r) => String(r?.country || '').toLowerCase() === studioCountry.toLowerCase())
       : null,
-  }), [studioSnap, studioCurrency, cpkIsSingleCountry, fleetCpk, studioTyres, yearly, studioCountry])
+    t,
+  }), [studioSnap, studioCurrency, cpkIsSingleCountry, fleetCpk, studioTyres, yearly, studioCountry, t])
 
   // Any expense to show/export at all: a country-scoped snapshot with a value, or
   // (All view) at least one country total. Drives the empty state + export buttons.
@@ -1124,9 +1127,9 @@ export default function ExpenseReport() {
     const W = doc.internal.pageSize.getWidth()
     const M = 12
     const company = appSettings?.company_name || 'TyrePulse'
-    const scope = activeCountry && activeCountry !== 'All' ? activeCountry : 'All countries'
+    const scope = activeCountry && activeCountry !== 'All' ? activeCountry : t('expense.page.allCountries')
     doc.setFontSize(16); doc.setTextColor(15, 23, 42)
-    doc.text(`${company} - Expense Report`, M, 16)
+    doc.text(t('expense.pdf.title', { company }), M, 16)
     doc.setFontSize(9); doc.setTextColor(100, 116, 139)
     doc.text(`${scope}  |  ${reportDateLabel(new Date())}`, M, 22)
 
@@ -1135,19 +1138,19 @@ export default function ExpenseReport() {
       // Never print one blended total: KSA (SAR), UAE (AED) and Egypt (EGP) are
       // listed separately, each in its own currency.
       doc.setFontSize(8); doc.setTextColor(100, 116, 139)
-      doc.text('Each country is shown in its own currency. Different currencies are not summed.', M, y)
+      doc.text(t('expense.pdf.perCountry'), M, y)
       y += 7
       if (byCountry.length === 0) {
         doc.setFontSize(9); doc.setTextColor(15, 23, 42)
-        doc.text('Per-country totals are not available for the selected filters.', M, y)
+        doc.text(t('expense.pdf.noTotals'), M, y)
         y += 8
       }
       byCountry.forEach((c) => {
         const fmt = moneyIn(currencyForCountry(c.country, activeCurrency))
         doc.setTextColor(15, 23, 42); doc.setFontSize(11)
-        doc.text(`${c.country || 'N/A'}: ${fmt(c.total)}`, M, y)
+        doc.text(`${c.country || t('expense.common.na')}: ${fmt(c.total)}`, M, y)
         doc.setTextColor(100, 116, 139); doc.setFontSize(7.5)
-        doc.text(`Tyres ${fmt(c.tyre)}  |  Spare ${fmt(c.spare)}  |  Oil ${fmt(c.oil)}  |  ${num(c.lines)} lines`, M, y + 5)
+        doc.text(t('expense.pdf.countryLine', { tyre: fmt(c.tyre), spare: fmt(c.spare), oil: fmt(c.oil), lines: num(c.lines) }), M, y + 5)
         y += 13
       })
       y += 3
@@ -1168,9 +1171,9 @@ export default function ExpenseReport() {
       }
       if (kp) {
         const tiles = [
-          ['Total expense', fmt(kp.total_expense)], ['Tyres', fmt(kp.tyre_expense)],
-          ['Spare parts', fmt(kp.spare_expense)], ['Oil', fmt(kp.oil_expense)],
-          ['Lines', num(kp.lines)], ['Tyres issued', num(kp.tyres_issued)],
+          [t('expense.report.kpi.total'), fmt(kp.total_expense)], [t('expense.report.kpi.tyres'), fmt(kp.tyre_expense)],
+          [t('expense.report.kpi.spare'), fmt(kp.spare_expense)], [t('expense.report.kpi.oil'), fmt(kp.oil_expense)],
+          [t('expense.report.kpi.lines'), num(kp.lines)], [t('expense.report.kpi.tyresIssued'), num(kp.tyres_issued)],
         ]
         tiles.forEach((tl, i) => {
           const x = M + (i % 6) * ((W - 2 * M) / 6)
@@ -1209,7 +1212,7 @@ export default function ExpenseReport() {
       const built = await buildExpenseDoc()
       if (built) built.doc.save(`${reportFileName(built.company, 'Expense Report', reportDateLabel())}.pdf`)
     } catch (e) {
-      setError(toUserMessage(e, 'Export failed. Please try again.'))
+      setError(toUserMessage(e, t('expense.page.errExport')))
     } finally {
       setExporting(false)
     }
@@ -1246,13 +1249,13 @@ export default function ExpenseReport() {
         {
           currency: activeCurrency,
           company,
-          title: `${company} Expense Report`,
+          title: t('expense.export.title', { company }),
           // Single-country export is unchanged; the All view states its scope.
-          ...(isAll ? { meta: { Scope: 'All countries - each country in its own currency, not summed' } } : {}),
+          ...(isAll ? { meta: { [t('expense.export.scope')]: t('expense.export.scopeAll') } } : {}),
         },
       )
     } catch (e) {
-      setError(toUserMessage(e, 'Export failed. Please try again.'))
+      setError(toUserMessage(e, t('expense.page.errExport')))
     } finally {
       setExporting(false)
     }
@@ -1275,10 +1278,10 @@ export default function ExpenseReport() {
         // owner saw while 108,384 KSA lines sat in the table (the cause was a
         // service bug, now fixed and pinned by listExpenseRows.test.js) - a
         // message that cannot say WHAT it searched is impossible to disprove.
-        setError(
-          `No expense rows found for ${scopedCountry || 'any country'}` +
-          `${from || to ? ` between ${from || 'the earliest record'} and ${to || 'today'}` : ''}.`,
-        )
+        const where = scopedCountry || t('expense.rows.anyCountry')
+        setError(from || to
+          ? t('expense.rows.noneBetween', { where, from: from || t('expense.rows.earliest'), to: to || t('expense.rows.today') })
+          : t('expense.rows.none', { where }))
         return
       }
       const data = raw.map((r) => ({
@@ -1289,7 +1292,7 @@ export default function ExpenseReport() {
         qty: r.qty,
         unit_cost: r.unit_cost,
         line_cost: r.line_cost,
-        category: Number(r.tyre_cost) > 0 ? 'Tyre' : Number(r.oil_cost) > 0 ? 'Oil' : 'Spare',
+        category: Number(r.tyre_cost) > 0 ? t('expense.rows.cat.tyre') : Number(r.oil_cost) > 0 ? t('expense.rows.cat.oil') : t('expense.rows.cat.spare'),
         // The three buckets are exported as their OWN columns, not just a label.
         // A label plus one Value column cannot be summed safely: the label says
         // which bucket the line leans to, while Value is the WHOLE line, so
@@ -1308,24 +1311,24 @@ export default function ExpenseReport() {
         // same item code cost elsewhere. Saying so in the sheet is the whole
         // point: an estimate that looks identical to a paid figure is worse
         // than a blank, because nobody knows to question it.
-        cost_basis: r.filled_cost != null ? 'Estimated from item code' : 'From ERP',
+        cost_basis: r.filled_cost != null ? t('expense.rows.basisEstimated') : t('expense.rows.basisErp'),
       }))
       await exportToExcel(
         data,
         ['event_date', 'work_order_no', 'item_code', 'item_description', 'qty', 'unit_cost', 'line_cost',
           'category', 'tyre_value', 'spare_value', 'oil_value', 'site', 'store_code', 'currency', 'country',
           'cost_basis'],
-        ['Date', 'Job card', 'Item code', 'Description', 'Qty', 'Unit cost', 'Value',
-          'Category', 'Tyre value', 'Spare value', 'Oil value', 'Site', 'Store', 'Currency', 'Country',
-          'Cost basis'],
+        ['date', 'jobCard', 'itemCode', 'description', 'qty', 'unitCost', 'value',
+          'category', 'tyreValue', 'spareValue', 'oilValue', 'site', 'store', 'currency', 'country',
+          'costBasis'].map((k) => t(`expense.rows.col.${k}`)),
         reportFileName(company, 'Expense Rows', reportDateLabel()),
         'Expense rows',
         {
           company,
-          title: `${company} Expense Rows`,
+          title: t('expense.rows.title', { company }),
           meta: {
-            Scope: scopedCountry || 'All countries - each row carries its own currency',
-            Rows: String(data.length) + (truncated ? ' (capped at 100,000 - narrow the date range for the rest)' : ''),
+            [t('expense.export.scope')]: scopedCountry || t('expense.rows.scopeAll'),
+            [t('expense.rows.metaRows')]: String(data.length) + (truncated ? ` ${t('expense.rows.capped')}` : ''),
           },
         },
       )
@@ -1334,13 +1337,10 @@ export default function ExpenseReport() {
         // KSA alone holds 108,384 lines, so a full-history download DOES hit
         // the 100,000 cap - saying so on screen is the difference between a
         // partial export and a wrong one.
-        setError(
-          `Exported the first ${data.length.toLocaleString()} rows - this period holds more. ` +
-          'Narrow the date range to download the rest.',
-        )
+        setError(t('expense.rows.truncated', { n: data.length.toLocaleString() }))
       }
     } catch (e) {
-      setError(toUserMessage(e, 'Export failed. Please try again.'))
+      setError(toUserMessage(e, t('expense.page.errExport')))
     } finally {
       setExporting(false)
     }
@@ -1361,13 +1361,13 @@ export default function ExpenseReport() {
       })
       await load()
     } catch (e) {
-      setBySiteErr(toUserMessage(e, 'Could not save the site mapping.'))
+      setBySiteErr(toUserMessage(e, t('expense.page.errSaveMapping')))
     }
-  }, [activeCountry, load])
+  }, [activeCountry, load, t])
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Expense Report" subtitle="Maintenance and parts expense: tyres, spare parts and oil" icon={Wallet} />
+      <PageHeader title={t('expense.page.title')} subtitle={t('expense.page.subtitle')} icon={Wallet} />
 
       {/* Reporting scope: which countries this report covers. Separate from the
           working context in the top bar, and it drives every query below. */}
@@ -1376,18 +1376,13 @@ export default function ExpenseReport() {
         <ReportingScopeBar />
         {isAll && hasScope && (
           <p className="text-[11px] text-[var(--text-muted)]">
-            {`${scopeTitle} (${scopeCurrencies(scopeCountryList).join(', ') || 'own currency'}). `}
-            {tx('expense.scope.perCountryReport',
-              'The full report is shown for each country separately, in its own currency, because spend in '
-              + 'different currencies is never added together. There is no combined total, no combined percentage '
-              + 'change and no combined cost per km on this page.')}
+            {`${scopeTitle} (${scopeCurrencies(scopeCountryList).join(', ') || t('expense.page.ownCurrency')}). `}
+            {t('expense.scope.perCountryReport')}
           </p>
         )}
         {refused.length > 0 && (
           <p className="text-[11px] text-amber-300">
-            Not included: {refused.join(', ')}. The scope asked for {refused.length === 1 ? 'this country' : 'these countries'} but
-            your access does not cover {refused.length === 1 ? 'it' : 'them'}, so {refused.length === 1 ? 'it is' : 'they are'} left
-            out of every figure above rather than partly counted.
+            {t(refused.length === 1 ? 'expense.page.refusedOne' : 'expense.page.refusedMany', { list: refused.join(', ') })}
           </p>
         )}
       </Card>
@@ -1397,7 +1392,7 @@ export default function ExpenseReport() {
           className="text-center text-[var(--text-muted)]"
           style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}
         >
-          No countries are selected in the reporting scope, so there is nothing to report on.
+          {t('expense.page.noScope')}
         </Card>
       )}
 
@@ -1417,13 +1412,13 @@ export default function ExpenseReport() {
               scope now, so their toggles stay. */}
           {SECTIONS.filter(([key]) => !isAll
             || key === 'bysite' || key === 'fleetcpk' || key === 'forecast' || key === 'builder',
-          ).map(([key, label, Icon]) => (
+          ).map(([key, Icon]) => (
             <button
               key={key}
               onClick={() => toggle(key)}
               className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${sections[key] ? 'bg-[var(--accent)]/15 text-[var(--accent)] border-[var(--accent)]/30' : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)]'}`}
             >
-              <Icon size={13} /> {label} {sections[key] ? <Eye size={12} /> : <EyeOff size={12} />}
+              <Icon size={13} /> {t(`expense.section.${key}`)} {sections[key] ? <Eye size={12} /> : <EyeOff size={12} />}
             </button>
           ))}
         </div>
@@ -1432,28 +1427,28 @@ export default function ExpenseReport() {
             className="text-xs w-40"
             value={from}
             onChange={(v) => { setFrom(v); setPeriod('') }}
-            placeholder="From date"
-            ariaLabel="From date"
+            placeholder={t('expense.page.fromDate')}
+            ariaLabel={t('expense.page.fromDate')}
           />
           <DateField
             className="text-xs w-40"
             value={to}
             onChange={(v) => { setTo(v); setPeriod('') }}
-            placeholder="To date"
-            ariaLabel="To date"
+            placeholder={t('expense.page.toDate')}
+            ariaLabel={t('expense.page.toDate')}
           />
-          {updatedAt && <span className="text-[11px] text-[var(--text-muted)]">Updated {updatedAt.toLocaleTimeString()}</span>}
+          {updatedAt && <span className="text-[11px] text-[var(--text-muted)]">{t('expense.page.updated', { time: updatedAt.toLocaleTimeString() })}</span>}
           <button onClick={load} disabled={refreshing} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Refresh
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> {t('expense.common.refresh')}
           </button>
           <button onClick={exportPdf} disabled={exporting || !hasAny} className="btn-primary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
-            <Download size={14} /> {exporting ? 'Preparing...' : 'Export PDF'}
+            <Download size={14} /> {exporting ? t('expense.page.preparing') : t('expense.page.exportPdf')}
           </button>
           <button onClick={exportExcel} disabled={exporting || !hasAny} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50">
-            <Boxes size={14} /> Export Excel
+            <Boxes size={14} /> {t('expense.page.exportExcel')}
           </button>
-          <button onClick={exportRowsExcel} disabled={exporting || !hasAny} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50" title="Every stored expense line for this country and period">
-            <Download size={14} /> Download rows (Excel)
+          <button onClick={exportRowsExcel} disabled={exporting || !hasAny} className="btn-secondary text-sm px-3 py-1.5 inline-flex items-center gap-1.5 disabled:opacity-50" title={t('expense.page.downloadRowsHint')}>
+            <Download size={14} /> {t('expense.page.downloadRows')}
           </button>
         </div>
       </div>
@@ -1464,14 +1459,14 @@ export default function ExpenseReport() {
           className="text-center text-[var(--text-muted)]"
           style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}
         >
-          Loading the expense report...
+          {t('expense.page.loading')}
         </Card>
       ) : !hasAny ? (
         <Card
           className="text-center text-[var(--text-muted)]"
           style={{ paddingTop: 'var(--space-10)', paddingBottom: 'var(--space-10)' }}
         >
-          <p>No expense data yet. Import your grid file from <Link to="/expense-import" className="text-[var(--accent)] font-semibold hover:underline">Expense Import</Link>.</p>
+          <p>{t('expense.page.emptyBefore')} <Link to="/expense-import" className="text-[var(--accent)] font-semibold hover:underline">{t('expense.page.emptyLink')}</Link>{t('expense.page.emptyAfter')}</p>
         </Card>
       ) : (
         <>
@@ -1483,10 +1478,10 @@ export default function ExpenseReport() {
           {isAll && byCountry.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-                <Wallet size={15} /> By country (own currency)
+                <Wallet size={15} /> {t('expense.page.byCountry')}
               </h2>
               <p className="text-xs text-[var(--text-tertiary)]">
-                Each country is shown in its own currency and is not summed together (SAR, AED and EGP are different currencies).
+                {t('expense.page.byCountryNote')}
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {byCountry.map((c) => {
@@ -1500,11 +1495,11 @@ export default function ExpenseReport() {
                       </div>
                       <p className="mt-1 text-xl font-bold text-[var(--text-primary)]">{fmt(c.total)}</p>
                       <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-[var(--text-secondary)]">
-                        <div><span className="block text-[var(--text-tertiary)]">Tyres</span>{fmt(c.tyre)}</div>
-                        <div><span className="block text-[var(--text-tertiary)]">Spare</span>{fmt(c.spare)}</div>
-                        <div><span className="block text-[var(--text-tertiary)]">Oil</span>{fmt(c.oil)}</div>
+                        <div><span className="block text-[var(--text-tertiary)]">{t('expense.series.tyres')}</span>{fmt(c.tyre)}</div>
+                        <div><span className="block text-[var(--text-tertiary)]">{t('expense.bySite.col.spare')}</span>{fmt(c.spare)}</div>
+                        <div><span className="block text-[var(--text-tertiary)]">{t('expense.series.oil')}</span>{fmt(c.oil)}</div>
                       </div>
-                      <p className="mt-2 text-xs text-[var(--text-tertiary)]">{num(c.lines)} lines</p>
+                      <p className="mt-2 text-xs text-[var(--text-tertiary)]">{t('expense.bySite.stat.lines', { n: num(c.lines) })}</p>
                     </Card>
                   )
                 })}
@@ -1559,9 +1554,7 @@ export default function ExpenseReport() {
             <section className="space-y-3">
               {reports.length > 1 && (
                 <p className="text-[11px] text-[var(--text-muted)]">
-                  {tx('expense.scope.forecastPerCountry',
-                    'The tyre forecast is shown once per country, each in its own currency. Forecast tyre counts '
-                    + 'are never added across countries, because each country is ordered and paid for separately.')}
+                  {t('expense.scope.forecastPerCountry')}
                 </p>
               )}
               {scopeCountryList.map((c) => {
@@ -1604,15 +1597,11 @@ export default function ExpenseReport() {
                 {reports.length > 1 && (
                   <Card pad="tight" className="space-y-2">
                     <p className="text-[11px] text-[var(--text-muted)]">
-                      {tx('expense.scope.builderOneCountry',
-                        'Charts are built one country at a time. This tool lets you put any two series on the same '
-                        + 'axis, stack them and total them, so it is only ever given one country in one currency - a '
-                        + 'chart that mixed SAR, AED and EGP would be a number that is not an amount of anything. '
-                        + 'Pick the country to chart below.')}
+                      {t('expense.scope.builderOneCountry')}
                     </p>
                     <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
                       <span className="font-semibold">
-                        {tx('expense.scope.builderCountry', 'Chart data for')}
+                        {t('expense.scope.builderCountry')}
                       </span>
                       <select
                         value={studioCountry}
@@ -1620,7 +1609,7 @@ export default function ExpenseReport() {
                         // Named explicitly: the studio mounts several unlabelled
                         // selects of its own, so this one needs its own name to
                         // be reachable by anyone navigating by control name.
-                        aria-label={tx('expense.scope.builderCountry', 'Chart data for')}
+                        aria-label={t('expense.scope.builderCountry')}
                         className="rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-2 py-1 text-sm text-[var(--text-primary)]"
                       >
                         {scopeCountryList.map((c) => (
@@ -1632,10 +1621,7 @@ export default function ExpenseReport() {
                     </label>
                     {!cpkIsSingleCountry && (
                       <p className="text-[11px] text-[var(--text-muted)]">
-                        {tx('expense.scope.builderCpkOmitted',
-                          'Cost per km and cost per hour by vehicle type are left out while more than one country '
-                          + 'is in scope: those rows do not record which country they came from, so they cannot be '
-                          + 'split per country. Narrow the reporting scope to one country to chart them.')}
+                        {t('expense.scope.builderCpkOmitted')}
                       </p>
                     )}
                   </Card>
@@ -1645,11 +1631,11 @@ export default function ExpenseReport() {
                   catalog={studioCatalog}
                   currency={studioCurrency}
                   money={studioMoney}
-                  scope={studioCountry || 'All countries'}
+                  scope={studioCountry || t('expense.page.allCountries')}
                   company={appSettings?.company_name || 'TyrePulse'}
                   filePrefix="Expense"
                   showInsights
-                  note={`Present your own data - spend, cost mix % and CPK - then copy, download a PNG, or export a PowerPoint deck with talking points. Values in ${studioCurrency}.`}
+                  note={t('expense.page.studioNote', { cur: studioCurrency })}
                 />
               </div>
             </StudioBoundary>
@@ -1662,10 +1648,10 @@ export default function ExpenseReport() {
               <div className="flex items-start gap-2">
                 <Gauge size={15} className="text-[var(--accent)] mt-0.5 shrink-0" />
                 <div>
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">Tyre spend ratio and cost per engine hour</h2>
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)]">{t('expense.fleetCpk.title')}</h2>
                   <p className="text-xs text-[var(--text-tertiary)]">
-                    Km for road assets, engine-hours for plant (generators, pumps, loaders). Currency stays per country.
-                    {' '}Window: {cpkFrom} to {cpkTo}{!from && !to ? ' (last 365 days)' : ''}
+                    {t('expense.fleetCpk.intro')}
+                    {' '}{t('expense.fleetCpk.window', { from: cpkFrom, to: cpkTo })}{!from && !to ? ` ${t('expense.fleetCpk.last365')}` : ''}
                   </p>
                 </div>
               </div>
@@ -1685,7 +1671,7 @@ export default function ExpenseReport() {
                   }}
                 >
                   <div className="w-4 h-4 rounded-full border-2 border-[var(--input-border)] border-t-[var(--accent)] animate-spin" />
-                  Computing unit-aware CPK...
+                  {t('expense.fleetCpk.computing')}
                 </Card>
               ) : !cpkHasData ? (
                 <Card
@@ -1693,30 +1679,30 @@ export default function ExpenseReport() {
                   style={{ paddingTop: 'var(--space-8)', paddingBottom: 'var(--space-8)' }}
                 >
                   <Gauge size={26} className="text-[var(--text-muted)]" />
-                  <p className="text-[var(--text-secondary)] text-sm font-medium">No tyre spend ratio or cost per engine hour for the selected filters</p>
+                  <p className="text-[var(--text-secondary)] text-sm font-medium">{t('expense.fleetCpk.empty')}</p>
                   <p className="text-[var(--text-tertiary)] text-xs max-w-md">
-                    These figures need tyre km (from tyre changes) or engine hours, plus expense data in this window.
+                    {t('expense.fleetCpk.emptyHint')}
                   </p>
                 </Card>
               ) : (
                 <>
                   {/* Fleet summary tiles per country (km side + hour side) */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {cpkFleetTiles.map((t, i) => {
-                      const isHours = t.unit === 'engine_hours'
+                    {cpkFleetTiles.map((tl, i) => {
+                      const isHours = tl.unit === 'engine_hours'
                       return (
-                        <Card key={`${t.country}-${t.unit}-${i}`} className="gap-2">
+                        <Card key={`${tl.country}-${tl.unit}-${i}`} className="gap-2">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 min-w-0">
                               {isHours ? <Clock size={14} className="text-amber-400 shrink-0" /> : <Gauge size={14} className="text-[var(--accent)] shrink-0" />}
                               <span className="text-xs text-[var(--text-secondary)] font-medium truncate">
-                                {t.country || 'Fleet'} - {isHours ? 'per engine hour' : 'per tyre km'}
+                                {tl.country || t('expense.fleetCpk.fleet')} - {isHours ? t('expense.fleetCpk.perHour') : t('expense.fleetCpk.perTyreKm')}
                               </span>
                             </div>
-                            <span className="text-[10px] text-[var(--text-muted)] uppercase">{t.currency}</span>
+                            <span className="text-[10px] text-[var(--text-muted)] uppercase">{tl.currency}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            {tileCells(t).map((c) => (
+                            {tileCells(tl).map((c) => (
                               <div key={c.label}>
                                 <p className="text-[10px] text-[var(--text-muted)]">{c.label}</p>
                                 <p className={`text-base font-bold leading-tight ${c.primary ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>{c.value}</p>
@@ -1724,9 +1710,9 @@ export default function ExpenseReport() {
                             ))}
                           </div>
                           <p className="text-[10px] text-[var(--text-muted)]">
-                            {isHours ? fmtDistance(t.distance, t.unit) : fmtDistance(t.distance, t.unit).replace(/ km$/, ' tyre km')} measured | Coverage {fmtCoverage(t.coveragePct)}
+                            {t('expense.fleetCpk.measured', { distance: isHours ? fmtDistance(tl.distance, tl.unit) : fmtDistance(tl.distance, tl.unit).replace(/ km$/, ' tyre km'), coverage: fmtCoverage(tl.coveragePct) })}
                           </p>
-                          <p className="text-[10px] text-[var(--text-muted)]">{tileBasis(t)}</p>
+                          <p className="text-[10px] text-[var(--text-muted)]">{tileBasis(tl)}</p>
                         </Card>
                       )
                     })}
@@ -1737,7 +1723,7 @@ export default function ExpenseReport() {
                     <div className="text-xs text-[var(--text-muted)] space-y-1">
                       {(fleetCpk.fleet || []).filter((f) => Number(f?.unregistered_cost) > 0).map((f, i) => (
                         <p key={i}>
-                          {f.country}: {fmtCpkMoney(f.unregistered_cost, f.currency || f.country)} of spend sits on assets not in the fleet register, so it is left out of the per-asset figures.
+                          {t('expense.fleetCpk.unregistered', { country: f.country, amount: fmtCpkMoney(f.unregistered_cost, f.currency || f.country) })}
                         </p>
                       ))}
                     </div>
@@ -1746,17 +1732,17 @@ export default function ExpenseReport() {
                   {/* By asset type (worst CPK first) */}
                   <Card className="overflow-x-auto">
                     <CardHeader
-                      title="Tyre spend ratio and cost per engine hour by asset type"
+                      title={t('expense.fleetCpk.byType')}
                       level={3}
                       icon={Layers}
                       actions={(
-                        <span className="text-xs text-[var(--text-muted)]">{cpkByType.length} types | highest rate first</span>
+                        <span className="text-xs text-[var(--text-muted)]">{t('expense.fleetCpk.typesCount', { n: cpkByType.length })}</span>
                       )}
                     />
                     <p className="text-xs text-[var(--text-muted)] mb-2">
-                      {cpkTypeStats.measured} of {cpkTypeStats.types} types measurable
-                      {cpkTypeStats.unmeasured > 0 ? `; ${cpkTypeStats.unmeasured} have no distance or hours, so CPK reads N/A` : ''}
-                      {cpkTypeStats.worstType ? `. Highest total CPK: ${cpkTypeStats.worstType}${cpkTypeStats.worstCountry ? ` (${cpkTypeStats.worstCountry})` : ''}.` : ''}
+                      {t('expense.fleetCpk.measurable', { measured: cpkTypeStats.measured, types: cpkTypeStats.types })}
+                      {cpkTypeStats.unmeasured > 0 ? `; ${t('expense.fleetCpk.unmeasured', { n: cpkTypeStats.unmeasured })}` : ''}
+                      {cpkTypeStats.worstType ? `. ${t('expense.fleetCpk.worst', { type: `${cpkTypeStats.worstType}${cpkTypeStats.worstCountry ? ` (${cpkTypeStats.worstCountry})` : ''}` })}` : ''}
                     </p>
                     <EnterpriseTable
                       columns={cpkTypeColumns}
@@ -1764,9 +1750,9 @@ export default function ExpenseReport() {
                       getRowId={(r) => r.key}
                       enableColumnFilters={false}
                       enableExport={false}
-                      searchPlaceholder="Search asset types"
+                      searchPlaceholder={t('expense.fleetCpk.search')}
                       initialPageSize={25}
-                      emptyMessage="No asset-type data"
+                      emptyMessage={t('expense.fleetCpk.noTypeData')}
                     />
                   </Card>
                 </>

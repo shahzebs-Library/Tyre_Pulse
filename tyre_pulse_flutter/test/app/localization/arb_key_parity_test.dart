@@ -695,10 +695,15 @@ void main() {
     // and Urdu font).
     // 2707 + 7 = 2714: the Article 91 fault finding (title, not recorded, four
     // findings) and the block when it was a third party or force majeure.
-    test('en, ar and ur each carry exactly 2714 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2714);
-      expect(_translatableKeys(ar).length, 2714);
-      expect(_translatableKeys(ur).length, 2714);
+    // 2714 + 65 = 2779: Profile's Sync queue and Drafts screens; + 2 = 2781:
+    // the not-active screen's "Check again" button and its "still not
+    // active" reply (accessBlockedCheckAgain / StillWaiting).
+    // 2781 + 1 = 2782: homeRoleCopyCatalog, the per-role Home tiles and rows
+    // (one catalog key, like the other *CopyCatalog keys).
+    test('en, ar and ur each carry exactly 2782 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2782);
+      expect(_translatableKeys(ar).length, 2782);
+      expect(_translatableKeys(ur).length, 2782);
     });
   });
 

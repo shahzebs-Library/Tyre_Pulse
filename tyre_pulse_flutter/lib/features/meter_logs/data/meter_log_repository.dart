@@ -97,7 +97,11 @@ import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
+import 'package:tyre_pulse/core/sync/module_photo_command_pusher.dart'
+    show modulePhotoFileName;
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
+import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart'
+    show meterLogMediaPrefix, moduleMediaBucket;
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/meter_logs/data/meter_reading.dart';
 import 'package:uuid/uuid.dart';
@@ -342,8 +346,9 @@ final class SupabaseMeterLogRepository
           : <QueuedMediaAttachment>[
               QueuedMediaAttachment(
                 localPath: input.odometerPhotoLocalPath!,
-                fileName: _basename(input.odometerPhotoLocalPath!),
+                fileName: _photoFileName(input.odometerPhotoLocalPath!),
                 orderIndex: 0,
+                bucket: moduleMediaBucket,
               ),
             ],
       country: input.country ?? workspace.activeCountry,
@@ -375,8 +380,9 @@ final class SupabaseMeterLogRepository
             : <QueuedMediaAttachment>[
                 QueuedMediaAttachment(
                   localPath: input.hoursPhotoLocalPath!,
-                  fileName: _basename(input.hoursPhotoLocalPath!),
+                  fileName: _photoFileName(input.hoursPhotoLocalPath!),
                   orderIndex: 0,
+                  bucket: moduleMediaBucket,
                 ),
               ],
         country: input.country ?? workspace.activeCountry,
@@ -401,6 +407,16 @@ final class SupabaseMeterLogRepository
   /// hyphen sits at index 8), so this reads identically to the reference's
   /// own slice.
   static String _freshSuffix() => _uuid.v4().substring(0, 8);
+
+  /// Lands under `tyre-photos/modules/meter-log/<user>/` - the namespace the
+  /// released app uses for gauge photos - and the payload's local path is
+  /// swapped for its tp-storage reference at push time
+  /// (`ModulePhotoCommandPusher`).
+  static String _photoFileName(String path) => modulePhotoFileName(
+        prefix: meterLogMediaPrefix,
+        unique: _uuid.v4(),
+        localName: _basename(path),
+      );
 
   static String _basename(String path) {
     final int slash = path.lastIndexOf(RegExp(r'[\\/]'));

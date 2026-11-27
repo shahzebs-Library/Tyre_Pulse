@@ -41,9 +41,26 @@
 /// # The literal constants the reference screen hard-codes on every submit
 ///
 /// `qty` is always `1`, `risk_level` is always `'Low'`, `category` is
-/// always `'Tyre Change'`, and `fitment_date`/`issue_date` are BOTH set to
-/// TODAY - reproduced here verbatim, not made configurable, because the
-/// reference never exposes a control for any of the four.
+/// always `'Tyre Change'`, and `issue_date` is set to TODAY - reproduced
+/// here verbatim, not made configurable, because the reference never
+/// exposes a control for any of them.
+///
+/// # `fitment_date` is NEVER sent
+///
+/// `tyre_records.fitment_date` is a GENERATED column (it always equals
+/// `issue_date`). Postgres refuses any insert that names a generated column
+/// (SQLSTATE 428C9), so sending it - as an earlier version of this payload
+/// did - made every queued tyre change fail on the server. Setting
+/// `issue_date` is what sets `fitment_date`.
+///
+/// # Known gap, owner decision pending
+///
+/// This insert records the NEW tyre only. It does not close the tyre that
+/// was previously active on the same asset + position, and the server's
+/// `guard_tyre_active_fitment` trigger refuses a second active tyre on one
+/// wheel. Closing the old fitment atomically needs a server RPC, which is an
+/// owner decision; until then such a change surfaces as a visible sync
+/// failure rather than being silently treated as synced.
 ///
 /// # `serial_no` / `serial_number` / `tyre_serial` - one typed value, three
 /// # columns
@@ -53,16 +70,12 @@
 /// null; serial_no: sn, serial_number: sn, tyre_serial: sn`. This port does
 /// the same.
 ///
-/// # `tyre_position` is deliberately left unset
+/// # `position` AND `tyre_position` carry the same value
 ///
-/// `CommandRegistry.specFor(CommandType.tyreChange).fieldAllowList`
-/// includes `tyre_position` as well as `position`, but the reference screen
-/// only ever writes `position`. This repository follows the reference
-/// exactly: writing a second column the production screen never populates,
-/// on a guess about what it might be for, is precisely the invention
-/// AGENTS.md rule 1 forbids. If `tyre_position` is later shown to be the
-/// column another surface actually reads, that is a considered follow-up
-/// change to this ONE payload map, not a silent addition made here.
+/// The server-side fitment guard and several web readers key on
+/// `tyre_position`, while older readers use `position`. Writing only one
+/// left the new fitment invisible to whichever surface read the other, so
+/// both columns get the same canonical code.
 ///
 /// # `photos` - a flat list, the SAME shape wash/meter-log already use
 ///
@@ -198,6 +211,7 @@ final class DefaultTyreReplacementRepository
         'site': _trimmedOrNull(input.site),
         'country': input.country,
         'position': position,
+        'tyre_position': position,
         'brand': _trimmedOrNull(input.brand),
         'size': _trimmedOrNull(input.size),
         'serial_no': sn,
@@ -207,7 +221,6 @@ final class DefaultTyreReplacementRepository
         'qty': 1,
         'km_at_fitment': input.kmAtFitment,
         'tread_depth': input.treadDepthMm,
-        'fitment_date': today,
         'issue_date': today,
         'risk_level': 'Low',
         'category': 'Tyre Change',

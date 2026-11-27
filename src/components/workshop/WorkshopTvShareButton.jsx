@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { createWorkshopShare, buildWorkshopTvUrl } from '../../lib/api/reportShares'
 import { toUserMessage } from '../../lib/safeError'
 import Modal from '../ui/Modal'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const ELEVATED_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -51,6 +52,8 @@ export default function WorkshopTvShareButton({ className = '' }) {
   const [error, setError] = useState('')
   const [minted, setMinted] = useState(null) // { url }
   const [copied, setCopied] = useState(false)
+  const { t } = useLanguage()
+  const tv = (k, v) => t(`workshop.tv.${k}`, v)
 
   const reset = useCallback(() => {
     setForm(EMPTY_FORM); setError(''); setMinted(null); setCopied(false); setBusy(false)
@@ -72,11 +75,12 @@ export default function WorkshopTvShareButton({ className = '' }) {
       if (!token) throw new Error('No token returned')
       setMinted({ url: buildWorkshopTvUrl(token) })
     } catch (err) {
-      setError(toUserMessage(err, 'Could not create the share link.'))
+      setError(toUserMessage(err, tv('createFailed')))
     } finally {
       setBusy(false)
     }
-  }, [form])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- tv only reads the current language
+  }, [form, t])
 
   const copyLink = useCallback(async () => {
     if (!minted?.url) return
@@ -97,71 +101,71 @@ export default function WorkshopTvShareButton({ className = '' }) {
         className={`inline-flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 min-h-[44px] text-sm font-semibold text-[var(--text-primary)] hover:opacity-90 ${className}`}
       >
         <Tv size={16} aria-hidden="true" />
-        <span>Share TV board</span>
+        <span>{tv('button')}</span>
       </button>
 
       <Modal
         open={open}
         onClose={close}
         size="sm"
-        title={<span className="flex items-center gap-2"><Tv size={20} className="text-blue-500" aria-hidden="true" /> Share workshop TV board</span>}
+        title={<span className="flex items-center gap-2"><Tv size={20} className="text-blue-500" aria-hidden="true" /> {tv('title')}</span>}
       >
         {minted ? (
           <div className="space-y-4">
             <div role="status" className="flex items-start gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-[var(--text-primary)]">
               <ShieldCheck size={18} className="mt-0.5 shrink-0 text-emerald-500" aria-hidden="true" />
-              <span>Read-only link created. Copy it now; it opens the live board with no login. Revoke it any time from Report Sharing.</span>
+              <span>{tv('created')}</span>
             </div>
             <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-2">
-              <input readOnly value={minted.url} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 bg-transparent px-2 text-sm text-[var(--text-primary)] outline-none" aria-label="Share link" />
+              <input readOnly value={minted.url} onFocus={(e) => e.target.select()} className="flex-1 min-w-0 bg-transparent px-2 text-sm text-[var(--text-primary)] outline-none" aria-label={tv('linkAria')} />
               <button type="button" onClick={copyLink} className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 min-h-[44px] text-sm font-semibold text-white hover:bg-green-500">
                 {copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
-                <span aria-live="polite">{copied ? 'Copied' : 'Copy'}</span>
+                <span aria-live="polite">{copied ? tv('copied') : tv('copy')}</span>
               </button>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <a href={minted.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 min-h-[44px] text-sm font-semibold text-blue-500 hover:text-blue-400">
-                <ExternalLink size={15} aria-hidden="true" /> Open board
+                <ExternalLink size={15} aria-hidden="true" /> {tv('open')}
               </a>
-              <button type="button" onClick={close} className="btn-secondary px-3 min-h-[44px] text-sm font-semibold">Done</button>
+              <button type="button" onClick={close} className="btn-secondary px-3 min-h-[44px] text-sm font-semibold">{tv('done')}</button>
             </div>
           </div>
         ) : (
           <form onSubmit={submit} className="space-y-4">
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Board name</span>
+              <span className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{tv('name')}</span>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-green-500"
-                placeholder="Workshop live board"
+                placeholder={tv('namePlaceholder')}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 flex items-center gap-1 text-sm font-medium text-[var(--text-secondary)]"><Clock size={14} aria-hidden="true" /> Refresh every (seconds)</span>
+              <span className="mb-1 flex items-center gap-1 text-sm font-medium text-[var(--text-secondary)]"><Clock size={14} aria-hidden="true" /> {tv('refresh')}</span>
               <input
                 type="number" min={REFRESH_SEC_MIN} max={REFRESH_SEC_MAX}
                 value={form.refreshSeconds}
                 onChange={(e) => setForm((f) => ({ ...f, refreshSeconds: e.target.value }))}
                 className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-green-500"
               />
-              <span className="mt-1 block text-xs text-[var(--text-muted)]">The board reloads its numbers on this cadence ({REFRESH_SEC_MIN} to {REFRESH_SEC_MAX} seconds).</span>
+              <span className="mt-1 block text-xs text-[var(--text-muted)]">{tv('refreshHint', { min: REFRESH_SEC_MIN, max: REFRESH_SEC_MAX })}</span>
             </label>
 
             <label className="block">
-              <span className="mb-1 flex items-center gap-1 text-sm font-medium text-[var(--text-secondary)]"><Lock size={14} aria-hidden="true" /> Viewer password (optional)</span>
+              <span className="mb-1 flex items-center gap-1 text-sm font-medium text-[var(--text-secondary)]"><Lock size={14} aria-hidden="true" /> {tv('password')}</span>
               <input
                 type="text" autoComplete="off"
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                 className="w-full min-h-[44px] rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-green-500"
-                placeholder="Leave blank for no password"
+                placeholder={tv('passwordPlaceholder')}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">Expires on (optional)</span>
+              <span className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{tv('expires')}</span>
               <input
                 type="date"
                 value={form.expires}
@@ -177,10 +181,10 @@ export default function WorkshopTvShareButton({ className = '' }) {
             )}
 
             <div className="flex justify-end gap-2 pt-1">
-              <button type="button" onClick={close} className="btn-secondary px-4 min-h-[44px] text-sm font-semibold">Cancel</button>
+              <button type="button" onClick={close} className="btn-secondary px-4 min-h-[44px] text-sm font-semibold">{tv('cancel')}</button>
               <button type="submit" disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-4 min-h-[44px] text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-60">
                 {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Tv size={16} aria-hidden="true" />}
-                <span>{busy ? 'Creating...' : 'Create link'}</span>
+                <span>{busy ? tv('creating') : tv('create')}</span>
               </button>
             </div>
           </form>

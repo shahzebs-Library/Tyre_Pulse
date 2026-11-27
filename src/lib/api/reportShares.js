@@ -114,7 +114,7 @@ export async function updateReportShare(id, patch = {}) {
  *   values mean "all" and are sent as null.
  */
 export async function getReportSnapshot(token, password = null, opts = {}) {
-  const { data, error } = await supabase.rpc('get_report_snapshot', {
+  let q = supabase.rpc('get_report_snapshot', {
     p_token: token,
     p_password: password,
     p_site: opts.site || null,
@@ -122,8 +122,59 @@ export async function getReportSnapshot(token, password = null, opts = {}) {
     p_from: opts.from || null,
     p_to: opts.to || null,
   })
+  // Optional client-side ceiling so a hung request turns into a retryable
+  // failure instead of an endless spinner.
+  if (opts.timeoutMs && typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' && typeof q?.abortSignal === 'function') {
+    q = q.abortSignal(AbortSignal.timeout(opts.timeoutMs))
+  }
+  const { data, error } = await q
   if (error) { if (isBackendMissing(error)) return { ok: false, reason: 'unavailable' }; throw toServiceError(error) }
   return data || { ok: false, reason: 'invalid' }
+}
+
+/**
+ * True for a failure worth one more try: a server statement timeout (57014,
+ * typical on the first cold open of a board), a client abort / timeout, or a
+ * network / gateway blip. A refusal (password, revoked, expired, invalid) is a
+ * normal reply, never an error, so it is never retried.
+ */
+export function isTransientSnapshotError(err) {
+  const code = String(err?.code ?? err?.cause?.code ?? '').toUpperCase()
+  const name = String(err?.name ?? err?.cause?.name ?? '')
+  const msg = String(err?.cause?.message ?? err?.message ?? '').toLowerCase()
+  if (code === '57014' || code === 'PGRST003' || code === '20') return true
+  if (name === 'AbortError' || name === 'TimeoutError') return true
+  const status = Number(err?.status ?? err?.cause?.status)
+  if (status === 502 || status === 503 || status === 504) return true
+  if (/timeout|timed out|canceling statement|failed to fetch|network|load failed|aborted|bad gateway|service unavailable|gateway time-?out/.test(msg)) return true
+  // A bare 502/503/504 counts only as a status code (start of the message, or
+  // after "status" / "http" / "code"), never as part of another number or id.
+  return /(?:^|\b(?:status|http|code)\s*(?:code)?\s*[:=]?\s*)50[234](?!\d)/.test(msg)
+}
+
+/** First-open ceilings: a normal attempt, then one longer attempt. */
+export const SNAPSHOT_ATTEMPT_TIMEOUTS_MS = [15000, 45000]
+
+/**
+ * getReportSnapshot with ONE automatic retry on a transient failure, using a
+ * longer client ceiling the second time. The first call on a cold database can
+ * hit the anon statement timeout; the second call runs against a warm cache.
+ * `onRetry` is called before the second attempt so the viewer can say it is
+ * still loading rather than showing an error. Throws the last error if both
+ * attempts fail.
+ */
+export async function getReportSnapshotWithRetry(token, password = null, opts = {}, { onRetry, timeouts = SNAPSHOT_ATTEMPT_TIMEOUTS_MS } = {}) {
+  let lastErr
+  for (let i = 0; i < timeouts.length; i += 1) {
+    try {
+      return await getReportSnapshot(token, password, { ...opts, timeoutMs: timeouts[i] })
+    } catch (err) {
+      lastErr = err
+      if (i === timeouts.length - 1 || !isTransientSnapshotError(err)) throw err
+      if (typeof onRetry === 'function') onRetry(i + 1)
+    }
+  }
+  throw lastErr
 }
 
 /**

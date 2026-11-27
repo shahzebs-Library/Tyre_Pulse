@@ -27,6 +27,7 @@ import {
   inspectionTrend, workspaceKpis, ITEM_STATUS, rowDay,
 } from '../../lib/inspectionWorkspaceView'
 import ObservationsBoard from './ObservationsBoard'
+import { useLanguage } from '../../contexts/LanguageContext'
 import './inspectionWorkspace.css'
 
 const PAGE = 8
@@ -44,28 +45,29 @@ const fmtTime = (ts) => {
 const meter = (v, unit) => (v == null || v === '' ? 'N/A' : `${Number(v).toLocaleString('en-US')} ${unit}`)
 
 const MODULES = [
-  { key: 'inspections', label: 'Inspections', sub: 'Conduct inspections', icon: ClipboardCheck },
-  { key: 'observations', label: 'Observations', sub: 'All findings and notes', icon: MessageSquare },
-  { key: 'checklists', label: 'Checklists', sub: 'Inspection templates', icon: ListChecks, to: '/checklists' },
-  { key: 'schedules', label: 'Inspection Schedules', sub: 'Planned inspections', icon: CalendarDays, to: '/inspection-planner' },
-  { key: 'actions', label: 'Corrective Actions', sub: 'Action management', icon: Wrench, to: '/actions' },
-  { key: 'reports', label: 'Reports', sub: 'Analysis and export', icon: BarChart3, to: '/inspection-intelligence' },
+  { key: 'inspections', icon: ClipboardCheck },
+  { key: 'observations', icon: MessageSquare },
+  { key: 'checklists', icon: ListChecks, to: '/checklists' },
+  { key: 'schedules', icon: CalendarDays, to: '/inspection-planner' },
+  { key: 'actions', icon: Wrench, to: '/actions' },
+  { key: 'reports', icon: BarChart3, to: '/inspection-intelligence' },
 ]
 
 /** One finding's own photo as a thumbnail; a click opens it large with Download. */
 function FindingThumb({ item, onOpen }) {
+  const { t } = useLanguage()
   if (!item) {
-    return <span className="iw-fthumb iw-fthumb-none"><ImageOff size={14} aria-hidden="true" /><small>No photo taken</small></span>
+    return <span className="iw-fthumb iw-fthumb-none"><ImageOff size={14} aria-hidden="true" /><small>{t('inspections.workspace.photo.none')}</small></span>
   }
   if (item.status === 'loading') {
-    return <span className="iw-fthumb iw-fthumb-none"><Loader2 size={14} className="animate-spin" aria-hidden="true" /><small>Loading photo</small></span>
+    return <span className="iw-fthumb iw-fthumb-none"><Loader2 size={14} className="animate-spin" aria-hidden="true" /><small>{t('inspections.workspace.photo.loading')}</small></span>
   }
   if (item.status !== 'ready') {
-    return <span className="iw-fthumb iw-fthumb-none"><ImageOff size={14} aria-hidden="true" /><small>Photo could not be opened</small></span>
+    return <span className="iw-fthumb iw-fthumb-none"><ImageOff size={14} aria-hidden="true" /><small>{t('inspections.workspace.photo.failed')}</small></span>
   }
   return (
-    <button type="button" className="iw-fthumb" onClick={onOpen} aria-label={`Open photo of ${item.label}`}>
-      <img src={item.url} alt={`Photo of ${item.label}`} loading="lazy" />
+    <button type="button" className="iw-fthumb" onClick={onOpen} aria-label={t('inspections.workspace.photo.openAria', { label: item.label })}>
+      <img src={item.url} alt={t('inspections.workspace.photo.alt', { label: item.label })} loading="lazy" />
     </button>
   )
 }
@@ -76,15 +78,16 @@ function Pill({ tone, children }) {
 
 /** Small three-series line chart. Real daily counts; a flat line means a quiet day, not missing data. */
 function TrendChart({ trend }) {
+  const { t } = useLanguage()
   const W = 520; const H = 170; const P = { l: 26, r: 8, t: 10, b: 22 }
   const max = Math.max(4, ...trend.completed, ...trend.pending, ...trend.overdue)
   const step = (W - P.l - P.r) / Math.max(1, trend.labels.length - 1)
   const y = (v) => H - P.b - (v / max) * (H - P.t - P.b)
   const path = (arr) => arr.map((v, i) => `${i ? 'L' : 'M'}${(P.l + i * step).toFixed(1)},${y(v).toFixed(1)}`).join(' ')
   const series = [
-    { key: 'completed', label: 'Completed', color: 'var(--cc-green)' },
-    { key: 'pending', label: 'Pending', color: 'var(--cc-blue)' },
-    { key: 'overdue', label: 'Overdue', color: 'var(--cc-red)' },
+    { key: 'completed', label: t('inspections.workspace.trend.completed'), color: 'var(--cc-green)' },
+    { key: 'pending', label: t('inspections.workspace.trend.pending'), color: 'var(--cc-blue)' },
+    { key: 'overdue', label: t('inspections.workspace.trend.overdue'), color: 'var(--cc-red)' },
   ]
   const ticks = [0, Math.round(max / 2), max]
   const xTicks = trend.labels.filter((_, i) => i % 5 === 0 || i === trend.labels.length - 1)
@@ -94,11 +97,11 @@ function TrendChart({ trend }) {
         {series.map((s) => <span key={s.key}><i style={{ background: s.color }} />{s.label}</span>)}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="iw-trend" role="img"
-        aria-label={`Inspections per day over ${trend.labels.length} days`}>
-        {ticks.map((t) => (
-          <g key={t}>
-            <line x1={P.l} x2={W - P.r} y1={y(t)} y2={y(t)} stroke="var(--cc-track)" />
-            <text x={P.l - 5} y={y(t) + 3} textAnchor="end" className="iw-axis">{t}</text>
+        aria-label={t('inspections.workspace.trend.aria', { days: trend.labels.length })}>
+        {ticks.map((tk) => (
+          <g key={tk}>
+            <line x1={P.l} x2={W - P.r} y1={y(tk)} y2={y(tk)} stroke="var(--cc-track)" />
+            <text x={P.l - 5} y={y(tk) + 3} textAnchor="end" className="iw-axis">{tk}</text>
           </g>
         ))}
         {xTicks.map((d) => {
@@ -118,6 +121,9 @@ export default function InspectionWorkspace({
   from, to, site, onFilter, onView, onPdf, onRaiseAction, onEdit, onApprove,
   onObservations, onAddObservation, now, country, regionOf,
 }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`inspections.workspace.${k}`, v)
+  const stageLabel = (s) => (s.key === 'scheduled' && s.label !== 'Scheduled' ? s.label : t(`inspections.workspace.stage.${s.key}`))
   const today = now || new Date()
   const [listTab, setListTab] = useState('all')
   const [q, setQ] = useState('')
@@ -187,7 +193,7 @@ export default function InspectionWorkspace({
   const flags = selected?.asset_no && flagMap ? flagMap[selected.asset_no] : null
 
   const unreadable = !!error
-  const show = (v) => (unreadable ? 'N/A' : fmtInt(v))
+  const show = (v) => (unreadable ? p('na') : fmtInt(v))
   const pageRows = list.slice(page * PAGE, page * PAGE + PAGE)
   const stage = inspectionStage(selected)
 
@@ -196,36 +202,36 @@ export default function InspectionWorkspace({
       <header className="iw-head">
         <span className="iw-head-icon" aria-hidden="true"><ClipboardCheck size={26} /></span>
         <div className="iw-head-copy">
-          <h1>Inspections &amp; Observations</h1>
-          <p>Conduct, track and manage multi-point vehicle inspections with photos, tyre readings and real-time observations.</p>
+          <h1>{p('title')}</h1>
+          <p>{p('subtitle')}</p>
         </div>
         <div className="iw-head-actions">{actions}</div>
       </header>
 
       <div className="iw-kpis">
-        <Kpi icon={ClipboardList} tone="t-blue" display={show(kpis.total)} label="Total inspections" loading={loading}
-          title={unreadable ? undefined : `${fmtInt(kpis.vehicles)} vehicles inspected`} />
-        <Kpi icon={CheckCircle2} tone="t-green" display={show(kpis.completed)} label={`Completed${kpis.completedPct == null || unreadable ? '' : `, ${kpis.completedPct}%`}`} loading={loading} />
-        <Kpi icon={Clock} tone="t-amber" display={show(kpis.pending)} label={`Pending${kpis.pendingPct == null || unreadable ? '' : `, ${kpis.pendingPct}%`}`} loading={loading} />
-        <Kpi icon={AlertTriangle} tone="t-red" display={show(kpis.overdue)} label={`Overdue${kpis.overduePct == null || unreadable ? '' : `, ${kpis.overduePct}%`}`} loading={loading} danger={!unreadable && kpis.overdue > 0} />
-        <Kpi icon={ShieldAlert} tone="t-red" display={show(kpis.critical)} label="Critical findings" loading={loading}
-          title="Inspections with a High or Critical severity, or a tyre recorded as damaged, flat or punctured" />
+        <Kpi icon={ClipboardList} tone="t-blue" display={show(kpis.total)} label={p('kpi.total')} loading={loading}
+          title={unreadable ? undefined : p('kpi.vehiclesInspected', { count: fmtInt(kpis.vehicles) })} />
+        <Kpi icon={CheckCircle2} tone="t-green" display={show(kpis.completed)} label={kpis.completedPct == null || unreadable ? p('kpi.completed') : p('kpi.completedPct', { pct: kpis.completedPct })} loading={loading} />
+        <Kpi icon={Clock} tone="t-amber" display={show(kpis.pending)} label={kpis.pendingPct == null || unreadable ? p('kpi.pending') : p('kpi.pendingPct', { pct: kpis.pendingPct })} loading={loading} />
+        <Kpi icon={AlertTriangle} tone="t-red" display={show(kpis.overdue)} label={kpis.overduePct == null || unreadable ? p('kpi.overdue') : p('kpi.overduePct', { pct: kpis.overduePct })} loading={loading} danger={!unreadable && kpis.overdue > 0} />
+        <Kpi icon={ShieldAlert} tone="t-red" display={show(kpis.critical)} label={p('kpi.critical')} loading={loading}
+          title={p('kpi.criticalHint')} />
         <div className="cc-card iw-filters">
-          <label><span>From</span><input type="date" className="cc-select" value={from || ''} onChange={(e) => onFilter('from', e.target.value)} /></label>
-          <label><span>To</span><input type="date" className="cc-select" value={to || ''} onChange={(e) => onFilter('to', e.target.value)} /></label>
-          <label><span>Site</span>
+          <label><span>{p('filters.from')}</span><input type="date" className="cc-select" value={from || ''} onChange={(e) => onFilter('from', e.target.value)} /></label>
+          <label><span>{p('filters.to')}</span><input type="date" className="cc-select" value={to || ''} onChange={(e) => onFilter('to', e.target.value)} /></label>
+          <label><span>{p('filters.site')}</span>
             <select className="cc-select" value={site || 'all'} onChange={(e) => onFilter('site', e.target.value)}>
-              <option value="all">All sites</option>
+              <option value="all">{p('filters.allSites')}</option>
               {sites.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
         </div>
       </div>
 
-      <nav className="iw-modules" aria-label="Inspection modules">
+      <nav className="iw-modules" aria-label={p('modules.aria')}>
         {MODULES.map((m) => {
           const Icon = m.icon
-          const body = (<><span className="iw-mod-icon"><Icon size={18} aria-hidden="true" /></span><span><b>{m.label}</b><small>{m.sub}</small></span></>)
+          const body = (<><span className="iw-mod-icon"><Icon size={18} aria-hidden="true" /></span><span><b>{t(`inspections.workspace.modules.${m.key}.label`)}</b><small>{t(`inspections.workspace.modules.${m.key}.sub`)}</small></span></>)
           if (m.to) return <Link key={m.key} to={m.to} className="iw-mod">{body}</Link>
           if (m.key === 'observations' || m.key === 'inspections') {
             const active = mode === m.key
@@ -243,7 +249,7 @@ export default function InspectionWorkspace({
       {unreadable && (
         <div className="cc-card iw-error" role="alert">
           <span>{error}</span>
-          <button type="button" className="cc-btn" onClick={onRetry}>Try again</button>
+          <button type="button" className="cc-btn" onClick={onRetry}>{p('tryAgain')}</button>
         </div>
       )}
 
@@ -261,17 +267,17 @@ export default function InspectionWorkspace({
         />
       ) : (<>
       <div className="iw-main">
-        <Card className="iw-list" title={`Vehicle Inspections (${unreadable ? 'N/A' : fmtInt(sorted.length)})`}>
+        <Card className="iw-list" title={p('list.title', { count: unreadable ? p('na') : fmtInt(sorted.length) })}>
           <div className="cc-search iw-search">
             <Search size={15} aria-hidden="true" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search vehicle, site, inspector..." aria-label="Search inspections" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={p('list.searchPlaceholder')} aria-label={p('list.searchAria')} />
           </div>
-          <Tabs label="Inspection queue" value={listTab} onChange={setListTab}
-            tabs={LIST_TABS.map((t) => ({ ...t, count: unreadable ? null : counts[t.key] }))} />
+          <Tabs label={p('list.queueAria')} value={listTab} onChange={setListTab}
+            tabs={LIST_TABS.map((lt) => ({ ...lt, label: t(`inspections.workspace.listTabs.${lt.key}`), count: unreadable ? null : counts[lt.key] }))} />
           {loading && !rows.length ? (
             <div className="iw-skel">{Array.from({ length: 6 }, (_, i) => <div key={i} className="cc-skel" style={{ height: 52 }} />)}</div>
           ) : !pageRows.length ? (
-            <div className="cc-empty">{unreadable ? 'Could not read the inspections.' : 'No inspection matches this view.'}</div>
+            <div className="cc-empty">{unreadable ? p('couldNotRead') : p('list.empty')}</div>
           ) : (
             <ul className="iw-rows">
               {pageRows.map((r) => {
@@ -281,12 +287,12 @@ export default function InspectionWorkspace({
                     <button type="button" className={`iw-row ${selected?.id === r.id ? 'is-sel' : ''}`} onClick={() => pick(r.id)} aria-pressed={selected?.id === r.id}>
                       <VehicleThumb row={r} size="sm" />
                       <span className="iw-row-main">
-                        <b>{r.asset_no || r.title || 'No asset'}</b>
-                        <small>{r.vehicle_type || r.inspection_type || 'Type not recorded'}</small>
-                        <small className="iw-row-site"><MapPin size={11} aria-hidden="true" />{r.site || 'No site'}</small>
+                        <b>{r.asset_no || r.title || p('noAsset')}</b>
+                        <small>{r.vehicle_type || r.inspection_type || p('typeNotRecorded')}</small>
+                        <small className="iw-row-site"><MapPin size={11} aria-hidden="true" />{r.site || p('noSite')}</small>
                       </span>
                       <span className="iw-row-side">
-                        <Pill tone={st.tone}>{st.label}</Pill>
+                        <Pill tone={st.tone}>{stageLabel(st)}</Pill>
                         <small>{fmtDay(rowDay(r))}</small>
                       </span>
                     </button>
@@ -295,64 +301,64 @@ export default function InspectionWorkspace({
               })}
             </ul>
           )}
-          {list.length > PAGE && <Pager page={page} pageSize={PAGE} total={list.length} onPage={setPage} noun="inspections" />}
+          {list.length > PAGE && <Pager page={page} pageSize={PAGE} total={list.length} onPage={setPage} noun={p('list.noun')} />}
         </Card>
 
         <Card className="iw-detail">
           {!selected ? (
-            <div className="cc-empty">{loading ? 'Loading inspections...' : 'Select an inspection to see its details.'}</div>
+            <div className="cc-empty">{loading ? p('detail.loading') : p('detail.select')}</div>
           ) : (
             <>
               {outsideList && (
                 <div className="iw-pinned" role="status">
-                  <span>Showing an older inspection of {selected.asset_no || 'this vehicle'} that is not in the list on the left.</span>
-                  <button type="button" className="cc-link cc-link-btn" onClick={() => pick(null)}><ArrowLeft size={12} aria-hidden="true" /> Back to list</button>
+                  <span>{p('detail.pinned', { asset: selected.asset_no || p('thisVehicle') })}</span>
+                  <button type="button" className="cc-link cc-link-btn" onClick={() => pick(null)}><ArrowLeft size={12} aria-hidden="true" /> {p('detail.backToList')}</button>
                 </div>
               )}
               <div className="iw-dhead">
                 <VehicleThumb row={selected} size="lg" />
                 <div className="iw-dhead-id">
                   <div className="iw-dhead-title">
-                    <h2>{selected.asset_no || selected.title || 'No asset'}</h2>
-                    <Pill tone={stage.tone}>{stage.label}</Pill>
+                    <h2>{selected.asset_no || selected.title || p('noAsset')}</h2>
+                    <Pill tone={stage.tone}>{stageLabel(stage)}</Pill>
                   </div>
-                  <p>{[selected.vehicle_type, selected.inspection_type].filter(Boolean).join(' | ') || 'Type not recorded'}</p>
+                  <p>{[selected.vehicle_type, selected.inspection_type].filter(Boolean).join(' | ') || p('typeNotRecorded')}</p>
                   <AiTyreProgress inspectionId={selected.id} />
                 </div>
                 <div className="iw-dhead-actions">
-                  <button type="button" className="cc-btn-ghost" onClick={() => onEdit(selected)}><Pencil size={14} aria-hidden="true" /> Edit</button>
-                  <button type="button" className="cc-btn-ghost" onClick={() => onPdf(selected)}><FileText size={14} aria-hidden="true" /> PDF</button>
+                  <button type="button" className="cc-btn-ghost" onClick={() => onEdit(selected)}><Pencil size={14} aria-hidden="true" /> {p('detail.edit')}</button>
+                  <button type="button" className="cc-btn-ghost" onClick={() => onPdf(selected)}><FileText size={14} aria-hidden="true" /> {p('detail.pdf')}</button>
                   {/* In the header, not the tyre table: observations, training records and
                       inspections without tyre readings still need signing. */}
                   {selected.approval_status === 'pending_approval' && onApprove && (
-                    <button type="button" className="cc-btn-primary" onClick={() => onApprove(selected)}>Review and sign</button>
+                    <button type="button" className="cc-btn-primary" onClick={() => onApprove(selected)}>{p('detail.reviewSign')}</button>
                   )}
-                  <button type="button" className="cc-btn-primary" onClick={() => onView(selected)}><Eye size={14} aria-hidden="true" /> Open</button>
+                  <button type="button" className="cc-btn-primary" onClick={() => onView(selected)}><Eye size={14} aria-hidden="true" /> {p('detail.open')}</button>
                 </div>
               </div>
               <div className="iw-facts">
-                <span><User size={15} aria-hidden="true" /><b>{selected.inspector || selected.attendees || 'N/A'}</b><small>Inspector</small></span>
-                <span><MapPin size={15} aria-hidden="true" /><b>{selected.site || 'N/A'}</b><small>Site</small></span>
-                <span><Gauge size={15} aria-hidden="true" /><b>{meter(selected.odometer_km, 'km')}</b><small>Odometer</small></span>
-                <span><Timer size={15} aria-hidden="true" /><b>{meter(selected.hour_meter, 'hrs')}</b><small>Engine hours</small></span>
-                <span><CalendarDays size={15} aria-hidden="true" /><b>{fmtDay(rowDay(selected))}</b><small>{fmtTime(selected.created_at) || 'Date'}</small></span>
+                <span><User size={15} aria-hidden="true" /><b>{selected.inspector || selected.attendees || p('na')}</b><small>{p('facts.inspector')}</small></span>
+                <span><MapPin size={15} aria-hidden="true" /><b>{selected.site || p('na')}</b><small>{p('facts.site')}</small></span>
+                <span><Gauge size={15} aria-hidden="true" /><b>{meter(selected.odometer_km, 'km')}</b><small>{p('facts.odometer')}</small></span>
+                <span><Timer size={15} aria-hidden="true" /><b>{meter(selected.hour_meter, 'hrs')}</b><small>{p('facts.engineHours')}</small></span>
+                <span><CalendarDays size={15} aria-hidden="true" /><b>{fmtDay(rowDay(selected))}</b><small>{fmtTime(selected.created_at) || p('facts.date')}</small></span>
               </div>
 
-              <Tabs variant="line" label="Inspection detail" value={detailTab} onChange={setDetailTab} tabs={[
-                { key: 'details', label: 'Inspection Details' },
-                { key: 'findings', label: 'Observations', count: selectedFindings.length },
-                { key: 'photos', label: 'Photos' },
-                { key: 'history', label: 'History', count: history.length },
+              <Tabs variant="line" label={p('detailTabs.aria')} value={detailTab} onChange={setDetailTab} tabs={[
+                { key: 'details', label: p('detailTabs.details') },
+                { key: 'findings', label: p('detailTabs.findings'), count: selectedFindings.length },
+                { key: 'photos', label: p('detailTabs.photos') },
+                { key: 'history', label: p('detailTabs.history'), count: history.length },
               ]} />
 
               {detailTab === 'details' && (
                 !sections.length ? (
                   <div className="cc-empty">
-                    <div>No tyre readings were recorded on this inspection.{selected.findings ? <><br />Findings: {selected.findings}</> : null}</div>
+                    <div>{p('detail.noReadings')}{selected.findings ? <><br />{p('findingsLabel')} {selected.findings}</> : null}</div>
                   </div>
                 ) : (
                   <div className="iw-check">
-                    <ul className="iw-sections" aria-label="Sections">
+                    <ul className="iw-sections" aria-label={p('detail.sectionsAria')}>
                       {sections.map((s) => {
                         const complete = s.done === s.total
                         return (
@@ -370,40 +376,40 @@ export default function InspectionWorkspace({
                       <div className="iw-items-head">
                         <div>
                           <h3>{activeSection?.label}</h3>
-                          <p>Condition, pressure and tread recorded per wheel.</p>
+                          <p>{p('detail.sectionHint')}</p>
                         </div>
                         {progress.total != null && (
                           <div className="iw-progress">
-                            <small>{progress.done} / {progress.total} positions recorded</small>
+                            <small>{p('detail.progress', { done: progress.done, total: progress.total })}</small>
                             <span><i style={{ width: `${progress.pct}%` }} /></span>
                           </div>
                         )}
                       </div>
-                      <div className="iw-table" role="table" aria-label={`${activeSection?.label} items`}>
+                      <div className="iw-table" role="table" aria-label={p('detail.itemsAria', { section: activeSection?.label || '' })}>
                         <div className="iw-tr iw-th" role="row">
-                          <span role="columnheader">Item</span><span role="columnheader">Status</span>
-                          <span role="columnheader">Remarks</span><span role="columnheader">Action</span>
+                          <span role="columnheader">{p('detail.colItem')}</span><span role="columnheader">{p('detail.colStatus')}</span>
+                          <span role="columnheader">{p('detail.colRemarks')}</span><span role="columnheader">{p('detail.colAction')}</span>
                         </div>
                         {activeSection?.items.map((it) => {
                           const meta = ITEM_STATUS[it.status]
                           return (
                             <div key={it.position} className="iw-tr" role="row">
                               <span role="cell"><b>{it.label}</b>{it.condition && it.status !== 'ok' && <small>{it.condition}</small>}</span>
-                              <span role="cell"><Pill tone={meta.tone}>{it.status === 'ok' ? <CheckCircle2 size={12} aria-hidden="true" /> : null}{meta.label}</Pill></span>
-                              <span role="cell" className="iw-remark">{it.remarks || (it.recorded ? 'No remarks' : 'Not recorded')}</span>
+                              <span role="cell"><Pill tone={meta.tone}>{it.status === 'ok' ? <CheckCircle2 size={12} aria-hidden="true" /> : null}{t(`inspections.workspace.itemStatus.${it.status}`)}</Pill></span>
+                              <span role="cell" className="iw-remark">{it.remarks || (it.recorded ? p('noRemarks') : p('notRecorded'))}</span>
                               <span role="cell">
                                 {(it.status === 'issue' || it.status === 'minor') && !selected.linked_action_id
-                                  ? <button type="button" className="cc-btn" onClick={() => raise(selected)}>Create action</button>
+                                  ? <button type="button" className="cc-btn" onClick={() => raise(selected)}>{p('detail.createAction')}</button>
                                   : it.status === 'issue' || it.status === 'minor'
-                                    ? <Link className="cc-link" to="/actions">Action raised</Link>
+                                    ? <Link className="cc-link" to="/actions">{p('detail.actionRaised')}</Link>
                                     : <span className="cc-na">-</span>}
                               </span>
                             </div>
                           )
                         })}
                       </div>
-                      {selected.findings && <p className="iw-note"><b>Findings:</b> {selected.findings}</p>}
-                      {selected.notes && <p className="iw-note"><b>Notes:</b> {selected.notes}</p>}
+                      {selected.findings && <p className="iw-note"><b>{p('findingsLabel')}</b> {selected.findings}</p>}
+                      {selected.notes && <p className="iw-note"><b>{p('notesLabel')}</b> {selected.notes}</p>}
                     </div>
                   </div>
                 )
@@ -412,7 +418,7 @@ export default function InspectionWorkspace({
               {detailTab === 'findings' && (
                 <div className="iw-fbody">
                   {!selectedFindings.length
-                    ? <div className="cc-empty">No tyre on this inspection was recorded as anything other than Good.</div>
+                    ? <div className="cc-empty">{p('detail.noFindings')}</div>
                     : (
                       <ul className="iw-finds iw-finds-photo">
                         {selectedFindings.map((f) => {
@@ -422,7 +428,7 @@ export default function InspectionWorkspace({
                               <FindingThumb item={ph} onOpen={() => setPhotoIndex(photoItems.indexOf(ph))} />
                               <span className="iw-find-text">
                                 <span><Pill tone={f.tone}>{f.severity}</Pill> <b>{f.position}</b> {f.condition}</span>
-                                <small>{f.notes || 'No remarks'}</small>
+                                <small>{f.notes || p('noRemarks')}</small>
                               </span>
                             </li>
                           )
@@ -431,10 +437,10 @@ export default function InspectionWorkspace({
                     )}
                   {(selected.findings || selected.notes || generalPhotos.length > 0) && (
                     <div className="iw-fnotes">
-                      {selected.findings && <p className="iw-note"><b>Findings:</b> {selected.findings}</p>}
-                      {selected.notes && <p className="iw-note"><b>Notes:</b> {selected.notes}</p>}
+                      {selected.findings && <p className="iw-note"><b>{p('findingsLabel')}</b> {selected.findings}</p>}
+                      {selected.notes && <p className="iw-note"><b>{p('notesLabel')}</b> {selected.notes}</p>}
                       {generalPhotos.length > 0 && (
-                        <div className="iw-fgallery" aria-label="Inspection photos">
+                        <div className="iw-fgallery" aria-label={p('detail.photosAria')}>
                           {generalPhotos.map((ph) => (
                             <FindingThumb key={ph.key} item={ph} onOpen={() => setPhotoIndex(photoItems.indexOf(ph))} />
                           ))}
@@ -448,19 +454,19 @@ export default function InspectionWorkspace({
                 </div>
               )}
 
-              {detailTab === 'photos' && <InspectionPhotos inspection={selected} showEvidence={false} title="Inspection photos" />}
+              {detailTab === 'photos' && <InspectionPhotos inspection={selected} showEvidence={false} title={p('detail.photosAria')} />}
 
               {detailTab === 'history' && (
-                !history.length ? <div className="cc-empty">No other inspection of this vehicle is loaded.</div> : (
+                !history.length ? <div className="cc-empty">{p('detail.noHistory')}</div> : (
                   <ul className="iw-finds">
                     {history.slice(0, 12).map((h) => {
                       const st = inspectionStage(h)
                       return (
                         <li key={h.id}>
                           <span className="iw-hist-day">{fmtDay(rowDay(h))}</span>
-                          <span>{h.inspection_type || 'Inspection'}{h.inspector ? `, ${h.inspector}` : ''}</span>
-                          <Pill tone={st.tone}>{st.label}</Pill>
-                          <button type="button" className="cc-link cc-link-btn" onClick={() => { pick(h.id, true); setDetailTab('details') }}>View <ArrowRight size={12} aria-hidden="true" /></button>
+                          <span>{h.inspection_type || p('detail.inspection')}{h.inspector ? `, ${h.inspector}` : ''}</span>
+                          <Pill tone={st.tone}>{stageLabel(st)}</Pill>
+                          <button type="button" className="cc-link cc-link-btn" onClick={() => { pick(h.id, true); setDetailTab('details') }}>{p('detail.view')} <ArrowRight size={12} aria-hidden="true" /></button>
                         </li>
                       )
                     })}
@@ -472,21 +478,21 @@ export default function InspectionWorkspace({
         </Card>
 
         <div className="iw-side">
-          <Card title="Vehicle Overview" sub="Tyre map as recorded on this inspection">
-            {selected ? <InspectionDiagram inspection={selected} width={300} showReadings={false} variant="board" /> : <div className="cc-empty">No inspection selected.</div>}
+          <Card title={p('side.overview')} sub={p('side.overviewSub')}>
+            {selected ? <InspectionDiagram inspection={selected} width={300} showReadings={false} variant="board" /> : <div className="cc-empty">{p('side.noneSelected')}</div>}
           </Card>
-          <Card title="Tyre Life Alerts" sub="From tyre running life today, not from photos">
-            {!selected ? <div className="cc-empty">No inspection selected.</div>
-              : flagMap == null ? <div className="cc-empty">Tyre life data is not available.</div>
+          <Card title={p('side.lifeAlerts')} sub={p('side.lifeAlertsSub')}>
+            {!selected ? <div className="cc-empty">{p('side.noneSelected')}</div>
+              : flagMap == null ? <div className="cc-empty">{p('side.lifeUnavailable')}</div>
                 : !flags || !flags.count ? (
-                  <div className="cc-empty">No tyre on {selected.asset_no || 'this vehicle'} is past or close to its expected life.</div>
+                  <div className="cc-empty">{p('side.lifeNone', { asset: selected.asset_no || p('thisVehicle') })}</div>
                 ) : (
                   <ul className="iw-finds">
-                    {[...flags.overdue.map((t) => ['bad', 'Past life', t]), ...flags.dueSoon.map((t) => ['warn', 'Due soon', t])].map(([tone, label, t], i) => (
-                      <li key={`${t.serial || t.position}-${i}`}>
+                    {[...flags.overdue.map((ty) => ['bad', p('side.pastLife'), ty]), ...flags.dueSoon.map((ty) => ['warn', p('side.dueSoon'), ty])].map(([tone, label, ty], i) => (
+                      <li key={`${ty.serial || ty.position}-${i}`}>
                         <Pill tone={tone}>{label}</Pill>
-                        <b>{t.position || 'Position not recorded'}</b>
-                        <span>{t.serial || 'No serial'}{t.lifeUsedPct != null ? `, ${Math.round(t.lifeUsedPct)}% life used` : ''}</span>
+                        <b>{ty.position || p('side.positionNotRecorded')}</b>
+                        <span>{ty.serial || p('side.noSerial')}{ty.lifeUsedPct != null ? p('side.lifeUsed', { pct: Math.round(ty.lifeUsedPct) }) : ''}</span>
                       </li>
                     ))}
                   </ul>
@@ -496,19 +502,19 @@ export default function InspectionWorkspace({
       </div>
 
       <div className="iw-bottom">
-        <Card title="Recent Observations" action={
+        <Card title={p('bottom.recent')} action={
           <span className="iw-actions">
-            {onAddObservation && <button type="button" className="cc-btn iw-inline" onClick={onAddObservation}><Plus size={12} aria-hidden="true" /> Add Observation</button>}
-            <button type="button" className="cc-link cc-link-btn" onClick={openObservations}>View all <ArrowRight size={12} aria-hidden="true" /></button>
+            {onAddObservation && <button type="button" className="cc-btn iw-inline" onClick={onAddObservation}><Plus size={12} aria-hidden="true" /> {p('bottom.addObservation')}</button>}
+            <button type="button" className="cc-link cc-link-btn" onClick={openObservations}>{p('bottom.viewAll')} <ArrowRight size={12} aria-hidden="true" /></button>
           </span>
         }>
-          {!findings.length ? <div className="cc-empty">{unreadable ? 'Could not read the inspections.' : 'No tyre in these inspections was recorded as anything other than Good.'}</div> : (
+          {!findings.length ? <div className="cc-empty">{unreadable ? p('couldNotRead') : p('bottom.noFindings')}</div> : (
             <ul className="iw-obs">
               {findings.map((f) => (
                 <li key={f.key}>
                   <button type="button" onClick={() => { pick(f.inspectionId, true); setDetailTab('findings') }}>
                     <span className={`iw-obs-dot ${f.tone}`} aria-hidden="true"><AlertTriangle size={15} /></span>
-                    <span className="iw-obs-main"><b>{f.condition} at {f.position}</b><small>{f.asset_no || 'No asset'}{f.site ? `, ${f.site}` : ''}</small></span>
+                    <span className="iw-obs-main"><b>{p('bottom.conditionAt', { condition: f.condition, position: f.position })}</b><small>{f.asset_no || p('noAsset')}{f.site ? `, ${f.site}` : ''}</small></span>
                     <span className="iw-obs-side"><Pill tone={f.tone}>{f.severity}</Pill><small>{fmtDay(f.day)}{f.inspector ? `, ${f.inspector}` : ''}</small></span>
                   </button>
                 </li>
@@ -516,13 +522,13 @@ export default function InspectionWorkspace({
             </ul>
           )}
         </Card>
-        <Card title="Defect Categories" sub="Tyre conditions other than Good">
-          {!defects.total ? <div className="cc-empty">No defect recorded in these inspections.</div>
-            : <Donut segments={defects.segments} total={defects.total} centerLabel="Total findings" />}
+        <Card title={p('bottom.defects')} sub={p('bottom.defectsSub')}>
+          {!defects.total ? <div className="cc-empty">{p('bottom.noDefects')}</div>
+            : <Donut segments={defects.segments} total={defects.total} centerLabel={p('bottom.totalFindings')} />}
         </Card>
-        <Card title="Inspection Trends" sub="Last 30 days, by inspection date">
-          {unreadable ? <div className="cc-empty">Could not read the inspections.</div>
-            : !trend.any ? <div className="cc-empty">No inspection is dated in the last 30 days.</div>
+        <Card title={p('bottom.trends')} sub={p('bottom.trendsSub')}>
+          {unreadable ? <div className="cc-empty">{p('couldNotRead')}</div>
+            : !trend.any ? <div className="cc-empty">{p('bottom.noTrend')}</div>
               : <TrendChart trend={trend} />}
         </Card>
       </div>

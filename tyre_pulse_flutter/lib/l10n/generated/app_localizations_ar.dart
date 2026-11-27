@@ -194,6 +194,13 @@ class AppLocalizationsAr extends AppLocalizations {
       'حسابك بانتظار الموافقة أو تم قفله. يمكن لمسؤول النظام معالجة ذلك.';
 
   @override
+  String get accessBlockedCheckAgain => 'تحقق مرة أخرى';
+
+  @override
+  String get accessBlockedStillWaiting =>
+      'حسابك لا يزال غير مفعّل. اطلب من مسؤول النظام الموافقة عليه.';
+
+  @override
   String get routeNotFoundTitle => 'هذه الشاشة غير موجودة';
 
   @override
@@ -2173,6 +2180,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get homeStatUnavailableCaption => 'تعذر التحقق';
 
   @override
+  String get homeRoleCopyCatalog =>
+      'meterTitle=سجّل عداد اليوم~meterNotLogged=لم يُسجَّل اليوم~meterLogged=سُجّل %time%~problemTitle=أبلغ عن مشكلة أو عطل~problemHint=أخبر الورشة بما هو معطّل~exceptionsTitle=استثناءات اليوم~offRoad=خارج الخدمة~openAccidents=حوادث مفتوحة~maintenanceOverdue=صيانة متأخرة~tyresAttention=إطارات تحتاج انتباهاً~handoverTitle=تسليمات بانتظار توقيعك~reportAccident=أبلغ عن حادث~approvalsTitle=موافقات بانتظارك~approvalsSplit=%a% فحوصات • %b% قوائم تحقق~issueTitle=أبلغ عن مشكلة~issueHint=شيء معطّل أو غير آمن~teamTitle=الفريق الآن~working=يعمل~waiting=ينتظر~free=متاح~teamNote=متاح يعني سجّل الحضور ولا يعمل. لا يمكن حساب الغياب: لا يوجد سجل حضور.~assignTitle=إسناد الأعمال~assignHint=%count% بطاقات عمل مفتوحة بدون مسؤول~assignGap=يفتح قائمة بطاقات العمل. الإسناد من الهاتف غير متاح بعد.~myJobsTitle=أعمالي~myJobsCount=%count% مفتوحة~myJobsNone=لا توجد أعمال مفتوحة~plantTitle=فحوصات المحطة اليوم~sheetsDue=%count% نماذج مستحقة~allDone=تم كل شيء اليوم~dailyTitle=الفحص اليومي للورشة~dueToday=مستحق اليوم~signTitle=موافقات للتوقيع~signHint=%count% بانتظار توقيعك~tyresDueTitle=إطارات مستحقة للاستبدال~myVehicle=مركبتي~noVehicle=لم يُسجَّل عداد بعد~wash=سجّل غسيلاً~washDays=آخر غسيل قبل %count% أيام~washToday=غُسلت اليوم~washNever=لا يوجد غسيل مسجّل~dailyChecklist=قائمة التحقق اليومية~charges=مخالفاتي ورسومي~chargesHint=المخالفات والرسوم وتوقيعاتك~summary=الملخص اليومي والتقارير~alerts=التنبيهات~plan=خطة اليوم~planOpen=%count% مفتوحة اليوم~repair=طلب إصلاح~meter=سجل العداد~inspectionsDue=فحوصات مستحقة اليوم~checklistsToSign=قوائم تحقق للتوقيع~waitingParts=بانتظار قطع الغيار~blocked=متوقف أكثر من 30 دقيقة~requestParts=اطلب قطع غيار~recent=الفحوصات الأخيرة~reorder=مخزون لإعادة الطلب~sync=بانتظار المزامنة~more=المزيد~open=افتح';
+
+  @override
   String get homeNoQuickActionsMessage =>
       'لا يتوفر لك شيء هنا بعد. تواصل مع المسؤول إذا احتجت إلى الوصول إلى إحدى الميزات.';
 
@@ -2897,7 +2908,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص~myCounts=عمليات الجرد الخاصة بي~transfers=التحويلات~needsApproval=فرق الجرد يحتاج إلى موافقة. استخدم الجرد لتسجيل ما على الرف؛ ويقوم المعتمِد بترحيل التغيير.~countNote=يُسجَّل جردك للمراجعة. لا يتغير رصيد المخزون إلا عندما يرحّل المعتمِد الفرق.~countRecorded=تم تسجيل الجرد للمراجعة.~countSavedOnPhone=تم حفظ الجرد على هذا الهاتف. سيُرسل عند عودة الاتصال.~countNoPlace=لا يحتوي بند المخزون هذا على مخزن أو دولة، لذا لا يمكن تسجيل الجرد.~countNeedsConnection=أول جرد في هذا المخزن يحتاج إلى اتصال لفتح جلسة جرد.~countRefused=لم يُقبل الجرد:';
+      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص~myCounts=عمليات الجرد الخاصة بي~transfers=التحويلات~needsApproval=فرق الجرد يحتاج إلى موافقة. استخدم الجرد لتسجيل ما على الرف؛ ويقوم المعتمِد بترحيل التغيير.~countNote=يُسجَّل جردك للمراجعة. لا يتغير رصيد المخزون إلا عندما يرحّل المعتمِد الفرق.~countRecorded=تم تسجيل الجرد للمراجعة.~countSavedOnPhone=تم حفظ الجرد على هذا الهاتف. سيُرسل عند عودة الاتصال.~countNoPlace=لا يحتوي بند المخزون هذا على مخزن أو دولة، لذا لا يمكن تسجيل الجرد.~countNeedsConnection=أول جرد في هذا المخزن يحتاج إلى اتصال لفتح جلسة جرد.~countRefused=لم يُقبل الجرد:~matches=مطابق~notMatch=غير مطابق~matchesRecorded=تم التسجيل: الرف مطابق للنظام.~matchesSavedOnPhone=تم الحفظ على هذا الهاتف: الرف مطابق للنظام. سيُرسل عند عودة الاتصال.~genuineQuestion=هل القطعة أصلية؟~genuine=أصلية~notGenuine=غير أصلية~genuineNote=ملاحظة عن القطعة (اختياري)~countedToday=تم الجرد اليوم~bin=الموقع~code=الرمز';
 
   @override
   String get calendarCopyCatalog =>
@@ -3016,7 +3027,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get workshopCopyCatalog =>
-      'title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب~photoLabel=صورة (اختياري)~takePhoto=الكاميرا~pickPhoto=المعرض~removePhoto=إزالة الصورة~photoLimit=حتى 3 صور~photoNotAttached=تم التسجيل. تعذّر إرفاق الصورة بدون اتصال.';
+      'title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب~photoLabel=صورة (اختياري)~takePhoto=الكاميرا~pickPhoto=المعرض~removePhoto=إزالة الصورة~photoLimit=حتى 3 صور~photoNotAttached=تم التسجيل. تعذّر إرفاق الصورة بدون اتصال.~c_whatDone=ما الذي تم إنجازه~c_parts=القطع المستخدمة~c_meters=قراءات العداد~c_km=عداد المسافة (كم)~c_hours=عداد الساعات~c_before=صور قبل العمل (اختياري)~c_after=صور بعد العمل~c_signature=توقيعك~returned=أعاده المشرف~waitingApproval=بانتظار موافقة المشرف~notAccepted=لم يُقبل:~c_queued=تم الحفظ على هذا الهاتف. يُرسل إلى المشرف فور توفر الاتصال.~c_stateQueued=في الانتظار على هذا الهاتف~c_stateFailed=تعذر الإرسال~c_stateSynced=تم الإرسال، بانتظار موافقة المشرف~jc_title=أعمال للمراجعة~jc_tabToCheck=للمراجعة~jc_tabReturned=المعادة~jc_emptyToCheck=لا يوجد عمل منجز بانتظارك.~jc_emptyReturned=لا يوجد عمل معاد.~jc_loadError=تعذر تحميل الأعمال.~jc_extra=دليل إضافي~jc_waiting=بانتظارك~jc_by=أنجزه~jc_returnReason=سبب الإعادة:~jc_noParts=لا توجد قطع مسجلة~jc_noMeters=لا توجد قراءة عداد~jc_photoUnavailable=الصورة غير متاحة~jc_pass=اعتماد وإغلاق~jc_return=إعادة العمل~jc_returnTitle=لماذا تتم الإعادة؟~jc_returnHint=اذكر ما الذي لا يزال يحتاج إلى إصلاح~jc_returnSend=إعادة العمل~jc_passed=تم اعتماد العمل وإغلاقه.~jc_returnedOk=تمت إعادة العمل. سيعيد مكتب البيانات إسناده.~jc_decideError=تعذر الحفظ. حاول مرة أخرى.~jc_signature=توقيع الفني';
 
   @override
   String get homeTodaysWork => 'عمل اليوم';
@@ -9387,4 +9398,232 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي.';
+
+  @override
+  String get profileSyncQueueTitle => 'قائمة المزامنة';
+
+  @override
+  String get syncQueueStatPending => 'قيد الانتظار';
+
+  @override
+  String get syncQueueStatAttention => 'تحتاج إلى متابعة';
+
+  @override
+  String get syncQueueStatSent => 'تم الإرسال';
+
+  @override
+  String get syncQueueStatSentCaption => 'لا يزال على هذا الجهاز';
+
+  @override
+  String syncQueueLastAttempt(String time) {
+    return 'آخر محاولة مزامنة: $time';
+  }
+
+  @override
+  String get syncQueueNoAttempt =>
+      'لم تُسجَّل أي محاولة مزامنة على هذا الجهاز بعد';
+
+  @override
+  String get syncQueueRunning => 'تجري المزامنة الآن';
+
+  @override
+  String get syncQueueSyncNow => 'زامن الآن';
+
+  @override
+  String get syncQueueOfflineReason =>
+      'أنت غير متصل. عملك محفوظ على هذا الهاتف وسيُرسل عند عودة الاتصال.';
+
+  @override
+  String get syncQueueNothingToSend => 'لا يوجد شيء بانتظار الإرسال.';
+
+  @override
+  String get syncQueueRequested =>
+      'تم طلب المزامنة. تتحدّث هذه القائمة مع إرسال العناصر.';
+
+  @override
+  String get syncQueueRequestFailed => 'تعذّر بدء المزامنة. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueEmptyTitle => 'تمت مزامنة كل شيء';
+
+  @override
+  String get syncQueueEmptyMessage =>
+      'لا يوجد شيء من هذا الجهاز بانتظار الإرسال.';
+
+  @override
+  String get syncQueueLoadFailedTitle => 'تعذّرت قراءة قائمة المزامنة';
+
+  @override
+  String get syncQueueLoadFailedMessage =>
+      'عملك المنتظر لا يزال على هذا الهاتف. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueSectionItems => 'العناصر في القائمة';
+
+  @override
+  String syncTypeInspection(String asset) {
+    return 'فحص $asset';
+  }
+
+  @override
+  String syncQueueItemQueued(String time) {
+    return 'أُضيف إلى القائمة $time';
+  }
+
+  @override
+  String syncQueueAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count محاولة',
+      many: '$count محاولة',
+      few: '$count محاولات',
+      two: 'محاولتان',
+      one: 'محاولة واحدة',
+      zero: 'لم تتم المحاولة بعد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncQueueNextAttempt(String time) {
+    return 'المحاولة التالية $time';
+  }
+
+  @override
+  String get syncQueueStateWaiting => 'بانتظار الإرسال';
+
+  @override
+  String get syncQueueStateSending => 'يُرسل الآن';
+
+  @override
+  String get syncQueueStateRetrying => 'ستتم إعادة المحاولة';
+
+  @override
+  String get syncQueueStateOnHold => 'معلّق';
+
+  @override
+  String get syncQueueStateNeedsAttention => 'تحتاج إلى متابعة';
+
+  @override
+  String get syncQueueStateSent => 'تم الإرسال';
+
+  @override
+  String get syncQueueRetry => 'إعادة المحاولة';
+
+  @override
+  String get syncQueueRetried => 'أُعيد إلى القائمة.';
+
+  @override
+  String get syncQueueRetryNotNeeded =>
+      'لم يعد هذا العنصر بانتظار إعادة المحاولة.';
+
+  @override
+  String get syncQueueRetryFailed =>
+      'تعذّرت إعادة محاولة هذا العنصر. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueErrorFallback => 'تعذّر إرسال هذا العنصر.';
+
+  @override
+  String get syncTypeTyreChange => 'تغيير إطار';
+
+  @override
+  String get syncTypeWorkOrder => 'أمر عمل';
+
+  @override
+  String get syncTypeRca => 'تحليل السبب الجذري';
+
+  @override
+  String get syncTypeReportIssue => 'مشكلة مُبلَّغ عنها';
+
+  @override
+  String get syncTypeStockAdjust => 'جرد المخزون';
+
+  @override
+  String get syncTypeWorkOrderStatus => 'حالة أمر العمل';
+
+  @override
+  String get syncTypeCorrectiveActionStatus => 'حالة الإجراء التصحيحي';
+
+  @override
+  String get syncTypeChecklistSubmission => 'قائمة تحقق';
+
+  @override
+  String get syncTypeChecklistAssignmentStatus => 'تكليف قائمة التحقق';
+
+  @override
+  String get syncTypeOdometerLog => 'قراءة العدّاد';
+
+  @override
+  String get syncTypeEngineHoursLog => 'قراءة ساعات المحرك';
+
+  @override
+  String get syncTypeReportAccident => 'تقرير حادث';
+
+  @override
+  String get syncTypeWashRecord => 'غسيل مركبة';
+
+  @override
+  String get syncTypeWorkshopEvent => 'نشاط الورشة';
+
+  @override
+  String get syncTypeInventoryCountLine => 'بند جرد المخزون';
+
+  @override
+  String get syncTypeUnknown => 'إدخال غير معروف';
+
+  @override
+  String get profileDraftsTitle => 'المسودات';
+
+  @override
+  String get profileDraftsEmptyTitle => 'لا توجد مسودات';
+
+  @override
+  String get profileDraftsEmptyMessage =>
+      'تظهر هنا قوائم التحقق والفحوصات غير المكتملة التي تبدؤها على هذا الهاتف.';
+
+  @override
+  String get profileDraftsLoadFailedTitle => 'تعذّرت قراءة مسوداتك';
+
+  @override
+  String get profileDraftsLoadFailedMessage =>
+      'مسوداتك لا تزال على هذا الهاتف. حاول مرة أخرى.';
+
+  @override
+  String get profileDraftKindChecklist => 'قائمة تحقق';
+
+  @override
+  String get profileDraftKindInspection => 'فحص';
+
+  @override
+  String profileDraftEdited(String time) {
+    return 'آخر تعديل $time';
+  }
+
+  @override
+  String get profileDraftNoAsset => 'لم يتم اختيار أصل بعد';
+
+  @override
+  String get profileDraftResume => 'متابعة';
+
+  @override
+  String get profileDraftDiscard => 'تجاهل';
+
+  @override
+  String get profileDraftDiscardTitle => 'هل تريد تجاهل هذه المسودة؟';
+
+  @override
+  String get profileDraftDiscardMessage =>
+      'سيُحذف كل ما سُجِّل في هذه المسودة من هذا الهاتف، بما في ذلك الصور والتواقيع. لا يمكن التراجع عن ذلك.';
+
+  @override
+  String get profileDraftDiscarded => 'تم تجاهل المسودة.';
+
+  @override
+  String get profileDraftDiscardFailed => 'تعذّر تجاهل المسودة. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueInspectionRetried =>
+      'تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة.';
 }

@@ -15,6 +15,12 @@ import {
   comparisonRows, cpkView, movers, evidenceBreakdown, PERIODS,
 } from '../../lib/costCpk'
 import { periodName } from '../../lib/defaultPeriod'
+import { useLanguage } from '../../contexts/LanguageContext'
+
+const EVIDENCE_KEYS = new Set([
+  'reviewed-master', 'code-range', 'description-tyre', 'brand-and-size',
+  'description-lubricant', 'accessory', 'job-card', 'default', 'unknown',
+])
 
 /**
  * Name the window rather than calling it "this period".
@@ -33,19 +39,20 @@ const pctText = (v) => (v == null ? 'N/A' : `${v > 0 ? '+' : ''}${(v * 100).toFi
 
 /** Green for down, red for up: on a COST page, falling is the good direction. */
 function DeltaPill({ ch, invert = false }) {
+  const { t } = useLanguage()
   if (!ch || ch.direction === 'unknown') {
-    return <span className="text-[11px] text-[var(--text-dim)]">N/A</span>
+    return <span className="text-[11px] text-[var(--text-dim)]">{t('expense.common.na')}</span>
   }
   if (ch.direction === 'new') {
-    return <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">New</span>
+    return <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">{t('expense.cpk.new')}</span>
   }
   if (ch.direction === 'stopped') {
-    return <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400">Stopped</span>
+    return <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400">{t('expense.cpk.stopped')}</span>
   }
   if (ch.direction === 'flat') {
     return (
       <span className="text-[11px] text-[var(--text-dim)] inline-flex items-center gap-1">
-        <Minus size={11} /> No change
+        <Minus size={11} /> {t('expense.cpk.noChange')}
       </span>
     )
   }
@@ -62,6 +69,7 @@ function DeltaPill({ ch, invert = false }) {
 
 /** Period picker. The window it produces is computed in costCpk.periodWindow. */
 export function PeriodBar({ value, onChange, windows }) {
+  const { t } = useLanguage()
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <div className="flex items-center gap-1 flex-wrap">
@@ -75,14 +83,14 @@ export function PeriodBar({ value, onChange, windows }) {
                 : 'bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
-            {p.label}
+            {t(`expense.period.${p.key}`)}
           </button>
         ))}
       </div>
       {windows?.current ? (
         <span className="text-[11px] text-[var(--text-dim)]">
-          {windowName(windows.current, 'Selected period')}
-          {windows.previous ? ` , compared with ${windowName(windows.previous, 'the period before')}` : ''}
+          {windowName(windows.current, t('expense.cpk.selectedPeriod'))}
+          {windows.previous ? ` , ${t('expense.cpk.comparedWith', { name: windowName(windows.previous, t('expense.cpk.thePeriodBefore')) })}` : ''}
         </span>
       ) : null}
     </div>
@@ -95,23 +103,23 @@ export function PeriodBar({ value, onChange, windows }) {
  * column is dropped rather than drawn twice.
  */
 export function ComparisonStrip({ snap, money }) {
+  const { t } = useLanguage()
   const { rows, previousIsLastYear, blended } = useMemo(() => comparisonRows(snap), [snap])
   // Real names, so the table still reads correctly once it has been exported or
   // forwarded and the picker is no longer on screen.
-  const curName = windowName(snap?.windows?.current, 'Selected period')
-  const prevName = windowName(snap?.windows?.previous, 'Period before')
-  const lastYearName = windowName(snap?.windows?.last_year, 'Same period last year')
+  const curName = windowName(snap?.windows?.current, t('expense.cpk.selectedPeriod'))
+  const prevName = windowName(snap?.windows?.previous, t('expense.cpk.periodBefore'))
+  const lastYearName = windowName(snap?.windows?.last_year, t('expense.cpk.sameLastYear'))
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-        <ArrowRight size={15} /> {curName} against {prevName}
+        <ArrowRight size={15} /> {t('expense.cpk.against', { cur: curName, prev: prevName })}
       </h2>
       {blended ? (
         <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-amber-300">
-            Pick a single country to see money here. Each country reports in its own currency,
-            so a combined figure would add SAR, AED and EGP together and mean nothing.
+            {t('expense.cpk.pickCountry')}
           </p>
         </div>
       ) : (
@@ -119,14 +127,14 @@ export function ComparisonStrip({ snap, money }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-                <th className="py-2 pr-3 font-semibold">Spend</th>
+                <th className="py-2 pr-3 font-semibold">{t('expense.cpk.spend')}</th>
                 <th className="py-2 px-3 font-semibold text-right">{curName}</th>
                 <th className="py-2 px-3 font-semibold text-right">{prevName}</th>
-                <th className="py-2 px-3 font-semibold text-right">Change</th>
+                <th className="py-2 px-3 font-semibold text-right">{t('expense.cpk.change')}</th>
                 {previousIsLastYear ? null : (
                   <>
                     <th className="py-2 px-3 font-semibold text-right">{lastYearName}</th>
-                    <th className="py-2 pl-3 font-semibold text-right">Change</th>
+                    <th className="py-2 pl-3 font-semibold text-right">{t('expense.cpk.change')}</th>
                   </>
                 )}
               </tr>
@@ -135,7 +143,7 @@ export function ComparisonStrip({ snap, money }) {
               {rows.map((r) => (
                 <tr key={r.key} className={`border-b border-[var(--hairline)]/60 ${
                   r.key === 'total' ? 'font-semibold' : ''}`}>
-                  <td className="py-2 pr-3 text-[var(--text-primary)]">{r.label}</td>
+                  <td className="py-2 pr-3 text-[var(--text-primary)]">{t(`expense.cpk.bucket.${r.key}`)}</td>
                   <td className="py-2 px-3 text-right text-[var(--text-primary)]">{money(r.current)}</td>
                   <td className="py-2 px-3 text-right text-[var(--text-secondary)]">{money(r.previous)}</td>
                   <td className="py-2 px-3 text-right"><DeltaPill ch={r.vsPrevious} /></td>
@@ -151,8 +159,7 @@ export function ComparisonStrip({ snap, money }) {
           </table>
           {previousIsLastYear ? (
             <p className="text-[11px] text-[var(--text-dim)] mt-2">
-              Over a twelve month range {prevName} and the same period last year are the same
-              dates, so they are shown once. Choose a shorter period to compare both.
+              {t('expense.cpk.shownOnce', { prev: prevName })}
             </p>
           ) : null}
         </div>
@@ -174,11 +181,15 @@ export function ComparisonStrip({ snap, money }) {
  * is too thin to support one.
  */
 export function CpkPanel({ snap, money }) {
+  const { t } = useLanguage()
   const v = useMemo(() => cpkView(snap), [snap])
   const cur = v.currency || ''
-  const fmtCpk = (n) => (n == null ? 'N/A' : `${n.toFixed(3)} ${cur} per vehicle km`)
+  const fmtCpk = (n) => (n == null ? t('expense.common.na') : t('expense.cpk.perVehicleKm', { value: n.toFixed(3), cur }))
   const M = metricDef(CPK_METRIC.OPERATING_COST_PER_VEHICLE_KM)
-  const fmtPct = (n) => (n == null ? 'N/A' : `${(n * 100).toFixed(1)}%`)
+  const fmtPct = (n) => (n == null ? t('expense.common.na') : `${(n * 100).toFixed(1)}%`)
+  const withheld = v.withheldReason
+    ? t(v.current.comparable ? 'expense.cpk.withheldEarlier' : 'expense.cpk.withheldCurrent')
+    : null
 
   return (
     <section className="space-y-3">
@@ -189,38 +200,38 @@ export function CpkPanel({ snap, money }) {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div className="card">
-          <p className="text-[11px] text-[var(--text-muted)]">This period</p>
+          <p className="text-[11px] text-[var(--text-muted)]">{t('expense.cpk.thisPeriod')}</p>
           <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{fmtCpk(v.current.cpk)}</p>
           <p className="text-[11px] text-[var(--text-dim)] mt-1">
-            {v.current.assetsMeasured} assets measured, {(v.current.km || 0).toLocaleString('en-US')} vehicle km
+            {t('expense.cpk.assetsMeasured', { n: v.current.assetsMeasured, km: (v.current.km || 0).toLocaleString('en-US') })}
           </p>
           <p className="text-[11px] text-[var(--text-dim)] mt-1">
-            Tyres {fmtCpk(v.current.cpkTyre)}. Maintenance {fmtCpk(v.current.cpkMaintenance)}.
+            {t('expense.cpk.split', { tyre: fmtCpk(v.current.cpkTyre), maint: fmtCpk(v.current.cpkMaintenance) })}
           </p>
         </div>
         <div className="card">
-          <p className="text-[11px] text-[var(--text-muted)]">Previous period</p>
+          <p className="text-[11px] text-[var(--text-muted)]">{t('expense.cpk.previousPeriod')}</p>
           <p className="text-2xl font-bold text-[var(--text-secondary)] leading-tight">{fmtCpk(v.previous.cpk)}</p>
           <div className="mt-1">
             {v.vsPrevious
               ? <DeltaPill ch={v.vsPrevious} />
-              : <span className="text-[11px] text-[var(--text-dim)]">Not comparable</span>}
+              : <span className="text-[11px] text-[var(--text-dim)]">{t('expense.cpk.notComparable')}</span>}
           </div>
         </div>
         <div className="card">
-          <p className="text-[11px] text-[var(--text-muted)]">Same period last year</p>
+          <p className="text-[11px] text-[var(--text-muted)]">{t('expense.cpk.sameLastYear')}</p>
           <p className="text-2xl font-bold text-[var(--text-secondary)] leading-tight">{fmtCpk(v.lastYear.cpk)}</p>
           <div className="mt-1">
             {v.vsLastYear
               ? <DeltaPill ch={v.vsLastYear} />
-              : <span className="text-[11px] text-[var(--text-dim)]">Not comparable</span>}
+              : <span className="text-[11px] text-[var(--text-dim)]">{t('expense.cpk.notComparable')}</span>}
           </div>
         </div>
         <div className="card">
-          <p className="text-[11px] text-[var(--text-muted)]">Odometer coverage</p>
+          <p className="text-[11px] text-[var(--text-muted)]">{t('expense.cpk.odometerCoverage')}</p>
           <p className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{fmtPct(v.current.coverage)}</p>
           <p className="text-[11px] text-[var(--text-dim)] mt-1">
-            of {money(v.current.spendTotal)} spend has measured distance
+            {t('expense.cpk.coverageOf', { spend: money(v.current.spendTotal) })}
           </p>
         </div>
       </div>
@@ -229,9 +240,7 @@ export function CpkPanel({ snap, money }) {
         <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
           <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5" />
           <p className="text-xs text-amber-300">
-            {v.withheldReason} A cost per vehicle km is only shown against a period where the
-            measured assets cover at least {Math.round((v.minCoverage || 0.25) * 100)}% of the spend,
-            so a change in coverage is never mistaken for a change in cost.
+            {withheld} {t('expense.cpk.withheldRule', { pct: Math.round((v.minCoverage || 0.25) * 100) })}
           </p>
         </div>
       ) : null}
@@ -239,10 +248,7 @@ export function CpkPanel({ snap, money }) {
       <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-sky-500/10 border border-sky-500/25">
         <Info size={13} className="text-sky-400 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-sky-300">
-          Distance comes from the odometer recorded when a tyre is fitted and when it is removed,
-          which is the only running-kilometre data the fleet currently captures. Logging daily
-          meter readings raises the coverage above and makes this figure fleet-wide. The tyre and
-          maintenance split reads N/A until the database function that returns it is updated.
+          {t('expense.cpk.distanceNote')}
         </p>
       </div>
     </section>
@@ -251,42 +257,40 @@ export function CpkPanel({ snap, money }) {
 
 /** What actually moved, biggest swing first. This is the "why" for the change above. */
 export function MoversPanel({ snap, money, dim, onDim }) {
+  const { t } = useLanguage()
   const rows = useMemo(() => movers(snap, dim, 12), [snap, dim])
-  const DIMS = [
-    ['by_asset', 'Asset'], ['by_site', 'Site'], ['by_item', 'Item'],
-    ['by_cost_center', 'Cost centre'], ['by_asset_type', 'Asset type'],
-  ]
+  const DIMS = ['by_asset', 'by_site', 'by_item', 'by_cost_center', 'by_asset_type']
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-          <TrendingUp size={15} /> What moved
+          <TrendingUp size={15} /> {t('expense.cpk.whatMoved')}
         </h2>
         <div className="flex items-center gap-1 flex-wrap">
-          {DIMS.map(([k, label]) => (
+          {DIMS.map((k) => (
             <button key={k} onClick={() => onDim(k)}
               className={`h-7 px-2.5 rounded-lg text-[11px] font-medium ${
                 dim === k ? 'bg-[var(--accent)] text-white'
                   : 'bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}>
-              {label}
+              {t(`expense.cpk.dim.${k}`)}
             </button>
           ))}
         </div>
       </div>
       {rows.length === 0 ? (
         <div className="card text-center py-6">
-          <p className="text-sm text-[var(--text-muted)]">Nothing changed between the two periods.</p>
+          <p className="text-sm text-[var(--text-muted)]">{t('expense.cpk.nothingChanged')}</p>
         </div>
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-[var(--text-muted)] border-b border-[var(--hairline)]">
-                <th className="py-2 pr-3 font-semibold">Name</th>
-                <th className="py-2 px-3 font-semibold text-right">Previous</th>
-                <th className="py-2 px-3 font-semibold text-right">This period</th>
-                <th className="py-2 px-3 font-semibold text-right">Difference</th>
-                <th className="py-2 pl-3 font-semibold text-right">Change</th>
+                <th className="py-2 pr-3 font-semibold">{t('expense.cpk.name')}</th>
+                <th className="py-2 px-3 font-semibold text-right">{t('expense.cpk.previous')}</th>
+                <th className="py-2 px-3 font-semibold text-right">{t('expense.cpk.thisPeriod')}</th>
+                <th className="py-2 px-3 font-semibold text-right">{t('expense.cpk.difference')}</th>
+                <th className="py-2 pl-3 font-semibold text-right">{t('expense.cpk.change')}</th>
               </tr>
             </thead>
             <tbody>
@@ -319,19 +323,21 @@ export function MoversPanel({ snap, money, dim, onDim }) {
  * beside the figures is what stops them being read as more certain than they are.
  */
 export function EvidencePanel({ snap, money }) {
+  const { t } = useLanguage()
+  const evLabel = (r) => (EVIDENCE_KEYS.has(r.key) ? t(`expense.cpk.evidence.${r.key}`) : r.label)
   const e = useMemo(() => evidenceBreakdown(snap), [snap])
   if (!e.rows.length) return null
   const weakPct = e.weakShare == null ? null : Math.round(e.weakShare * 100)
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-2">
-        <ShieldCheck size={15} /> How certain is this split
+        <ShieldCheck size={15} /> {t('expense.cpk.howCertain')}
       </h2>
       <div className="card space-y-3">
         <div className="flex h-3 rounded-full overflow-hidden bg-[var(--surface-raised)]">
           {e.rows.map((r) => (
             <div key={r.key}
-              title={`${r.label}: ${money(r.spend)}`}
+              title={`${evLabel(r)}: ${money(r.spend)}`}
               style={{ width: `${(r.share || 0) * 100}%` }}
               className={r.weak ? 'bg-amber-500/70' : 'bg-emerald-500/70'} />
           ))}
@@ -343,11 +349,11 @@ export function EvidencePanel({ snap, money }) {
                 <td className="py-1.5 pr-3">
                   <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
                     r.weak ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                  <span className="text-[var(--text-primary)]">{r.label}</span>
+                  <span className="text-[var(--text-primary)]">{evLabel(r)}</span>
                 </td>
                 <td className="py-1.5 px-3 text-right text-[var(--text-secondary)]">{money(r.spend)}</td>
                 <td className="py-1.5 pl-3 text-right text-[var(--text-muted)] w-16">
-                  {r.share == null ? 'N/A' : `${(r.share * 100).toFixed(0)}%`}
+                  {r.share == null ? t('expense.common.na') : `${(r.share * 100).toFixed(0)}%`}
                 </td>
               </tr>
             ))}
@@ -355,9 +361,7 @@ export function EvidencePanel({ snap, money }) {
         </table>
         {weakPct != null && weakPct > 0 ? (
           <p className="text-xs text-[var(--text-tertiary)]">
-            {weakPct}% of this spend was filed by the fallback rule, meaning nothing in the item
-            code or description identified it. Confirming those items in Material Master moves
-            them onto a decision rather than a guess.
+            {t('expense.cpk.weakNote', { pct: weakPct })}
           </p>
         ) : null}
       </div>

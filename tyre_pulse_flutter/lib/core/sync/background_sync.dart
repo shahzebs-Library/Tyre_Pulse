@@ -71,6 +71,8 @@ import 'package:tyre_pulse/core/storage/secure_slot_store_impl.dart';
 import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
 import 'package:tyre_pulse/core/sync/accident_evidence_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/inventory_count_command_pusher.dart';
+import 'package:tyre_pulse/core/sync/job_completion_evidence_command_pusher.dart';
+import 'package:tyre_pulse/core/sync/module_photo_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/sync_engine.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_inventory_repository.dart';
@@ -184,6 +186,16 @@ Future<bool> _runBackgroundSync() async {
 
     final SupabaseClient client = Supabase.instance.client;
     if (client.auth.currentUser?.id != workspace.userId) return true;
+    // A photo refused for a lapsed session gets one refresh before it waits.
+    Future<bool> refreshSession() async {
+      try {
+        final AuthResponse res = await client.auth.refreshSession();
+        return res.session != null && res.user?.id == workspace.userId;
+      } on Object {
+        return false;
+      }
+    }
+
     final SyncEngine engine = SyncEngine(
       queueDao: db.queueDao,
       mediaDao: ScopedMediaDao(
@@ -198,7 +210,21 @@ Future<bool> _runBackgroundSync() async {
         client: client,
         db: db,
         delegate: AccidentEvidenceCommandPusher(
-          delegate: SupabaseCommandPusher(client),
+          // Job completion photos are swapped for their uploaded references
+          // just before submit_job_completion is called.
+          delegate: JobCompletionEvidenceCommandPusher(
+            // Wash and meter-log photos are uploaded (or dropped with a
+            // visible reason) and swapped for their tp-storage references.
+            delegate: ModulePhotoCommandPusher(
+              delegate: SupabaseCommandPusher(client),
+              queueDao: db.queueDao,
+              mediaDao: db.mediaDao,
+              uploader: SupabaseMediaUploader(client),
+              refreshSession: refreshSession,
+            ),
+            queueDao: db.queueDao,
+            mediaDao: db.mediaDao,
+          ),
           queueDao: db.queueDao,
           mediaDao: db.mediaDao,
         ),
@@ -211,6 +237,7 @@ Future<bool> _runBackgroundSync() async {
       // holder id between them would let both believe they hold the sync
       // lock at once.
       holderId: const Uuid().v4(),
+      refreshSession: refreshSession,
     );
 
     await engine.runOnce(
@@ -312,11 +339,22 @@ class ConnectivitySyncTrigger {
     _wasOffline = !isOnline;
   }
 
-  Future<void> _triggerOneOffSync() {
-    return Workmanager().registerOneOffTask(
-      backgroundSyncOneOffTaskName,
-      backgroundSyncOneOffTaskName,
-      constraints: Constraints(networkType: NetworkType.connected),
-    );
-  }
+  Future<void> _triggerOneOffSync() => requestImmediateSync();
+}
+
+/// Asks for one sync pass now, through the SAME one-off Workmanager task the
+/// connectivity trigger uses - so a "Sync now" control adds no second
+/// execution path and no second engine. The pass itself still takes the
+/// queue's single sync lock (`QueueDao.acquireSyncLock`), so a request made
+/// while a periodic run is already in flight does no harm: the second run
+/// finds the lock held and stops.
+///
+/// Throws whatever the plugin throws when the task cannot be registered; the
+/// caller reports that to the person rather than pretending a sync started.
+Future<void> requestImmediateSync() {
+  return Workmanager().registerOneOffTask(
+    backgroundSyncOneOffTaskName,
+    backgroundSyncOneOffTaskName,
+    constraints: Constraints(networkType: NetworkType.connected),
+  );
 }

@@ -36,6 +36,7 @@ class TpInput extends StatelessWidget {
     this.autofocus = false,
     this.onChanged,
     this.onSubmitted,
+    this.textDirection,
     super.key,
   });
 
@@ -62,6 +63,10 @@ class TpInput extends StatelessWidget {
   final bool autofocus;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
+
+  /// Forces the typed value's direction, e.g. left-to-right for plate and
+  /// chassis codes on an Arabic screen. Null keeps the ambient direction.
+  final TextDirection? textDirection;
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +112,7 @@ class TpInput extends StatelessWidget {
           autofocus: autofocus,
           onChanged: onChanged,
           onSubmitted: onSubmitted,
+          textDirection: textDirection,
           style: textStyle ?? text.bodyLarge,
           decoration: InputDecoration(
             hintText: hint,

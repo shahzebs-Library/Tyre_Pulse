@@ -103,11 +103,12 @@ vi.mock('../contexts/SettingsContext', () => ({
     appSettings: { company_name: 'Green Concrete', currency: 'SAR' },
   }),
 }))
-// Raw keys back, so every assertion below reads the ENGLISH fallback the tx()
-// wrapper supplies - which is what a deploy with a missing locale entry renders.
-vi.mock('../contexts/LanguageContext', () => ({
-  useLanguage: () => ({ t: (k) => k, isRTL: false }),
-}))
+// English from the real locale file, so every assertion below reads the text a
+// user in English sees.
+vi.mock('../contexts/LanguageContext', async () => {
+  const { expenseT } = await import('./expenseT.helpers.js')
+  return { useLanguage: () => ({ t: expenseT, isRTL: false }) }
+})
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ profile: { role: 'Admin' }, isSuperAdmin: true }),
 }))

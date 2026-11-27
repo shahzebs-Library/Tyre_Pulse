@@ -7,6 +7,8 @@
 /// as an empty result.
 library;
 
+import 'dart:math' as math;
+
 import 'package:drift/drift.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/database_constants.dart';
@@ -300,6 +302,61 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
     );
   }
 
+  /// The per-item "Retry" on the sync queue screen: puts ONE `failed` row
+  /// back in the queue with its counter reset, exactly as [retryFailed] does
+  /// for every failed row at once.
+  ///
+  /// Only a row still `failed` is touched, so a stale tap on a row that has
+  /// since been retried, sent or pruned changes nothing. Returns whether a
+  /// row was reset.
+  Future<bool> retryFailedCommand(String id, {required DateTime now}) async {
+    final int changed = await (update(pendingCommands)
+          ..where(
+            (t) => t.id.equals(id) & t.status.equals(CommandStatus.failed),
+          ))
+        .write(
+      PendingCommandsCompanion(
+        status: const Value<String>(CommandStatus.pending),
+        retryCount: const Value<int>(0),
+        nextRetryAt: Value<DateTime>(now),
+        lastError: const Value<String?>(null),
+      ),
+    );
+    return changed > 0;
+  }
+
+  /// Every row still in the queue table for [workspaceId], newest first, as
+  /// a live list - `synced` rows included, because they stay on the device
+  /// until their photos are verified and a sync run prunes them.
+  ///
+  /// Read-only. A read failure surfaces as a stream error, never as an empty
+  /// list (an empty list would read as "everything is synced").
+  Stream<List<PendingCommand>> watchQueuedCommands({String? workspaceId}) {
+    return (select(pendingCommands)
+          ..where((t) {
+            if (workspaceId == null) return const Constant<bool>(true);
+            return t.workspaceId.equals(workspaceId);
+          })
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.createdAt),
+            (t) => OrderingTerm.desc(t.id),
+          ]))
+        .watch();
+  }
+
+  /// The sync lock and the last-run marker, live. Read-only: what the sync
+  /// queue screen needs to say "a sync is running" and "last sync attempt".
+  Stream<List<SyncMetadataEntry>> watchSyncRunMetadata() {
+    return (select(syncMetadata)
+          ..where(
+            (t) => t.key.isIn(<String>[
+              SyncMetadataKeys.syncLastRunAt,
+              SyncMetadataKeys.syncLockAcquiredAt,
+            ]),
+          ))
+        .watch();
+  }
+
   /// Returns to the queue a claim that a crashed sync run abandoned.
   ///
   /// Without this a crash mid-flight strands the row in `processing` forever
@@ -425,8 +482,12 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
         )..where((t) => t.commandId.equals(command.id)))
             .get();
 
+        // Abandoned photos are final too: the record went out without them
+        // and the reason was kept until now.
         final bool allVerified = media.every(
-          (PendingMediaUpload m) => m.state == MediaUploadState.verified,
+          (PendingMediaUpload m) =>
+              m.state == MediaUploadState.verified ||
+              m.state == MediaUploadState.abandoned,
         );
         if (!allVerified) {
           continue;
@@ -444,7 +505,29 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
         )..where((t) => t.id.equals(command.id)))
             .go();
       }
-      return filesToDelete;
+      if (filesToDelete.isEmpty) return filesToDelete;
+
+      // A file is only deleted when nothing left still points at it: two
+      // queued records (or a record and a draft) can share one photo file,
+      // and the other one still needs it.
+      final List<String> unique = filesToDelete.toSet().toList();
+      final Set<String> stillUsed = <String>{};
+      const int chunk = 400;
+      for (int i = 0; i < unique.length; i += chunk) {
+        final List<String> part =
+            unique.sublist(i, math.min(i + chunk, unique.length));
+        final remaining = await (select(pendingMediaUploads)
+              ..where((t) => t.localPath.isIn(part)))
+            .get();
+        stillUsed.addAll(remaining.map((PendingMediaUpload m) => m.localPath));
+        final drafts = await (select(attachedDatabase.draftPhotos)
+              ..where((t) => t.localPath.isIn(part)))
+            .get();
+        stillUsed.addAll(drafts.map((DraftPhoto d) => d.localPath));
+      }
+      return unique
+          .where((String path) => !stillUsed.contains(path))
+          .toList(growable: false);
     });
   }
 

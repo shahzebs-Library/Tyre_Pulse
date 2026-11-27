@@ -249,13 +249,13 @@ export default function ChecklistTab({
             {/* Card header with language toggle */}
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-[var(--text-primary)]">{CHECKLIST_LABELS[lang].title}</h3>
-              <div className="flex gap-1 p-0.5 bg-[var(--surface-2)] rounded-lg" role="group" aria-label="Checklist language">
+              <div className="flex gap-1 p-0.5 bg-[var(--surface-2)] rounded-lg" role="group" aria-label={t('inspections.formExtra.checklistLanguage')}>
                 {['en', 'ar'].map(l => (
                   <button
                     key={l}
                     type="button"
                     aria-pressed={lang === l}
-                    aria-label={l === 'en' ? 'English' : 'Arabic'}
+                    aria-label={l === 'en' ? t('inspections.formExtra.english') : t('inspections.formExtra.arabic')}
                     onClick={() => setLang(l)}
                     className={`px-3 min-h-[36px] min-w-[44px] py-1 rounded-md text-xs font-semibold transition-all ${
                       lang === l
@@ -376,7 +376,7 @@ export default function ChecklistTab({
                   </div>
 
                   {/* Position chips - tap any to jump, shows fill status */}
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tyre positions">
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('inspections.formExtra.tyrePositions')}>
                     {clPositions.map(p => {
                       const has = !!p.pressure
                       const isActive = p.position === clSelectedPos
@@ -528,7 +528,7 @@ export default function ChecklistTab({
               <p className="label flex items-center gap-1.5"><PenLine size={12} className="text-[var(--text-secondary)]" /> {t('inspections.form.inspectorSignature')}</p>
               {clSignature ? (
                 <div className="flex items-center gap-3">
-                  <img src={clSignature} alt="Inspector signature"
+                  <img src={clSignature} alt={t('inspections.formExtra.inspectorSignature')}
                     style={{ height: 56, maxWidth: 180, background: '#fff', borderRadius: 8, border: '1px solid var(--hairline)', padding: 4 }} />
                   <div>
                     <p className="text-xs font-semibold" style={{ color: '#16a34a' }}>{t('inspections.form.signedAs', { name: clInspector })}</p>

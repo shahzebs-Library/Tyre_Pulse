@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../components/inspection/AiTyreProgress', () => ({ default: () => null }))
@@ -7,6 +7,13 @@ vi.mock('../components/inspection/InspectionPhotos', () => ({ default: () => nul
 vi.mock('../components/inspection/InspectionDiagram', () => ({ default: () => null }))
 vi.mock('../lib/api/tyreChangeTracking', () => ({ listFitmentsForAssets: vi.fn(async () => ({ ok: true, rows: [] })) }))
 
+
+import { LanguageProvider, useLanguage } from '../contexts/LanguageContext'
+
+// The inspections namespace loads lazily; warm it once so synchronous queries
+// see the real English strings rather than the humanised placeholder.
+function WarmLocale() { const { t } = useLanguage(); return <span>{t('inspections.workspace.detail.createAction')}</span> }
+beforeAll(async () => { render(<LanguageProvider><WarmLocale /></LanguageProvider>); await screen.findByText('Create action'); cleanup() })
 import {
   observationRegister, filterObservations, observationSummary,
 } from '../lib/inspectionWorkspaceView'

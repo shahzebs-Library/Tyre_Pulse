@@ -260,6 +260,28 @@ export function ratioPct(numer, denom) {
  * an honest `empty` flag so the viewer can show "No data" instead of a broken
  * chart. The returned `kind` tells the viewer which ECharts option to build.
  */
+// Money channels the server may send per country instead of as one figure
+// (each country reports in its own currency): the per-country kpi list and the
+// field holding each country's amount.
+const PER_COUNTRY_MONEY = {
+  tyre_spend: ['tyre_spend_by_country', 'value'],
+  claims_claimed: ['claims_by_country', 'claimed'],
+  claims_recovered: ['claims_by_country', 'recovered'],
+}
+// Per-country 12-month series list for a money trend.
+const PER_COUNTRY_TREND = {
+  tyre_spend: 'tyre_spend_by_country',
+  claims_claimed: 'claims_by_country',
+  claims_recovered: 'claims_by_country',
+}
+/** True when a money trend is withheld because several currencies are in scope. */
+export function trendIsMixed(snapshot, path) {
+  const listKey = PER_COUNTRY_TREND[path]
+  if (!listKey) return false
+  const t = (snapshot || {}).trends || {}
+  return t[path] == null && arr(t[listKey]).filter((r) => r && r.country).length > 1
+}
+
 export function resolveBlock(block, snapshot) {
   const b = normalizeBlock(block)
   if (b.type === 'text') {
@@ -274,13 +296,21 @@ export function resolveBlock(block, snapshot) {
       const bag = s.from === 'ops' ? (snap.ops || {}) : (snap.kpis || {})
       const value = num(bag[s.path])
       const spark = s.from === 'ops' ? [] : arr((snap.trends || {})[s.path])
-      return { kind: 'kpi', value, money: !!s.money, label: b.title || s.label, spark, accent: b.accent, empty: false }
+      // Money with no single currency (all countries): one line per country,
+      // each in its own currency, instead of a misleading 0.
+      const pc = s.from !== 'ops' ? PER_COUNTRY_MONEY[s.path] : null
+      const perCountry = pc && (snap.kpis || {})[s.path] == null
+        ? arr((snap.kpis || {})[pc[0]]).filter((r) => r && r.country)
+          .map((r) => ({ key: r.country, currency: r.currency || r.country, value: num(r[pc[1]]) }))
+        : []
+      return { kind: 'kpi', value, money: !!s.money, label: b.title || s.label, spark, accent: b.accent, empty: false, perCountry }
     }
     case 'series': {
       const labels = arr(snap.labels)
       const data = arr((snap.trends || {})[s.path]).map(num)
       const empty = !labels.length || !data.some((n) => n > 0)
-      return { kind: 'series', viz: b.viz, labels, data, accent: b.accent, empty }
+      const mixed = trendIsMixed(snap, s.path)
+      return { kind: 'series', viz: b.viz, labels, data, accent: b.accent, empty, mixed }
     }
     case 'breakdown': {
       const items = arr((snap.breakdowns || {})[s.path])
@@ -292,14 +322,14 @@ export function resolveBlock(block, snapshot) {
       const spend = arr((snap.trends || {}).tyre_spend).map(num)
       const accidents = arr((snap.trends || {}).accidents).map(num)
       const empty = !labels.length || (!spend.some((n) => n > 0) && !accidents.some((n) => n > 0))
-      return { kind: 'combo', labels, spend, accidents, empty }
+      return { kind: 'combo', labels, spend, accidents, empty, mixed: trendIsMixed(snap, 'tyre_spend') }
     }
     case 'claims': {
       const labels = arr(snap.labels)
       const claimed = arr((snap.trends || {}).claims_claimed).map(num)
       const recovered = arr((snap.trends || {}).claims_recovered).map(num)
       const empty = !labels.length || (!claimed.some((n) => n > 0) && !recovered.some((n) => n > 0))
-      return { kind: 'claims', labels, claimed, recovered, empty }
+      return { kind: 'claims', labels, claimed, recovered, empty, mixed: trendIsMixed(snap, 'claims_claimed') }
     }
     case 'heatmap': {
       const rows = arr(snap.heatmap)

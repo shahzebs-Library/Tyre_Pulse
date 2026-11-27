@@ -25,6 +25,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { fetchAllPages } from '../lib/fetchAll'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { exportToPdf, exportToExcel, reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 import useLatestRequest from '../lib/useLatestRequest'
@@ -44,6 +45,7 @@ import TyreChangeTracking from '../components/tyre/TyreChangeTracking'
 import LifecycleAnalytics from '../components/tyreLifecycle/LifecycleAnalytics'
 import TyreHistoryPanel from '../components/tyreLifecycle/TyreHistoryPanel'
 import { LifeProgressionChart, TopBrandsBars } from '../components/tyreLifecycle/LifecycleCharts'
+import { statusLabels, categoryLabels } from '../lib/tyreLifecycleLabels'
 import './TyreLifecycle.css'
 
 const ROW_CAP = 50000
@@ -51,15 +53,36 @@ const REASON_COLORS = ['var(--cc-green)', 'var(--cc-blue)', 'var(--cc-amber)', '
 const BAND_COLOR = { overdue: 'var(--cc-red)', 'due-soon': 'var(--cc-amber)', 'mid-life': 'var(--cc-blue)', healthy: 'var(--cc-green)' }
 const EMPTY_FILTERS = { search: '', vehicleType: 'All', brand: 'All', position: 'All', status: 'All', site: 'All', category: 'All', from: '', to: '' }
 
-const na = <span className="cc-na">N/A</span>
+// Export header label keys, in VIEW_EXPORT_COLS order.
+function exportHeaders(t) {
+  const map = {
+    serial_number: t('tyrelifecycle.export.headers.serial'),
+    brand: t('tyrelifecycle.export.headers.brand'),
+    size: t('tyrelifecycle.export.headers.size'),
+    position: t('tyrelifecycle.export.headers.position'),
+    asset_no: t('tyrelifecycle.export.headers.asset'),
+    site: t('tyrelifecycle.export.headers.site'),
+    issue_date: t('tyrelifecycle.export.headers.fitmentDate'),
+    removal_date: t('tyrelifecycle.export.headers.removalDate'),
+    km_run: t('tyrelifecycle.export.headers.kmRun'),
+    category: t('tyrelifecycle.export.headers.category'),
+    cost: t('tyrelifecycle.export.headers.cost'),
+    cpk: t('tyrelifecycle.export.headers.cpk'),
+    stage: t('tyrelifecycle.export.headers.stage'),
+    status: t('tyrelifecycle.export.headers.status'),
+    life_used: t('tyrelifecycle.export.headers.lifeUsed'),
+  }
+  return VIEW_EXPORT_COLS.map((k, i) => map[k] || VIEW_EXPORT_HEADERS[i])
+}
 
 function LifeBar({ row }) {
+  const { t } = useLanguage()
   if (row._lifePct == null) {
-    return <span className="cc-na" title={row._stage === 'In Service' ? 'No running-life measure for this tyre' : 'Removed tyre'}>N/A</span>
+    return <span className="cc-na" title={row._stage === 'In Service' ? t('tyrelifecycle.table.noRunningLife') : t('tyrelifecycle.table.removedTyre')}>{t('tyrelifecycle.na')}</span>
   }
   const v = Math.round(row._lifePct)
   return (
-    <span className="cc-meter" title={row._lifeDim === 'hours' ? 'Judged on engine hours' : 'Judged on distance'}>
+    <span className="cc-meter" title={row._lifeDim === 'hours' ? t('tyrelifecycle.table.judgedHours') : t('tyrelifecycle.table.judgedDistance')}>
       <b>{v}%</b>
       <span className="cc-meter-track"><span style={{ width: `${Math.min(100, v)}%`, background: BAND_COLOR[row._band] || 'var(--cc-ink-3)' }} /></span>
     </span>
@@ -68,6 +91,12 @@ function LifeBar({ row }) {
 
 export default function TyreLifecycle() {
   const { activeCountry, activeCurrency } = useSettings()
+  const { t } = useLanguage()
+  const na = <span className="cc-na">{t('tyrelifecycle.na')}</span>
+  const STATUS_LABEL = statusLabels(t)
+  const STATUS_NOTE = { 'Near End': t('tyrelifecycle.status.noteNearEnd'), Normal: t('tyrelifecycle.status.noteNormal'), 'In Service': t('tyrelifecycle.status.noteInService') }
+  const CATEGORY_LABEL = categoryLabels(t)
+  const TAB_LABEL = { all: t('tyrelifecycle.tabs.all'), inService: t('tyrelifecycle.tabs.inService'), removed: t('tyrelifecycle.tabs.removed'), history: t('tyrelifecycle.tabs.history'), analytics: t('tyrelifecycle.tabs.analytics') }
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -96,18 +125,19 @@ export default function TyreLifecycle() {
     }, { max: ROW_CAP }).then(({ data, error: err, truncated }) => {
       if (stale()) return
       if (err) {
-        setError(toUserMessage(err, 'Could not load lifecycle data.'))
+        setError(toUserMessage(err, t('tyrelifecycle.errors.load')))
         setRecords([]); setCapped(false)
       } else {
         setRecords(data || []); setCapped(Boolean(truncated))
       }
       setLoading(false)
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCountry, refreshKey, latest])
 
   const rl = useCard(async () => {
     const payload = await getTyreRunningLife({ country: activeCountry, maxAgeMs: refreshKey ? 0 : 60000 })
-    if (!payload || payload.ok === false) throw new Error(payload?.reason || 'Running life could not be read.')
+    if (!payload || payload.ok === false) throw new Error(payload?.reason || t('tyrelifecycle.errors.runningLife'))
     return shapeRunningLife(payload).rows
   }, [activeCountry, refreshKey])
 
@@ -131,18 +161,19 @@ export default function TyreLifecycle() {
   const statusOf = (r) => (rlPending && r._stage === 'In Service' ? null : r._status)
 
   // Export the whole filtered set on the active tab, never one page.
-  const scope = [filters.from && `from ${filters.from}`, filters.to && `to ${filters.to}`, ...['vehicleType', 'brand', 'position', 'status', 'site', 'category'].map((k) => (filters[k] !== 'All' ? filters[k] : null))].filter(Boolean).join(' | ')
+  const scope = [filters.from && t('tyrelifecycle.export.scopeFrom', { date: filters.from }), filters.to && t('tyrelifecycle.export.scopeTo', { date: filters.to }), ...['vehicleType', 'brand', 'position', 'status', 'site', 'category'].map((k) => (filters[k] !== 'All' ? (k === 'status' ? STATUS_LABEL[filters[k]] || filters[k] : k === 'category' ? CATEGORY_LABEL[filters[k]] || filters[k] : filters[k]) : null))].filter(Boolean).join(' | ')
   const fileName = reportFileName('TyrePulse Tyre Lifecycle', activeCountry !== 'All' ? activeCountry : null)
   const exportSet = tab === 'inService' || tab === 'removed' ? shown : filtered
+  const headers = exportHeaders(t)
   function handlePdf(opts = {}) {
     return exportToPdf(
       viewExportRows(exportSet),
-      VIEW_EXPORT_COLS.map((k, i) => ({ key: k, header: VIEW_EXPORT_HEADERS[i] })),
-      `Tyre Lifecycle Report${scope ? ` (${scope})` : ''}`,
+      VIEW_EXPORT_COLS.map((k, i) => ({ key: k, header: headers[i] })),
+      `${t('tyrelifecycle.export.reportTitle')}${scope ? ` (${scope})` : ''}`,
       fileName, 'landscape', '', opts,
     )
   }
-  const handleExcel = () => exportToExcel(viewExportRows(exportSet), VIEW_EXPORT_COLS, VIEW_EXPORT_HEADERS, fileName, 'Lifecycle')
+  const handleExcel = () => exportToExcel(viewExportRows(exportSet), VIEW_EXPORT_COLS, headers, fileName, 'Lifecycle')
 
   function onStage(stage) {
     setFilters((f) => ({ ...f, status: stage === 'In Service' ? 'All' : stage }))
@@ -150,114 +181,118 @@ export default function TyreLifecycle() {
   }
 
   const columns = [
-    { key: 'serial', header: 'Serial Number', sortValue: (r) => r.serial_number || '', cell: (r) => (r.serial_number
+    { key: 'serial', header: t('tyrelifecycle.table.serial'), sortValue: (r) => r.serial_number || '', cell: (r) => (r.serial_number
       ? <Link className="tlc-serial" to={`/tyre-passport/${encodeURIComponent(r.serial_number)}`} onClick={(e) => e.stopPropagation()}>{r.serial_number}</Link>
       : na) },
-    { key: 'asset', header: 'Vehicle / Asset', sortValue: (r) => r.asset_no || '', cell: (r) => (
+    { key: 'asset', header: t('tyrelifecycle.table.asset'), sortValue: (r) => r.asset_no || '', cell: (r) => (
       <span className="cc-vehicle"><VehicleThumb row={{ asset_no: r.asset_no, vehicle_type: r.vehicle_type }} size="sm" />
-        <span><b>{r.asset_no || 'N/A'}</b><span className="cc-sub">{r.site || r.vehicle_type || 'Site not recorded'}</span></span></span>
+        <span><b>{r.asset_no || t('tyrelifecycle.na')}</b><span className="cc-sub">{r.site || r.vehicle_type || t('tyrelifecycle.table.siteNotRecorded')}</span></span></span>
     ) },
-    { key: 'brand', header: 'Brand', cell: (r) => r.brand || na },
-    { key: 'size', header: 'Size', cell: (r) => r.size || na },
-    { key: 'position', header: 'Position', cell: (r) => r.position || na },
-    { key: 'issue_date', header: 'Fitment Date', cell: (r) => r.issue_date || na },
-    { key: 'km', header: 'Current KM', numeric: true, sortValue: (r) => r._currentKm ?? r.km_at_removal ?? -1, cell: (r) => {
+    { key: 'brand', header: t('tyrelifecycle.table.brand'), cell: (r) => r.brand || na },
+    { key: 'size', header: t('tyrelifecycle.table.size'), cell: (r) => r.size || na },
+    { key: 'position', header: t('tyrelifecycle.table.position'), cell: (r) => r.position || na },
+    { key: 'issue_date', header: t('tyrelifecycle.table.fitmentDate'), cell: (r) => r.issue_date || na },
+    { key: 'km', header: t('tyrelifecycle.table.currentKm'), numeric: true, sortValue: (r) => r._currentKm ?? r.km_at_removal ?? -1, cell: (r) => {
       if (r._currentKm != null) return fmtInt(r._currentKm)
-      if (r._stage !== 'In Service' && r.km_at_removal != null) return <span title="Odometer when the tyre came off">{fmtInt(r.km_at_removal)}<span className="cc-sub">at removal</span></span>
+      if (r._stage !== 'In Service' && r.km_at_removal != null) return <span title={t('tyrelifecycle.table.kmAtRemovalHint')}>{fmtInt(r.km_at_removal)}<span className="cc-sub">{t('tyrelifecycle.table.atRemoval')}</span></span>
       return na
     } },
-    { key: 'life', header: 'Life %', sortValue: (r) => r._lifePct ?? -1, cell: (r) => <LifeBar row={r} /> },
-    { key: 'status', header: 'Status', sortValue: (r) => r._status, cell: (r) => {
+    { key: 'life', header: t('tyrelifecycle.table.lifePct'), sortValue: (r) => r._lifePct ?? -1, cell: (r) => <LifeBar row={r} /> },
+    { key: 'status', header: t('tyrelifecycle.table.status'), sortValue: (r) => r._status, cell: (r) => {
       const s = statusOf(r)
-      return s ? <span className={`cc-pill ${STATUS_META[s]?.tone || 'muted'}`} title={STATUS_META[s]?.note}>{s}</span> : <span className="cc-na">Checking</span>
+      return s ? <span className={`cc-pill ${STATUS_META[s]?.tone || 'muted'}`} title={STATUS_NOTE[s]}>{STATUS_LABEL[s] || s}</span> : <span className="cc-na">{t('tyrelifecycle.status.checking')}</span>
     } },
-    { key: 'actions', header: 'Actions', sortable: false, cell: (r) => (
+    { key: 'actions', header: t('tyrelifecycle.table.actions'), sortable: false, cell: (r) => (
       <span className="tlc-actions" onClick={(e) => e.stopPropagation()} role="presentation">
-        <button type="button" className="cc-icon-btn" aria-label={`View tyre ${r.serial_number || r.id}`} title="View history" disabled={!r.serial_number} onClick={() => setSelected(r)}><Eye size={14} /></button>
-        <Link className="cc-icon-btn" to={`/tyre-records${r.serial_number ? `?search=${encodeURIComponent(r.serial_number)}` : ''}`} aria-label="Edit in tyre records" title="Edit in Tyre Records"><Pencil size={14} /></Link>
-        {r.asset_no && <Link className="cc-icon-btn" to={`/asset-management/${encodeURIComponent(r.asset_no)}`} aria-label={`Open asset ${r.asset_no}`} title="Open asset"><ExternalLink size={14} /></Link>}
+        <button type="button" className="cc-icon-btn" aria-label={t('tyrelifecycle.table.viewTyreAria', { id: r.serial_number || r.id })} title={t('tyrelifecycle.table.viewHistory')} disabled={!r.serial_number} onClick={() => setSelected(r)}><Eye size={14} /></button>
+        <Link className="cc-icon-btn" to={`/tyre-records${r.serial_number ? `?search=${encodeURIComponent(r.serial_number)}` : ''}`} aria-label={t('tyrelifecycle.table.editAria')} title={t('tyrelifecycle.table.editTitle')}><Pencil size={14} /></Link>
+        {r.asset_no && <Link className="cc-icon-btn" to={`/asset-management/${encodeURIComponent(r.asset_no)}`} aria-label={t('tyrelifecycle.table.openAssetAria', { asset: r.asset_no })} title={t('tyrelifecycle.table.openAsset')}><ExternalLink size={14} /></Link>}
       </span>
     ) },
   ]
 
-  const kpiNA = error ? 'N/A' : undefined
-  const nearEndDisplay = error ? 'N/A' : rl.error ? 'N/A' : undefined
-  const tabsWithCounts = TABS.map((t) => (t.key === 'all' ? { ...t, count: loading ? null : fmtInt(filtered.length) }
-    : t.key === 'inService' ? { ...t, count: loading ? null : fmtInt(kpis.active) }
-      : t.key === 'removed' ? { ...t, count: loading ? null : fmtInt(kpis.removed) } : t))
+  const naText = t('tyrelifecycle.na')
+  const kpiNA = error ? naText : undefined
+  const nearEndDisplay = error ? naText : rl.error ? naText : undefined
+  const tabsWithCounts = TABS.map((tb0) => {
+    const tb = { ...tb0, label: TAB_LABEL[tb0.key] || tb0.label }
+    return tb.key === 'all' ? { ...tb, count: loading ? null : fmtInt(filtered.length) }
+      : tb.key === 'inService' ? { ...tb, count: loading ? null : fmtInt(kpis.active) }
+        : tb.key === 'removed' ? { ...tb, count: loading ? null : fmtInt(kpis.removed) } : tb
+  })
 
   return (
     <div className="cc tlc-page">
       <PageHero
-        hello="Tyre Management"
-        title="Tyre Lifecycle Tracker"
-        lead="Track complete tyre lifecycle from fitment to removal with real usage, performance, cost and condition."
+        hello={t('tyrelifecycle.hero.hello')}
+        title={t('tyrelifecycle.hero.title')}
+        lead={t('tyrelifecycle.hero.lead')}
         imgLight="/dashboard/hero-lifecycle-light.webp"
         imgDark="/dashboard/hero-lifecycle-dark.webp"
-        stat={{ value: loading || error || life.avgLifeKm == null ? 'N/A' : `${fmtInt(Math.round(life.avgLifeKm))} km`, lines: ['Average lifetime per physical tyre (all fitments)', `${fmtInt(life.measuredLife)} tyres measured`] }}
+        stat={{ value: loading || error || life.avgLifeKm == null ? naText : t('tyrelifecycle.hero.statKm', { value: fmtInt(Math.round(life.avgLifeKm)) }), lines: [t('tyrelifecycle.hero.statLine1'), t('tyrelifecycle.hero.statLine2', { count: fmtInt(life.measuredLife) })] }}
       />
 
-      {error && <div className="cc-card tlc-banner" role="alert"><AlertTriangle size={16} aria-hidden="true" /><div>{error}</div><button type="button" className="cc-btn" onClick={reload}>Retry</button></div>}
-      {capped && <div className="cc-card tlc-banner" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>Showing the most recent {ROW_CAP.toLocaleString()} tyre records. Narrow the country for a complete view.</div></div>}
-      {rl.error && <div className="cc-card tlc-banner" role="alert"><AlertTriangle size={16} aria-hidden="true" /><div>Running life could not be read, so life used and Near End read N/A. {rl.error}</div><button type="button" className="cc-btn" onClick={rl.retry}>Retry</button></div>}
+      {error && <div className="cc-card tlc-banner" role="alert"><AlertTriangle size={16} aria-hidden="true" /><div>{error}</div><button type="button" className="cc-btn" onClick={reload}>{t('tyrelifecycle.common.retry')}</button></div>}
+      {capped && <div className="cc-card tlc-banner" role="status"><AlertTriangle size={16} aria-hidden="true" /><div>{t('tyrelifecycle.banner.capped', { count: ROW_CAP.toLocaleString() })}</div></div>}
+      {rl.error && <div className="cc-card tlc-banner" role="alert"><AlertTriangle size={16} aria-hidden="true" /><div>{t('tyrelifecycle.errors.runningLifeBanner', { detail: rl.error })}</div><button type="button" className="cc-btn" onClick={rl.retry}>{t('tyrelifecycle.common.retry')}</button></div>}
 
       <div className="cc-kpis tlc-kpis">
-        <Kpi icon={CircleDot} tone="t-green" value={kpis.total} display={kpiNA} label="Total Tyres" loading={loading} onClick={() => setTab('all')} title="Tyre records in scope" />
-        <Kpi icon={Activity} tone="t-blue" value={kpis.active} display={kpiNA} label="Active" loading={loading} onClick={() => setTab('inService')} title="Records with no removal recorded" />
-        <Kpi icon={Truck} tone="t-green" value={kpis.inService} display={nearEndDisplay} label="In Service" loading={loading || rlPending} onClick={() => { setTab('inService'); setFilters((f) => ({ ...f, status: 'Normal' })) }} title="Active tyres not near the end of their expected life" />
-        <Kpi icon={AlertTriangle} tone="t-red" value={kpis.nearEnd} display={nearEndDisplay} label="Near End of Life" loading={loading || rlPending} onClick={() => { setTab('inService'); setFilters((f) => ({ ...f, status: 'Near End' })) }} title="Past or within the due-soon band of the expected life" />
-        <Kpi icon={Archive} tone="t-orange" value={kpis.removed} display={kpiNA} label="Removed" loading={loading} onClick={() => setTab('removed')} title="Removed, retreaded or scrapped records" />
+        <Kpi icon={CircleDot} tone="t-green" value={kpis.total} display={kpiNA} label={t('tyrelifecycle.kpi.total')} loading={loading} onClick={() => setTab('all')} title={t('tyrelifecycle.kpi.totalHint')} />
+        <Kpi icon={Activity} tone="t-blue" value={kpis.active} display={kpiNA} label={t('tyrelifecycle.kpi.active')} loading={loading} onClick={() => setTab('inService')} title={t('tyrelifecycle.kpi.activeHint')} />
+        <Kpi icon={Truck} tone="t-green" value={kpis.inService} display={nearEndDisplay} label={t('tyrelifecycle.kpi.inService')} loading={loading || rlPending} onClick={() => { setTab('inService'); setFilters((f) => ({ ...f, status: 'Normal' })) }} title={t('tyrelifecycle.kpi.inServiceHint')} />
+        <Kpi icon={AlertTriangle} tone="t-red" value={kpis.nearEnd} display={nearEndDisplay} label={t('tyrelifecycle.kpi.nearEnd')} loading={loading || rlPending} onClick={() => { setTab('inService'); setFilters((f) => ({ ...f, status: 'Near End' })) }} title={t('tyrelifecycle.kpi.nearEndHint')} />
+        <Kpi icon={Archive} tone="t-orange" value={kpis.removed} display={kpiNA} label={t('tyrelifecycle.kpi.removed')} loading={loading} onClick={() => setTab('removed')} title={t('tyrelifecycle.kpi.removedHint')} />
       </div>
 
       <Card className="tlc-main">
-        <Tabs tabs={tabsWithCounts} value={tab} onChange={setTab} label="Tyre lifecycle views" />
+        <Tabs tabs={tabsWithCounts} value={tab} onChange={setTab} label={t('tyrelifecycle.tabs.label')} />
 
         {(tab === 'all' || tab === 'inService' || tab === 'removed') && (
           <>
             <div className="cc-filters tlc-filters">
-              <label className="cc-field"><span>Vehicle type</span>
-                <select className="cc-select" value={filters.vehicleType} onChange={setF('vehicleType')}><option value="All">All Vehicle Types</option>{options.vehicleTypes.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+              <label className="cc-field"><span>{t('tyrelifecycle.filters.vehicleType')}</span>
+                <select className="cc-select" value={filters.vehicleType} onChange={setF('vehicleType')}><option value="All">{t('tyrelifecycle.filters.allVehicleTypes')}</option>{options.vehicleTypes.map((o) => <option key={o} value={o}>{o}</option>)}</select>
               </label>
-              <label className="cc-field"><span>Brand</span>
-                <select className="cc-select" value={filters.brand} onChange={setF('brand')}><option value="All">All Tyre Brands</option>{options.brands.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+              <label className="cc-field"><span>{t('tyrelifecycle.filters.brand')}</span>
+                <select className="cc-select" value={filters.brand} onChange={setF('brand')}><option value="All">{t('tyrelifecycle.filters.allBrands')}</option>{options.brands.map((o) => <option key={o} value={o}>{o}</option>)}</select>
               </label>
-              <label className="cc-field"><span>Position</span>
-                <select className="cc-select" value={filters.position} onChange={setF('position')}><option value="All">All Positions</option>{options.positions.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+              <label className="cc-field"><span>{t('tyrelifecycle.filters.position')}</span>
+                <select className="cc-select" value={filters.position} onChange={setF('position')}><option value="All">{t('tyrelifecycle.filters.allPositions')}</option>{options.positions.map((o) => <option key={o} value={o}>{o}</option>)}</select>
               </label>
-              <label className="cc-field"><span>Status</span>
-                <select className="cc-select" value={filters.status} onChange={setF('status')}><option value="All">All Status</option>{STATUSES.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+              <label className="cc-field"><span>{t('tyrelifecycle.filters.status')}</span>
+                <select className="cc-select" value={filters.status} onChange={setF('status')}><option value="All">{t('tyrelifecycle.filters.allStatus')}</option>{STATUSES.map((o) => <option key={o} value={o}>{STATUS_LABEL[o] || o}</option>)}</select>
               </label>
-              <label className="cc-field tlc-date"><span>Fitted from</span><input type="date" className="tlc-input" value={filters.from} onChange={setF('from')} /></label>
-              <label className="cc-field tlc-date"><span>Fitted to</span><input type="date" className="tlc-input" value={filters.to} onChange={setF('to')} /></label>
-              <div className="cc-search"><Search size={15} aria-hidden="true" /><input type="search" value={filters.search} onChange={setF('search')} placeholder="Search by serial no, vehicle, brand" aria-label="Search tyres" /></div>
-              <button type="button" className="cc-btn-ghost" aria-expanded={moreOpen} onClick={() => setMoreOpen((v) => !v)}><SlidersHorizontal size={14} aria-hidden="true" /> More</button>
-              {hasFilter && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> Clear</button>}
+              <label className="cc-field tlc-date"><span>{t('tyrelifecycle.filters.fittedFrom')}</span><input type="date" className="tlc-input" value={filters.from} onChange={setF('from')} /></label>
+              <label className="cc-field tlc-date"><span>{t('tyrelifecycle.filters.fittedTo')}</span><input type="date" className="tlc-input" value={filters.to} onChange={setF('to')} /></label>
+              <div className="cc-search"><Search size={15} aria-hidden="true" /><input type="search" value={filters.search} onChange={setF('search')} placeholder={t('tyrelifecycle.filters.searchPlaceholder')} aria-label={t('tyrelifecycle.filters.searchAria')} /></div>
+              <button type="button" className="cc-btn-ghost" aria-expanded={moreOpen} onClick={() => setMoreOpen((v) => !v)}><SlidersHorizontal size={14} aria-hidden="true" /> {t('tyrelifecycle.filters.more')}</button>
+              {hasFilter && <button type="button" className="cc-btn-ghost" onClick={clearFilters}><X size={14} aria-hidden="true" /> {t('tyrelifecycle.filters.clear')}</button>}
               <span className="tlc-export">
-                <button type="button" className="cc-btn-ghost" onClick={() => handlePdf()} disabled={loading || !exportSet.length}><FileText size={14} aria-hidden="true" /> PDF</button>
-                <button type="button" className="cc-btn-ghost" onClick={handleExcel} disabled={loading || !exportSet.length}><FileSpreadsheet size={14} aria-hidden="true" /> Excel</button>
+                <button type="button" className="cc-btn-ghost" onClick={() => handlePdf()} disabled={loading || !exportSet.length}><FileText size={14} aria-hidden="true" /> {t('tyrelifecycle.export.pdf')}</button>
+                <button type="button" className="cc-btn-ghost" onClick={handleExcel} disabled={loading || !exportSet.length}><FileSpreadsheet size={14} aria-hidden="true" /> {t('tyrelifecycle.export.excel')}</button>
                 <EmailPdfButton
                   className="cc-btn-ghost"
-                  getPdf={async () => ({ base64: await handlePdf({ returnBase64: true }), filename: `${fileName}.pdf`, subject: 'Tyre Lifecycle', bodyHtml: '<p>Attached is the Tyre Lifecycle report.</p>' })}
+                  getPdf={async () => ({ base64: await handlePdf({ returnBase64: true }), filename: `${fileName}.pdf`, subject: t('tyrelifecycle.export.emailSubject'), bodyHtml: `<p>${t('tyrelifecycle.export.emailBody')}</p>` })}
                 />
-                <button type="button" className="cc-icon-btn" onClick={reload} aria-label="Refresh lifecycle data" title="Refresh"><RefreshCw size={14} /></button>
+                <button type="button" className="cc-icon-btn" onClick={reload} aria-label={t('tyrelifecycle.common.refreshAria')} title={t('tyrelifecycle.common.refresh')}><RefreshCw size={14} /></button>
               </span>
             </div>
             {moreOpen && (
               <div className="cc-filters tlc-filters">
-                <label className="cc-field"><span>Site</span>
-                  <select className="cc-select" value={filters.site} onChange={setF('site')}><option value="All">All sites</option>{options.sites.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                <label className="cc-field"><span>{t('tyrelifecycle.filters.site')}</span>
+                  <select className="cc-select" value={filters.site} onChange={setF('site')}><option value="All">{t('tyrelifecycle.filters.allSites')}</option>{options.sites.map((o) => <option key={o} value={o}>{o}</option>)}</select>
                 </label>
-                <label className="cc-field"><span>Category</span>
-                  <select className="cc-select" value={filters.category} onChange={setF('category')}><option value="All">All categories</option>{CATEGORIES.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                <label className="cc-field"><span>{t('tyrelifecycle.filters.category')}</span>
+                  <select className="cc-select" value={filters.category} onChange={setF('category')}><option value="All">{t('tyrelifecycle.filters.allCategories')}</option>{CATEGORIES.map((o) => <option key={o} value={o}>{CATEGORY_LABEL[o] || o}</option>)}</select>
                 </label>
               </div>
             )}
-            <p className="tlc-count" aria-live="polite">{fmtInt(shown.length)} of {fmtInt(rows.length)} records. Select a row to see where that tyre has been.</p>
+            <p className="tlc-count" aria-live="polite">{t('tyrelifecycle.table.count', { shown: fmtInt(shown.length), total: fmtInt(rows.length) })}</p>
             <div className="tlc-scroll">
               <KitTable
                 columns={columns} rows={shown} loading={loading} error={error} onRetry={reload}
                 getRowId={(r) => String(r.id)} onRowClick={(r) => r.serial_number && setSelected(r)} initialPageSize={25}
-                empty={rows.length ? 'No tyres match these filters' : 'No tyre records for this country yet. Import tyre records to track each tyre from fitment to retirement.'}
+                empty={rows.length ? t('tyrelifecycle.table.emptyFiltered') : t('tyrelifecycle.table.emptyNone')}
               />
             </div>
           </>
@@ -266,18 +301,18 @@ export default function TyreLifecycle() {
         {tab === 'history' && (
           <div className="tlc-history">
             <form className="cc-filters" onSubmit={(e) => { e.preventDefault(); setHistorySerial(historyQuery.trim()) }}>
-              <div className="cc-search"><Search size={15} aria-hidden="true" /><input value={historyQuery} onChange={(e) => setHistoryQuery(e.target.value)} placeholder="Enter a tyre serial number" aria-label="Tyre serial number" /></div>
-              <button type="submit" className="cc-btn-primary" disabled={!historyQuery.trim()}>Show history</button>
+              <div className="cc-search"><Search size={15} aria-hidden="true" /><input value={historyQuery} onChange={(e) => setHistoryQuery(e.target.value)} placeholder={t('tyrelifecycle.history.serialPlaceholder')} aria-label={t('tyrelifecycle.history.serialAria')} /></div>
+              <button type="submit" className="cc-btn-primary" disabled={!historyQuery.trim()}>{t('tyrelifecycle.history.show')}</button>
             </form>
             {historySerial
               ? <TyreHistoryPanel key={historySerial} serial={historySerial} row={rows.find((r) => (r.serial_number || '').toUpperCase() === historySerial.toUpperCase())} />
-              : <div className="cc-empty">Enter a serial, or select a row on the All Tyres tab, to see every fitment and removal for that tyre.</div>}
+              : <div className="cc-empty">{t('tyrelifecycle.history.empty')}</div>}
             <TyreChangeTracking />
           </div>
         )}
 
         {tab === 'analytics' && (
-          error ? <div className="cc-empty" role="alert"><div>Could not load lifecycle data.<br /><button type="button" className="cc-btn" onClick={reload}>Retry</button></div></div>
+          error ? <div className="cc-empty" role="alert"><div>{t('tyrelifecycle.errors.load')}<br /><button type="button" className="cc-btn" onClick={reload}>{t('tyrelifecycle.common.retry')}</button></div></div>
             : loading ? <div className="cc-skel" style={{ height: 240 }} />
               : <LifecycleAnalytics records={filtered} currency={singleCurrency} onStage={onStage} />
         )}
@@ -288,22 +323,22 @@ export default function TyreLifecycle() {
       )}
 
       <div className="tlc-bottom">
-        <Card title="Tyre Life Progression" sub={`Life used against distance run, active tyres by wheel corner (${fmtInt(progression.sample)} measured)`}>
-          {rl.error ? <div className="cc-empty">Running life could not be read.</div>
+        <Card title={t('tyrelifecycle.bottom.progressionTitle')} sub={t('tyrelifecycle.bottom.progressionSub', { count: fmtInt(progression.sample) })}>
+          {rl.error ? <div className="cc-empty">{t('tyrelifecycle.errors.runningLife')}</div>
             : (loading || rlPending) ? <div className="cc-skel" style={{ height: 200 }} />
-              : progression.sample === 0 ? <div className="cc-empty">No active tyre in scope has a measured life on distance.</div>
+              : progression.sample === 0 ? <div className="cc-empty">{t('tyrelifecycle.bottom.progressionEmpty')}</div>
                 : <LifeProgressionChart data={progression} />}
         </Card>
-        <Card title="Removal Reasons" sub={reasons.unrecorded ? `${fmtInt(reasons.unrecorded)} of ${fmtInt(reasons.removed)} removed tyres have no reason recorded` : 'Removed tyres in scope'}>
+        <Card title={t('tyrelifecycle.bottom.reasonsTitle')} sub={reasons.unrecorded ? t('tyrelifecycle.bottom.reasonsSubUnrecorded', { unrecorded: fmtInt(reasons.unrecorded), removed: fmtInt(reasons.removed) }) : t('tyrelifecycle.bottom.reasonsSub')}>
           {loading ? <div className="cc-skel" style={{ height: 200 }} />
-            : error ? <div className="cc-empty">Could not load lifecycle data.</div>
-              : reasons.recorded === 0 ? <div className="cc-empty">No removal reason is recorded in scope.</div>
-                : <Donut segments={reasons.segments.map((s, i) => ({ ...s, label: s.label === 'OTHER' ? 'Other' : s.label, color: REASON_COLORS[i % REASON_COLORS.length] }))} total={reasons.recorded} centerLabel="Removed" />}
+            : error ? <div className="cc-empty">{t('tyrelifecycle.errors.load')}</div>
+              : reasons.recorded === 0 ? <div className="cc-empty">{t('tyrelifecycle.bottom.reasonsEmpty')}</div>
+                : <Donut segments={reasons.segments.map((s, i) => ({ ...s, label: s.label === 'OTHER' ? t('tyrelifecycle.bottom.other') : s.label, color: REASON_COLORS[i % REASON_COLORS.length] }))} total={reasons.recorded} centerLabel={t('tyrelifecycle.bottom.reasonsCenter')} />}
         </Card>
-        <Card title="Top Tyre Brands (by Life)" sub="Average km run per removed tyre, brands with at least 5 measured">
+        <Card title={t('tyrelifecycle.bottom.brandsTitle')} sub={t('tyrelifecycle.bottom.brandsSub')}>
           {loading ? <div className="cc-skel" style={{ height: 200 }} />
-            : error ? <div className="cc-empty">Could not load lifecycle data.</div>
-              : brands.length === 0 ? <div className="cc-empty">No brand has 5 tyres with a measured life in scope.</div>
+            : error ? <div className="cc-empty">{t('tyrelifecycle.errors.load')}</div>
+              : brands.length === 0 ? <div className="cc-empty">{t('tyrelifecycle.bottom.brandsEmpty')}</div>
                 : <TopBrandsBars brands={brands} />}
         </Card>
       </div>

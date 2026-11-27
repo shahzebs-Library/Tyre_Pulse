@@ -81,6 +81,8 @@ PendingCapture stockCountCapture({
   required String userId,
   required String sessionId,
   required DateTime capturedAt,
+  bool? genuine,
+  String? genuineNote,
 }) {
   final String? itemId = _blank(item.itemId);
   final String? description = _blank(item.description);
@@ -107,6 +109,8 @@ PendingCapture stockCountCapture({
         piOwnerships.contains(item.ownership) ? item.ownership! : 'owned',
     locationId: _blank(item.locationId),
     remarks: _blank(reason),
+    genuine: genuine,
+    genuineNote: _blank(genuineNote),
   );
 }
 
@@ -291,6 +295,8 @@ final class StockCountRecorder {
     required String? orgId,
     String? fallbackCountry,
     String? deviceId,
+    bool? genuine,
+    String? genuineNote,
   }) {
     return _send(
       site: item.site,
@@ -307,6 +313,8 @@ final class StockCountRecorder {
         userId: userId,
         sessionId: sessionId,
         capturedAt: _now(),
+        genuine: genuine,
+        genuineNote: genuineNote,
       ),
     );
   }

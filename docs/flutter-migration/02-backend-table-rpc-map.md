@@ -420,3 +420,10 @@ section 9.1.
 | Object | Created by | Access | Flutter use |
 |---|---|---|---|
 | `modules` SELECT of `module_id, status` | Table from V258 (applied live; it has no file in the repo, so its existence and columns were verified against the live database on 2026-11-12). The authenticated read policy is `MIGRATIONS_V275_CONSOLE_AUDIT.sql`; the maintenance window columns are `MIGRATIONS_V278_MAINTENANCE_WEBGATE.sql` | GLOBAL table (no `organisation_id`); every signed-in user may read, only super admin / Admin may write | `SupabaseAccessPermissionsRepository._readModuleStatuses`: one bounded read (about 200 rows) beside the two permission RPCs, at sign-in and on resume. Read-only. A failed read returns null and FAILS OPEN. See artifact 04 section 11 |
+
+### 7.15 Stock Count genuine mark and line identity (added 2026-11-27)
+
+| Object | Created by | Access | Flutter use |
+|---|---|---|---|
+| `physical_inventory_captures.genuine` / `.genuine_note` | `supabase/migrations/20261127120000_count_line_genuine.sql` (written 2026-11-27; owner approved applying it) | Written only through `inv_pi_capture(jsonb)`, which now reads payload keys `genuine` ('true'/'false'/absent) and `genuine_note` | `stockCountCapture` -> `PendingCapture.genuine/genuineNote` -> `toPayload()` sends the keys only when stated; a server without the migration ignores them. Stock Count "Matches" / "Doesn't match" (`stock_count_screen.dart`) |
+| `stock_records.uom`, embeds `location:inventory_locations(code)` and `item:material_master(item_code)` | Columns and FKs from `20261120100000_inv_p0_ledger_integrity.sql` / `20261120101000_inv_item_master_locations.sql` (single FKs `stock_records_location_fk`, `stock_records_item_id_fkey`, checked live 2026-11-27) | RLS on each embedded table; an unreadable row embeds as null | `DefaultStockCountRepository.list`: shows bin, item code, condition, ownership and unit so lines with the same description can be told apart |

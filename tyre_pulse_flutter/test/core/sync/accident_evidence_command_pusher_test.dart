@@ -81,6 +81,8 @@ const SupabaseFailure _duplicateFailure = SupabaseFailure(
   ),
   cause: SupabaseFailureCause.uniqueViolation,
   code: '23505',
+  rawMessage: 'duplicate key value violates unique constraint '
+      '"ux_accidents_client_uuid"',
 );
 
 String _localPath(String fileName) =>
@@ -234,7 +236,9 @@ void main() {
     expect(command!.status, CommandStatus.retry);
     final PendingMediaUpload media =
         (await db.mediaDao.mediaForCommand('accident-command')).single;
-    expect(media.state, MediaUploadState.failed);
+    // Offline never spends the attempt budget: still queued, backed off.
+    expect(media.state, MediaUploadState.queued);
+    expect(media.attempts, 0);
     expect(media.localPath, _localPath('offline.jpg'));
   });
 

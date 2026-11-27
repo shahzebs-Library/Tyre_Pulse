@@ -388,6 +388,18 @@ abstract class AppLocalizations {
   /// **'Your account is waiting for approval or has been locked. Your administrator can put this right.'**
   String get accessBlockedMessage;
 
+  /// Re-reads the account from the server on the not-active screen, so an account approved meanwhile goes straight in.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get accessBlockedCheckAgain;
+
+  /// No description provided for @accessBlockedStillWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is still not active. Ask your administrator to approve it.'**
+  String get accessBlockedStillWaiting;
+
   /// No description provided for @routeNotFoundTitle.
   ///
   /// In en, this message translates to:
@@ -3886,6 +3898,12 @@ abstract class AppLocalizations {
   /// **'Could not check'**
   String get homeStatUnavailableCaption;
 
+  /// Per-role Home tiles and rows, key=value pairs separated by ~. %count% %time% %a% %b% are replaced at runtime.
+  ///
+  /// In en, this message translates to:
+  /// **'meterTitle=Log today\'s meter~meterNotLogged=Not logged today~meterLogged=Logged %time%~problemTitle=Report a problem or breakdown~problemHint=Tell the workshop what is wrong~exceptionsTitle=Today\'s exceptions~offRoad=Off road~openAccidents=Open accidents~maintenanceOverdue=Maintenance overdue~tyresAttention=Tyres need attention~handoverTitle=Handovers awaiting your sign-off~reportAccident=Report an accident~approvalsTitle=Approvals waiting on you~approvalsSplit=%a% inspections • %b% checklists~issueTitle=Report an issue~issueHint=Something broken or unsafe~teamTitle=Team now~working=Working~waiting=Waiting~free=Free~teamNote=Free means checked in and not working. Absent cannot be counted: no attendance is recorded.~assignTitle=Assign jobs~assignHint=%count% open job cards with nobody assigned~assignGap=Opens the job card list. Assigning from the phone is not built yet.~myJobsTitle=My jobs~myJobsCount=%count% open~myJobsNone=No open jobs~plantTitle=Today\'s plant checks~sheetsDue=%count% sheets due~allDone=All done today~dailyTitle=Workshop Daily~dueToday=Due today~signTitle=Approvals to sign~signHint=%count% awaiting your signature~tyresDueTitle=Tyres due for replacement~myVehicle=My vehicle~noVehicle=No meter logged yet~wash=Record a wash~washDays=Last washed %count% days ago~washToday=Washed today~washNever=No wash recorded~dailyChecklist=Daily checklist~charges=My fines & charges~chargesHint=Fines, charges and your own sign-offs~summary=Daily summary & reports~alerts=Alerts~plan=Today\'s plan~planOpen=%count% open today~repair=Repair request~meter=Meter log~inspectionsDue=Inspections due today~checklistsToSign=Checklists to sign~waitingParts=Waiting for parts~blocked=Blocked over 30 minutes~requestParts=Request parts~recent=Recent inspections~reorder=Stock to reorder~sync=Pending sync~more=More~open=Open'**
+  String get homeRoleCopyCatalog;
+
   /// No description provided for @homeNoQuickActionsMessage.
   ///
   /// In en, this message translates to:
@@ -5203,7 +5221,7 @@ abstract class AppLocalizations {
   /// No description provided for @stockCountCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease~myCounts=My counts~transfers=Transfers~needsApproval=A count difference needs approval. Use Count to record what is on the shelf; an approver posts the change.~countNote=Your count is recorded for review. The stock balance changes only when an approver posts the difference.~countRecorded=Count recorded for review.~countSavedOnPhone=Count saved on this phone. It is sent when the connection is back.~countNoPlace=This stock line has no store or country, so the count cannot be recorded.~countNeedsConnection=The first count in this store needs a connection to open a count session.~countRefused=The count was not accepted:'**
+  /// **'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease~myCounts=My counts~transfers=Transfers~needsApproval=A count difference needs approval. Use Count to record what is on the shelf; an approver posts the change.~countNote=Your count is recorded for review. The stock balance changes only when an approver posts the difference.~countRecorded=Count recorded for review.~countSavedOnPhone=Count saved on this phone. It is sent when the connection is back.~countNoPlace=This stock line has no store or country, so the count cannot be recorded.~countNeedsConnection=The first count in this store needs a connection to open a count session.~countRefused=The count was not accepted:~matches=Matches~notMatch=Doesn\'t match~matchesRecorded=Recorded: the shelf matches the system.~matchesSavedOnPhone=Saved on this phone: the shelf matches the system. It is sent when the connection is back.~genuineQuestion=Is the part genuine?~genuine=Genuine~notGenuine=Not genuine~genuineNote=Note on the part (optional)~countedToday=Counted today~bin=Bin~code=Code'**
   String get stockCountCopyCatalog;
 
   /// No description provided for @calendarCopyCatalog.
@@ -5425,7 +5443,7 @@ abstract class AppLocalizations {
   /// No description provided for @workshopCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.'**
+  /// **'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.~c_whatDone=What was done~c_parts=Parts used~c_meters=Meter readings~c_km=Odometer (km)~c_hours=Hour meter~c_before=Before photos (optional)~c_after=After photos~c_signature=Your signature~returned=Returned by supervisor~waitingApproval=Waiting for supervisor approval~notAccepted=Not accepted:~c_queued=Saved on this phone. It is sent to the supervisor as soon as there is signal.~c_stateQueued=Queued on this phone~c_stateFailed=Failed, not sent~c_stateSynced=Sent, waiting for supervisor approval~jc_title=Jobs to check~jc_tabToCheck=To check~jc_tabReturned=Returned~jc_emptyToCheck=No finished job is waiting for you.~jc_emptyReturned=No returned job.~jc_loadError=The jobs could not be loaded.~jc_extra=Extra evidence~jc_waiting=Waiting for you~jc_by=Finished by~jc_returnReason=Returned because:~jc_noParts=No parts recorded~jc_noMeters=No meter reading~jc_photoUnavailable=Photo not available~jc_pass=Pass and close~jc_return=Return the job~jc_returnTitle=Why is it returned?~jc_returnHint=Tell them what still needs fixing~jc_returnSend=Return the job~jc_passed=Job passed and closed.~jc_returnedOk=Job returned. The data desk will reassign it.~jc_decideError=This could not be saved. Try again.~jc_signature=Technician\'s signature'**
   String get workshopCopyCatalog;
 
   /// Home section heading for the work the signed-in user has today.
@@ -16385,6 +16403,396 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.'**
   String get driverChargeAppealClosedDeducted;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync queue'**
+  String get profileSyncQueueTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get syncQueueStatPending;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get syncQueueStatAttention;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get syncQueueStatSent;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Still on this device'**
+  String get syncQueueStatSentCaption;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Last sync attempt: {time}'**
+  String syncQueueLastAttempt(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'No sync attempt recorded on this device yet'**
+  String get syncQueueNoAttempt;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'A sync is running now'**
+  String get syncQueueRunning;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get syncQueueSyncNow;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'You are offline. Your work is safe on this phone and will be sent when you are back online.'**
+  String get syncQueueOfflineReason;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is waiting to be sent.'**
+  String get syncQueueNothingToSend;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync requested. This list updates as items are sent.'**
+  String get syncQueueRequested;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start a sync. Try again.'**
+  String get syncQueueRequestFailed;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything is synced'**
+  String get syncQueueEmptyTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing from this device is waiting to be sent.'**
+  String get syncQueueEmptyMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the sync queue'**
+  String get syncQueueLoadFailedTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Your queued work is still on this phone. Try again.'**
+  String get syncQueueLoadFailedMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued items'**
+  String get syncQueueSectionItems;
+
+  /// Sync queue item name for a submitted inspection; asset is the asset number.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection {asset}'**
+  String syncTypeInspection(String asset);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued {time}'**
+  String syncQueueItemQueued(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Not tried yet} =1{1 attempt} other{{count} attempts}}'**
+  String syncQueueAttempts(int count);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Next try {time}'**
+  String syncQueueNextAttempt(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to send'**
+  String get syncQueueStateWaiting;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending now'**
+  String get syncQueueStateSending;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Will try again'**
+  String get syncQueueStateRetrying;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'On hold'**
+  String get syncQueueStateOnHold;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get syncQueueStateNeedsAttention;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get syncQueueStateSent;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get syncQueueRetry;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Put back in the queue.'**
+  String get syncQueueRetried;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'This item is no longer waiting for a retry.'**
+  String get syncQueueRetryNotNeeded;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not retry this item. Try again.'**
+  String get syncQueueRetryFailed;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'This item could not be sent.'**
+  String get syncQueueErrorFallback;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre change'**
+  String get syncTypeTyreChange;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Work order'**
+  String get syncTypeWorkOrder;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Root cause analysis'**
+  String get syncTypeRca;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported issue'**
+  String get syncTypeReportIssue;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock count'**
+  String get syncTypeStockAdjust;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Work order status'**
+  String get syncTypeWorkOrderStatus;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrective action status'**
+  String get syncTypeCorrectiveActionStatus;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get syncTypeChecklistSubmission;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist assignment'**
+  String get syncTypeChecklistAssignmentStatus;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer reading'**
+  String get syncTypeOdometerLog;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine hours reading'**
+  String get syncTypeEngineHoursLog;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident report'**
+  String get syncTypeReportAccident;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle wash'**
+  String get syncTypeWashRecord;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop activity'**
+  String get syncTypeWorkshopEvent;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Inventory count line'**
+  String get syncTypeInventoryCountLine;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrecognised entry'**
+  String get syncTypeUnknown;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Drafts'**
+  String get profileDraftsTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'No drafts'**
+  String get profileDraftsEmptyTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfinished checklists and inspections you start on this phone appear here.'**
+  String get profileDraftsEmptyMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read your drafts'**
+  String get profileDraftsLoadFailedTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Your drafts are still on this phone. Try again.'**
+  String get profileDraftsLoadFailedMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get profileDraftKindChecklist;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection'**
+  String get profileDraftKindInspection;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Last edited {time}'**
+  String profileDraftEdited(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'No asset picked yet'**
+  String get profileDraftNoAsset;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get profileDraftResume;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get profileDraftDiscard;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard this draft?'**
+  String get profileDraftDiscardTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything recorded in this draft, including its photos and signatures, is removed from this phone. This cannot be undone.'**
+  String get profileDraftDiscardMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft discarded.'**
+  String get profileDraftDiscarded;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not discard the draft. Try again.'**
+  String get profileDraftDiscardFailed;
+
+  /// After Retry on a submitted inspection flushed the inspection queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Tried to send your inspections again. The status below is up to date.'**
+  String get syncQueueInspectionRetried;
 }
 
 class _AppLocalizationsDelegate

@@ -94,15 +94,31 @@ abstract interface class ChecklistRemoteRepository {
   /// tiebreak (a batch of offline sheets synced together can share a
   /// `submitted_at` timestamp - an order that is not total drops or repeats
   /// a row at a page boundary).
+  ///
+  /// Pages past PostgREST's per-response row cap ([historyPageSize] rows
+  /// per request) up to [maxRows], so an operator with hundreds of sheets
+  /// sees all of them - it used to stop silently at the first 200.
   Future<List<ChecklistHistoryRow>> myHistory({
     required String submittedBy,
-    int limit = 200,
+    int maxRows = historyMaxRows,
   });
+
+  /// The exact number of this user's synced submissions, from a head-only
+  /// count (no rows transferred). `null` when the count could not be read,
+  /// so the screen never prints a guessed total.
+  Future<int?> myHistoryCount({required String submittedBy});
 
   /// One submitted sheet in full, for the read-only details screen, or
   /// `null` when it does not exist / is not readable under RLS.
   Future<ChecklistSubmissionDetail?> getSubmission(String id);
 }
+
+/// Rows per history request. PostgREST caps every response at 1000 rows
+/// whatever `.limit` asks for, so a page must not exceed that.
+const int historyPageSize = 1000;
+
+/// Upper bound on how many history rows one load fetches.
+const int historyMaxRows = 10000;
 
 final class SupabaseChecklistRemoteRepository
     with SupabaseGateway
@@ -275,25 +291,53 @@ final class SupabaseChecklistRemoteRepository
   @override
   Future<List<ChecklistHistoryRow>> myHistory({
     required String submittedBy,
-    int limit = 200,
+    int maxRows = historyMaxRows,
   }) async {
     if (submittedBy.isEmpty) return const <ChecklistHistoryRow>[];
-    final List<Map<String, dynamic>> rows =
-        await guard<List<Map<String, dynamic>>>(
-      () async => await _client
-          .from(SupabaseTables.checklistSubmissions)
-          .select(checklistHistoryColumns)
-          .eq('submitted_by', submittedBy)
-          .order('submitted_at', ascending: false)
-          .order('id')
-          .limit(limit),
-    );
     final List<ChecklistHistoryRow> out = <ChecklistHistoryRow>[];
-    for (final Map<String, dynamic> row in rows) {
-      final ChecklistHistoryRow? decoded = ChecklistHistoryRow.fromRow(row);
-      if (decoded != null) out.add(decoded);
+    var from = 0;
+    while (from < maxRows) {
+      final int to = (from + historyPageSize < maxRows
+              ? from + historyPageSize
+              : maxRows) -
+          1;
+      final int start = from;
+      // Ordered newest first with an `id` tiebreak: `submitted_at` is not
+      // unique (offline sheets synced together share it), and offset paging
+      // over a non-total order drops or repeats rows at a page boundary.
+      final List<Map<String, dynamic>> rows =
+          await guard<List<Map<String, dynamic>>>(
+        () async => await _client
+            .from(SupabaseTables.checklistSubmissions)
+            .select(checklistHistoryColumns)
+            .eq('submitted_by', submittedBy)
+            .order('submitted_at', ascending: false)
+            .order('id')
+            .range(start, to),
+      );
+      for (final Map<String, dynamic> row in rows) {
+        final ChecklistHistoryRow? decoded = ChecklistHistoryRow.fromRow(row);
+        if (decoded != null) out.add(decoded);
+      }
+      if (rows.length < to - start + 1) break;
+      from = to + 1;
     }
     return out;
+  }
+
+  @override
+  Future<int?> myHistoryCount({required String submittedBy}) async {
+    if (submittedBy.isEmpty) return 0;
+    try {
+      return await guard<int>(
+        () async => await _client
+            .from(SupabaseTables.checklistSubmissions)
+            .count(CountOption.exact)
+            .eq('submitted_by', submittedBy),
+      );
+    } on Object {
+      return null;
+    }
   }
 
   @override

@@ -75,6 +75,12 @@ abstract final class MediaUploadState {
   /// Refused after its attempts, or the local file is gone.
   static const String failed = 'failed';
 
+  /// Given up on for good (the file is gone, the server refused it, or it
+  /// could not upload in time) and its owning record was sent without it.
+  /// Final like [verified]: once the record is synced the queue may prune
+  /// the row and clean up the file. `lastError` keeps the reason.
+  static const String abandoned = 'abandoned';
+
   static const List<String> all = <String>[
     local,
     queued,
@@ -82,6 +88,7 @@ abstract final class MediaUploadState {
     uploaded,
     verified,
     failed,
+    abandoned,
   ];
 
   /// The states the uploader may claim work from.

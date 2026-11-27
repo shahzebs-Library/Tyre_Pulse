@@ -23,11 +23,11 @@ import ObservationDetail from './ObservationDetail'
 import { listActionsForInspectionIds } from '../../lib/api/correctiveActions'
 import { toUserMessage } from '../../lib/safeError'
 import MultiSelectFilter from '../ui/MultiSelectFilter'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { selectionMatches, isSelectionActive } from '../../lib/filterSelection'
 
 const PAGE = 15
 const SEVERITIES = ['all', 'Critical', 'High', 'Medium', 'Minor', 'Low', 'Note', 'Not rated']
-const KIND_LABEL = Object.fromEntries(OBSERVATION_KINDS.map((k) => [k.key, k.label]))
 
 const fmtDay = (d) => {
   if (!d) return 'N/A'
@@ -38,6 +38,10 @@ const fmtDay = (d) => {
 export default function ObservationsBoard({
   rows, loading, error, onBack, onOpen, onRaiseAction, onAddObservation, country, regionOf,
 }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`inspections.observations.${k}`, v)
+  const kindLabel = (key) => t(`inspections.observations.kinds.${key}`)
+  const nowLabel = (key) => t(`inspections.observations.tyreNowState.${key}`)
   const [kind, setKind] = useState('all')
   // Multi-select filters hold an array; [] means no narrowing.
   const [severity, setSeverity] = useState([])
@@ -68,7 +72,7 @@ export default function ObservationsBoard({
     const ids = inspectionKey ? inspectionKey.split('|') : []
     listActionsForInspectionIds(ids)
       .then((actions) => { if (alive) setActionRows(actions) })
-      .catch(() => { if (alive) setActionError('Corrective action status could not be verified. Please retry before creating another action.') })
+      .catch(() => { if (alive) setActionError(p('actionStatusError')) })
     return () => { alive = false }
   }, [inspectionKey])
   const assetKey = useMemo(
@@ -84,9 +88,9 @@ export default function ObservationsBoard({
       .then((res) => {
         if (!alive) return
         if (res.ok) setFitments(res.rows)
-        else setFitError(res.reason || 'Could not read the tyre change records.')
+        else setFitError(res.reason || p('fitError'))
       })
-      .catch(() => { if (alive) setFitError('Could not read the tyre change records.') })
+      .catch(() => { if (alive) setFitError(p('fitError')) })
     return () => { alive = false }
   }, [assetKey, country])
   const all = useMemo(() => {
@@ -150,7 +154,7 @@ export default function ObservationsBoard({
   }
 
   const unreadable = !!error
-  const show = (v) => (unreadable ? 'N/A' : fmtInt(v))
+  const show = (v) => (unreadable ? p('na') : fmtInt(v))
   const grouped = useMemo(() => groupObservationsByInspection(list), [list])
   const pageRows = grouped.slice(page * PAGE, page * PAGE + PAGE)
   const severities = SEVERITIES.filter((s) => s !== 'all' && all.some((o) => o.severity === s))
@@ -159,67 +163,67 @@ export default function ObservationsBoard({
     setExportError('')
     try {
       const r = (o) => o.tyreNow?.replacement || {}
-      const p = (o) => o.tyreNow?.previous || {}
+      const prev = (o) => o.tyreNow?.previous || {}
       await exportToExcel(
         list.map((o) => ({
-          day: o.day, kind: KIND_LABEL[o.kind], asset_no: o.asset_no, site: o.site,
+          day: o.day, kind: kindLabel(o.kind), asset_no: o.asset_no, site: o.site,
           position: o.position, text: o.text, remarks: o.remarks, severity: o.severity,
           pressure: o.pressure ?? '', tread: o.tread ?? '', inspector: o.inspector,
-          tyre_now: o.tyreNow ? TYRE_NOW_META[o.tyreNow.state].label : '',
-          old_serial: p(o).serial || '', old_brand: p(o).brand || '', old_fitted: p(o).fittedOn || '', old_job_card: p(o).jobCard || '',
+          tyre_now: o.tyreNow ? nowLabel(o.tyreNow.state) : '',
+          old_serial: prev(o).serial || '', old_brand: prev(o).brand || '', old_fitted: prev(o).fittedOn || '', old_job_card: prev(o).jobCard || '',
           new_serial: r(o).serial || '', new_brand: r(o).brand || '', new_size: r(o).size || '',
           replaced_on: r(o).fittedOn || '', job_card: r(o).jobCard || '',
           days_to_replace: o.tyreNow?.daysToReplace ?? '', removed_on: o.tyreNow?.removedOn || '',
           not_known_reason: o.tyreNow?.state === 'unknown' ? (o.tyreNow.reason || '') : '',
-          action: o.kind === 'note' ? '' : o.actionRaised ? 'Raised' : 'Not raised',
+          action: o.kind === 'note' ? '' : o.actionRaised ? p('export.raised') : p('export.notRaised'),
         })),
         ['day', 'kind', 'asset_no', 'site', 'position', 'text', 'remarks', 'severity', 'pressure', 'tread', 'inspector',
           'tyre_now', 'old_serial', 'old_brand', 'old_fitted', 'old_job_card',
           'new_serial', 'new_brand', 'new_size', 'replaced_on', 'job_card', 'days_to_replace', 'removed_on', 'not_known_reason', 'action'],
-        ['Inspection date', 'Type', 'Asset', 'Site', 'Position', 'Observation', 'Remarks', 'Severity', 'Pressure (PSI)', 'Tread (mm)', 'Inspector',
-          'Tyre now', 'Tyre at inspection: serial', 'Tyre at inspection: brand', 'Tyre at inspection: fitted on', 'Tyre at inspection: job card',
-          'New tyre: serial', 'New tyre: brand', 'New tyre: size', 'Replaced on', 'Replacement job card', 'Days to replace', 'Removed on', 'Why not known', 'Corrective action'],
+        [p('export.date'), p('export.type'), p('export.asset'), p('export.site'), p('export.position'), p('export.observation'), p('export.remarks'), p('export.severity'), p('export.pressure'), p('export.tread'), p('export.inspector'),
+          p('export.tyreNow'), p('export.oldSerial'), p('export.oldBrand'), p('export.oldFitted'), p('export.oldJobCard'),
+          p('export.newSerial'), p('export.newBrand'), p('export.newSize'), p('export.replacedOn'), p('export.replacementJobCard'), p('export.daysToReplace'), p('export.removedOn'), p('export.whyNotKnown'), p('export.correctiveAction')],
         'TyrePulse Observations',
         'Observations',
       )
     } catch (e) {
-      setExportError(toUserMessage(e, 'Could not export. Try again.'))
+      setExportError(toUserMessage(e, p('exportError')))
     }
   }
 
   return (
     <div className="iw-obsboard">
       <div className="iw-kpis iw-kpis-obs">
-        <Kpi icon={MessageSquare} tone="t-blue" display={show(summary.total)} label="Observations" loading={loading}
-          title={unreadable ? undefined : `${fmtInt(summary.tyre)} tyre findings, ${fmtInt(summary.note)} notes, ${fmtInt(summary.observation)} site observations`} />
-        <Kpi icon={AlertTriangle} tone="t-red" display={show(summary.critical)} label="Critical or high" loading={loading}
+        <Kpi icon={MessageSquare} tone="t-blue" display={show(summary.total)} label={p('kpi.observations')} loading={loading}
+          title={unreadable ? undefined : p('kpi.observationsHint', { tyre: fmtInt(summary.tyre), note: fmtInt(summary.note), observation: fmtInt(summary.observation) })} />
+        <Kpi icon={AlertTriangle} tone="t-red" display={show(summary.critical)} label={p('kpi.critical')} loading={loading}
           danger={!unreadable && summary.critical > 0} />
-        <Kpi icon={Truck} tone="t-amber" display={show(summary.vehicles)} label="Vehicles with observations" loading={loading} />
-        <Kpi icon={CheckCircle2} tone="t-green" display={unreadable || fitError ? 'N/A' : fitments == null ? '...' : fmtInt(nowSummary.replaced)}
-          label="Tyres already replaced" loading={loading} onClick={() => setTyreNow('replaced')}
-          title="A different tyre was fitted on the same wheel after the inspection, per the tyre change records" />
-        <Kpi icon={Wrench} tone="t-amber" display={unreadable || fitError ? 'N/A' : fitments == null ? '...' : fmtInt(nowSummary.open)}
-          label="Still open" loading={loading} onClick={() => setTyreNow('open')}
-          title={unreadable ? undefined : `Tyre findings where the same tyre is still fitted or no change record covers the wheel. ${fmtInt(summary.withAction)} inspections have an action.`} />
+        <Kpi icon={Truck} tone="t-amber" display={show(summary.vehicles)} label={p('kpi.vehicles')} loading={loading} />
+        <Kpi icon={CheckCircle2} tone="t-green" display={unreadable || fitError ? p('na') : fitments == null ? '...' : fmtInt(nowSummary.replaced)}
+          label={p('kpi.replaced')} loading={loading} onClick={() => setTyreNow('replaced')}
+          title={p('kpi.replacedHint')} />
+        <Kpi icon={Wrench} tone="t-amber" display={unreadable || fitError ? p('na') : fitments == null ? '...' : fmtInt(nowSummary.open)}
+          label={p('kpi.open')} loading={loading} onClick={() => setTyreNow('open')}
+          title={unreadable ? undefined : p('kpi.openHint', { count: fmtInt(summary.withAction) })} />
       </div>
 
       <Card
-        title={`Observations (${unreadable ? 'N/A' : fmtInt(grouped.length)} inspections, ${fmtInt(list.length)} findings)`}
-        sub="Tyres recorded as anything other than Good, inspector findings and notes, and site observations, over the dates and site above."
+        title={p('card.title', { inspections: unreadable ? p('na') : fmtInt(grouped.length), findings: fmtInt(list.length) })}
+        sub={p('card.sub')}
         action={(
           <span className="iw-actions">
             {onBack && (
               <button type="button" className="cc-btn-ghost iw-inline" onClick={onBack}>
-                <ArrowLeft size={12} aria-hidden="true" /> Inspections
+                <ArrowLeft size={12} aria-hidden="true" /> {p('card.back')}
               </button>
             )}
             {onAddObservation && (
               <button type="button" className="cc-btn iw-inline" onClick={onAddObservation}>
-                <Plus size={12} aria-hidden="true" /> Add Observation
+                <Plus size={12} aria-hidden="true" /> {p('card.add')}
               </button>
             )}
             <button type="button" className="cc-btn iw-inline" onClick={exportExcel} disabled={!list.length}>
-              <Download size={12} aria-hidden="true" /> Excel
+              <Download size={12} aria-hidden="true" /> {p('card.excel')}
             </button>
           </span>
         )}
@@ -228,54 +232,54 @@ export default function ObservationsBoard({
           <div className="cc-search iw-search">
             <Search size={15} aria-hidden="true" />
             <input value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Search vehicle, site, inspector, text, tyre serial, job card..." aria-label="Search observations" />
+              placeholder={p('filters.searchPlaceholder')} aria-label={p('filters.searchAria')} />
           </div>
-          <MultiSelectFilter className="iw-ms" label="Observation" allLabel="All observations" pluralLabel="observations"
+          <MultiSelectFilter className="iw-ms" label={p('filters.observation')} allLabel={p('filters.allObservations')} pluralLabel={p('filters.observationsPlural')}
             options={observationList.map((o) => ({ value: o.label, label: `${o.label} (${o.count})` }))}
             value={observation} onChange={setObservation} />
-          <MultiSelectFilter className="iw-ms" label="Severity" allLabel="All severities" pluralLabel="severities"
+          <MultiSelectFilter className="iw-ms" label={p('filters.severity')} allLabel={p('filters.allSeverities')} pluralLabel={p('filters.severitiesPlural')}
             options={severities} value={severity} onChange={setSeverity} />
           <label className="iw-obs-sev">
-            <span>Tyre now</span>
-            <select className="cc-select" value={tyreNow} onChange={(e) => setTyreNow(e.target.value)} aria-label="Filter by whether the tyre was replaced">
-              <option value="not_replaced">Not replaced yet</option>
-              <option value="all">Any, including replaced</option>
-              <option value="open">Still open</option>
-              {Object.entries(TYRE_NOW_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+            <span>{p('filters.tyreNow')}</span>
+            <select className="cc-select" value={tyreNow} onChange={(e) => setTyreNow(e.target.value)} aria-label={p('filters.tyreNowAria')}>
+              <option value="not_replaced">{p('filters.notReplaced')}</option>
+              <option value="all">{p('filters.anyIncludingReplaced')}</option>
+              <option value="open">{p('filters.stillOpen')}</option>
+              {Object.keys(TYRE_NOW_META).map((k) => <option key={k} value={k}>{nowLabel(k)}</option>)}
             </select>
           </label>
           {regionOptions.length > 0 && (
-            <MultiSelectFilter className="iw-ms" label="Region" allLabel="All regions" pluralLabel="regions"
+            <MultiSelectFilter className="iw-ms" label={p('filters.region')} allLabel={p('filters.allRegions')} pluralLabel={p('filters.regionsPlural')}
               options={regionOptions} value={region} onChange={setRegion} />
           )}
-          <MultiSelectFilter className="iw-ms" label="Site" allLabel="All sites" pluralLabel="sites"
+          <MultiSelectFilter className="iw-ms" label={p('filters.site')} allLabel={p('filters.allSites')} pluralLabel={p('filters.sitesPlural')}
             options={siteOptions} value={site} onChange={setSite} />
-          <MultiSelectFilter className="iw-ms" label="Vehicle" allLabel="All vehicles" pluralLabel="vehicles"
+          <MultiSelectFilter className="iw-ms" label={p('filters.vehicle')} allLabel={p('filters.allVehicles')} pluralLabel={p('filters.vehiclesPlural')}
             options={assetOptions} value={asset} onChange={setAsset} />
-          <MultiSelectFilter className="iw-ms" label="Inspector" allLabel="All inspectors" pluralLabel="inspectors"
+          <MultiSelectFilter className="iw-ms" label={p('filters.inspector')} allLabel={p('filters.allInspectors')} pluralLabel={p('filters.inspectorsPlural')}
             options={inspectorOptions} value={inspector} onChange={setInspector} />
           <label className="iw-obs-sev">
-            <span>Action</span>
-            <select className="cc-select" value={action} onChange={(e) => setAction(e.target.value)} aria-label="Filter by corrective action">
-              <option value="all">Any</option>
-              <option value="raised">Action raised</option>
-              <option value="none">No action yet</option>
+            <span>{p('filters.action')}</span>
+            <select className="cc-select" value={action} onChange={(e) => setAction(e.target.value)} aria-label={p('filters.actionAria')}>
+              <option value="all">{p('filters.any')}</option>
+              <option value="raised">{p('filters.actionRaised')}</option>
+              <option value="none">{p('filters.noAction')}</option>
             </select>
           </label>
           {filtersOn && (
-            <button type="button" className="cc-btn-ghost iw-inline" onClick={clearFilters}>Clear filters</button>
+            <button type="button" className="cc-btn-ghost iw-inline" onClick={clearFilters}>{p('filters.clear')}</button>
           )}
         </div>
         {tyreNow === 'not_replaced' && nowSummary.replaced > 0 && (
           <p className="iw-od-muted" role="status">
-            {fmtInt(nowSummary.replaced)} {nowSummary.replaced === 1 ? 'finding is' : 'findings are'} hidden because the tyre change history shows the tyre was already replaced.{' '}
-            <button type="button" className="cc-link cc-link-btn" onClick={() => setTyreNow('replaced')}>Show them</button>
+            {nowSummary.replaced === 1 ? p('hiddenOne') : p('hiddenMany', { count: fmtInt(nowSummary.replaced) })}{' '}
+            <button type="button" className="cc-link cc-link-btn" onClick={() => setTyreNow('replaced')}>{p('showThem')}</button>
           </p>
         )}
-        {fitError && <p className="iw-od-muted" role="status">Could not read the tyre change records, so no finding shows whether it was replaced. {fitError}</p>}
-        <Tabs label="Observation type" value={kind} onChange={setKind} tabs={[
-          { key: 'all', label: 'All', count: unreadable ? null : all.length },
-          ...OBSERVATION_KINDS.map((k) => ({ key: k.key, label: k.label, count: unreadable ? null : summary[k.key] })),
+        {fitError && <p className="iw-od-muted" role="status">{p('fitErrorBanner')} {fitError}</p>}
+        <Tabs label={p('typeTabsAria')} value={kind} onChange={setKind} tabs={[
+          { key: 'all', label: p('all'), count: unreadable ? null : all.length },
+          ...OBSERVATION_KINDS.map((k) => ({ key: k.key, label: kindLabel(k.key), count: unreadable ? null : summary[k.key] })),
         ]} />
 
         {exportError && <div className="cc-card iw-error" role="alert"><span>{exportError}</span></div>}
@@ -283,55 +287,55 @@ export default function ObservationsBoard({
         {loading && !rows?.length ? (
           <div className="iw-skel">{Array.from({ length: 6 }, (_, i) => <div key={i} className="cc-skel" style={{ height: 44 }} />)}</div>
         ) : unreadable ? (
-          <div className="cc-empty">Could not read the inspections, so no observation can be listed.</div>
+          <div className="cc-empty">{p('unreadable')}</div>
         ) : !all.length ? (
           <div className="cc-empty">
-            No observation in these inspections: every tyre was recorded as Good and no finding or note was written.
-            {onAddObservation ? ' Use Add Observation to record one.' : ''}
+            {p('emptyAll')}
+            {onAddObservation ? ` ${p('emptyAdd')}` : ''}
           </div>
         ) : !pageRows.length ? (
-          <div className="cc-empty">No observation matches these filters.</div>
+          <div className="cc-empty">{p('emptyFiltered')}</div>
         ) : (
-          <div className="iw-obs-table" role="table" aria-label="Observations">
+          <div className="iw-obs-table" role="table" aria-label={p('tableAria')}>
             <div className="iw-otr iw-oth" role="row">
-              <span role="columnheader">Date</span>
-              <span role="columnheader">Vehicle</span>
-              <span role="columnheader">Observation</span>
-              <span role="columnheader">Severity</span>
-              <span role="columnheader">Tyre now</span>
-              <span role="columnheader">Inspector</span>
-              <span role="columnheader">Action</span>
+              <span role="columnheader">{p('cols.date')}</span>
+              <span role="columnheader">{p('cols.vehicle')}</span>
+              <span role="columnheader">{p('cols.observation')}</span>
+              <span role="columnheader">{p('cols.severity')}</span>
+              <span role="columnheader">{p('cols.tyreNow')}</span>
+              <span role="columnheader">{p('cols.inspector')}</span>
+              <span role="columnheader">{p('cols.action')}</span>
             </div>
             {pageRows.map((o) => (
               <div key={o.key} className="iw-otr" role="row">
                 <span role="cell" className="iw-o-day">{fmtDay(o.day)}</span>
-                <span role="cell"><b>{o.asset_no || 'No asset'}</b><small>{o.site || 'No site'}</small></span>
+                <span role="cell"><b>{o.asset_no || p('noAsset')}</b><small>{o.site || p('noSite')}</small></span>
                 <span role="cell" className="iw-o-text">
-                  <small className="iw-o-kind">{o.findings.length} findings in this inspection</small>
-                  <b>{o.findings.filter((f) => f.kind === 'tyre').length} tyre finding(s)</b>
+                  <small className="iw-o-kind">{p('row.findingsIn', { count: o.findings.length })}</small>
+                  <b>{p('row.tyreFindings', { count: o.findings.filter((f) => f.kind === 'tyre').length })}</b>
                   <small title={o.findings.map((f) => [f.position, f.text].filter(Boolean).join(': ')).join(' | ')} style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{o.findings.map((f) => [f.position, f.text].filter(Boolean).join(': ')).join(' | ')}</small>
                 </span>
-                <span role="cell"><span className={`cc-pill ${o.findings.some((f) => f.tone === 'bad') ? 'bad' : o.tone}`}>{o.findings.some((f) => f.tone === 'bad') ? 'Critical' : o.severity}</span></span>
+                <span role="cell"><span className={`cc-pill ${o.findings.some((f) => f.tone === 'bad') ? 'bad' : o.tone}`}>{o.findings.some((f) => f.tone === 'bad') ? p('critical') : o.severity}</span></span>
                 <span role="cell">
                   {!o.findings.some((f) => f.kind === 'tyre') ? <span className="cc-na">-</span>
-                    : !o.findings.find((f) => f.kind === 'tyre')?.tyreNow ? <small>{fitError ? 'N/A' : 'Checking...'}</small>
+                    : !o.findings.find((f) => f.kind === 'tyre')?.tyreNow ? <small>{fitError ? p('na') : p('row.checking')}</small>
                       : (
                         <>
-                          <small>{o.findings.filter((f) => f.kind === 'tyre' && f.tyreNow?.state === 'replaced').length} replaced / {o.findings.filter((f) => f.kind === 'tyre').length} reported</small>
+                          <small>{p('row.replacedOf', { replaced: o.findings.filter((f) => f.kind === 'tyre' && f.tyreNow?.state === 'replaced').length, total: o.findings.filter((f) => f.kind === 'tyre').length })}</small>
                         </>
                       )}
                 </span>
-                <span role="cell">{o.inspector || 'N/A'}</span>
+                <span role="cell">{o.inspector || p('na')}</span>
                 <span role="cell" className="iw-o-acts">
                   <button type="button" className="cc-btn-ghost iw-inline" onClick={() => setDetail(o.inspectionId)}>
-                    <Eye size={12} aria-hidden="true" /> Open
+                    <Eye size={12} aria-hidden="true" /> {p('row.open')}
                   </button>
                   {!actionsReady
-                    ? <small role="status">{actionError ? 'Action status unavailable' : 'Checking actions...'}</small>
+                    ? <small role="status">{actionError ? p('row.actionUnavailable') : p('row.checkingActions')}</small>
                     : <>
-                      <small>{o.findings.filter((f) => f.actionRaised).length} / {o.findings.filter((f) => f.kind !== 'note').length} actions raised</small>
+                      <small>{p('row.actionsRaised', { raised: o.findings.filter((f) => f.actionRaised).length, total: o.findings.filter((f) => f.kind !== 'note').length })}</small>
                       {o.findings.some((f) => f.kind === 'tyre' && !f.actionRaised && f.tyreNow?.state !== 'replaced') && onRaiseAction && (
-                        <button type="button" className="cc-btn iw-inline" onClick={() => onRaiseAction(o.row)}>Create actions</button>
+                        <button type="button" className="cc-btn iw-inline" onClick={() => onRaiseAction(o.row)}>{p('row.createActions')}</button>
                       )}
                     </>}
                 </span>
@@ -340,7 +344,7 @@ export default function ObservationsBoard({
           </div>
         )}
         {actionError && <p role="alert" className="text-sm text-red-500 mt-3">{actionError}</p>}
-        {grouped.length > PAGE && <Pager page={page} pageSize={PAGE} total={grouped.length} onPage={setPage} noun="inspections" />}
+        {grouped.length > PAGE && <Pager page={page} pageSize={PAGE} total={grouped.length} onPage={setPage} noun={p('noun')} />}
       </Card>
       {detail && (
         <ObservationDetail

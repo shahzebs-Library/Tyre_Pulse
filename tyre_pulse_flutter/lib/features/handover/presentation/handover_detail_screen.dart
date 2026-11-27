@@ -27,6 +27,7 @@ import 'package:tyre_pulse/features/handover/data/handover_remote_repository.dar
 import 'package:tyre_pulse/features/handover/domain/handover_approval.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_damage_marker.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_paper.dart';
+import 'package:tyre_pulse/features/handover/domain/handover_party.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_record.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_signing.dart';
 import 'package:tyre_pulse/features/handover/handover_providers.dart';
@@ -53,6 +54,9 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
   AppError? _loadError;
   HandoverRecord? _record;
   String? _signerName;
+
+  /// The caller's own driver record, for the "not your own handover" rule.
+  String? _myDriverId;
   String? _signature;
   final TextEditingController _note = TextEditingController();
   _DecisionBusy? _busy;
@@ -66,6 +70,31 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
     super.initState();
     unawaited(_load());
     unawaited(_loadSignerName());
+    unawaited(_loadMyDriver());
+  }
+
+  Future<void> _loadMyDriver() async {
+    final String userId = ref.read(workspaceContextProvider)?.userId ?? '';
+    if (userId.isEmpty) return;
+    try {
+      final String? id = await ref
+          .read(handoverRemoteRepositoryProvider)
+          .myLinkedDriverId(userId);
+      if (mounted) setState(() => _myDriverId = id);
+    } on Object {
+      // The server refuses a party's decision anyway; this only hides the
+      // button sooner.
+    }
+  }
+
+  HandoverPartyReason? get _partyReason {
+    final HandoverRecord? record = _record;
+    if (record == null) return null;
+    return handoverPartyReason(
+      record,
+      userId: ref.read(workspaceContextProvider)?.userId ?? '',
+      linkedDriverId: _myDriverId,
+    );
   }
 
   @override
@@ -140,6 +169,7 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
     final WorkspaceContext? ctx = ref.read(workspaceContextProvider);
     final bool isSuper = ctx?.isSuperAdmin ?? false;
     final String roleToken = ctx?.role.token ?? '';
+    if (_partyReason != null) return false;
     return canDecide(record.approval, roleToken, isSuperAdmin: isSuper);
   }
 
@@ -313,6 +343,12 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
     return _DetailBody(
       record: record,
       canDecide: _isPending && _canDecide,
+      partyNotice: _isPending && _partyReason != null
+          ? handoverPartyNotice(
+              Localizations.localeOf(context).languageCode,
+              _partyReason!,
+            )
+          : null,
       signerName: _signerName,
       signature: _signature,
       note: _note,
@@ -333,9 +369,13 @@ class _DetailBody extends StatelessWidget {
     required this.busy,
     required this.onSignatureChanged,
     required this.onSigned,
+    this.partyNotice,
   });
 
   final Future<void> Function() onSigned;
+
+  /// Shown instead of the sign-off form when the caller is a party.
+  final String? partyNotice;
   final HandoverRecord record;
   final bool canDecide;
   final String? signerName;
@@ -446,6 +486,23 @@ class _DetailBody extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.sm),
         _SignoffLadder(record: record),
+        if (partyNotice != null) ...<Widget>[
+          const SizedBox(height: TpSpace.md),
+          TpCard(
+            key: const Key('handover.partyNotice'),
+            padding: const EdgeInsets.all(TpSpace.md),
+            background:
+                TpPalette.of(context).forStatus(TpStatus.info).soft,
+            child: Text(
+              partyNotice!,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: TpPalette.of(context)
+                        .forStatus(TpStatus.info)
+                        .onSoft,
+                  ),
+            ),
+          ),
+        ],
         if (canDecide) ...<Widget>[
           const SizedBox(height: TpSpace.lg),
           _DecisionForm(

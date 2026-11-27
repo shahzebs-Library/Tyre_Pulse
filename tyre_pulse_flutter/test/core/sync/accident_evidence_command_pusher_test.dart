@@ -236,9 +236,9 @@ void main() {
     expect(command!.status, CommandStatus.retry);
     final PendingMediaUpload media =
         (await db.mediaDao.mediaForCommand('accident-command')).single;
-    // One try per sync pass: still queued, budget not spent offline.
+    // Offline never spends the attempt budget: still queued, backed off.
     expect(media.state, MediaUploadState.queued);
-    expect(media.attempts, 1);
+    expect(media.attempts, 0);
     expect(media.localPath, _localPath('offline.jpg'));
   });
 

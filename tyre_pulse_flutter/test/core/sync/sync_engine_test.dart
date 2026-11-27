@@ -693,9 +693,9 @@ void main() {
 
       final PendingMediaUpload blockedMedia =
           (await db.mediaDao.mediaForCommand('cmd-blocked')).single;
-      // One try per pass: the failed photo is queued for the next sync,
-      // its attempt budget not spent within this one pass.
-      expect(blockedMedia.attempts, 1);
+      // A transient (network) failure never spends the attempt budget: the
+      // photo is queued for the next sync with a backoff instead.
+      expect(blockedMedia.attempts, 0);
       expect(blockedMedia.state, MediaUploadState.queued);
     });
 

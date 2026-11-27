@@ -15,9 +15,10 @@
 ///
 /// - a photo that already uploaded is sent as its reference;
 /// - a photo still waiting is uploaded by the drain, one try per sync; the
-///   record waits for it (no connection, 5xx, 429, an expired session) for
-///   up to [kModulePhotoWaitCap] syncs, then goes out without it with a
-///   visible reason;
+///   record waits for it (no connection, 5xx, 429) for up to
+///   [kModulePhotoWaitCap] syncs, then goes out without it with a visible
+///   reason. A lapsed session is refreshed once and otherwise only waits:
+///   it never counts toward the cap and never drops the photo;
 /// - a photo the server refuses for good (403, 413, 400, missing bucket) is
 ///   marked abandoned with a visible reason and the record goes without it;
 /// - a photo whose local file is gone is marked abandoned with a reason
@@ -41,6 +42,9 @@ import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart'
     show meterLogMediaPrefix, moduleMediaBucket, washMediaPrefix;
 import 'package:tyre_pulse/core/sync/sync_engine.dart';
+
+export 'package:tyre_pulse/core/sync/sync_engine.dart'
+    show isAuthFailure, isConnectivityFailure, isDefinitivePhotoRefusal;
 
 /// File-name prefix per command whose photos this decorator resolves.
 const Map<CommandType, String> kModulePhotoPrefixes = <CommandType, String>{
@@ -85,12 +89,14 @@ final class ModulePhotoCommandPusher implements CommandPusher {
     required MediaUploader uploader,
     bool Function(String path) fileExists = _defaultFileExists,
     DateTime Function()? clock,
+    SessionRefresher? refreshSession,
   })  : _delegate = delegate,
         _queueDao = queueDao,
         _mediaDao = mediaDao,
         _uploader = uploader,
         _fileExists = fileExists,
-        _clock = clock;
+        _clock = clock,
+        _refreshSession = refreshSession;
 
   final CommandPusher _delegate;
   final QueueDao _queueDao;
@@ -98,6 +104,7 @@ final class ModulePhotoCommandPusher implements CommandPusher {
   final MediaUploader _uploader;
   final bool Function(String path) _fileExists;
   final DateTime Function()? _clock;
+  final SessionRefresher? _refreshSession;
 
   DateTime _now() => (_clock ?? DateTime.now)().toUtc();
 
@@ -254,7 +261,13 @@ final class ModulePhotoCommandPusher implements CommandPusher {
 
     final bool unrouted = media.bucket == null || media.bucket!.isEmpty;
     final bool spent = media.state == MediaUploadState.failed;
-    if (!unrouted && !spent && !atCap) throw _waiting();
+    if (!unrouted && !spent && !atCap) {
+      // Waiting on the drain. If the drain's last try failed only because
+      // the session lapsed, say so: that wait must not use up the budget.
+      final MediaUploadBackoff? backoff =
+          await _mediaDao.uploadBackoff(media.id);
+      throw _waiting(authLapse: backoff?.authLapse ?? false);
+    }
 
     String bucket = media.bucket ?? '';
     String fileName = media.fileName;
@@ -273,11 +286,26 @@ final class ModulePhotoCommandPusher implements CommandPusher {
     }
 
     try {
-      final MediaUploadResult result = await _uploader.upload(
-        bucket: bucket,
-        localPath: media.localPath,
-        fileName: fileName,
-      );
+      MediaUploadResult result;
+      try {
+        result = await _uploader.upload(
+          bucket: bucket,
+          localPath: media.localPath,
+          fileName: fileName,
+        );
+      } on SupabaseFailure catch (failure) {
+        // One session refresh, then one more try, before treating a lapsed
+        // session as a wait.
+        final SessionRefresher? refresh = _refreshSession;
+        if (!isAuthFailure(failure) || refresh == null || !await refresh()) {
+          rethrow;
+        }
+        result = await _uploader.upload(
+          bucket: bucket,
+          localPath: media.localPath,
+          fileName: fileName,
+        );
+      }
       await _mediaDao.markUploaded(
         media.id,
         bucket: bucket,
@@ -287,6 +315,11 @@ final class ModulePhotoCommandPusher implements CommandPusher {
       );
       return result.remoteRef;
     } on SupabaseFailure catch (failure) {
+      if (isAuthFailure(failure)) {
+        // A lapsed session says nothing about the photo: never abandon it
+        // for this, and never count it toward the wait cap.
+        throw _waiting(cause: failure, authLapse: true);
+      }
       if (isDefinitivePhotoRefusal(failure)) {
         await _mediaDao.abandonMedia(
           media.id,
@@ -294,8 +327,8 @@ final class ModulePhotoCommandPusher implements CommandPusher {
         );
         return null;
       }
-      // Transient (no connection, 5xx, 429, an expired session): keep the
-      // photo and wait, until the record has waited long enough.
+      // Transient (no connection, 5xx, 429): keep the photo and wait, until
+      // the record has waited long enough.
       if (atCap && !isConnectivityFailure(failure)) {
         await _mediaDao.abandonMedia(
           media.id,
@@ -313,36 +346,10 @@ final class ModulePhotoCommandPusher implements CommandPusher {
 /// retry limit, so the record itself is never dead-lettered for a photo.
 const int kModulePhotoWaitCap = 5;
 
-/// A refusal that will not change on retry: forbidden, too large, invalid,
-/// or the destination does not exist.
-bool isDefinitivePhotoRefusal(SupabaseFailure failure) {
-  switch (failure.code) {
-    case '400':
-    case '403':
-    case '404':
-    case '413':
-      return true;
-  }
-  switch (failure.cause) {
-    case SupabaseFailureCause.forbidden:
-    case SupabaseFailureCause.rowLevelSecurity:
-    case SupabaseFailureCause.checkViolation:
-    case SupabaseFailureCause.invalidInput:
-    case SupabaseFailureCause.storageNotFound:
-      return true;
-    default:
-      return false;
-  }
-}
-
-/// No usable connection: nothing can be learned about the photo, and the
-/// record could not be written either.
-bool isConnectivityFailure(SupabaseFailure failure) =>
-    failure.cause == SupabaseFailureCause.offline ||
-    failure.cause == SupabaseFailureCause.timeout;
-
-SupabaseFailure _waiting({Object? cause}) => _failure(
-      'A photo of this record has not finished uploading.',
+SupabaseFailure _waiting({Object? cause, bool authLapse = false}) => _failure(
+      authLapse
+          ? kPhotoWaitAuthLapseTechnical
+          : 'A photo of this record has not finished uploading.',
       cause: cause,
     );
 

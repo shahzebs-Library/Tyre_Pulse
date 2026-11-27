@@ -109,6 +109,64 @@ bool isClientUuidReplay(SupabaseFailure failure) {
   return raw.contains('client_uuid') || raw.contains('client_uid');
 }
 
+/// A refusal that will not change on retry: forbidden, too large, invalid,
+/// or the destination does not exist. Only these count against a photo's
+/// upload attempts.
+///
+/// An auth lapse is never one of them, whatever status it arrived with:
+/// Storage's legacy error body reports `InvalidJWT` as HTTP 400.
+bool isDefinitivePhotoRefusal(SupabaseFailure failure) {
+  if (isAuthFailure(failure)) return false;
+  switch (failure.code) {
+    case '400':
+    case '403':
+    case '404':
+    case '413':
+      return true;
+  }
+  switch (failure.cause) {
+    case SupabaseFailureCause.forbidden:
+    case SupabaseFailureCause.rowLevelSecurity:
+    case SupabaseFailureCause.checkViolation:
+    case SupabaseFailureCause.invalidInput:
+    case SupabaseFailureCause.storageNotFound:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// No usable connection: nothing can be learned about the photo, and the
+/// record could not be written either.
+bool isConnectivityFailure(SupabaseFailure failure) =>
+    failure.cause == SupabaseFailureCause.offline ||
+    failure.cause == SupabaseFailureCause.timeout;
+
+/// The session lapsed (no token, an expired or invalid JWT). A refresh or a
+/// fresh sign-in fixes it; it says nothing about the photo.
+bool isAuthFailure(SupabaseFailure failure) {
+  if (failure.cause == SupabaseFailureCause.unauthenticated ||
+      failure.cause == SupabaseFailureCause.jwtExpired) {
+    return true;
+  }
+  if (failure.code == '401') return true;
+  return isStorageAuthError(null, failure.rawMessage ?? '');
+}
+
+/// Marks a "this record is waiting for its photo" failure that is only
+/// waiting because the session lapsed. The engine puts such a command back
+/// without counting a retry, so an expired session never spends the record's
+/// photo wait budget.
+const String kPhotoWaitAuthLapseTechnical =
+    'A photo of this record is waiting for the session to be refreshed.';
+
+bool isAuthLapsePhotoWait(SupabaseFailure failure) =>
+    failure.rawMessage == kPhotoWaitAuthLapseTechnical;
+
+/// Refreshes the signed-in session. Returns true when a usable session is
+/// back. Must not throw.
+typedef SessionRefresher = Future<bool> Function();
+
 /// What [SyncEngine] needs to push one command's business row to the server.
 ///
 /// A production implementation ([SupabaseCommandPusher] in
@@ -187,16 +245,21 @@ final class SyncEngine {
     required CommandPusher pusher,
     required MediaUploader uploader,
     required String holderId,
+    SessionRefresher? refreshSession,
   })  : _queueDao = queueDao,
         _mediaDao = mediaDao,
         _pusher = pusher,
         _uploader = uploader,
-        _holderId = holderId;
+        _holderId = holderId,
+        _refreshSession = refreshSession;
 
   final QueueDao _queueDao;
   final MediaDao _mediaDao;
   final CommandPusher _pusher;
   final MediaUploader _uploader;
+
+  /// Tried once per pass when an upload is refused for a lapsed session.
+  final SessionRefresher? _refreshSession;
 
   /// Identifies THIS run for [QueueDao.acquireSyncLock]. Every call site that
   /// constructs a [SyncEngine] should mint a fresh value per attempt (a UUID
@@ -275,6 +338,11 @@ final class SyncEngine {
       await _queueDao.reclaimStaleClaims(now: now);
       await _queueDao.unblockForWorkspace(workspaceId: workspaceId, now: now);
 
+      // Photos that an older build marked `failed` for a transient reason
+      // (no signal, 5xx, an expired session) could never be retried, and a
+      // record that needs them stalled for good. Requeued once.
+      await _mediaDao.requeueLegacyTransientFailuresOnce(now: now);
+
       final (int photosUploaded, int photosFailed) =
           await _drainMediaUploads(now: now);
 
@@ -330,16 +398,17 @@ final class SyncEngine {
   }) async {
     int uploaded = 0;
     int failed = 0;
-    // One try per photo per pass: a failed attempt goes back to `queued`,
-    // and re-claiming it in the same pass would spend its whole attempt
-    // budget in seconds (offline included), long before the connection
-    // returns. A photo seen again this pass is released untouched and waits
-    // for the next sync.
+    // One try per photo per pass, and a photo still inside its backoff is
+    // skipped. Both are passed to the claim so a failing photo at the head
+    // of the queue cannot hide the photos behind it.
     final Set<String> attempted = <String>{};
+    bool refreshTried = false;
 
     for (int round = 0; round < _maxMediaClaimRounds; round++) {
-      final List<PendingMediaUpload> claimed =
-          await _mediaDao.claimNextUploads();
+      final Set<String> backedOff = await _mediaDao.mediaIdsInBackoff(now);
+      final List<PendingMediaUpload> claimed = await _mediaDao.claimNextUploads(
+        excludeIds: <String>{...attempted, ...backedOff},
+      );
       if (claimed.isEmpty) {
         break;
       }
@@ -365,24 +434,35 @@ final class SyncEngine {
           continue;
         }
 
-        try {
-          final MediaUploadResult result = await _uploader.upload(
-            bucket: bucket,
-            localPath: media.localPath,
-            fileName: media.fileName,
-          );
-          await _mediaDao.markUploaded(
-            media.id,
-            bucket: bucket,
-            remotePath: result.remotePath,
-            remoteRef: result.remoteRef,
-            at: now,
-          );
+        SupabaseFailure? failure = await _uploadOne(media, bucket, now: now);
+        if (failure != null &&
+            isAuthFailure(failure) &&
+            !refreshTried &&
+            _refreshSession != null) {
+          refreshTried = true;
+          if (await _refreshSession()) {
+            failure = await _uploadOne(media, bucket, now: now);
+          }
+        }
+
+        if (failure == null) {
           uploaded++;
-        } on SupabaseFailure catch (failure) {
+        } else if (isDefinitivePhotoRefusal(failure)) {
+          // Only a refusal that will not change on retry spends an attempt.
           await _mediaDao.markUploadAttemptFailed(
             media.id,
             messageSafe: failure.error.message,
+          );
+          failed++;
+        } else {
+          // No signal, 5xx, 429, an expired session: the photo waits with a
+          // growing backoff and never runs out of attempts, so evidence a
+          // record needs is never failed or abandoned for a passing reason.
+          await _mediaDao.recordTransientUploadFailure(
+            media.id,
+            messageSafe: failure.error.message,
+            now: now,
+            authLapse: isAuthFailure(failure),
           );
           failed++;
         }
@@ -391,6 +471,31 @@ final class SyncEngine {
     }
 
     return (uploaded, failed);
+  }
+
+  /// Uploads one claimed photo. Returns null on success, else the failure.
+  Future<SupabaseFailure?> _uploadOne(
+    PendingMediaUpload media,
+    String bucket, {
+    required DateTime now,
+  }) async {
+    try {
+      final MediaUploadResult result = await _uploader.upload(
+        bucket: bucket,
+        localPath: media.localPath,
+        fileName: media.fileName,
+      );
+      await _mediaDao.markUploaded(
+        media.id,
+        bucket: bucket,
+        remotePath: result.remotePath,
+        remoteRef: result.remoteRef,
+        at: now,
+      );
+      return null;
+    } on SupabaseFailure catch (failure) {
+      return failure;
+    }
   }
 
   // -- Commands -----------------------------------------------------------
@@ -531,6 +636,12 @@ final class SyncEngine {
       await _markCommandSynced(command, spec: spec, now: now);
       return _CommandOutcome.synced;
     } on SupabaseFailure catch (failure) {
+      if (isAuthLapsePhotoWait(failure)) {
+        // Waiting only on a session refresh: not a failed attempt, so it
+        // must not count toward the record's photo wait budget.
+        await _queueDao.returnToPending(command.id);
+        return _CommandOutcome.mediaPending;
+      }
       // The idempotency judgement: a duplicate key on a RETRY of an
       // idempotent write means the earlier attempt already landed. A
       // duplicate key on the FIRST attempt (retryCount == 0) is a genuine

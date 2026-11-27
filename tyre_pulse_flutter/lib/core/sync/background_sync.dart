@@ -186,6 +186,16 @@ Future<bool> _runBackgroundSync() async {
 
     final SupabaseClient client = Supabase.instance.client;
     if (client.auth.currentUser?.id != workspace.userId) return true;
+    // A photo refused for a lapsed session gets one refresh before it waits.
+    Future<bool> refreshSession() async {
+      try {
+        final AuthResponse res = await client.auth.refreshSession();
+        return res.session != null && res.user?.id == workspace.userId;
+      } on Object {
+        return false;
+      }
+    }
+
     final SyncEngine engine = SyncEngine(
       queueDao: db.queueDao,
       mediaDao: ScopedMediaDao(
@@ -210,6 +220,7 @@ Future<bool> _runBackgroundSync() async {
               queueDao: db.queueDao,
               mediaDao: db.mediaDao,
               uploader: SupabaseMediaUploader(client),
+              refreshSession: refreshSession,
             ),
             queueDao: db.queueDao,
             mediaDao: db.mediaDao,
@@ -226,6 +237,7 @@ Future<bool> _runBackgroundSync() async {
       // holder id between them would let both believe they hold the sync
       // lock at once.
       holderId: const Uuid().v4(),
+      refreshSession: refreshSession,
     );
 
     await engine.runOnce(

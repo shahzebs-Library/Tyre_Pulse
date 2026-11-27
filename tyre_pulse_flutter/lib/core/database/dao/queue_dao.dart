@@ -7,6 +7,8 @@
 /// as an empty result.
 library;
 
+import 'dart:math' as math;
+
 import 'package:drift/drift.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/database_constants.dart';
@@ -503,7 +505,29 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
         )..where((t) => t.id.equals(command.id)))
             .go();
       }
-      return filesToDelete;
+      if (filesToDelete.isEmpty) return filesToDelete;
+
+      // A file is only deleted when nothing left still points at it: two
+      // queued records (or a record and a draft) can share one photo file,
+      // and the other one still needs it.
+      final List<String> unique = filesToDelete.toSet().toList();
+      final Set<String> stillUsed = <String>{};
+      const int chunk = 400;
+      for (int i = 0; i < unique.length; i += chunk) {
+        final List<String> part =
+            unique.sublist(i, math.min(i + chunk, unique.length));
+        final remaining = await (select(pendingMediaUploads)
+              ..where((t) => t.localPath.isIn(part)))
+            .get();
+        stillUsed.addAll(remaining.map((PendingMediaUpload m) => m.localPath));
+        final drafts = await (select(attachedDatabase.draftPhotos)
+              ..where((t) => t.localPath.isIn(part)))
+            .get();
+        stillUsed.addAll(drafts.map((DraftPhoto d) => d.localPath));
+      }
+      return unique
+          .where((String path) => !stillUsed.contains(path))
+          .toList(growable: false);
     });
   }
 

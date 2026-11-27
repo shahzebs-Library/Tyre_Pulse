@@ -18,6 +18,9 @@
 /// media DAO test exists to catch.
 library;
 
+import 'dart:convert';
+import 'dart:math' as math;
+
 import 'package:drift/drift.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/database_constants.dart';
@@ -62,11 +65,23 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
   ///
   /// A row that has already reached [maxUploadAttempts] is not claimed again;
   /// it is reported instead of retried into the same crash loop.
+  ///
+  /// [excludeIds] are skipped: photos already tried this pass, and photos
+  /// still inside their transient backoff. Without it a failing photo at the
+  /// head of the queue is claimed again and again and hides the rest.
   Future<List<PendingMediaUpload>> claimNextUploads({
     int limit = uploadConcurrency,
     String? workspaceId,
     String? createdBy,
+    Iterable<String> excludeIds = const <String>[],
   }) async {
+    final Set<String> excludeSet = excludeIds.toSet();
+    // Small sets go into the SQL; a large one (many photos waiting out a
+    // backoff) would pass SQLite's bound-variable limit, so it is filtered
+    // here instead.
+    final bool inSql = excludeSet.length <= _inClauseChunk;
+    final List<String> exclude =
+        inSql ? excludeSet.toList(growable: false) : const <String>[];
     return transaction(() async {
       final commands = attachedDatabase.pendingCommands;
       final owners = selectOnly(commands)..addColumns([commands.id]);
@@ -81,17 +96,22 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
               (t) =>
                   t.state.equals(MediaUploadState.queued) &
                   t.attempts.isSmallerThanValue(maxUploadAttempts) &
-                  t.commandId.isInQuery(owners),
+                  t.commandId.isInQuery(owners) &
+                  (exclude.isEmpty
+                      ? const Constant<bool>(true)
+                      : t.id.isNotIn(exclude)),
             )
             ..orderBy([
               (t) => OrderingTerm.asc(t.capturedAt),
               (t) => OrderingTerm.asc(t.id),
             ])
-            ..limit(limit))
+            ..limit(inSql ? limit : limit + excludeSet.length))
           .get();
 
       final claimed = <PendingMediaUpload>[];
-      for (final PendingMediaUpload row in due) {
+      for (final PendingMediaUpload row in due
+          .where((PendingMediaUpload r) => !excludeSet.contains(r.id))
+          .take(limit)) {
         await (update(
           pendingMediaUploads,
         )..where((t) => t.id.equals(row.id)))
@@ -133,6 +153,7 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
         lastError: const Value<String?>(null),
       ),
     );
+    await clearUploadBackoff(id);
   }
 
   /// The owning command reached `synced` carrying these references. Only now is
@@ -218,6 +239,172 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
         state: const Value<String>(MediaUploadState.abandoned),
         attempts: const Value<int>(maxUploadAttempts),
         lastError: Value<String?>(messageSafe),
+      ),
+    );
+    await clearUploadBackoff(id);
+  }
+
+  // -- Transient failures ---------------------------------------------------
+
+  /// First wait after a transient upload failure; doubles per consecutive
+  /// failure up to [transientBackoffMax].
+  static const Duration transientBackoffBase = Duration(seconds: 30);
+  static const Duration transientBackoffMax = Duration(minutes: 15);
+
+  /// Records an upload failure that may clear on its own (no signal, 5xx,
+  /// 429, a lapsed session). It does NOT count an attempt: the photo goes
+  /// back to `queued`, keeps [messageSafe] as its visible reason, and waits
+  /// a growing backoff before the next try. A record that needs this photo
+  /// is never failed or abandoned for a passing reason.
+  ///
+  /// The backoff lives in `sync_metadata` because the engine is rebuilt for
+  /// every sync run.
+  Future<void> recordTransientUploadFailure(
+    String id, {
+    required String messageSafe,
+    required DateTime now,
+    bool authLapse = false,
+  }) async {
+    await transaction(() async {
+      await (update(pendingMediaUploads)
+            ..where(
+              (t) =>
+                  t.id.equals(id) &
+                  t.state.isIn(<String>[
+                    MediaUploadState.uploading,
+                    MediaUploadState.queued,
+                  ]),
+            ))
+          .write(
+        PendingMediaUploadsCompanion(
+          state: const Value<String>(MediaUploadState.queued),
+          lastError: Value<String?>(messageSafe),
+        ),
+      );
+      final Map<String, MediaUploadBackoff> all = await _readBackoff();
+      final int streak = (all[id]?.streak ?? 0) + 1;
+      final int factor = math.pow(2, math.min(streak - 1, 16)).toInt();
+      Duration wait = transientBackoffBase * factor;
+      if (wait > transientBackoffMax) wait = transientBackoffMax;
+      all[id] = MediaUploadBackoff(
+        until: now.toUtc().add(wait),
+        streak: streak,
+        authLapse: authLapse,
+      );
+      await _writeBackoff(all, now);
+    });
+  }
+
+  /// The transient backoff recorded for [id], or null.
+  Future<MediaUploadBackoff?> uploadBackoff(String id) async =>
+      (await _readBackoff())[id];
+
+  /// Ids of photos whose backoff has not elapsed at [now].
+  Future<Set<String>> mediaIdsInBackoff(DateTime now) async {
+    final DateTime at = now.toUtc();
+    return <String>{
+      for (final MapEntry<String, MediaUploadBackoff> e
+          in (await _readBackoff()).entries)
+        if (e.value.until.isAfter(at)) e.key,
+    };
+  }
+
+  /// Forgets the backoff of [id] (it uploaded, or was given up for good).
+  Future<void> clearUploadBackoff(String id) async {
+    final Map<String, MediaUploadBackoff> all = await _readBackoff();
+    if (all.remove(id) == null) return;
+    await _writeBackoff(all, DateTime.now().toUtc());
+  }
+
+  /// Puts every `failed` photo of a not-yet-synced record back in the queue
+  /// with a fresh attempt budget. Call after a sign-in or when the
+  /// connection returns, so a photo failed for a reason that has since
+  /// cleared gets another chance. Abandoned photos are final and untouched.
+  Future<int> requeueFailedMedia() {
+    final commands = attachedDatabase.pendingCommands;
+    final unsynced = selectOnly(commands)
+      ..addColumns([commands.id])
+      ..where(commands.status.equals(CommandStatus.synced).not());
+    return (update(pendingMediaUploads)
+          ..where(
+            (t) =>
+                t.state.equals(MediaUploadState.failed) &
+                t.commandId.isInQuery(unsynced),
+          ))
+        .write(
+      const PendingMediaUploadsCompanion(
+        state: Value<String>(MediaUploadState.queued),
+        attempts: Value<int>(0),
+      ),
+    );
+  }
+
+  /// Older builds spent a photo's attempts on transient failures (no
+  /// signal, 5xx, an expired session), so its `failed` rows may be perfectly
+  /// uploadable. Those cannot be told apart from a real refusal afterwards,
+  /// so they are all requeued once; from this build on, only a definitive
+  /// refusal can mark a photo `failed`.
+  Future<int> requeueLegacyTransientFailuresOnce({
+    required DateTime now,
+  }) async {
+    final table = attachedDatabase.syncMetadata;
+    final done = await (select(table)
+          ..where((t) => t.key.equals(_legacyRequeueKey))
+          ..limit(1))
+        .getSingleOrNull();
+    if (done != null) return 0;
+    final int count = await requeueFailedMedia();
+    await into(table).insertOnConflictUpdate(
+      SyncMetadataCompanion.insert(
+        key: _legacyRequeueKey,
+        valueJson: jsonEncode(<String, Object?>{'requeued': count}),
+        updatedAt: now.toUtc(),
+      ),
+    );
+    return count;
+  }
+
+  static const String _backoffKey = 'media.uploadBackoff';
+  static const String _legacyRequeueKey = 'media.legacyTransientRequeuedV1';
+
+  Future<Map<String, MediaUploadBackoff>> _readBackoff() async {
+    final table = attachedDatabase.syncMetadata;
+    final row = await (select(table)
+          ..where((t) => t.key.equals(_backoffKey))
+          ..limit(1))
+        .getSingleOrNull();
+    final Map<String, MediaUploadBackoff> out = <String, MediaUploadBackoff>{};
+    if (row == null) return out;
+    try {
+      final Object? decoded = jsonDecode(row.valueJson);
+      if (decoded is! Map<String, Object?>) return out;
+      for (final MapEntry<String, Object?> e in decoded.entries) {
+        final MediaUploadBackoff? b = MediaUploadBackoff.tryParse(e.value);
+        if (b != null) out[e.key] = b;
+      }
+    } on FormatException {
+      return out;
+    }
+    return out;
+  }
+
+  Future<void> _writeBackoff(
+    Map<String, MediaUploadBackoff> all,
+    DateTime now,
+  ) async {
+    final table = attachedDatabase.syncMetadata;
+    if (all.isEmpty) {
+      await (delete(table)..where((t) => t.key.equals(_backoffKey))).go();
+      return;
+    }
+    await into(table).insertOnConflictUpdate(
+      SyncMetadataCompanion.insert(
+        key: _backoffKey,
+        valueJson: jsonEncode(<String, Object?>{
+          for (final MapEntry<String, MediaUploadBackoff> e in all.entries)
+            e.key: e.value.toJson(),
+        }),
+        updatedAt: now.toUtc(),
       ),
     );
   }
@@ -527,6 +714,44 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
     return candidates
         .where((String name) => !referenced.contains(name))
         .toList(growable: false);
+  }
+}
+
+/// The wait recorded after a transient upload failure.
+final class MediaUploadBackoff {
+  const MediaUploadBackoff({
+    required this.until,
+    required this.streak,
+    this.authLapse = false,
+  });
+
+  /// Not retried before this instant.
+  final DateTime until;
+
+  /// Consecutive transient failures.
+  final int streak;
+
+  /// The last failure was a lapsed session, not the photo or the network.
+  final bool authLapse;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+        'until': until.toUtc().toIso8601String(),
+        'streak': streak,
+        'auth': authLapse,
+      };
+
+  static MediaUploadBackoff? tryParse(Object? raw) {
+    if (raw is! Map<String, Object?>) return null;
+    final Object? until = raw['until'];
+    final Object? streak = raw['streak'];
+    if (until is! String || streak is! int) return null;
+    final DateTime? at = DateTime.tryParse(until);
+    if (at == null) return null;
+    return MediaUploadBackoff(
+      until: at.toUtc(),
+      streak: streak,
+      authLapse: raw['auth'] == true,
+    );
   }
 }
 

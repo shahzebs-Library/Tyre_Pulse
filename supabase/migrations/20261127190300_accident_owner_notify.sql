@@ -1,7 +1,8 @@
 -- =============================================================================
 -- Accident notifications driven by the owner's settings (accident_notify_rules).
 --
--- STATUS: AUTHORED, NOT APPLIED. Needs 20261127190100 + 20261127190200 first.
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; consumer registered, both older consumers patched, dedupe index created.
+--         (was: AUTHORED, NOT APPLIED.) Needs 20261127190100 + 20261127190200 first.
 --
 -- WHY DUPLICATES HAPPENED (A4, found while building this):
 --   * accident.reported does NOT fire twice per insert. 58 events / 45 accidents is

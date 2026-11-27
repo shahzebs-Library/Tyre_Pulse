@@ -1,7 +1,8 @@
 -- =============================================================================
 -- "My accident tasks", the who-holds-what board, stalled cases and a daily digest.
 --
--- STATUS: AUTHORED, NOT APPLIED. Needs 20261127190100..190300 first.
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; accident_sla_scan patched; dry stalled scan 11 (rolled back); VINAY my_tasks 12.
+--         (was: AUTHORED, NOT APPLIED.) Needs 20261127190100..190300 first.
 --
 -- A8  accident_my_tasks()        open steps owned by me, or by my role in my scope,
 --                                with case ref, step, due, SLA state, days in step.

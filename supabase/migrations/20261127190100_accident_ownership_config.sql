@@ -1,7 +1,8 @@
 -- =============================================================================
 -- Accident ownership + notification settings (owner-editable).
 --
--- STATUS: AUTHORED, NOT APPLIED. Apply in order:
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; 20 team roles + 24 notify rules; assessment KSA -> VINAY.
+--         (was: AUTHORED, NOT APPLIED.) Apply in order:
 --   20261127190100_accident_ownership_config.sql      (this file)
 --   20261127190200_accident_case_bootstrap.sql
 --   20261127190250_accident_legacy_close_data.sql      (data only, separate)

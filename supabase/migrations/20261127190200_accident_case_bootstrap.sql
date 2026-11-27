@@ -1,7 +1,8 @@
 -- =============================================================================
 -- Accident case bootstrap: every new accident gets its steps, owners and timers.
 --
--- STATUS: AUTHORED, NOT APPLIED. Needs 20261127190100 first.
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; 0 null case_status, 0 diverged, 13 cases / 86 steps (38 named), 4 responsible owners. Backfill raised 36 workstream_assigned in-app notices via the older consumer.
+--         (was: AUTHORED, NOT APPLIED.) Needs 20261127190100 first.
 --
 -- A1  AFTER INSERT on accidents creates the required workstreams from the route
 --     profile (accident_route_profiles, else the default profile, else the engine's

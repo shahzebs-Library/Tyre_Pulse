@@ -1,7 +1,8 @@
 -- =============================================================================
 -- DATA ONLY: close the stuck legacy accident cases (owner decision 2026-11-27).
 --
--- STATUS: AUTHORED, NOT APPLIED. Independent of the other accident migrations;
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; exactly 20 cases legacy_closed (33 total), 0 stage-event rows written, 5 triggers re-enabled, ACC-2026-0041/0043 still open.
+--         (was: AUTHORED, NOT APPLIED.) Independent of the other accident migrations;
 -- apply it BEFORE the first daily scan that includes the stalled check
 -- (20261127190400), otherwise each of these cases raises a stalled notice.
 --

@@ -85,7 +85,7 @@ Each customer is set up by the Tyre Pulse team as its own company; there is no s
 
 ## Pricing
 
-Pricing is not published. Four indicative packages are described on the pricing page. They are not self-service plans: each customer is set up by the Tyre Pulse team.
+Prices are agreed per contract and are not published. Four indicative packages are described on the pricing page. They are not self-service plans: each customer is set up by the Tyre Pulse team.
 
 - Solo, for an owner managing a small fleet: core asset and tyre records, inspections, basic dashboards, standard exports.
 - Team, for growing site and workshop teams: multiple users and sites, approvals, maintenance and inventory, PDF and Excel reports.
@@ -106,7 +106,7 @@ A quote depends on fleet size, users, modules, countries and integration require
 
 - The product name is Tyre Pulse, two words. The Android store listing is "${ANDROID_APP_NAME}".
 ${iosFact}
-- Pricing: quoted on request, not published.
+- Pricing: by contract, quoted on request, not published.
 - Onboarding: done with the customer by the Tyre Pulse team. There is no self sign-up.
 - Not available today (planned): live TPMS pressure, a direct telematics connection, supplier price history and delivery performance.
 - Set up on request: preventive maintenance plans, warranty claims, purchase requests, RFID reads, fuel records, single sign-on, API access.

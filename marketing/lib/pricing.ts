@@ -1,16 +1,14 @@
 /**
  * How Tyre Pulse is priced, stated once for the English and Arabic pricing pages.
  *
- * The owner prices per vehicle, per user or per module bundle ("it depends, we can do all 3")
- * and has not published figures. Nothing on the site may show a price until the owner
- * supplies one.
- *
- * TODO(owner): published figures. Set PRICE_FIGURES to real numbers, for example
- *   { perVehicle: "SAR 00 per vehicle per month", perUser: "...", bundle: "..." },
- * and the pricing pages will show them under each model. While it is null, each model
- * says "Quoted on your fleet" instead of a number.
+ * Owner decision: prices are agreed per contract. The site shows no price figures, and
+ * nothing here (pages, FAQ, JSON-LD, llms.txt) may state or estimate one. Each model and
+ * package reads PRICING_BY_CONTRACT, with QUOTE_CTA pointing to the quote form.
  */
-export const PRICE_FIGURES: null | { perVehicle: string; perUser: string; bundle: string } = null;
+export const PRICING_BY_CONTRACT = { en: "Pricing by contract", ar: "الأسعار حسب العقد" } as const;
+
+/** The call to action under every model and package. */
+export const QUOTE_CTA = { en: "Talk to us for a quote", ar: "تحدث معنا لطلب عرض سعر" } as const;
 
 /** The promise next to the quote form. Change here if the reply time changes. */
 export const QUOTE_TURNAROUND = { en: "1 working day", ar: "يوم عمل واحد" } as const;

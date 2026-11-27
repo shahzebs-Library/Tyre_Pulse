@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { BadgeDollarSign, Boxes, CheckCircle2, Truck, Users } from "lucide-react";
 import { Card, CardGrid } from "@/components/ui/Card";
 import { FaqList, Section } from "@/components/ui/Section";
 import { ContactForm } from "@/components/ContactForm";
-import { PRICE_FACTORS, PRICE_FIGURES, PRICING_MODELS, QUOTE_TURNAROUND } from "@/lib/pricing";
+import { PRICE_FACTORS, PRICING_BY_CONTRACT, PRICING_MODELS, QUOTE_CTA, QUOTE_TURNAROUND } from "@/lib/pricing";
 
 const ICONS = { perVehicle: Truck, perUser: Users, bundle: Boxes } as const;
 
@@ -10,7 +11,6 @@ const COPY = {
   en: {
     modelsTitle: "Three ways to price, combined when it helps.",
     modelsLead: "We price per vehicle, per user or per module bundle, and can mix them, for example a bundle for the head office and a per-vehicle rate for the sites.",
-    quoted: "Quoted on your fleet",
     factorsTitle: "What affects the price.",
     factorsLead: "These are the numbers a quote is built from. Send them and the figure follows.",
     quoteTitle: `Get a quote in ${QUOTE_TURNAROUND.en}.`,
@@ -20,7 +20,6 @@ const COPY = {
   ar: {
     modelsTitle: "ثلاث طرق للتسعير، ويمكن الجمع بينها.",
     modelsLead: "نسعّر لكل مركبة أو لكل مستخدم أو لكل باقة وحدات، ويمكن المزج بينها، مثل باقة للمكتب الرئيسي وسعر لكل مركبة في المواقع.",
-    quoted: "يُحدَّد حسب أسطولك",
     factorsTitle: "ما الذي يحدد السعر.",
     factorsLead: "هذه هي الأرقام التي يُبنى عليها عرض السعر. أرسلها ويصلك الرقم.",
     quoteTitle: `احصل على عرض سعر خلال ${QUOTE_TURNAROUND.ar}.`,
@@ -31,7 +30,7 @@ const COPY = {
 
 /**
  * The pricing explanation shared by /pricing and /ar/pricing: the three models, what affects
- * the price, and the short quote form. No figure is shown until the owner sets PRICE_FIGURES.
+ * the price, and the short quote form. Prices are agreed per contract, so no figure is shown.
  */
 export function PricingModels({ locale = "en" }: { locale?: "en" | "ar" }) {
   const t = COPY[locale];
@@ -41,10 +40,10 @@ export function PricingModels({ locale = "en" }: { locale?: "en" | "ar" }) {
         <CardGrid cols={3}>
           {PRICING_MODELS.map((m) => {
             const c = m[locale];
-            const figure = PRICE_FIGURES ? PRICE_FIGURES[m.id] : null;
             return (
               <Card key={m.id} icon={ICONS[m.id] ?? BadgeDollarSign} title={c.title} text={c.text} note={c.fit}>
-                <p className="price-figure">{figure ?? t.quoted}</p>
+                <p className="price-figure">{PRICING_BY_CONTRACT[locale]}</p>
+                <Link className="btn btn-secondary" href="#quote">{QUOTE_CTA[locale]}<span className="sr-only"> ({c.title})</span></Link>
               </Card>
             );
           })}

@@ -4,7 +4,7 @@ import { Check, CheckCircle2 } from "lucide-react";
 import { PageFrame } from "@/components/PageFrame";
 import { PageTop } from "@/components/PageTop";
 import { PricingModels } from "@/components/PricingContent";
-import { QUOTE_TURNAROUND } from "@/lib/pricing";
+import { PRICING_BY_CONTRACT, QUOTE_CTA, QUOTE_TURNAROUND } from "@/lib/pricing";
 import { JsonLd, alternatesFor, faqSchema, pageBreadcrumb } from "../schema";
 import { PRICING_FAQ as PRICE_FAQ } from "@/lib/faqs";
 import { OG_IMAGES } from "@/lib/site";
@@ -12,7 +12,7 @@ import { OG_IMAGES } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Pricing: per vehicle, per user or per module bundle",
   description:
-    "Tyre Pulse is priced per vehicle, per user or per module bundle. See what affects the price and get a quote on your fleet within one working day.",
+    "Tyre Pulse is priced by contract, per vehicle, per user or per module bundle. See what affects the price and get a quote on your fleet within one working day.",
   alternates: alternatesFor("/pricing"),
   openGraph: { images: OG_IMAGES,
     title: "Pricing | Tyre Pulse",
@@ -42,19 +42,20 @@ export default function PricingPage() {
   return <PageFrame>
     <JsonLd data={faqSchema(PRICE_FAQ, "/pricing")} />
     <JsonLd data={pageBreadcrumb("Pricing", "/pricing")} />
-    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Pricing" }]} title="Priced per vehicle, per user or per module bundle." lead={`Pick the model that fits how your fleet is run, or combine them. Send your fleet size and you get a quote within ${QUOTE_TURNAROUND.en}. Our team sets up each customer. There is no self sign-up.`} cta={false} />
+    <PageTop crumbs={[{ href: "/", label: "Home" }, { label: "Pricing" }]} title="Priced per vehicle, per user or per module bundle." lead={`Pick the model that fits how your fleet is run, or combine them. Prices are agreed per contract. Send your fleet size and you get a quote within ${QUOTE_TURNAROUND.en}. Our team sets up each customer. There is no self sign-up.`} cta={false} />
     <PricingModels locale="en" />
     <section className="section-pad tight" aria-labelledby="pkg-h"><div className="site-shell">
       <h2 className="sec-h" id="pkg-h">Typical packages.</h2>
-      <p className="panel-text">What each size of operation usually starts with. Every package is priced with one of the models above.</p>
+      <p className="panel-text">What each size of operation usually starts with. Every package is priced by contract, using one of the models above.</p>
       <div className="price-grid">
         {plans.map(([name, text, features], i) => (
           <article className={`price-card tp-priced ${i === 2 ? "featured" : ""}`} key={String(name)} aria-label={i === 2 ? `${name}, most flexible` : String(name)}>
             {i === 2 && <span className="eyebrow">Most flexible</span>}
             <h3 className="h2 price-name">{String(name)}</h3>
             <p className="muted price-for">{String(text)}</p>
+            <p className="price-figure">{PRICING_BY_CONTRACT.en}</p>
             <ul>{(features as string[]).map(f => <li key={f}><Check className="price-check" size={17} strokeWidth={2.4} aria-hidden="true" />{f}</li>)}</ul>
-            <Link className={`btn ${i === 2 ? "btn-primary" : "btn-secondary"}`} href="#quote">Get a quote<span className="sr-only"> for the {String(name)} package</span></Link>
+            <Link className={`btn ${i === 2 ? "btn-primary" : "btn-secondary"}`} href="#quote">{QUOTE_CTA.en}<span className="sr-only"> for the {String(name)} package</span></Link>
           </article>
         ))}
       </div>

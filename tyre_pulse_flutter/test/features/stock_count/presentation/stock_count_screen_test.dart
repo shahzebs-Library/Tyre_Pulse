@@ -176,6 +176,7 @@ List<Override> _overrides(
   _Repo repo, {
   RoleId role = RoleId.storeKeeper,
   Override? items,
+  Map<String, StockItemFace> faces = const <String, StockItemFace>{},
 }) {
   final _Store store = _Store();
   int n = 0;
@@ -201,7 +202,7 @@ List<Override> _overrides(
     storeItemPermissionsProvider
         .overrideWith((Ref ref) async => const StoreItemPermissions()),
     stockItemFacesProvider.overrideWith(
-      (Ref ref, String key) async => const <String, StockItemFace>{},
+      (Ref ref, String key) async => faces,
     ),
     stockHistoryRepositoryProvider.overrideWithValue(_NoHistory()),
     stockCountRecorderProvider.overrideWithValue(
@@ -390,7 +391,7 @@ void main() {
     expect(repo.captures.single['kind'], 'proposed_new');
   });
 
-  testWidgets('each line is one compact row, at most two lines at 2x text',
+  testWidgets('each line is three short lines: name, part, where + genuine',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
@@ -427,7 +428,21 @@ void main() {
       final double h =
           tester.getSize(find.byKey(const Key('stock.item.line-a'))).height;
       expect(h, greaterThanOrEqualTo(48), reason: 'tap target');
-      if (scale == 1) expect(h, lessThanOrEqualTo(64));
+      if (scale == 1) {
+        // The test font draws every glyph full-width, so a name wraps sooner
+        // than with real fonts (the 360dp screenshots measure ~96dp).
+        expect(h, inInclusiveRange(76, 112), reason: 'compact, not tall');
+      }
+      // Part line falls back to the ERP code; where = bin and site.
+      expect(
+        tester.widget<Text>(find.byKey(const Key('stock.part.line-a'))).data,
+        'DEMO-Q-001',
+      );
+      expect(
+        tester.widget<Text>(find.byKey(const Key('stock.where.line-a'))).data,
+        'Bin DEMO-WH-A · DEMO YARD',
+      );
+      expect(find.byKey(const Key('stock.genuineChip.line-a')), findsOne);
       final RenderParagraph name = tester.renderObject<RenderParagraph>(
         find.byKey(const Key('stock.name.line-long')),
       );
@@ -441,6 +456,93 @@ void main() {
       );
       expect(name.didExceedMaxLines, isTrue, reason: 'long name is cut');
     }
+  });
+
+  testWidgets('long-press Matches records once; Undo takes it back',
+      (WidgetTester tester) async {
+    // Tall enough that the snackbar never covers a row.
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final _Repo repo = _Repo();
+    await tester.pumpWidget(
+      _app(
+        _overrides(
+          repo,
+          faces: const <String, StockItemFace>{
+            'item-1': StockItemFace(
+              partNumber: 'P550148',
+              partBrand: 'Donaldson',
+              classification: 'genuine',
+            ),
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('P550148 · Donaldson'), findsNWidgets(2));
+    expect(find.text('Genuine'), findsNWidgets(2));
+
+    // Recorded once, held for Undo: nothing reaches the server yet.
+    await tester.longPress(find.byKey(const Key('stock.item.line-a')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Counted: DEMO Valve cap (quantity item)'), findsOne);
+    expect(repo.captures, isEmpty);
+    await tester.tap(find.byKey(const Key('stock.quick.undo')));
+    await tester.pumpAndSettle();
+    expect(find.text('Count removed. Nothing was sent.'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+    expect(repo.captures, isEmpty, reason: 'undone: never sent');
+    expect(
+      (tester
+              .widget<Container>(find.byKey(const Key('stock.dot.line-a')))
+              .decoration! as BoxDecoration)
+          .border,
+      isNotNull,
+      reason: 'back to "not counted today"',
+    );
+
+    // Without Undo it is sent once the snackbar closes, with the mark.
+    await tester.longPress(find.byKey(const Key('stock.item.line-b')));
+    await tester.pump();
+    expect(find.text('Counted: DEMO Valve cap (quantity item)'), findsOne);
+    for (int i = 0; i < 8; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    await tester.pumpAndSettle();
+    expect(repo.captures, hasLength(1));
+    expect(repo.captures.single['quantity'], 8);
+    expect(repo.captures.single['genuine'], true);
+    expect((repo.captures.single['refs']! as Map)['stock_id'], 'line-b');
+  });
+
+  testWidgets('long-press opens the card when genuine status is unchecked',
+      (WidgetTester tester) async {
+    final _Repo repo = _Repo();
+    await tester.pumpWidget(_app(_overrides(repo)));
+    await tester.pumpAndSettle();
+    expect(find.text('Unchecked'), findsNWidgets(2));
+    await tester.longPress(find.byKey(const Key('stock.item.line-a')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('stock.matches.line-a')), findsOneWidget);
+    expect(repo.captures, isEmpty);
+  });
+
+  testWidgets('screen readers get a "Mark as matches" action on each line',
+      (WidgetTester tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    await tester.pumpWidget(_app(_overrides(_Repo())));
+    await tester.pumpAndSettle();
+    final SemanticsNode node = tester.getSemantics(
+      find.byKey(const Key('stock.item.line-a')),
+    );
+    expect(
+      node.getSemanticsData().customSemanticsActionIds,
+      isNotEmpty,
+    );
+    handle.dispose();
   });
 
   testWidgets('the cards fit a small phone without overflow',

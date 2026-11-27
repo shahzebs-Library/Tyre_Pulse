@@ -229,6 +229,22 @@ final class PhysicalCaptureOutbox {
     return removed;
   }
 
+  /// Removes a capture the server does NOT have yet (an Undo right after
+  /// recording it). Returns false when it was already sent (or is gone), so
+  /// sent evidence is never taken back from here.
+  Future<bool> discardUnsent(String userId, String clientUuid) async {
+    bool removed = false;
+    await _mutate(userId, (List<PendingCapture> all) {
+      final List<PendingCapture> keep = <PendingCapture>[
+        for (final PendingCapture c in all)
+          if (!(c.clientUuid == clientUuid && !c.captureSent)) c,
+      ];
+      removed = keep.length != all.length;
+      return keep;
+    });
+    return removed;
+  }
+
   /// Removes a capture the person has acknowledged (e.g. a photo file the OS
   /// deleted). Only a capture the server already holds can be dismissed, so
   /// unsent evidence is never thrown away from here. Returns true when removed.

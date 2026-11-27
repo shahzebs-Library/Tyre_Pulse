@@ -28,6 +28,8 @@ import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
+import 'package:tyre_pulse/core/storage/secure_key_value_store.dart';
+import 'package:tyre_pulse/core/storage/secure_read.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
@@ -38,12 +40,16 @@ import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/home/presentation/home_screen.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
+import 'package:tyre_pulse/features/inventory/data/physical_capture_outbox.dart';
+import 'package:tyre_pulse/features/inventory/data/physical_inventory_repository.dart';
+import 'package:tyre_pulse/features/inventory/domain/physical_capture.dart';
 import 'package:tyre_pulse/features/inventory/inventory_providers.dart';
 import 'package:tyre_pulse/features/inventory/physical_inventory_providers.dart';
 import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/stock_count/data/stock_count_recorder.dart';
 import 'package:tyre_pulse/features/stock_count/data/stock_history_repository.dart';
 import 'package:tyre_pulse/features/stock_count/data/store_item_repository.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
@@ -185,7 +191,19 @@ final class _Repo implements StoreItemRepository {
   @override
   Future<Map<String, StockItemFace>> faces(List<String> itemIds) async =>
       const <String, StockItemFace>{
-        'item-1': StockItemFace(photo: _photoRef, brand: 'Mann'),
+        'item-1': StockItemFace(
+          photo: _photoRef,
+          brand: 'Mann',
+          partNumber: 'W 950/26',
+          partBrand: 'Mann',
+          classification: 'genuine',
+        ),
+        'item-2': StockItemFace(
+          brand: 'Sakura',
+          partNumber: 'VC-8R',
+          partBrand: 'Sakura',
+          classification: 'aftermarket',
+        ),
         'item-3': StockItemFace(brand: 'Triangle'),
       };
   @override
@@ -268,6 +286,71 @@ Future<Uint8List> _photo(Color body) async {
   return png!.buffer.asUint8List();
 }
 
+final class _ShotStore extends SecureKeyValueStore {
+  final Map<String, String> values = <String, String>{};
+
+  @override
+  int get readFailureCount => 0;
+
+  @override
+  Future<SecureRead> read(String key) async {
+    final String? v = values[key];
+    return v == null ? const SecureRead.absent() : SecureRead.ok(v);
+  }
+
+  @override
+  Future<void> write(String key, String value) async => values[key] = value;
+
+  @override
+  Future<void> delete(String key) async => values.remove(key);
+}
+
+final class _ShotInv implements PhysicalInventoryRepository {
+  final List<Map<String, Object?>> captures = <Map<String, Object?>>[];
+
+  @override
+  Future<List<PhysicalSession>> openSessions() async => const <PhysicalSession>[
+        PhysicalSession(
+          id: 'session-1',
+          reference: 'PI-1',
+          site: 'DEMO YARD',
+          status: 'open',
+          country: 'KSA',
+        ),
+      ];
+
+  @override
+  Future<PhysicalSession> startSession({
+    required String idempotencyKey,
+    required String country,
+    required String site,
+    String? locationId,
+  }) async =>
+      throw StateError('a session is already open');
+
+  @override
+  Future<Map<String, Object?>> capture(Map<String, Object?> payload) async {
+    captures.add(payload);
+    return <String, Object?>{'id': 'srv-${payload['client_uuid']}'};
+  }
+
+  @override
+  Future<List<InventoryPlace>> stores() async => const <InventoryPlace>[];
+
+  @override
+  Future<InventoryPlace?> placeById(String id) async => null;
+
+  @override
+  Future<List<MaterialPick>> search(String query) async =>
+      const <MaterialPick>[];
+
+  @override
+  Future<void> upload(String path, Uint8List bytes) async {}
+
+  @override
+  Future<void> attachPhoto(Map<String, Object?> payload) async {}
+}
+
 void main() {
   final String? out = Platform.environment['TP_STORE_SHOTS'];
   final bool enabled = out != null && out.isNotEmpty && _textFont() != null;
@@ -346,6 +429,19 @@ void main() {
         ),
         stockHistoryRepositoryProvider.overrideWithValue(_History()),
         inventoryDeviceIdProvider.overrideWith((Ref ref) async => 'device-1'),
+        stockCountRecorderProvider.overrideWith((Ref ref) {
+          final _ShotStore store = _ShotStore();
+          int n = 0;
+          return StockCountRecorder(
+            repository: _ShotInv(),
+            outbox: PhysicalCaptureOutbox(
+              store,
+              readBytes: (String p) async => const PhotoMissing(),
+            ),
+            store: store,
+            newId: () => 'shot-${n++}',
+          );
+        }),
         privateStorageImageUrlProvider.overrideWith(
           (Ref ref, String reference) async =>
               '$base/${reference.split('/').last.replaceAll('.jpg', '')}',
@@ -417,6 +513,17 @@ void main() {
       await settle(tester);
       expect(find.byKey(const Key('stock.banner.offline')), findsOneWidget);
       await save(tester, shot, '01_stock_count_offline_$tag');
+      // Long-press "Matches" on the first line: counted, with Undo.
+      await tester.longPress(find.byKey(const Key('stock.item.line-a')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await save(tester, shot, '05_long_press_matches_$tag');
+      await tester.tap(find.byKey(const Key('stock.quick.undo')));
+      await settle(tester);
+      tester
+          .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+          .clearSnackBars();
+      await settle(tester);
       // The same list at 2x text: a line may wrap to two lines, never more.
       await tester.pumpWidget(
         MediaQuery(

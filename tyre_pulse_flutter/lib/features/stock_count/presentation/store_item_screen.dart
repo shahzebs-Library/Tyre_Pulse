@@ -969,6 +969,22 @@ Future<void> showStorePhotoViewer(BuildContext context, String reference) =>
     );
 
 /// The brand for one stock line from the same batch read, or null.
+/// Everything the stock list row shows from the batch read, or null.
+StockItemFace? stockItemFace(
+  WidgetRef ref,
+  StockItem item, {
+  String? facesKey,
+}) {
+  final String? itemId = item.itemId;
+  if (itemId == null) return null;
+  return ref
+      .watch(
+        stockItemFacesProvider(facesKey ?? stockFacesKey(<StockItem>[item])),
+      )
+      .asData
+      ?.value[itemId];
+}
+
 String? stockItemBrand(WidgetRef ref, StockItem item, {String? facesKey}) {
   final String? itemId = item.itemId;
   if (itemId == null) return null;

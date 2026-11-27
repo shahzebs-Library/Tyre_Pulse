@@ -3,6 +3,8 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show CustomSemanticsAction;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
@@ -22,6 +24,7 @@ import 'package:tyre_pulse/features/inventory/presentation/store_receipt_screen.
 import 'package:tyre_pulse/features/inventory/presentation/transfers_screen.dart';
 import 'package:tyre_pulse/features/stock_count/data/stock_count_recorder.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
+import 'package:tyre_pulse/features/stock_count/domain/store_item_card.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/stock_count_copy.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/store_history_copy.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/store_history_screen.dart';
@@ -605,8 +608,17 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                       copy: copy,
                       countedToday: counted(visible[i]),
                       facesKey: facesKey,
+                      localGenuine: _genuine[visible[i].id],
                       onOpen: () => unawaited(
                         _open(visible[i], copy: copy, canAdjust: canAdjust),
+                      ),
+                      onQuickMatches: (StockGenuine g) => unawaited(
+                        _quickMatches(
+                          visible[i],
+                          copy,
+                          g,
+                          canAdjust: canAdjust,
+                        ),
                       ),
                     ),
                   ],
@@ -669,6 +681,112 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     setState(() => _busyId = null);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(outcome.message)),
+    );
+  }
+
+  /// Long-press "Matches" on a row: records that the shelf matches the
+  /// system for this line, through the same recorder and offline outbox as
+  /// the card. The count is held on the phone for the snackbar's 5 seconds
+  /// so Undo truly removes it (nothing was sent); then it is sent. When the
+  /// line still needs a decision first (genuine status unchecked, or an
+  /// approver who posts differences) it opens the card instead.
+  Future<void> _quickMatches(
+    StockItem item,
+    StockCountCopy copy,
+    StockGenuine genuine, {
+    required bool canAdjust,
+  }) async {
+    if (canAdjust || genuine == StockGenuine.unchecked) {
+      await _open(item, copy: copy, canAdjust: canAdjust);
+      return;
+    }
+    if (_busyId != null) return;
+    final workspace = ref.read(workspaceContextProvider);
+    if (workspace == null) return;
+    final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+    void say(String m) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(m)));
+    }
+
+    final bool? mark = switch (genuine) {
+      StockGenuine.genuine => true,
+      StockGenuine.notGenuine => false,
+      _ => null,
+    };
+    final StockCountRecorder recorder = ref.read(stockCountRecorderProvider);
+    setState(() => _busyId = item.id);
+    String id;
+    try {
+      id = await recorder.recordHeld(
+        item: item,
+        count: item.quantity,
+        userId: workspace.userId,
+        fallbackCountry: workspace.activeCountry,
+        genuine: mark,
+      );
+    } on StockCountRecordFailure catch (f) {
+      say(
+        switch (f.problem) {
+          StockCountRecordProblem.noPlace => copy('countNoPlace'),
+          StockCountRecordProblem.needsConnectionForSession =>
+            copy('countNeedsConnection'),
+          StockCountRecordProblem.storage => copy('saveFailed'),
+        },
+      );
+      return;
+    } on SupabaseFailure catch (f) {
+      say(f.error.message);
+      return;
+    } on Object {
+      say(copy('saveFailed'));
+      return;
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+    unawaited(HapticFeedback.mediumImpact());
+    final CountedTodayNotifier counted =
+        ref.read(stockCountedTodayProvider.notifier);
+    final DateTime? before = ref.read(stockCountedTodayProvider)[item.id];
+    counted.mark(item.id, DateTime.now());
+    bool undone = false;
+    messenger.hideCurrentSnackBar();
+    final ScaffoldFeatureController<SnackBar, SnackBarClosedReason> bar =
+        messenger.showSnackBar(
+      SnackBar(
+        key: Key('stock.quick.${item.id}'),
+        duration: const Duration(seconds: 5),
+        // A snackbar with an action stays until dismissed by default; this
+        // one must close on its own so the count is sent.
+        persist: false,
+        content: Text(
+          '${copy('countedItem')} ${item.description ?? copy('stockItem')}',
+        ),
+        action: SnackBarAction(
+          key: const Key('stock.quick.undo'),
+          label: copy('undo'),
+          onPressed: () => undone = true,
+        ),
+      ),
+    );
+    await bar.closed;
+    if (undone) {
+      final bool removed = await recorder.discardHeld(workspace.userId, id);
+      if (removed) counted.restore(item.id, before);
+      say(removed ? copy('countUndone') : copy('undoTooLate'));
+      return;
+    }
+    String? device;
+    try {
+      device = await ref.read(inventoryDeviceIdProvider.future);
+    } on Object {
+      device = null;
+    }
+    await recorder.send(
+      userId: workspace.userId,
+      orgId: workspace.tenantId ?? workspace.companyId,
+      deviceId: device,
     );
   }
 
@@ -878,23 +996,32 @@ class _Metric extends StatelessWidget {
       );
 }
 
-/// One stock line in the list: thumbnail (tap = photo), name with brand and
-/// bin as muted text, quantity and a status dot. At least 56dp tall, so the
-/// whole line is a comfortable tap target; at large text the name may take a
-/// second line, never more.
+/// One stock line in the list, three short lines so the part is clear at a
+/// glance: the name (at most two lines), part number and brand (else SKU /
+/// ERP code), and bin and site with the genuine status. A 60dp thumbnail on
+/// the left (tap = full screen photo) and the quantity with its unit and a
+/// status dot on the right. About 88-104dp tall at normal text; at large
+/// text it grows and the part number and bin lines wrap instead of clipping.
+/// Long-press records "Matches" (see _StockCountScreenState._quickMatches).
 class _StockRow extends ConsumerWidget {
   const _StockRow({
     required this.item,
     required this.copy,
     required this.countedToday,
     required this.facesKey,
+    required this.localGenuine,
     required this.onOpen,
+    required this.onQuickMatches,
   });
   final StockItem item;
   final StockCountCopy copy;
   final bool countedToday;
   final String facesKey;
+
+  /// A genuine mark stated on this phone this session (wins over the read).
+  final bool? localGenuine;
   final VoidCallback onOpen;
+  final ValueChanged<StockGenuine> onQuickMatches;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -905,12 +1032,30 @@ class _StockRow extends ConsumerWidget {
       item.minimum,
       item.critical,
     );
-    final String? brand = stockItemBrand(ref, item, facesKey: facesKey);
-    final String muted = <String>[
-      if (brand != null) brand,
-      if ((item.locationCode ?? '').isNotEmpty) item.locationCode!,
+    final StockItemFace? face = stockItemFace(ref, item, facesKey: facesKey);
+    final StockGenuine genuine = localGenuine != null
+        ? stockGenuineFor(mark: localGenuine)
+        : (face?.genuineFor(item.id) ?? StockGenuine.unchecked);
+    // Line 2: the part number and its brand; else the SKU / ERP code with
+    // the item brand.
+    final String? number = face?.partNumber ?? item.itemCode;
+    final String? brand = face?.partBrand ?? face?.brand;
+    final String line2 = <String>[
+      if ((number ?? '').isNotEmpty) number!,
+      if ((brand ?? '').isNotEmpty) brand!,
     ].join(' · ');
-    final bool large = MediaQuery.textScalerOf(context).scale(14) > 14 * 1.3;
+    // Line 3: where it is.
+    final String line3 = <String>[
+      if ((item.locationCode ?? '').isNotEmpty)
+        '${copy('bin')} ${item.locationCode}',
+      if ((item.site ?? '').isNotEmpty) item.site!,
+    ].join(' · ');
+    final (TpStatus chipStatus, String chipLabel) = switch (genuine) {
+      StockGenuine.genuine => (TpStatus.ok, copy('genuine')),
+      StockGenuine.notGenuine => (TpStatus.critical, copy('notGenuine')),
+      StockGenuine.aftermarket => (TpStatus.warning, copy('aftermarket')),
+      StockGenuine.unchecked => (TpStatus.unknown, copy('unchecked')),
+    };
     // The dot says what needs attention: stock level first, then whether it
     // was counted today. A fine line counted today has a quiet green dot.
     final (Color dot, bool hollow, String dotLabel) = switch (status) {
@@ -919,71 +1064,143 @@ class _StockRow extends ConsumerWidget {
       _ when !countedToday => (palette.textSecondary, true, copy('stale')),
       _ => (palette.ok.base, false, copy('countedToday')),
     };
+    final TextStyle? muted =
+        text.bodySmall?.copyWith(color: palette.textSecondary);
+    final String name = item.description ?? copy('stockItem');
+    // At normal text the part and place lines stay one line each (ellipsis);
+    // at large text they wrap, so nothing is clipped.
+    final bool large = MediaQuery.textScalerOf(context).scale(14) > 14 * 1.3;
+    // The chip is a short label in a narrow column: capped at 1.5x so the
+    // whole word fits instead of ending in an ellipsis at very large text.
+    final Widget chip = MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.5,
+      child: TpStatusChip(
+        key: Key('stock.genuineChip.${item.id}'),
+        status: chipStatus,
+        label: chipLabel,
+        isCompact: true,
+      ),
+    );
+    final Widget? whereText = line3.isEmpty
+        ? null
+        : Text(
+            line3,
+            key: Key('stock.where.${item.id}'),
+            style: muted,
+            maxLines: large ? null : 1,
+            overflow: large ? null : TextOverflow.ellipsis,
+          );
     return Semantics(
       button: true,
-      label: '${item.description ?? copy('stockItem')}, '
-          '${item.quantity} ${copy('onHand')}, $dotLabel',
+      label: <String>[
+        name,
+        if (line2.isNotEmpty) line2,
+        if (line3.isNotEmpty) line3,
+        chipLabel,
+        '${item.quantity} ${item.uom ?? ''} ${copy('onHand')}'.trim(),
+        dotLabel,
+      ].join(', '),
+      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+        CustomSemanticsAction(label: copy('markMatches')): () =>
+            onQuickMatches(genuine),
+      },
       excludeSemantics: true,
       child: InkWell(
         key: Key('stock.item.${item.id}'),
         onTap: onOpen,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 56),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: TpSpace.md,
-              vertical: TpSpace.xs,
-            ),
-            child: Row(
-              children: <Widget>[
-                StockItemThumb(item: item, facesKey: facesKey, size: 40),
-                const SizedBox(width: TpSpace.md),
-                Expanded(
-                  child: Text.rich(
+        onLongPress: () => onQuickMatches(genuine),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: TpSpace.sm,
+            vertical: TpSpace.sm,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              StockItemThumb(item: item, facesKey: facesKey, size: 60),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      name,
+                      key: Key('stock.name.${item.id}'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                    if (line2.isNotEmpty)
+                      Text(
+                        line2,
+                        key: Key('stock.part.${item.id}'),
+                        style: muted,
+                        maxLines: large ? null : 1,
+                        overflow: large ? null : TextOverflow.ellipsis,
+                      ),
+                    const SizedBox(height: 2),
+                    // Place and genuine chip share a line when they fit;
+                    // otherwise the chip moves under the place (never
+                    // clipped, never overflowing).
+                    LayoutBuilder(
+                      builder: (BuildContext context, BoxConstraints box) =>
+                          Wrap(
+                        spacing: TpSpace.xs,
+                        runSpacing: 2,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: <Widget>[
+                          if (whereText != null)
+                            ConstrainedBox(
+                              constraints:
+                                  BoxConstraints(maxWidth: box.maxWidth),
+                              child: whereText,
+                            ),
+                          chip,
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: TpSpace.sm),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Text.rich(
                     TextSpan(
                       children: <InlineSpan>[
                         TextSpan(
-                          text: item.description ?? copy('stockItem'),
-                          style: text.bodyLarge
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        if (muted.isNotEmpty)
-                          TextSpan(
-                            text: '  $muted',
-                            style: text.bodySmall
-                                ?.copyWith(color: palette.textSecondary),
+                          text: '${item.quantity}',
+                          style: text.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontFeatures: const <FontFeature>[
+                              FontFeature.tabularFigures(),
+                            ],
                           ),
+                        ),
+                        if ((item.uom ?? '').isNotEmpty)
+                          TextSpan(text: ' ${item.uom}', style: muted),
                       ],
                     ),
-                    key: Key('stock.name.${item.id}'),
-                    maxLines: large ? 2 : 1,
-                    overflow: TextOverflow.ellipsis,
+                    key: Key('stock.qty.${item.id}'),
                   ),
-                ),
-                const SizedBox(width: TpSpace.sm),
-                Text(
-                  '${item.quantity}',
-                  key: Key('stock.qty.${item.id}'),
-                  style: text.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    fontFeatures: const <FontFeature>[
-                      FontFeature.tabularFigures(),
-                    ],
+                  const SizedBox(height: TpSpace.xs),
+                  Container(
+                    key: Key('stock.dot.${item.id}'),
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: hollow ? null : dot,
+                      border: hollow ? Border.all(color: dot, width: 2) : null,
+                    ),
                   ),
-                ),
-                const SizedBox(width: TpSpace.sm),
-                Container(
-                  key: Key('stock.dot.${item.id}'),
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: hollow ? null : dot,
-                    border: hollow ? Border.all(color: dot, width: 2) : null,
-                  ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

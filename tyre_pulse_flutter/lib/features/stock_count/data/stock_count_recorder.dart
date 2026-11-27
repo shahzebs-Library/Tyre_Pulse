@@ -319,6 +319,73 @@ final class StockCountRecorder {
     );
   }
 
+  /// Saves a count for [item] on the phone WITHOUT sending it yet, and
+  /// returns its client uuid. Used by the long-press "Matches" on a Stock
+  /// Count row: the count can be undone ([discardHeld]) for a few seconds,
+  /// then [send] sends it (the background flush sends it too). Same session,
+  /// capture and offline rules as [record].
+  Future<String> recordHeld({
+    required StockItem item,
+    required num count,
+    required String userId,
+    String? fallbackCountry,
+    bool? genuine,
+  }) async {
+    String? id;
+    await _send(
+      site: item.site,
+      country: item.country,
+      fallbackCountry: fallbackCountry,
+      userId: userId,
+      orgId: null,
+      deviceId: null,
+      build: (String sessionId, String clientUuid) {
+        id = clientUuid;
+        return stockCountCapture(
+          item: item,
+          count: count,
+          reason: null,
+          clientUuid: clientUuid,
+          userId: userId,
+          sessionId: sessionId,
+          capturedAt: _now(),
+          genuine: genuine,
+        );
+      },
+    );
+    return id!;
+  }
+
+  /// Takes back a held count that was not sent yet. False when it already
+  /// reached the server (it then stays for review, as every count does).
+  Future<bool> discardHeld(String userId, String clientUuid) async {
+    try {
+      return await _outbox.discardUnsent(userId, clientUuid);
+    } on Object {
+      return false;
+    }
+  }
+
+  /// Sends whatever waits in the outbox now. Never throws: anything not
+  /// confirmed stays on the phone for the next flush.
+  Future<void> send({
+    required String userId,
+    required String? orgId,
+    String? deviceId,
+  }) async {
+    if (orgId == null || orgId.isEmpty) return;
+    try {
+      await _outbox.flush(
+        userId: userId,
+        orgId: orgId,
+        repository: _repository,
+        deviceId: deviceId,
+      );
+    } on Object {
+      // Kept on the phone.
+    }
+  }
+
   /// Records a NEW stock line ("Add stock") for approval. Nothing reaches the
   /// stock balance from here: see [newStockCapture]. Same offline and
   /// idempotency rules as [record] (encrypted outbox, keyed by client_uuid).

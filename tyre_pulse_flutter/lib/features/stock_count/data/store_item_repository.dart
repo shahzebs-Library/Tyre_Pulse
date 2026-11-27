@@ -405,7 +405,8 @@ final class SupabaseStoreItemRepository
               _client
                   .from('material_canonical_items')
                   .select(
-                    'item_id,canonical_id,canonical:material_canonical(brand)',
+                    'item_id,canonical_id,variant_id,'
+                    'canonical:material_canonical(brand)',
                   )
                   .inFilter('item_id', ids)
                   .limit(ids.length),
@@ -419,6 +420,7 @@ final class SupabaseStoreItemRepository
             ),
           ]);
           final Map<String, String> canonicalOf = <String, String>{};
+          final Map<String, String> variantOf = <String, String>{};
           final Map<String, String?> canonicalBrand = <String, String?>{};
           for (final Map<String, dynamic> r
               in first[0]! as List<Map<String, dynamic>>) {
@@ -426,6 +428,8 @@ final class SupabaseStoreItemRepository
             final String? can = r['canonical_id'] as String?;
             if (item == null || can == null) continue;
             canonicalOf[item] = can;
+            final String? variant = r['variant_id'] as String?;
+            if (variant != null) variantOf[item] = variant;
             final Object? c = r['canonical'];
             canonicalBrand[can] = c is Map ? c['brand'] as String? : null;
           }
@@ -450,16 +454,101 @@ final class SupabaseStoreItemRepository
               }
             }
           }
+          // Part numbers: the variant an item is linked to, else the
+          // catalogue item's first active one (genuine / OES first).
+          final Map<String, Map<String, dynamic>> variantById =
+              <String, Map<String, dynamic>>{};
+          final Map<String, Map<String, dynamic>> bestOfCanonical =
+              <String, Map<String, dynamic>>{};
+          // The newest genuine / not genuine mark from a count, per stock
+          // line (entered_refs.stock_id) and per item.
+          final Map<String, Map<String, bool>> markByStock =
+              <String, Map<String, bool>>{};
+          final Map<String, bool> markByItem = <String, bool>{};
+          final List<Object?> second =
+              await Future.wait<Object?>(<Future<Object?>>[
+            if (canonicalOf.isEmpty)
+              Future<List<Map<String, dynamic>>>.value(
+                const <Map<String, dynamic>>[],
+              )
+            else
+              _rows(
+                _client
+                    .from('material_variants')
+                    .select(
+                      'id,canonical_id,brand,part_number,'
+                      'part_classification,status',
+                    )
+                    .inFilter(
+                      'canonical_id',
+                      canonicalOf.values.toSet().toList(),
+                    )
+                    .inFilter(
+                  'status',
+                  <String>['active', 'proposed'],
+                ).limit(600),
+              ),
+            _rows(
+              _client
+                  .from('physical_inventory_captures')
+                  .select('item_id,genuine,entered_refs,captured_at')
+                  .inFilter('item_id', ids)
+                  .not('genuine', 'is', null)
+                  .order('captured_at', ascending: false)
+                  .limit(600),
+            ),
+          ]);
+          int rank(Map<String, dynamic> v) {
+            final int st = v['status'] == 'active' ? 0 : 10;
+            return st +
+                switch ('${v['part_classification']}') {
+                  'genuine' => 0,
+                  'oes' => 1,
+                  'aftermarket' => 2,
+                  _ => 3,
+                };
+          }
+
+          for (final Map<String, dynamic> v
+              in second[0]! as List<Map<String, dynamic>>) {
+            if ((v['part_number'] as String? ?? '').trim().isEmpty) continue;
+            variantById['${v['id']}'] = v;
+            final String can = '${v['canonical_id']}';
+            final Map<String, dynamic>? best = bestOfCanonical[can];
+            if (best == null || rank(v) < rank(best)) bestOfCanonical[can] = v;
+          }
+          for (final Map<String, dynamic> c
+              in second[1]! as List<Map<String, dynamic>>) {
+            final String? item = c['item_id'] as String?;
+            final Object? g = c['genuine'];
+            if (item == null || g is! bool) continue;
+            markByItem.putIfAbsent(item, () => g);
+            final Object? refs = c['entered_refs'];
+            final Object? stock = refs is Map ? refs['stock_id'] : null;
+            if (stock is String && stock.isNotEmpty) {
+              (markByStock[item] ??= <String, bool>{})
+                  .putIfAbsent(stock, () => g);
+            }
+          }
           String? clean(String? s) =>
               (s ?? '').trim().isEmpty ? null : s!.trim();
           return <String, StockItemFace>{
             for (final String id in ids)
-              id: StockItemFace(
-                photo:
-                    canonicalOf[id] == null ? null : photoOf[canonicalOf[id]],
-                brand: clean(canonicalBrand[canonicalOf[id]]) ??
-                    clean(masterBrand[id]),
-              ),
+              id: () {
+                final Map<String, dynamic>? v = variantById[variantOf[id]] ??
+                    bestOfCanonical[canonicalOf[id]];
+                return StockItemFace(
+                  photo:
+                      canonicalOf[id] == null ? null : photoOf[canonicalOf[id]],
+                  brand: clean(canonicalBrand[canonicalOf[id]]) ??
+                      clean(masterBrand[id]),
+                  partNumber: clean(v?['part_number'] as String?),
+                  partBrand: clean(v?['brand'] as String?),
+                  classification: v?['part_classification'] as String?,
+                  genuineByStock: markByStock[id] ?? const <String, bool>{},
+                  genuineMark: markByItem[id],
+                );
+              }(),
           };
         },
         timeout: storeItemReadTimeout,

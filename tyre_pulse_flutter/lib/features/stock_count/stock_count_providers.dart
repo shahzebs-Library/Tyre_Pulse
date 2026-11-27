@@ -136,6 +136,17 @@ final class CountedTodayNotifier extends Notifier<Map<String, DateTime>> {
   void mark(String stockId, DateTime at) {
     state = <String, DateTime>{...state, stockId: at};
   }
+
+  /// Puts back what was there before a count that was undone.
+  void restore(String stockId, DateTime? previous) {
+    final Map<String, DateTime> next = <String, DateTime>{...state};
+    if (previous == null) {
+      next.remove(stockId);
+    } else {
+      next[stockId] = previous;
+    }
+    state = next;
+  }
 }
 
 /// A line counts as counted today when the register says so or this phone

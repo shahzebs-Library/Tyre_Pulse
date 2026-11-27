@@ -305,10 +305,55 @@ List<String> filterBrands(List<String> brands, String query) {
       .toList(growable: false);
 }
 
-/// The thumbnail and brand line for one ERP item on the stock list.
+/// What a stock list row shows about a part, besides the stock line itself.
+enum StockGenuine { genuine, notGenuine, aftermarket, unchecked }
+
+/// The genuine status for a row. A Store Keeper's own mark on a count
+/// ([mark], newest first) wins; else the part number's classification
+/// (genuine / OES count as genuine, aftermarket as aftermarket); else
+/// unchecked. Pure, for tests.
+StockGenuine stockGenuineFor({bool? mark, String? classification}) {
+  if (mark == true) return StockGenuine.genuine;
+  if (mark == false) return StockGenuine.notGenuine;
+  return switch ((classification ?? '').toLowerCase()) {
+    'genuine' || 'oes' => StockGenuine.genuine,
+    'aftermarket' => StockGenuine.aftermarket,
+    _ => StockGenuine.unchecked,
+  };
+}
+
+/// The thumbnail, brand, part number and genuine data for one ERP item on
+/// the stock list, read in one batch for the whole list.
 @immutable
 final class StockItemFace {
-  const StockItemFace({this.photo, this.brand});
+  const StockItemFace({
+    this.photo,
+    this.brand,
+    this.partNumber,
+    this.partBrand,
+    this.classification,
+    this.genuineByStock = const <String, bool>{},
+    this.genuineMark,
+  });
   final String? photo;
   final String? brand;
+
+  /// The linked part number (or the catalogue item's first active one) and
+  /// its brand; null when the item has none.
+  final String? partNumber;
+  final String? partBrand;
+
+  /// That part number's classification: genuine, oes, aftermarket, unknown.
+  final String? classification;
+
+  /// The newest genuine / not genuine mark per stock line (by stock id).
+  final Map<String, bool> genuineByStock;
+
+  /// The newest mark on any line of this item (fallback).
+  final bool? genuineMark;
+
+  StockGenuine genuineFor(String stockId) => stockGenuineFor(
+        mark: genuineByStock[stockId] ?? genuineMark,
+        classification: classification,
+      );
 }

@@ -1,4 +1,4 @@
--- STATUS: AUTHORED, NOT APPLIED. The apply was refused by the session permission check (production data change relayed, not typed by the owner). Apply only after the owner confirms directly.
+-- STATUS: APPLIED LIVE 2026-11-27 on owner OK (targeting as migration checklist_targeting_plant_vehicle_split; drafts as checklist_draft_workshop_housekeeping and checklist_draft_workshop_tools_check). Verified: WHK 43 fields, WTC 46 fields, both draft v1.
 -- 1. Snapshot every template's assignee_roles/status into _bak.checklist_template_targeting_20261127.
 -- 2. Owner split: plant trades vs vehicle trades.
 --    ICP, CHL, CLG, GSR, BPD -> plant trades + Workshop Supervisor + Maintenance Supervisor.

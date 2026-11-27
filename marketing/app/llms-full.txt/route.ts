@@ -1,5 +1,5 @@
 import { IOS_STATEMENT } from "@/lib/site";
-import { ANDROID_APP_NAME, ANDROID_APP_VERSION, ANDROID_PACKAGE, APP_STORE_URL, APP_URL, HAS_IOS_APP, MODULES, PLAY_STORE_URL, SITE_URL } from "../schema";
+import { BRAND_TAGLINE, ANDROID_APP_NAME, ANDROID_APP_VERSION, ANDROID_PACKAGE, APP_STORE_URL, APP_URL, HAS_IOS_APP, MODULES, PLAY_STORE_URL, SITE_URL } from "../schema";
 
 export const dynamic = "force-static";
 
@@ -19,6 +19,8 @@ const iosFact = HAS_IOS_APP
 const moduleSection = MODULES.map((m) => `### ${m.name}\n${m.description}`).join("\n\n");
 
 const body = `# Tyre Pulse
+
+Tagline: ${BRAND_TAGLINE}
 
 > Tyre Pulse is a PMV (plant, machinery and vehicles) operations platform. It connects asset records, workshop job cards, field inspections, tyre lifecycle, stores, costs, sign-off and reporting in one system for multi-site and multi-country operations.
 

@@ -48,6 +48,7 @@ export const PLATFORM_SENTENCE = HAS_IOS_APP
   : `It is available as a web application and as an Android app. ${IOS_STATEMENT}`;
 
 export const BRAND_NAME = "Tyre Pulse";
+export const BRAND_TAGLINE = "Your Fleet. Safer. Smarter. Longer.";
 export const BRAND_COLOR = "#161616";
 
 export const PRODUCT_DESCRIPTION =
@@ -83,6 +84,7 @@ export function organizationSchema(): Json {
     "@id": `${SITE_URL}/#organization`,
     name: BRAND_NAME,
     alternateName: "TyrePulse",
+    slogan: BRAND_TAGLINE,
     url: SITE_URL,
     logo: {
       "@type": "ImageObject",

@@ -71,6 +71,7 @@ import 'package:tyre_pulse/core/storage/secure_slot_store_impl.dart';
 import 'package:tyre_pulse/core/storage/staged_secure_store.dart';
 import 'package:tyre_pulse/core/sync/accident_evidence_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/inventory_count_command_pusher.dart';
+import 'package:tyre_pulse/core/sync/job_completion_evidence_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart';
 import 'package:tyre_pulse/core/sync/sync_engine.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_inventory_repository.dart';
@@ -198,7 +199,13 @@ Future<bool> _runBackgroundSync() async {
         client: client,
         db: db,
         delegate: AccidentEvidenceCommandPusher(
-          delegate: SupabaseCommandPusher(client),
+          // Job completion photos are swapped for their uploaded references
+          // just before submit_job_completion is called.
+          delegate: JobCompletionEvidenceCommandPusher(
+            delegate: SupabaseCommandPusher(client),
+            queueDao: db.queueDao,
+            mediaDao: db.mediaDao,
+          ),
           queueDao: db.queueDao,
           mediaDao: db.mediaDao,
         ),

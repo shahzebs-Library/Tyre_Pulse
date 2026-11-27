@@ -194,10 +194,13 @@ void main() {
   });
 
   group('requiresMediaReady', () {
-    test('is true only for TYRE_CHANGE and CHECKLIST_SUBMISSION', () {
+    test(
+        'is true only for TYRE_CHANGE, CHECKLIST_SUBMISSION and '
+        'JOB_COMPLETION', () {
       const Set<CommandType> expected = <CommandType>{
         CommandType.tyreChange,
         CommandType.checklistSubmission,
+        CommandType.jobCompletion,
       };
 
       for (final CommandType type in CommandType.values) {
@@ -239,7 +242,8 @@ void main() {
       expect(fields.contains('tyre_position'), isTrue);
     });
 
-    test('JOB_COMPLETION goes through submit_job_completion and carries its '
+    test(
+        'JOB_COMPLETION goes through submit_job_completion and carries its '
         'own client_uuid (the RPC answer is matched on it)', () {
       final CommandSpec spec =
           CommandRegistry.specFor(CommandType.jobCompletion);
@@ -251,6 +255,11 @@ void main() {
       // Never a status: the server decides where the job goes.
       expect(spec.fieldAllowList, isNot(contains('status')));
       expect(spec.fieldAllowList, isNot(contains('qc_status')));
+      // The server reads country, site and asset from the work order.
+      expect(spec.fieldAllowList, isNot(contains('country')));
+      expect(spec.fieldAllowList, isNot(contains('site')));
+      expect(spec.fieldAllowList, isNot(contains('asset_no')));
+      expect(spec.requiresMediaReady, isTrue);
     });
 
     test('WORKSHOP_EVENT carries the local tap time', () {
@@ -283,8 +292,7 @@ void main() {
   });
 
   group('inventory (docs/inventory_reserved_patch.md)', () {
-    test('INVENTORY_COUNT_LINE is an RPC command, on inv_count_submit',
-        () {
+    test('INVENTORY_COUNT_LINE is an RPC command, on inv_count_submit', () {
       final CommandSpec spec =
           CommandRegistry.specFor(CommandType.inventoryCountLine);
       expect(spec.operation, CommandOperation.rpc);

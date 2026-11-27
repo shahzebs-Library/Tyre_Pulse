@@ -189,6 +189,8 @@ Future<void> _pump(
   _FakeParts? parts,
   _FakeCompletion? completion,
   List<WorkshopEventRecord> pending = const <WorkshopEventRecord>[],
+  Map<String, WorkshopPendingCompletion> pendingCompletions =
+      const <String, WorkshopPendingCompletion>{},
 }) async {
   await tester.binding.setSurfaceSize(const Size(390, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -208,7 +210,7 @@ Future<void> _pump(
         workshopCompletionServiceProvider
             .overrideWithValue(completion ?? _FakeCompletion()),
         workshopPendingCompletionsProvider.overrideWithValue(
-          (String userId) async => const <String, WorkshopPendingCompletion>{},
+          (String userId) async => pendingCompletions,
         ),
       ],
       child: MaterialApp(
@@ -526,9 +528,11 @@ void main() {
   testWidgets('a job with the supervisor waits: chip, no work actions', (
     WidgetTester tester,
   ) async {
-    await _pump(tester, _FakeRepo(status: 'Quality Inspection', qc: 'pending'));
+    // The server never writes qc_status on submit: Quality Inspection alone
+    // means the completion reached the supervisor.
+    await _pump(tester, _FakeRepo(status: 'Quality Inspection'));
     expect(find.byKey(WorkshopTechnicianKeys.awaitingApproval), findsOneWidget);
-    expect(find.text('Waiting for supervisor approval'), findsOneWidget);
+    expect(find.text('Sent, waiting for supervisor approval'), findsOneWidget);
     expect(
       find.byKey(WorkshopTechnicianKeys.action('start_job')),
       findsNothing,
@@ -572,7 +576,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('Complete opens the sheet; a full completion goes to approval', (
+  testWidgets('Complete opens the sheet; a full completion is queued', (
     WidgetTester tester,
   ) async {
     final _FakeRepo repo = _FakeRepo();
@@ -589,20 +593,22 @@ void main() {
 
     expect(completion.submitted, hasLength(1));
     expect(completion.workDone.single, 'Replaced hub seal');
+    // Local paths go to the queue; it uploads them when there is signal.
     expect(
       completion.submitted.single.afterPhotos.single,
-      startsWith('tp-storage://'),
+      isNot(startsWith('tp-storage://')),
     );
     expect(completion.submitted.single.signature, startsWith('data:image/png'));
     expect(repo.recorded.last.eventType, 'complete_task');
-    expect(find.text('Waiting for supervisor approval'), findsOneWidget);
+    expect(find.byKey(WorkshopTechnicianKeys.completionQueued), findsOneWidget);
+    expect(find.text('Queued on this phone'), findsOneWidget);
     expect(
       find.byKey(WorkshopTechnicianKeys.action('pause_job')),
       findsNothing,
     );
   });
 
-  testWidgets('no signal for the after photo: nothing is sent', (
+  testWidgets('no signal: the completion is still queued, nothing uploaded', (
     WidgetTester tester,
   ) async {
     final _FakeCompletion completion = _FakeCompletion();
@@ -616,8 +622,30 @@ void main() {
     await fillCompletion(tester);
     await tester.tap(find.byKey(WorkshopCompletionKeys.submit));
     await tester.pumpAndSettle();
-    expect(completion.submitted, isEmpty);
-    expect(find.byKey(WorkshopTechnicianKeys.awaitingApproval), findsNothing);
+    expect(completion.submitted, hasLength(1));
+    expect(find.byKey(WorkshopTechnicianKeys.completionQueued), findsOneWidget);
+  });
+
+  testWidgets('a refused completion shows Failed with the server reason', (
+    WidgetTester tester,
+  ) async {
+    final _FakeRepo repo = _FakeRepo();
+    await _pump(
+      tester,
+      repo,
+      pendingCompletions: <String, WorkshopPendingCompletion>{
+        'wo-1': const WorkshopPendingCompletion(
+          jobId: 'wo-1',
+          error: 'This job was closed before your completion arrived.',
+          state: WorkshopCompletionQueueState.failed,
+        ),
+      },
+    );
+    expect(find.byKey(WorkshopTechnicianKeys.completionFailed), findsOneWidget);
+    expect(
+      find.textContaining('This job was closed before your completion'),
+      findsOneWidget,
+    );
   });
 
   test('only field trades get the technician screen', () {

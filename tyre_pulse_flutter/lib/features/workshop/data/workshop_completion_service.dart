@@ -5,9 +5,12 @@
 /// * [WorkshopCompletionService.assetMeters] - whether the asset carries an
 ///   odometer and / or an hour meter, so the sheet only asks for what exists.
 /// * [WorkshopCompletionService.submit] - queues ONE `JOB_COMPLETION` command
-///   (an RPC command, idempotent on `client_uuid`). Photos are uploaded first
-///   by the caller with the existing workshop uploader, so the queued payload
-///   only carries `tp-storage://` references. The server
+///   (an RPC command, idempotent per technician on `client_uuid`). Works
+///   offline: the photos ride along as queued media attachments (bucket
+///   `tyre-photos`, file name `jobdone_...` so they land under
+///   `modules/workshop/<user>/`), the payload keeps their local paths, and
+///   `JobCompletionEvidenceCommandPusher` swaps those for the uploaded
+///   references when the queue sends it. The server
 ///   (`submit_job_completion`) moves the job to Quality Inspection for a
 ///   supervisor; it never closes the job.
 ///
@@ -19,10 +22,14 @@ import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
+import 'package:tyre_pulse/core/database/dao/queue_dao.dart'
+    show QueuedMediaAttachment;
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
+import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart'
+    show workshopCompletionMediaBucket, workshopCompletionMediaPrefix;
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
 import 'package:tyre_pulse/features/workshop/domain/workshop_completion.dart';
@@ -51,8 +58,8 @@ abstract interface class WorkshopCompletionService {
 
   Future<WorkshopAssetMeters> assetMeters(String? assetNo);
 
-  /// Queues the completion. [draft] photos must already be references.
-  /// Returns the command's idempotency key.
+  /// Queues the completion with its photos (durable local paths). Returns
+  /// the command's idempotency key.
   Future<String> submit({
     required WorkspaceContext workspace,
     required WorkshopJob job,
@@ -158,17 +165,51 @@ final class SupabaseWorkshopCompletionService
         draft: draft,
         workDone: workDone,
         taskId: taskId,
-        site: job.site ?? workspace.legacySite,
-        country: workspace.activeCountry,
         now: DateTime.now(),
       ),
       workspace: workspace,
       now: DateTime.now(),
       country: workspace.activeCountry,
       idempotencyKey: key,
+      attachments: workshopCompletionAttachments(key: key, draft: draft),
     );
     return key;
   }
+}
+
+/// The queued photos of a completion, one attachment per local photo.
+/// Already-uploaded references are not re-queued.
+List<QueuedMediaAttachment> workshopCompletionAttachments({
+  required String key,
+  required WorkshopCompletionDraft draft,
+}) {
+  final String stem = key.replaceAll(RegExp('[^A-Za-z0-9_-]'), '');
+  final List<QueuedMediaAttachment> out = <QueuedMediaAttachment>[];
+  void add(List<String> photos, String field) {
+    for (int i = 0; i < photos.length; i++) {
+      final String path = photos[i];
+      if (path.startsWith('tp-storage://')) continue;
+      final bool png = path.toLowerCase().endsWith('.png');
+      final String core = stem.startsWith(workshopCompletionMediaPrefix)
+          ? stem.substring(workshopCompletionMediaPrefix.length)
+          : stem;
+      out.add(
+        QueuedMediaAttachment(
+          localPath: path,
+          fileName: '$workshopCompletionMediaPrefix${core}_${field}_$i'
+              '${png ? '.png' : '.jpg'}',
+          orderIndex: i,
+          fieldKey: field,
+          mimeType: png ? 'image/png' : 'image/jpeg',
+          bucket: workshopCompletionMediaBucket,
+        ),
+      );
+    }
+  }
+
+  add(draft.beforePhotos, 'before');
+  add(draft.afterPhotos, 'after');
+  return out;
 }
 
 /// The exact payload the RPC reads. Pure, so it is tested directly.
@@ -179,8 +220,6 @@ Map<String, Object?> workshopCompletionPayload({
   required String workDone,
   required DateTime now,
   String? taskId,
-  String? site,
-  String? country,
 }) =>
     <String, Object?>{
       // The RPC answer is matched on this, so it must equal the command's
@@ -188,9 +227,6 @@ Map<String, Object?> workshopCompletionPayload({
       'client_uuid': key,
       'job_id': job.id,
       'task_id': taskId,
-      'asset_no': job.assetNo,
-      'site': site,
-      'country': country,
       'work_done': workDone,
       'quick_picks': <String>[
         for (final String p in kWorkshopQuickPicks)
@@ -199,6 +235,7 @@ Map<String, Object?> workshopCompletionPayload({
       'parts_used': <Map<String, Object?>>[
         for (final WorkshopPartUsed p in draft.parts) p.toJson(),
       ],
+      // Local paths until the queue sends it; see the library comment.
       'before_photos': draft.beforePhotos,
       'after_photos': draft.afterPhotos,
       'km': draft.km,
@@ -207,13 +244,29 @@ Map<String, Object?> workshopCompletionPayload({
       'completed_at': now.toUtc().toIso8601String(),
     };
 
+/// Where a completion still on this phone stands.
+enum WorkshopCompletionQueueState {
+  /// Saved on the phone, waiting for signal (or for its photos to upload).
+  queued,
+
+  /// The server refused it, or sending keeps failing; [error] says why.
+  failed,
+}
+
 /// One still-unsent completion from the queue: the job it is for, and the
 /// server's refusal when there was one.
 final class WorkshopPendingCompletion {
-  const WorkshopPendingCompletion({required this.jobId, this.error});
+  const WorkshopPendingCompletion({
+    required this.jobId,
+    this.error,
+    this.state = WorkshopCompletionQueueState.queued,
+  });
 
   final String jobId;
   final String? error;
+  final WorkshopCompletionQueueState state;
+
+  bool get isFailed => state == WorkshopCompletionQueueState.failed;
 }
 
 /// This user's completions still in the offline queue, keyed by job.
@@ -236,9 +289,13 @@ Map<String, WorkshopPendingCompletion> workshopPendingCompletions(
     final Object? job = decoded['job_id'];
     if (job is! String || job.isEmpty) continue;
     final String? err = c.lastError?.trim();
+    final bool failed = err != null && err.isNotEmpty;
     out[job] = WorkshopPendingCompletion(
       jobId: job,
-      error: err == null || err.isEmpty ? null : err,
+      error: failed ? err : null,
+      state: failed
+          ? WorkshopCompletionQueueState.failed
+          : WorkshopCompletionQueueState.queued,
     );
   }
   return out;

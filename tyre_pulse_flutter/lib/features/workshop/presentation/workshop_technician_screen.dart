@@ -82,6 +82,8 @@ abstract final class WorkshopTechnicianKeys {
   static Key action(String key) => ValueKey<String>('workshop.action.$key');
   static const Key productivity = ValueKey<String>('workshop.productivity');
   static const Key moreToggle = ValueKey<String>('workshop.more');
+  static const Key completionQueued = Key('workshopTech.completionQueued');
+  static const Key completionFailed = Key('workshopTech.completionFailed');
   static const Key awaitingApproval =
       ValueKey<String>('workshop.awaiting-approval');
   static const Key offlineBanner = ValueKey<String>('workshop.offline');
@@ -300,10 +302,9 @@ class _WorkshopTechnicianScreenState
   _JobPhase _phaseOf(WorkshopJob job) {
     final WorkshopPendingCompletion? pending = _pendingCompletions[job.id];
     if (pending != null) {
-      // A refused completion is back in the technician's hands.
-      return pending.error == null
-          ? _JobPhase.awaitingApproval
-          : _JobPhase.normal;
+      // Still on this phone: queued (nothing to start or finish while it
+      // waits), or refused and back in the technician's hands.
+      return pending.isFailed ? _JobPhase.failed : _JobPhase.queued;
     }
     if (isWorkshopJobAwaitingQc(job.status, job.qcStatus)) {
       return _JobPhase.awaitingApproval;
@@ -516,10 +517,11 @@ class _WorkshopTechnicianScreenState
     );
   }
 
-  /// The completion sheet, then: upload photos (the after photo is required,
-  /// so a failed upload stops here and keeps the draft), queue
-  /// `JOB_COMPLETION`, and record the `complete_task` event so productivity
-  /// counts the finish. The job then waits for a supervisor.
+  /// The completion sheet, then: queue `JOB_COMPLETION` with its photos
+  /// (works with no signal - the queue uploads the photos and sends the
+  /// completion when it can) and record the `complete_task` event so
+  /// productivity counts the finish. The card then reads Queued, Sent
+  /// (waiting for the supervisor) or Failed with the server's reason.
   Future<void> _openCompletion(WorkshopJob job, WorkshopCopy copy) async {
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
     if (workspace == null || _busyKey != null) return;
@@ -541,71 +543,42 @@ class _WorkshopTechnicianScreenState
     if (draft == null || !mounted) return;
     setState(() => _busyKey = 'complete_task');
     try {
-      messenger.showSnackBar(SnackBar(content: Text(copy('c_uploading'))));
-      final WorkshopPhotoUploader uploader =
-          ref.read(workshopPhotoUploaderProvider);
-      final WorkshopPhotoResolution after = await resolveWorkshopPhotos(
-        uploader: uploader,
-        photos: draft.afterPhotos,
-        userId: workspace.userId,
-      );
-      final WorkshopPhotoResolution before = draft.beforePhotos.isEmpty
-          ? const WorkshopPhotoResolution(refs: <String>[], dropped: 0)
-          : await resolveWorkshopPhotos(
-              uploader: uploader,
-              photos: draft.beforePhotos,
-              userId: workspace.userId,
-            );
-      // Every after photo must be on the server: it is the evidence the
-      // supervisor approves against. Anything less keeps the draft here.
-      if (after.dropped > 0 || after.refs.isEmpty) {
-        messenger
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(content: Text(copy('c_photosNeedSignal'))),
-          );
-        return;
-      }
       await service.submit(
         workspace: workspace,
         job: job,
         taskId: _selectedTaskId,
         workDone: draft.effectiveWorkDone((String p) => copy('qp_$p')),
-        draft: draft.copyWith(
-          afterPhotos: after.refs,
-          beforePhotos: before.refs,
-        ),
+        draft: draft,
       );
-      for (final String path in <String>[
-        ...after.uploadedLocalPaths,
-        ...before.uploadedLocalPaths,
-      ]) {
-        unawaited(picker.discard(path));
+      WorkshopEventRecord? local;
+      try {
+        local = await ref.read(workshopRepositoryProvider).recordEvent(
+              workspace: workspace,
+              input: RecordWorkshopEventInput(
+                eventType: 'complete_task',
+                jobId: job.id,
+                taskId: _selectedTaskId,
+                assetNo: job.assetNo,
+                site: job.site ?? workspace.legacySite,
+                country: workspace.activeCountry,
+                device: 'mobile:${defaultTargetPlatform.name.toLowerCase()}',
+                gps: _gps,
+              ),
+            );
+      } on Object {
+        // The completion is queued; a productivity tap that could not be
+        // saved does not undo it.
       }
-      final WorkshopEventRecord local =
-          await ref.read(workshopRepositoryProvider).recordEvent(
-                workspace: workspace,
-                input: RecordWorkshopEventInput(
-                  eventType: 'complete_task',
-                  jobId: job.id,
-                  taskId: _selectedTaskId,
-                  assetNo: job.assetNo,
-                  site: job.site ?? workspace.legacySite,
-                  country: workspace.activeCountry,
-                  device: 'mobile:${defaultTargetPlatform.name.toLowerCase()}',
-                  gps: _gps,
-                ),
-              );
       if (!mounted) return;
       setState(() {
         _completionDrafts.remove(job.id);
         _pendingCompletions[job.id] = WorkshopPendingCompletion(jobId: job.id);
-        _localEvents.add(local);
+        if (local != null) _localEvents.add(local);
         _showMore = false;
       });
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(copy('c_sent'))));
+        ..showSnackBar(SnackBar(content: Text(copy('c_queued'))));
     } on Object {
       if (!mounted) return;
       messenger
@@ -735,13 +708,13 @@ class _WorkshopTechnicianScreenState
         jobStatus == null ? null : workshopActionsFor(jobStatus);
     // With the supervisor: nothing to start, pause or finish until they
     // pass it or send it back.
-    final WorkshopActionPlan? plan =
-        basePlan == null || phase != _JobPhase.awaitingApproval
-            ? basePlan
-            : WorkshopActionPlan(
-                primary: const <WorkshopTechAction>[],
-                more: basePlan.more,
-              );
+    final WorkshopActionPlan? plan = basePlan == null ||
+            (phase != _JobPhase.awaitingApproval && phase != _JobPhase.queued)
+        ? basePlan
+        : WorkshopActionPlan(
+            primary: const <WorkshopTechAction>[],
+            more: basePlan.more,
+          );
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -1289,7 +1262,9 @@ class _ProductivityCard extends StatelessWidget {
 }
 
 /// Where the job stands with the supervisor.
-enum _JobPhase { normal, awaitingApproval, returned }
+/// Where the job stands: its completion still on this phone (queued or
+/// failed), sent and with the supervisor, or returned.
+enum _JobPhase { normal, queued, failed, awaitingApproval, returned }
 
 class _JobCard extends StatelessWidget {
   const _JobCard({
@@ -1334,7 +1309,8 @@ class _JobCard extends StatelessWidget {
                   style: text.titleSmall,
                 ),
               ),
-              if (phase == _JobPhase.normal && s != null)
+              if ((phase == _JobPhase.normal || phase == _JobPhase.failed) &&
+                  s != null)
                 TpStatusChip(
                   status: _statusTone(s),
                   label: copy('s_${s.token}'),
@@ -1344,12 +1320,28 @@ class _JobCard extends StatelessWidget {
           ),
           // The supervisor state gets its own line: it is the one thing the
           // technician needs to read, and it must never be cut off.
-          if (phase == _JobPhase.awaitingApproval) ...<Widget>[
+          if (phase == _JobPhase.queued) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            TpStatusChip(
+              key: WorkshopTechnicianKeys.completionQueued,
+              status: TpStatus.neutral,
+              label: copy('c_stateQueued'),
+              isCompact: true,
+            ),
+          ] else if (phase == _JobPhase.failed) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            TpStatusChip(
+              key: WorkshopTechnicianKeys.completionFailed,
+              status: TpStatus.critical,
+              label: copy('c_stateFailed'),
+              isCompact: true,
+            ),
+          ] else if (phase == _JobPhase.awaitingApproval) ...<Widget>[
             const SizedBox(height: TpSpace.xs),
             TpStatusChip(
               key: WorkshopTechnicianKeys.awaitingApproval,
               status: TpStatus.info,
-              label: copy('waitingApproval'),
+              label: copy('c_stateSynced'),
               isCompact: true,
             ),
           ] else if (phase == _JobPhase.returned) ...<Widget>[

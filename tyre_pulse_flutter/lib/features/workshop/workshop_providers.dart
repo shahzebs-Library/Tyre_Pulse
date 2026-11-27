@@ -14,6 +14,7 @@ import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_gps_source.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_completion_service.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_job_check_service.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_offline.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_capture.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_photo_uploader.dart';
@@ -108,4 +109,10 @@ final Provider<
           userId: userId,
         );
   },
+);
+
+/// Supervisor "Jobs to check": the waiting completions and the decision RPC.
+final Provider<WorkshopJobCheckService> workshopJobCheckServiceProvider =
+    Provider<WorkshopJobCheckService>(
+  (ref) => SupabaseWorkshopJobCheckService(ref.watch(supabaseClientProvider)),
 );

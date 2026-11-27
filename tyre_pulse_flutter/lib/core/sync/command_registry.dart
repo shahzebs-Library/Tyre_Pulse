@@ -134,9 +134,12 @@ enum CommandType {
   /// `20261127150000_workshop_job_completion.sql`). It records what was done,
   /// parts, photos, meters and the technician's signature, and moves the job
   /// to Quality Inspection for a SUPERVISOR to pass or return - never straight
-  /// to closed. Idempotent on `client_uuid` (the command's idempotency key).
-  /// Photos are uploaded before the command is queued, so the payload only
-  /// carries `tp-storage://` references.
+  /// to closed. Idempotent per technician on `client_uuid` (the command's
+  /// idempotency key). Works offline: the before / after photos are queued
+  /// as media attachments ([CommandSpec.requiresMediaReady]) and
+  /// `JobCompletionEvidenceCommandPusher` swaps their local paths for the
+  /// uploaded `tp-storage://` references at push time. Country, site and
+  /// asset are read by the server from the work order, never sent.
   jobCompletion,
 }
 
@@ -615,13 +618,13 @@ abstract final class CommandRegistry {
       table: SupabaseTables.workOrders,
       operation: CommandOperation.rpc,
       rpc: 'submit_job_completion',
+      // The after photo is the evidence the supervisor approves against:
+      // the RPC is not called until every queued photo is on the server.
+      requiresMediaReady: true,
       fieldAllowList: <String>{
         'client_uuid',
         'job_id',
         'task_id',
-        'asset_no',
-        'site',
-        'country',
         'work_done',
         'quick_picks',
         'parts_used',

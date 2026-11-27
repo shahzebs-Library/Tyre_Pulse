@@ -149,6 +149,12 @@ final class SupabaseMediaUploader extends SupabaseGateway
   }
 }
 
+/// Bucket of queued job completion photos.
+const String workshopCompletionMediaBucket = 'tyre-photos';
+
+/// File-name prefix that marks a queued photo as job completion evidence.
+const String workshopCompletionMediaPrefix = 'jobdone_';
+
 /// Builds the private Storage object path used by queued media uploads.
 ///
 /// Accident evidence follows the production application's canonical
@@ -172,6 +178,20 @@ String storageObjectPath({
       'fileName',
       'must be one safe basename',
     );
+  }
+  if (bucket == workshopCompletionMediaBucket &&
+      name.startsWith(workshopCompletionMediaPrefix)) {
+    // Job completion photos land where the workshop uploader puts them, so
+    // `submit_job_completion` can check the object is the technician's own.
+    final String owner = userId?.trim() ?? '';
+    if (owner.isEmpty) {
+      throw StateError(
+        'Job completion photos cannot be uploaded without a signed-in owner.',
+      );
+    }
+    final String ownerSegment =
+        owner.length <= 8 ? owner : owner.substring(0, 8);
+    return 'modules/workshop/$ownerSegment/$name';
   }
   if (bucket != 'accident-photos') return name;
 

@@ -17,6 +17,7 @@ import EnterpriseTable from '../ui/EnterpriseTable'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { EmojiGlyph, RouteEmoji } from '../ui/NavEmoji'
 import { vehiclePhoto, vehicleKind } from '../../lib/vehiclePhoto'
+import { useVehicleImageUrl } from '../../lib/useVehicleImageUrl'
 import './commandCenter.css'
 
 // Kit strings live in the core `dashboard` namespace. Some page tests stub t()
@@ -176,12 +177,17 @@ const KIND_ICON = {
  */
 export function VehicleThumb({ row, src, size = 'md' }) {
   const [failed, setFailed] = useState(false)
-  const url = !failed ? (src || vehiclePhoto(row)) : null
+  const [ownFailed, setOwnFailed] = useState(false)
+  // The machine's own photo (image_path, e.g. from an on-site verification)
+  // wins over the class artwork; any failure falls back to the artwork.
+  const own = useVehicleImageUrl(src ? null : row)
+  const useOwn = Boolean(own) && !ownFailed
+  const url = useOwn ? own : (!failed ? (src || vehiclePhoto(row)) : null)
   const Icon = KIND_ICON[vehicleKind(row)] || Truck
   return (
     <span className={`cc-thumb cc-thumb-${size}`}>
       {url
-        ? <img src={url} alt="" loading="lazy" onError={() => setFailed(true)} />
+        ? <img src={url} alt="" loading="lazy" onError={() => (useOwn ? setOwnFailed(true) : setFailed(true))} />
         : <Icon size={size === 'lg' ? 28 : 18} aria-hidden="true" />}
     </span>
   )

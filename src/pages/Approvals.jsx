@@ -17,6 +17,7 @@ import { matchesCountry } from '../lib/countryFilter'
 import { toUserMessage } from '../lib/safeError'
 import { useAuth } from '../contexts/AuthContext'
 import { useSettings } from '../contexts/SettingsContext'
+import { PendingVerificationsPanel } from '../components/fleetVerification'
 import { formatDistanceToNow } from 'date-fns'
 import FilterBar from '../components/ui/FilterBar'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
@@ -1263,6 +1264,9 @@ export default function Approvals() {
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /> Refresh
         </button>
       </div>
+
+      {/* On-site fleet verifications (Admin / Manager); hides itself for other roles. */}
+      <div className="mb-4"><PendingVerificationsPanel country={activeCountry} /></div>
 
       {fatalError ? (
         <EngineUnavailable message={fatalError} onRetry={load} retrying={loading} />

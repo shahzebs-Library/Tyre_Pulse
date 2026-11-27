@@ -154,3 +154,23 @@ export async function verificationPhotoUrl(path) {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600)
   return error ? null : (data?.signedUrl ?? null)
 }
+
+/**
+ * Whole-register progress for one country (or all): exact server counts, so
+ * the tile never describes only the page on screen. { verified, pending, total, notSetUp }.
+ */
+export async function countVerification(country) {
+  const scoped = (q) => (country && country !== 'All' ? q.eq('country', country) : q)
+  const head = () => scoped(supabase.from('vehicle_fleet').select('id', { count: 'exact', head: true }))
+  const [all, done, wait] = await Promise.all([
+    head(),
+    head().eq('verification_status', 'verified'),
+    head().eq('verification_status', 'pending'),
+  ])
+  const err = all.error || done.error || wait.error
+  if (err) {
+    if (isVerificationNotSetUp(err)) return { verified: 0, pending: 0, total: all.count ?? 0, notSetUp: true }
+    throw fail(err, 'Could not count verified machines.')
+  }
+  return { verified: done.count ?? 0, pending: wait.count ?? 0, total: all.count ?? 0, notSetUp: false }
+}

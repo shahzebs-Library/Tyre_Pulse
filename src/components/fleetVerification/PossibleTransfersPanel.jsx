@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
 import { listPossibleTransfers } from '../../lib/api/fleetVerification'
@@ -10,6 +10,10 @@ import { listPossibleTransfers } from '../../lib/api/fleetVerification'
  */
 export default function PossibleTransfersPanel({ country = 'KSA', onVerify }) {
   const { t } = useLanguage()
+  // t may change identity every render; reading it through a ref keeps the
+  // load callback stable so a re-render never triggers another fetch.
+  const tRef = useRef(t)
+  tRef.current = t
   const [state, setState] = useState({ loading: true, rows: [], notSetUp: false, error: null })
 
   const load = useCallback(async () => {
@@ -18,9 +22,9 @@ export default function PossibleTransfersPanel({ country = 'KSA', onVerify }) {
       const r = await listPossibleTransfers(country)
       setState({ loading: false, rows: r.rows, notSetUp: r.notSetUp, error: null })
     } catch (e) {
-      setState({ loading: false, rows: [], notSetUp: false, error: toUserMessage(e, t('fleetVerification.loadError')) })
+      setState({ loading: false, rows: [], notSetUp: false, error: toUserMessage(e, tRef.current('fleetVerification.loadError')) })
     }
-  }, [country, t])
+  }, [country])
 
   useEffect(() => { load() }, [load])
   const yn = (b) => t(`fleetVerification.transfers.${b ? 'yes' : 'no'}`)

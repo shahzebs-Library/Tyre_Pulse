@@ -1,10 +1,24 @@
 import { useLanguage } from '../../contexts/LanguageContext'
 import { verificationProgress } from '../../lib/fleetVerification'
 
-/** "N of M verified" over the rows on screen (pass the filtered register rows). */
-export default function VerificationProgressTile({ rows = [] }) {
+/**
+ * "N of M verified". Pass `counts` ({ verified, pending, total }) from the
+ * server for a whole register, or `rows` for a list already fully loaded.
+ * `loading` shows a placeholder; `notSetUp` says the server side is missing.
+ */
+export default function VerificationProgressTile({ rows = [], counts, loading = false, notSetUp = false }) {
   const { t } = useLanguage()
-  const p = verificationProgress(rows)
+  const p = counts
+    ? { ...counts, pct: counts.total ? Math.round((counts.verified / counts.total) * 100) : null }
+    : verificationProgress(rows)
+  if (loading || notSetUp) {
+    return (
+      <div className="card p-4" aria-label={t('fleetVerification.progress.title')} aria-busy={loading}>
+        <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{t('fleetVerification.progress.title')}</div>
+        <div className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>{loading ? '...' : t('fleetVerification.notSetUp')}</div>
+      </div>
+    )
+  }
   return (
     <div className="card p-4" aria-label={t('fleetVerification.progress.title')}>
       <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{t('fleetVerification.progress.title')}</div>

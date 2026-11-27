@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { toUserMessage } from '../../lib/safeError'
@@ -21,6 +21,10 @@ function Photo({ path, label }) {
 /** Manager review queue for on-site verifications. Self-gates to Admin/Manager. */
 export default function PendingVerificationsPanel({ country, onChanged }) {
   const { t } = useLanguage()
+  // t may change identity every render; reading it through a ref keeps the
+  // load callback stable so a re-render never triggers another fetch.
+  const tRef = useRef(t)
+  tRef.current = t
   const { profile, isSuperAdmin } = useAuth()
   const allowed = canApprove({ role: profile?.role, isSuperAdmin })
   const [state, setState] = useState({ loading: true, rows: [], notSetUp: false, error: null })
@@ -34,9 +38,9 @@ export default function PendingVerificationsPanel({ country, onChanged }) {
       const r = await listPendingFleetVerifications(country)
       setState({ loading: false, rows: r.rows, notSetUp: r.notSetUp, error: null })
     } catch (e) {
-      setState({ loading: false, rows: [], notSetUp: false, error: toUserMessage(e, t('fleetVerification.loadError')) })
+      setState({ loading: false, rows: [], notSetUp: false, error: toUserMessage(e, tRef.current('fleetVerification.loadError')) })
     }
-  }, [country, t])
+  }, [country])
 
   useEffect(() => { if (allowed) load() }, [allowed, load])
   if (!allowed) return null

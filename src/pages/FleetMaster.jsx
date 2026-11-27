@@ -18,9 +18,12 @@ import {
   CheckCircle2, Wrench, AlertCircle, FileText, CircleSlash, MapPin, Activity, Layers,
   Bookmark, Columns, Download, ChevronDown, MoreHorizontal, Upload, BarChart3,
   CalendarClock, ShieldCheck, Gauge, ChevronRight, Eye, Copy, Circle,
-  Bus, Car, Construction, Container, Factory, ListChecks, Siren, ArrowUpDown, Info,
+  Bus, Car, Construction, Container, Factory, ListChecks, Siren, ArrowUpDown, Info, Camera,
 } from 'lucide-react'
 import { vehicleKind } from '../lib/vehiclePhoto'
+import { VerifyOnSiteModal, VerificationBadge, VerificationProgressTile, PendingVerificationsPanel, PossibleTransfersPanel } from '../components/fleetVerification'
+import { canVerify } from '../lib/fleetVerification'
+import { countVerification } from '../lib/api/fleetVerification'
 import useAnchoredPopover from '../components/ui/useAnchoredPopover'
 import DialogModal from '../components/ui/Modal'
 import CustomFieldsPanel from '../components/CustomFieldsPanel'
@@ -295,6 +298,20 @@ function FleetRegister() {
   const { profile, isSuperAdmin } = useAuth()
   const { activeCountry, activeCurrency } = useSettings()
   const { t } = useLanguage()
+  // On-site verification (migration 20261127180000). Counts come from the
+  // server so the tile covers the whole register, not the page on screen.
+  const mayVerify = canVerify({ role: profile?.role, isSuperAdmin })
+  const [verifyRow, setVerifyRow] = useState(null)
+  const [verifyCounts, setVerifyCounts] = useState({ loading: true, counts: null, notSetUp: false })
+  const [verifyTick, setVerifyTick] = useState(0)
+  useEffect(() => {
+    let alive = true
+    setVerifyCounts((v) => ({ ...v, loading: true }))
+    countVerification(activeCountry)
+      .then((r) => { if (alive) setVerifyCounts({ loading: false, counts: r.notSetUp ? null : r, notSetUp: r.notSetUp }) })
+      .catch(() => { if (alive) setVerifyCounts({ loading: false, counts: null, notSetUp: false }) })
+    return () => { alive = false }
+  }, [activeCountry, verifyTick])
   // t() hands back the key itself when a string is missing; show the English
   // fallback instead so a missing locale entry never reaches the screen.
   const tx = useCallback((key, fallback, vars) => {
@@ -1019,6 +1036,10 @@ function FleetRegister() {
       key: 'status', header: t('fleetmaster.columns.status'),
       cell: (r) => { const st = statusPill(r); return <span className={`cc-pill ${st.tone}`} title={r.ops_status_note || undefined}><st.Icon size={12} aria-hidden="true" />{st.key ? t(`fleetmaster.reg.pill.${st.key}`) : st.label}</span> },
     },
+    {
+      key: 'verification', header: t('fleetVerification.column.title'),
+      cell: (r) => <VerificationBadge status={r.verification_status} lastVerifiedAt={r.last_verified_at} />,
+    },
     show('priority') && {
       key: 'priority',
       header: (
@@ -1072,6 +1093,7 @@ function FleetRegister() {
               <>
                 <MenuItem icon={Eye} onClick={() => { close(); openVehicle(r) }}>{t('fleetmaster.reg.view')}</MenuItem>
                 <MenuItem icon={ClipboardCheck} onClick={() => { close(); navigate(`/inspections?asset=${encodeURIComponent(r.asset_no)}`) }}>{t('fleetmaster.table.startChecklist')}</MenuItem>
+                {mayVerify && <MenuItem icon={Camera} onClick={() => { close(); setVerifyRow(r) }}>{t('fleetVerification.action.verify')}</MenuItem>}
                 {canEdit && <MenuItem icon={Edit2} onClick={() => { close(); openEdit(r) }}>{t('fleetmaster.table.edit')}</MenuItem>}
                 {canDelete && <MenuItem icon={Trash2} danger onClick={() => { close(); confirmDelete(r) }}>{t('fleetmaster.table.delete')}</MenuItem>}
               </>
@@ -1132,6 +1154,10 @@ function FleetRegister() {
           label={t('fleetmaster.reg.kpi.critHigh')}
           onClick={() => applyPriority('1-3')}
           title={t('fleetmaster.reg.kpi.critHighHint')} />
+      </div>
+
+      <div className="mb-4" style={{ maxWidth: 360 }}>
+        <VerificationProgressTile counts={verifyCounts.counts} loading={verifyCounts.loading} notSetUp={verifyCounts.notSetUp} />
       </div>
       {!summaryPending && (debouncedSearch || siteFilter || typeFilter) && (
         <p className="fm-note">
@@ -1413,6 +1439,18 @@ function FleetRegister() {
           </Card>
         </aside>
       </div>
+
+      {/* ── On-site verification: review queue + possible transfers ───── */}
+      <div className="space-y-4 mt-4">
+        <PendingVerificationsPanel country={activeCountry} onChanged={() => { loadRecords(); setVerifyTick((n) => n + 1) }} />
+        {mayVerify && <PossibleTransfersPanel country="KSA" />}
+      </div>
+      <VerifyOnSiteModal
+        open={verifyRow !== null}
+        vehicle={verifyRow}
+        onClose={() => setVerifyRow(null)}
+        onDone={() => { loadRecords(); setVerifyTick((n) => n + 1) }}
+      />
 
       {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}
       {editRecord !== null && (

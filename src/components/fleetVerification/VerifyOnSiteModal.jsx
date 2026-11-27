@@ -140,7 +140,11 @@ export default function VerifyOnSiteModal({ open, onClose, vehicle, onDone }) {
 
           <label className="block text-sm">
             {t('fleetVerification.modal.photo')}
-            <input className="mt-1 block w-full text-sm" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"
+            <span className="mt-1 flex items-center gap-3">
+              <span className="btn-secondary inline-flex items-center" style={{ minHeight: 44 }}>{t(file ? 'fleetVerification.modal.changePhoto' : 'fleetVerification.modal.choosePhoto')}</span>
+              <span className="text-xs truncate" style={{ color: 'var(--text-dim)' }}>{file ? file.name : t('fleetVerification.modal.noPhotoYet')}</span>
+            </span>
+            <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" capture="environment"
               onChange={(e) => setFile(e.target.files?.[0] || null)} />
             <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{t('fleetVerification.modal.photoHint')}</span>
           </label>

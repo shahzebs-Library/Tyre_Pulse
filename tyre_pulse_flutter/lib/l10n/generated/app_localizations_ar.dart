@@ -9626,4 +9626,41 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get syncQueueInspectionRetried =>
       'تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة.';
+
+  @override
+  String syncQueuePhotoFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تعذّر رفع $count صور',
+      one: 'تعذّر رفع صورة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncQueuePhotoRetry => 'إعادة رفع الصورة';
+
+  @override
+  String get syncQueuePhotoRetried =>
+      'ستُعاد محاولة رفع الصورة في المزامنة التالية.';
+
+  @override
+  String get syncQueuePhotoRemove => 'إرسال بدون هذه الصورة';
+
+  @override
+  String get syncQueuePhotoRemoveTitle => 'الإرسال بدون هذه الصورة؟';
+
+  @override
+  String get syncQueuePhotoRemoveMessage =>
+      'هذه الصورة دليل على السجل. إذا أزلتها فسيُرسل السجل بدونها ولا يمكن استعادتها من القائمة. التقطها من جديد من السجل إن أمكن.';
+
+  @override
+  String get syncQueuePhotoRemoveConfirm => 'إزالة الصورة';
+
+  @override
+  String get syncQueuePhotoRemoved => 'أُزيلت الصورة. سيُرسل السجل بدونها.';
+
+  @override
+  String get syncQueuePhotoActionFailed => 'لم ينجح ذلك. حاول مرة أخرى.';
 }

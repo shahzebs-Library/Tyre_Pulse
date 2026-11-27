@@ -52,6 +52,7 @@ import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/dao/media_dao.dart';
 import 'package:tyre_pulse/core/database/dao/queue_dao.dart';
 import 'package:tyre_pulse/core/database/database_constants.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/sync_outcome.dart';
@@ -153,15 +154,30 @@ bool isAuthFailure(SupabaseFailure failure) {
   return isStorageAuthError(null, failure.rawMessage ?? '');
 }
 
-/// Marks a "this record is waiting for its photo" failure that is only
-/// waiting because the session lapsed. The engine puts such a command back
-/// without counting a retry, so an expired session never spends the record's
-/// photo wait budget.
-const String kPhotoWaitAuthLapseTechnical =
-    'A photo of this record is waiting for the session to be refreshed.';
+/// Marks a "this record is waiting for its photo to upload" answer from a
+/// pusher. It is not a failed attempt: the engine puts the command back
+/// without counting a retry, so a photo waiting out no signal, a 5xx, a 429
+/// or a lapsed session can never dead-letter its record or use up its wait
+/// budget. The photo's own backoff paces the retries.
+const String kPhotoWaitTechnical =
+    'A photo of this record has not finished uploading.';
 
-bool isAuthLapsePhotoWait(SupabaseFailure failure) =>
-    failure.rawMessage == kPhotoWaitAuthLapseTechnical;
+bool isPhotoWait(SupabaseFailure failure) =>
+    failure.rawMessage == kPhotoWaitTechnical;
+
+/// The failure a pusher throws while a record waits for its photos.
+SupabaseFailure photoWaitFailure({Object? cause}) => SupabaseFailure(
+      error: AppError(
+        kind: AppErrorKind.sync,
+        message: 'This record is waiting for its photos to upload. '
+            'It stays on this phone and will try again.',
+        technical: kPhotoWaitTechnical,
+        cause: cause,
+        isRetryable: true,
+      ),
+      cause: SupabaseFailureCause.unknown,
+      rawMessage: kPhotoWaitTechnical,
+    );
 
 /// Refreshes the signed-in session. Returns true when a usable session is
 /// back. Must not throw.
@@ -322,9 +338,15 @@ final class SyncEngine {
   /// make sure that if something else DID block rows for the organisation
   /// that is active right now, they become claimable again the moment this
   /// run starts.
+  ///
+  /// [requeueFailedPhotos] is set when the pass was asked for because the
+  /// connection came back or a person pressed Sync now: photos a server
+  /// refused (`failed`) get one more bounded try, once their backoff has
+  /// passed, so a record waiting on them is not stuck for good.
   Future<SyncRunSummary> runOnce({
     required String workspaceId,
     required DateTime now,
+    bool requeueFailedPhotos = false,
   }) async {
     final bool acquired = await _queueDao.acquireSyncLock(
       holder: _holderId,
@@ -342,6 +364,9 @@ final class SyncEngine {
       // (no signal, 5xx, an expired session) could never be retried, and a
       // record that needs them stalled for good. Requeued once.
       await _mediaDao.requeueLegacyTransientFailuresOnce(now: now);
+      if (requeueFailedPhotos) {
+        await _mediaDao.requeueFailedMedia(workspaceId: workspaceId, now: now);
+      }
 
       final (int photosUploaded, int photosFailed) =
           await _drainMediaUploads(now: now);
@@ -449,9 +474,12 @@ final class SyncEngine {
           uploaded++;
         } else if (isDefinitivePhotoRefusal(failure)) {
           // Only a refusal that will not change on retry spends an attempt.
+          // It also backs off, so an under-budget refusal is not retried
+          // every pass.
           await _mediaDao.markUploadAttemptFailed(
             media.id,
             messageSafe: failure.error.message,
+            now: now,
           );
           failed++;
         } else {
@@ -636,9 +664,9 @@ final class SyncEngine {
       await _markCommandSynced(command, spec: spec, now: now);
       return _CommandOutcome.synced;
     } on SupabaseFailure catch (failure) {
-      if (isAuthLapsePhotoWait(failure)) {
-        // Waiting only on a session refresh: not a failed attempt, so it
-        // must not count toward the record's photo wait budget.
+      if (isPhotoWait(failure)) {
+        // Waiting on a photo upload: not a failed attempt, so it must not
+        // count a retry or the record would dead-letter while offline.
         await _queueDao.returnToPending(command.id);
         return _CommandOutcome.mediaPending;
       }

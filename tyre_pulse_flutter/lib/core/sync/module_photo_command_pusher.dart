@@ -14,11 +14,11 @@
 /// photo must never hold the record back for good. So:
 ///
 /// - a photo that already uploaded is sent as its reference;
-/// - a photo still waiting is uploaded by the drain, one try per sync; the
-///   record waits for it (no connection, 5xx, 429) for up to
-///   [kModulePhotoWaitCap] syncs, then goes out without it with a visible
-///   reason. A lapsed session is refreshed once and otherwise only waits:
-///   it never counts toward the cap and never drops the photo;
+/// - a photo still waiting is uploaded by the drain, one try per sync with
+///   a growing backoff; the record waits for it (no connection, 5xx, 429, a
+///   lapsed session, refreshed once per pass) and is never dropped for a
+///   transient reason. The wait counts no retry, so the record is never
+///   dead-lettered for a photo;
 /// - a photo the server refuses for good (403, 413, 400, missing bucket) is
 ///   marked abandoned with a visible reason and the record goes without it;
 /// - a photo whose local file is gone is marked abandoned with a reason
@@ -61,11 +61,6 @@ const String kModulePhotoMissingMessage =
 const String kModulePhotoRefusedMessage =
     'The server refused this photo, so the record was sent without it.';
 
-/// The visible reason left on a photo that kept failing until the cap.
-const String kModulePhotoTimedOutMessage =
-    'This photo could not be uploaded in time, so the record was sent '
-    'without it.';
-
 /// The upload object name for a module photo: prefix + a unique part + the
 /// local basename. Safe as one storage basename.
 String modulePhotoFileName({
@@ -82,7 +77,7 @@ String modulePhotoFileName({
 bool _defaultFileExists(String path) => File(path).existsSync();
 
 final class ModulePhotoCommandPusher implements CommandPusher {
-  const ModulePhotoCommandPusher({
+  ModulePhotoCommandPusher({
     required CommandPusher delegate,
     required QueueDao queueDao,
     required MediaDao mediaDao,
@@ -105,6 +100,10 @@ final class ModulePhotoCommandPusher implements CommandPusher {
   final bool Function(String path) _fileExists;
   final DateTime Function()? _clock;
   final SessionRefresher? _refreshSession;
+
+  /// One session refresh per sync pass (an instance is built per pass),
+  /// shared by every photo, like the engine's drain.
+  bool _refreshTried = false;
 
   DateTime _now() => (_clock ?? DateTime.now)().toUtc();
 
@@ -215,11 +214,7 @@ final class ModulePhotoCommandPusher implements CommandPusher {
       // than write a device path to the server.
       if (match == null) continue;
       consumed.add(match.id);
-      final String? ref = await _refFor(
-        match,
-        prefix,
-        atCap: (command?.retryCount ?? 0) >= kModulePhotoWaitCap,
-      );
+      final String? ref = await _refFor(match, prefix);
       if (ref != null) refs.add(ref);
     }
 
@@ -228,19 +223,15 @@ final class ModulePhotoCommandPusher implements CommandPusher {
   }
 
   /// The uploaded reference for [media], or null when the record should be
-  /// sent without this photo. Throws a retryable failure when the record
-  /// should wait for the photo.
+  /// sent without this photo. Throws a photo wait when the record should
+  /// wait for the photo.
   ///
-  /// The drain uploads queued photos (one try per sync). This method only
-  /// uploads a photo itself when the drain cannot: it has no destination yet
-  /// (an older build), its attempt budget is spent, or the record has waited
-  /// [kModulePhotoWaitCap] syncs ([atCap]). It never counts an attempt, so a
-  /// transient error cannot spend a photo's budget.
-  Future<String?> _refFor(
-    PendingMediaUpload media,
-    String prefix, {
-    required bool atCap,
-  }) async {
+  /// The drain uploads queued photos (one try per sync, with backoff). This
+  /// method only uploads a photo itself when the drain cannot: it has no
+  /// destination yet (an older build) or a server refusal spent its attempt
+  /// budget. A transient error (no signal, 5xx, 429, a lapsed session) never
+  /// drops the photo: it backs off and the record keeps waiting.
+  Future<String?> _refFor(PendingMediaUpload media, String prefix) async {
     if (media.state == MediaUploadState.uploaded ||
         media.state == MediaUploadState.verified) {
       final String? ref = media.remoteRef;
@@ -261,13 +252,8 @@ final class ModulePhotoCommandPusher implements CommandPusher {
 
     final bool unrouted = media.bucket == null || media.bucket!.isEmpty;
     final bool spent = media.state == MediaUploadState.failed;
-    if (!unrouted && !spent && !atCap) {
-      // Waiting on the drain. If the drain's last try failed only because
-      // the session lapsed, say so: that wait must not use up the budget.
-      final MediaUploadBackoff? backoff =
-          await _mediaDao.uploadBackoff(media.id);
-      throw _waiting(authLapse: backoff?.authLapse ?? false);
-    }
+    // Waiting on the drain.
+    if (!unrouted && !spent) throw photoWaitFailure();
 
     String bucket = media.bucket ?? '';
     String fileName = media.fileName;
@@ -297,9 +283,11 @@ final class ModulePhotoCommandPusher implements CommandPusher {
         // One session refresh, then one more try, before treating a lapsed
         // session as a wait.
         final SessionRefresher? refresh = _refreshSession;
-        if (!isAuthFailure(failure) || refresh == null || !await refresh()) {
+        if (!isAuthFailure(failure) || refresh == null || _refreshTried) {
           rethrow;
         }
+        _refreshTried = true;
+        if (!await refresh()) rethrow;
         result = await _uploader.upload(
           bucket: bucket,
           localPath: media.localPath,
@@ -315,11 +303,6 @@ final class ModulePhotoCommandPusher implements CommandPusher {
       );
       return result.remoteRef;
     } on SupabaseFailure catch (failure) {
-      if (isAuthFailure(failure)) {
-        // A lapsed session says nothing about the photo: never abandon it
-        // for this, and never count it toward the wait cap.
-        throw _waiting(cause: failure, authLapse: true);
-      }
       if (isDefinitivePhotoRefusal(failure)) {
         await _mediaDao.abandonMedia(
           media.id,
@@ -327,31 +310,18 @@ final class ModulePhotoCommandPusher implements CommandPusher {
         );
         return null;
       }
-      // Transient (no connection, 5xx, 429): keep the photo and wait, until
-      // the record has waited long enough.
-      if (atCap && !isConnectivityFailure(failure)) {
-        await _mediaDao.abandonMedia(
-          media.id,
-          messageSafe: kModulePhotoTimedOutMessage,
-        );
-        return null;
-      }
-      throw _waiting(cause: failure);
+      // Transient (no connection, 5xx, 429, a lapsed session): keep the
+      // photo, back off, and keep the record waiting. Never abandoned.
+      await _mediaDao.recordTransientUploadFailure(
+        media.id,
+        messageSafe: failure.error.message,
+        now: _now(),
+        authLapse: isAuthFailure(failure),
+      );
+      throw photoWaitFailure(cause: failure);
     }
   }
 }
-
-/// How many syncs a record waits for a photo that keeps failing for a
-/// transient reason before it is sent without it. Below the queue's own
-/// retry limit, so the record itself is never dead-lettered for a photo.
-const int kModulePhotoWaitCap = 5;
-
-SupabaseFailure _waiting({Object? cause, bool authLapse = false}) => _failure(
-      authLapse
-          ? kPhotoWaitAuthLapseTechnical
-          : 'A photo of this record has not finished uploading.',
-      cause: cause,
-    );
 
 SupabaseFailure _failure(String technical, {Object? cause}) => SupabaseFailure(
       error: AppError(

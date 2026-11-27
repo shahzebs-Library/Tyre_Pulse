@@ -700,10 +700,12 @@ void main() {
     // active" reply (accessBlockedCheckAgain / StillWaiting).
     // 2781 + 1 = 2782: homeRoleCopyCatalog, the per-role Home tiles and rows
     // (one catalog key, like the other *CopyCatalog keys).
-    test('en, ar and ur each carry exactly 2782 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2782);
-      expect(_translatableKeys(ar).length, 2782);
-      expect(_translatableKeys(ur).length, 2782);
+    // 2782 + 9 = 2791: the sync queue's "photo could not upload" line and
+    // its Retry / send-without-this-photo actions.
+    test('en, ar and ur each carry exactly 2791 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2791);
+      expect(_translatableKeys(ar).length, 2791);
+      expect(_translatableKeys(ur).length, 2791);
     });
   });
 

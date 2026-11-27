@@ -4,6 +4,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show StorageException;
 import 'package:tyre_pulse/core/database/app_database.dart';
+import 'package:tyre_pulse/core/database/dao/media_dao.dart';
 import 'package:tyre_pulse/core/database/dao/queue_dao.dart';
 import 'package:tyre_pulse/core/database/database_constants.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
@@ -281,7 +282,7 @@ void main() {
       final _Uploader uploader = _Uploader()
         ..fail['${washMediaPrefix}abc_w.jpg'] = <SupabaseFailure>[_auth];
       final _OkPusher delegate = _OkPusher();
-      for (int i = 1; i <= kModulePhotoWaitCap + 3; i++) {
+      for (int i = 1; i <= 10; i++) {
         await SyncEngine(
           queueDao: db.queueDao,
           mediaDao: db.mediaDao,
@@ -407,4 +408,172 @@ void main() {
       isEmpty,
     );
   });
+
+  group('failed photos are never stuck', () {
+    Future<void> failIt(String cmd) async {
+      await (db.update(db.pendingMediaUploads)
+            ..where((t) => t.commandId.equals(cmd)))
+          .write(
+        const PendingMediaUploadsCompanion(
+          state: Value<String>(MediaUploadState.failed),
+          attempts: Value<int>(maxUploadAttempts),
+        ),
+      );
+    }
+
+    test('Sync now / connection back gives one bounded try', () async {
+      await db.mediaDao.requeueLegacyTransientFailuresOnce(now: testNow);
+      await seedCommand(
+        db,
+        id: 'tc',
+        attachments: <QueuedMediaAttachment>[_photo('tc.jpg')],
+      );
+      await failIt('tc');
+      final _Uploader uploader = _Uploader()
+        ..fail['tc.jpg'] = <SupabaseFailure>[_forbidden];
+
+      // A normal periodic pass leaves it alone.
+      await _engine(db, _OkPusher(), uploader)
+          .runOnce(workspaceId: workspaceA, now: _day(1));
+      expect(uploader.calls, isEmpty);
+
+      // A one-off pass tries it once, it is refused, and it is failed again
+      // with a backoff: no loop.
+      await _engine(db, _OkPusher(), uploader).runOnce(
+        workspaceId: workspaceA,
+        now: _day(2),
+        requeueFailedPhotos: true,
+      );
+      expect(uploader.calls, <String>['tc.jpg']);
+      expect(
+        (await db.mediaDao.mediaForCommand('tc')).single.state,
+        MediaUploadState.failed,
+      );
+
+      // Inside the backoff a second trigger does not requeue it.
+      expect(await db.mediaDao.requeueFailedMedia(now: _day(2)), 0);
+
+      // Later, and now the server accepts it: the record syncs.
+      uploader.fail.clear();
+      final _OkPusher pusher = _OkPusher();
+      await _engine(db, pusher, uploader).runOnce(
+        workspaceId: workspaceA,
+        now: _day(3),
+        requeueFailedPhotos: true,
+      );
+      expect(pusher.calls, 1);
+      expect(await db.queueDao.commandById('tc'), isNull);
+    });
+
+    test('a person can send the record without the photo', () async {
+      await db.mediaDao.requeueLegacyTransientFailuresOnce(now: testNow);
+      const String path = '/data/user/0/app/files/queue-media/tc.jpg';
+      await seedCommand(
+        db,
+        id: 'tc',
+        payloadJson: jsonEncode(<String, Object?>{
+          'asset_no': 'TM514',
+          'photos': <String>[path, 'tp-storage://tyre-photos/kept.jpg'],
+        }),
+        attachments: <QueuedMediaAttachment>[_photo('tc.jpg', path: path)],
+      );
+      await failIt('tc');
+      final String mediaId =
+          (await db.mediaDao.mediaForCommand('tc')).single.id;
+      expect(await db.mediaDao.commandMediaReady('tc'), isFalse);
+
+      expect(await db.mediaDao.removeFailedPhoto(mediaId), isTrue);
+      expect(await db.mediaDao.commandMediaReady('tc'), isTrue);
+      final PendingCommand cmd = (await db.queueDao.commandById('tc'))!;
+      expect(
+        (jsonDecode(cmd.payloadJson) as Map<String, Object?>)['photos'],
+        <String>['tp-storage://tyre-photos/kept.jpg'],
+      );
+      // A queued (not failed) photo can never be removed this way.
+      expect(await db.mediaDao.removeFailedPhoto('nope'), isFalse);
+    });
+  });
+
+  test('a far-future backoff from a bad clock is clamped', () async {
+    await seedCommand(
+      db,
+      id: 'tc',
+      attachments: <QueuedMediaAttachment>[_photo('tc.jpg')],
+    );
+    final String id = (await db.mediaDao.mediaForCommand('tc')).single.id;
+    // Clock ran a year ahead when the failure was recorded.
+    await db.mediaDao.recordTransientUploadFailure(
+      id,
+      messageSafe: 'x',
+      now: testNow.add(const Duration(days: 365)),
+    );
+    expect(await db.mediaDao.mediaIdsInBackoff(testNow), contains(id));
+    final MediaUploadBackoff b =
+        (await db.mediaDao.uploadBackoff(id, now: testNow))!;
+    expect(
+      b.until.isAfter(testNow.add(MediaDao.transientBackoffMax)),
+      isFalse,
+    );
+    expect(
+      await db.mediaDao.mediaIdsInBackoff(
+        testNow.add(MediaDao.transientBackoffMax + const Duration(minutes: 1)),
+      ),
+      isNot(contains(id)),
+    );
+  });
+
+  test('the module pusher refreshes the session once per pass', () async {
+    const String a = '/data/user/0/app/files/wash_photos/a.jpg';
+    const String b = '/data/user/0/app/files/wash_photos/b.jpg';
+    await db.queueDao.enqueue(
+      commandType: CommandType.washRecord.wireName,
+      entityType: CommandRegistry.specFor(CommandType.washRecord).table,
+      payloadJson: jsonEncode(<String, Object?>{
+        'asset_no': 'TM514',
+        'photos': <String>[a, b],
+      }),
+      createdBy: testUser,
+      workspaceId: workspaceA,
+      now: testNow,
+      idempotencyKey: 'wash_two',
+      attachments: const <QueuedMediaAttachment>[
+        // An older build queued these with no destination, so the pusher
+        // uploads them itself.
+        QueuedMediaAttachment(localPath: a, fileName: 'a.jpg', orderIndex: 0),
+        QueuedMediaAttachment(localPath: b, fileName: 'b.jpg', orderIndex: 1),
+      ],
+    );
+    int refreshes = 0;
+    final _AuthUploader uploader = _AuthUploader();
+    await SyncEngine(
+      queueDao: db.queueDao,
+      mediaDao: db.mediaDao,
+      pusher: ModulePhotoCommandPusher(
+        delegate: _OkPusher(),
+        queueDao: db.queueDao,
+        mediaDao: db.mediaDao,
+        uploader: uploader,
+        fileExists: (_) => true,
+        clock: () => testNow,
+        refreshSession: () async {
+          refreshes++;
+          return true;
+        },
+      ),
+      uploader: uploader,
+      holderId: 'wash',
+    ).runOnce(workspaceId: workspaceA, now: _day(1));
+    expect(refreshes, 1);
+  });
+}
+
+/// Every upload is refused for a lapsed session.
+final class _AuthUploader implements MediaUploader {
+  @override
+  Future<MediaUploadResult> upload({
+    required String bucket,
+    required String localPath,
+    required String fileName,
+  }) async =>
+      throw _auth;
 }

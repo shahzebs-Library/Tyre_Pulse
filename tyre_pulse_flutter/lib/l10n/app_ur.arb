@@ -3825,5 +3825,14 @@
   "profileDraftDiscardMessage": "اس مسودے میں درج سب کچھ، بشمول تصاویر اور دستخط، اس فون سے ہٹا دیا جائے گا۔ اسے واپس نہیں کیا جا سکتا۔",
   "profileDraftDiscarded": "مسودہ ختم کر دیا گیا۔",
   "profileDraftDiscardFailed": "مسودہ ختم نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
-  "syncQueueInspectionRetried": "آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔"
+  "syncQueueInspectionRetried": "آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔",
+  "syncQueuePhotoFailed": "{count, plural, =1{ایک تصویر اپ لوڈ نہیں ہو سکی} other{{count} تصاویر اپ لوڈ نہیں ہو سکیں}}",
+  "syncQueuePhotoRetry": "تصویر دوبارہ بھیجیں",
+  "syncQueuePhotoRetried": "اگلی مطابقت پر تصویر دوبارہ بھیجی جائے گی۔",
+  "syncQueuePhotoRemove": "اس تصویر کے بغیر بھیجیں",
+  "syncQueuePhotoRemoveTitle": "اس تصویر کے بغیر بھیجیں؟",
+  "syncQueuePhotoRemoveMessage": "یہ تصویر ریکارڈ کا ثبوت ہے۔ اسے ہٹانے پر ریکارڈ اس کے بغیر بھیجا جائے گا اور تصویر قطار سے واپس نہیں آ سکے گی۔ ہو سکے تو ریکارڈ سے دوبارہ تصویر لیں۔",
+  "syncQueuePhotoRemoveConfirm": "تصویر ہٹائیں",
+  "syncQueuePhotoRemoved": "تصویر ہٹا دی گئی۔ ریکارڈ اس کے بغیر بھیجا جائے گا۔",
+  "syncQueuePhotoActionFailed": "یہ کام نہیں ہوا۔ دوبارہ کوشش کریں۔"
 }

@@ -16793,6 +16793,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tried to send your inspections again. The status below is up to date.'**
   String get syncQueueInspectionRetried;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{A photo could not upload} other{{count} photos could not upload}}'**
+  String syncQueuePhotoFailed(int count);
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry photo'**
+  String get syncQueuePhotoRetry;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo will be tried again on the next sync.'**
+  String get syncQueuePhotoRetried;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Send without this photo'**
+  String get syncQueuePhotoRemove;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Send without this photo?'**
+  String get syncQueuePhotoRemoveTitle;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo is evidence for the record. If you remove it, the record is sent without it and the photo cannot be recovered from the queue. Retake it from the record if you can.'**
+  String get syncQueuePhotoRemoveMessage;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get syncQueuePhotoRemoveConfirm;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo removed. The record will be sent without it.'**
+  String get syncQueuePhotoRemoved;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'That did not work. Try again.'**
+  String get syncQueuePhotoActionFailed;
 }
 
 class _AppLocalizationsDelegate

@@ -37,4 +37,23 @@ final class ScopedMediaDao extends MediaDao {
       excludeIds: excludeIds,
     );
   }
+
+  @override
+  Future<int> requeueFailedMedia({
+    String? workspaceId,
+    String? createdBy,
+    String? commandId,
+    int budget = 1,
+    bool force = false,
+    DateTime? now,
+  }) {
+    return super.requeueFailedMedia(
+      workspaceId: this.workspaceId,
+      createdBy: userId,
+      commandId: commandId,
+      budget: budget,
+      force: force,
+      now: now,
+    );
+  }
 }

@@ -9501,5 +9501,46 @@
   "syncQueueInspectionRetried": "Tried to send your inspections again. The status below is up to date.",
   "@syncQueueInspectionRetried": {
     "description": "After Retry on a submitted inspection flushed the inspection queue."
+  },
+  "syncQueuePhotoFailed": "{count, plural, =1{A photo could not upload} other{{count} photos could not upload}}",
+  "@syncQueuePhotoFailed": {
+    "description": "Profile sync queue: a photo that could not upload.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncQueuePhotoRetry": "Retry photo",
+  "@syncQueuePhotoRetry": {
+    "description": "Profile sync queue: a photo that could not upload."
+  },
+  "syncQueuePhotoRetried": "The photo will be tried again on the next sync.",
+  "@syncQueuePhotoRetried": {
+    "description": "Profile sync queue: a photo that could not upload."
+  },
+  "syncQueuePhotoRemove": "Send without this photo",
+  "@syncQueuePhotoRemove": {
+    "description": "Profile sync queue: a photo that could not upload."
+  },
+  "syncQueuePhotoRemoveTitle": "Send without this photo?",
+  "@syncQueuePhotoRemoveTitle": {
+    "description": "Profile sync queue: a photo that could not upload."
+  },
+  "syncQueuePhotoRemoveMessage": "This photo is evidence for the record. If you remove it, the record is sent without it and the photo cannot be recovered from the queue. Retake it from the record if you can.",
+  "@syncQueuePhotoRemoveMessage": {
+    "description": "Profile sync queue: a photo that could not upload."
+  },
+  "syncQueuePhotoRemoveConfirm": "Remove photo",
+  "@syncQueuePhotoRemoveConfirm": {
+    "description": "Profile sync queue: a photo that could not upload."
+  },
+  "syncQueuePhotoRemoved": "Photo removed. The record will be sent without it.",
+  "@syncQueuePhotoRemoved": {
+    "description": "Profile sync queue: a photo that could not upload."
+  },
+  "syncQueuePhotoActionFailed": "That did not work. Try again.",
+  "@syncQueuePhotoActionFailed": {
+    "description": "Profile sync queue: a photo that could not upload."
   }
 }

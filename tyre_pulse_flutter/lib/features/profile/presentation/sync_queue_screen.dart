@@ -24,7 +24,10 @@ import 'package:intl/intl.dart' show DateFormat;
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart'
+    show isLeakyMessage;
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/features/profile/sync_queue_providers.dart';
 
@@ -51,6 +54,12 @@ abstract final class SyncQueueScreenKeys {
   static ValueKey<String> item(String id) => ValueKey<String>('syncQueue.$id');
   static ValueKey<String> retry(String id) =>
       ValueKey<String>('syncQueue.retry.$id');
+  static ValueKey<String> photoFailed(String id) =>
+      ValueKey<String>('syncQueue.photoFailed.$id');
+  static ValueKey<String> photoRetry(String id) =>
+      ValueKey<String>('syncQueue.photoRetry.$id');
+  static ValueKey<String> photoRemove(String mediaId) =>
+      ValueKey<String>('syncQueue.photoRemove.$mediaId');
 }
 
 /// The plain-English name of a queue row: "Inspection ASSET" for a
@@ -243,6 +252,48 @@ class _SyncQueueScreenState extends ConsumerState<SyncQueueScreen>
     }
   }
 
+  Future<void> _retryPhotos(String commandId) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    try {
+      await ref.read(syncQueuePhotoRetryProvider)(commandId);
+      if (!mounted) return;
+      _showMessage(l10n.syncQueuePhotoRetried);
+      if (ref.read(syncQueueOnlineProvider).asData?.value == true) {
+        try {
+          await ref.read(syncNowRequestProvider)();
+          if (mounted) _startPolling();
+        } on Object {
+          // The next periodic run picks it up.
+        }
+      }
+    } on Object {
+      if (mounted) _showMessage(l10n.syncQueuePhotoActionFailed);
+    }
+  }
+
+  Future<void> _removePhoto(PendingMediaUpload media) async {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final bool sure = await TpDialog.confirm(
+      context: context,
+      title: l10n.syncQueuePhotoRemoveTitle,
+      message: l10n.syncQueuePhotoRemoveMessage,
+      confirmLabel: l10n.syncQueuePhotoRemoveConfirm,
+      isDestructive: true,
+    );
+    if (!sure || !mounted) return;
+    try {
+      final bool removed = await ref.read(syncQueuePhotoRemoveProvider)(
+        media.id,
+      );
+      if (!mounted) return;
+      _showMessage(
+        removed ? l10n.syncQueuePhotoRemoved : l10n.syncQueuePhotoActionFailed,
+      );
+    } on Object {
+      if (mounted) _showMessage(l10n.syncQueuePhotoActionFailed);
+    }
+  }
+
   Future<void> _retry(SyncQueueEntry entry) async {
     if (_retrying.contains(entry.id)) return;
     final AppLocalizations l10n = AppLocalizations.of(context);
@@ -318,6 +369,9 @@ class _SyncQueueScreenState extends ConsumerState<SyncQueueScreen>
     final AsyncValue<bool> online = ref.watch(syncQueueOnlineProvider);
     final bool syncing = run.isSyncingAt(DateTime.now());
 
+    final Map<String, List<PendingMediaUpload>> failedPhotos =
+        ref.watch(syncQueueFailedPhotosProvider).asData?.value ??
+            const <String, List<PendingMediaUpload>>{};
     final int pending = items.where((e) => e.state.isPending).length;
     final int attention =
         items.where((e) => e.state == SyncQueueItemState.needsAttention).length;
@@ -435,6 +489,11 @@ class _SyncQueueScreenState extends ConsumerState<SyncQueueScreen>
               onRetry: entry.state == SyncQueueItemState.needsAttention
                   ? () => unawaited(_retry(entry))
                   : null,
+              failedPhotos:
+                  failedPhotos[entry.id] ?? const <PendingMediaUpload>[],
+              onRetryPhotos: () => unawaited(_retryPhotos(entry.id)),
+              onRemovePhoto: (PendingMediaUpload m) =>
+                  unawaited(_removePhoto(m)),
             ),
             const SizedBox(height: TpSpace.sm),
           ],
@@ -449,11 +508,20 @@ class _SyncQueueItemCard extends StatelessWidget {
     required this.entry,
     required this.isRetrying,
     this.onRetry,
+    this.failedPhotos = const <PendingMediaUpload>[],
+    this.onRetryPhotos,
+    this.onRemovePhoto,
   });
 
   final SyncQueueEntry entry;
   final bool isRetrying;
   final VoidCallback? onRetry;
+
+  /// Photos of this record that could not upload. Shown with a Retry and a
+  /// confirmed "send without this photo", never dropped silently.
+  final List<PendingMediaUpload> failedPhotos;
+  final VoidCallback? onRetryPhotos;
+  final void Function(PendingMediaUpload media)? onRemovePhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -519,6 +587,52 @@ class _SyncQueueItemCard extends StatelessWidget {
               ),
             ),
           ],
+          if (failedPhotos.isNotEmpty) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            Text(
+              l10n.syncQueuePhotoFailed(failedPhotos.length),
+              key: SyncQueueScreenKeys.photoFailed(entry.id),
+              style: text.bodySmall?.copyWith(
+                color: palette.critical.base,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            for (final PendingMediaUpload media in failedPhotos)
+              if (_showablePhotoError(media.lastError) != null)
+                Text(
+                  _showablePhotoError(media.lastError)!,
+                  style: text.bodySmall?.copyWith(
+                    color: palette.textSecondary,
+                  ),
+                ),
+            const SizedBox(height: TpSpace.xs),
+            Wrap(
+              spacing: TpSpace.sm,
+              runSpacing: TpSpace.xs,
+              alignment: WrapAlignment.end,
+              children: <Widget>[
+                TpButton(
+                  key: SyncQueueScreenKeys.photoRetry(entry.id),
+                  label: l10n.syncQueuePhotoRetry,
+                  icon: Icons.refresh_rounded,
+                  variant: TpButtonVariant.secondary,
+                  isCompact: true,
+                  onPressed: onRetryPhotos,
+                ),
+                for (final PendingMediaUpload media in failedPhotos)
+                  TpButton(
+                    key: SyncQueueScreenKeys.photoRemove(media.id),
+                    label: l10n.syncQueuePhotoRemove,
+                    icon: Icons.hide_image_outlined,
+                    variant: TpButtonVariant.danger,
+                    isCompact: true,
+                    onPressed: onRemovePhoto == null
+                        ? null
+                        : () => onRemovePhoto!(media),
+                  ),
+              ],
+            ),
+          ],
           if (onRetry != null) ...<Widget>[
             const SizedBox(height: TpSpace.sm),
             Align(
@@ -538,4 +652,12 @@ class _SyncQueueItemCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A photo's stored reason when it is safe to show, else null.
+String? _showablePhotoError(String? raw) {
+  final String? message = raw?.trim();
+  if (message == null || message.isEmpty) return null;
+  if (message.length > 240 || isLeakyMessage(message)) return null;
+  return message;
 }

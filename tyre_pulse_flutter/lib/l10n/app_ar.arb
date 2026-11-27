@@ -3825,5 +3825,14 @@
   "profileDraftDiscardMessage": "سيُحذف كل ما سُجِّل في هذه المسودة من هذا الهاتف، بما في ذلك الصور والتواقيع. لا يمكن التراجع عن ذلك.",
   "profileDraftDiscarded": "تم تجاهل المسودة.",
   "profileDraftDiscardFailed": "تعذّر تجاهل المسودة. حاول مرة أخرى.",
-  "syncQueueInspectionRetried": "تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة."
+  "syncQueueInspectionRetried": "تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة.",
+  "syncQueuePhotoFailed": "{count, plural, =1{تعذّر رفع صورة} other{تعذّر رفع {count} صور}}",
+  "syncQueuePhotoRetry": "إعادة رفع الصورة",
+  "syncQueuePhotoRetried": "ستُعاد محاولة رفع الصورة في المزامنة التالية.",
+  "syncQueuePhotoRemove": "إرسال بدون هذه الصورة",
+  "syncQueuePhotoRemoveTitle": "الإرسال بدون هذه الصورة؟",
+  "syncQueuePhotoRemoveMessage": "هذه الصورة دليل على السجل. إذا أزلتها فسيُرسل السجل بدونها ولا يمكن استعادتها من القائمة. التقطها من جديد من السجل إن أمكن.",
+  "syncQueuePhotoRemoveConfirm": "إزالة الصورة",
+  "syncQueuePhotoRemoved": "أُزيلت الصورة. سيُرسل السجل بدونها.",
+  "syncQueuePhotoActionFailed": "لم ينجح ذلك. حاول مرة أخرى."
 }

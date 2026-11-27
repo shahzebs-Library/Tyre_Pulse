@@ -80,6 +80,36 @@ import 'package:tyre_pulse/features/work_orders/data/work_order_item.dart';
 import 'package:tyre_pulse/features/work_orders/domain/work_order_status.dart';
 import 'package:uuid/uuid.dart';
 
+/// Status values that mean a card is finished. Read with `not.in`, so a
+/// card with any other status (New, Open, In Progress, Assigned, a blank or
+/// an unexpected spelling) still reaches the phone.
+const String workOrderClosedStatusFilter =
+    '("Closed","Completed","Cancelled","closed","completed","cancelled",'
+    '"CLOSED","COMPLETED","CANCELLED")';
+
+/// Upper bound for the open-cards read. Open cards are a small set (tens),
+/// so this is a guard, not a page size.
+const int workOrderOpenReadLimit = 1000;
+
+/// Merges the open cards with the recent cards: open first, no card twice,
+/// each part keeping its own newest-first order.
+List<Map<String, dynamic>> mergeWorkOrderRows(
+  List<Map<String, dynamic>> open,
+  List<Map<String, dynamic>> recent,
+) {
+  final Set<Object?> seen = <Object?>{};
+  final List<Map<String, dynamic>> out = <Map<String, dynamic>>[];
+  for (final Map<String, dynamic> row in <Map<String, dynamic>>[
+    ...open,
+    ...recent,
+  ]) {
+    final Object? id = row['id'];
+    if (id != null && !seen.add(id)) continue;
+    out.add(row);
+  }
+  return out;
+}
+
 /// The `.or(...)` filter that scopes the list to [country], or `null` when
 /// the whole list should be read unfiltered.
 ///
@@ -239,15 +269,35 @@ final class SupabaseWorkOrderRepository
     String? country,
     int limit = 300,
   }) async {
+    final String? filter = workOrderCountryFilter(country);
     final List<Map<String, dynamic>> rows =
         await guard<List<Map<String, dynamic>>>(() async {
-      var query =
+      // Two reads, merged. The newest [limit] cards by open date can all be
+      // closed: old ERP imports carry future-dated closed cards (a day/month
+      // swap), so "newest 300" was 300 closed cards and every open card fell
+      // off the list (the phone showed 0 active while 49 were In Progress).
+      // Open cards are therefore read on their own, by status, server side.
+      var openQuery =
           _client.from(SupabaseTables.workOrders).select(workOrderListColumns);
-      final String? filter = workOrderCountryFilter(country);
+      var recentQuery =
+          _client.from(SupabaseTables.workOrders).select(workOrderListColumns);
       if (filter != null) {
-        query = query.or(filter);
+        openQuery = openQuery.or(filter);
+        recentQuery = recentQuery.or(filter);
       }
-      return await query.order('opened_at', ascending: false).limit(limit);
+      final List<List<Map<String, dynamic>>> parts =
+          await Future.wait(<Future<List<Map<String, dynamic>>>>[
+        openQuery
+            .not('status', 'in', workOrderClosedStatusFilter)
+            .order('opened_at', ascending: false)
+            .order('id')
+            .limit(workOrderOpenReadLimit),
+        recentQuery
+            .order('opened_at', ascending: false)
+            .order('id')
+            .limit(limit),
+      ]);
+      return mergeWorkOrderRows(parts[0], parts[1]);
     });
     return <WorkOrderItem>[
       for (final Map<String, dynamic> row in rows) WorkOrderItem.fromRow(row),

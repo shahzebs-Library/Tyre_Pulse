@@ -697,10 +697,13 @@ void main() {
     // findings) and the block when it was a third party or force majeure.
     // 2714 + 2 = 2716: the not-active screen's "Check again" button and its
     // "still not active" reply (accessBlockedCheckAgain / StillWaiting).
-    test('en, ar and ur each carry exactly 2716 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2716);
-      expect(_translatableKeys(ar).length, 2716);
-      expect(_translatableKeys(ur).length, 2716);
+    // 2716 + 1 = 2717: storeItemCopyCatalog, the Store item card (photos,
+    // bins, part numbers, barcodes and the approval-bound additions), packed
+    // like stockCountCopyCatalog.
+    test('en, ar and ur each carry exactly 2717 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2717);
+      expect(_translatableKeys(ar).length, 2717);
+      expect(_translatableKeys(ur).length, 2717);
     });
   });
 

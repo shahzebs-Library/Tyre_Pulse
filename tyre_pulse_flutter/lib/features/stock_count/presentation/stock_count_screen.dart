@@ -23,12 +23,11 @@ import 'package:tyre_pulse/features/inventory/presentation/transfers_screen.dart
 import 'package:tyre_pulse/features/stock_count/data/stock_count_recorder.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/stock_count_copy.dart';
-import 'package:tyre_pulse/features/stock_count/presentation/stock_item_detail_screen.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/store_history_copy.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/store_history_screen.dart';
+import 'package:tyre_pulse/features/stock_count/presentation/store_item_screen.dart';
 import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
-
-enum _StockFilter { all, low, stale }
+import 'package:tyre_pulse/features/stock_count/store_item_providers.dart';
 
 class StockCountScreen extends ConsumerStatefulWidget {
   const StockCountScreen({required this.route, super.key});
@@ -40,8 +39,30 @@ class StockCountScreen extends ConsumerStatefulWidget {
 
 class _StockCountScreenState extends ConsumerState<StockCountScreen> {
   final TextEditingController _search = TextEditingController();
-  _StockFilter _filter = _StockFilter.all;
+  StockCountFilter _filter = StockCountFilter.all;
   String? _busyId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Home's store tiles ask for a filter ("Need reorder" -> low stock,
+    // "Not counted" -> not counted today, "Items" -> all).
+    _filter =
+        ref.read(stockCountRequestedFilterProvider) ?? StockCountFilter.all;
+    // Cleared after the first frame: a provider may not change during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(stockCountRequestedFilterProvider.notifier).take();
+    });
+    ref.listenManual<StockCountFilter?>(stockCountRequestedFilterProvider, (
+      StockCountFilter? previous,
+      StockCountFilter? next,
+    ) {
+      if (next == null || !mounted) return;
+      final StockCountFilter? f =
+          ref.read(stockCountRequestedFilterProvider.notifier).take();
+      if (f != null) setState(() => _filter = f);
+    });
+  }
 
   /// The genuine / not genuine mark chosen on a line before "Matches" (and
   /// the starting choice in the count dialog). Null = not stated.
@@ -82,9 +103,10 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     }
   }
 
-  /// The item's detail: levels, receive stock, and its movement history.
+  /// The item card: photo, where it is, part numbers, brand, movements;
+  /// levels and receiving stay one tap further on its app bar.
   Future<void> _open(StockItem item) async {
-    await Navigator.of(context).push(StockItemDetailScreen.route(item));
+    await Navigator.of(context).push(StoreItemScreen.route(item));
     if (mounted) ref.invalidate(stockItemsProvider);
   }
 
@@ -275,6 +297,14 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
   Widget build(BuildContext context) {
     final StockCountCopy copy = StockCountCopy.of(context);
     final AsyncValue<List<StockItem>> state = ref.watch(stockItemsProvider);
+    // The last list that loaded: shown while a reload runs or after it failed
+    // (offline), so the shelf never disappears behind a spinner.
+    final List<StockItem>? cached = ref.watch(
+      lastStockItemsProvider.select(
+        (Map<String, List<StockItem>> m) =>
+            m[LastStockItemsNotifier.keyFor(ref.watch(activeCountryProvider))],
+      ),
+    );
     final String fallback = TpBackFallbacks.forRoute(widget.route);
     return TpScaffold(
       backFallback: fallback,
@@ -370,27 +400,57 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
           ),
         ],
       ),
-      body: state.when(
-        loading: () => const TpLoadingState(),
-        error: (Object error, StackTrace stackTrace) => TpErrorState(
-          error: switch (error) {
-            final SupabaseFailure failure => failure.error,
-            final AppError appError => appError,
-            _ => AppError(
-                kind: AppErrorKind.unknown,
-                message: copy('loadFailed'),
-                cause: error,
-                isRetryable: true,
-              ),
-          },
-          onRetry: () => ref.invalidate(stockItemsProvider),
-        ),
-        data: (List<StockItem> rows) => _content(copy, rows),
-      ),
+      body: _body(copy, state, cached),
     );
   }
 
-  Widget _content(StockCountCopy copy, List<StockItem> rows) {
+  /// The list, kept on screen from the last good load while a reload runs
+  /// or after it failed, with a banner saying so. A full screen spinner or
+  /// error only when nothing was ever loaded.
+  Widget _body(
+    StockCountCopy copy,
+    AsyncValue<List<StockItem>> state,
+    List<StockItem>? cached,
+  ) {
+    if (state is AsyncData<List<StockItem>>) return _content(copy, state.value);
+    final List<StockItem>? last = cached ?? state.asData?.value;
+    if (state.isLoading) {
+      return last == null
+          ? const TpLoadingState()
+          : _content(copy, last, banner: _ListBanner.refreshing);
+    }
+    final Object? error = state.error;
+    if (last != null) {
+      return _content(
+        copy,
+        last,
+        banner: error is SupabaseFailure && error.isConnectivity
+            ? _ListBanner.offline
+            : _ListBanner.refreshFailed,
+      );
+    }
+    return TpErrorState(
+      error: switch (error) {
+        final SupabaseFailure failure => failure.error,
+        final AppError appError => appError,
+        _ => AppError(
+            kind: AppErrorKind.unknown,
+            message: copy('loadFailed'),
+            cause: error,
+            isRetryable: true,
+          ),
+      },
+      onRetry: () => ref.invalidate(stockItemsProvider),
+    );
+  }
+
+  Widget _content(
+    StockCountCopy copy,
+    List<StockItem> rows, {
+    _ListBanner? banner,
+  }) {
+    // One thumbnail / brand read for the whole register, not per filter.
+    final String facesKey = stockFacesKey(rows);
     final DateTime now = DateTime.now();
     final Map<String, DateTime> local = ref.watch(stockCountedTodayProvider);
     final bool canAdjust = ref.watch(canPostCountDifferenceProvider);
@@ -400,9 +460,9 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     final String term = _search.text.trim().toLowerCase();
     final List<StockItem> visible = rows.where((StockItem row) {
       final bool filterMatch = switch (_filter) {
-        _StockFilter.all => true,
-        _StockFilter.low => row.needsReorder,
-        _StockFilter.stale => !counted(row),
+        StockCountFilter.all => true,
+        StockCountFilter.low => row.needsReorder,
+        StockCountFilter.stale => !counted(row),
       };
       if (!filterMatch) return false;
       if (term.isEmpty) return true;
@@ -430,6 +490,10 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
           TpSpace.xxxl,
         ),
         children: <Widget>[
+          if (banner != null) ...<Widget>[
+            _ListBannerView(banner: banner, copy: copy),
+            const SizedBox(height: TpSpace.sm),
+          ],
           // Equal-height tiles: a label that wraps (e.g. "Need reorder") must
           // not push its tile out of line with the others.
           IntrinsicHeight(
@@ -468,23 +532,23 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
             ),
           ),
           const SizedBox(height: TpSpace.sm),
-          SegmentedButton<_StockFilter>(
-            segments: <ButtonSegment<_StockFilter>>[
-              ButtonSegment<_StockFilter>(
-                value: _StockFilter.all,
+          SegmentedButton<StockCountFilter>(
+            segments: <ButtonSegment<StockCountFilter>>[
+              ButtonSegment<StockCountFilter>(
+                value: StockCountFilter.all,
                 label: Text(copy('all')),
               ),
-              ButtonSegment<_StockFilter>(
-                value: _StockFilter.low,
+              ButtonSegment<StockCountFilter>(
+                value: StockCountFilter.low,
                 label: Text(copy('low')),
               ),
-              ButtonSegment<_StockFilter>(
-                value: _StockFilter.stale,
+              ButtonSegment<StockCountFilter>(
+                value: StockCountFilter.stale,
                 label: Text(copy('stale')),
               ),
             ],
-            selected: <_StockFilter>{_filter},
-            onSelectionChanged: (Set<_StockFilter> value) =>
+            selected: <StockCountFilter>{_filter},
+            onSelectionChanged: (Set<StockCountFilter> value) =>
                 setState(() => _filter = value.single),
           ),
           const SizedBox(height: TpSpace.md),
@@ -513,6 +577,7 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                 onAdjust: (int delta) => unawaited(_adjust(item, delta, copy)),
                 onMove: (JobCardMove move) => unawaited(_move(item, move)),
                 onOpen: () => unawaited(_open(item)),
+                facesKey: facesKey,
                 inventoryCopy: InventoryCopy.of(context),
               ),
               const SizedBox(height: TpSpace.sm),
@@ -796,10 +861,14 @@ class _StockCard extends StatelessWidget {
     required this.onMove,
     required this.inventoryCopy,
     required this.busy,
+    required this.facesKey,
     this.onOpen,
   });
   final StockItem item;
   final VoidCallback? onOpen;
+
+  /// [stockFacesKey] of the list, so every card shares one photo/brand read.
+  final String facesKey;
   final StockCountCopy copy;
   final InventoryCopy inventoryCopy;
 
@@ -871,6 +940,7 @@ class _StockCard extends StatelessWidget {
               .titleSmall
               ?.copyWith(fontWeight: FontWeight.w800),
         ),
+        _BrandLine(item: item, facesKey: facesKey),
         if (item.site != null)
           Text(
             item.site!,
@@ -901,16 +971,8 @@ class _StockCard extends StatelessWidget {
         ),
       ],
     );
-    final Widget icon = DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.surfaceAlt,
-        borderRadius: BorderRadius.circular(TpRadius.md),
-      ),
-      child: const Padding(
-        padding: EdgeInsets.all(TpSpace.md),
-        child: Icon(Icons.inventory_2_outlined),
-      ),
-    );
+    // The item's photo when the catalogue has one, else the stock icon.
+    final Widget icon = StockItemThumb(item: item, facesKey: facesKey);
 
     if (canAdjust) {
       // An approver keeps +/- (each tap is an audited movement) and Count.
@@ -1229,6 +1291,86 @@ class _CountDialogState extends State<_CountDialog> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Why the list on screen is the last loaded one.
+enum _ListBanner { offline, refreshFailed, refreshing }
+
+class _ListBannerView extends StatelessWidget {
+  const _ListBannerView({required this.banner, required this.copy});
+  final _ListBanner banner;
+  final StockCountCopy copy;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final (IconData icon, String text, TpStatusColors tone) = switch (banner) {
+      _ListBanner.offline => (
+          Icons.cloud_off_rounded,
+          copy('offlineShowingLast'),
+          palette.warning,
+        ),
+      _ListBanner.refreshFailed => (
+          Icons.error_outline_rounded,
+          copy('refreshFailedShowingLast'),
+          palette.warning,
+        ),
+      _ListBanner.refreshing => (
+          Icons.sync_rounded,
+          copy('refreshing'),
+          palette.info,
+        ),
+    };
+    return Semantics(
+      liveRegion: true,
+      child: DecoratedBox(
+        key: Key('stock.banner.${banner.name}'),
+        decoration: BoxDecoration(
+          color: tone.soft,
+          borderRadius: BorderRadius.circular(TpRadius.md),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(TpSpace.sm),
+          child: Row(
+            children: <Widget>[
+              Icon(icon, size: 20, color: tone.onSoft),
+              const SizedBox(width: TpSpace.sm),
+              Expanded(
+                child: Text(text, style: TextStyle(color: tone.onSoft)),
+              ),
+              if (banner == _ListBanner.refreshing)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The brand from the company catalogue (or the ERP item), when known.
+class _BrandLine extends ConsumerWidget {
+  const _BrandLine({required this.item, required this.facesKey});
+  final StockItem item;
+  final String facesKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final String? brand = stockItemBrand(ref, item, facesKey: facesKey);
+    if (brand == null) return const SizedBox.shrink();
+    return Text(
+      brand,
+      key: Key('stock.brand.${item.id}'),
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: TpPalette.of(context).textSecondary,
+            fontWeight: FontWeight.w700,
+          ),
     );
   }
 }

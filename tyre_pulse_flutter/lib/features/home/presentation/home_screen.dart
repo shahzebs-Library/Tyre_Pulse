@@ -83,6 +83,8 @@
 /// screen are excluded so a Home control can never lead to a placeholder.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -885,7 +887,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         (snapshot == null ||
             snapshot.attempted.contains(MyWorkSource.inspectionPlans));
     final DateTime today = now ?? DateTime.now();
-    void openStock() => context.push(const StockCountRoute().location);
+    // Each store tile opens Stock Count on its own filter.
+    void openStock(StockCountFilter filter) {
+      ref.read(stockCountRequestedFilterProvider.notifier).request(filter);
+      unawaited(context.push(const StockCountRoute().location));
+    }
+
     String stockLabel(String key) =>
         _catalogLabel(l10n.stockCountCopyCatalog, key);
     return <_SummaryTileData>[
@@ -895,12 +902,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         tile<List<StockItem>>(
           id: 'stockItems',
           icon: Icons.inventory_2_outlined,
-          gem: TpGemSpec.stockCount,
+          gem: TpGemSpec.stockItems,
           tone: palette.info,
           label: stockLabel('items'),
           state: store,
           value: (List<StockItem> v) => '${v.length}',
-          onTap: openStock,
+          onTap: () => openStock(StockCountFilter.all),
         ),
         tile<List<StockItem>>(
           id: 'stockReorder',
@@ -911,19 +918,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           state: store,
           value: (List<StockItem> v) =>
               '${v.where((StockItem i) => i.needsReorder).length}',
-          onTap: openStock,
+          onTap: () => openStock(StockCountFilter.low),
         ),
         tile<List<StockItem>>(
           id: 'stockNotCounted',
-          icon: Icons.fact_check_outlined,
-          gem: TpGemSpec.inspectionsDue,
+          icon: Icons.pending_actions_outlined,
+          gem: TpGemSpec.stockNotCounted,
           tone: palette.neutral,
           label: stockLabel('notToday'),
           state: store,
           value: (List<StockItem> v) => '${v.where(
                 (StockItem i) => !stockLineCountedToday(i, today, countedToday),
               ).length}',
-          onTap: openStock,
+          onTap: () => openStock(StockCountFilter.stale),
         ),
       ],
       if (planHasInspections)

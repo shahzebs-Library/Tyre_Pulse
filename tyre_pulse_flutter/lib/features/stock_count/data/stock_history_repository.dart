@@ -66,6 +66,9 @@ String? validateStockPost({
   return null;
 }
 
+/// How long a ledger read may wait for an answer.
+const Duration stockHistoryReadTimeout = Duration(seconds: 20);
+
 abstract interface class StockHistoryRepository {
   /// One page of the ledger, newest first, with an id tiebreak so paging
   /// never drops or repeats a row that shares a timestamp.
@@ -140,34 +143,42 @@ final class DefaultStockHistoryRepository
     required int offset,
     required int limit,
   }) {
-    return guard<List<StockMovement>>(() async {
-      final List<Map<String, dynamic>> rows = await _filtered(
-        _movementCols,
-        query,
-      )
-          .order('effective_at', ascending: false)
-          .order('id', ascending: false)
-          .range(offset, offset + limit - 1);
-      final List<StockMovement> list = rows
-          .map(StockMovement.fromRow)
-          .where((StockMovement m) => m.id.isNotEmpty)
-          .toList(growable: false);
-      return _withNames(list);
-    });
+    return guard<List<StockMovement>>(
+      () async {
+        final List<Map<String, dynamic>> rows = await _filtered(
+          _movementCols,
+          query,
+        )
+            .order('effective_at', ascending: false)
+            .order('id', ascending: false)
+            .range(offset, offset + limit - 1);
+        final List<StockMovement> list = rows
+            .map(StockMovement.fromRow)
+            .where((StockMovement m) => m.id.isNotEmpty)
+            .toList(growable: false);
+        return _withNames(list);
+        // A read with no answer (offline, auth retrying) becomes an offline
+        // error instead of an endless spinner.
+      },
+      timeout: stockHistoryReadTimeout,
+    );
   }
 
   @override
   Future<MovementSummary> summary(StockHistoryQuery query) {
-    return guard<MovementSummary>(() async {
-      final List<Map<String, dynamic>> rows = await fetchStockPages(
-        (int from, int to) => _filtered(
-          'id,movement_type,source_doc_type,qty_change,effective_at,'
-          'posted_at,created_at',
-          query,
-        ).order('effective_at', ascending: false).order('id').range(from, to),
-      );
-      return summarizeMovements(rows.map(StockMovement.fromRow));
-    });
+    return guard<MovementSummary>(
+      () async {
+        final List<Map<String, dynamic>> rows = await fetchStockPages(
+          (int from, int to) => _filtered(
+            'id,movement_type,source_doc_type,qty_change,effective_at,'
+            'posted_at,created_at',
+            query,
+          ).order('effective_at', ascending: false).order('id').range(from, to),
+        );
+        return summarizeMovements(rows.map(StockMovement.fromRow));
+      },
+      timeout: stockHistoryReadTimeout,
+    );
   }
 
   Future<List<StockMovement>> _withNames(List<StockMovement> list) async {

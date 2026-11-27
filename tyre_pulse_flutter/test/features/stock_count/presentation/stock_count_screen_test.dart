@@ -10,6 +10,8 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
@@ -132,7 +134,11 @@ WorkspaceContext _workspace(RoleId role) => WorkspaceContext(
       activeCountry: 'KSA',
     );
 
-List<Override> _overrides(_Repo repo, {RoleId role = RoleId.storeKeeper}) {
+List<Override> _overrides(
+  _Repo repo, {
+  RoleId role = RoleId.storeKeeper,
+  Override? items,
+}) {
   final _Store store = _Store();
   int n = 0;
   return <Override>[
@@ -140,8 +146,9 @@ List<Override> _overrides(_Repo repo, {RoleId role = RoleId.storeKeeper}) {
         .overrideWithValue(AccessState(role: UserRole.known(role))),
     workspaceContextProvider.overrideWithValue(_workspace(role)),
     activeCountryProvider.overrideWithValue('KSA'),
-    stockItemsProvider
-        .overrideWith((Ref ref) async => const <StockItem>[_binA, _binB]),
+    items ??
+        stockItemsProvider
+            .overrideWith((Ref ref) async => const <StockItem>[_binA, _binB]),
     inventoryDeviceIdProvider.overrideWith((Ref ref) async => 'device-1'),
     stockCountRecorderProvider.overrideWithValue(
       StockCountRecorder(
@@ -323,5 +330,117 @@ void main() {
     await tester.pumpWidget(_app(_overrides(_Repo())));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'offline reload keeps the last loaded list on screen with a banner, '
+      'never a full screen spinner', (WidgetTester tester) async {
+    final _Repo repo = _Repo();
+    int loads = 0;
+    final List<Override> overrides = _overrides(
+      repo,
+      items: stockItemsProvider.overrideWith((Ref ref) async {
+        loads++;
+        if (loads == 1) {
+          ref
+              .read(lastStockItemsProvider.notifier)
+              .remember('KSA', const <StockItem>[_binA, _binB]);
+          return const <StockItem>[_binA, _binB];
+        }
+        throw const SupabaseFailure(
+          error: AppError(
+            kind: AppErrorKind.network,
+            message: 'offline',
+          ),
+          cause: SupabaseFailureCause.offline,
+        );
+      }),
+    );
+    await tester.pumpWidget(_app(overrides));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('stock.item.line-a')), findsOneWidget);
+
+    ProviderScope.containerOf(
+      tester.element(find.byType(StockCountScreen)),
+    ).invalidate(stockItemsProvider);
+    await tester.pump();
+    expect(find.byKey(const Key('stock.item.line-a')), findsOneWidget);
+    await tester.pumpAndSettle();
+
+    expect(loads, 2);
+    expect(find.byKey(const Key('stock.banner.offline')), findsOneWidget);
+    expect(
+      find.text('Offline - showing last loaded data'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('stock.item.line-a')), findsOneWidget);
+    expect(find.byKey(const Key('stock.item.line-b')), findsOneWidget);
+  });
+
+  testWidgets("Home's Need reorder tile opens the list on low stock",
+      (WidgetTester tester) async {
+    final _Repo repo = _Repo();
+    const StockItem plenty = StockItem(
+      id: 'line-c',
+      site: 'DEMO YARD',
+      description: 'DEMO Plenty',
+      quantity: 40,
+      minimum: 2,
+      country: 'KSA',
+    );
+    const StockItem low = StockItem(
+      id: 'line-d',
+      site: 'DEMO YARD',
+      description: 'DEMO Low',
+      quantity: 1,
+      minimum: 2,
+      country: 'KSA',
+    );
+    final ProviderContainer container = ProviderContainer(
+      overrides: _overrides(
+        repo,
+        items: stockItemsProvider
+            .overrideWith((Ref ref) async => const <StockItem>[plenty, low]),
+      ),
+    );
+    addTearDown(container.dispose);
+    container
+        .read(stockCountRequestedFilterProvider.notifier)
+        .request(StockCountFilter.low);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          localizationsDelegates: TpLocalizations.delegates,
+          supportedLocales: TpLocalizations.supportedLocales,
+          home: StockCountScreen(route: StockCountRoute()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<SegmentedButton<StockCountFilter>>(
+            find.byType(SegmentedButton<StockCountFilter>),
+          )
+          .selected,
+      <StockCountFilter>{StockCountFilter.low},
+    );
+    expect(
+      find.byKey(const Key('stock.item.line-c'), skipOffstage: false),
+      findsNothing,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('stock.item.line-d')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const Key('stock.item.line-d')), findsOneWidget);
+    expect(
+      container.read(stockCountRequestedFilterProvider),
+      isNull,
+      reason: 'the request is applied once, then cleared',
+    );
   });
 }

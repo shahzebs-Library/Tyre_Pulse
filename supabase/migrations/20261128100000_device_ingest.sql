@@ -34,8 +34,20 @@
 --   * any unexpected error in one message rejects that message only
 --     ('processing_error'); the batch, the loop and the rate counter go on.
 --   * a key bound to a device only ever updates that device's last_seen_at.
---   * device_ingest_purge(days) trims old usage minutes and rejected ledger
---     rows (service_role only, not scheduled; run from a cron when wanted).
+--   * the purge function lives in its own follow-up migration,
+--     20261128100500_device_ingest_purge.sql (its body has a DELETE).
+--
+-- Third review fixes (2026-11-28):
+--   * the direct SELECT policies on the ledger, unmatched, tread and fuel
+--     level tables now also apply the country wall (app_can_see_country on
+--     the row's country, and for ledger / unmatched rows the key's countries
+--     via _device_key_visible). Super admins and ALL profiles still see all.
+--     device_ingest_settings is org-wide config with no country data and stays
+--     org + admin.
+--   * device_ingest_dry_run refuses an admin with no country, like key_create.
+--   * overview counts and recent errors only count what the admin may see;
+--     a match outside the key's countries is refused with a clear message, and
+--     a successful match records the target row id.
 --
 -- What this adds (additive only, no existing row is changed):
 --   * device_ingest_keys      one hashed key per device or per integration,
@@ -90,7 +102,7 @@
 --     public.device_ingest_resolve_unmatched(uuid,uuid), public.device_ingest_dismiss_unmatched(uuid),
 --     public.device_ingest_dry_run(jsonb), public.device_ingest_save_settings(jsonb),
 --     public._device_ingest_process(uuid,uuid,jsonb,boolean,uuid), public._device_resolve_asset(uuid,uuid,jsonb,uuid,text[]),
---     public._device_admin_countries(), public._device_countries_visible(text[]), public.device_ingest_purge(int),
+--     public._device_admin_countries(), public._device_countries_visible(text[]), public._device_key_visible(uuid),
 --     public._device_alert(uuid,text,text,text,text,uuid,text), public._device_ingest_require_admin(),
 --     public._device_norm(text);
 --   drop table if exists public.device_alert_notices, public.device_ingest_unmatched,
@@ -281,8 +293,15 @@ end $rfid$;
 
 -- RLS: org wall + admin-only read; no client write policy anywhere (all
 -- writes go through the DEFINER functions below).
+-- Policy helper: may the caller see rows written through this key? DEFINER so
+-- a policy can read device_ingest_keys without a client grant on it.
+create or replace function public._device_key_visible(p_key uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public._device_countries_visible((select k.countries from public.device_ingest_keys k where k.id = p_key))
+$$;
+
 do $rls$
-declare t text;
+declare t text; v_extra text;
 begin
   foreach t in array array['device_ingest_keys','device_ingest_usage','device_ingest_messages','device_ingest_unmatched',
     'device_ingest_settings','device_alert_notices','tread_depth_readings','fuel_level_readings'] loop
@@ -294,8 +313,15 @@ begin
     if exists (select 1 from pg_policies where schemaname = 'public' and tablename = t and policyname = t || '_admin_read') then
       execute format('drop policy %I on public.%I', t || '_admin_read', t);
     end if;
+    -- country wall on top of org + admin (settings has no country data)
+    v_extra := case t
+      when 'device_ingest_messages' then ' and public.app_can_see_country(country) and public._device_key_visible(key_id)'
+      when 'device_ingest_unmatched' then ' and public._device_key_visible(key_id)'
+      when 'tread_depth_readings' then ' and public.app_can_see_country(country)'
+      when 'fuel_level_readings' then ' and public.app_can_see_country(country)'
+      else '' end;
     execute format('create policy %I on public.%I for select to authenticated using (
-      organisation_id = (select public.app_current_org()) and (select public.app_is_org_admin()))', t || '_admin_read', t);
+      organisation_id = (select public.app_current_org()) and (select public.app_is_org_admin())%s)', t || '_admin_read', t, v_extra);
     execute format('grant select on public.%I to authenticated', t);
   end loop;
 end $rls$;
@@ -708,7 +734,7 @@ begin
      where organisation_id = p_org and public._device_norm(device_id) = public._device_norm(v_dev_txt)
        and (v_countries is null or country is null or lower(country) = any (select lower(btrim(x)) from unnest(v_countries) x));
   end if;
-  return jsonb_build_object('status', 'accepted', 'target_table', v_table, 'asset_no', v_asset);
+  return jsonb_build_object('status', 'accepted', 'target_table', v_table, 'asset_no', v_asset, 'target_id', v_tid);
 exception
   when invalid_text_representation or numeric_value_out_of_range or check_violation or not_null_violation then
     -- A bad value in one message rejects that message only. The savepoint of
@@ -868,15 +894,20 @@ begin
   return jsonb_build_object(
     'by_type', coalesce((select jsonb_object_agg(msg_type, n) from (
         select msg_type, count(*) n from public.device_ingest_messages
-         where organisation_id = v_org and received_at > now() - interval '24 hours' group by msg_type) s), '{}'::jsonb),
+         where organisation_id = v_org and received_at > now() - interval '24 hours'
+           and public.app_can_see_country(country) and public._device_key_visible(key_id) group by msg_type) s), '{}'::jsonb),
     'by_status', coalesce((select jsonb_object_agg(status, n) from (
         select status, count(*) n from public.device_ingest_messages
-         where organisation_id = v_org and received_at > now() - interval '24 hours' group by status) s), '{}'::jsonb),
-    'unmatched_open', (select count(*) from public.device_ingest_unmatched where organisation_id = v_org and status = 'open'),
-    'last_message_at', (select max(received_at) from public.device_ingest_messages where organisation_id = v_org),
+         where organisation_id = v_org and received_at > now() - interval '24 hours'
+           and public.app_can_see_country(country) and public._device_key_visible(key_id) group by status) s), '{}'::jsonb),
+    'unmatched_open', (select count(*) from public.device_ingest_unmatched
+                        where organisation_id = v_org and status = 'open' and public._device_key_visible(key_id)),
+    'last_message_at', (select max(received_at) from public.device_ingest_messages
+                         where organisation_id = v_org and public.app_can_see_country(country) and public._device_key_visible(key_id)),
     'recent_errors', coalesce((select jsonb_agg(e) from (
         select received_at, msg_type, status, error, key_id from public.device_ingest_messages
          where organisation_id = v_org and status in ('rejected','quarantined')
+           and public.app_can_see_country(country) and public._device_key_visible(key_id)
          order by received_at desc limit 20) e), '[]'::jsonb),
     'settings', (select to_jsonb(s) - 'organisation_id' from public.device_ingest_settings s where organisation_id = v_org));
 end $$;
@@ -900,14 +931,21 @@ declare
   v_org uuid := public._device_ingest_require_admin();
   u public.device_ingest_unmatched%rowtype;
   v_r jsonb;
+  v_kc text[];
+  v_vc text;
 begin
   select * into u from public.device_ingest_unmatched where id = p_id and organisation_id = v_org and status = 'open' for update;
-  if not found or not public._device_countries_visible((select countries from public.device_ingest_keys where id = u.key_id)) then
+  if not found or not public._device_key_visible(u.key_id) then
     raise exception 'Reading not found or already handled' using errcode = '22023';
   end if;
-  if not exists (select 1 from public.vehicle_fleet where id = p_vehicle_id and organisation_id = v_org
-                   and public.app_can_see_country(country)) then
+  select country into v_vc from public.vehicle_fleet where id = p_vehicle_id and organisation_id = v_org;
+  if not found or not public.app_can_see_country(v_vc) then
     raise exception 'Asset not found' using errcode = '22023';
+  end if;
+  select countries into v_kc from public.device_ingest_keys where id = u.key_id;
+  if v_kc is not null and v_vc is not null
+     and not exists (select 1 from unnest(v_kc) x where lower(btrim(x)) = lower(btrim(v_vc))) then
+    raise exception 'That asset is outside the countries this key may write to' using errcode = '22023';
   end if;
   v_r := public._device_ingest_process(v_org, u.key_id, u.payload, false, p_vehicle_id);
   if v_r->>'status' <> 'accepted' then
@@ -916,7 +954,7 @@ begin
   update public.device_ingest_unmatched set status = 'matched', resolved_by = auth.uid(), resolved_at = now(),
          resolved_asset_no = v_r->>'asset_no' where id = p_id;
   update public.device_ingest_messages set status = 'accepted', target_table = v_r->>'target_table', asset_no = v_r->>'asset_no',
-         error = null where id = u.message_id;
+         country = v_vc, target_id = nullif(v_r->>'target_id', '')::uuid, error = null where id = u.message_id;
   return v_r;
 end $$;
 
@@ -938,6 +976,9 @@ declare
   m jsonb;
   i int := 0;
 begin
+  if public._device_admin_countries() is not null and cardinality(public._device_admin_countries()) = 0 then
+    raise exception 'No country is assigned to your account' using errcode = '42501';
+  end if;
   if jsonb_typeof(p_messages) <> 'array' or jsonb_array_length(p_messages) > 50 then
     raise exception 'Send up to 50 messages' using errcode = '22023';
   end if;
@@ -968,20 +1009,6 @@ begin
     alert_repeat_hours = excluded.alert_repeat_hours, max_reading_age_days = excluded.max_reading_age_days, updated_by = excluded.updated_by, updated_at = now();
 end $$;
 
--- Retention: usage minutes are only needed for the current minute; rejected
--- ledger rows are monitoring only. Not scheduled here; call from a cron job.
-create or replace function public.device_ingest_purge(p_days int default 90)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_u int; v_r int;
-begin
-  delete from public.device_ingest_usage where minute < now() - interval '1 day';
-  get diagnostics v_u = row_count;
-  delete from public.device_ingest_messages
-   where status = 'rejected' and received_at < now() - make_interval(days => least(greatest(coalesce(p_days, 90), 7), 3650));
-  get diagnostics v_r = row_count;
-  return jsonb_build_object('usage_rows', v_u, 'rejected_rows', v_r);
-end $$;
-
 -- ---------------------------------------------------------------------------
 -- Grants. Order is load-bearing (V500): grant the intended role first, then
 -- revoke PUBLIC, then revoke anon by name.
@@ -1008,9 +1035,6 @@ begin
     'public.device_ingest_submit(uuid,jsonb)',
     'public._device_ingest_process(uuid,uuid,jsonb,boolean,uuid)',
     'public._device_resolve_asset(uuid,uuid,jsonb,uuid,text[])',
-    'public._device_admin_countries()',
-    'public._device_countries_visible(text[])',
-    'public.device_ingest_purge(int)',
     'public._device_alert(uuid,text,text,text,text,uuid,text)',
     'public._device_ingest_require_admin()'] loop
     execute format('revoke execute on function %s from public', f);
@@ -1019,7 +1043,14 @@ begin
   end loop;
   execute 'grant execute on function public.device_ingest_key_lookup(text) to service_role';
   execute 'grant execute on function public.device_ingest_submit(uuid,jsonb) to service_role';
-  execute 'grant execute on function public.device_ingest_purge(int) to service_role';
+  -- policy helpers: they only answer for the caller's own scope, and the
+  -- SELECT policies above call them as the signed-in user.
+  foreach f in array array['public._device_admin_countries()', 'public._device_countries_visible(text[])',
+    'public._device_key_visible(uuid)'] loop
+    execute format('grant execute on function %s to authenticated', f);
+    execute format('revoke execute on function %s from public', f);
+    execute format('revoke execute on function %s from anon', f);
+  end loop;
 end $g$;
 
 commit;

@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
 const migration = await readFile(new URL('../migrations/20261128100000_device_ingest.sql', import.meta.url), 'utf8')
+const purgeMigration = await readFile(new URL('../migrations/20261128100500_device_ingest_purge.sql', import.meta.url), 'utf8')
 const ORG = '00000000-0000-0000-0000-000000000001'
 const OTHER = '00000000-0000-0000-0000-000000000099'
 const ADMIN = '00000000-0000-0000-0000-0000000000a1'
@@ -78,6 +79,7 @@ async function setup() {
       driver_name text, event_type text, severity text, event_at timestamptz, location text, speed_kmh numeric, video_url text, notes text);
   `)
   await db.exec(migration)
+  await db.exec(purgeMigration)
   return db
 }
 
@@ -299,6 +301,25 @@ test('device ingest: admin-only management, idempotent ingest, quarantine, alert
       JSON.stringify([{ type: 'gps', message_id: 'ksa1', asset: { asset_no: 'GN103', country: 'UAE' }, data: { lat: 1, lon: 1 } }])])).r
     assert.equal(w.results[0].status, 'quarantined')
     assert.equal(w.results[0].reason, 'unknown')
+  })
+
+  await t.test('direct table reads apply the country wall too', async () => {
+    await as(db, KSA_ADMIN)
+    const rows = (await db.query(`SELECT key_id, country FROM device_ingest_messages`)).rows
+    assert.ok(rows.length > 0)
+    assert.ok(rows.every((x) => x.key_id !== keyId && (x.country === null || x.country === 'KSA')))
+    assert.ok((await db.query(`SELECT key_id FROM device_ingest_unmatched`)).rows.every((x) => x.key_id !== keyId))
+    const ov = (await one(db, `SELECT device_ingest_overview() o`)).o
+    assert.ok(ov.recent_errors.every((x) => x.key_id !== keyId))
+    await as(db, ADMIN)
+    assert.ok((await db.query(`SELECT 1 FROM device_ingest_messages WHERE key_id = $1`, [keyId])).rows.length > 0)
+  })
+
+  await t.test('an admin with no country cannot dry run', async () => {
+    await db.exec(`RESET ROLE; UPDATE profiles SET country = '{}' WHERE id = '${KSA_ADMIN}'`)
+    await as(db, KSA_ADMIN)
+    await assert.rejects(db.query(`SELECT device_ingest_dry_run('[]'::jsonb)`), (e) => e.code === '42501')
+    await db.exec(`RESET ROLE; UPDATE profiles SET country = '{KSA}' WHERE id = '${KSA_ADMIN}'`)
   })
 
   await t.test('a bound key only updates its own device last_seen', async () => {

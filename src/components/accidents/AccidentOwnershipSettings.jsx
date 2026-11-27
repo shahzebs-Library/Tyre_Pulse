@@ -19,7 +19,7 @@ import useAccidentOwnershipText from './useAccidentOwnershipText'
  *                is "Not set": no timer runs for that step.
  *   NotifyTab  - who is told about each event (step owner, roles, named people,
  *                the driver), push on/off, stalled days.
- * Writes go through RLS (Admin and super admin only); readers see a read-only view.
+ * Writes go through RLS (Admin and super admin only); everyone else sees a read-only view.
  */
 
 const inputCls =

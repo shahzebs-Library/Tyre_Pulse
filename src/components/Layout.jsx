@@ -333,7 +333,7 @@ const NAV_GROUPS = [
       { to: '/insurance-claims', label: 'Insurance Claims', icon: ShieldAlert, roles: ['Admin', 'Manager', 'Director'] },
       { to: '/insurance-policies', label: 'Insurance Policies', icon: Shield, adminOnly: A },
       { to: '/recall-tracker', label: 'Recall Tracker',  icon: AlertCircle, adminOnly: A },
-      { to: '/accident-workflow-settings', label: 'Accident Workflow', icon: GitBranch, adminOnly: true },
+      { to: '/accident-workflow-settings', label: 'Accident Workflow', icon: GitBranch, roles: ANALYTICS_ROLES },
     ],
   },
   {

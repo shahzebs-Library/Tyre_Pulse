@@ -47,9 +47,7 @@ import { compareValues } from '../lib/consoleTable'
 import { reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
-// Owner/notify routing decides who sees and is told about every case, so the
-// whole page is Admin-only (super admins pass); the database enforces the same.
-const WRITE_ROLES = new Set(['Admin'])
+const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
 // Recipient role choices for routing rules (Title Case, mirrors the app roles).
 const ROLE_CHOICES = [
@@ -93,6 +91,9 @@ export default function AccidentWorkflowSettings() {
   const { profile, isSuperAdmin } = useAuth()
   const { t: tr } = useLanguage()
   const canWrite = isSuperAdmin === true || WRITE_ROLES.has(profile?.role)
+  // Step owners and who is told decide who sees and hears about every case, so
+  // those two tabs are Admin-only (super admins pass); the database enforces it.
+  const canWriteOwnership = isSuperAdmin === true || profile?.role === 'Admin'
 
   // The active tab is URL-borne so a link can open a given section.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -159,13 +160,13 @@ export default function AccidentWorkflowSettings() {
         refreshing={refreshing}
       />
 
-      {!canWrite && (
+      {(!canWrite || (['owners', 'notify'].includes(tab) && !canWriteOwnership)) && (
         <div className="card border border-amber-800/50 flex items-start gap-3" role="note">
           <ShieldAlert size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
             <p className="text-[var(--text-primary)] font-medium">{tr('accidentOwnership.readOnly.title')}</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
-              {tr('accidentOwnership.readOnly.body')}
+              {canWrite ? tr('accidentOwnership.readOnly.ownerBody') : tr('accidentOwnership.readOnly.body')}
             </p>
           </div>
         </div>
@@ -196,8 +197,8 @@ export default function AccidentWorkflowSettings() {
       </div>
 
       <div role="tabpanel" id={`awf-panel-${tab}`} aria-labelledby={`awf-tab-${tab}`}>
-        {tab === 'owners' && <OwnersTab canWrite={canWrite} />}
-        {tab === 'notify' && <NotifyTab canWrite={canWrite} />}
+        {tab === 'owners' && <OwnersTab canWrite={canWriteOwnership} />}
+        {tab === 'notify' && <NotifyTab canWrite={canWriteOwnership} />}
         {tab === 'departments' && (
           <DepartmentsTab
             rows={departments} rules={rules} setRows={setDepartments} canWrite={canWrite}

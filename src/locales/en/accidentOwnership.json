@@ -5,7 +5,8 @@
   },
   "readOnly": {
     "title": "Read-only view",
-    "body": "You can review the workflow configuration. Changes require an Admin."
+    "body": "You can review the workflow configuration. Changes require an Admin, Manager or Director role.",
+    "ownerBody": "Only an Admin can change step owners, SLA targets and who is told. You can review them here."
   },
   "common": {
     "tryAgain": "Try again",

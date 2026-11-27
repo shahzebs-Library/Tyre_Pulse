@@ -12,6 +12,7 @@
  * degrades to [] on a missing relation so the page can prompt for the migration
  * instead of throwing.
  */
+import { TECHNICIAN_ROLES } from '../workOrderAccess'
 import { supabase, unwrap, applyCountry, ServiceError, isMissingRelation, fetchAllOrThrow } from './_client'
 import { expectRows } from './writeGuard'
 import { EVENT_TYPES, buildBoard, computeKpis } from '../workshopLive'
@@ -47,7 +48,14 @@ const ATTENDANCE_COLS = 'id,user_id,shift_id,check_in,check_out,source,site'
 
 // ── Controlled vocabularies (mirror the DB CHECK constraints) ──────────────────
 
-export const WORKSHOP_ROLES = Object.freeze(['Technician', 'Tyre Man', 'Mechanic', 'Foreman'])
+// The roster is every role that does workshop work: the trade titles the
+// work-order access rules treat as technicians (mechanics, electricians,
+// welders, helpers, plant technicians) plus the legacy titles. Listing only
+// 'Technician'/'Mechanic' matched nobody, so supervisors could never assign a
+// trade. Keep this derived from TECHNICIAN_ROLES so the two never drift.
+export const WORKSHOP_ROLES = Object.freeze(
+  [...new Set(['Technician', 'Tyre Man', 'Mechanic', 'Electrician', 'Foreman', ...TECHNICIAN_ROLES])],
+)
 export const TASK_STATUS = Object.freeze(['pending', 'in_progress', 'blocked', 'done', 'qc'])
 export const ASSIGNMENT_ROLES = Object.freeze(['primary', 'helper'])
 

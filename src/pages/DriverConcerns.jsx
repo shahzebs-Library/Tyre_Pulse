@@ -6,7 +6,7 @@
  * write (PT409).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { MessageSquareWarning, ShieldAlert, AlertTriangle, Clock, FileDown, Link2 } from 'lucide-react'
+import { MessageSquare, ShieldAlert, AlertTriangle, Clock, FileDown, Link2 } from 'lucide-react'
 import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SideDrawer from '../components/ui/SideDrawer'
@@ -99,7 +99,7 @@ export default function DriverConcerns() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title={t('driverConcerns.title')} subtitle={t('driverConcerns.subtitle')} icon={MessageSquareWarning} onRefresh={load} refreshing={state.loading} />
+      <PageHeader title={t('driverConcerns.title')} subtitle={t('driverConcerns.subtitle')} icon={MessageSquare} onRefresh={load} refreshing={state.loading} />
       <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{t('driverConcerns.voiceSoon')}</p>
 
       {state.notSetUp && <div className="card p-4 text-sm">{t('driverConcerns.notSetUp')}</div>}

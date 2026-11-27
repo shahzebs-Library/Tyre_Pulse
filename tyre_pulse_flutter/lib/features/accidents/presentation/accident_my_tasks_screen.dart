@@ -14,6 +14,7 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_tasks_repository.dart';
 import 'package:tyre_pulse/features/accidents/presentation/accident_copy.dart';
@@ -182,7 +183,8 @@ class _TaskRow extends StatelessWidget {
         l10n.accidentTasksInStep(
           accidentTaskDaysLabel(l10n, task.daysInStep),
         ),
-        if (!task.assignedToMe && task.ownerRole != null) task.ownerRole!,
+        if (!task.assignedToMe && task.ownerRole != null)
+          accidentTaskRoleLabel(l10n, task.ownerRole!),
       ],
       isFirst: isFirst,
       showDivider: showDivider,
@@ -191,6 +193,20 @@ class _TaskRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The stored role name ("Fleet Supervisor") in the reader's language. A role
+/// the catalog does not carry (a custom role) shows exactly as stored.
+String accidentTaskRoleLabel(AppLocalizations l10n, String stored) {
+  final RoleId? id = UserRole.fromDatabase(stored).id;
+  if (id == null) return stored;
+  for (final String pair in l10n.accidentTasksRoleNames.split('~')) {
+    final int eq = pair.indexOf('=');
+    if (eq > 0 && pair.substring(0, eq) == id.token) {
+      return pair.substring(eq + 1);
+    }
+  }
+  return stored;
 }
 
 /// SLA badge label + tone for one task. Mirrors the web slaStateLabel().

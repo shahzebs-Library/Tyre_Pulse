@@ -16895,6 +16895,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mine'**
   String get accidentRegisterMine;
+
+  /// Role names shown on accident task rows, token=label pairs separated by ~. Unknown roles show as stored.
+  ///
+  /// In en, this message translates to:
+  /// **'admin=Admin~manager=Manager~director=Director~inspector=Inspector~tyre_man=Tyre Technician~reporter=Reporter~driver=Driver~mechanic=Mechanic~electrician=Electrician~maintenance_supervisor=Maintenance Supervisor~workshop_supervisor=Workshop Supervisor~tyre_data_collector=Tyre Data Collector~pmv_manager=PMV Manager~workshop_area_manager=Workshop Area Manager~workshop_maintenance_area_manager=Workshop Maintenance Area Manager~fleet_supervisor=Fleet Supervisor~fleet_incharge=Fleet Incharge~store_keeper=Store Keeper'**
+  String get accidentTasksRoleNames;
 }
 
 class _AppLocalizationsDelegate

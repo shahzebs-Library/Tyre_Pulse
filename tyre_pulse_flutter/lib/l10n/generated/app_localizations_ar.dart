@@ -9687,4 +9687,8 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get accidentRegisterMine => 'الخاصة بي';
+
+  @override
+  String get accidentTasksRoleNames =>
+      'admin=مسؤول~manager=مدير~director=مدير تنفيذي~inspector=مفتّش~tyre_man=فنّي إطارات~reporter=معدّ تقارير~driver=سائق~mechanic=ميكانيكي~electrician=كهربائي~maintenance_supervisor=مشرف الصيانة~workshop_supervisor=مشرف الورشة~tyre_data_collector=جامع بيانات الإطارات~pmv_manager=مدير المعدات والمركبات~workshop_area_manager=مدير منطقة الورشة~workshop_maintenance_area_manager=مدير منطقة صيانة الورشة~fleet_supervisor=مشرف الأسطول~fleet_incharge=مسؤول الأسطول~store_keeper=أمين المستودع';
 }

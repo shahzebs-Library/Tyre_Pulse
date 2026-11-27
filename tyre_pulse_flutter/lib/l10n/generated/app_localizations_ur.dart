@@ -9709,4 +9709,8 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get accidentRegisterMine => 'میرے';
+
+  @override
+  String get accidentTasksRoleNames =>
+      'admin=ایڈمن~manager=مینیجر~director=ڈائریکٹر~inspector=انسپکٹر~tyre_man=ٹائر ٹیکنیشن~reporter=رپورٹر~driver=ڈرائیور~mechanic=مکینک~electrician=الیکٹریشن~maintenance_supervisor=مینٹیننس سپروائزر~workshop_supervisor=ورکشاپ سپروائزر~tyre_data_collector=ٹائر ڈیٹا کلیکٹر~pmv_manager=پی ایم وی مینیجر~workshop_area_manager=ورکشاپ ایریا مینیجر~workshop_maintenance_area_manager=ورکشاپ مینٹیننس ایریا مینیجر~fleet_supervisor=فلیٹ سپروائزر~fleet_incharge=فلیٹ انچارج~store_keeper=اسٹور کیپر';
 }

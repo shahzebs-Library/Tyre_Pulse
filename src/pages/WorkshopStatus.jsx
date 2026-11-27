@@ -35,6 +35,8 @@ import ActivityLogPanel from '../components/workshopStatus/ActivityLogPanel'
 import TeamWorkloadPanel from '../components/workshopStatus/TeamWorkloadPanel'
 import RemovedRecordsPanel from '../components/workshopStatus/RemovedRecordsPanel'
 import WorkshopNotificationsPanel from '../components/workshopStatus/WorkshopNotificationsPanel'
+import IntakePanel from '../components/workshopStatus/IntakePanel'
+import { useAuth } from '../contexts/AuthContext'
 import { getCurrentUserId } from '../lib/api/workshopStatusNotifications'
 import { focusFilters, WORKSHOP_FOCUS } from '../lib/workshopStatus/notificationLinks'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -51,6 +53,7 @@ import '../components/workshopStatus/workshopStatus.css'
  */
 export const TABS = [
   { key: 'active', labelKey: 'active' },
+  { key: 'intake', labelKey: 'intake', ns: 'workshopStatusIntake.tabs', requires: ['intake', 'intake_confirm', 'roster', 'configure'] },
   { key: 'activity', labelKey: 'activity', ns: 'workshopStatusActivity.tabs', requires: ['view_activity'] },
   { key: 'workload', labelKey: 'workload', ns: 'workshopStatusActivity.tabs', requires: ['view_activity', 'view_reports'] },
   { key: 'removed', labelKey: 'removed', ns: 'workshopStatusRemoved.tabs', requires: ['view_removed'] },
@@ -65,6 +68,7 @@ export function visibleTabs(permissions) {
 
 export default function WorkshopStatus() {
   const { t } = useLanguage()
+  const { profile } = useAuth() || {}
   const p = useCallback((k, v) => t(`workshopStatus.page.${k}`, v), [t])
   const [params, setParams] = useSearchParams()
   const requested = params.get('tab')
@@ -172,6 +176,16 @@ export default function WorkshopStatus() {
       />
 
       <VehicleHistoryDrawer record={historyOf} open={!!historyOf} onClose={() => setHistoryOf(null)} />
+
+      {tab === 'intake' && (
+        <IntakePanel
+          permissions={permissions}
+          permState={permState}
+          onRetryPermissions={loadPerms}
+          initialView={params.get('view') || undefined}
+          myRole={profile?.role}
+        />
+      )}
 
       {tab === 'activity' && (
         <ActivityLogPanel permissions={permissions} permState={permState} onRetryPermissions={loadPerms} />

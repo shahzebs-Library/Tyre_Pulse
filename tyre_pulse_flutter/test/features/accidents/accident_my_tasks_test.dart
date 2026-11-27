@@ -89,8 +89,10 @@ void main() {
     );
   });
 
-  Widget host(AccidentTasksResult result,
-          {Locale locale = const Locale('en')}) =>
+  Widget host(
+    AccidentTasksResult result, {
+    Locale locale = const Locale('en'),
+  }) =>
       ProviderScope(
         overrides: [
           accidentMyTasksProvider.overrideWith((Ref ref) async => result),
@@ -130,7 +132,8 @@ void main() {
       (WidgetTester tester) async {
     await tester.pumpWidget(
       host(
-          const AccidentTasksResult(tasks: <AccidentTask>[], available: false)),
+        const AccidentTasksResult(tasks: <AccidentTask>[], available: false),
+      ),
     );
     await tester.pumpAndSettle();
     expect(
@@ -143,7 +146,9 @@ void main() {
     await tester.pumpWidget(
       host(
         AccidentTasksResult(
-            available: true, tasks: <AccidentTask>[_task('01')]),
+          available: true,
+          tasks: <AccidentTask>[_task('01')],
+        ),
         locale: const Locale('ar'),
       ),
     );

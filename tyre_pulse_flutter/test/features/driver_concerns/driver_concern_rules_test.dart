@@ -26,33 +26,40 @@ void main() {
 
   test('treatment is the only sensitive category, subtypes validate', () {
     expect(
-        concernCategories
-            .where((ConcernCategory c) => c.sensitive)
-            .map((ConcernCategory c) => c.key),
-        <String>['treatment']);
+      concernCategories
+          .where((ConcernCategory c) => c.sensitive)
+          .map((ConcernCategory c) => c.key),
+      <String>['treatment'],
+    );
     expect(isValidSubtype('pay', 'salary_late'), isTrue);
     expect(isValidSubtype('pay', 'harassment'), isFalse);
   });
 
   test('deadline: unacknowledged past ack is overdue, closed is null', () {
     expect(
-        deadlineState(
-            _c(<String, Object?>{
-              'ack_due_at': '2026-11-27T10:00:00Z',
-              'due_at': '2026-11-29T10:00:00Z'
-            }),
-            now),
-        ConcernDeadline.overdue);
+      deadlineState(
+        _c(<String, Object?>{
+          'ack_due_at': '2026-11-27T10:00:00Z',
+          'due_at': '2026-11-29T10:00:00Z',
+        }),
+        now,
+      ),
+      ConcernDeadline.overdue,
+    );
     expect(
-        deadlineState(
-            _c(<String, Object?>{
-              'acknowledged_at': '2026-11-27T09:00:00Z',
-              'due_at': '2026-11-27T18:00:00Z'
-            }),
-            now),
-        ConcernDeadline.dueSoon);
-    expect(deadlineState(_c(<String, Object?>{'status': 'accepted'}), now),
-        isNull);
+      deadlineState(
+        _c(<String, Object?>{
+          'acknowledged_at': '2026-11-27T09:00:00Z',
+          'due_at': '2026-11-27T18:00:00Z',
+        }),
+        now,
+      ),
+      ConcernDeadline.dueSoon,
+    );
+    expect(
+      deadlineState(_c(<String, Object?>{'status': 'accepted'}), now),
+      isNull,
+    );
   });
 
   test('driver signs only after confirming the outcome was seen', () {
@@ -63,13 +70,16 @@ void main() {
           myRank: 0,
         );
     expect(
-        allowedActions(d(<String, Object?>{}), now).contains('sign'), isFalse);
+      allowedActions(d(<String, Object?>{}), now).contains('sign'),
+      isFalse,
+    );
     expect(
-        allowedActions(
-                d(<String, Object?>{'outcome_seen_at': '2026-11-27T11:00:00Z'}),
-                now)
-            .contains('sign'),
-        isTrue);
+      allowedActions(
+        d(<String, Object?>{'outcome_seen_at': '2026-11-27T11:00:00Z'}),
+        now,
+      ).contains('sign'),
+      isTrue,
+    );
   });
 
   test('a supervisor cannot act on a case already with the incharge', () {

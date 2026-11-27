@@ -491,14 +491,12 @@ class _DetailBody extends StatelessWidget {
           TpCard(
             key: const Key('handover.partyNotice'),
             padding: const EdgeInsets.all(TpSpace.md),
-            background:
-                TpPalette.of(context).forStatus(TpStatus.info).soft,
+            background: TpPalette.of(context).forStatus(TpStatus.info).soft,
             child: Text(
               partyNotice!,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: TpPalette.of(context)
-                        .forStatus(TpStatus.info)
-                        .onSoft,
+                    color:
+                        TpPalette.of(context).forStatus(TpStatus.info).onSoft,
                   ),
             ),
           ),

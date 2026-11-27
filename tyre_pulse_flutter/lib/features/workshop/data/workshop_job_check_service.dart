@@ -114,6 +114,7 @@ final class WorkshopCheckItem {
   final List<String> afterPhotos;
   final num? km;
   final num? engineHours;
+
   /// Null in the list (the image is fetched when the item is opened, see
   /// [WorkshopCheckSignatureSource]).
   final String? signature;

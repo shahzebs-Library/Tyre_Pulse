@@ -266,6 +266,7 @@ export const EDGE_FUNCTIONS = Object.freeze([
   { name: 'billing-checkout', what: 'Stripe checkout (billing not live)', auth: 'In code' },
   { name: 'billing-webhook', what: 'Stripe events (billing not live)', auth: 'Signature' },
   { name: 'chat-ai', what: 'Answers assistant questions', auth: 'In code' },
+  { name: 'device-ingest', what: 'Hardware and telematics readings (not deployed yet)', auth: 'Device key' },
   { name: 'embed-worker', what: 'Background document indexing', auth: 'Cron secret' },
   { name: 'generate-embedding', what: 'Turns documents into search vectors', auth: 'Gateway and in code' },
   { name: 'public-api', what: 'External API for customers', auth: 'API key' },

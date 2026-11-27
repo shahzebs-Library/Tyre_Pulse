@@ -702,10 +702,13 @@ void main() {
     // (one catalog key, like the other *CopyCatalog keys).
     // 2782 + 9 = 2791: the sync queue's "photo could not upload" line and
     // its Retry / send-without-this-photo actions.
-    test('en, ar and ur each carry exactly 2791 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2791);
-      expect(_translatableKeys(ar).length, 2791);
-      expect(_translatableKeys(ur).length, 2791);
+    // 2791 + 2 = 2793: the fleet list's "Off road" drill-down chip
+    // (fleetListOffRoadFilter) and the Inspect picker's note on why its All
+    // count is lower than the register (inspectionPickerCollapsedNote).
+    test('en, ar and ur each carry exactly 2793 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2793);
+      expect(_translatableKeys(ar).length, 2793);
+      expect(_translatableKeys(ur).length, 2793);
     });
   });
 

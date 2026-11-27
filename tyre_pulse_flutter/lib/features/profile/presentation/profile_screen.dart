@@ -504,6 +504,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       onOpenAssigned: canSeeTasks
                           ? () => context.push(const TasksRoute().location)
                           : () => context.push(const CalendarRoute().location),
+                      onRetryAssigned: () =>
+                          ref.invalidate(myWorkSnapshotProvider),
                       profileStale: authState.profileStale,
                       onOpenDrafts: () => unawaited(openProfileDrafts(context)),
                       onOpenSyncQueue: () => unawaited(openSyncQueue(context)),
@@ -845,6 +847,26 @@ String _countText(AsyncValue<int> value) {
 /// that list), queued work still on this device, unread notifications (when
 /// there is no assigned-work tile), and - only when the profile itself is served from the offline cache - an
 /// offline marker. No invented task count or "last sync" clock.
+/// What the "Assigned tasks" tile shows for [work].
+///
+/// Never a permanent dash: a snapshot already read keeps showing while a
+/// refresh runs (Riverpod's reloading state still carries the value), a read
+/// that is genuinely still running shows an ellipsis, and a failed read says
+/// so and becomes tap-to-retry. `loadMyWork` bounds every source with a
+/// timeout, so "still running" always ends.
+@visibleForTesting
+({String value, bool failed}) profileAssignedTasksCount(
+  AsyncValue<MyWorkSnapshot> work,
+) {
+  final MyWorkSnapshot? snapshot = work.value;
+  if (snapshot != null) {
+    final int n = snapshot.items.where((item) => item.isOpen).length;
+    return (value: snapshot.partial ? '$n+' : '$n', failed: false);
+  }
+  if (work.hasError) return (value: '-', failed: true);
+  return (value: '…', failed: false);
+}
+
 class _ProfileStatusStrip extends StatelessWidget {
   const _ProfileStatusStrip({
     required this.drafts,
@@ -853,6 +875,7 @@ class _ProfileStatusStrip extends StatelessWidget {
     required this.profileStale,
     this.assigned,
     this.onOpenAssigned,
+    this.onRetryAssigned,
     this.onOpenDrafts,
     this.onOpenSyncQueue,
   });
@@ -866,6 +889,9 @@ class _ProfileStatusStrip extends StatelessWidget {
   /// in which case the notifications count keeps its place.
   final AsyncValue<MyWorkSnapshot>? assigned;
   final VoidCallback? onOpenAssigned;
+
+  /// Re-reads the snapshot after a failed load (the tile then says so).
+  final VoidCallback? onRetryAssigned;
 
   /// Opens the drafts list (the "Pending drafts" tile).
   final VoidCallback? onOpenDrafts;
@@ -900,21 +926,17 @@ class _ProfileStatusStrip extends StatelessWidget {
                     case final AsyncValue<MyWorkSnapshot> work) ...<Widget>[
                   Expanded(
                     child: InkWell(
-                      onTap: onOpenAssigned,
+                      onTap: profileAssignedTasksCount(work).failed
+                          ? onRetryAssigned
+                          : onOpenAssigned,
                       borderRadius: BorderRadius.circular(TpRadius.md),
                       child: _ProfileStatusItem(
                         key: ProfileScreenKeys.assignedTile,
                         icon: Icons.assignment_outlined,
-                        value: switch (work) {
-                          AsyncData<MyWorkSnapshot>(:final value) => () {
-                              final int n = value.items
-                                  .where((item) => item.isOpen)
-                                  .length;
-                              return value.partial ? '$n+' : '$n';
-                            }(),
-                          _ => '-',
-                        },
-                        label: l10n.profileAssignedTasks,
+                        value: profileAssignedTasksCount(work).value,
+                        label: profileAssignedTasksCount(work).failed
+                            ? '${l10n.profileAssignedTasks} · ${l10n.actionRetry}'
+                            : l10n.profileAssignedTasks,
                         tone: palette.ok,
                         stacked: stacked,
                       ),

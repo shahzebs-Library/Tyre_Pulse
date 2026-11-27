@@ -11,6 +11,7 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/navigation/list_drilldown.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
@@ -38,6 +39,21 @@ class PreventiveMaintenanceScreen extends ConsumerStatefulWidget {
 class _PreventiveMaintenanceScreenState
     extends ConsumerState<PreventiveMaintenanceScreen> {
   bool dueOnly = true;
+
+  /// Overdue plans only, no work orders: what Home's "Maintenance overdue"
+  /// tile counts (active plans whose `next_due` is before today). Set by that
+  /// tile's drill-down; cleared from its chip.
+  bool overdueOnly = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (ref
+        .read(listDrilldownProvider)
+        .take(ListDrilldown.maintenanceOverdue)) {
+      overdueOnly = true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,16 +133,20 @@ class _PreventiveMaintenanceScreenState
           .where((PmPlan plan) => plan.dueBand(now) == PmDueBand.overdue)
           .length,
     );
-    final List<PmPlan> visible = dueOnly
+    final List<PmPlan> visible = overdueOnly
         ? plans
-            .where(
-              (PmPlan plan) => <PmDueBand>{
-                PmDueBand.overdue,
-                PmDueBand.dueSoon,
-              }.contains(plan.dueBand(now)),
-            )
+            .where((PmPlan plan) => plan.dueBand(now) == PmDueBand.overdue)
             .toList(growable: false)
-        : plans;
+        : dueOnly
+            ? plans
+                .where(
+                  (PmPlan plan) => <PmDueBand>{
+                    PmDueBand.overdue,
+                    PmDueBand.dueSoon,
+                  }.contains(plan.dueBand(now)),
+                )
+                .toList(growable: false)
+            : plans;
     final bool canWorkOrders = ref.watch(
       canAccessModuleProvider(ModuleKey.workorders),
     );
@@ -137,7 +157,7 @@ class _PreventiveMaintenanceScreenState
     final bool canTyres = ref.watch(canAccessModuleProvider(ModuleKey.records));
     final TpPalette palette = TpPalette.of(context);
     final List<MaintenanceQueueEntry> queue = buildMaintenanceQueue(
-      workOrders: orders,
+      workOrders: overdueOnly ? const <MaintenanceWorkOrder>[] : orders,
       plans: visible,
       now: now,
     );
@@ -322,12 +342,26 @@ class _PreventiveMaintenanceScreenState
           ),
           // A quiet filter, not a control that competes with the queue. The
           // PM schedule quick-access tile flips it to "All plans".
-          _QuietFilter(
-            dueLabel: copy('due'),
-            allLabel: copy('all'),
-            dueOnly: dueOnly,
-            onChanged: (bool value) => setState(() => dueOnly = value),
-          ),
+          if (overdueOnly)
+            Padding(
+              padding: const EdgeInsets.only(top: TpSpace.sm),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: InputChip(
+                  key: const Key('pm.filter.overdueOnly'),
+                  label: Text(copy('overdue')),
+                  selected: true,
+                  onDeleted: () => setState(() => overdueOnly = false),
+                ),
+              ),
+            )
+          else
+            _QuietFilter(
+              dueLabel: copy('due'),
+              allLabel: copy('all'),
+              dueOnly: dueOnly,
+              onChanged: (bool value) => setState(() => dueOnly = value),
+            ),
           const _SectionDivider(),
           if (queueLoading)
             const _QueueLoading()
@@ -431,7 +465,10 @@ class _PreventiveMaintenanceScreenState
                   tone: palette.info,
                   label: copy('pmSchedule'),
                   hint: copy('pmScheduleHint'),
-                  onTap: () => setState(() => dueOnly = false),
+                  onTap: () => setState(() {
+                    dueOnly = false;
+                    overdueOnly = false;
+                  }),
                 ),
               ),
               const SizedBox(width: TpSpace.xs),

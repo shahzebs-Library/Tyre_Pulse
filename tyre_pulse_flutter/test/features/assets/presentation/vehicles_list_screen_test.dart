@@ -34,6 +34,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/navigation/list_drilldown.dart';
 import 'package:tyre_pulse/features/assets/data/fleet_signals_repository.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/fleet_class_groups.dart';
@@ -867,4 +868,46 @@ void main() {
       expect(find.text('Synced'), findsNothing);
     });
   });
+
+  testWidgets(
+    'the Home Off road tile opens only the ops_status = breakdown machines, '
+    'with a chip that clears the filter',
+    (WidgetTester tester) async {
+      await _pump(
+        tester,
+        _resolved(
+          const VehicleFleetListLoaded(
+            assets: <VehicleAsset>[
+              VehicleAsset(id: 'a', assetNo: 'TM100', opsStatus: 'breakdown'),
+              VehicleAsset(id: 'b', assetNo: 'TM200', opsStatus: 'running'),
+            ],
+            truncated: false,
+          ),
+        ),
+        extra: <Override>[
+          listDrilldownProvider.overrideWithValue(
+            ListDrilldownBox()..request(ListDrilldown.offRoad),
+          ),
+        ],
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(VehiclesListScreenKeys.asset('a')), findsOneWidget);
+      expect(find.byKey(VehiclesListScreenKeys.asset('b')), findsNothing);
+      expect(find.byKey(VehiclesListScreenKeys.opsStatusChip), findsOneWidget);
+
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byKey(VehiclesListScreenKeys.opsStatusChip),
+              matching: find.byType(Icon),
+            )
+            .last,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(VehiclesListScreenKeys.opsStatusChip), findsNothing);
+      expect(find.byKey(VehiclesListScreenKeys.asset('b')), findsOneWidget);
+    },
+  );
 }

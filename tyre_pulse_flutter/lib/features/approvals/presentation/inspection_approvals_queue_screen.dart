@@ -40,6 +40,7 @@ import 'package:tyre_pulse/features/approvals/domain/bulk_inspection_approval.da
 import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/queue_list_kit.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/refresh_when_shown.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_type_display.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 
@@ -56,6 +57,54 @@ abstract final class InspectionApprovalsQueueKeys {
   static Key row(String id) => Key('inspection.approvals.row.$id');
   static Key check(String id) => Key('inspection.approvals.check.$id');
   static Key heading(String id) => Key('inspection.approvals.heading.$id');
+  static const Key kindInspections =
+      Key('inspection.approvals.kind.inspections');
+  static const Key kindChecklists = Key('inspection.approvals.kind.checklists');
+}
+
+/// Inspections | Checklists: the Approvals tab is the one place a signer
+/// lands, and Home counts BOTH queues, so the checklist queue must be one
+/// tap away here rather than reachable only from a Home tile.
+class _QueueKindSwitch extends StatelessWidget {
+  const _QueueKindSwitch({
+    required this.inspectionsLabel,
+    required this.checklistsLabel,
+    required this.onChecklists,
+  });
+
+  final String inspectionsLabel;
+  final String checklistsLabel;
+  final VoidCallback onChecklists;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        TpSpace.lg,
+        TpSpace.md,
+        TpSpace.lg,
+        0,
+      ),
+      child: Wrap(
+        spacing: TpSpace.sm,
+        runSpacing: TpSpace.sm,
+        children: <Widget>[
+          QueueFilterChip(
+            key: InspectionApprovalsQueueKeys.kindInspections,
+            label: inspectionsLabel,
+            selected: true,
+            onSelected: () {},
+          ),
+          QueueFilterChip(
+            key: InspectionApprovalsQueueKeys.kindChecklists,
+            label: checklistsLabel,
+            selected: false,
+            onSelected: onChecklists,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// The three tabs the approved mock's queue shows, each a distinct real
@@ -404,12 +453,23 @@ class _InspectionApprovalsQueueScreenState
 
   Widget _body(AppLocalizations l10n) {
     final Widget header = _capped(
-      _QueueSummary(
-        tab: _tab,
-        pendingCount: _pendingCount ?? _items.length,
-        onTabChanged: _changeTab,
-        searchController: _search,
-        onSearchChanged: (String value) => setState(() => _query = value),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          _QueueKindSwitch(
+            inspectionsLabel: l10n.adminApprovalsTabInspections,
+            checklistsLabel: l10n.adminApprovalsTabChecklists,
+            onChecklists: () =>
+                context.push(const ChecklistApprovalsRoute().location),
+          ),
+          _QueueSummary(
+            tab: _tab,
+            pendingCount: _pendingCount ?? _items.length,
+            onTabChanged: _changeTab,
+            searchController: _search,
+            onSearchChanged: (String value) => setState(() => _query = value),
+          ),
+        ],
       ),
     );
 
@@ -746,7 +806,7 @@ class _QueueRow extends StatelessWidget {
   /// s.title || 'Inspection'`.
   static String _headingFor(InspectionApprovalItem item, String fallbackTitle) {
     final String? assetNo = item.assetNo?.trim();
-    final String? vehicleType = item.vehicleType?.trim();
+    final String? vehicleType = vehicleTypeDisplay(item.vehicleType);
     final String assetAndType = <String>[
       if (assetNo != null && assetNo.isNotEmpty)
         TpDirection.isolateLtr(assetNo),

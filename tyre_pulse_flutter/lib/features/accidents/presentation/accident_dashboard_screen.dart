@@ -18,6 +18,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/navigation/list_drilldown.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
@@ -65,6 +66,11 @@ class _AccidentDashboardScreenState
   @override
   void initState() {
     super.initState();
+    // Home's "Open accidents" tile opens this register on the Open filter,
+    // the same closed-token rule its count uses (`accidentRecordIsClosed`).
+    if (ref.read(listDrilldownProvider).take(ListDrilldown.openAccidents)) {
+      _status = _StatusFilter.open;
+    }
     unawaited(_load(reset: true));
   }
 

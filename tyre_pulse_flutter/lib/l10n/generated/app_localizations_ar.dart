@@ -9663,4 +9663,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get syncQueuePhotoActionFailed => 'لم ينجح ذلك. حاول مرة أخرى.';
+
+  @override
+  String get fleetListOffRoadFilter => 'خارج الخدمة';
+
+  @override
+  String inspectionPickerCollapsedNote(int assets, int rows) {
+    return '$assets رقم أصل من $rows سجلا في السجل. الرقم المستخدم في أكثر من دولة يظهر مرة واحدة: اختر الدولة لفحص المعدة الصحيحة.';
+  }
 }

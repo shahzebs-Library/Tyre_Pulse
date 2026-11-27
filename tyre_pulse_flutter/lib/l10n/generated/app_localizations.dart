@@ -16847,6 +16847,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'That did not work. Try again.'**
   String get syncQueuePhotoActionFailed;
+
+  /// Fleet list chip: only assets whose operational status is breakdown (opened from Home's Off road tile)
+  ///
+  /// In en, this message translates to:
+  /// **'Off road'**
+  String get fleetListOffRoadFilter;
+
+  /// Inspect asset picker: why the All count is lower than the fleet register
+  ///
+  /// In en, this message translates to:
+  /// **'{assets} asset numbers from {rows} register rows. A number used in more than one country is listed once: choose a country to inspect the right machine.'**
+  String inspectionPickerCollapsedNote(int assets, int rows);
 }
 
 class _AppLocalizationsDelegate

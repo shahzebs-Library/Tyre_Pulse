@@ -189,6 +189,13 @@ class AppLocalizationsUr extends AppLocalizations {
       'آپ کا اکاؤنٹ منظوری کا منتظر ہے یا مقفل کر دیا گیا ہے۔ آپ کا ایڈمن اسے درست کر سکتا ہے۔';
 
   @override
+  String get accessBlockedCheckAgain => 'دوبارہ چیک کریں';
+
+  @override
+  String get accessBlockedStillWaiting =>
+      'آپ کا اکاؤنٹ ابھی تک فعال نہیں۔ اپنے ایڈمن سے اسے منظور کرنے کو کہیں۔';
+
+  @override
   String get routeNotFoundTitle => 'یہ اسکرین موجود نہیں';
 
   @override
@@ -2905,7 +2912,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی~myCounts=میری گنتیاں~transfers=منتقلیاں~needsApproval=گنتی کے فرق کے لیے منظوری درکار ہے۔ شیلف پر موجود مقدار درج کرنے کے لیے گنتی استعمال کریں؛ منظور کنندہ تبدیلی درج کرے گا۔~countNote=آپ کی گنتی جائزے کے لیے درج ہوتی ہے۔ اسٹاک بیلنس صرف تب بدلتا ہے جب منظور کنندہ فرق درج کرے۔~countRecorded=گنتی جائزے کے لیے درج ہو گئی۔~countSavedOnPhone=گنتی اس فون پر محفوظ ہو گئی۔ کنکشن بحال ہونے پر بھیجی جائے گی۔~countNoPlace=اس اسٹاک لائن کا کوئی اسٹور یا ملک نہیں، اس لیے گنتی درج نہیں ہو سکتی۔~countNeedsConnection=اس اسٹور میں پہلی گنتی کے لیے سیشن کھولنے کو کنکشن ضروری ہے۔~countRefused=گنتی قبول نہیں ہوئی:';
+      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی~myCounts=میری گنتیاں~transfers=منتقلیاں~needsApproval=گنتی کے فرق کے لیے منظوری درکار ہے۔ شیلف پر موجود مقدار درج کرنے کے لیے گنتی استعمال کریں؛ منظور کنندہ تبدیلی درج کرے گا۔~countNote=آپ کی گنتی جائزے کے لیے درج ہوتی ہے۔ اسٹاک بیلنس صرف تب بدلتا ہے جب منظور کنندہ فرق درج کرے۔~countRecorded=گنتی جائزے کے لیے درج ہو گئی۔~countSavedOnPhone=گنتی اس فون پر محفوظ ہو گئی۔ کنکشن بحال ہونے پر بھیجی جائے گی۔~countNoPlace=اس اسٹاک لائن کا کوئی اسٹور یا ملک نہیں، اس لیے گنتی درج نہیں ہو سکتی۔~countNeedsConnection=اس اسٹور میں پہلی گنتی کے لیے سیشن کھولنے کو کنکشن ضروری ہے۔~countRefused=گنتی قبول نہیں ہوئی:~matches=مطابق ہے~notMatch=مطابق نہیں~matchesRecorded=درج ہو گیا: شیلف سسٹم سے مطابق ہے۔~matchesSavedOnPhone=اس فون پر محفوظ ہو گیا: شیلف سسٹم سے مطابق ہے۔ کنکشن بحال ہونے پر بھیجا جائے گا۔~genuineQuestion=کیا پرزہ اصلی ہے؟~genuine=اصلی~notGenuine=اصلی نہیں~genuineNote=پرزے کے بارے میں نوٹ (اختیاری)~countedToday=آج گنا گیا~bin=خانہ~code=کوڈ';
 
   @override
   String get calendarCopyCatalog =>

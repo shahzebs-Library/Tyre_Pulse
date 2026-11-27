@@ -194,6 +194,13 @@ class AppLocalizationsAr extends AppLocalizations {
       'حسابك بانتظار الموافقة أو تم قفله. يمكن لمسؤول النظام معالجة ذلك.';
 
   @override
+  String get accessBlockedCheckAgain => 'تحقق مرة أخرى';
+
+  @override
+  String get accessBlockedStillWaiting =>
+      'حسابك لا يزال غير مفعّل. اطلب من مسؤول النظام الموافقة عليه.';
+
+  @override
   String get routeNotFoundTitle => 'هذه الشاشة غير موجودة';
 
   @override
@@ -2897,7 +2904,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص~myCounts=عمليات الجرد الخاصة بي~transfers=التحويلات~needsApproval=فرق الجرد يحتاج إلى موافقة. استخدم الجرد لتسجيل ما على الرف؛ ويقوم المعتمِد بترحيل التغيير.~countNote=يُسجَّل جردك للمراجعة. لا يتغير رصيد المخزون إلا عندما يرحّل المعتمِد الفرق.~countRecorded=تم تسجيل الجرد للمراجعة.~countSavedOnPhone=تم حفظ الجرد على هذا الهاتف. سيُرسل عند عودة الاتصال.~countNoPlace=لا يحتوي بند المخزون هذا على مخزن أو دولة، لذا لا يمكن تسجيل الجرد.~countNeedsConnection=أول جرد في هذا المخزن يحتاج إلى اتصال لفتح جلسة جرد.~countRefused=لم يُقبل الجرد:';
+      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص~myCounts=عمليات الجرد الخاصة بي~transfers=التحويلات~needsApproval=فرق الجرد يحتاج إلى موافقة. استخدم الجرد لتسجيل ما على الرف؛ ويقوم المعتمِد بترحيل التغيير.~countNote=يُسجَّل جردك للمراجعة. لا يتغير رصيد المخزون إلا عندما يرحّل المعتمِد الفرق.~countRecorded=تم تسجيل الجرد للمراجعة.~countSavedOnPhone=تم حفظ الجرد على هذا الهاتف. سيُرسل عند عودة الاتصال.~countNoPlace=لا يحتوي بند المخزون هذا على مخزن أو دولة، لذا لا يمكن تسجيل الجرد.~countNeedsConnection=أول جرد في هذا المخزن يحتاج إلى اتصال لفتح جلسة جرد.~countRefused=لم يُقبل الجرد:~matches=مطابق~notMatch=غير مطابق~matchesRecorded=تم التسجيل: الرف مطابق للنظام.~matchesSavedOnPhone=تم الحفظ على هذا الهاتف: الرف مطابق للنظام. سيُرسل عند عودة الاتصال.~genuineQuestion=هل القطعة أصلية؟~genuine=أصلية~notGenuine=غير أصلية~genuineNote=ملاحظة عن القطعة (اختياري)~countedToday=تم الجرد اليوم~bin=الموقع~code=الرمز';
 
   @override
   String get calendarCopyCatalog =>

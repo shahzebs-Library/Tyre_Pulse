@@ -695,14 +695,13 @@ void main() {
     // and Urdu font).
     // 2707 + 7 = 2714: the Article 91 fault finding (title, not recorded, four
     // findings) and the block when it was a third party or force majeure.
-    // 2714 + 65 = 2779: Profile's Sync queue screen (stat tiles, last sync
-    // attempt, Sync now and its disabled reasons, item states, retry, one
-    // plain-English name per queued command type) and its Drafts screen
-    // (list, resume, discard confirmation, empty and error states).
-    test('en, ar and ur each carry exactly 2779 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2779);
-      expect(_translatableKeys(ar).length, 2779);
-      expect(_translatableKeys(ur).length, 2779);
+    // 2714 + 65 = 2779: Profile's Sync queue and Drafts screens; + 2 = 2781:
+    // the not-active screen's "Check again" button and its "still not
+    // active" reply (accessBlockedCheckAgain / StillWaiting).
+    test('en, ar and ur each carry exactly 2781 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2781);
+      expect(_translatableKeys(ar).length, 2781);
+      expect(_translatableKeys(ur).length, 2781);
     });
   });
 

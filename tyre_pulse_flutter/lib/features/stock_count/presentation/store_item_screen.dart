@@ -611,6 +611,12 @@ class _Photos extends ConsumerWidget {
           height: 200,
           child: PageView.builder(
             key: const Key('storeItem.photos'),
+            // With more than one photo the next one peeks in, so it is clear
+            // there is more to swipe to.
+            controller: PageController(
+              viewportFraction: photos.length > 1 ? 0.86 : 1,
+            ),
+            padEnds: photos.length <= 1,
             itemCount: photos.length,
             itemBuilder: (BuildContext context, int i) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: TpSpace.xs),

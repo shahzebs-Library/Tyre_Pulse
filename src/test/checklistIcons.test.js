@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   CHECKLIST_ICONS, CHECKLIST_ICON_TOKENS, DEFAULT_CHECKLIST_ICON,
@@ -120,13 +120,17 @@ describe('mobile mirror stays in step', () => {
     expect(tokens).toEqual(CHECKLIST_ICON_TOKENS)
   })
 
-  it('maps every token to a REAL Ionicons glyph', () => {
+  // The glyph map ships inside the mobile app's own dependencies. CI installs
+  // them (ci.yml: npm ci --prefix mobile), so there this check always runs. A
+  // local checkout with only the root dependencies has no map to read; the
+  // check is skipped there, never in CI, where a missing map must fail.
+  const IONICONS_MAP = resolve(__dirname, '../../mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json')
+  const mapAvailable = existsSync(IONICONS_MAP) || Boolean(process.env.CI)
+
+  it.skipIf(!mapAvailable)('maps every token to a REAL Ionicons glyph', () => {
     // Guessing a glyph name is exactly how this bug shipped, so the names are
     // checked against the installed glyph map, not against a memory of it.
-    const glyphs = JSON.parse(readFileSync(
-      resolve(__dirname, '../../mobile/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/glyphmaps/Ionicons.json'),
-      'utf8',
-    ))
+    const glyphs = JSON.parse(readFileSync(IONICONS_MAP, 'utf8'))
     const used = [...src.matchAll(/ionicon: '([a-z-]+)'/g)].map((m) => m[1])
     expect(used).toHaveLength(CHECKLIST_ICON_TOKENS.length)
     for (const name of used) expect(Object.prototype.hasOwnProperty.call(glyphs, name)).toBe(true)

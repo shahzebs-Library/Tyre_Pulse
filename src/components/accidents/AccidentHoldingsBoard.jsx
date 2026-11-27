@@ -45,8 +45,8 @@ export default function AccidentHoldingsBoard() {
       {state.ok && rows.length === 0 && <p className="text-sm text-[var(--text-muted)]">No open accident steps.</p>}
       {state.ok && rows.length > 0 && (
         <table className="w-full text-sm">
-          <thead className="text-[11px] uppercase tracking-wide text-[var(--text-dim)] text-left">
-            <tr><th className="py-1.5 font-medium">Holder</th><th className="py-1.5 font-medium">Open</th><th className="py-1.5 font-medium text-right">Overdue</th><th className="py-1.5 font-medium text-right">Oldest</th></tr>
+          <thead className="text-[11px] uppercase tracking-wide text-[var(--text-dim)] text-start">
+            <tr><th className="py-1.5 font-medium">Holder</th><th className="py-1.5 font-medium px-3">Open</th><th className="py-1.5 font-medium text-end">Overdue</th><th className="py-1.5 font-medium text-end">Oldest</th></tr>
           </thead>
           <tbody>
             {rows.map((r) => (
@@ -55,14 +55,14 @@ export default function AccidentHoldingsBoard() {
                   <p className={`font-medium ${r.no_owner ? 'text-amber-400' : 'text-[var(--text-primary)]'}`}>{holderLabel(r)}</p>
                   {r.holder_name && r.holder_role && <p className="text-[11px] text-[var(--text-dim)]">{r.holder_role}</p>}
                 </td>
-                <td className="py-2 pr-3 w-1/3">
+                <td className="py-2 px-3 w-1/3">
                   <div className="flex items-center gap-2">
                     <div className="h-2 rounded-full bg-[var(--accent)]" style={{ width: `${Math.max(6, (r.open_count / max) * 100)}%` }} aria-hidden="true" />
                     <span className="text-[var(--text-primary)]">{r.open_count}</span>
                   </div>
                 </td>
-                <td className={`py-2 text-right ${r.overdue_count ? 'text-red-400 font-medium' : 'text-[var(--text-muted)]'}`}>{r.overdue_count}</td>
-                <td className="py-2 text-right text-[var(--text-secondary)]">{daysLabel(r.oldest_days)}</td>
+                <td className={`py-2 px-2 text-end ${r.overdue_count ? 'text-red-400 font-medium' : 'text-[var(--text-muted)]'}`}>{r.overdue_count}</td>
+                <td dir="auto" className="py-2 text-end text-[var(--text-secondary)]">{daysLabel(r.oldest_days)}</td>
               </tr>
             ))}
           </tbody>

@@ -379,11 +379,15 @@ function NotifyRuleCard({ rule, people, canWrite, onSaved, onRemove }) {
           <input type="checkbox" checked={draft.only_when_serious === true} disabled={!canWrite} onChange={(e) => set({ only_when_serious: e.target.checked })} />
           Only severe, injury or cost from
         </label>
-        <input className={`${inputCls} w-28`} inputMode="numeric" disabled={!canWrite || !draft.only_when_serious} aria-label="Serious cost threshold"
-          value={draft.serious_cost ?? 20000} onChange={(e) => set({ serious_cost: Number(e.target.value) || 0 })} />
+        {draft.only_when_serious && (
+          <div className="w-28">
+            <input className={inputCls} inputMode="numeric" disabled={!canWrite} aria-label="Serious cost threshold"
+              value={draft.serious_cost ?? 20000} onChange={(e) => set({ serious_cost: Number(e.target.value) || 0 })} />
+          </div>
+        )}
         {draft.event_key === 'accident.stalled' && (
           <label className="inline-flex items-center gap-1.5">Stalled after
-            <input className={`${inputCls} w-20`} inputMode="numeric" placeholder="Not set" disabled={!canWrite} aria-label="Stalled days"
+            <input className={`${inputCls} !w-20`} inputMode="numeric" placeholder="Not set" disabled={!canWrite} aria-label="Stalled days"
               value={draft.stalled_days ?? ''} onChange={(e) => set({ stalled_days: e.target.value === '' ? null : Math.max(1, Number(e.target.value) || 1) })} />
             days on one stage
           </label>

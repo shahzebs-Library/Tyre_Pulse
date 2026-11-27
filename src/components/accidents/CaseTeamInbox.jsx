@@ -17,9 +17,10 @@ import { toUserMessage } from '../../lib/safeError'
  * Honest states: loading, not switched on yet, error with retry, empty.
  */
 const PILL = {
-  danger: 'border-red-700/50 bg-red-950/25 text-red-200',
-  warning: 'border-amber-700/50 bg-amber-950/25 text-amber-200',
-  good: 'border-emerald-700/50 bg-emerald-950/25 text-emerald-200',
+  // 500-level ink on a 10% tint reads in both the light and the dark theme.
+  danger: 'border-red-500/40 bg-red-500/10 text-red-500',
+  warning: 'border-amber-500/40 bg-amber-500/10 text-amber-600',
+  good: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600',
   quiet: 'border-[var(--input-border)] bg-[var(--input-bg)]/40 text-[var(--text-dim)]',
 }
 function slaTone(t) {
@@ -58,7 +59,7 @@ function TaskRow({ task }) {
           {(task.site || task.country) && (
             <span className="inline-flex items-center gap-1"><MapPin size={11} aria-hidden="true" />{[task.site, task.country].filter(Boolean).join(', ')}</span>
           )}
-          <span>In this step {daysLabel(task.days_in_step)}</span>
+          <span dir="auto">In this step {daysLabel(task.days_in_step)}</span>
           {!task.assigned_to_me && task.owner_role && <span className="inline-flex items-center gap-1"><Users size={11} aria-hidden="true" />{task.owner_role}</span>}
         </div>
       </Link>
@@ -135,7 +136,7 @@ export default function CaseTeamInbox({ items, title = 'My accident tasks', comp
         <Inbox size={16} className="text-[var(--accent)]" aria-hidden="true" />
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
         {rows && rows.length > 0 && (
-          <span className="text-xs text-[var(--text-muted)]">
+          <span dir="auto" className="text-xs text-[var(--text-muted)]">
             {counts.total} open{counts.overdue ? ` · ${counts.overdue} overdue` : ''}{counts.dueSoon ? ` · ${counts.dueSoon} due soon` : ''}
           </span>
         )}

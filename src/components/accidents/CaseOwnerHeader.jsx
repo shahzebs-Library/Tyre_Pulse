@@ -25,9 +25,9 @@ function clock(instance) {
 }
 
 const TONE = {
-  danger: 'text-red-300 border-red-700/50 bg-red-950/30',
-  warning: 'text-amber-200 border-amber-700/50 bg-amber-950/30',
-  good: 'text-emerald-200 border-emerald-700/50 bg-emerald-950/25',
+  danger: 'text-red-500 border-red-500/40 bg-red-500/10',
+  warning: 'text-amber-600 border-amber-500/40 bg-amber-500/10',
+  good: 'text-emerald-600 border-emerald-500/40 bg-emerald-500/10',
   quiet: 'text-[var(--text-muted)] border-[var(--input-border)] bg-[var(--input-bg)]',
 }
 
@@ -92,7 +92,7 @@ export default function CaseOwnerHeader({ accident, workstreams, canReassign, on
         </div>
         <div>
           <p className="text-[11px] uppercase tracking-wide text-[var(--text-dim)]">In this step</p>
-          <p className="font-medium text-[var(--text-primary)] flex items-center gap-1.5"><Clock size={14} aria-hidden="true" /> {days == null ? 'N/A' : daysLabel(days)}</p>
+          <p dir="auto" className="font-medium text-[var(--text-primary)] flex items-center gap-1.5"><Clock size={14} aria-hidden="true" /> {days == null ? 'N/A' : daysLabel(days)}</p>
         </div>
         <div>
           <p className="text-[11px] uppercase tracking-wide text-[var(--text-dim)]">SLA</p>
@@ -124,7 +124,7 @@ export default function CaseOwnerHeader({ accident, workstreams, canReassign, on
       </div>
       {err && <p className="text-xs text-red-400" role="alert">{err}</p>}
       {gaps.length > 0 && (
-        <div className="rounded-xl border border-amber-700/50 bg-amber-950/20 p-3 flex items-start gap-2 text-sm" role="note" aria-label="Missing on this case">
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 flex items-start gap-2 text-sm" role="note" aria-label="Missing on this case">
           <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
             <p className="font-medium text-[var(--text-primary)]">Missing on this case</p>

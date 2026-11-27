@@ -567,6 +567,19 @@ class _RoleHomePanel extends ConsumerWidget {
               ),
             ),
           ];
+        case HomeRow.myConcerns:
+          return <_RoleRowData>[
+            _RoleRowData(
+              id: 'myConcerns',
+              title: DriverConcernsCopy.of(context)('raise'),
+              note: DriverConcernsCopy.of(context)('title'),
+              onTap: () => Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (BuildContext context) => const MyConcernsScreen(),
+                ),
+              ),
+            ),
+          ];
         case HomeRow.dailySummary:
           if (!can(ModuleKey.reports)) return const <_RoleRowData>[];
           return <_RoleRowData>[
@@ -881,6 +894,7 @@ class _RoleHomePanel extends ConsumerWidget {
       'myVehicle' || 'vehicles' => (spec: TpGemSpec.asset, tone: null),
       'wash' || 'washing' => (spec: TpGemSpec.washing, tone: null),
       'myCharges' => (spec: TpGemSpec.reportIssue, tone: TpGemTone.slate),
+      'myConcerns' => (spec: TpGemSpec.reportIssue, tone: TpGemTone.violet),
       'dailySummary' => (
           spec: TpGemSpec.inspectionsDue,
           tone: TpGemTone.violet

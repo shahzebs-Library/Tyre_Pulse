@@ -111,6 +111,9 @@ enum HomeRow {
   /// A published checklist targeted at the role (driver, Tyre Man).
   dailyChecklist,
   myCharges,
+
+  /// Driver: raise or follow a concern (grievance). Opens Driver Concerns.
+  myConcerns,
   dailySummary,
   alerts,
   offRoad,
@@ -223,6 +226,7 @@ HomeRolePlan homeRolePlanFor(HomePersona persona) => switch (persona) {
             HomeRow.reportAccident,
             HomeRow.dailyChecklist,
             HomeRow.myCharges,
+            HomeRow.myConcerns,
           ],
           // The owner removed Alerts, Serial, fleet Vehicles and More from
           // the driver's Home.

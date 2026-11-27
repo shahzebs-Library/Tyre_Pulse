@@ -2,8 +2,8 @@
 -- 20261127120000_count_line_genuine.sql
 -- Genuine / not genuine mark on a counted stock line.
 --
--- STATUS: NOT APPLIED. Owner approval recorded 2026-11-27 (coordinator); apply as ONE
---         atomic script (apply_migration). No begin/commit inside on purpose.
+-- STATUS: APPLIED LIVE 2026-11-27 (owner approved). Verified: 2 columns, v_genuine in body,
+--         anon cannot execute. Live body matched the 20261122100000 copy (md5) before apply.
 --
 -- WHY
 --   A Store Keeper counting a shelf marks whether the part on it is a genuine (original)

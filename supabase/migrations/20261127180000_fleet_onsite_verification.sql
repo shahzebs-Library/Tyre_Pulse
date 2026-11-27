@@ -21,6 +21,22 @@
 --     vehicle_fleet.image_path, replacing the class artwork.
 --   * Who / when / GPS recorded. GPS is optional and never blocks.
 --
+-- Hardening after review (2026-11-27)
+--   * A doubtful submission (asset code mismatch, chassis with I/O/Q, plate or
+--     chassis already on another machine) fills NOTHING; all of it waits.
+--   * Reject undoes what submit filled, only where the field still holds it.
+--   * vehicle_fleet.verification_status / last_verified_* move only on an
+--     auto-applied check or an approval, never on a pending one.
+--   * Approve re-checks duplicates, site scope, and that the photo object is
+--     the one uploaded at submit (etag + updated_at); otherwise PT409.
+--   * Photos under '%/verify/%' cannot be updated or deleted except by a super
+--     admin (two RESTRICTIVE storage policies). Submit requires the object to
+--     be owned by the caller and its path to match org/COUNTRY/ASSET/verify/id.
+--   * Reads: own submissions, or a verifier / approver role.
+--   * Replay with another machine or another user -> PT409; a concurrent save
+--     of the same id is answered as a replay. Length caps; absurd GPS dropped.
+--   * plate_key folds Arabic-Indic digits.
+--
 -- Rules followed
 --   * Writes only through SECURITY DEFINER RPCs; the table has NO client
 --     insert / update / delete policy or grant.
@@ -57,6 +73,12 @@
 --   submit a different plate -> pending, plate unchanged; impersonate a Manager
 --   of the same org, decide approve -> plate changed, admin_row_changes row;
 --   decide again -> PT409; submitter deciding own -> 42501.
+--   Flagged duplicate plate -> pending, NOTHING filled (blank chassis too);
+--   reject a pending check whose blank chassis was filled -> chassis back to
+--   blank; vehicle_fleet.verification_status unchanged while pending.
+--   As a Fleet Supervisor: update/delete a '%/verify/%' object -> 0 rows.
+--   As a Reporter: select from fleet_verifications -> 0 rows.
+--   select public.plate_key('٤٢٠٥ SXA');               -- '4205SXA'
 --
 -- ROLLBACK
 --   drop function if exists public.list_possible_transfers(text);
@@ -66,6 +88,10 @@
 --   drop function if exists public.fleet_verifier_allowed();
 --   drop function if exists public.fleet_verification_approver_allowed();
 --   drop function if exists public.chassis_has_invalid_vin_chars(text);
+--   drop function if exists public._fv_path_segment(text,text);
+--   drop function if exists public._fleet_verification_audit(uuid,uuid,jsonb,jsonb);
+--   drop policy if exists vehicle_photos_verify_no_update on storage.objects;
+--   drop policy if exists vehicle_photos_verify_no_delete on storage.objects;
 --   drop function if exists public.plate_key(text);
 --   drop function if exists public.normalize_chassis(text);
 --   drop function if exists public.normalize_plate(text);
@@ -96,7 +122,8 @@ create or replace function public.plate_key(p text)
 returns text language sql immutable parallel safe
 set search_path = public
 as $$
-  select nullif(regexp_replace(upper(coalesce(p, '')), '\s+', '', 'g'), '')
+  select nullif(translate(regexp_replace(upper(coalesce(p, '')), '\s+', '', 'g'),
+                          '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'), '')
 $$;
 
 -- Chassis / VIN: upper case, spaces, dashes and dots removed, Cyrillic lookalike
@@ -155,7 +182,7 @@ do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'vehicle_fleet_verification_status_chk') then
     alter table public.vehicle_fleet add constraint vehicle_fleet_verification_status_chk
       check (verification_status is null
-             or verification_status in ('verified', 'pending', 'not_found', 'other_country', 'rejected'));
+             or verification_status in ('verified', 'not_found', 'other_country'));
   end if;
 end $$;
 
@@ -177,6 +204,9 @@ create table if not exists public.fleet_verifications (
   previous_plate    text,
   previous_chassis  text,
   photo_path        text,
+  photo_etag        text,                              -- storage object at submit time:
+  photo_updated_at  timestamptz,                       -- accept refuses if it changed since
+  previous_image_path text,
   lat               double precision check (lat is null or lat between -90 and 90),
   lng               double precision check (lng is null or lng between -180 and 180),
   accuracy_m        double precision check (accuracy_m is null or accuracy_m >= 0),
@@ -204,25 +234,23 @@ create index if not exists fleet_verifications_vehicle_idx
 
 alter table public.fleet_verifications enable row level security;
 
-drop policy if exists fleet_verifications_org_isolation on public.fleet_verifications;
 create policy fleet_verifications_org_isolation on public.fleet_verifications
   as restrictive for all to authenticated
   using ((organisation_id = (select public.app_current_org())) or (select public.is_super_admin()));
 
-drop policy if exists fleet_verifications_country_isolation on public.fleet_verifications;
 create policy fleet_verifications_country_isolation on public.fleet_verifications
   as restrictive for select to authenticated
   using (public.app_can_see_country(country));
 
-drop policy if exists fleet_verifications_site_isolation on public.fleet_verifications;
 create policy fleet_verifications_site_isolation on public.fleet_verifications
   as restrictive for select to authenticated
   using (public.app_can_see_site(site));
 
-drop policy if exists fleet_verifications_read on public.fleet_verifications;
 create policy fleet_verifications_read on public.fleet_verifications
   for select to authenticated
-  using ((select public.app_is_active()));
+  using (submitted_by = (select auth.uid())
+         or (select public.fleet_verifier_allowed())
+         or (select public.fleet_verification_approver_allowed()));
 
 revoke all on public.fleet_verifications from public, anon, authenticated;
 grant select on public.fleet_verifications to authenticated;
@@ -238,6 +266,29 @@ as $$
   insert into public.admin_row_changes (organisation_id, tbl, row_id, action, before_data, after_data, changed_by)
   select p_org, 'vehicle_fleet', p_row, 'update', p_before, p_after, auth.uid()
   where p_before is distinct from p_after
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 5b. Verification photos are evidence: once uploaded they cannot be replaced
+--     or deleted by anyone but a super admin. RESTRICTIVE, so it narrows the
+--     existing vehicle_photos_update / _delete policies for verify paths only.
+-- ---------------------------------------------------------------------------
+create policy vehicle_photos_verify_no_update on storage.objects
+  as restrictive for update to authenticated
+  using (not (bucket_id = 'vehicle-photos' and name like '%/verify/%') or (select public.is_super_admin()));
+
+create policy vehicle_photos_verify_no_delete on storage.objects
+  as restrictive for delete to authenticated
+  using (not (bucket_id = 'vehicle-photos' and name like '%/verify/%') or (select public.is_super_admin()));
+
+-- One storage path segment: [A-Za-z0-9_-] only, edge underscores trimmed.
+-- Mirrors segment() in src/lib/fleetVerification.js and _segment() in Dart.
+create or replace function public._fv_path_segment(p text, p_fallback text)
+returns text language sql immutable parallel safe
+set search_path = public
+as $$
+  select coalesce(nullif(regexp_replace(regexp_replace(btrim(coalesce(p, '')), '[^a-zA-Z0-9_-]', '_', 'g'),
+                                        '^_+|_+$', '', 'g'), ''), p_fallback)
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -273,10 +324,17 @@ declare
   v_obs_asset text := nullif(upper(regexp_replace(coalesce(p_observed_asset_no, ''), '\s+', '', 'g')), '');
   v_photo    text := nullif(btrim(coalesce(p_photo_path, '')), '');
   v_other    text := nullif(btrim(coalesce(p_other_country, '')), '');
+  v_note     text := nullif(btrim(coalesce(p_note, '')), '');
   v_dup_plate boolean := false;
   v_dup_chassis boolean := false;
+  v_blocking boolean;
   v_lat double precision := p_lat;
   v_lng double precision := p_lng;
+  v_acc double precision := p_accuracy_m;
+  v_obj_owner uuid;
+  v_obj_etag text;
+  v_obj_updated timestamptz;
+  v_expected_prefix text;
 begin
   if v_uid is null then
     raise exception 'Sign in to record a verification' using errcode = '42501';
@@ -291,18 +349,13 @@ begin
   if p_outcome is null or p_outcome not in ('present', 'not_found', 'other_country') then
     raise exception 'Unknown verification outcome' using errcode = '22023';
   end if;
-
-  -- Idempotent replay: the same device resending the same verification.
-  select * into v_existing from public.fleet_verifications where client_uuid = p_client_uuid;
-  if found then
-    if v_existing.submitted_by <> v_uid then
-      raise exception 'This verification id is already used' using errcode = 'PT409';
-    end if;
-    return jsonb_build_object('ok', true, 'replayed', true, 'id', v_existing.id,
-      'status', v_existing.status, 'flags', to_jsonb(v_existing.flags),
-      'applied_fields', to_jsonb(v_existing.applied_fields));
+  if length(v_plate) > 20 or length(v_chassis) > 30 or length(v_obs_asset) > 30
+     or length(v_other) > 40 or length(v_note) > 500 then
+    raise exception 'A field is too long' using errcode = '22023';
   end if;
 
+  -- Lock the machine first: two saves of the same check from one phone then
+  -- run one after the other, and the second finds the first one's row.
   select * into v_old from public.vehicle_fleet where id = p_vehicle_id for update;
   if not found then
     raise exception 'Machine not found' using errcode = '22023';
@@ -313,6 +366,17 @@ begin
   if public.app_can_see_country(v_old.country) is not true
      or public.app_can_see_site(v_old.site) is not true then
     raise exception 'This machine is outside your country or site' using errcode = '42501';
+  end if;
+
+  -- Idempotent replay: the same device resending the same verification.
+  select * into v_existing from public.fleet_verifications where client_uuid = p_client_uuid;
+  if found then
+    if v_existing.submitted_by <> v_uid or v_existing.vehicle_id <> p_vehicle_id then
+      raise exception 'This verification id is already used' using errcode = 'PT409';
+    end if;
+    return jsonb_build_object('ok', true, 'replayed', true, 'id', v_existing.id,
+      'status', v_existing.status, 'flags', to_jsonb(v_existing.flags),
+      'applied_fields', to_jsonb(v_existing.applied_fields));
   end if;
 
   if p_outcome = 'other_country' then
@@ -326,20 +390,33 @@ begin
     v_other := null;
   end if;
 
-  -- GPS is best effort: an out-of-range pair is dropped, never refused.
+  -- GPS is best effort: an out-of-range pair or accuracy is dropped, never refused.
   if v_lat is null or v_lng is null or v_lat not between -90 and 90 or v_lng not between -180 and 180 then
-    v_lat := null; v_lng := null;
+    v_lat := null; v_lng := null; v_acc := null;
+  end if;
+  if v_acc is not null and (v_acc < 0 or v_acc > 10000 or v_acc = 'NaN'::float8) then
+    v_acc := null;
   end if;
 
-  -- Photo must sit at this verification's own unique path and be uploaded.
+  -- Photo: this verification's own path, this machine's org/country/asset,
+  -- uploaded by the caller. Its etag is kept so accept can see a swap.
   if v_photo is not null then
-    if split_part(v_photo, '/', 1) <> lower(v_old.organisation_id::text)
-       or position(('/verify/' || p_client_uuid::text || '.') in v_photo) = 0
-       or v_photo like '%..%' then
+    v_expected_prefix := lower(public._fv_path_segment(v_old.organisation_id::text, 'no-org')) || '/'
+      || upper(public._fv_path_segment(v_old.country, 'NO-COUNTRY')) || '/'
+      || upper(public._fv_path_segment(v_old.asset_no, 'NO-ASSET')) || '/verify/'
+      || lower(p_client_uuid::text) || '.';
+    if left(v_photo, length(v_expected_prefix)) <> v_expected_prefix
+       or v_photo !~ '^[A-Za-z0-9_/.-]+$' or v_photo like '%..%' then
       raise exception 'Photo path does not belong to this verification' using errcode = '22023';
     end if;
-    if not exists (select 1 from storage.objects o where o.bucket_id = 'vehicle-photos' and o.name = v_photo) then
+    select o.owner, o.metadata->>'eTag', o.updated_at
+      into v_obj_owner, v_obj_etag, v_obj_updated
+      from storage.objects o where o.bucket_id = 'vehicle-photos' and o.name = v_photo;
+    if not found then
       raise exception 'The photo has not finished uploading' using errcode = 'PT409';
+    end if;
+    if v_obj_owner is distinct from v_uid then
+      raise exception 'The photo was not uploaded by you' using errcode = '42501';
     end if;
   end if;
 
@@ -351,7 +428,6 @@ begin
     if v_chassis is not null and public.chassis_has_invalid_vin_chars(v_chassis) then
       v_flags := v_flags || 'chassis_invalid_chars'::text;
     end if;
-
     if v_plate is not null then
       select exists (select 1 from public.vehicle_fleet f
         where f.organisation_id = v_old.organisation_id and f.country is not distinct from v_old.country
@@ -363,7 +439,6 @@ begin
         v_flags := v_flags || 'plate_changed'::text;
       end if;
     end if;
-
     if v_chassis is not null then
       select exists (select 1 from public.vehicle_fleet f
         where f.organisation_id = v_old.organisation_id and f.country is not distinct from v_old.country
@@ -375,21 +450,23 @@ begin
         v_flags := v_flags || 'chassis_changed'::text;
       end if;
     end if;
-
     v_status := case when cardinality(v_flags) = 0 then 'auto_applied' else 'pending' end;
   else
     v_flags := v_flags || p_outcome;
     v_status := 'pending';
   end if;
 
-  -- Apply what may be applied now: a blank field filled with a clean value
-  -- (no duplicate on another machine), and the photo when nothing is pending.
+  -- A doubtful submission (wrong code, invalid chassis, value already on
+  -- another machine) fills nothing: all of it waits for a manager.
+  v_blocking := v_flags && array['asset_code_mismatch', 'chassis_invalid_chars',
+                                 'duplicate_plate', 'duplicate_chassis']::text[];
+
   v_new := v_old;
-  if p_outcome = 'present' then
-    if v_plate is not null and public.plate_key(v_old.registration_no) is null and not v_dup_plate then
+  if p_outcome = 'present' and not v_blocking then
+    if v_plate is not null and public.plate_key(v_old.registration_no) is null then
       v_new.registration_no := v_plate; v_applied := v_applied || 'registration_no'::text;
     end if;
-    if v_chassis is not null and public.normalize_chassis(v_old.chassis_no) is null and not v_dup_chassis then
+    if v_chassis is not null and public.normalize_chassis(v_old.chassis_no) is null then
       v_new.chassis_no := v_chassis; v_applied := v_applied || 'chassis_no'::text;
     end if;
     if v_status = 'auto_applied' and v_photo is not null then
@@ -397,28 +474,45 @@ begin
     end if;
   end if;
 
-  update public.vehicle_fleet set
-    registration_no     = v_new.registration_no,
-    chassis_no          = v_new.chassis_no,
-    image_path          = v_new.image_path,
-    last_verified_at    = now(),
-    last_verified_by    = v_uid,
-    verification_status = case when v_status = 'auto_applied' then 'verified' else 'pending' end,
-    updated_at          = now()
-  where id = v_old.id
-  returning * into v_new;
+  begin
+    insert into public.fleet_verifications (
+      id, organisation_id, country, site, vehicle_id, asset_no, outcome, other_country,
+      observed_asset_no, observed_plate, observed_chassis, previous_plate, previous_chassis,
+      photo_path, photo_etag, photo_updated_at, previous_image_path,
+      lat, lng, accuracy_m, client_uuid, status, flags, applied_fields, note,
+      submitted_by, submitted_at
+    ) values (
+      p_client_uuid, v_old.organisation_id, v_old.country, v_old.site, v_old.id, v_old.asset_no,
+      p_outcome, v_other, v_obs_asset, v_plate, v_chassis, v_old.registration_no, v_old.chassis_no,
+      v_photo, v_obj_etag, v_obj_updated, v_old.image_path,
+      v_lat, v_lng, v_acc, p_client_uuid, v_status, v_flags, v_applied, v_note,
+      v_uid, now()
+    );
+  exception when unique_violation then
+    -- A concurrent save of the same id won the race: answer as a replay.
+    select * into v_existing from public.fleet_verifications where client_uuid = p_client_uuid;
+    if v_existing.submitted_by <> v_uid or v_existing.vehicle_id <> p_vehicle_id then
+      raise exception 'This verification id is already used' using errcode = 'PT409';
+    end if;
+    return jsonb_build_object('ok', true, 'replayed', true, 'id', v_existing.id,
+      'status', v_existing.status, 'flags', to_jsonb(v_existing.flags),
+      'applied_fields', to_jsonb(v_existing.applied_fields));
+  end;
 
-  insert into public.fleet_verifications (
-    id, organisation_id, country, site, vehicle_id, asset_no, outcome, other_country,
-    observed_asset_no, observed_plate, observed_chassis, previous_plate, previous_chassis,
-    photo_path, lat, lng, accuracy_m, client_uuid, status, flags, applied_fields, note,
-    submitted_by, submitted_at
-  ) values (
-    p_client_uuid, v_old.organisation_id, v_old.country, v_old.site, v_old.id, v_old.asset_no,
-    p_outcome, v_other, v_obs_asset, v_plate, v_chassis, v_old.registration_no, v_old.chassis_no,
-    v_photo, v_lat, v_lng, p_accuracy_m, p_client_uuid, v_status, v_flags, v_applied,
-    nullif(btrim(coalesce(p_note, '')), ''), v_uid, now()
-  );
+  -- The machine's verification stamp moves only when the check is accepted
+  -- now; a pending check leaves it as it was until a manager decides.
+  if v_status = 'auto_applied' or cardinality(v_applied) > 0 then
+    update public.vehicle_fleet set
+      registration_no     = v_new.registration_no,
+      chassis_no          = v_new.chassis_no,
+      image_path          = v_new.image_path,
+      last_verified_at    = case when v_status = 'auto_applied' then now() else last_verified_at end,
+      last_verified_by    = case when v_status = 'auto_applied' then v_uid else last_verified_by end,
+      verification_status = case when v_status = 'auto_applied' then 'verified' else verification_status end,
+      updated_at          = now()
+    where id = v_old.id
+    returning * into v_new;
+  end if;
 
   if cardinality(v_applied) > 0 then
     perform public._fleet_verification_audit(v_old.organisation_id, v_old.id, to_jsonb(v_old), to_jsonb(v_new));
@@ -430,7 +524,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- 7. decide_fleet_verification  (Admin or Manager of that org/country)
+-- 7. decide_fleet_verification  (Admin or Manager of that org/country/site)
 -- ---------------------------------------------------------------------------
 create or replace function public.decide_fleet_verification(p_id uuid, p_approve boolean, p_note text default null)
 returns jsonb
@@ -444,6 +538,8 @@ declare
   v_new  public.vehicle_fleet;
   v_note text := nullif(btrim(coalesce(p_note, '')), '');
   v_applied text[] := '{}';
+  v_etag text;
+  v_updated timestamptz;
 begin
   if v_uid is null or not public.fleet_verification_approver_allowed() then
     raise exception 'Only an Admin or Manager can decide a verification' using errcode = '42501';
@@ -451,13 +547,17 @@ begin
   if p_approve is null then
     raise exception 'Choose approve or reject' using errcode = '22023';
   end if;
+  if length(v_note) > 500 then
+    raise exception 'The note is too long' using errcode = '22023';
+  end if;
 
   select * into v_ver from public.fleet_verifications where id = p_id for update;
   if not found then
     raise exception 'Verification not found' using errcode = '22023';
   end if;
   if not (public.is_super_admin() or v_ver.organisation_id = public.app_current_org())
-     or public.app_can_see_country(v_ver.country) is not true then
+     or public.app_can_see_country(v_ver.country) is not true
+     or public.app_can_see_site(v_ver.site) is not true then
     raise exception 'Verification not found' using errcode = '42501';
   end if;
   if v_ver.status <> 'pending' then
@@ -478,7 +578,8 @@ begin
 
   if p_approve then
     if v_ver.outcome = 'present' then
-      -- Stale guard: the file must still hold what the supervisor compared against.
+      -- Stale guard: the file must still hold what the supervisor compared
+      -- against (or already the observed value, e.g. a blank filled at submit).
       if v_ver.observed_plate is not null
          and public.plate_key(v_old.registration_no) is distinct from public.plate_key(v_ver.observed_plate)
          and public.plate_key(v_old.registration_no) is distinct from public.plate_key(v_ver.previous_plate) then
@@ -488,6 +589,25 @@ begin
          and public.normalize_chassis(v_old.chassis_no) is distinct from v_ver.observed_chassis
          and public.normalize_chassis(v_old.chassis_no) is distinct from public.normalize_chassis(v_ver.previous_chassis) then
         raise exception 'The chassis on file changed since this was submitted' using errcode = 'PT409';
+      end if;
+      -- Duplicates are re-checked now, not trusted from submit time.
+      if v_ver.observed_plate is not null and exists (select 1 from public.vehicle_fleet f
+           where f.organisation_id = v_old.organisation_id and f.country is not distinct from v_old.country
+             and f.id <> v_old.id and public.plate_key(f.registration_no) = public.plate_key(v_ver.observed_plate)) then
+        raise exception 'This plate is on another machine now. Correct that machine first' using errcode = 'PT409';
+      end if;
+      if v_ver.observed_chassis is not null and exists (select 1 from public.vehicle_fleet f
+           where f.organisation_id = v_old.organisation_id and f.country is not distinct from v_old.country
+             and f.id <> v_old.id and public.normalize_chassis(f.chassis_no) = v_ver.observed_chassis) then
+        raise exception 'This chassis is on another machine now. Correct that machine first' using errcode = 'PT409';
+      end if;
+      -- The photo must be the very object the supervisor uploaded.
+      if v_ver.photo_path is not null then
+        select o.metadata->>'eTag', o.updated_at into v_etag, v_updated
+          from storage.objects o where o.bucket_id = 'vehicle-photos' and o.name = v_ver.photo_path;
+        if not found or v_etag is distinct from v_ver.photo_etag or v_updated is distinct from v_ver.photo_updated_at then
+          raise exception 'The photo changed or is missing since this was submitted' using errcode = 'PT409';
+        end if;
       end if;
       if v_ver.observed_plate is not null
          and public.plate_key(v_old.registration_no) is distinct from public.plate_key(v_ver.observed_plate) then
@@ -508,26 +628,42 @@ begin
       v_new.status := 'Transferred'; v_applied := v_applied || 'status'::text;
       v_new.verification_status := 'other_country';
     end if;
+    v_new.last_verified_at := now();
+    v_new.last_verified_by := v_ver.submitted_by;
   else
-    v_new.verification_status := 'rejected';
+    -- Reject: undo whatever submit filled, but only where the field still
+    -- holds exactly what submit wrote (a later correction is never undone).
+    if 'registration_no' = any (v_ver.applied_fields)
+       and public.plate_key(v_old.registration_no) is not distinct from public.plate_key(v_ver.observed_plate) then
+      v_new.registration_no := v_ver.previous_plate; v_applied := v_applied || 'registration_no'::text;
+    end if;
+    if 'chassis_no' = any (v_ver.applied_fields)
+       and public.normalize_chassis(v_old.chassis_no) is not distinct from v_ver.observed_chassis then
+      v_new.chassis_no := v_ver.previous_chassis; v_applied := v_applied || 'chassis_no'::text;
+    end if;
+    if 'image_path' = any (v_ver.applied_fields) and v_old.image_path is not distinct from v_ver.photo_path then
+      v_new.image_path := v_ver.previous_image_path; v_applied := v_applied || 'image_path'::text;
+    end if;
   end if;
 
-  update public.vehicle_fleet set
-    registration_no     = v_new.registration_no,
-    chassis_no          = v_new.chassis_no,
-    image_path          = v_new.image_path,
-    status              = v_new.status,
-    verification_status = v_new.verification_status,
-    last_verified_at    = case when p_approve then now() else last_verified_at end,
-    last_verified_by    = case when p_approve then v_ver.submitted_by else last_verified_by end,
-    updated_at          = now()
-  where id = v_old.id
-  returning * into v_new;
+  if cardinality(v_applied) > 0 or p_approve then
+    update public.vehicle_fleet set
+      registration_no     = v_new.registration_no,
+      chassis_no          = v_new.chassis_no,
+      image_path          = v_new.image_path,
+      status              = v_new.status,
+      verification_status = v_new.verification_status,
+      last_verified_at    = v_new.last_verified_at,
+      last_verified_by    = v_new.last_verified_by,
+      updated_at          = now()
+    where id = v_old.id
+    returning * into v_new;
+  end if;
 
   update public.fleet_verifications set
     status = case when p_approve then 'approved' else 'rejected' end,
     decided_by = v_uid, decided_at = now(), decision_note = v_note,
-    applied_fields = applied_fields || v_applied
+    applied_fields = case when p_approve then applied_fields || v_applied else applied_fields end
   where id = v_ver.id;
 
   if cardinality(v_applied) > 0 then
@@ -536,7 +672,7 @@ begin
 
   return jsonb_build_object('ok', true, 'id', v_ver.id,
     'status', case when p_approve then 'approved' else 'rejected' end,
-    'applied_fields', to_jsonb(v_applied));
+    (case when p_approve then 'applied_fields' else 'reverted_fields' end), to_jsonb(v_applied));
 end;
 $$;
 
@@ -624,7 +760,8 @@ revoke execute on function public.normalize_plate(text), public.plate_key(text),
   public.decide_fleet_verification(uuid,boolean,text),
   public.list_pending_fleet_verifications(text),
   public.list_possible_transfers(text),
-  public._fleet_verification_audit(uuid,uuid,jsonb,jsonb)
+  public._fleet_verification_audit(uuid,uuid,jsonb,jsonb),
+  public._fv_path_segment(text,text)
   from public;
 
 revoke execute on function public.normalize_plate(text), public.plate_key(text),
@@ -634,7 +771,8 @@ revoke execute on function public.normalize_plate(text), public.plate_key(text),
   public.decide_fleet_verification(uuid,boolean,text),
   public.list_pending_fleet_verifications(text),
   public.list_possible_transfers(text),
-  public._fleet_verification_audit(uuid,uuid,jsonb,jsonb)
+  public._fleet_verification_audit(uuid,uuid,jsonb,jsonb),
+  public._fv_path_segment(text,text)
   from anon;
 
 -- The audit helper is internal: only the two definer RPCs (owned by postgres) call it.

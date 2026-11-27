@@ -38,11 +38,29 @@ String? normalizePlate(String? v) {
   return s.isEmpty ? null : s;
 }
 
-/// Every space removed; characters never reordered.
+const String _arabicIndic = '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹';
+const String _asciiDigits = '01234567890123456789';
+
+/// Every space removed, Arabic-Indic digits folded; never reordered.
 String? plateKey(String? v) {
-  final String s = (v ?? '').toUpperCase().replaceAll(RegExp(r'\s+'), '');
+  final String raw = (v ?? '').toUpperCase().replaceAll(RegExp(r'\s+'), '');
+  final StringBuffer out = StringBuffer();
+  for (final int rune in raw.runes) {
+    final String ch = String.fromCharCode(rune);
+    final int i = _arabicIndic.indexOf(ch);
+    out.write(i >= 0 ? _asciiDigits[i] : ch);
+  }
+  final String s = out.toString();
   return s.isEmpty ? null : s;
 }
+
+/// Flags that make a submission doubtful: nothing is filled, all of it waits.
+const List<String> blockingFlags = <String>[
+  'asset_code_mismatch',
+  'chassis_invalid_chars',
+  'duplicate_plate',
+  'duplicate_chassis',
+];
 
 /// Upper case, spaces/dashes/dots removed, Cyrillic lookalikes to Latin.
 String? normalizeChassis(String? v) {
@@ -170,12 +188,13 @@ VerificationPreview previewVerification({
     if (onFile != null && onFile != chassis) flags.add('chassis_changed');
   }
   final String status = flags.isEmpty ? 'auto_applied' : 'pending';
-  if (plate != null && plateKey(vehicle.registrationNo) == null && !dupPlate) {
+  if (flags.any(blockingFlags.contains)) {
+    return VerificationPreview(status, flags, applyNow);
+  }
+  if (plate != null && plateKey(vehicle.registrationNo) == null) {
     applyNow.add('registration_no');
   }
-  if (chassis != null &&
-      normalizeChassis(vehicle.chassisNo) == null &&
-      !dupChassis) {
+  if (chassis != null && normalizeChassis(vehicle.chassisNo) == null) {
     applyNow.add('chassis_no');
   }
   if (status == 'auto_applied' && hasPhoto) applyNow.add('image_path');

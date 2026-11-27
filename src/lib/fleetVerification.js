@@ -40,11 +40,21 @@ export function normalizePlate(v) {
   return s || null
 }
 
-/** Plate for comparison: every space removed, characters never reordered. */
+const ARABIC_INDIC = '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹'
+const ASCII_DIGITS = '01234567890123456789'
+
+/** Plate for comparison: spaces removed, Arabic-Indic digits folded, never reordered. */
 export function plateKey(v) {
-  const s = String(v ?? '').toUpperCase().replace(/\s+/g, '')
+  let s = ''
+  for (const ch of String(v ?? '').toUpperCase().replace(/\s+/g, '')) {
+    const i = ARABIC_INDIC.indexOf(ch)
+    s += i >= 0 ? ASCII_DIGITS[i] : ch
+  }
   return s || null
 }
+
+/** Flags that make a submission doubtful: nothing is filled, all of it waits. */
+export const BLOCKING_FLAGS = ['asset_code_mismatch', 'chassis_invalid_chars', 'duplicate_plate', 'duplicate_chassis']
 
 /** Chassis: upper, spaces/dashes/dots removed, Cyrillic lookalikes to Latin. */
 export function normalizeChassis(v) {
@@ -121,8 +131,9 @@ export function previewVerification({ vehicle = {}, outcome, observedAssetNo, ob
   }
 
   const status = flags.length === 0 ? 'auto_applied' : 'pending'
-  if (plate && !plateKey(vehicle.registration_no) && !dupPlate) applyNow.push('registration_no')
-  if (chassis && !normalizeChassis(vehicle.chassis_no) && !dupChassis) applyNow.push('chassis_no')
+  if (flags.some((f) => BLOCKING_FLAGS.includes(f))) return { status, flags, applyNow }
+  if (plate && !plateKey(vehicle.registration_no)) applyNow.push('registration_no')
+  if (chassis && !normalizeChassis(vehicle.chassis_no)) applyNow.push('chassis_no')
   if (status === 'auto_applied' && hasPhoto) applyNow.push('image_path')
   return { status, flags, applyNow }
 }

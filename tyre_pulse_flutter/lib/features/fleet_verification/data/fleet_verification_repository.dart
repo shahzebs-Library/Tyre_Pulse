@@ -183,8 +183,20 @@ String? _blankToNull(String? v) {
 /// How a send attempt ended.
 enum SendOutcome { sent, retryLater, failed, notSetUp }
 
-/// Classifies a server error code. Pure, so it is unit-tested.
-SendOutcome classifyVerificationError(String? code) {
+/// Local failure reasons, stored with a leading '@' and translated in the UI.
+const String failedPhotoMissing = '@photoMissing';
+const String failedRetryLimit = '@retryLimit';
+
+/// After this many failed sends a verification stops retrying and is shown
+/// as failed, so a phone never retries forever in the background.
+const int maxVerificationAttempts = 20;
+
+/// Classifies a server error. Pure, so it is unit-tested.
+SendOutcome classifyVerificationError(String? code, [String? message]) {
+  if (code == 'PT409' &&
+      (message ?? '').toLowerCase().contains('already used')) {
+    return SendOutcome.failed;
+  }
   switch (code) {
     case 'PGRST202':
     case 'PGRST205':
@@ -368,10 +380,14 @@ final class SupabaseFleetVerificationRemote implements FleetVerificationRemote {
 
 /// Saves to the outbox, then tries to send everything waiting.
 final class FleetVerificationService {
-  FleetVerificationService(this._outbox, this._remote);
+  FleetVerificationService(this._outbox, this._remote, {this.photoDir});
 
   final FleetVerificationOutbox _outbox;
   final FleetVerificationRemote _remote;
+
+  /// Durable folder for evidence photos (app documents). The picker's file can
+  /// live in a cache the OS clears, so the photo is copied here at save time.
+  final Future<Directory> Function()? photoDir;
 
   static const Uuid _uuid = Uuid();
   static String newId() => _uuid.v4();
@@ -382,8 +398,23 @@ final class FleetVerificationService {
 
   /// Saves first (never lost), then sends. Returns this item's outcome.
   Future<SendOutcome> save(QueuedVerification item) async {
-    await _outbox.add(item);
-    return sendOne(item);
+    final QueuedVerification durable = await _keepPhoto(item);
+    await _outbox.add(durable);
+    return sendOne(durable);
+  }
+
+  Future<QueuedVerification> _keepPhoto(QueuedVerification item) async {
+    final String? local = item.localPhotoPath;
+    final Future<Directory> Function()? dirOf = photoDir;
+    if (local == null || dirOf == null) return item;
+    final File src = File(local);
+    if (!src.existsSync()) return item;
+    final Directory base = Directory('${(await dirOf()).path}/fleet_verify');
+    if (!base.existsSync()) base.createSync(recursive: true);
+    final File copy = await src.copy('${base.path}/${item.id}.jpg');
+    return QueuedVerification.fromJson(
+      <String, dynamic>{...item.toJson(), 'localPhotoPath': copy.path},
+    );
   }
 
   Future<SendOutcome> sendOne(QueuedVerification start) async {
@@ -393,33 +424,55 @@ final class FleetVerificationService {
       final String? local = item.localPhotoPath;
       if (local != null && item.photoPath == null) {
         final File file = File(local);
-        if (file.existsSync()) {
-          final String path = verificationPhotoPath(
-            orgId: item.orgId,
-            country: item.country,
-            assetNo: item.assetNo,
-            verificationId: item.id,
-          );
-          await _remote.uploadPhoto(path, file);
-          item = item.copyWith(photoPath: path);
-          await _outbox.replace(item);
+        if (!file.existsSync()) {
+          // Never send a check without the photo it was saved with.
+          await _outbox
+              .replace(item.copyWith(failedMessage: failedPhotoMissing));
+          return SendOutcome.failed;
         }
+        final String path = verificationPhotoPath(
+          orgId: item.orgId,
+          country: item.country,
+          assetNo: item.assetNo,
+          verificationId: item.id,
+        );
+        await _remote.uploadPhoto(path, file);
+        item = item.copyWith(photoPath: path);
+        await _outbox.replace(item);
       }
       await _remote.submit(item.rpcParams());
       await _outbox.remove(item.id);
+      if (local != null) {
+        try {
+          final File f = File(local);
+          if (f.existsSync()) f.deleteSync();
+        } on Object {
+          // Leaving a sent photo behind is harmless.
+        }
+      }
       return SendOutcome.sent;
     } on PostgrestException catch (e) {
-      final SendOutcome o = classifyVerificationError(e.code);
+      final SendOutcome o = classifyVerificationError(e.code, e.message);
       if (o == SendOutcome.failed) {
         await _outbox.replace(item.copyWith(failedMessage: e.message));
-      } else {
-        await _outbox.replace(item.copyWith(attempts: item.attempts + 1));
+        return o;
       }
-      return o;
+      return _retry(item, o);
     } on Object {
-      await _outbox.replace(item.copyWith(attempts: item.attempts + 1));
-      return SendOutcome.retryLater;
+      return _retry(item, SendOutcome.retryLater);
     }
+  }
+
+  Future<SendOutcome> _retry(QueuedVerification item, SendOutcome o) async {
+    final int attempts = item.attempts + 1;
+    if (attempts >= maxVerificationAttempts) {
+      await _outbox.replace(
+        item.copyWith(attempts: attempts, failedMessage: failedRetryLimit),
+      );
+      return SendOutcome.failed;
+    }
+    await _outbox.replace(item.copyWith(attempts: attempts));
+    return o;
   }
 
   /// Sends every waiting (not failed) item. Returns how many reached the server.

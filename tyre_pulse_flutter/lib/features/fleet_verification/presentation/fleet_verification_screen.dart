@@ -64,12 +64,40 @@ class _FleetVerificationScreenState
   String? _fileChassis;
   String? _filePlate;
   List<VerificationVehicle> _peers = const <VerificationVehicle>[];
+  List<QueuedVerification> _waiting = const <QueuedVerification>[];
 
   @override
   void initState() {
     super.initState();
     _filePlate = widget.asset.registrationNo;
     _loadFacts();
+    _loadWaiting();
+  }
+
+  Future<void> _loadWaiting() async {
+    final FleetVerificationService? service =
+        await ref.read(fleetVerificationServiceProvider.future);
+    if (!mounted || service == null) return;
+    setState(() {
+      _waiting = service
+          .waiting()
+          .where((QueuedVerification q) => q.vehicleId == widget.asset.id)
+          .toList();
+    });
+  }
+
+  Future<void> _discard(String id) async {
+    final FleetVerificationService? service =
+        await ref.read(fleetVerificationServiceProvider.future);
+    await service?.discard(id);
+    await _loadWaiting();
+  }
+
+  Future<void> _sendNow() async {
+    final FleetVerificationService? service =
+        await ref.read(fleetVerificationServiceProvider.future);
+    await service?.flush();
+    await _loadWaiting();
   }
 
   Future<void> _loadFacts() async {
@@ -153,6 +181,7 @@ class _FleetVerificationScreenState
       localPhotoPath: _photo,
     );
     final SendOutcome outcome = await service.save(item);
+    await _loadWaiting();
     if (!mounted) return;
     final String failedReason = service
             .waiting()
@@ -160,6 +189,8 @@ class _FleetVerificationScreenState
             .map((QueuedVerification q) => q.failedMessage ?? '')
             .firstOrNull ??
         '';
+    final String reason =
+        failedReason.startsWith('@') ? copy(failedReason) : failedReason;
     setState(() {
       _busy = false;
       _done = outcome != SendOutcome.failed;
@@ -168,7 +199,7 @@ class _FleetVerificationScreenState
         SendOutcome.retryLater => copy('queued'),
         SendOutcome.notSetUp => copy('notSetUp'),
         SendOutcome.failed =>
-          copy.fill('failed', <String, String>{'reason': failedReason}),
+          copy.fill('failed', <String, String>{'reason': reason}),
       };
     });
   }
@@ -221,6 +252,15 @@ class _FleetVerificationScreenState
                   style: TextStyle(color: palette.critical.base),
                 ),
               ),
+            if (_waiting.isNotEmpty) ...<Widget>[
+              _WaitingList(
+                items: _waiting,
+                copy: copy,
+                onDiscard: _discard,
+                onSendNow: _sendNow,
+              ),
+              const SizedBox(height: TpSpace.lg),
+            ],
             Text(
               copy('outcome'),
               style: Theme.of(context).textTheme.titleSmall,
@@ -403,4 +443,77 @@ class _FleetVerificationScreenState
           ],
         ),
       );
+}
+
+/// Checks for this machine that are still on the phone: waiting (with tries)
+/// or failed (with the reason). Failed ones can be discarded; nothing is ever
+/// dropped silently.
+class _WaitingList extends StatelessWidget {
+  const _WaitingList({
+    required this.items,
+    required this.copy,
+    required this.onDiscard,
+    required this.onSendNow,
+  });
+
+  final List<QueuedVerification> items;
+  final FleetVerificationCopy copy;
+  final Future<void> Function(String id) onDiscard;
+  final Future<void> Function() onSendNow;
+
+  String _reason(String raw) => raw.startsWith('@') ? copy(raw) : raw;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    return TpCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            copy('waitingFor'),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: TpSpace.sm),
+          for (final QueuedVerification q in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: TpSpace.sm),
+              child: Row(
+                children: <Widget>[
+                  Icon(
+                    q.failed ? Icons.error_outline : Icons.schedule,
+                    color:
+                        q.failed ? palette.critical.base : palette.warning.base,
+                  ),
+                  const SizedBox(width: TpSpace.sm),
+                  Expanded(
+                    child: Text(
+                      q.failed
+                          ? copy.fill('stateFailed', <String, String>{
+                              'reason': _reason(q.failedMessage!),
+                            })
+                          : copy.fill(
+                              'stateWaiting',
+                              <String, String>{'n': '${q.attempts}'},
+                            ),
+                    ),
+                  ),
+                  if (q.failed)
+                    TpButton.text(
+                      label: copy('discard'),
+                      onPressed: () => onDiscard(q.id),
+                    ),
+                ],
+              ),
+            ),
+          if (items.any((QueuedVerification q) => !q.failed))
+            TpButton.secondary(
+              label: copy('retryNow'),
+              icon: Icons.sync,
+              onPressed: onSendNow,
+            ),
+        ],
+      ),
+    );
+  }
 }

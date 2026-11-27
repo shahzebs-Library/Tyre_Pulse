@@ -51,6 +51,7 @@ import 'package:tyre_pulse/features/checklists/'
 import 'package:tyre_pulse/features/extras/extras_screen_registrations.dart';
 import 'package:tyre_pulse/features/fleet_supervisor/'
     'fleet_supervisor_screen_registrations.dart';
+import 'package:tyre_pulse/features/fleet_verification/fleet_verification_sync_binding.dart';
 import 'package:tyre_pulse/features/handover/'
     'handover_screen_registrations.dart';
 import 'package:tyre_pulse/features/home/home_screen_registrations.dart';
@@ -438,7 +439,9 @@ class TyrePulseApp extends ConsumerWidget {
           child: PushBinding(
             child: WorkforceSyncBinding(
               child: PhysicalOutboxSyncBinding(
-                child: child ?? const SizedBox.shrink(),
+                child: FleetVerificationSyncBinding(
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),

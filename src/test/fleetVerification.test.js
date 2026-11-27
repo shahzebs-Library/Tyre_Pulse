@@ -62,8 +62,17 @@ describe('previewVerification', () => {
     expect(p.flags).toEqual(['duplicate_plate'])
     expect(p.applyNow).toEqual([])
   })
-  it('asset code mismatch waits', () => {
-    expect(previewVerification({ vehicle, outcome: 'present', observedAssetNo: 'TM515' }).flags).toEqual(['asset_code_mismatch'])
+  it('asset code mismatch waits and fills nothing, not even a blank', () => {
+    const p = previewVerification({ vehicle, outcome: 'present', observedAssetNo: 'TM515', observedChassis: 'LZG123' })
+    expect(p.flags).toEqual(['asset_code_mismatch'])
+    expect(p.applyNow).toEqual([])
+  })
+  it('a chassis with I/O/Q fills nothing', () => {
+    expect(previewVerification({ vehicle, outcome: 'present', observedPlate: '1 A', observedChassis: 'LZGO1' }).applyNow).toEqual([])
+  })
+  it('plateKey folds Arabic-Indic digits', () => {
+    expect(plateKey('٤٢٠٥ sxa')).toBe('4205SXA')
+    expect(plateKey('۴۲۰۵ SXA')).toBe('4205SXA')
   })
   it('not found / other country always wait', () => {
     expect(previewVerification({ vehicle, outcome: 'not_found' })).toEqual({ status: 'pending', flags: ['not_found'], applyNow: [] })

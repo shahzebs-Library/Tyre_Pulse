@@ -30,6 +30,14 @@ final class FleetVerificationCopy {
   static const Map<String, Map<String, String>> values =
       <String, Map<String, String>>{
     'en': <String, String>{
+      'waitingFor': 'Waiting to send for this machine',
+      'stateWaiting': 'Waiting to send (tries: {n})',
+      'stateFailed': 'Not sent: {reason}',
+      '@photoMissing':
+          'the photo is no longer on this phone. Discard and check again.',
+      '@retryLimit':
+          'could not reach the server after many tries. Discard and check again.',
+      'retryNow': 'Send now',
       'action': 'Verify on site',
       'title': 'Verify on site',
       'subtitle': '{asset} - check the machine in front of you',
@@ -81,6 +89,13 @@ final class FleetVerificationCopy {
       'r.chassis_changed': 'chassis differs from file',
     },
     'ar': <String, String>{
+      'waitingFor': 'بانتظار الإرسال لهذه المعدة',
+      'stateWaiting': 'بانتظار الإرسال (المحاولات: {n})',
+      'stateFailed': 'لم يرسل: {reason}',
+      '@photoMissing': 'الصورة لم تعد على هذا الهاتف. تجاهل وتحقق مرة أخرى.',
+      '@retryLimit':
+          'تعذر الوصول إلى الخادم بعد محاولات كثيرة. تجاهل وتحقق مرة أخرى.',
+      'retryNow': 'إرسال الآن',
       'action': 'التحقق في الموقع',
       'title': 'التحقق في الموقع',
       'subtitle': '{asset} - افحص المعدة التي أمامك',
@@ -130,6 +145,14 @@ final class FleetVerificationCopy {
       'r.chassis_changed': 'الشاصي يختلف عن السجل',
     },
     'ur': <String, String>{
+      'waitingFor': 'اس مشین کے لیے بھیجنے کا انتظار',
+      'stateWaiting': 'بھیجنے کا انتظار (کوششیں: {n})',
+      'stateFailed': 'نہیں بھیجا گیا: {reason}',
+      '@photoMissing':
+          'تصویر اب اس فون پر نہیں ہے۔ ختم کریں اور دوبارہ چیک کریں۔',
+      '@retryLimit':
+          'کئی کوششوں کے بعد بھی سرور تک رسائی نہیں ہو سکی۔ ختم کریں اور دوبارہ چیک کریں۔',
+      'retryNow': 'ابھی بھیجیں',
       'action': 'سائٹ پر تصدیق',
       'title': 'سائٹ پر تصدیق',
       'subtitle': '{asset} - سامنے موجود مشین چیک کریں',

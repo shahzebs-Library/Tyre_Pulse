@@ -165,7 +165,8 @@ export async function countVerification(country) {
   const [all, done, wait] = await Promise.all([
     head(),
     head().eq('verification_status', 'verified'),
-    head().eq('verification_status', 'pending'),
+    // A pending check does not change the machine's stamp; count the queue.
+    scoped(supabase.from('fleet_verifications').select('id', { count: 'exact', head: true })).eq('status', 'pending'),
   ])
   const err = all.error || done.error || wait.error
   if (err) {

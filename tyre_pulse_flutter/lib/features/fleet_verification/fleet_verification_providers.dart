@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show FutureProviderFamily;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
@@ -28,6 +29,7 @@ final FutureProvider<FleetVerificationService?>
   return FleetVerificationService(
     FleetVerificationOutbox(prefs, ws.userId),
     ref.watch(fleetVerificationRemoteProvider),
+    photoDir: getApplicationDocumentsDirectory,
   );
 });
 

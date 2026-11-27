@@ -48,7 +48,7 @@ export default function AccidentHoldingsBoard() {
       {state.ok && rows.length > 0 && (
         <table className="w-full text-sm">
           <thead className="text-[11px] uppercase tracking-wide text-[var(--text-dim)] text-start">
-            <tr><th className="py-1.5 font-medium">{tx('holdings.colHolder')}</th><th className="py-1.5 font-medium px-3">{tx('holdings.colOpen')}</th><th className="py-1.5 font-medium text-end">{tx('holdings.colOverdue')}</th><th className="py-1.5 font-medium text-end">{tx('holdings.colOldest')}</th></tr>
+            <tr><th className="py-1.5 font-medium text-start">{tx('holdings.colHolder')}</th><th className="py-1.5 font-medium px-3 text-start">{tx('holdings.colOpen')}</th><th className="py-1.5 font-medium !text-end">{tx('holdings.colOverdue')}</th><th className="py-1.5 font-medium !text-end">{tx('holdings.colOldest')}</th></tr>
           </thead>
           <tbody>
             {rows.map((r) => (

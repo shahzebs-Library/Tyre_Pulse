@@ -256,7 +256,7 @@ export function OwnersTab({ canWrite }) {
           )}
         </div>
         <table className="w-full text-start text-sm">
-          <thead className="text-[11px] uppercase tracking-wide text-[var(--text-dim)]">
+          <thead className="text-[11px] uppercase tracking-wide text-[var(--text-dim)] [&_th]:text-start">
             <tr>
               <th className="py-2 pe-3 font-medium">{tx('owners.colStep')}</th>
               <th className="py-2 pe-2 font-medium">{tx('owners.colRole')}</th>

@@ -4,6 +4,7 @@ import { Inbox, Clock, AlertTriangle, CheckCircle2, User, Users, MapPin, Refresh
 import { listMyAccidentTasks } from '../../lib/api/accidentOwnership'
 import { splitTasks, taskCounts } from '../../lib/accidentOwnership'
 import useAccidentOwnershipText from './useAccidentOwnershipText'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
 
 /**
@@ -28,19 +29,20 @@ function slaTone(t) {
   if (t.sla_state === 'running' || t.sla_state === 'met') return 'good'
   return 'quiet'
 }
-function dueText(dueAt) {
+function dueText(dueAt, lang) {
   if (!dueAt) return null
   const d = new Date(dueAt)
   if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleString(lang === 'ar' ? 'ar' : undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 const rowKey = (t) => t.workstream_id || `${t.accident_id}-${t.workstream_key}`
 
 function TaskRow({ task }) {
+  const { language } = useLanguage()
   const L = useAccidentOwnershipText()
   const { tx } = L
   const tone = slaTone(task)
-  const due = dueText(task.due_at)
+  const due = dueText(task.due_at, language)
   return (
     <li className="py-2.5">
       <Link

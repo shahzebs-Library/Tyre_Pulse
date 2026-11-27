@@ -78,6 +78,8 @@ export const MOBILE_MODULES = [
   // ADMIN ONLY (ModuleDef.adminOnly) - no leakage.
   { key: 'admin',          label: 'Admin Console',    group: 'Admin',       roles: [] },
   { key: 'users',          label: 'User Management',  group: 'Admin',       roles: [] },
+  // Field hardware (Flutter-only): admin-only until opened per user here.
+  { key: 'devices',        label: 'Devices',          group: 'Admin',       roles: [] },
 ]
 
 /** Lookup by mobile key. */

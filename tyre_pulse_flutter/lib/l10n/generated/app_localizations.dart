@@ -16385,6 +16385,438 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.'**
   String get driverChargeAppealClosedDeducted;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get devicesTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Gauges, scanners, printers'**
+  String get devicesProfileRowValue;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Gauges, handheld scanners and label printers added on this phone. Only you see this list.'**
+  String get devicesIntro;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'No devices yet'**
+  String get devicesEmptyTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Add a tread or pressure gauge, a handheld scanner or a label printer.'**
+  String get devicesEmptyMessage;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The saved devices could not be read on this phone.'**
+  String get devicesLoadFailed;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Add device'**
+  String get devicesAdd;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tread depth gauge'**
+  String get devicesKindTread;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre pressure gauge'**
+  String get devicesKindPressure;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tread and pressure gauge'**
+  String get devicesKindCombined;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Barcode or RFID handheld'**
+  String get devicesKindScanner;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'UHF RFID reader'**
+  String get devicesKindRfid;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Label printer'**
+  String get devicesKindPrinter;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get devicesTransportBle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard mode'**
+  String get devicesTransportHid;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get devicesTransportNetwork;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Simulator (testing only)'**
+  String get devicesTransportSimulator;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth is off. Turn it on to add or use a Bluetooth device.'**
+  String get devicesBluetoothOff;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre Pulse is not allowed to use Bluetooth. Allow it, or turn it on in the phone settings.'**
+  String get devicesPermissionDenied;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This phone has no Bluetooth LE. Keyboard-mode and network devices still work.'**
+  String get devicesBluetoothUnsupported;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Allow Bluetooth'**
+  String get devicesAllowBluetooth;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for nearby devices…'**
+  String get devicesScanning;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'No devices found. Wake the device and keep it close to the phone.'**
+  String get devicesScanNone;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Scan again'**
+  String get devicesScanAgain;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Unnamed device'**
+  String get devicesUnnamed;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'What is this device?'**
+  String get devicesChooseKind;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'How does it connect?'**
+  String get devicesChooseConnection;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Device name'**
+  String get devicesNameLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer IP address'**
+  String get devicesHostLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get devicesPortLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer language'**
+  String get devicesLanguageLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Label size'**
+  String get devicesLabelSizeLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Save device'**
+  String get devicesSave;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in this field.'**
+  String get devicesFieldRequired;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'First pair the device with the phone as a keyboard in the phone\'s Bluetooth settings, then save it here.'**
+  String get devicesHidHint;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Test'**
+  String get devicesTest;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Read once'**
+  String get devicesTestRead;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Print test label'**
+  String get devicesTestPrint;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre Pulse test label'**
+  String get devicesTestLabelName;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Read {value}'**
+  String devicesTestReading(String value);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Test label sent to the printer.'**
+  String get devicesTestPrinted;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Forget'**
+  String get devicesForget;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Forget {name}? You can add it again later.'**
+  String devicesForgetConfirm(String name);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Battery {level}%'**
+  String devicesBattery(int level);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The device did not connect. Check it is switched on and close by.'**
+  String get devicesErrorNotConnected;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The device did not answer in time.'**
+  String get devicesErrorTimeout;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'No reading arrived. Take the measurement on the gauge and try again.'**
+  String get devicesErrorNoReading;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The device sent data this app cannot read. Its settings need the maker\'s specification.'**
+  String get devicesErrorUnreadable;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This device is missing its connection settings.'**
+  String get devicesErrorNotConfigured;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The label could not be printed. Check the printer has paper and is on.'**
+  String get devicesErrorPrintFailed;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This device cannot do that.'**
+  String get devicesErrorUnsupported;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This reader needs its maker\'s software, which is not installed yet. Use it in keyboard mode for now.'**
+  String get devicesErrorVendorSdk;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Read pressure from gauge'**
+  String get gaugeReadPressure;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Read tread from gauge'**
+  String get gaugeReadTread;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'No gauge is set up for this reading. Add one under Profile > Devices.'**
+  String get gaugeNoGauge;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a gauge'**
+  String get gaugePickTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Reading from {device}…'**
+  String gaugeReadingFrom(String device);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Use this reading?'**
+  String get gaugeConfirmTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'{device} measured {value} on {position}.'**
+  String gaugeConfirmBody(String device, String value, String position);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This replaces the value already entered ({old}).'**
+  String gaugeConfirmReplace(String old);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Use reading'**
+  String get gaugeUseReading;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Send the reading'**
+  String get gaugeHidTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Press the send button on {device}. The value appears below.'**
+  String gaugeHidMessage(String device);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Value from the gauge'**
+  String get gaugeHidField;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'{value} psi'**
+  String gaugeValuePsi(String value);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'{value} mm'**
+  String gaugeValueMm(String value);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Handheld scanner ready: press the trigger to look up a tyre or asset.'**
+  String get hidScannerReady;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Print label'**
+  String get labelPrint;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Print label on'**
+  String get labelChoosePrinter;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'System printer or PDF'**
+  String get labelPrintPdf;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Label sent to {printer}.'**
+  String labelPrinted(String printer);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Arabic or Urdu text on this label prints correctly only through the system printer or PDF.'**
+  String get labelUnicodeNote;
 }
 
 class _AppLocalizationsDelegate

@@ -9389,4 +9389,257 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.';
+
+  @override
+  String get devicesTitle => 'Devices';
+
+  @override
+  String get devicesProfileRowValue => 'Gauges, scanners, printers';
+
+  @override
+  String get devicesIntro =>
+      'Gauges, handheld scanners and label printers added on this phone. Only you see this list.';
+
+  @override
+  String get devicesEmptyTitle => 'No devices yet';
+
+  @override
+  String get devicesEmptyMessage =>
+      'Add a tread or pressure gauge, a handheld scanner or a label printer.';
+
+  @override
+  String get devicesLoadFailed =>
+      'The saved devices could not be read on this phone.';
+
+  @override
+  String get devicesAdd => 'Add device';
+
+  @override
+  String get devicesKindTread => 'Tread depth gauge';
+
+  @override
+  String get devicesKindPressure => 'Tyre pressure gauge';
+
+  @override
+  String get devicesKindCombined => 'Tread and pressure gauge';
+
+  @override
+  String get devicesKindScanner => 'Barcode or RFID handheld';
+
+  @override
+  String get devicesKindRfid => 'UHF RFID reader';
+
+  @override
+  String get devicesKindPrinter => 'Label printer';
+
+  @override
+  String get devicesTransportBle => 'Bluetooth';
+
+  @override
+  String get devicesTransportHid => 'Keyboard mode';
+
+  @override
+  String get devicesTransportNetwork => 'Network';
+
+  @override
+  String get devicesTransportSimulator => 'Simulator (testing only)';
+
+  @override
+  String get devicesBluetoothOff =>
+      'Bluetooth is off. Turn it on to add or use a Bluetooth device.';
+
+  @override
+  String get devicesPermissionDenied =>
+      'Tyre Pulse is not allowed to use Bluetooth. Allow it, or turn it on in the phone settings.';
+
+  @override
+  String get devicesBluetoothUnsupported =>
+      'This phone has no Bluetooth LE. Keyboard-mode and network devices still work.';
+
+  @override
+  String get devicesAllowBluetooth => 'Allow Bluetooth';
+
+  @override
+  String get devicesScanning => 'Looking for nearby devices…';
+
+  @override
+  String get devicesScanNone =>
+      'No devices found. Wake the device and keep it close to the phone.';
+
+  @override
+  String get devicesScanAgain => 'Scan again';
+
+  @override
+  String get devicesUnnamed => 'Unnamed device';
+
+  @override
+  String get devicesChooseKind => 'What is this device?';
+
+  @override
+  String get devicesChooseConnection => 'How does it connect?';
+
+  @override
+  String get devicesNameLabel => 'Device name';
+
+  @override
+  String get devicesHostLabel => 'Printer IP address';
+
+  @override
+  String get devicesPortLabel => 'Port';
+
+  @override
+  String get devicesLanguageLabel => 'Printer language';
+
+  @override
+  String get devicesLabelSizeLabel => 'Label size';
+
+  @override
+  String get devicesSave => 'Save device';
+
+  @override
+  String get devicesFieldRequired => 'Fill in this field.';
+
+  @override
+  String get devicesHidHint =>
+      'First pair the device with the phone as a keyboard in the phone\'s Bluetooth settings, then save it here.';
+
+  @override
+  String get devicesTest => 'Test';
+
+  @override
+  String get devicesTestRead => 'Read once';
+
+  @override
+  String get devicesTestPrint => 'Print test label';
+
+  @override
+  String get devicesTestLabelName => 'Tyre Pulse test label';
+
+  @override
+  String devicesTestReading(String value) {
+    return 'Read $value';
+  }
+
+  @override
+  String get devicesTestPrinted => 'Test label sent to the printer.';
+
+  @override
+  String get devicesForget => 'Forget';
+
+  @override
+  String devicesForgetConfirm(String name) {
+    return 'Forget $name? You can add it again later.';
+  }
+
+  @override
+  String devicesBattery(int level) {
+    return 'Battery $level%';
+  }
+
+  @override
+  String get devicesErrorNotConnected =>
+      'The device did not connect. Check it is switched on and close by.';
+
+  @override
+  String get devicesErrorTimeout => 'The device did not answer in time.';
+
+  @override
+  String get devicesErrorNoReading =>
+      'No reading arrived. Take the measurement on the gauge and try again.';
+
+  @override
+  String get devicesErrorUnreadable =>
+      'The device sent data this app cannot read. Its settings need the maker\'s specification.';
+
+  @override
+  String get devicesErrorNotConfigured =>
+      'This device is missing its connection settings.';
+
+  @override
+  String get devicesErrorPrintFailed =>
+      'The label could not be printed. Check the printer has paper and is on.';
+
+  @override
+  String get devicesErrorUnsupported => 'This device cannot do that.';
+
+  @override
+  String get devicesErrorVendorSdk =>
+      'This reader needs its maker\'s software, which is not installed yet. Use it in keyboard mode for now.';
+
+  @override
+  String get gaugeReadPressure => 'Read pressure from gauge';
+
+  @override
+  String get gaugeReadTread => 'Read tread from gauge';
+
+  @override
+  String get gaugeNoGauge =>
+      'No gauge is set up for this reading. Add one under Profile > Devices.';
+
+  @override
+  String get gaugePickTitle => 'Choose a gauge';
+
+  @override
+  String gaugeReadingFrom(String device) {
+    return 'Reading from $device…';
+  }
+
+  @override
+  String get gaugeConfirmTitle => 'Use this reading?';
+
+  @override
+  String gaugeConfirmBody(String device, String value, String position) {
+    return '$device measured $value on $position.';
+  }
+
+  @override
+  String gaugeConfirmReplace(String old) {
+    return 'This replaces the value already entered ($old).';
+  }
+
+  @override
+  String get gaugeUseReading => 'Use reading';
+
+  @override
+  String get gaugeHidTitle => 'Send the reading';
+
+  @override
+  String gaugeHidMessage(String device) {
+    return 'Press the send button on $device. The value appears below.';
+  }
+
+  @override
+  String get gaugeHidField => 'Value from the gauge';
+
+  @override
+  String gaugeValuePsi(String value) {
+    return '$value psi';
+  }
+
+  @override
+  String gaugeValueMm(String value) {
+    return '$value mm';
+  }
+
+  @override
+  String get hidScannerReady =>
+      'Handheld scanner ready: press the trigger to look up a tyre or asset.';
+
+  @override
+  String get labelPrint => 'Print label';
+
+  @override
+  String get labelChoosePrinter => 'Print label on';
+
+  @override
+  String get labelPrintPdf => 'System printer or PDF';
+
+  @override
+  String labelPrinted(String printer) {
+    return 'Label sent to $printer.';
+  }
+
+  @override
+  String get labelUnicodeNote =>
+      'Arabic or Urdu text on this label prints correctly only through the system printer or PDF.';
 }

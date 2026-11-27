@@ -927,6 +927,16 @@ principle that the server is the real boundary, but it means an administrator
 looking for it in the module list will not find it. Decision D11 in artifact 09
 asks whether it should get a key.
 
+**Devices (added 2026-11-27).** `ModuleKey.devices`, built with
+`ModuleDef.adminOnly` and listed in `flutterOnlyModules`: no role reaches it by
+default; Admin and super-admin always do (the break-glass in section 1); one
+person is opened with a `mobile:devices` per-user grant from the web Access
+Manager (`src/lib/mobileModules.js` carries the key with `roles: []`). Every
+device surface asks `devicesAccessProvider` (`lib/core/devices/
+device_providers.dart`), which fails CLOSED when the access state cannot be
+read, so a field role sees no device button and the screens behave exactly as
+before. There is no server data behind it to protect.
+
 ## 11. Module Control: a module switched Off on the web (added 2026-11-12)
 
 The web console's Module Control marks each WEB module `live`, `beta`,

@@ -26,6 +26,7 @@ import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/sync/sync_workspace_id.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/inventory/physical_inventory_providers.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 
 /// Every queued command not yet `synced` for the active workspace, live.
@@ -37,10 +38,18 @@ final StreamProvider<int> profilePendingSyncCountProvider =
     StreamProvider<int>((ref) {
   final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
   if (workspace == null) return Stream<int>.value(0);
+  // Physical counts (Stock Count) wait in their own encrypted outbox, not in
+  // pending_commands; they are added in so an offline count is never "0".
+  final AsyncValue<int> captures =
+      ref.watch(physicalOutboxPendingCountProvider);
+  if (captures case AsyncError<int>(:final Object error)) {
+    return Stream<int>.error(error);
+  }
+  final int extra = captures.value ?? 0;
   final AppDatabase db = ref.watch(appDatabaseProvider);
-  return db.queueDao.watchPendingCount(
-    workspaceId: workspaceIdFor(workspace),
-  );
+  return db.queueDao
+      .watchPendingCount(workspaceId: workspaceIdFor(workspace))
+      .map((int n) => n + extra);
 });
 
 /// The signed-in person's own saved signature store (V601).

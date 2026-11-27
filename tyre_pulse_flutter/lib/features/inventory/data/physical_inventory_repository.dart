@@ -60,54 +60,68 @@ final class SupabasePhysicalInventoryRepository
 
   final SupabaseClient _client;
 
+  /// Every call is bounded so a half-dead link fails as "offline" (the
+  /// capture stays in the outbox) instead of holding the outbox flush, and
+  /// with it every later flush, for minutes. Each write is idempotent
+  /// (client_uuid / idempotency key), so a late answer stores nothing twice.
+  static const Duration _readTimeout = Duration(seconds: 15);
+  static const Duration _writeTimeout = Duration(seconds: 30);
+  static const Duration _uploadTimeout = Duration(seconds: 90);
+
   @override
-  Future<List<PhysicalSession>> openSessions() =>
-      guard<List<PhysicalSession>>(() async {
-        final List<Map<String, dynamic>> rows = await _client
-            .from(PhysicalInventoryRpcs.sessions)
-            .select(
-              'id, reference, country, site, location_id, status, started_at',
-            )
-            .eq('status', 'open')
-            .order('started_at', ascending: false)
-            .order('id')
-            .limit(50);
-        return rows
-            .map((Map<String, dynamic> r) => PhysicalSession.fromJson(r))
-            .toList(growable: false);
-      });
+  Future<List<PhysicalSession>> openSessions() => guard<List<PhysicalSession>>(
+        () async {
+          final List<Map<String, dynamic>> rows = await _client
+              .from(PhysicalInventoryRpcs.sessions)
+              .select(
+                'id, reference, country, site, location_id, status, started_at',
+              )
+              .eq('status', 'open')
+              .order('started_at', ascending: false)
+              .order('id')
+              .limit(50);
+          return rows
+              .map((Map<String, dynamic> r) => PhysicalSession.fromJson(r))
+              .toList(growable: false);
+        },
+        timeout: _readTimeout,
+      );
 
   static const String _placeCols =
       'id, country, site, parent_id, location_type, code, name, active';
 
   @override
-  Future<List<InventoryPlace>> stores() =>
-      guard<List<InventoryPlace>>(() async {
-        final List<Map<String, dynamic>> rows = await _client
-            .from(PhysicalInventoryRpcs.locations)
-            .select(_placeCols)
-            .eq('location_type', 'warehouse')
-            .eq('active', true)
-            .order('site')
-            .order('code')
-            .order('id')
-            .limit(200);
-        return rows
-            .map((Map<String, dynamic> r) => InventoryPlace.fromJson(r))
-            .toList(growable: false);
-      });
+  Future<List<InventoryPlace>> stores() => guard<List<InventoryPlace>>(
+        () async {
+          final List<Map<String, dynamic>> rows = await _client
+              .from(PhysicalInventoryRpcs.locations)
+              .select(_placeCols)
+              .eq('location_type', 'warehouse')
+              .eq('active', true)
+              .order('site')
+              .order('code')
+              .order('id')
+              .limit(200);
+          return rows
+              .map((Map<String, dynamic> r) => InventoryPlace.fromJson(r))
+              .toList(growable: false);
+        },
+        timeout: _readTimeout,
+      );
 
   @override
-  Future<InventoryPlace?> placeById(String id) =>
-      guard<InventoryPlace?>(() async {
-        final List<Map<String, dynamic>> rows = await _client
-            .from(PhysicalInventoryRpcs.locations)
-            .select(_placeCols)
-            .eq('id', id)
-            .eq('active', true)
-            .limit(1);
-        return rows.isEmpty ? null : InventoryPlace.fromJson(rows.first);
-      });
+  Future<InventoryPlace?> placeById(String id) => guard<InventoryPlace?>(
+        () async {
+          final List<Map<String, dynamic>> rows = await _client
+              .from(PhysicalInventoryRpcs.locations)
+              .select(_placeCols)
+              .eq('id', id)
+              .eq('active', true)
+              .limit(1);
+          return rows.isEmpty ? null : InventoryPlace.fromJson(rows.first);
+        },
+        timeout: _readTimeout,
+      );
 
   @override
   Future<PhysicalSession> startSession({
@@ -116,82 +130,95 @@ final class SupabasePhysicalInventoryRepository
     required String site,
     String? locationId,
   }) =>
-      guard<PhysicalSession>(() async {
-        final Object? r = await _client.rpc<Object?>(
-          PhysicalInventoryRpcs.sessionStart,
-          params: <String, Object?>{
-            'p_payload': <String, Object?>{
-              'idempotency_key': idempotencyKey,
-              'country': country,
-              'site': site,
-              'location_id': locationId,
+      guard<PhysicalSession>(
+        () async {
+          final Object? r = await _client.rpc<Object?>(
+            PhysicalInventoryRpcs.sessionStart,
+            params: <String, Object?>{
+              'p_payload': <String, Object?>{
+                'idempotency_key': idempotencyKey,
+                'country': country,
+                'site': site,
+                'location_id': locationId,
+              },
             },
-          },
-        );
-        final Map<Object?, Object?> m =
-            r is Map ? r : const <Object?, Object?>{};
-        return PhysicalSession(
-          id: '${m['id'] ?? ''}',
-          reference: '${m['reference'] ?? ''}',
-          site: site.toUpperCase(),
-          status: 'open',
-          country: country,
-          locationId: locationId,
-        );
-      });
+          );
+          final Map<Object?, Object?> m =
+              r is Map ? r : const <Object?, Object?>{};
+          return PhysicalSession(
+            id: '${m['id'] ?? ''}',
+            reference: '${m['reference'] ?? ''}',
+            site: site.toUpperCase(),
+            status: 'open',
+            country: country,
+            locationId: locationId,
+          );
+        },
+        timeout: _writeTimeout,
+      );
 
   @override
-  Future<List<MaterialPick>> search(String query) =>
-      guard<List<MaterialPick>>(() async {
-        final Object? r = await _client.rpc<Object?>(
-          PhysicalInventoryRpcs.search,
-          params: <String, Object?>{
-            'p_payload': <String, Object?>{'query': query, 'limit': 20},
-          },
-        );
-        return MaterialPick.fromSearch(r);
-      });
+  Future<List<MaterialPick>> search(String query) => guard<List<MaterialPick>>(
+        () async {
+          final Object? r = await _client.rpc<Object?>(
+            PhysicalInventoryRpcs.search,
+            params: <String, Object?>{
+              'p_payload': <String, Object?>{'query': query, 'limit': 20},
+            },
+          );
+          return MaterialPick.fromSearch(r);
+        },
+        timeout: _readTimeout,
+      );
 
   @override
   Future<Map<String, Object?>> capture(Map<String, Object?> payload) =>
-      guard<Map<String, Object?>>(() async {
-        final Object? r = await _client.rpc<Object?>(
-          PhysicalInventoryRpcs.capture,
-          params: <String, Object?>{'p_payload': payload},
-        );
-        return r is Map
-            ? Map<String, Object?>.from(r)
-            : const <String, Object?>{};
-      });
+      guard<Map<String, Object?>>(
+        () async {
+          final Object? r = await _client.rpc<Object?>(
+            PhysicalInventoryRpcs.capture,
+            params: <String, Object?>{'p_payload': payload},
+          );
+          return r is Map
+              ? Map<String, Object?>.from(r)
+              : const <String, Object?>{};
+        },
+        timeout: _writeTimeout,
+      );
 
   @override
-  Future<void> upload(String path, Uint8List bytes) => guard<void>(() async {
-        try {
-          await _client.storage.from(inventoryPhotoBucket).uploadBinary(
-                path,
-                bytes,
-                fileOptions: const FileOptions(
-                  contentType: 'image/jpeg',
-                  upsert: false,
-                ),
-              );
-        } on StorageException catch (e) {
-          final String m = e.message.toLowerCase();
-          if (e.statusCode == '409' ||
-              m.contains('already exists') ||
-              m.contains('duplicate')) {
-            return;
+  Future<void> upload(String path, Uint8List bytes) => guard<void>(
+        () async {
+          try {
+            await _client.storage.from(inventoryPhotoBucket).uploadBinary(
+                  path,
+                  bytes,
+                  fileOptions: const FileOptions(
+                    contentType: 'image/jpeg',
+                    upsert: false,
+                  ),
+                );
+          } on StorageException catch (e) {
+            final String m = e.message.toLowerCase();
+            if (e.statusCode == '409' ||
+                m.contains('already exists') ||
+                m.contains('duplicate')) {
+              return;
+            }
+            rethrow;
           }
-          rethrow;
-        }
-      });
+        },
+        timeout: _uploadTimeout,
+      );
 
   @override
-  Future<void> attachPhoto(Map<String, Object?> payload) =>
-      guard<void>(() async {
-        await _client.rpc<Object?>(
-          PhysicalInventoryRpcs.photoAttach,
-          params: <String, Object?>{'p_payload': payload},
-        );
-      });
+  Future<void> attachPhoto(Map<String, Object?> payload) => guard<void>(
+        () async {
+          await _client.rpc<Object?>(
+            PhysicalInventoryRpcs.photoAttach,
+            params: <String, Object?>{'p_payload': payload},
+          );
+        },
+        timeout: _writeTimeout,
+      );
 }

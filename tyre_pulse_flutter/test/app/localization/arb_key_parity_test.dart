@@ -698,10 +698,12 @@ void main() {
     // 2714 + 65 = 2779: Profile's Sync queue and Drafts screens; + 2 = 2781:
     // the not-active screen's "Check again" button and its "still not
     // active" reply (accessBlockedCheckAgain / StillWaiting).
-    test('en, ar and ur each carry exactly 2781 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2781);
-      expect(_translatableKeys(ar).length, 2781);
-      expect(_translatableKeys(ur).length, 2781);
+    // 2781 + 1 = 2782: homeRoleCopyCatalog, the per-role Home tiles and rows
+    // (one catalog key, like the other *CopyCatalog keys).
+    test('en, ar and ur each carry exactly 2782 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2782);
+      expect(_translatableKeys(ar).length, 2782);
+      expect(_translatableKeys(ur).length, 2782);
     });
   });
 

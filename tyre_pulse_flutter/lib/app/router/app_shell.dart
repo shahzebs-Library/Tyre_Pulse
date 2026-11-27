@@ -73,6 +73,8 @@ class TpAppShell extends ConsumerWidget {
         destinations: TpShell.destinations,
         canAccess: (RouteGuard guard) =>
             resolver.decide(guard) is ModuleAccessAllowed,
+        preferredPrimary: ref.watch(shellTabPolicyProvider).preferred,
+        canSignApprovals: ref.watch(shellTabPolicyProvider).canSignApprovals,
       ),
       navigationShell.currentIndex,
     );

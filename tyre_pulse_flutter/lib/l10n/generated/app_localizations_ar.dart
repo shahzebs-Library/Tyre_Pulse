@@ -2180,6 +2180,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get homeStatUnavailableCaption => 'تعذر التحقق';
 
   @override
+  String get homeRoleCopyCatalog =>
+      'meterTitle=سجّل عداد اليوم~meterNotLogged=لم يُسجَّل اليوم~meterLogged=سُجّل %time%~problemTitle=أبلغ عن مشكلة أو عطل~problemHint=أخبر الورشة بما هو معطّل~exceptionsTitle=استثناءات اليوم~offRoad=خارج الخدمة~openAccidents=حوادث مفتوحة~maintenanceOverdue=صيانة متأخرة~tyresAttention=إطارات تحتاج انتباهاً~handoverTitle=تسليمات بانتظار توقيعك~reportAccident=أبلغ عن حادث~approvalsTitle=موافقات بانتظارك~approvalsSplit=%a% فحوصات • %b% قوائم تحقق~issueTitle=أبلغ عن مشكلة~issueHint=شيء معطّل أو غير آمن~teamTitle=الفريق الآن~working=يعمل~waiting=ينتظر~free=متاح~teamNote=متاح يعني سجّل الحضور ولا يعمل. لا يمكن حساب الغياب: لا يوجد سجل حضور.~assignTitle=إسناد الأعمال~assignHint=%count% بطاقات عمل مفتوحة بدون مسؤول~assignGap=يفتح قائمة بطاقات العمل. الإسناد من الهاتف غير متاح بعد.~myJobsTitle=أعمالي~myJobsCount=%count% مفتوحة~myJobsNone=لا توجد أعمال مفتوحة~plantTitle=فحوصات المحطة اليوم~sheetsDue=%count% نماذج مستحقة~allDone=تم كل شيء اليوم~dailyTitle=الفحص اليومي للورشة~dueToday=مستحق اليوم~signTitle=موافقات للتوقيع~signHint=%count% بانتظار توقيعك~tyresDueTitle=إطارات مستحقة للاستبدال~myVehicle=مركبتي~noVehicle=لم يُسجَّل عداد بعد~wash=سجّل غسيلاً~washDays=آخر غسيل قبل %count% أيام~washToday=غُسلت اليوم~washNever=لا يوجد غسيل مسجّل~dailyChecklist=قائمة التحقق اليومية~charges=مخالفاتي ورسومي~chargesHint=المخالفات والرسوم وتوقيعاتك~summary=الملخص اليومي والتقارير~alerts=التنبيهات~plan=خطة اليوم~planOpen=%count% مفتوحة اليوم~repair=طلب إصلاح~meter=سجل العداد~inspectionsDue=فحوصات مستحقة اليوم~checklistsToSign=قوائم تحقق للتوقيع~waitingParts=بانتظار قطع الغيار~blocked=متوقف أكثر من 30 دقيقة~requestParts=اطلب قطع غيار~recent=الفحوصات الأخيرة~reorder=مخزون لإعادة الطلب~sync=بانتظار المزامنة~more=المزيد~open=افتح';
+
+  @override
   String get homeNoQuickActionsMessage =>
       'لا يتوفر لك شيء هنا بعد. تواصل مع المسؤول إذا احتجت إلى الوصول إلى إحدى الميزات.';
 

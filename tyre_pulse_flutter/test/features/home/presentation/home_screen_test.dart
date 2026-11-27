@@ -46,7 +46,19 @@ import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
 
 import '../../../core/database/database_test_support.dart';
 
-const AccessState _admin = AccessState(role: UserRole.known(RoleId.admin));
+/// Reaches every module on the ORIGINAL Home layout. A super admin whose own
+/// role (Director) has no per-role plan keeps that layout
+/// (`domain/home_role_plan.dart`); a plain Admin now gets the Admin plan, so
+/// the original-layout tests below run as this person instead.
+const AccessState _admin = AccessState(
+  role: UserRole.known(RoleId.director),
+  isSuperAdmin: true,
+);
+
+/// Reaches only the handover queue and has no per-role plan: the original
+/// layout with no Today's-work source at all.
+const AccessState _noWorkSource =
+    AccessState(role: UserRole.known(RoleId.fleetIncharge));
 const AccessState _tyreMan = AccessState(role: UserRole.known(RoleId.tyreMan));
 const AccessState _director =
     AccessState(role: UserRole.known(RoleId.director));
@@ -437,13 +449,19 @@ void main() {
     'a role scoped to some modules keeps the header and its permitted '
     'actions, and More is always reachable',
     (WidgetTester tester) async {
+      // A Tyre Man has a per-role plan: the header, ONE big New inspection
+      // tile, and More as a chip.
       await _pumpHome(tester, access: _tyreMan);
 
       expect(tester.takeException(), isNull);
       expect(find.text('Mohammed'), findsOneWidget);
       expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.newInspection), findsOneWidget);
-      expect(find.byKey(HomeScreenKeys.action('more')), findsOneWidget);
+      expect(find.byKey(HomeScreenKeys.rolePanel), findsOneWidget);
+      expect(
+        find.byKey(HomeScreenKeys.roleBig('newInspection')),
+        findsOneWidget,
+      );
+      expect(find.byKey(HomeScreenKeys.roleChip('more')), findsOneWidget);
     },
   );
 
@@ -743,7 +761,7 @@ void main() {
     testWidgets(
       'a role with no work source says so instead of "Nothing needs you"',
       (WidgetTester tester) async {
-        await _pumpHome(tester, access: _driver);
+        await _pumpHome(tester, access: _noWorkSource);
         await tester.pumpAndSettle();
 
         expect(find.byKey(HomeScreenKeys.workRow('none')), findsOneWidget);

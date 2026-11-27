@@ -386,6 +386,11 @@ const Map<ModuleKey, Set<RoleId>> flutterRoleDefaultExtensions =
   // inventory contract (docs/inventory/07) names it as a counting role. The
   // server is still the boundary: every `inv_*` RPC re-checks the capability.
   ModuleKey.stock: <RoleId>{RoleId.storeKeeper},
+  // Workshop: the Workshop Supervisor runs the floor. Their Home leads with
+  // "Team now" and "Assign jobs" (2026-11-27), both of which open the
+  // workshop route, which for a non-technician is the job-card board. The
+  // Expo registry never listed this role on `workshop`.
+  ModuleKey.workshop: <RoleId>{RoleId.workshopSupervisor},
 };
 
 /// The registry itself.

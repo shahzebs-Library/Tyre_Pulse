@@ -63,6 +63,7 @@ export async function lookupFleet({ country, assets }) {
     const { data, error } = await supabase.from('vehicle_fleet')
       .select('id,asset_no,registration_no,vehicle_type,make,site')
       .eq('country', c).in('asset_no', part)
+      .limit(500) // at most 150 codes per call; asset_no is unique per country
     if (error) throw toServiceError(error, 'Could not look up the vehicles.')
     for (const f of data || []) map.set(assetKey(f.asset_no), f)
   }

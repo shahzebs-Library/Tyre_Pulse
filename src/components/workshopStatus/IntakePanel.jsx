@@ -181,12 +181,12 @@ function VehicleLine({ r, k }) {
   return (
     <div className="wks-intake-line">
       <strong className="wks-mono">{r.asset_no}</strong>
-      {r.reg_no && <span className="wks-muted">{r.reg_no}</span>}
+      {r.reg_no && <bdi dir="ltr" className="wks-muted">{r.reg_no}</bdi>}
       {r.site && <span className="wks-chip">{r.site}</span>}
       <span className={`wks-chip is-src-${r.intake_source}`}>{k(`source.${r.intake_source}`)}</span>
       {r.priority && <span className={`wks-chip is-prio-${r.priority.toLowerCase()}`}>{k(`priority.${r.priority}`)}</span>}
-      {r.job_card_ref ? <span className="wks-muted">{k('jobCard')}: {r.job_card_ref}</span>
-        : r.provisional_ref && <span className="wks-muted">{k('provisional')}: {r.provisional_ref}</span>}
+      {r.job_card_ref ? <span className="wks-muted">{k('jobCard')}: <bdi dir="ltr">{r.job_card_ref}</bdi></span>
+        : r.provisional_ref && <span className="wks-muted">{k('provisional')}: <bdi dir="ltr">{r.provisional_ref}</bdi></span>}
       {r.complaint && <p className="wks-intake-complaint">{r.complaint}</p>}
       <p className="wks-muted wks-intake-meta">
         {k('enteredBy', { name: r.submitted_by_name || k('system'), time: fmtTime(r.submitted_at || r.first_seen_at) })}
@@ -271,8 +271,12 @@ function WaitingView({ rows, others, me, override, loading, k, onDone }) {
               <VehicleLine r={r} k={k} />
               <div className="wks-intake-actions">
                 {own && <span className="wks-muted">{k('waiting.ownEntry')}</span>}
-                <button type="button" className="cc-btn wks-tap" disabled={!can || busy} onClick={() => doConfirm([r.id])}><CheckCircle2 size={14} aria-hidden="true" /> {k('waiting.confirm')}</button>
-                <button type="button" className="cc-btn-ghost wks-tap" disabled={busy || own} onClick={() => { setReturning(r); setReason(''); setErr('') }}><Undo2 size={14} aria-hidden="true" /> {k('waiting.return')}</button>
+                {!own && (
+                  <>
+                    <button type="button" className="cc-btn wks-tap" disabled={!can || busy} onClick={() => doConfirm([r.id])}><CheckCircle2 size={14} aria-hidden="true" /> {k('waiting.confirm')}</button>
+                    <button type="button" className="cc-btn-ghost wks-tap" disabled={busy} onClick={() => { setReturning(r); setReason(''); setErr('') }}><Undo2 size={14} aria-hidden="true" /> {k('waiting.return')}</button>
+                  </>
+                )}
               </div>
             </li>
           )

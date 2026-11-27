@@ -194,7 +194,7 @@ export default function IntakeSheetGrid({ country, listed, onSent }) {
                   {SHEET_COLUMNS.map((c, ci) => {
                     if (c.auto) {
                       const v = c.key === 'reg_no' ? f?.registration_no : f?.vehicle_type
-                      return <td key={c.key} className="wks-intake-auto">{v || ''}</td>
+                      return <td key={c.key} className="wks-intake-auto"><bdi dir="ltr">{v || ''}</bdi></td>
                     }
                     const err = errors[c.key]
                     const id = `wks-in-${i}-${c.key}`

@@ -81,7 +81,7 @@
     "addRow": "Add row",
     "send": "Send to supervisor ({n})",
     "sendError": "The vehicles could not be sent.",
-    "problems": "{n} rows need fixing before they can be sent.",
+    "problems": "Rows that need fixing before they can be sent: {n}",
     "fleetError": "Plate and type could not be looked up. You can still send; the server checks the vehicle.",
     "pasted": "{n} rows pasted.",
     "pastedWithHeader": "{n} rows pasted, columns matched by their headers.",

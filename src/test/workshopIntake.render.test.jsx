@@ -48,8 +48,8 @@ describe('IntakePanel waiting view', () => {
     render(<IntakePanel permissions={{ view: true, intake_confirm: true }} permState="ready" initialView="waiting" />)
     await screen.findByText('TM701')
     const buttons = screen.getAllByRole('button', { name: 'Confirm' })
+    expect(buttons).toHaveLength(1)
     expect(buttons[0]).not.toBeDisabled()
-    expect(buttons[1]).toBeDisabled()
     expect(screen.getByText(intakeEn.waiting.ownEntry)).toBeTruthy()
   })
 

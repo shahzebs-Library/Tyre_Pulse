@@ -1,23 +1,25 @@
 /* Workshop Status -> Vehicle intake (sheet, waiting, list, roster, checks, sheets). */
-.wks-intake-body { display: grid; gap: 12px; margin-top: 12px; min-width: 0; }
+.wks-intake-body { display: grid; gap: 12px; margin-top: 12px; min-width: 0; max-width: 100%; }
+.wks-intake-sheet { display: grid; gap: 8px; min-width: 0; max-width: 100%; }
+.wks-intake-body .cc-btn, .wks-intake-body .cc-btn-ghost { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .wks-intake-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .wks-intake-toolbar .wks-muted { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
 .wks-intake-poll { font-size: 12px; }
 .wks-intake-warn { color: var(--cc-amber); font-size: 13px; margin: 0; }
 .wks-intake-err { display: block; color: var(--cc-red); font-size: 11px; margin-top: 2px; }
 
-.wks-intake-wrap { overflow-x: auto; border: 1px solid var(--cc-line); border-radius: 10px; -webkit-overflow-scrolling: touch; }
+.wks-intake-wrap { max-width: 100%; min-width: 0; overflow-x: auto; border: 1px solid var(--cc-border); border-radius: 10px; -webkit-overflow-scrolling: touch; }
 .wks-intake-grid { border-collapse: collapse; min-width: 1100px; width: 100%; font-size: 13px; }
-.wks-intake-grid th { position: sticky; top: 0; background: var(--cc-surface-2, var(--cc-track)); color: var(--cc-ink-2);
-  font-weight: 600; text-align: start; padding: 8px 6px; border-bottom: 1px solid var(--cc-line); white-space: nowrap; }
-.wks-intake-grid td { border-bottom: 1px solid var(--cc-line); padding: 4px 4px; vertical-align: top; }
+.wks-intake-grid th { position: sticky; top: 0; background: var(--cc-inner); color: var(--cc-ink-2);
+  font-weight: 600; text-align: start; padding: 8px 6px; border-bottom: 1px solid var(--cc-border); white-space: nowrap; }
+.wks-intake-grid td { border-bottom: 1px solid var(--cc-border); padding: 4px 4px; vertical-align: top; }
 .wks-intake-grid tr.is-empty td { opacity: .75; }
 .wks-intake-n { width: 36px; text-align: center; color: var(--cc-ink-3); }
 .wks-intake-auto { color: var(--cc-ink-2); padding-top: 12px !important; white-space: nowrap; }
 .wks-intake-cell { width: 100%; min-width: 110px; min-height: 36px; padding: 6px 8px; border-radius: 6px;
-  border: 1px solid transparent; background: transparent; color: var(--cc-ink); font: inherit; }
-.wks-intake-cell:hover { border-color: var(--cc-line); }
-.wks-intake-cell:focus { outline: 2px solid var(--cc-green); outline-offset: -1px; background: var(--cc-surface, #fff); }
+  border: 1px solid var(--cc-border); background: transparent; color: var(--cc-ink); font: inherit; }
+.wks-intake-cell:hover { border-color: var(--cc-ink-3); }
+.wks-intake-cell:focus { outline: 2px solid var(--cc-green); outline-offset: -1px; background: var(--cc-card); }
 .wks-intake-cell.has-err { border-color: var(--cc-red); background: var(--cc-red-tint); }
 .wks-intake-act { white-space: nowrap; text-align: end; }
 
@@ -30,7 +32,7 @@
 
 .wks-intake-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .wks-intake-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start;
-  padding: 12px; border: 1px solid var(--cc-line); border-radius: 10px; background: var(--cc-surface, transparent); }
+  padding: 12px; border: 1px solid var(--cc-border); border-radius: 10px; background: var(--cc-card); }
 .wks-intake-section .wks-intake-item { grid-template-columns: minmax(0, 1fr) auto auto; }
 .wks-intake-pick { padding-top: 2px; }
 .wks-intake-pick input { width: 20px; height: 20px; }
@@ -46,8 +48,8 @@
 .wks-intake-form { display: grid; gap: 10px; }
 .wks-intake-field { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--cc-ink); }
 .wks-intake-field input, .wks-intake-field select, .wks-intake-field textarea {
-  min-height: 40px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--cc-line);
-  background: var(--cc-surface, transparent); color: var(--cc-ink); font: inherit; font-weight: 400; }
+  min-height: 40px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--cc-border);
+  background: var(--cc-card); color: var(--cc-ink); font: inherit; font-weight: 400; }
 .wks-intake-roster-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .wks-intake-roster-form .wks-intake-field { flex: 1 1 160px; }
 

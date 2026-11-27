@@ -794,23 +794,16 @@ class _ChecklistHubHeader extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            Image.asset(
-              'assets/login/figma_brand_pulse_mark.png',
-              width: 40,
-              height: 28,
-              fit: BoxFit.contain,
-              excludeFromSemantics: true,
-            ),
-            const SizedBox(width: TpSpace.xs),
-            Text(
-              'TYRE\nPULSE',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: navy,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                    height: 0.9,
-                    letterSpacing: 0.4,
-                  ),
+            Semantics(
+              label: 'Tyre Pulse',
+              image: true,
+              child: Image.asset(
+                TpBrandArt.forBrightness(palette.brightness),
+                height: 28,
+                width: 28 * TpBrandArt.aspectRatio,
+                fit: BoxFit.contain,
+                excludeFromSemantics: true,
+              ),
             ),
             const Spacer(),
             Semantics(

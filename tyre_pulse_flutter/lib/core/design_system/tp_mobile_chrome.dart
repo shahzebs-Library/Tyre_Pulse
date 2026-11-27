@@ -13,6 +13,21 @@ import 'package:tyre_pulse/core/design_system/tp_asset_icons.dart';
 import 'package:tyre_pulse/core/design_system/tp_button.dart';
 import 'package:tyre_pulse/core/design_system/tp_text_scale.dart';
 
+/// The approved Tyre Pulse lockup art: the TP tread mark beside the outlined
+/// TYRE PULSE wordmark. [inkOnLight] is asphalt for light surfaces;
+/// [reverse] is white TYRE / yellow PULSE / yellow mark for dark surfaces.
+abstract final class TpBrandArt {
+  static const String inkOnLight = 'assets/login/tp_wordmark_ink.png';
+  static const String reverse = 'assets/login/tp_wordmark_reverse.png';
+
+  /// Width / height of both lockup files (1226.2 x 266 in the master SVG).
+  static const double aspectRatio = 1226.2 / 266;
+
+  /// The lockup that reads on a surface of [brightness].
+  static String forBrightness(Brightness brightness) =>
+      brightness == Brightness.dark ? reverse : inkOnLight;
+}
+
 class TpBrandLockup extends StatelessWidget {
   const TpBrandLockup({this.compact = false, super.key});
 
@@ -21,6 +36,7 @@ class TpBrandLockup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
+    final double height = compact ? 24 : 28;
     return Semantics(
       label: 'Tyre Pulse',
       image: true,
@@ -30,31 +46,14 @@ class TpBrandLockup extends StatelessWidget {
       child: FittedBox(
         fit: BoxFit.scaleDown,
         alignment: AlignmentDirectional.centerStart,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            // The transparent cut of the login pulse: the login artwork sits
-            // on an opaque navy plate made for the dark hero, which reads as a
-            // black box on the light app chrome.
-            Image.asset(
-              'assets/login/figma_brand_pulse_mark.png',
-              width: compact ? 42 : 48,
-              height: compact ? 24 : 28,
-              fit: BoxFit.contain,
-              excludeFromSemantics: true,
-            ),
-            const SizedBox(width: 5),
-            Text(
-              'TYRE\nPULSE',
-              style: TextStyle(
-                color: palette.text,
-                fontSize: compact ? 13 : 15,
-                height: .84,
-                fontWeight: FontWeight.w900,
-                letterSpacing: .8,
-              ),
-            ),
-          ],
+        // The wordmark is outlined artwork (never re-typed) and stays
+        // left-to-right in every language.
+        child: Image.asset(
+          TpBrandArt.forBrightness(palette.brightness),
+          height: height,
+          width: height * TpBrandArt.aspectRatio,
+          fit: BoxFit.contain,
+          excludeFromSemantics: true,
         ),
       ),
     );

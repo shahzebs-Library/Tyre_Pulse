@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Mid tone of the approved icon gradient (store-assets/drafts/icon.py). -->
-    <color name="ic_launcher_background">#0E7239</color>
+    <!-- Brand asphalt (#161616): adaptive icon background and splash background. -->
+    <color name="ic_launcher_background">#161616</color>
+    <color name="splash_background">#161616</color>
+    <!-- Signal yellow: accent tint for the white status-bar notification icon. -->
+    <color name="notification_accent">#FFC629</color>
 </resources>

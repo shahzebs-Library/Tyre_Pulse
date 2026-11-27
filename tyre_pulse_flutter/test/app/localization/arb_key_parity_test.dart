@@ -707,10 +707,14 @@ void main() {
     // "all sides" with their count, the no-picture and pick-a-vehicle
     // lines, the waterless switch, the no-charge cost line, the washed
     // areas label, the derived "recorded as" line and the selected label).
-    test('en, ar and ur each carry exactly 2804 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2804);
-      expect(_translatableKeys(ar).length, 2804);
-      expect(_translatableKeys(ur).length, 2804);
+    // 2804 + 9 = 2813: wash audit evidence (before/after photos required and
+    // their missing label, the time and place stamp with its no-GPS text,
+    // the read-only note, record id, device capture time, the site-from-
+    // vehicle line and the audit record title).
+    test('en, ar and ur each carry exactly 2813 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2813);
+      expect(_translatableKeys(ar).length, 2813);
+      expect(_translatableKeys(ur).length, 2813);
     });
   });
 

@@ -29,8 +29,18 @@ class WashPhotoGallery extends StatelessWidget {
     required this.onRemove,
     required this.addLabel,
     this.canAdd = true,
+    this.cameraOnly = false,
+    this.stamps,
     super.key,
   });
+
+  /// True skips the camera/gallery choice and opens the camera directly.
+  /// Wash evidence must be taken on site at the time of the wash, so the
+  /// wash screen turns the gallery off.
+  final bool cameraOnly;
+
+  /// Optional one-line stamp under each thumbnail (time and place).
+  final List<String?>? stamps;
 
   /// False hides the "Add photo" tile - used when the before and after
   /// galleries together have reached [WashPhotoCapture.maxPhotos].
@@ -52,12 +62,18 @@ class WashPhotoGallery extends StatelessWidget {
       runSpacing: TpSpace.sm,
       children: <Widget>[
         for (int i = 0; i < localPaths.length; i++)
-          _WashPhotoTile(localPath: localPaths[i], onRemove: () => onRemove(i)),
+          _WashPhotoTile(
+            localPath: localPaths[i],
+            stamp: stamps != null && i < stamps!.length ? stamps![i] : null,
+            onRemove: () => onRemove(i),
+          ),
         if (canAddMore)
           _AddPhotoTile(
             label: addLabel,
             isBusy: isCapturing,
-            onTap: () => _showSourcePicker(context),
+            onTap: cameraOnly
+                ? () => onAdd(WashPhotoSource.camera)
+                : () => _showSourcePicker(context),
           ),
       ],
     );
@@ -94,16 +110,21 @@ class WashPhotoGallery extends StatelessWidget {
 }
 
 class _WashPhotoTile extends StatelessWidget {
-  const _WashPhotoTile({required this.localPath, required this.onRemove});
+  const _WashPhotoTile({
+    required this.localPath,
+    required this.onRemove,
+    this.stamp,
+  });
 
   final String localPath;
+  final String? stamp;
   final VoidCallback onRemove;
 
-  static const double _size = 96;
+  static const double _size = 72;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    final Widget thumb = SizedBox(
       width: _size,
       height: _size,
       child: Stack(
@@ -118,26 +139,48 @@ class _WashPhotoTile extends StatelessWidget {
               errorBuilder: (context, error, stack) => const SizedBox.shrink(),
             ),
           ),
-          Positioned(
-            top: 2,
-            right: 2,
+          PositionedDirectional(
+            top: 0,
+            end: 0,
             child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: onRemove,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
-                ),
-                child: Padding(
-                  padding: EdgeInsets.all(2),
-                  child: Icon(
-                    Icons.close,
-                    size: TpSizing.iconSm,
-                    color: Colors.white,
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(2),
+                    child: Icon(
+                      Icons.close,
+                      size: TpSizing.iconSm,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+    if (stamp == null) return thumb;
+    return SizedBox(
+      width: _size + 56,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          thumb,
+          const SizedBox(height: 2),
+          Text(
+            stamp!,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: TpPalette.of(context).textSecondary,
+                ),
           ),
         ],
       ),
@@ -156,7 +199,7 @@ class _AddPhotoTile extends StatelessWidget {
   final bool isBusy;
   final VoidCallback onTap;
 
-  static const double _size = 96;
+  static const double _size = 72;
 
   @override
   Widget build(BuildContext context) {

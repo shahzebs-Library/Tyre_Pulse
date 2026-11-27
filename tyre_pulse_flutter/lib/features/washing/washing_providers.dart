@@ -11,6 +11,8 @@ import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_gps_source.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
 import 'package:tyre_pulse/features/washing/data/wash_photo_capture.dart';
 import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
 
@@ -49,4 +51,13 @@ final Provider<Future<bool?> Function()> washOnlineCheckProvider =
       return null;
     }
   },
+);
+
+/// One best-effort GPS fix for a wash photo stamp, reusing the inspection
+/// GPS source (bounded wait, never throws). Null when location is off,
+/// denied or too slow; the photo is still kept and its stamp says "No GPS".
+/// Overridden in tests.
+final Provider<Future<InspectionGpsFix?> Function()> washLocateProvider =
+    Provider<Future<InspectionGpsFix?> Function()>(
+  (Ref ref) => () async => (await InspectionGpsSource().captureFix()).fix,
 );

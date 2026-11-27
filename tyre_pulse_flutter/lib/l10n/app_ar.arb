@@ -3805,5 +3805,14 @@
   "washCostNoCharge": "بدون تكلفة · غسيل داخلي",
   "washAreasLabel": "المناطق المغسولة",
   "washRecordedAsType": "يُسجَّل كـ {type}",
-  "washAreaSelected": "محدد"
+  "washAreaSelected": "محدد",
+  "washMissingPhotos": "التقط صور قبل وبعد",
+  "washPhotosRequired": "صورة واحدة على الأقل قبل الغسيل وأخرى بعده، تُلتقط بالكاميرا الآن. تُختم كل صورة بوقتها وموقعها.",
+  "washPhotoStamp": "{time} · {place}",
+  "washGpsNone": "بدون موقع",
+  "washReadOnlyNote": "لا يمكن تعديل هذا السجل من الهاتف. تتم التصحيحات عبر الويب بواسطة مسؤول، ويُحفظ كل تغيير في سجل التدقيق.",
+  "washRecordIdLabel": "رقم السجل",
+  "washCapturedOnDevice": "وقت الالتقاط على الجهاز",
+  "washSiteFromVehicle": "مأخوذ من سجل المركبة ولا يمكن تغييره هنا.",
+  "washAuditTitle": "سجل التدقيق"
 }

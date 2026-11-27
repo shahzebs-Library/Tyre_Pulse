@@ -34,27 +34,29 @@
 ///
 /// # Four numbered steps built around the vehicle's own picture
 ///
-/// The form reads 1 Vehicle (scan or search), 2 What was washed (the
-/// selected vehicle's real picture with its five sides to tap, then drawn
-/// tiles for exterior body, engine bay, undercarriage, cabin, tyres and
-/// rims, mixer drum and hopper - mixers and pumps only - and steam
-/// degrease), 3 Photos (before and after), 4 Review and save. An asset and
-/// at least one washed area are required; the checklist and chemicals sit
-/// folded inside the review step and keep their own rules (chemical names
-/// and issue notes must be filled when used). The save button sits pinned at
-/// the bottom and names what is still missing - tapping it then scrolls to
-/// that step instead of failing after the fact.
+/// 1 Vehicle (scan or search; the site comes from the vehicle record and
+/// cannot be typed). 2 What was washed: the vehicle's wash picture (the
+/// owner's illustration for its class, else its plain real fleet photo), the five sides to tap, and small picture
+/// chips for exterior body, engine bay, undercarriage, cabin, tyres and
+/// rims, mixer drum and hopper (mixers and pumps only) and steam degrease.
+/// 3 Photos: at least one before AND one after photo, camera only, each
+/// stamped with its device time and, when the phone can tell, GPS. 4 Review
+/// and save: a dense summary list; checklist and chemicals fold inside it.
+/// The save button is pinned at the bottom and names what is still missing.
 ///
-/// The driver no longer picks a `wash_type`: it is derived from the marked
-/// areas by `washTypeForAreas` (still one of the CHECK values, so history and
-/// the web keep working), and the areas and sides are stored inside the
-/// existing `wash_details` jsonb as `areas` and `views` (see
-/// `domain/wash_areas.dart`). Washing is done in-house at no charge, so the
-/// review shows the cost as "No charge" and nothing here treats it as a cost.
+/// # Audit evidence
 ///
-/// Before and after photos are two galleries on screen but are saved as the
-/// one ordered `photos` list the record has always had (before first, then
-/// after), so nothing about what is stored changes.
+/// Who (`created_by` and the profile name as `washed_by`), when (server
+/// `created_at`, device `captured_at`, wash date locked to today) and where
+/// (site from the vehicle record) come from the session and device; the
+/// driver edits none of them. Photo stamps and the washed areas and sides
+/// live inside the existing `wash_details` jsonb (`photo_evidence`, `areas`,
+/// `views`), which the live CHECK accepts with no migration. A saved record
+/// is read-only on the phone (see `WashRecordViewer`).
+///
+/// `wash_type` is derived from the areas by `washTypeForAreas` and stays one
+/// of the CHECK values. Washing is done in-house at no charge, so the review
+/// shows "No charge" and nothing here treats it as a cost.
 library;
 
 import 'dart:async';
@@ -79,6 +81,7 @@ import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_areas.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_details.dart';
+import 'package:tyre_pulse/features/washing/domain/wash_evidence.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_insights.dart';
 import 'package:tyre_pulse/features/washing/presentation/wash_history_screen.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_area_grid.dart';
@@ -113,8 +116,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   static const Uuid _uuid = Uuid();
 
   final TextEditingController _assetController = TextEditingController();
-  final TextEditingController _siteController = TextEditingController();
-  final TextEditingController _operatorController = TextEditingController();
   final TextEditingController _bayController = TextEditingController();
   final TextEditingController _odometerController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -123,7 +124,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     for (final _WashStep step in _WashStep.values) step: GlobalKey(),
   };
 
-  bool _siteTouched = false;
   String? _entryName;
   Timer? _lookupDebounce;
   VehicleAsset? _master;
@@ -133,8 +133,8 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   bool _waterless = false;
   String _status = kWashDefaultStatus;
   Map<String, dynamic> _washDetails = emptyWashDetails();
-  final List<String> _beforePaths = <String>[];
-  final List<String> _afterPaths = <String>[];
+  final List<WashShot> _before = <WashShot>[];
+  final List<WashShot> _after = <WashShot>[];
   bool? _capturingBefore;
   bool _submitting = false;
   _WashStep? _attention;
@@ -151,11 +151,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     _sessionKey = _uuid.v4();
 
     final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
-    final String? legacySite = workspace?.legacySite?.trim();
-    if (legacySite != null && legacySite.isNotEmpty) {
-      _siteController.text = legacySite;
-      _siteTouched = true;
-    }
 
     _assetController.addListener(_onAssetChanged);
     unawaited(_fillOperatorFromProfile(workspace));
@@ -167,8 +162,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     _lookupDebounce?.cancel();
     _assetController.removeListener(_onAssetChanged);
     _assetController.dispose();
-    _siteController.dispose();
-    _operatorController.dispose();
     _bayController.dispose();
     _odometerController.dispose();
     _notesController.dispose();
@@ -204,9 +197,6 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
         await ref.read(washRepositoryProvider).currentUserDisplayName(userId);
     if (!mounted || name == null || name.trim().isEmpty) return;
     setState(() => _entryName = name.trim());
-    if (_operatorController.text.trim().isEmpty) {
-      _operatorController.text = name.trim();
-    }
   }
 
   void _onAssetChanged() {
@@ -257,22 +247,22 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
         }
       });
     }
-
-    final String? masterSite = resolved.site?.trim();
-    if (masterSite != null &&
-        masterSite.isNotEmpty &&
-        !_siteTouched &&
-        _siteController.text.trim().isEmpty) {
-      _siteController.text = masterSite;
-    }
   }
 
-  void _onSiteEdited(String _) {
-    _siteTouched = true;
+  int get _photoCount => _before.length + _after.length;
+
+  /// The site, never typed by the driver: the vehicle record's site, else
+  /// the user's own legacy site. Null when neither is known.
+  String? get _site {
+    final String? fromVehicle = _master?.site?.trim();
+    if (fromVehicle != null && fromVehicle.isNotEmpty) return fromVehicle;
+    final String? legacy =
+        ref.read(workspaceContextProvider)?.legacySite?.trim();
+    return (legacy == null || legacy.isEmpty) ? null : legacy;
   }
 
-  int get _photoCount => _beforePaths.length + _afterPaths.length;
-
+  /// Camera capture, then a best-effort GPS fix for the stamp. The photo is
+  /// kept even when there is no fix; its stamp then says "No GPS".
   Future<void> _capturePhoto(bool before, WashPhotoSource source) async {
     setState(() => _capturingBefore = before);
     try {
@@ -280,14 +270,23 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
           await ref.read(washPhotoCaptureProvider).captureAndStore(
                 sessionKey: _sessionKey,
                 orderIndex: _photoCount,
-                source: source,
+                source: WashPhotoSource.camera,
               );
+      if (!mounted || photo == null) return;
+      final fix = await ref.read(washLocateProvider)();
       if (!mounted) return;
-      if (photo != null) {
-        setState(
-          () => (before ? _beforePaths : _afterPaths).add(photo.localPath),
-        );
-      }
+      final WashShot shot = WashShot(
+        path: photo.localPath,
+        stage: before ? WashShotStage.before : WashShotStage.after,
+        takenAt: photo.capturedAt,
+        latitude: fix?.latitude,
+        longitude: fix?.longitude,
+        accuracyMeters: fix?.accuracyMeters,
+      );
+      setState(() {
+        (before ? _before : _after).add(shot);
+        if (_attention == _WashStep.photos) _attention = null;
+      });
     } finally {
       if (mounted) setState(() => _capturingBefore = null);
     }
@@ -297,6 +296,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   _WashStep? get _missingStep {
     if (_assetController.text.trim().isEmpty) return _WashStep.vehicle;
     if (_areas.isEmpty) return _WashStep.areas;
+    if (!washPhotosComplete(_before, _after)) return _WashStep.photos;
     if (!validWashDetails(_washDetails)) return _WashStep.review;
     return null;
   }
@@ -305,8 +305,10 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   String? get _washType => washTypeForAreas(_areas, waterless: _waterless);
 
   /// The `wash_details` payload: checklist/chemicals plus areas and sides.
-  Map<String, dynamic> get _detailsPayload =>
-      withWashScope(_washDetails, areas: _areas, views: _views);
+  Map<String, dynamic> get _detailsPayload => <String, dynamic>{
+        ...withWashScope(_washDetails, areas: _areas, views: _views),
+        'photo_evidence': washPhotoEvidence(_before, _after),
+      };
 
   void _toggleArea(WashArea area) => setState(() {
         if (!_areas.remove(area)) _areas.add(area);
@@ -320,6 +322,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   String _missingLabel(AppLocalizations l10n, _WashStep step) => switch (step) {
         _WashStep.vehicle => l10n.washMissingVehicle,
         _WashStep.areas => l10n.washMissingAreas,
+        _WashStep.photos => l10n.washMissingPhotos,
         _ => l10n.washMissingEvidence,
       };
 
@@ -387,13 +390,9 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
             input: SubmitWashInput(
               assetNo: asset,
               vehicleType: _vehicleType,
-              site: _siteController.text.trim().isEmpty
-                  ? null
-                  : _siteController.text.trim(),
+              site: _site,
               country: workspace.activeCountry,
-              washedBy: _operatorController.text.trim().isEmpty
-                  ? null
-                  : _operatorController.text.trim(),
+              washedBy: _entryName,
               washType: washType,
               status: _status,
               bay: _bayController.text.trim().isEmpty
@@ -403,7 +402,10 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
               notes: _notesController.text.trim().isEmpty
                   ? null
                   : _notesController.text.trim(),
-              photoLocalPaths: <String>[..._beforePaths, ..._afterPaths],
+              photoLocalPaths: <String>[
+                for (final WashShot shot in <WashShot>[..._before, ..._after])
+                  shot.path,
+              ],
               washDetails: _detailsPayload,
             ),
           );
@@ -447,14 +449,8 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   }
 
   void _resetForm() {
-    final WorkspaceContext? workspace = ref.read(workspaceContextProvider);
-    final String? legacySite = workspace?.legacySite?.trim();
-
     _lookupDebounce?.cancel();
     _assetController.clear();
-    _siteController.text =
-        (legacySite != null && legacySite.isNotEmpty) ? legacySite : '';
-    _siteTouched = legacySite != null && legacySite.isNotEmpty;
     _bayController.clear();
     _odometerController.clear();
     _notesController.clear();
@@ -466,15 +462,11 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
       _waterless = false;
       _status = kWashDefaultStatus;
       _washDetails = emptyWashDetails();
-      _beforePaths.clear();
-      _afterPaths.clear();
+      _before.clear();
+      _after.clear();
       _attention = null;
       _sessionKey = _uuid.v4();
     });
-    // Operator name is deliberately KEPT - the same driver usually logs
-    // several washes in a row, matching the reference's own
-    // `resetForm`, which re-seeds it from `profile?.full_name` rather than
-    // blanking it.
   }
 
   Future<void> _openHistory() {
@@ -535,7 +527,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     final bool detailsValid = validWashDetails(_washDetails);
     final int checksDone = washChecklistDone(_washDetails);
     final int checksTotal = detailItems(_washDetails, 'checklist').length;
-    final bool photosDone = _photoCount > 0;
+    final bool photosDone = washPhotosComplete(_before, _after);
     final _WashStep? missing = _missingStep;
     final bool ready = missing == null;
     final String? washType = _washType;
@@ -637,21 +629,13 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                     info: washInfo,
                   ),
                 ],
-                const SizedBox(height: TpSpace.md),
-                TpInput(
+                const SizedBox(height: TpSpace.sm),
+                _LockedFact(
+                  key: WashingScreenKeys.site,
+                  icon: Icons.location_on_outlined,
                   label: l10n.washSiteLabel,
-                  controller: _siteController,
-                  hint: l10n.washSiteHint,
-                  prefixIcon: Icons.location_on_outlined,
-                  onChanged: _onSiteEdited,
-                ),
-                const SizedBox(height: TpSpace.xs),
-                Text(
-                  l10n.washSiteHelp,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: palette.textMuted),
+                  value: _site ?? l10n.washNotRecorded,
+                  note: l10n.washSiteFromVehicle,
                 ),
               ],
             ),
@@ -686,6 +670,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   vehicleType: _vehicleType,
                   selected: _views,
                   onToggle: _toggleView,
+                  areas: _areas,
                   onSetAll: (bool all) => setState(() {
                     _views.clear();
                     if (all) _views.addAll(WashView.values);
@@ -716,8 +701,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
             key: _stepKeys[_WashStep.photos],
             number: 3,
             title: l10n.washStepPhotos,
-            optionalLabel: l10n.washStepOptional,
-            state: photosDone ? WashStepState.done : WashStepState.todo,
+            state: _stateFor(_WashStep.photos, photosDone),
             summary:
                 l10n.washPhotosCount(_photoCount, WashPhotoCapture.maxPhotos),
             child: Column(
@@ -725,7 +709,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Text(
-                  l10n.washPhotosOptional,
+                  l10n.washPhotosRequired,
                   style: Theme.of(context)
                       .textTheme
                       .bodySmall
@@ -737,12 +721,12 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   title: l10n.washPhotosBefore,
                   icon: Icons.photo_camera_back_rounded,
                   tone: TpGemTone.amber,
-                  paths: _beforePaths,
+                  shots: _before,
                   busy: _capturingBefore == true,
                   canAdd: _photoCount < WashPhotoCapture.maxPhotos &&
                       _capturingBefore == null,
                   onAdd: (WashPhotoSource s) => _capturePhoto(true, s),
-                  onRemove: (int i) => setState(() => _beforePaths.removeAt(i)),
+                  onRemove: (int i) => setState(() => _before.removeAt(i)),
                 ),
                 const SizedBox(height: TpSpace.md),
                 _PhotoSlot(
@@ -750,12 +734,12 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   title: l10n.washPhotosAfter,
                   icon: Icons.photo_camera_front_rounded,
                   tone: TpGemTone.green,
-                  paths: _afterPaths,
+                  shots: _after,
                   busy: _capturingBefore == false,
                   canAdd: _photoCount < WashPhotoCapture.maxPhotos &&
                       _capturingBefore == null,
                   onAdd: (WashPhotoSource s) => _capturePhoto(false, s),
-                  onRemove: (int i) => setState(() => _afterPaths.removeAt(i)),
+                  onRemove: (int i) => setState(() => _after.removeAt(i)),
                 ),
               ],
             ),
@@ -845,9 +829,12 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                     (
                       Icons.location_on_outlined,
                       l10n.washSiteLabel,
-                      _siteController.text.trim().isEmpty
-                          ? null
-                          : _siteController.text.trim(),
+                      _site,
+                    ),
+                    (
+                      Icons.badge_outlined,
+                      l10n.washOperatorLabel,
+                      _entryName,
                     ),
                     (
                       Icons.local_car_wash_rounded,
@@ -964,6 +951,7 @@ abstract final class WashingScreenKeys {
   static const ValueKey<String> afterPhotos =
       ValueKey<String>('washing.afterPhotos');
   static const ValueKey<String> review = ValueKey<String>('washing.review');
+  static const ValueKey<String> site = ValueKey<String>('washing.site');
   static const ValueKey<String> vehicleViews =
       ValueKey<String>('washing.vehicleViews');
   static const ValueKey<String> waterless =
@@ -1094,7 +1082,7 @@ class _PhotoSlot extends StatelessWidget {
     required this.title,
     required this.icon,
     required this.tone,
-    required this.paths,
+    required this.shots,
     required this.busy,
     required this.canAdd,
     required this.onAdd,
@@ -1105,7 +1093,7 @@ class _PhotoSlot extends StatelessWidget {
   final String title;
   final IconData icon;
   final TpGemTone tone;
-  final List<String> paths;
+  final List<WashShot> shots;
   final bool busy;
   final bool canAdd;
   final ValueChanged<WashPhotoSource> onAdd;
@@ -1121,7 +1109,7 @@ class _PhotoSlot extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            WashGem(icon: icon, tone: tone, size: 32),
+            WashGem(icon: icon, tone: tone, size: 28),
             const SizedBox(width: TpSpace.sm),
             Expanded(
               child: Text(
@@ -1133,7 +1121,7 @@ class _PhotoSlot extends StatelessWidget {
               ),
             ),
             Text(
-              l10n.washPhotoCountShort(paths.length),
+              l10n.washPhotoCountShort(shots.length),
               style: Theme.of(context)
                   .textTheme
                   .labelSmall
@@ -1143,7 +1131,15 @@ class _PhotoSlot extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.sm),
         WashPhotoGallery(
-          localPaths: paths,
+          localPaths: <String>[for (final WashShot s in shots) s.path],
+          cameraOnly: true,
+          stamps: <String>[
+            for (final WashShot s in shots)
+              l10n.washPhotoStamp(
+                washStampTime(s.takenAt),
+                s.hasGps ? washGpsLabel(s) : l10n.washGpsNone,
+              ),
+          ],
           isCapturing: busy,
           canAdd: canAdd || busy,
           onAdd: onAdd,
@@ -1180,6 +1176,62 @@ class _Folded extends StatelessWidget {
   }
 }
 
+/// A value the driver cannot change (taken from the session or the vehicle
+/// record), shown with a lock so nobody looks for an edit control.
+class _LockedFact extends StatelessWidget {
+  const _LockedFact({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.note,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(TpSpace.sm),
+      decoration: BoxDecoration(
+        color: palette.surfaceAlt,
+        borderRadius: BorderRadius.circular(TpRadius.md),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, size: 18, color: palette.textMuted),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '$label: $value',
+                  style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  note,
+                  style: text.bodySmall?.copyWith(color: palette.textMuted),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.lock_rounded, size: 16, color: palette.textMuted),
+        ],
+      ),
+    );
+  }
+}
+
+/// The review as a dense list: one line per fact, label then value, with a
+/// thin divider between rows (not cards). Missing values read "Not recorded"
+/// in the warning colour.
 class _ReviewSummary extends StatelessWidget {
   const _ReviewSummary({required this.rows, super.key});
 
@@ -1190,52 +1242,49 @@ class _ReviewSummary extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(TpSpace.md),
-      decoration: BoxDecoration(
-        color: palette.surfaceAlt,
-        borderRadius: BorderRadius.circular(TpRadius.md),
-        border: Border.all(color: palette.border),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(top: TpSpace.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
             l10n.washReviewTitle,
-            style: text.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            style: text.labelLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
-          for (final (IconData icon, String label, String? value) in rows)
+          for (int i = 0; i < rows.length; i++) ...<Widget>[
+            if (i > 0) Divider(height: 1, color: palette.border),
             Padding(
-              padding: const EdgeInsets.only(top: TpSpace.sm),
+              padding: const EdgeInsets.symmetric(vertical: TpSpace.xs),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Icon(icon, size: 18, color: palette.textMuted),
+                  Icon(rows[i].$1, size: 16, color: palette.textMuted),
                   const SizedBox(width: TpSpace.sm),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          label,
-                          style: text.labelSmall
-                              ?.copyWith(color: palette.textMuted),
+                    child: Text.rich(
+                      TextSpan(
+                        text: '${rows[i].$2}: ',
+                        style: text.bodySmall?.copyWith(
+                          color: palette.textSecondary,
                         ),
-                        Text(
-                          value ?? l10n.washNotRecorded,
-                          style: text.bodyMedium?.copyWith(
-                            color: value == null
-                                ? palette.warning.base
-                                : palette.text,
-                            fontWeight: FontWeight.w700,
+                        children: <InlineSpan>[
+                          TextSpan(
+                            text: rows[i].$3 ?? l10n.washNotRecorded,
+                            style: text.bodySmall?.copyWith(
+                              color: rows[i].$3 == null
+                                  ? palette.warning.base
+                                  : palette.text,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
+          ],
         ],
       ),
     );

@@ -3805,5 +3805,14 @@
   "washCostNoCharge": "کوئی خرچ نہیں · اندرونِ ادارہ دھلائی",
   "washAreasLabel": "دھوئے گئے حصے",
   "washRecordedAsType": "بطور {type} درج ہوگا",
-  "washAreaSelected": "منتخب"
+  "washAreaSelected": "منتخب",
+  "washMissingPhotos": "پہلے اور بعد کی تصاویر لیں",
+  "washPhotosRequired": "کم از کم ایک تصویر دھلائی سے پہلے اور ایک بعد میں، ابھی کیمرے سے لیں۔ ہر تصویر پر اس کا وقت اور مقام درج ہوتا ہے۔",
+  "washPhotoStamp": "{time} · {place}",
+  "washGpsNone": "GPS نہیں",
+  "washReadOnlyNote": "یہ ریکارڈ فون پر تبدیل نہیں ہو سکتا۔ درستگی ویب پر منتظم کرتا ہے، اور ہر تبدیلی آڈٹ ہسٹری میں محفوظ رہتی ہے۔",
+  "washRecordIdLabel": "ریکارڈ آئی ڈی",
+  "washCapturedOnDevice": "ڈیوائس پر محفوظ ہونے کا وقت",
+  "washSiteFromVehicle": "گاڑی کے ریکارڈ سے لیا گیا ہے۔ یہاں تبدیل نہیں ہو سکتا۔",
+  "washAuditTitle": "آڈٹ ریکارڈ"
 }

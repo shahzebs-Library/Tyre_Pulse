@@ -16925,6 +16925,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Selected'**
   String get washAreaSelected;
+
+  /// No description provided for @washMissingPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Take before and after photos'**
+  String get washMissingPhotos;
+
+  /// No description provided for @washPhotosRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'At least one before and one after photo, taken with the camera now. Each photo is stamped with its time and location.'**
+  String get washPhotosRequired;
+
+  /// No description provided for @washPhotoStamp.
+  ///
+  /// In en, this message translates to:
+  /// **'{time} · {place}'**
+  String washPhotoStamp(String time, String place);
+
+  /// No description provided for @washGpsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No GPS'**
+  String get washGpsNone;
+
+  /// No description provided for @washReadOnlyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This record cannot be changed on the phone. Corrections are made on the web by an administrator, and every change is kept in the audit history.'**
+  String get washReadOnlyNote;
+
+  /// No description provided for @washRecordIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Record ID'**
+  String get washRecordIdLabel;
+
+  /// No description provided for @washCapturedOnDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Captured on device'**
+  String get washCapturedOnDevice;
+
+  /// No description provided for @washSiteFromVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Taken from the vehicle record. It cannot be changed here.'**
+  String get washSiteFromVehicle;
+
+  /// No description provided for @washAuditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Audit record'**
+  String get washAuditTitle;
 }
 
 class _AppLocalizationsDelegate

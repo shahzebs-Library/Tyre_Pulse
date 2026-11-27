@@ -13,6 +13,8 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
+import 'package:tyre_pulse/features/inspections/domain/inspection_gps_fix.dart';
+import 'package:tyre_pulse/features/washing/data/wash_photo_capture.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_areas.dart';
@@ -65,6 +67,25 @@ final class _Repo implements WashRepository {
   }
 }
 
+class _Camera implements WashPhotoCapture {
+  final List<WashPhotoSource> sources = <WashPhotoSource>[];
+  int _n = 0;
+
+  @override
+  Future<CapturedWashPhoto?> captureAndStore({
+    required String sessionKey,
+    required int orderIndex,
+    required WashPhotoSource source,
+  }) async {
+    sources.add(source);
+    _n++;
+    return CapturedWashPhoto(
+      localPath: '/no/such/wash_$_n.jpg',
+      capturedAt: DateTime.utc(2026, 11, 27, 6, _n),
+    );
+  }
+}
+
 class _Fleet implements VehicleFleetSource {
   _Fleet([this.vehicleType = 'TR-MIXER']);
 
@@ -102,6 +123,8 @@ Future<void> _pump(
   double textScale = 1,
   bool? online = false,
   String vehicleType = 'TR-MIXER',
+  _Camera? camera,
+  InspectionGpsFix? gps,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -112,6 +135,8 @@ Future<void> _pump(
         workspaceContextProvider.overrideWithValue(_workspace),
         washRepositoryProvider.overrideWithValue(repo),
         washOnlineCheckProvider.overrideWithValue(() async => online),
+        washPhotoCaptureProvider.overrideWithValue(camera ?? _Camera()),
+        washLocateProvider.overrideWithValue(() async => gps),
         vehicleFleetRepositoryProvider.overrideWithValue(
           VehicleFleetRepository(_Fleet(vehicleType)),
         ),
@@ -134,9 +159,28 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-Future<void> _tapKey(WidgetTester tester, Key key) async {
-  await tester.ensureVisible(find.byKey(key));
+/// Brings [finder] into the lazily built list, scrolling up or down.
+Future<void> _reveal(WidgetTester tester, Finder finder) async {
+  final Finder list = find.byType(Scrollable).first;
+  for (final double step in <double>[-300, 300]) {
+    if (finder.evaluate().isNotEmpty) break;
+    try {
+      await tester.scrollUntilVisible(
+        finder,
+        step,
+        scrollable: list,
+        maxScrolls: 40,
+      );
+    } on StateError {
+      // Not in that direction; try the other.
+    }
+  }
+  await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
+}
+
+Future<void> _tapKey(WidgetTester tester, Key key) async {
+  await _reveal(tester, find.byKey(key));
   await tester.tap(find.byKey(key));
   await tester.pumpAndSettle();
 }
@@ -149,6 +193,16 @@ Future<void> _enterAsset(WidgetTester tester, String asset) async {
 
 Future<void> _tapArea(WidgetTester tester, WashArea area) =>
     _tapKey(tester, WashAreaGrid.tileKey(area));
+
+Future<void> _addPhoto(WidgetTester tester, Key slot) async {
+  final Finder add = find.descendant(
+    of: find.byKey(slot),
+    matching: find.byIcon(Icons.add_a_photo_outlined),
+  );
+  await _reveal(tester, add);
+  await tester.tap(add);
+  await tester.pumpAndSettle();
+}
 
 String _saveLabel(WidgetTester tester) {
   final TpButton button =
@@ -168,7 +222,6 @@ void main() {
 
     expect(find.text('0 of 4 steps done'), findsOneWidget);
     expect(find.textContaining('Logged by Ahmed Saleh'), findsOneWidget);
-    expect(find.textContaining('Ahmed Saleh'), findsOneWidget);
     expect(find.textContaining('Entered by'), findsNothing);
     for (final String title in <String>[
       'Vehicle',
@@ -196,8 +249,13 @@ void main() {
 
     await _tapArea(tester, WashArea.exterior);
     await _tapArea(tester, WashArea.cabin);
-    expect(_saveLabel(tester), 'Save Wash');
     expect(find.text('Recorded as Full'), findsOneWidget);
+    // Areas alone are not enough: the audit needs before AND after photos.
+    expect(_saveLabel(tester), 'Take before and after photos');
+    await _addPhoto(tester, WashingScreenKeys.beforePhotos);
+    expect(_saveLabel(tester), 'Take before and after photos');
+    await _addPhoto(tester, WashingScreenKeys.afterPhotos);
+    expect(_saveLabel(tester), 'Save Wash');
 
     // Tapping again un-picks; nothing left means not ready again.
     await _tapArea(tester, WashArea.exterior);
@@ -206,27 +264,52 @@ void main() {
     expect(repo.submitted, isEmpty);
   });
 
-  testWidgets('saves areas and sides inside wash_details',
+  testWidgets('saves areas, sides and stamped photo evidence',
       (WidgetTester tester) async {
     final _Repo repo = _Repo();
-    await _pump(tester, const WashingScreen(route: WashingRoute()), repo: repo);
+    final _Camera camera = _Camera();
+    await _pump(
+      tester,
+      const WashingScreen(route: WashingRoute()),
+      repo: repo,
+      camera: camera,
+      gps: InspectionGpsFix(
+        latitude: 24.7136123,
+        longitude: 46.6753456,
+        accuracyMeters: 8.4,
+        capturedAt: DateTime.utc(2026, 11, 27, 6),
+      ),
+    );
 
     await _enterAsset(tester, 'TM514');
     await _tapArea(tester, WashArea.engineBay);
     await _tapArea(tester, WashArea.drumHopper);
     await _tapKey(tester, WashVehicleViews.viewKey(WashView.left));
     await _tapKey(tester, WashVehicleViews.viewKey(WashView.rear));
+    await _addPhoto(tester, WashingScreenKeys.beforePhotos);
+    await _addPhoto(tester, WashingScreenKeys.afterPhotos);
+    // Camera only: no gallery choice is ever offered.
+    expect(camera.sources, <WashPhotoSource>[
+      WashPhotoSource.camera,
+      WashPhotoSource.camera,
+    ]);
+    expect(find.text('Gallery'), findsNothing);
+    expect(find.textContaining('24.71361, 46.67535'), findsNWidgets(2));
     await tester.tap(find.byKey(WashingScreenKeys.save));
     await tester.pumpAndSettle();
 
     final SubmitWashInput input = repo.submitted.single;
     expect(input.assetNo, 'TM514');
     expect(input.washType, 'Engine Bay');
+    // Who and where come from the session and the vehicle record.
     expect(input.site, 'DIRIYAH-G1');
-    expect(input.vehicleType, 'TR-MIXER');
     expect(input.washedBy, 'Ahmed Saleh');
+    expect(input.vehicleType, 'TR-MIXER');
     expect(input.status, kWashDefaultStatus);
-    expect(input.photoLocalPaths, isEmpty);
+    expect(input.photoLocalPaths, <String>[
+      '/no/such/wash_1.jpg',
+      '/no/such/wash_2.jpg',
+    ]);
     final Map<String, dynamic> details = input.washDetails!;
     expect(details['version'], 1);
     expect(details['chemical_status'], 'not_recorded');
@@ -234,11 +317,58 @@ void main() {
     expect(details['checklist'], isA<List<dynamic>>());
     expect(details['areas'], <String>['engine_bay', 'drum_hopper']);
     expect(details['views'], <String>['left', 'rear']);
+    expect(details['photo_evidence'], <Map<String, Object?>>[
+      <String, Object?>{
+        'index': 0,
+        'stage': 'before',
+        'taken_at': '2026-11-27T06:01:00.000Z',
+        'lat': 24.713612,
+        'lng': 46.675346,
+        'accuracy_m': 8,
+      },
+      <String, Object?>{
+        'index': 1,
+        'stage': 'after',
+        'taken_at': '2026-11-27T06:02:00.000Z',
+        'lat': 24.713612,
+        'lng': 46.675346,
+        'accuracy_m': 8,
+      },
+    ]);
 
     expect(find.byKey(WashingScreenKeys.savedSheet), findsOneWidget);
     expect(find.text('Wash saved'), findsOneWidget);
     expect(find.textContaining('You are offline'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a photo with no GPS is kept and says so',
+      (WidgetTester tester) async {
+    final _Repo repo = _Repo();
+    await _pump(tester, const WashingScreen(route: WashingRoute()), repo: repo);
+    await _enterAsset(tester, 'TM514');
+    await _addPhoto(tester, WashingScreenKeys.beforePhotos);
+    expect(find.textContaining('No GPS'), findsOneWidget);
+  });
+
+  testWidgets('site is read-only and taken from the vehicle record',
+      (WidgetTester tester) async {
+    await _pump(
+      tester,
+      const WashingScreen(route: WashingRoute()),
+      repo: _Repo(),
+    );
+    await _enterAsset(tester, 'TM514');
+    expect(find.byKey(WashingScreenKeys.site), findsOneWidget);
+    expect(find.textContaining('Site: DIRIYAH-G1'), findsOneWidget);
+    // Only the asset field is a text input in step 1.
+    expect(
+      find.descendant(
+        of: find.byKey(WashingScreenKeys.site),
+        matching: find.byType(TextField),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('waterless switch records a Waterless wash',
@@ -248,12 +378,14 @@ void main() {
     await _enterAsset(tester, 'TM514');
     await _tapArea(tester, WashArea.exterior);
     await _tapKey(tester, WashingScreenKeys.waterless);
+    await _addPhoto(tester, WashingScreenKeys.beforePhotos);
+    await _addPhoto(tester, WashingScreenKeys.afterPhotos);
     await tester.tap(find.byKey(WashingScreenKeys.save));
     await tester.pumpAndSettle();
     expect(repo.submitted.single.washType, 'Waterless');
   });
 
-  testWidgets('a mixer shows its real five-view picture and drum tile',
+  testWidgets('a mixer shows the wash picture, side thumbnails and drum chip',
       (WidgetTester tester) async {
     await _pump(
       tester,
@@ -262,8 +394,15 @@ void main() {
     );
     await _enterAsset(tester, 'TM514');
     expect(
-      find.byKey(WashVehicleViews.pictureKey(WashPictureKind.multiView)),
+      find.byKey(WashVehicleViews.pictureKey(WashPictureKind.sample)),
       findsOneWidget,
+    );
+    final Image picture = tester.widget<Image>(
+      find.byKey(const ValueKey<String>('washing.vehiclePicture.image')),
+    );
+    expect(
+      (picture.image as AssetImage).assetName,
+      'assets/wash_types/exterior.png',
     );
     expect(find.byKey(WashAreaGrid.tileKey(WashArea.drumHopper)), findsOne);
     await _tapKey(tester, WashVehicleViews.allSides);
@@ -271,7 +410,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('an unknown vehicle class falls back without a drum tile',
+  testWidgets('a van with its cabin picked shows the interior wash picture',
+      (WidgetTester tester) async {
+    await _pump(
+      tester,
+      const WashingScreen(route: WashingRoute()),
+      repo: _Repo(),
+      vehicleType: 'TOYOTA HIACE',
+    );
+    await _enterAsset(tester, 'BU101');
+    const Key pictureKey = ValueKey<String>('washing.vehiclePicture.image');
+    String shown() =>
+        (tester.widget<Image>(find.byKey(pictureKey)).image as AssetImage)
+            .assetName;
+    expect(shown(), 'assets/wash_vehicles/hiace_van.png');
+    await _tapArea(tester, WashArea.cabin);
+    expect(shown(), 'assets/wash_vehicles/van_interior_wash.png');
+  });
+
+  testWidgets('a class with no sample keeps its plain real photo',
+      (WidgetTester tester) async {
+    await _pump(
+      tester,
+      const WashingScreen(route: WashingRoute()),
+      repo: _Repo(),
+      vehicleType: 'SANY GENERATOR',
+    );
+    await _enterAsset(tester, 'GN101');
+    expect(
+      find.byKey(WashVehicleViews.pictureKey(WashPictureKind.multiView)),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('washing.vehiclePicture.image')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('an unknown vehicle class falls back without a drum chip',
       (WidgetTester tester) async {
     await _pump(
       tester,
@@ -303,7 +479,7 @@ void main() {
       repo: _Repo(),
       size: const Size(420, 4000),
     );
-    expect(find.text('No charge · washed in-house'), findsOneWidget);
+    expect(find.textContaining('No charge · washed in-house'), findsOneWidget);
   });
 
   testWidgets('vehicle card shows last wash and overdue from history',

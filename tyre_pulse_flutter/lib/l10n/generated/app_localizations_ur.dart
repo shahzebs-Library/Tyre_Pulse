@@ -9752,4 +9752,36 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get washAreaSelected => 'منتخب';
+
+  @override
+  String get washMissingPhotos => 'پہلے اور بعد کی تصاویر لیں';
+
+  @override
+  String get washPhotosRequired =>
+      'کم از کم ایک تصویر دھلائی سے پہلے اور ایک بعد میں، ابھی کیمرے سے لیں۔ ہر تصویر پر اس کا وقت اور مقام درج ہوتا ہے۔';
+
+  @override
+  String washPhotoStamp(String time, String place) {
+    return '$time · $place';
+  }
+
+  @override
+  String get washGpsNone => 'GPS نہیں';
+
+  @override
+  String get washReadOnlyNote =>
+      'یہ ریکارڈ فون پر تبدیل نہیں ہو سکتا۔ درستگی ویب پر منتظم کرتا ہے، اور ہر تبدیلی آڈٹ ہسٹری میں محفوظ رہتی ہے۔';
+
+  @override
+  String get washRecordIdLabel => 'ریکارڈ آئی ڈی';
+
+  @override
+  String get washCapturedOnDevice => 'ڈیوائس پر محفوظ ہونے کا وقت';
+
+  @override
+  String get washSiteFromVehicle =>
+      'گاڑی کے ریکارڈ سے لیا گیا ہے۔ یہاں تبدیل نہیں ہو سکتا۔';
+
+  @override
+  String get washAuditTitle => 'آڈٹ ریکارڈ';
 }

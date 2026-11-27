@@ -23,7 +23,36 @@ import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.d
 import 'package:tyre_pulse/features/washing/domain/wash_areas.dart';
 
 /// Which kind of picture the widget is showing, exposed for tests.
-enum WashPictureKind { multiView, photo, fallback }
+///
+/// [sample] is the owner-supplied wash illustration for the vehicle class
+/// (`assets/wash_vehicles/`, chosen by `vehicleWashSampleAssetFor` in the
+/// shared resolver). Classes with no sample keep their plain real fleet
+/// picture ([multiView] or [photo]); a drawn spray overlay was tried and
+/// dropped because it did not look clean over dark machinery.
+enum WashPictureKind { sample, multiView, photo, fallback }
+
+/// A type-specific special-wash picture from the owner's samples, used only
+/// when the picked areas match it (a van's cabin, a loader's undercarriage,
+/// a forklift's engine bay or steam). It changes
+/// only the picture, never the stored wash type.
+String washSampleForAreas(String sample, Set<WashArea> areas) {
+  bool has(WashArea a) => areas.contains(a);
+  switch (sample) {
+    case 'assets/wash_vehicles/hiace_van.png':
+      if (has(WashArea.cabin)) {
+        return 'assets/wash_vehicles/van_interior_wash.png';
+      }
+    case 'assets/wash_vehicles/wheel_loader.png':
+      if (has(WashArea.undercarriage)) {
+        return 'assets/wash_vehicles/loader_mud_flush.png';
+      }
+    case 'assets/wash_vehicles/forklift.png':
+      if (has(WashArea.engineBay) || has(WashArea.steam)) {
+        return 'assets/wash_vehicles/forklift_degrease.png';
+      }
+  }
+  return sample;
+}
 
 /// Resolves the picture source for a vehicle. [master] wins over the plain
 /// [vehicleType] when both exist (it carries make and model).
@@ -36,6 +65,16 @@ enum WashPictureKind { multiView, photo, fallback }
   final String? board = master != null
       ? vehicleMultiViewAsset(master)
       : vehicleMultiViewAssetFor(assetNo: assetNo, vehicleType: vehicleType);
+  final String? sample = vehicleWashSampleAssetFor(
+    assetNo: master?.assetNo ?? assetNo,
+    vehicleType: master?.vehicleType ?? vehicleType,
+    make: master?.make,
+    model: master?.model,
+  );
+  if (sample != null) {
+    // The board (if any) still feeds the side thumbnails.
+    return (kind: WashPictureKind.sample, boardPath: board, photoPath: sample);
+  }
   if (board != null) {
     return (kind: WashPictureKind.multiView, boardPath: board, photoPath: null);
   }
@@ -73,8 +112,12 @@ class WashVehicleViews extends StatefulWidget {
     required this.selected,
     required this.onToggle,
     required this.onSetAll,
+    this.areas = const <WashArea>{},
     super.key,
   });
+
+  /// The picked areas; they can swap in a special-wash picture.
+  final Set<WashArea> areas;
 
   final VehicleAsset? master;
   final String? assetNo;
@@ -131,6 +174,13 @@ class _WashVehicleViewsState extends State<WashVehicleViews> {
         );
 
     final Widget big = switch (picture.kind) {
+      WashPictureKind.sample => Image.asset(
+          washSampleForAreas(picture.photoPath!, widget.areas),
+          key: const ValueKey<String>('washing.vehiclePicture.image'),
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (_, __, ___) => fallback(l10n.washVehiclePictureNone),
+        ),
       WashPictureKind.multiView => Image.asset(
           washViewImagePath(picture.boardPath!, _focus),
           fit: BoxFit.contain,
@@ -158,7 +208,9 @@ class _WashVehicleViewsState extends State<WashVehicleViews> {
       children: <Widget>[
         Container(
           key: WashVehicleViews.pictureKey(picture.kind),
-          height: picture.kind == WashPictureKind.fallback ? null : 200,
+          // The vehicle picture is the main picture of the screen, so it
+          // gets a moderate fixed height; everything else is compact.
+          height: picture.kind == WashPictureKind.fallback ? null : 176,
           constraints: const BoxConstraints(minHeight: 140),
           alignment: Alignment.center,
           decoration: BoxDecoration(
@@ -184,7 +236,7 @@ class _WashVehicleViewsState extends State<WashVehicleViews> {
                     Positioned.fill(child: Center(child: big)),
                     if (picture.kind == WashPictureKind.multiView)
                       PositionedDirectional(
-                        top: 0,
+                        bottom: 0,
                         start: 0,
                         child: _Pill(
                           label: washViewName(l10n, _focus),
@@ -230,7 +282,7 @@ class _WashVehicleViewsState extends State<WashVehicleViews> {
               _ViewChip(
                 key: WashVehicleViews.viewKey(view),
                 label: washViewName(l10n, view),
-                imagePath: picture.kind == WashPictureKind.multiView
+                imagePath: picture.boardPath != null
                     ? washViewImagePath(picture.boardPath!, view)
                     : null,
                 selected: widget.selected.contains(view),

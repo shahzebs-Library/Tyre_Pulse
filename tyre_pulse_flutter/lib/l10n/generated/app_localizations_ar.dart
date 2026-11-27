@@ -9747,4 +9747,35 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get washAreaSelected => 'محدد';
+
+  @override
+  String get washMissingPhotos => 'التقط صور قبل وبعد';
+
+  @override
+  String get washPhotosRequired =>
+      'صورة واحدة على الأقل قبل الغسيل وأخرى بعده، تُلتقط بالكاميرا الآن. تُختم كل صورة بوقتها وموقعها.';
+
+  @override
+  String washPhotoStamp(String time, String place) {
+    return '$time · $place';
+  }
+
+  @override
+  String get washGpsNone => 'بدون موقع';
+
+  @override
+  String get washReadOnlyNote =>
+      'لا يمكن تعديل هذا السجل من الهاتف. تتم التصحيحات عبر الويب بواسطة مسؤول، ويُحفظ كل تغيير في سجل التدقيق.';
+
+  @override
+  String get washRecordIdLabel => 'رقم السجل';
+
+  @override
+  String get washCapturedOnDevice => 'وقت الالتقاط على الجهاز';
+
+  @override
+  String get washSiteFromVehicle => 'مأخوذ من سجل المركبة ولا يمكن تغييره هنا.';
+
+  @override
+  String get washAuditTitle => 'سجل التدقيق';
 }

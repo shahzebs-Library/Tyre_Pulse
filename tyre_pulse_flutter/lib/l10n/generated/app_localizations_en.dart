@@ -9732,4 +9732,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get washAreaSelected => 'Selected';
+
+  @override
+  String get washMissingPhotos => 'Take before and after photos';
+
+  @override
+  String get washPhotosRequired =>
+      'At least one before and one after photo, taken with the camera now. Each photo is stamped with its time and location.';
+
+  @override
+  String washPhotoStamp(String time, String place) {
+    return '$time · $place';
+  }
+
+  @override
+  String get washGpsNone => 'No GPS';
+
+  @override
+  String get washReadOnlyNote =>
+      'This record cannot be changed on the phone. Corrections are made on the web by an administrator, and every change is kept in the audit history.';
+
+  @override
+  String get washRecordIdLabel => 'Record ID';
+
+  @override
+  String get washCapturedOnDevice => 'Captured on device';
+
+  @override
+  String get washSiteFromVehicle =>
+      'Taken from the vehicle record. It cannot be changed here.';
+
+  @override
+  String get washAuditTitle => 'Audit record';
 }

@@ -1,6 +1,6 @@
-/// Wash-area tiles: one drawn illustration per part of the vehicle, name and
-/// a one-line description. Several can be picked; a picked tile is framed in
-/// the brand colour and carries a check.
+/// Wash-area chips: one small owner-supplied illustration per part of the
+/// vehicle and its name, several to a row. Several can be picked; a picked
+/// chip is framed in the brand colour and carries a check.
 library;
 
 import 'package:flutter/material.dart';
@@ -29,12 +29,16 @@ class WashAreaGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final int columns = constraints.maxWidth >= 560 ? 3 : 2;
+        // Small picture chips: 3 per row on a narrow phone, 4 from about
+        // 360dp of content width, more on tablets. Labels wrap and the chip
+        // grows, so large text stays readable.
+        const double gap = TpSpace.sm;
+        final int columns = (constraints.maxWidth / 92).floor().clamp(3, 6);
         final double width =
-            (constraints.maxWidth - (columns - 1) * TpSpace.sm) / columns;
+            (constraints.maxWidth - (columns - 1) * gap) / columns;
         return Wrap(
-          spacing: TpSpace.sm,
-          runSpacing: TpSpace.sm,
+          spacing: gap,
+          runSpacing: gap,
           children: <Widget>[
             for (final WashArea area in areas)
               SizedBox(
@@ -92,18 +96,17 @@ class _WashAreaTile extends StatelessWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
-    final BorderRadius corners = BorderRadius.circular(TpRadius.lg);
     final String name = washAreaName(l10n, area);
 
     return Semantics(
       button: true,
       selected: selected,
-      label: name,
+      label: '$name. ${_washAreaDescription(l10n, area)}',
       excludeSemantics: true,
       child: Material(
         color: selected ? palette.primarySoft : palette.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: corners,
+          borderRadius: BorderRadius.circular(TpRadius.md),
           side: BorderSide(
             color: selected ? palette.primary : palette.border,
             width: selected ? 2 : 1,
@@ -112,89 +115,69 @@ class _WashAreaTile extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Stack(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.all(TpSpace.xs),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  // The illustrations are drawn on transparent white-body
-                  // vehicles; a light well keeps them readable in dark mode.
-                  Container(
-                    height: 96,
-                    width: double.infinity,
-                    margin: const EdgeInsets.all(TpSpace.xs),
-                    decoration: BoxDecoration(
-                      color: palette.brightness == Brightness.dark
-                          ? palette.surfaceAlt
-                          : palette.surfaceSunken,
-                      borderRadius: BorderRadius.circular(TpRadius.md),
-                    ),
-                    padding: const EdgeInsets.all(TpSpace.xs),
-                    child: Image.asset(
-                      area.assetPath,
-                      fit: BoxFit.contain,
-                      filterQuality: FilterQuality.medium,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.local_car_wash_rounded,
-                        size: 40,
-                        color: palette.textMuted,
+                  Stack(
+                    children: <Widget>[
+                      // The owner's illustrations are drawn on white; they
+                      // sit on a small white card in both themes.
+                      AspectRatio(
+                        aspectRatio: 1.25,
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(TpRadius.sm),
+                          ),
+                          padding: const EdgeInsets.all(2),
+                          child: Image.asset(
+                            area.assetPath,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.medium,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.local_car_wash_rounded,
+                              color: Colors.black45,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      if (selected)
+                        PositionedDirectional(
+                          top: 2,
+                          end: 2,
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: palette.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.check_rounded,
+                              size: 13,
+                              color: palette.onPrimary,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                  PositionedDirectional(
-                    top: TpSpace.sm,
-                    end: TpSpace.sm,
-                    child: AnimatedOpacity(
-                      opacity: selected ? 1 : 0,
-                      duration: const Duration(milliseconds: 160),
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: palette.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.check_rounded,
-                          size: 16,
-                          color: palette.onPrimary,
-                          semanticLabel:
-                              selected ? l10n.washAreaSelected : null,
-                        ),
-                      ),
+                  const SizedBox(height: 2),
+                  Text(
+                    name,
+                    textAlign: TextAlign.center,
+                    style: text.labelSmall?.copyWith(
+                      color: selected ? palette.primary : palette.text,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  TpSpace.sm,
-                  0,
-                  TpSpace.sm,
-                  TpSpace.sm,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      name,
-                      style: text.titleSmall?.copyWith(
-                        color: selected ? palette.primary : palette.text,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      _washAreaDescription(l10n, area),
-                      style: text.bodySmall?.copyWith(
-                        color: palette.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

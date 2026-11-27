@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { render, screen, within, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../lib/api/accidentOwnership', () => ({
@@ -7,6 +7,12 @@ vi.mock('../lib/api/accidentOwnership', () => ({
 }))
 
 import CaseTeamInbox from '../components/accidents/CaseTeamInbox'
+import { LanguageProvider, useLanguage } from '../contexts/LanguageContext'
+
+// The accidentOwnership namespace loads lazily; warm it once so synchronous
+// queries see the real English strings rather than the humanised placeholder.
+function WarmLocale() { const { t } = useLanguage(); return <span>{t('accidentOwnership.common.na')}</span> }
+beforeAll(async () => { render(<LanguageProvider><WarmLocale /></LanguageProvider>); await screen.findByText('N/A'); cleanup() })
 
 // CaseTeamInbox is built on accident_my_tasks(): "Assigned to me" and "For my
 // team", overdue first, with honest loading / empty states.

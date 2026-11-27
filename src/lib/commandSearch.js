@@ -236,7 +236,7 @@ export const NAV_COMMANDS = [
   { id: 'insurance-policies', label: 'Insurance Policies', path: '/insurance-policies', icon: 'Shield', roles: ['Admin'], keywords: ['insurance', 'policy', 'claim', 'reject', 'delay', 'total loss', 'coverage', 'vehicle value'] },
   { id: 'insurance-claims', label: 'Insurance Claims', path: '/insurance-claims', icon: 'ShieldAlert' },
   { id: 'incidents', label: 'Incident Reports', path: '/incidents', icon: 'FileWarning' },
-  { id: 'accident-workflow-settings', label: 'Accident Workflow', path: '/accident-workflow-settings', icon: 'GitBranch', roles: ANALYTICS_ROLES },
+  { id: 'accident-workflow-settings', label: 'Accident Workflow', path: '/accident-workflow-settings', icon: 'GitBranch', adminOnly: true },
   { id: 'approval-matrix', label: 'Approval Matrix', path: '/approval-matrix', icon: 'ShieldCheck', keywords: 'who approves signer routing escalation', adminOnly: true },
   { id: 'workshop-live', label: 'Workshop Live Control', path: '/workshop-live', icon: 'Activity', roles: ANALYTICS_ROLES },
   { id: 'workshop-absence', label: 'Absence & Attendance', path: '/workshop-absence', icon: 'CalendarCheck2', roles: ANALYTICS_ROLES },

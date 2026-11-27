@@ -695,7 +695,7 @@ function MainApp() {
                       <Route path="/accident-cases" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><AccidentCases /></RoleRoute></Safe>} />
                       <Route path="/claims-summary" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><FlagRoute flag="accidents_module"><ClaimsSummary /></FlagRoute></RoleRoute></Safe>} />
                       <Route path="/insurance-policies" element={<Safe><RoleRoute allowed={['Admin']}><InsurancePolicies /></RoleRoute></Safe>} />
-                      <Route path="/accident-workflow-settings" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><AccidentWorkflowSettings /></RoleRoute></Safe>} />
+                      <Route path="/accident-workflow-settings" element={<Safe><RoleRoute allowed={['Admin']}><AccidentWorkflowSettings /></RoleRoute></Safe>} />
                       <Route path="/approval-matrix" element={<Safe><RoleRoute allowed={['Admin']}><ApprovalMatrix /></RoleRoute></Safe>} />
                       <Route path="/broadcast" element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']} moduleKey="broadcast"><Broadcast /></RoleRoute></Safe>} />
                       <Route path="/rca"         element={<Safe><ModuleRoute moduleKey="rca"><RcaRecords /></ModuleRoute></Safe>} />

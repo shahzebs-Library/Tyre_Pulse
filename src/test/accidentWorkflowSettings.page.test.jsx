@@ -1,6 +1,6 @@
 import React from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 const h = vi.hoisted(() => ({
@@ -41,6 +41,11 @@ function mount(path = '/accident-workflow-settings') {
 }
 
 beforeEach(() => { h.deptError = null; h.setEnabled.mockReset() })
+
+import { LanguageProvider, useLanguage } from '../contexts/LanguageContext'
+// The accidentOwnership namespace loads lazily; warm it so the tab names are real.
+function WarmLocale() { const { t } = useLanguage(); return <span>{t('accidentOwnership.common.na')}</span> }
+beforeAll(async () => { render(<LanguageProvider><WarmLocale /></LanguageProvider>); await screen.findByText('N/A'); cleanup() })
 
 describe('AccidentWorkflowSettings page', () => {
   it('shows the KPI strip and flags a rule that reaches nobody', async () => {

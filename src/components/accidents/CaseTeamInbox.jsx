@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Inbox, Clock, AlertTriangle, CheckCircle2, User, Users, MapPin, RefreshCw } from 'lucide-react'
 import { listMyAccidentTasks } from '../../lib/api/accidentOwnership'
-import {
-  splitTasks, taskCounts, daysLabel, slaStateLabel, workstreamName,
-} from '../../lib/accidentOwnership'
+import { splitTasks, taskCounts } from '../../lib/accidentOwnership'
+import useAccidentOwnershipText from './useAccidentOwnershipText'
 import { toUserMessage } from '../../lib/safeError'
 
 /**
@@ -38,6 +37,8 @@ function dueText(dueAt) {
 const rowKey = (t) => t.workstream_id || `${t.accident_id}-${t.workstream_key}`
 
 function TaskRow({ task }) {
+  const L = useAccidentOwnershipText()
+  const { tx } = L
   const tone = slaTone(task)
   const due = dueText(task.due_at)
   return (
@@ -47,11 +48,11 @@ function TaskRow({ task }) {
         className="block rounded-lg px-2 -mx-2 py-1 hover:bg-[var(--surface-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-sm font-medium text-[var(--text-primary)]">{task.reference_no ? `Case ${task.reference_no}` : 'Case'}</span>
-          <span className="text-sm text-[var(--text-secondary)]">{task.workstream_name || workstreamName(task.workstream_key)}</span>
-          <span className={`ml-auto inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${PILL[tone]}`}>
+          <span className="text-sm font-medium text-[var(--text-primary)]">{task.reference_no ? tx('inbox.case', { ref: task.reference_no }) : tx('inbox.caseNoRef')}</span>
+          <span className="text-sm text-[var(--text-secondary)]">{L.step(task.workstream_key) || task.workstream_name}</span>
+          <span className={`ms-auto inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${PILL[tone]}`}>
             {tone === 'danger' ? <AlertTriangle size={11} aria-hidden="true" /> : <Clock size={11} aria-hidden="true" />}
-            {slaStateLabel(task)}{due && !task.overdue ? ` · ${due}` : ''}
+            {L.slaState(task)}{due && !task.overdue ? ` · ${due}` : ''}
           </span>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-muted)]">
@@ -59,8 +60,8 @@ function TaskRow({ task }) {
           {(task.site || task.country) && (
             <span className="inline-flex items-center gap-1"><MapPin size={11} aria-hidden="true" />{[task.site, task.country].filter(Boolean).join(', ')}</span>
           )}
-          <span dir="auto">In this step {daysLabel(task.days_in_step)}</span>
-          {!task.assigned_to_me && task.owner_role && <span className="inline-flex items-center gap-1"><Users size={11} aria-hidden="true" />{task.owner_role}</span>}
+          <span dir="auto">{tx('inbox.inStep', { days: L.days(task.days_in_step) })}</span>
+          {!task.assigned_to_me && task.owner_role && <span className="inline-flex items-center gap-1"><Users size={11} aria-hidden="true" />{L.role(task.owner_role)}</span>}
         </div>
       </Link>
     </li>
@@ -80,7 +81,9 @@ function Section({ icon: Icon, title, tasks, emptyText }) {
   )
 }
 
-export default function CaseTeamInbox({ items, title = 'My accident tasks', compact = false }) {
+export default function CaseTeamInbox({ items, title, compact = false }) {
+  const { tx } = useAccidentOwnershipText()
+  const heading = title || tx('inbox.title')
   const selfLoad = items === undefined
   const [state, setState] = useState({ loading: selfLoad, ok: true, rows: selfLoad ? null : items })
 
@@ -90,9 +93,9 @@ export default function CaseTeamInbox({ items, title = 'My accident tasks', comp
       const res = await listMyAccidentTasks()
       setState({ loading: false, ok: res.ok, rows: res.rows })
     } catch (e) {
-      setState({ loading: false, ok: true, error: toUserMessage(e, 'Could not load your accident tasks.') })
+      setState({ loading: false, ok: true, error: toUserMessage(e, tx('inbox.loadFailed')) })
     }
-  }, [])
+  }, [tx])
   useEffect(() => { if (selfLoad) load() }, [selfLoad, load])
   useEffect(() => { if (!selfLoad) setState({ loading: items == null, ok: true, rows: items }) }, [items, selfLoad])
 
@@ -102,21 +105,21 @@ export default function CaseTeamInbox({ items, title = 'My accident tasks', comp
 
   let body
   if (state.loading && !rows) {
-    body = <p className="text-sm text-[var(--text-muted)] py-3">Loading your tasks...</p>
+    body = <p className="text-sm text-[var(--text-muted)] py-3">{tx('inbox.loading')}</p>
   } else if (state.error) {
     body = (
       <div className="flex items-center gap-2 py-3" role="alert">
         <AlertTriangle size={16} className="text-red-400" aria-hidden="true" />
         <p className="text-sm text-[var(--text-primary)] flex-1">{state.error}</p>
-        <button type="button" onClick={load} className="text-sm text-[var(--accent)] hover:underline">Try again</button>
+        <button type="button" onClick={load} className="text-sm text-[var(--accent)] hover:underline">{tx('common.tryAgain')}</button>
       </div>
     )
   } else if (state.ok === false) {
-    body = <p className="text-sm text-[var(--text-muted)] py-3">Accident task tracking is not switched on yet.</p>
+    body = <p className="text-sm text-[var(--text-muted)] py-3">{tx('common.notOn')}</p>
   } else if (!rows || rows.length === 0) {
     body = (
       <p className="flex items-center gap-2 text-sm text-[var(--text-muted)] py-3">
-        <CheckCircle2 size={16} className="text-emerald-400" aria-hidden="true" /> Nothing waiting for you on accident cases.
+        <CheckCircle2 size={16} className="text-emerald-400" aria-hidden="true" />{' '}{tx('inbox.empty')}
       </p>
     )
   } else if (compact) {
@@ -124,25 +127,25 @@ export default function CaseTeamInbox({ items, title = 'My accident tasks', comp
   } else {
     body = (
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section icon={User} title="Assigned to me" tasks={groups.mine} emptyText="No steps assigned to you by name." />
-        <Section icon={Users} title="For my team" tasks={groups.team} emptyText="No steps waiting for your role." />
+        <Section icon={User} title={tx('inbox.mine')} tasks={groups.mine} emptyText={tx('inbox.mineEmpty')} />
+        <Section icon={Users} title={tx('inbox.team')} tasks={groups.team} emptyText={tx('inbox.teamEmpty')} />
       </div>
     )
   }
 
   return (
-    <section className="card" aria-label={title}>
+    <section className="card" aria-label={heading}>
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <Inbox size={16} className="text-[var(--accent)]" aria-hidden="true" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{heading}</h3>
         {rows && rows.length > 0 && (
           <span dir="auto" className="text-xs text-[var(--text-muted)]">
-            {counts.total} open{counts.overdue ? ` · ${counts.overdue} overdue` : ''}{counts.dueSoon ? ` · ${counts.dueSoon} due soon` : ''}
+            {tx('inbox.open', { n: counts.total })}{counts.overdue ? tx('inbox.overdue', { n: counts.overdue }) : ''}{counts.dueSoon ? tx('inbox.dueSoon', { n: counts.dueSoon }) : ''}
           </span>
         )}
         {selfLoad && (
-          <button type="button" onClick={load} aria-label="Refresh tasks"
-            className="ml-auto inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]">
+          <button type="button" onClick={load} aria-label={tx('inbox.refresh')}
+            className="ms-auto inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)]">
             <RefreshCw size={14} className={state.loading ? 'animate-spin' : ''} />
           </button>
         )}

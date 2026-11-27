@@ -509,7 +509,7 @@ export default function CommandCenter() {
       {/* Accident steps owned by me or my role (accident_my_tasks); shows its own
           empty / not-switched-on state, so it never adds noise. */}
       <div className="cc-accident-tasks" style={{ marginTop: 16 }}>
-        <CaseTeamInbox compact title="My accident tasks" />
+        <CaseTeamInbox compact />
       </div>
     </div>
   )

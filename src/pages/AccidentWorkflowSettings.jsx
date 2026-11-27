@@ -28,6 +28,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SharedModal from '../components/ui/Modal'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   listDepartments, createDepartment, updateDepartment, deleteDepartment,
   listRoutingRules, createRoutingRule, updateRoutingRule, deleteRoutingRule,
@@ -46,7 +47,9 @@ import { compareValues } from '../lib/consoleTable'
 import { reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
 
-const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
+// Owner/notify routing decides who sees and is told about every case, so the
+// whole page is Admin-only (super admins pass); the database enforces the same.
+const WRITE_ROLES = new Set(['Admin'])
 
 // Recipient role choices for routing rules (Title Case, mirrors the app roles).
 const ROLE_CHOICES = [
@@ -64,8 +67,8 @@ const EVENT_CHOICES = [
 const EVENT_LABEL = Object.fromEntries(EVENT_CHOICES.map((e) => [e.value, e.label]))
 
 const TABS = [
-  { id: 'owners', label: 'Step Owners & SLA', icon: UserCheck },
-  { id: 'notify', label: 'Who Is Told', icon: BellRing },
+  { id: 'owners', label: 'Step Owners & SLA', i18n: 'accidentOwnership.tabs.owners', icon: UserCheck },
+  { id: 'notify', label: 'Who Is Told', i18n: 'accidentOwnership.tabs.notify', icon: BellRing },
   { id: 'departments', label: 'Departments', icon: Building2 },
   { id: 'rules', label: 'Routing Rules', icon: ListChecks },
   { id: 'templates', label: 'Email Templates', icon: Mail },
@@ -88,6 +91,7 @@ function arr(v) { return Array.isArray(v) ? v : [] }
 
 export default function AccidentWorkflowSettings() {
   const { profile, isSuperAdmin } = useAuth()
+  const { t: tr } = useLanguage()
   const canWrite = isSuperAdmin === true || WRITE_ROLES.has(profile?.role)
 
   // The active tab is URL-borne so a link can open a given section.
@@ -159,9 +163,9 @@ export default function AccidentWorkflowSettings() {
         <div className="card border border-amber-800/50 flex items-start gap-3" role="note">
           <ShieldAlert size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-[var(--text-primary)] font-medium">Read-only view</p>
+            <p className="text-[var(--text-primary)] font-medium">{tr('accidentOwnership.readOnly.title')}</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
-              You can review the workflow configuration. Changes require an Admin, Manager or Director role.
+              {tr('accidentOwnership.readOnly.body')}
             </p>
           </div>
         </div>
@@ -185,7 +189,7 @@ export default function AccidentWorkflowSettings() {
               onClick={() => setTab(t.id)}
               className={`inline-flex items-center gap-1.5 min-h-[44px] px-4 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] ${on ? 'border-[var(--accent)] text-[var(--text-primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-secondary)]'}`}
             >
-              <Icon size={15} aria-hidden="true" /> {t.label}
+              <Icon size={15} aria-hidden="true" /> {t.i18n ? tr(t.i18n) : t.label}
             </button>
           )
         })}

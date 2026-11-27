@@ -18,10 +18,14 @@ import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
 import 'package:tyre_pulse/features/inventory/presentation/job_card_issue_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/my_audits_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/physical_inventory_screen.dart';
+import 'package:tyre_pulse/features/inventory/presentation/store_receipt_screen.dart';
 import 'package:tyre_pulse/features/inventory/presentation/transfers_screen.dart';
 import 'package:tyre_pulse/features/stock_count/data/stock_count_recorder.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/stock_count_copy.dart';
+import 'package:tyre_pulse/features/stock_count/presentation/stock_item_detail_screen.dart';
+import 'package:tyre_pulse/features/stock_count/presentation/store_history_copy.dart';
+import 'package:tyre_pulse/features/stock_count/presentation/store_history_screen.dart';
 import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
 
 enum _StockFilter { all, low, stale }
@@ -72,6 +76,12 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
+  }
+
+  /// The item's detail: levels, receive stock, and its movement history.
+  Future<void> _open(StockItem item) async {
+    await Navigator.of(context).push(StockItemDetailScreen.route(item));
+    if (mounted) ref.invalidate(stockItemsProvider);
   }
 
   /// Issue this stock to a job card, or take it back from one.
@@ -264,44 +274,86 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
         },
         backFallback: fallback,
         actions: <Widget>[
-          // Inventory counts and transfers are pushed with Navigator: their
-          // routes belong in reserved router files (see
+          // At most three icons on a phone bar; the rest sit in a labelled
+          // overflow menu. Counts, transfers and receipts are pushed with
+          // Navigator: their routes belong in reserved router files (see
           // docs/inventory_reserved_patch.md). Same `stock` module gate.
+          // Goods received against an open PO line, sent for approval.
           IconButton(
-            key: const Key('stock.myCounts'),
-            tooltip: copy('myCounts'),
-            icon: const TpIcon(Icons.fact_check_outlined),
-            onPressed: () =>
-                unawaited(Navigator.of(context).push(MyAuditsScreen.route())),
-          ),
-          IconButton(
-            key: const Key('stock.physicalInventory'),
-            tooltip: InventoryCopy.of(context)('pi_entry'),
-            icon: const Icon(Icons.inventory_2_outlined),
+            key: const Key('stock.receiveGoods'),
+            tooltip: InventoryCopy.of(context)('sr_entry'),
+            icon: const Icon(Icons.move_to_inbox_outlined),
             onPressed: () => unawaited(
-              Navigator.of(context).push(PhysicalInventoryScreen.route()),
+              Navigator.of(context).push(StoreReceiptScreen.route()),
             ),
           ),
+          // Store history: every movement, filterable. Same `stock` gate.
           IconButton(
-            key: const Key('stock.transfers'),
-            tooltip: copy('transfers'),
-            icon: const Icon(Icons.swap_horiz_rounded),
-            onPressed: () =>
-                unawaited(Navigator.of(context).push(TransfersScreen.route())),
-          ),
-          IconButton(
-            key: const Key('stock.add'),
-            tooltip: copy('add'),
-            icon: const Icon(Icons.add_rounded),
+            key: const Key('stock.history'),
+            tooltip: StoreHistoryCopy.of(context)('historyTitle'),
+            icon: const Icon(Icons.history_rounded),
             onPressed: () => unawaited(
-              _add(
-                copy,
-                switch (state) {
-                  AsyncData<List<StockItem>>(:final value) => value,
-                  _ => const <StockItem>[],
-                },
+              Navigator.of(context).push(StoreHistoryScreen.route()),
+            ),
+          ),
+          PopupMenuButton<String>(
+            key: const Key('stock.more'),
+            tooltip: InventoryCopy.of(context)('sr_more'),
+            onSelected: (String v) {
+              final NavigatorState nav = Navigator.of(context);
+              switch (v) {
+                case 'counts':
+                  unawaited(nav.push(MyAuditsScreen.route()));
+                case 'physical':
+                  unawaited(nav.push(PhysicalInventoryScreen.route()));
+                case 'transfers':
+                  unawaited(nav.push(TransfersScreen.route()));
+                case 'add':
+                  unawaited(
+                    _add(
+                      copy,
+                      switch (state) {
+                        AsyncData<List<StockItem>>(:final value) => value,
+                        _ => const <StockItem>[],
+                      },
+                    ),
+                  );
+              }
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                key: const Key('stock.add'),
+                value: 'add',
+                child: ListTile(
+                  leading: const Icon(Icons.add_rounded),
+                  title: Text(copy('add')),
+                ),
               ),
-            ),
+              PopupMenuItem<String>(
+                key: const Key('stock.myCounts'),
+                value: 'counts',
+                child: ListTile(
+                  leading: const TpIcon(Icons.fact_check_outlined),
+                  title: Text(copy('myCounts')),
+                ),
+              ),
+              PopupMenuItem<String>(
+                key: const Key('stock.physicalInventory'),
+                value: 'physical',
+                child: ListTile(
+                  leading: const Icon(Icons.inventory_2_outlined),
+                  title: Text(InventoryCopy.of(context)('pi_entry')),
+                ),
+              ),
+              PopupMenuItem<String>(
+                key: const Key('stock.transfers'),
+                value: 'transfers',
+                child: ListTile(
+                  leading: const Icon(Icons.swap_horiz_rounded),
+                  title: Text(copy('transfers')),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -428,6 +480,7 @@ class _StockCountScreenState extends ConsumerState<StockCountScreen> {
                 busy: _busyId == item.id,
                 onAdjust: (int delta) => unawaited(_adjust(item, delta, copy)),
                 onMove: (JobCardMove move) => unawaited(_move(item, move)),
+                onOpen: () => unawaited(_open(item)),
                 inventoryCopy: InventoryCopy.of(context),
               ),
               const SizedBox(height: TpSpace.sm),
@@ -664,8 +717,10 @@ class _StockCard extends StatelessWidget {
     required this.onMove,
     required this.inventoryCopy,
     required this.busy,
+    this.onOpen,
   });
   final StockItem item;
+  final VoidCallback? onOpen;
   final StockCountCopy copy;
   final InventoryCopy inventoryCopy;
   final VoidCallback onCount;
@@ -688,6 +743,7 @@ class _StockCard extends StatelessWidget {
     };
     return TpCard(
       key: Key('stock.item.${item.id}'),
+      onTap: onOpen,
       padding: const EdgeInsets.all(TpSpace.md),
       child: Row(
         children: <Widget>[

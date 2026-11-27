@@ -22,6 +22,7 @@
 library;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_payload.dart';
@@ -102,6 +103,91 @@ abstract interface class HandoverRemoteRepository {
   /// The signed-in user's display name (`full_name` else `username`), for the
   /// "signing as" line. Best-effort: null on any failure or nothing found.
   Future<String?> currentUserDisplayName(String userId);
+
+  /// Active drivers in the register (RLS scoped), for the party pickers.
+  /// Best-effort: `[]` on failure so the typed-name path still works.
+  Future<List<HandoverDriverOption>> listDrivers({String? country});
+
+  /// The row a queued submission created, found by its idempotency key.
+  Future<HandoverRecord?> byClientUuid(String clientUuid);
+
+  /// Records one party's signature through `sign_handover`. Online only:
+  /// throws [SupabaseFailure] (cause `offline` when there is no connection).
+  Future<HandoverSignResult> sign(HandoverSignInput input);
+
+  /// The driver-register id linked to the signed-in account
+  /// (`driver_account_links`), or null. Null only means the screen asks for
+  /// the on-behalf confirmation; the server decides.
+  Future<String?> myLinkedDriverId(String userId);
+}
+
+/// A driver from the register.
+final class HandoverDriverOption {
+  const HandoverDriverOption({
+    required this.id,
+    required this.name,
+    this.employeeId,
+    this.site,
+  });
+  final String id;
+  final String name;
+  final String? employeeId;
+  final String? site;
+
+  String get label =>
+      employeeId == null || employeeId!.isEmpty ? name : '$name · $employeeId';
+}
+
+/// What the device collected for one signature.
+final class HandoverSignInput {
+  const HandoverSignInput({
+    required this.handoverId,
+    required this.party,
+    required this.signature,
+    this.signerName,
+    this.latitude,
+    this.longitude,
+    this.accuracyMeters,
+    this.locationStatus,
+    this.onBehalf = false,
+  });
+  final String handoverId;
+
+  /// Sent as `p_on_behalf`: true whenever the account is not the party's own
+  /// linked driver. Only a supervisor-level account is accepted with it.
+  final bool onBehalf;
+  final HandoverParty party;
+
+  /// A `data:image/png;base64,...` URL from the signature pad.
+  final String signature;
+  final String? signerName;
+  final double? latitude;
+  final double? longitude;
+  final double? accuracyMeters;
+
+  /// `denied` or `unavailable` when there is no fix.
+  final String? locationStatus;
+
+  Map<String, Object?> toParams() => <String, Object?>{
+        'p_id': handoverId,
+        'p_party': party.key,
+        'p_signature': signature,
+        'p_signer_name': signerName,
+        'p_latitude': latitude,
+        'p_longitude': longitude,
+        'p_accuracy_m': accuracyMeters,
+        'p_location_status':
+            latitude == null || longitude == null ? locationStatus : null,
+        'p_on_behalf': onBehalf,
+      };
+}
+
+/// The server's answer: who it recorded and when (server time).
+final class HandoverSignResult {
+  const HandoverSignResult({this.signedName, this.signedAt, this.status});
+  final String? signedName;
+  final String? signedAt;
+  final String? status;
 }
 
 final class SupabaseHandoverRemoteRepository
@@ -142,22 +228,65 @@ final class SupabaseHandoverRemoteRepository
   Future<void> upsertHandover({
     required HandoverPayload payload,
     required String clientUuid,
-  }) {
-    return guard<void>(() async {
-      await _client.from(SupabaseTables.handoverReports).upsert(
-        <String, Object?>{...payload.toRow(), 'client_uuid': clientUuid},
-        onConflict: 'client_uuid',
-        ignoreDuplicates: true,
+  }) async {
+    final Map<String, Object?> row = <String, Object?>{
+      ...payload.toRow(),
+      'client_uuid': clientUuid,
+    };
+    Future<void> write(Map<String, Object?> values) => guard<void>(() async {
+          await _client.from(SupabaseTables.handoverReports).upsert(
+                values,
+                onConflict: 'client_uuid',
+                ignoreDuplicates: true,
+              );
+        });
+    try {
+      await write(row);
+    } on SupabaseFailure catch (failure) {
+      // A server without the authorization-paper migration does not know the
+      // driver id / hour meter / site columns and fails the WHOLE insert.
+      // Retry once without them rather than leaving the handover stuck.
+      final bool hasAuthKeys =
+          HandoverPayload.authorizationKeys.any(row.containsKey);
+      if (failure.cause != SupabaseFailureCause.schemaMismatch ||
+          !hasAuthKeys) {
+        rethrow;
+      }
+      // That server cannot collect the two drivers' signatures either, so an
+      // unsigned paper would reach the supervisor as if it were signed.
+      // Refuse instead; the draft stays on the phone and goes through once
+      // the server update is installed.
+      final Object? legacySignature = row['signature_url'];
+      if (legacySignature == null || '$legacySignature'.trim().isEmpty) {
+        rethrow;
+      }
+      await write(<String, Object?>{
+        for (final MapEntry<String, Object?> e in row.entries)
+          if (!HandoverPayload.authorizationKeys.contains(e.key))
+            e.key: e.value,
+      });
+    }
+  }
+
+  /// Runs [read] with the authorization columns, and once more with the
+  /// legacy list when the server has not had that migration applied.
+  Future<T> _withColumns<T>(Future<T> Function(String columns) read) async {
+    try {
+      return await guard<T>(
+        () => read('$handoverRecordColumns,$handoverAuthorizationColumns'),
       );
-    });
+    } on SupabaseFailure catch (failure) {
+      if (failure.cause != SupabaseFailureCause.schemaMismatch) rethrow;
+      return guard<T>(() => read(handoverRecordColumns));
+    }
   }
 
   @override
   Future<HandoverRecord?> byId(String id) async {
-    final Map<String, dynamic>? row = await guard<Map<String, dynamic>?>(
-      () => _client
+    final Map<String, dynamic>? row = await _withColumns(
+      (String columns) => _client
           .from(SupabaseTables.handoverReports)
-          .select(handoverRecordColumns)
+          .select(columns)
           .eq('id', id)
           .maybeSingle(),
     );
@@ -166,15 +295,106 @@ final class SupabaseHandoverRemoteRepository
   }
 
   @override
+  Future<HandoverRecord?> byClientUuid(String clientUuid) async {
+    final Map<String, dynamic>? row = await _withColumns(
+      (String columns) => _client
+          .from(SupabaseTables.handoverReports)
+          .select(columns)
+          .eq('client_uuid', clientUuid)
+          .maybeSingle(),
+    );
+    if (row == null) return null;
+    return HandoverRecord.fromRow(row);
+  }
+
+  @override
+  Future<List<HandoverDriverOption>> listDrivers({String? country}) async {
+    try {
+      return await guard<List<HandoverDriverOption>>(() async {
+        // The register holds hundreds of drivers and the server caps every
+        // response at 1000 rows, so read it in pages; a driver who is cut off
+        // cannot be picked and the not-the-signing-driver check is lost.
+        const int pageSize = 1000;
+        const int maxRows = 10000;
+        final List<Map<String, dynamic>> rows = <Map<String, dynamic>>[];
+        for (int from = 0; from < maxRows; from += pageSize) {
+          var query = _client
+              .from('drivers')
+              .select('id,driver_id,driver_name,site,country,status');
+          if (country != null && country.isNotEmpty && country != 'All') {
+            query = query.eq('country', country);
+          }
+          final List<Map<String, dynamic>> page = await query
+              .order('driver_name', ascending: true)
+              .order('id', ascending: true)
+              .range(from, from + pageSize - 1);
+          rows.addAll(page);
+          if (page.length < pageSize) break;
+        }
+        return <HandoverDriverOption>[
+          for (final Map<String, dynamic> r in rows)
+            if ((r['driver_name'] as Object?)?.toString().trim().isNotEmpty ??
+                false)
+              if ('${r['status'] ?? 'active'}'.toLowerCase() != 'inactive')
+                HandoverDriverOption(
+                  id: '${r['id']}',
+                  name: '${r['driver_name']}'.trim(),
+                  employeeId: (r['driver_id'] as Object?)?.toString(),
+                  site: (r['site'] as Object?)?.toString(),
+                ),
+        ];
+      });
+    } on Object {
+      return const <HandoverDriverOption>[];
+    }
+  }
+
+  @override
+  Future<String?> myLinkedDriverId(String userId) async {
+    if (userId.isEmpty) return null;
+    try {
+      final Map<String, dynamic>? row = await guard<Map<String, dynamic>?>(
+        () => _client
+            .from('driver_account_links')
+            .select('driver_id')
+            .eq('user_id', userId)
+            .maybeSingle(),
+      );
+      final Object? id = row?['driver_id'];
+      return id == null ? null : '$id';
+    } on Object {
+      return null;
+    }
+  }
+
+  @override
+  Future<HandoverSignResult> sign(HandoverSignInput input) async {
+    final Object? result = await guard<Object?>(
+      () => _client.rpc<Object?>(
+        SupabaseRpcs.signHandover,
+        params: input.toParams(),
+      ),
+    );
+    if (result is Map) {
+      return HandoverSignResult(
+        signedName: (result['signed_name'] as Object?)?.toString(),
+        signedAt: (result['signed_at'] as Object?)?.toString(),
+        status: (result['status'] as Object?)?.toString(),
+      );
+    }
+    return const HandoverSignResult();
+  }
+
+  @override
   Future<List<HandoverRecord>> myHandovers({
     required String createdBy,
     int limit = 100,
   }) async {
     final List<Map<String, dynamic>> rows =
-        await guard<List<Map<String, dynamic>>>(
-      () async => await _client
+        await _withColumns<List<Map<String, dynamic>>>(
+      (String columns) async => await _client
           .from(SupabaseTables.handoverReports)
-          .select(handoverRecordColumns)
+          .select(columns)
           .eq('created_by', createdBy)
           .order('created_at', ascending: false)
           .limit(limit),
@@ -190,11 +410,9 @@ final class SupabaseHandoverRemoteRepository
     int limit = 100,
   }) async {
     final List<Map<String, dynamic>> rows =
-        await guard<List<Map<String, dynamic>>>(() async {
-      var query = _client
-          .from(SupabaseTables.handoverReports)
-          .select(handoverRecordColumns)
-          .inFilter(
+        await _withColumns<List<Map<String, dynamic>>>((String columns) async {
+      var query =
+          _client.from(SupabaseTables.handoverReports).select(columns).inFilter(
         'approval_status',
         <String>['pending_supervisor', 'pending_incharge'],
       );

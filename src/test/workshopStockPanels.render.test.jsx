@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 
 const api = vi.hoisted(() => ({
   loadJobCardMaterials: vi.fn(),
@@ -14,12 +14,17 @@ const api = vi.hoisted(() => ({
 vi.mock('../lib/workshopStock/service', () => api)
 vi.mock('../lib/exportUtils', () => ({ exportToExcel: vi.fn(), exportToPdf: vi.fn(), reportFileName: (...p) => p.join(' ') }))
 
-import { LanguageProvider } from '../contexts/LanguageContext'
+import { LanguageProvider, useLanguage } from '../contexts/LanguageContext'
 import JobCardMaterialsPanel from '../components/workshopStock/JobCardMaterialsPanel'
 import AssetMaterialCostPanel from '../components/workshopStock/AssetMaterialCostPanel'
 import { buildJobMaterials, summariseJobMaterials } from '../lib/workshopStock/jobMaterials'
 
 const wrap = (ui) => render(<LanguageProvider>{ui}</LanguageProvider>)
+
+// The wmsissue namespace loads lazily; warm it once so synchronous queries see
+// the real English strings rather than the humanised placeholder.
+function WarmLocale() { const { t } = useLanguage(); return <span>{t('wmsissue.common.na')}</span> }
+beforeAll(async () => { render(<LanguageProvider><WarmLocale /></LanguageProvider>); await screen.findByText('N/A'); cleanup() })
 const yes = () => true
 const scope = { country: 'KSA', site: 'all' }
 

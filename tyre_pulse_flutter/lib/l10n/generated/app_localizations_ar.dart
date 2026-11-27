@@ -661,10 +661,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get tyreConditionPuncture => 'مثقوب';
 
   @override
-  String get tyreConditionFlat => 'فارغ';
+  String get tyreConditionFlat => 'فارغ من الهواء';
 
   @override
   String get tyreConditionMissing => 'مفقود';
+
+  @override
+  String get tyreConditionNotChecked => 'لم يُفحص';
 
   @override
   String get inspectionNavTitle => 'فحص جديد';
@@ -8732,7 +8735,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get inventoryCopyCatalog =>
-      'myAuditsTitle=عمليات الجرد الخاصة بي~audit=جرد المخزون~noAudits=لا توجد عمليات جرد مسندة~noAuditsBody=لا توجد عملية جرد مسندة إليك حاليا.~draftsUnreadable=تعذرت قراءة عمليات الجرد المحفوظة على هذا الهاتف الآن. لم يتغير شيء. حاول مرة أخرى.~unsyncedLines=%n سطر جرد محفوظة على هذا الهاتف ولم ترسل بعد. اضغط للفتح.~pendingN=%n غير مرسلة~overdue=متأخر~due=الاستحقاق~notCounting=هذه العملية غير مفتوحة للجرد.~notProvisionedTitle=عمليات جرد المخزون غير مهيأة بعد~notProvisionedBody=لم يفعل الخادم جرد المخزون بعد. يجب على المسؤول إكمال إعداد المخزون.~loadFailed=تعذر التحميل.~countTitle=جرد أعمى~resumed=تم الاستئناف: %n سطر من جلستك السابقة.~noLocations=لا توجد مواقع في هذه العملية.~progress=المواقع المجرودة: %a من %b~linesDone=%n سطر مجرود~unexpectedN=%n غير متوقع~scanLocation=امسح ملصق الموقع أولا~scanItem=امسح صنفا أو رقما تسلسليا أو باركود~scanCamera=المسح بالكاميرا~locations=المواقع~atLocation=الجرد في~scanningSerialsOf=مسح الأرقام التسلسلية لـ~stopSerials=إيقاف~serialTracked=متتبع بالرقم التسلسلي~linesN=%n سطر~myLines=جردي هنا~noLinesHere=لم يجرد شيء في هذا الموقع بعد.~confirmedZero=صفر (مؤكد)~notCountedYet=لم يجرد بعد~unexpected=صنف غير متوقع~unexpectedHint=ليس في قائمة هذا الموقع. ستتم مراجعته.~photosN=%n صور~submitN=إرسال %n سطر مجرود~submitDone=تم إرسال %n سطر.~submitNothing=أكمل سطرا قبل الإرسال.~submitOffline=لا يوجد اتصال. جردك محفوظ على هذا الهاتف؛ أرسله مرة أخرى عند توفر الإشارة.~submitQueued=لا يوجد اتصال. سترسل %n من البنود المعدودة تلقائيا عند عودة الاتصال.~submitPartial=لم تقبل بعض السطور أو تعذر رفع صورها. راجع السطور المعلمة.~submitFailed=تعذر إرسال الجرد. لا يزال محفوظا على هذا الهاتف.~draftSaveFailed=تعذر على الهاتف حفظ الجرد الآن. لا تغلق التطبيق؛ حاول مرة أخرى.~serialCounted=تم جرد الرقم التسلسلي.~scan_locationSelected=تم اختيار الموقع.~scan_serialItemSelected=الآن امسح الرقم التسلسلي لكل وحدة.~scan_locationOutOfScope=هذا الموقع ليس ضمن هذه العملية.~scan_duplicateSerial=هذا الرقم التسلسلي مجرود بالفعل في هذه العملية.~scan_needsLocation=امسح ملصق الموقع قبل جرد الأصناف.~countedQty=الكمية المجرودة~confirmZero=لم يوجد شيء هنا~confirmZeroHint=ضع علامة فقط بعد التحقق: الخانة الفارغة ليست جردا بصفر.~serialOne=وحدة واحدة برقم تسلسلي.~condition=الحالة~condition_good=جيد~condition_damaged=تالف~condition_repairable=قابل للإصلاح~condition_quarantine=حجر~condition_scrap=خردة~remarks=ملاحظات (اختياري)~photo=صورة~addPhoto=إضافة صورة~photoFailed=تعذر التقاط الصورة.~removeLine=إزالة~saveLine=حفظ~enterQty=أدخل الكمية المجرودة أو ضع علامة لم يوجد شيء هنا.~invalidQty=لا يمكن أن تكون الكميات سالبة.~confirmZeroFirst=للصفر، ضع علامة لم يوجد شيء هنا.~state_draft=على الهاتف~state_submitted=مرسل~state_rejected=غير مقبول~status_draft=مسودة~status_scheduled=مجدول~status_assigned=مسند~status_in_progress=قيد التنفيذ~status_counting_completed=اكتمل الجرد~status_reconciliation=مطابقة~status_recount=إعادة جرد~status_investigation=تحقيق~status_approval=بانتظار الموافقة~status_adjustment_posted=تم ترحيل التسوية~status_closed=مغلق~status_cancelled=ملغى~status_rejected=مرفوض~status_unknown=الحالة غير مسجلة~type_full=جرد كامل~type_partial=جرد جزئي~type_cycle=جرد دوري~type_category=جرد فئة~type_high_value=جرد عالي القيمة~type_surprise=جرد مفاجئ~type_bin=جرد رف~type_tyre_serial=جرد أرقام الإطارات~type_vehicle_tyre=جرد إطارات المركبات~transfersTitle=تحويلات المخزون~transfer=تحويل~noTransfers=لا توجد تحويلات~noTransfersBody=لا توجد تحويلات مخزون مرئية لك.~tstatus_dispatched=مرسل~tstatus_in_transit=في الطريق~tstatus_partially_received=مستلم جزئيا~tstatus_completed=مكتمل~tstatus_cancelled=ملغى~tstatus_unknown=الحالة غير مسجلة~dispatchTitle=إرسال مخزون~scanFrom=امسح ملصق موقع المصدر~scanTo=امسح ملصق موقع الوجهة~from=من~to=إلى~items=الأصناف~noItemsScanned=لم يتم مسح أي صنف بعد.~needFrom=امسح الموقع الذي يخرج منه المخزون.~needTo=امسح الموقع الذي يذهب إليه المخزون.~sameLocation=يجب أن يكون المصدر والوجهة موقعين مختلفين.~needLines=أضف سطرا واحدا على الأقل.~dispatchSend=إرسال~dispatchDone=تم إرسال التحويل.~transferOffline=لا يوجد اتصال. لم يرسل شيء؛ حاول مرة أخرى عند توفر الإشارة.~transferFailed=تعذر حفظ التحويل.~receiveTitle=استلام تحويل~noLines=لا يحتوي هذا التحويل على سطور.~outstanding=متبقي للوصول~outstandingUnknown=الكمية المرسلة غير مسجلة~receiveSend=تأكيد الاستلام~receiveDone=تم تسجيل الاستلام.~manualSendNote=تبقى أعدادك على هذا الهاتف حتى يؤكدها الخادم. عند انقطاع الاتصال ترسل البنود المكتملة (مع صورها) تلقائيا عند عودة الاتصال. اضغط إرسال لإرسالها الآن.~finishCounting=إنهاء الجرد~finishNote=عند جرد كل المواقع وإرسالها، أنهِ الجرد حتى تتم مطابقته. لا يمكنك إضافة أعداد بعد ذلك.~finishUnsent=لا يزال %n من البنود على هذا الهاتف. أرسلها قبل إنهاء الجرد.~finishNotOpen=الجرد غير مفتوح في هذا التدقيق، لذا لا يمكن إنهاؤه.~finishOffline=لا يوجد اتصال. إنهاء الجرد يحتاج إلى إشارة؛ لم يتغير شيء.~finishConfirmTitle=إنهاء الجرد؟~finishConfirmBody=سينتقل التدقيق إلى المطابقة ولن يمكن إضافة أعداد أخرى. تأكد من جرد كل المواقع.~finishCancel=متابعة الجرد~finishDone=تم إنهاء الجرد. التدقيق جاهز للمطابقة.~finishFailed=تعذر إنهاء الجرد. حاول مرة أخرى.~pi_title=الجرد الفعلي~pi_entry=الجرد الفعلي~pi_pendingN=%n بانتظار الإرسال~pi_startLead=سجّل ما هو موجود على الرفوف. لا شيء هنا يغيّر المخزون الرسمي؛ يعتمد المدير الرصيد الافتتاحي لاحقاً.~pi_store=المستودع~pi_start=بدء الجرد الفعلي~pi_pickStore=اختر المستودع أولاً.~pi_scanHint=امسح ملصق الرف أو الباركود أو الرقم أو رقم OEM أو البديل~pi_scanned=الممسوح~pi_change=تغيير~pi_variantUnknown=المادة (النوع غير معروف)~pi_describe=لم يُعثر عليه؟ صف الصنف~pi_ref_description=الوصف~pi_ref_manufacturer=المصنّع~pi_ref_oem=رقم قطعة OEM~pi_ref_aftermarket=رقم القطعة البديلة~pi_ref_company_sku=رقم الشركة~pi_unidentifiedHint=لا يلزم سعر أو أمر شراء. الأصناف غير المعرّفة تحصل على مرجع مؤقت ولا تُصرف حتى تُراجع.~pi_qty=الكمية~pi_uom=الوحدة~pi_condition=الحالة~pi_ownership=الملكية~pi_locationHint=الرف أو الخانة~pi_remarks=ملاحظات~pi_photoRole=الصورة تُظهر~pi_takePhoto=التقاط صورة~pi_photosN=%n صور~pi_saveNext=حفظ والتالي~pi_leave=العودة إلى الجلسات~pi_ledgerRule=تبقى الأصناف المحفوظة على هذا الهاتف حتى تُرسل. لا يتغير المخزون الرسمي إلا بعد اعتماد الرصيد الافتتاحي من شخص آخر.~pi_noMatch=لا توجد مادة معتمدة مطابقة. صف الصنف واحفظه.~pi_searchOffline=غير متصل: صف الصنف وسيُرسل لاحقاً.~pi_qtyInvalid=أدخل كمية صفراً أو أكثر.~pi_savedLocal=تم الحفظ. جاهز للصنف التالي.~pi_saveFailed=تعذّر على الهاتف حفظ الصنف. لم يُفقد شيء؛ حاول مرة أخرى.~pi_cls_genuine=أصلي~pi_cls_oes=مورّد أصلي OES~pi_cls_aftermarket=بديل~pi_cls_unknown=غير موثّق~pi_cond_new=جديد~pi_cond_used=مستعمل~pi_cond_refurbished=مجدد~pi_cond_repairable=قابل للإصلاح~pi_cond_damaged=تالف~pi_cond_scrap=خردة~pi_cond_unknown=غير معروف~pi_own_owned=ملك الشركة~pi_own_consignment=أمانة~pi_own_supplier=ملك المورد~pi_own_customer=ملك العميل~pi_own_unknown=غير معروف~pi_role_item=الصنف~pi_role_label=الملصق~pi_role_location=الموقع~pi_role_packaging=التغليف~pi_role_damage=التلف~pi_role_other=أخرى~pi_attention=صنف يحتاج انتباهاً~pi_dismiss=تجاهل~pi_err_photo_missing=حُذف ملف صورة من الهاتف قبل إرساله. الصنف نفسه محفوظ؛ اختر تجاهل لقبول الصورة المفقودة.~pi_err_photo_read_failed=تعذّرت قراءة صورة الآن. تبقى على الهاتف وستُرسل لاحقاً.~pi_noStores=لم يُعدّ أي مستودع لك بعد. اطلب من المسؤول إضافة المستودع من الويب.~pi_scanStoreLabel=أو امسح ملصق المستودع أو الرف~pi_bin=الرف~pi_clearBin=إلغاء الرف~pi_binUnknown=لم يُعثر على هذا الملصق. اختر المستودع من القائمة.~pi_binOtherStore=هذا الرف يتبع مستودعاً آخر.~pi_binOffline=بدون اتصال: تم حفظ الرف وسيُتحقق منه عند الإرسال.~pi_captureTitle=الجرد الفعلي الأولي~pi_online=متصل~pi_offline=غير متصل~pi_location=الموقع~pi_chooseBin=اضغط لاختيار الرف~pi_scanBin=امسح ملصق الرف~pi_searchHint=امسح الباركود / ابحث برقم الشركة أو OEM أو رقم القطعة...~pi_ref_part_number=رقم قطعة المصنّع~pi_classification=التصنيف~pi_clsPick_genuine=أصلي OEM~pi_clsPick_aftermarket=بديل~pi_clsPick_unknown=غير معروف~pi_clsFromCatalog=محدد من المادة المعتمدة~pi_photoEvidence=صور الإثبات (صورة واحدة على الأقل مطلوبة)~pi_slot_label=رقم القطعة~pi_photoRequired=التقط صورة واحدة على الأقل قبل الحفظ.~pi_removePhoto=إزالة الصورة~pi_saveCountNext=حفظ وجرد الصنف التالي~pi_moreDetails=تفاصيل إضافية~pi_qtyMinus=إنقاص الكمية (اضغط مطولاً لعشرة)~pi_qtyPlus=زيادة الكمية (اضغط مطولاً لعشرة)~jc_menu=صرف أو إرجاع~jc_issueTitle=صرف إلى بطاقة العمل~jc_returnTitle=إرجاع من بطاقة العمل~jc_stockLine=بند المخزون~jc_jobCard=رقم بطاقة العمل~jc_find=تحقق من بطاقة العمل~jc_asset=الأصل~jc_status=الحالة~jc_notFound=لا توجد بطاقة عمل بهذا الرقم ضمن صلاحياتك.~jc_lookupFailed=تعذّر التحقق من بطاقة العمل. تحقق من الاتصال وحاول مرة أخرى.~jc_checkFirst=تحقق من بطاقة العمل قبل الإرسال.~jc_closed=بطاقة العمل هذه مغلقة. لا يمكن صرف مواد عليها.~jc_qty=الكمية~jc_reason=السبب~jc_reasonOptional=السبب (اختياري)~jc_onHand=المتوفر~jc_available=المتاح~jc_send=صرف المخزون~jc_sendReturn=إرجاع المخزون~jc_needStock=اختر بند مخزون.~jc_needJobCard=أدخل رقم بطاقة العمل.~jc_needQty=أدخل كمية أكبر من صفر.~jc_moreThanOnHand=هذه الكمية أكثر من المتاح في هذا البند.~jc_needReason=اذكر سبب الإرجاع.~jc_issued=تم صرف المخزون إلى بطاقة العمل.~jc_returned=تم إرجاع المخزون من بطاقة العمل.~jc_alreadyPosted=تم تسجيل هذا من قبل. لم يُسجَّل مرتين.~jc_shortage=المخزون غير كافٍ: المتاح %n. لم يُسجَّل شيء.~jc_reserved=محجوز لبطاقة العمل هذه: %n. يستخدم الصرف هذا الحجز.~jc_reservedOldest=(%n حجوزات، يُستخدم الأقدم أولاً.)~jc_noReservation=لا يوجد حجز مفتوح لبطاقة العمل هذه على بند المخزون هذا.~jc_reservationFailed=تعذّر التحقق من الحجوزات. لا يزال بالإمكان إرسال الصرف.~jc_offline=لا يوجد اتصال. لم يُسجَّل شيء؛ حاول مرة أخرى عند الاتصال.~jc_failed=تعذّر تحريك المخزون. يرجى المحاولة مرة أخرى.~jc_onlineNote=يتطلب اتصالاً. لا يتحرك المخزون إلا بعد تأكيد الخادم.~jc_returnNote=يقتصر الإرجاع على ما صُرف لهذه البطاقة من هذا البند، ويعود بتكلفة الصرف نفسها.';
+      'myAuditsTitle=عمليات الجرد الخاصة بي~audit=جرد المخزون~noAudits=لا توجد عمليات جرد مسندة~noAuditsBody=لا توجد عملية جرد مسندة إليك حاليا.~draftsUnreadable=تعذرت قراءة عمليات الجرد المحفوظة على هذا الهاتف الآن. لم يتغير شيء. حاول مرة أخرى.~unsyncedLines=%n سطر جرد محفوظة على هذا الهاتف ولم ترسل بعد. اضغط للفتح.~pendingN=%n غير مرسلة~overdue=متأخر~due=الاستحقاق~notCounting=هذه العملية غير مفتوحة للجرد.~notProvisionedTitle=عمليات جرد المخزون غير مهيأة بعد~notProvisionedBody=لم يفعل الخادم جرد المخزون بعد. يجب على المسؤول إكمال إعداد المخزون.~loadFailed=تعذر التحميل.~countTitle=جرد أعمى~resumed=تم الاستئناف: %n سطر من جلستك السابقة.~noLocations=لا توجد مواقع في هذه العملية.~progress=المواقع المجرودة: %a من %b~linesDone=%n سطر مجرود~unexpectedN=%n غير متوقع~scanLocation=امسح ملصق الموقع أولا~scanItem=امسح صنفا أو رقما تسلسليا أو باركود~scanCamera=المسح بالكاميرا~locations=المواقع~atLocation=الجرد في~scanningSerialsOf=مسح الأرقام التسلسلية لـ~stopSerials=إيقاف~serialTracked=متتبع بالرقم التسلسلي~linesN=%n سطر~myLines=جردي هنا~noLinesHere=لم يجرد شيء في هذا الموقع بعد.~confirmedZero=صفر (مؤكد)~notCountedYet=لم يجرد بعد~unexpected=صنف غير متوقع~unexpectedHint=ليس في قائمة هذا الموقع. ستتم مراجعته.~photosN=%n صور~submitN=إرسال %n سطر مجرود~submitDone=تم إرسال %n سطر.~submitNothing=أكمل سطرا قبل الإرسال.~submitOffline=لا يوجد اتصال. جردك محفوظ على هذا الهاتف؛ أرسله مرة أخرى عند توفر الإشارة.~submitQueued=لا يوجد اتصال. سترسل %n من البنود المعدودة تلقائيا عند عودة الاتصال.~submitPartial=لم تقبل بعض السطور أو تعذر رفع صورها. راجع السطور المعلمة.~submitFailed=تعذر إرسال الجرد. لا يزال محفوظا على هذا الهاتف.~draftSaveFailed=تعذر على الهاتف حفظ الجرد الآن. لا تغلق التطبيق؛ حاول مرة أخرى.~serialCounted=تم جرد الرقم التسلسلي.~scan_locationSelected=تم اختيار الموقع.~scan_serialItemSelected=الآن امسح الرقم التسلسلي لكل وحدة.~scan_locationOutOfScope=هذا الموقع ليس ضمن هذه العملية.~scan_duplicateSerial=هذا الرقم التسلسلي مجرود بالفعل في هذه العملية.~scan_needsLocation=امسح ملصق الموقع قبل جرد الأصناف.~countedQty=الكمية المجرودة~confirmZero=لم يوجد شيء هنا~confirmZeroHint=ضع علامة فقط بعد التحقق: الخانة الفارغة ليست جردا بصفر.~serialOne=وحدة واحدة برقم تسلسلي.~condition=الحالة~condition_good=جيد~condition_damaged=تالف~condition_repairable=قابل للإصلاح~condition_quarantine=حجر~condition_scrap=خردة~remarks=ملاحظات (اختياري)~photo=صورة~addPhoto=إضافة صورة~photoFailed=تعذر التقاط الصورة.~removeLine=إزالة~saveLine=حفظ~enterQty=أدخل الكمية المجرودة أو ضع علامة لم يوجد شيء هنا.~invalidQty=لا يمكن أن تكون الكميات سالبة.~confirmZeroFirst=للصفر، ضع علامة لم يوجد شيء هنا.~state_draft=على الهاتف~state_submitted=مرسل~state_rejected=غير مقبول~status_draft=مسودة~status_scheduled=مجدول~status_assigned=مسند~status_in_progress=قيد التنفيذ~status_counting_completed=اكتمل الجرد~status_reconciliation=مطابقة~status_recount=إعادة جرد~status_investigation=تحقيق~status_approval=بانتظار الموافقة~status_adjustment_posted=تم ترحيل التسوية~status_closed=مغلق~status_cancelled=ملغى~status_rejected=مرفوض~status_unknown=الحالة غير مسجلة~type_full=جرد كامل~type_partial=جرد جزئي~type_cycle=جرد دوري~type_category=جرد فئة~type_high_value=جرد عالي القيمة~type_surprise=جرد مفاجئ~type_bin=جرد رف~type_tyre_serial=جرد أرقام الإطارات~type_vehicle_tyre=جرد إطارات المركبات~transfersTitle=تحويلات المخزون~transfer=تحويل~noTransfers=لا توجد تحويلات~noTransfersBody=لا توجد تحويلات مخزون مرئية لك.~tstatus_dispatched=مرسل~tstatus_in_transit=في الطريق~tstatus_partially_received=مستلم جزئيا~tstatus_completed=مكتمل~tstatus_cancelled=ملغى~tstatus_unknown=الحالة غير مسجلة~dispatchTitle=إرسال مخزون~scanFrom=امسح ملصق موقع المصدر~scanTo=امسح ملصق موقع الوجهة~from=من~to=إلى~items=الأصناف~noItemsScanned=لم يتم مسح أي صنف بعد.~needFrom=امسح الموقع الذي يخرج منه المخزون.~needTo=امسح الموقع الذي يذهب إليه المخزون.~sameLocation=يجب أن يكون المصدر والوجهة موقعين مختلفين.~needLines=أضف سطرا واحدا على الأقل.~dispatchSend=إرسال~dispatchDone=تم إرسال التحويل.~transferOffline=لا يوجد اتصال. لم يرسل شيء؛ حاول مرة أخرى عند توفر الإشارة.~transferFailed=تعذر حفظ التحويل.~receiveTitle=استلام تحويل~noLines=لا يحتوي هذا التحويل على سطور.~outstanding=متبقي للوصول~outstandingUnknown=الكمية المرسلة غير مسجلة~receiveSend=تأكيد الاستلام~receiveDone=تم تسجيل الاستلام.~manualSendNote=تبقى أعدادك على هذا الهاتف حتى يؤكدها الخادم. عند انقطاع الاتصال ترسل البنود المكتملة (مع صورها) تلقائيا عند عودة الاتصال. اضغط إرسال لإرسالها الآن.~finishCounting=إنهاء الجرد~finishNote=عند جرد كل المواقع وإرسالها، أنهِ الجرد حتى تتم مطابقته. لا يمكنك إضافة أعداد بعد ذلك.~finishUnsent=لا يزال %n من البنود على هذا الهاتف. أرسلها قبل إنهاء الجرد.~finishNotOpen=الجرد غير مفتوح في هذا التدقيق، لذا لا يمكن إنهاؤه.~finishOffline=لا يوجد اتصال. إنهاء الجرد يحتاج إلى إشارة؛ لم يتغير شيء.~finishConfirmTitle=إنهاء الجرد؟~finishConfirmBody=سينتقل التدقيق إلى المطابقة ولن يمكن إضافة أعداد أخرى. تأكد من جرد كل المواقع.~finishCancel=متابعة الجرد~finishDone=تم إنهاء الجرد. التدقيق جاهز للمطابقة.~finishFailed=تعذر إنهاء الجرد. حاول مرة أخرى.~pi_title=الجرد الفعلي~pi_entry=الجرد الفعلي~pi_pendingN=%n بانتظار الإرسال~pi_startLead=سجّل ما هو موجود على الرفوف. لا شيء هنا يغيّر المخزون الرسمي؛ يعتمد المدير الرصيد الافتتاحي لاحقاً.~pi_store=المستودع~pi_start=بدء الجرد الفعلي~pi_pickStore=اختر المستودع أولاً.~pi_scanHint=امسح ملصق الرف أو الباركود أو الرقم أو رقم OEM أو البديل~pi_scanned=الممسوح~pi_change=تغيير~pi_variantUnknown=المادة (النوع غير معروف)~pi_describe=لم يُعثر عليه؟ صف الصنف~pi_ref_description=الوصف~pi_ref_manufacturer=المصنّع~pi_ref_oem=رقم قطعة OEM~pi_ref_aftermarket=رقم القطعة البديلة~pi_ref_company_sku=رقم الشركة~pi_unidentifiedHint=لا يلزم سعر أو أمر شراء. الأصناف غير المعرّفة تحصل على مرجع مؤقت ولا تُصرف حتى تُراجع.~pi_qty=الكمية~pi_uom=الوحدة~pi_condition=الحالة~pi_ownership=الملكية~pi_locationHint=الرف أو الخانة~pi_remarks=ملاحظات~pi_photoRole=الصورة تُظهر~pi_takePhoto=التقاط صورة~pi_photosN=%n صور~pi_saveNext=حفظ والتالي~pi_leave=العودة إلى الجلسات~pi_ledgerRule=تبقى الأصناف المحفوظة على هذا الهاتف حتى تُرسل. لا يتغير المخزون الرسمي إلا بعد اعتماد الرصيد الافتتاحي من شخص آخر.~pi_noMatch=لا توجد مادة معتمدة مطابقة. صف الصنف واحفظه.~pi_searchOffline=غير متصل: صف الصنف وسيُرسل لاحقاً.~pi_qtyInvalid=أدخل كمية صفراً أو أكثر.~pi_savedLocal=تم الحفظ. جاهز للصنف التالي.~pi_saveFailed=تعذّر على الهاتف حفظ الصنف. لم يُفقد شيء؛ حاول مرة أخرى.~pi_cls_genuine=أصلي~pi_cls_oes=مورّد أصلي OES~pi_cls_aftermarket=بديل~pi_cls_unknown=غير موثّق~pi_cond_new=جديد~pi_cond_used=مستعمل~pi_cond_refurbished=مجدد~pi_cond_repairable=قابل للإصلاح~pi_cond_damaged=تالف~pi_cond_scrap=خردة~pi_cond_unknown=غير معروف~pi_own_owned=ملك الشركة~pi_own_consignment=أمانة~pi_own_supplier=ملك المورد~pi_own_customer=ملك العميل~pi_own_unknown=غير معروف~pi_role_item=الصنف~pi_role_label=الملصق~pi_role_location=الموقع~pi_role_packaging=التغليف~pi_role_damage=التلف~pi_role_other=أخرى~pi_attention=صنف يحتاج انتباهاً~pi_dismiss=تجاهل~pi_err_photo_missing=حُذف ملف صورة من الهاتف قبل إرساله. الصنف نفسه محفوظ؛ اختر تجاهل لقبول الصورة المفقودة.~pi_err_photo_read_failed=تعذّرت قراءة صورة الآن. تبقى على الهاتف وستُرسل لاحقاً.~pi_noStores=لم يُعدّ أي مستودع لك بعد. اطلب من المسؤول إضافة المستودع من الويب.~pi_scanStoreLabel=أو امسح ملصق المستودع أو الرف~pi_bin=الرف~pi_clearBin=إلغاء الرف~pi_binUnknown=لم يُعثر على هذا الملصق. اختر المستودع من القائمة.~pi_binOtherStore=هذا الرف يتبع مستودعاً آخر.~pi_binOffline=بدون اتصال: تم حفظ الرف وسيُتحقق منه عند الإرسال.~pi_captureTitle=الجرد الفعلي الأولي~pi_online=متصل~pi_offline=غير متصل~pi_location=الموقع~pi_chooseBin=اضغط لاختيار الرف~pi_scanBin=امسح ملصق الرف~pi_searchHint=امسح الباركود / ابحث برقم الشركة أو OEM أو رقم القطعة...~pi_ref_part_number=رقم قطعة المصنّع~pi_classification=التصنيف~pi_clsPick_genuine=أصلي OEM~pi_clsPick_aftermarket=بديل~pi_clsPick_unknown=غير معروف~pi_clsFromCatalog=محدد من المادة المعتمدة~pi_photoEvidence=صور الإثبات (صورة واحدة على الأقل مطلوبة)~pi_slot_label=رقم القطعة~pi_photoRequired=التقط صورة واحدة على الأقل قبل الحفظ.~pi_removePhoto=إزالة الصورة~pi_saveCountNext=حفظ وجرد الصنف التالي~pi_moreDetails=تفاصيل إضافية~pi_qtyMinus=إنقاص الكمية (اضغط مطولاً لعشرة)~pi_qtyPlus=زيادة الكمية (اضغط مطولاً لعشرة)~jc_menu=صرف أو إرجاع~jc_issueTitle=صرف إلى بطاقة العمل~jc_returnTitle=إرجاع من بطاقة العمل~jc_stockLine=بند المخزون~jc_jobCard=رقم بطاقة العمل~jc_find=تحقق من بطاقة العمل~jc_asset=الأصل~jc_status=الحالة~jc_notFound=لا توجد بطاقة عمل بهذا الرقم ضمن صلاحياتك.~jc_lookupFailed=تعذّر التحقق من بطاقة العمل. تحقق من الاتصال وحاول مرة أخرى.~jc_checkFirst=تحقق من بطاقة العمل قبل الإرسال.~jc_closed=بطاقة العمل هذه مغلقة. لا يمكن صرف مواد عليها.~jc_qty=الكمية~jc_reason=السبب~jc_reasonOptional=السبب (اختياري)~jc_onHand=المتوفر~jc_available=المتاح~jc_send=صرف المخزون~jc_sendReturn=إرجاع المخزون~jc_needStock=اختر بند مخزون.~jc_needJobCard=أدخل رقم بطاقة العمل.~jc_needQty=أدخل كمية أكبر من صفر.~jc_moreThanOnHand=هذه الكمية أكثر من المتاح في هذا البند.~jc_needReason=اذكر سبب الإرجاع.~jc_issued=تم صرف المخزون إلى بطاقة العمل.~jc_returned=تم إرجاع المخزون من بطاقة العمل.~jc_alreadyPosted=تم تسجيل هذا من قبل. لم يُسجَّل مرتين.~jc_shortage=المخزون غير كافٍ: المتاح %n. لم يُسجَّل شيء.~jc_reserved=محجوز لبطاقة العمل هذه: %n. يستخدم الصرف هذا الحجز.~jc_reservedOldest=(%n حجوزات، يُستخدم الأقدم أولاً.)~jc_noReservation=لا يوجد حجز مفتوح لبطاقة العمل هذه على بند المخزون هذا.~jc_reservationFailed=تعذّر التحقق من الحجوزات. لا يزال بالإمكان إرسال الصرف.~jc_offline=لا يوجد اتصال. لم يُسجَّل شيء؛ حاول مرة أخرى عند الاتصال.~jc_failed=تعذّر تحريك المخزون. يرجى المحاولة مرة أخرى.~jc_onlineNote=يتطلب اتصالاً. لا يتحرك المخزون إلا بعد تأكيد الخادم.~jc_returnNote=يقتصر الإرجاع على ما صُرف لهذه البطاقة من هذا البند، ويعود بتكلفة الصرف نفسها.~sr_entry=استلام بضاعة~sr_title=استلام بضاعة~sr_intro=سجّل ما وصل مقابل أمر شراء معتمد. لا تدخل الكمية إلى المخزون إلا بعد موافقة شخص آخر.~sr_noLines=لا توجد بنود مفتوحة في أوامر الشراء~sr_noLinesBody=لا يوجد شيء مفتوح للاستلام في مواقعك. يجب أن يكون أمر الشراء معتمدًا أو صادرًا للمورّد وفيه بنود، وأن تكون مواقعك مخصصة لك بالاسم.~sr_search=ابحث برقم أمر الشراء أو رمز الصنف أو اسمه~sr_open=المتبقي %n~sr_ordered=كمية أمر الشراء %n~sr_mine=آخر استلاماتي~sr_status_pending=بانتظار الموافقة~sr_status_approved=معتمد وأُدخل في المخزون~sr_status_rejected=مرفوض~sr_status_cancelled=مسحوب~sr_formTitle=تسجيل التسليم~sr_qtyReceived=الكمية المستلمة~sr_qtyRejected=الكمية المرفوضة~sr_rejectionReason=سبب الرفض~sr_location=موقع الاستلام~sr_noLocation=لا يوجد موقع استلام في هذا الموقع. اطلب من المسؤول إضافته.~sr_deliveryNoteNo=رقم إشعار التسليم (اختياري)~sr_notes=ملاحظات (اختياري)~sr_photo=صورة إشعار التسليم (اختياري)~sr_photoTaken=تم إرفاق الصورة~sr_photoRemove=إزالة الصورة~sr_noPrice=سعر الوحدة والتكلفة محددان في أمر الشراء، ولا يمكنك تعديلهما.~sr_send=إرسال للموافقة~sr_sent=تم إرسال الاستلام للموافقة~sr_alreadySent=تم إرسال هذا الاستلام من قبل~sr_withdraw=سحب~sr_withdrawn=تم سحب الاستلام~sr_offline=لا يوجد اتصال. لم يُرسل شيء. أعد المحاولة عند الاتصال، ولن يُسجّل الاستلام نفسه مرتين.~sr_failed=تعذّر إرسال الاستلام. أعد المحاولة.~sr_photoFailed=تعذّر رفع الصورة. لم يُرسل شيء. أعد المحاولة أو أزل الصورة.~sr_qtyRequired=أدخل الكمية المستلمة.~sr_qtyPositive=يجب أن تكون الكمية أكبر من صفر.~sr_qtyTooLarge=هذه الكمية كبيرة جدًا.~sr_rejectedRange=لا يمكن أن تكون الكمية المرفوضة سالبة أو أكبر من المستلمة.~sr_reasonRequired=اذكر سبب رفض البضاعة.~sr_overOpen=أكثر من الكمية المتبقية في هذا البند.~sr_locationRequired=اختر موقع الاستلام.~sr_noteTooLong=رقم إشعار التسليم طويل جدًا.~sr_onlineNote=يعمل مع الاتصال فقط. لا يتغير المخزون حتى يوافق شخص آخر.~sr_qtyInvalid=اكتب الكمية رقمًا فقط، مثل 12 أو 2.5، دون فواصل.~sr_rejectedInvalid=اكتب الكمية المرفوضة رقمًا فقط، أو اتركها فارغة.~sr_photoOffline=لا يوجد اتصال. اتصل قبل التقاط الصورة، فهي تُرفع مع الاستلام.~sr_withdrawTitle=سحب هذا الاستلام؟~sr_withdrawBody=لن يُرسل للموافقة ولن يتغير المخزون. يمكنك تسجيل التسليم مرة أخرى.~sr_keep=إبقاؤه~sr_errSite=هذا الموقع غير مخصص لك بالاسم. اطلب من المسؤول إضافته إلى مواقعك.~sr_errPoStatus=أمر الشراء هذا لم يُعتمد ولم يصدر للمورّد بعد.~sr_errLineClosed=بند أمر الشراء هذا مغلق بالفعل.~sr_errNotKeeper=لا يمكن تسجيل البضاعة المستلمة إلا لأمين مستودع معتمد.~sr_more=المزيد~sr_noMatch=لا يوجد بند مفتوح يطابق بحثك.';
 
   @override
   String get captchaSemanticLabel => 'التحقق الأمني';
@@ -8817,4 +8820,571 @@ class AppLocalizationsAr extends AppLocalizations {
   String approvalsBulkProgress(int done, int total) {
     return 'جارٍ اعتماد $done من $total';
   }
+
+  @override
+  String get driverChargeSectionTitle => 'المبالغ المطلوبة مني';
+
+  @override
+  String get driverChargeNone => 'لا توجد مبالغ مسجلة على هذا السائق.';
+
+  @override
+  String driverChargeOutstanding(String amount) {
+    return 'المتبقي: $amount';
+  }
+
+  @override
+  String get driverChargeFilterAll => 'الكل';
+
+  @override
+  String get driverChargeLoadError =>
+      'تعذر تحميل المبالغ. تحقق من الاتصال وأعد المحاولة.';
+
+  @override
+  String get driverChargeLoadMore => 'تحميل المزيد';
+
+  @override
+  String driverChargeDetailTitle(String number) {
+    return 'مطالبة $number';
+  }
+
+  @override
+  String get driverChargeAmount => 'المبلغ';
+
+  @override
+  String get driverChargeDeducted => 'المخصوم حتى الآن';
+
+  @override
+  String get driverChargeStatusLabel => 'الحالة';
+
+  @override
+  String get driverChargeCategoryLabel => 'الفئة';
+
+  @override
+  String get driverChargeLinkedRecord => 'السجل المرتبط';
+
+  @override
+  String get driverChargeVehicle => 'المركبة';
+
+  @override
+  String get driverChargeIncident => 'تاريخ ووقت الواقعة';
+
+  @override
+  String get driverChargeIssuedAt => 'تاريخ الإصدار';
+
+  @override
+  String get driverChargeNotifiedAt => 'تاريخ إبلاغك';
+
+  @override
+  String get driverChargeBasis => 'السبب المكتوب للمطالبة';
+
+  @override
+  String get driverChargeEvidence => 'الأدلة';
+
+  @override
+  String get driverChargeNoEvidence =>
+      'لا توجد أدلة مدرجة. تعتمد المطالبة على السجل المرتبط.';
+
+  @override
+  String get driverChargeSignatures => 'التواقيع';
+
+  @override
+  String driverChargeSignedBy(String name, String time) {
+    return 'وقّع $name في $time (وقت الخادم)';
+  }
+
+  @override
+  String get driverChargeSignatureHidden =>
+      'صورة التوقيع غير معروضة لمستوى صلاحيتك.';
+
+  @override
+  String get driverChargeDecisions => 'المراجعات والقرارات';
+
+  @override
+  String get driverChargeNoDecisions => 'لم تسجل أي مراجعة بعد.';
+
+  @override
+  String get driverChargeSchedule => 'جدول الخصم';
+
+  @override
+  String get driverChargeNoSchedule => 'لا يوجد خصم مجدول.';
+
+  @override
+  String driverChargeInstalmentLine(
+      String month, String amount, String status) {
+    return '$month: $amount ($status)';
+  }
+
+  @override
+  String driverChargeCapLine(String percent) {
+    return 'لا يجوز أن يتجاوز أي قسط شهري $percent% من الراتب.';
+  }
+
+  @override
+  String get driverChargeAppealTitle => 'الاعتراض';
+
+  @override
+  String get driverChargeNoAppeal => 'لم يقدم أي اعتراض.';
+
+  @override
+  String driverChargeAppealFiled(String time) {
+    return 'قدم الاعتراض في $time';
+  }
+
+  @override
+  String driverChargeAppealOutcome(String outcome) {
+    return 'النتيجة: $outcome';
+  }
+
+  @override
+  String get driverChargeAppealPending =>
+      'بانتظار قرار من شخص لم يصدر هذه المطالبة ولم يراجعها.';
+
+  @override
+  String get driverChargeTimeline => 'السجل الكامل';
+
+  @override
+  String get driverChargeSharePdf => 'مشاركة الإشعار بصيغة PDF';
+
+  @override
+  String get driverChargePdfFailed => 'تعذر إنشاء ملف الإشعار. أعد المحاولة.';
+
+  @override
+  String get driverChargeRespond => 'الرد على هذه المطالبة';
+
+  @override
+  String get driverChargeAccept => 'قبول';
+
+  @override
+  String get driverChargeDispute => 'اعتراض على المطالبة';
+
+  @override
+  String get driverChargeStatementTitle => 'الإقرار الذي توقع عليه';
+
+  @override
+  String get driverChargeStatementLanguage => 'لغة الإقرار الذي توقع عليه';
+
+  @override
+  String get driverChargeStatementReadAloud =>
+      'إذا كنت لا تستطيع القراءة، اطلب من مشرفك أن يقرأها لك قبل التوقيع.';
+
+  @override
+  String get driverChargePhotosTitle => 'صور هذه المطالبة';
+
+  @override
+  String get driverChargePhotosNone => 'لا توجد صور مرفقة بهذه المطالبة.';
+
+  @override
+  String get driverChargePhotoUnavailable => 'تعذر تحميل الصورة.';
+
+  @override
+  String get driverChargePhotosSeen => 'انظر إلى الصور قبل أن تجيب.';
+
+  @override
+  String get driverChargeKsaRule =>
+      'يطبق نظام العمل السعودي على هذه المطالبة. التلف أو الفقد: فقط إذا كان بسبب خطئك أو مخالفتك لتعليمات الشركة، وليس بسبب طرف آخر أو قوة قاهرة، وبحد أقصى أجر 5 أيام في الشهر. أي مطالبة أخرى، ومنها المخالفة المرورية: فقط بموافقتك الكتابية. مجموع الخصومات: بحد أقصى نصف الأجر. لديك 15 يوم عمل من يوم استلامك هذه المطالبة للاعتراض.';
+
+  @override
+  String get driverChargeOtherRule =>
+      'يطبق حد الشركة على هذه المطالبة. هذه القاعدة لا تزال تحتاج إلى تأكيد قانوني في هذه الدولة.';
+
+  @override
+  String get driverChargeBlockNoFault =>
+      'نظام العمل السعودي (المادة 91): التلف كان بسبب طرف آخر أو قوة قاهرة، لذا لا يخصم من السائق أبدا.';
+
+  @override
+  String get driverChargeFaultForceMajeure => 'قوة قاهرة (لا يخصم)';
+
+  @override
+  String get driverChargeFaultThirdParty => 'خطأ طرف آخر (لا يخصم)';
+
+  @override
+  String get driverChargeFaultInstruction => 'مخالفة تعليمات الشركة';
+
+  @override
+  String get driverChargeFaultDriver => 'خطأ السائق نفسه';
+
+  @override
+  String get driverChargeFaultNone => 'غير مسجلة';
+
+  @override
+  String get driverChargeFaultTitle => 'نتيجة التحقق من الخطأ (المادة 91)';
+
+  @override
+  String get driverChargePdfFontFailed =>
+      'تعذر تحميل الحروف العربية والأردية، لذا لم تصنع الورقة. تحقق من الاتصال بالإنترنت وحاول مرة أخرى.';
+
+  @override
+  String get driverChargePhotoOpen => 'افتح الصورة بحجم أكبر';
+
+  @override
+  String get driverChargePhotoRetry => 'إعادة المحاولة';
+
+  @override
+  String get driverChargePhotosWait => 'انتظر حتى تحمل كل الصور قبل أن توقع.';
+
+  @override
+  String get driverChargePhotosBlocked =>
+      'تعذر تحميل صورة. يجب أن ترى كل الصور قبل أن توقع. اضغط إعادة المحاولة.';
+
+  @override
+  String get driverChargeOtherRuleDriver =>
+      'يطبق حد الخصم الخاص بالشركة على هذه المطالبة.';
+
+  @override
+  String driverChargeObjectionUntil(String date) {
+    return 'يمكنك الاعتراض حتى $date.';
+  }
+
+  @override
+  String get driverChargeLangEnglish => 'English';
+
+  @override
+  String get driverChargeLangArabic => 'العربية';
+
+  @override
+  String get driverChargeLangUrdu => 'اردو';
+
+  @override
+  String driverChargeStatementConsent(String amount) {
+    return 'أنا السائق المذكور اسمه في هذه الورقة. اطلعت على هذه المطالبة: السبب والأدلة والصور. أوافق على أنني ملزم بدفع مبلغ $amount إجمالا عن هذه المطالبة. وأوافق على أن تخصم الشركة هذا المبلغ من راتبي على أجزاء شهرية. لن يزيد جزء أي شهر عن الحد الشهري الذي يسمح به النظام، وسيعرض علي مبلغ كل شهر قبل خصمه. هذه الموافقة تخص هذه المطالبة فقط. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.';
+  }
+
+  @override
+  String get driverChargeStatementDispute =>
+      'أنا السائق المذكور اسمه في هذه الورقة. استلمت هذه المطالبة واطلعت على السبب والأدلة والصور. لا أوافق على هذه المطالبة للأسباب التي كتبتها. توقيعي يثبت فقط أنني استلمت هذه الورقة، ولا يعني أنني موافق. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.';
+
+  @override
+  String get driverChargeStatementWitness =>
+      'رأيت أن ورقة هذه المطالبة سلمت إلى السائق المذكور اسمه فيها، وأن السائق رفض التوقيع عليها أو الرد. تاريخ ووقت هذا السجل يحددهما النظام.';
+
+  @override
+  String get driverChargeBlockTitle => 'لا يمكن جدولة الخصم بعد';
+
+  @override
+  String get driverChargeBlockConsent =>
+      'نظام العمل السعودي (المادة 92): لا يجوز خصم هذه المطالبة من الراتب إلا بموافقة السائق الكتابية. السائق لم يوافق، لذلك لا يمكن خصمها.';
+
+  @override
+  String get driverChargeBlockObjection =>
+      'يوجد اعتراض مفتوح. يجب البت فيه أولا.';
+
+  @override
+  String driverChargeBlockWindow(String date) {
+    return 'لا يزال بإمكان السائق الاعتراض حتى $date. لا يمكن جدولة أي خصم قبل ذلك.';
+  }
+
+  @override
+  String driverChargeBlockWindowKsa(String date) {
+    return 'نظام العمل السعودي (المادة 91): للسائق 15 يوم عمل للاعتراض، حتى $date. لا يمكن جدولة أي خصم قبل ذلك.';
+  }
+
+  @override
+  String get driverChargeStatementMissing =>
+      'تعذر تحميل الإقرار. حدّث الصفحة قبل التوقيع.';
+
+  @override
+  String get driverChargeAcknowledge =>
+      'قرأت هذا الإقرار وأوافق على التوقيع عليه.';
+
+  @override
+  String get driverChargeExplanation => 'لماذا تعترض على هذه المطالبة؟';
+
+  @override
+  String get driverChargeSignBelow => 'وقّع أدناه';
+
+  @override
+  String get driverChargeSubmit => 'التوقيع والإرسال';
+
+  @override
+  String get driverChargeAppealAction => 'الاعتراض على هذه المطالبة';
+
+  @override
+  String get driverChargeAppealReason => 'أسباب اعتراضك';
+
+  @override
+  String get driverChargeAppealSubmit => 'إرسال الاعتراض';
+
+  @override
+  String get driverChargeAppealOnce =>
+      'يمكنك الاعتراض على المطالبة مرة واحدة فقط. يقرر في الاعتراض شخص لم يصدرها ولم يعتمدها.';
+
+  @override
+  String get driverChargeIssueExplanation =>
+      'اكتب 10 أحرف على الأقل لتوضيح سبب اعتراضك.';
+
+  @override
+  String get driverChargeIssueAck => 'أكد أنك قرأت الإقرار.';
+
+  @override
+  String get driverChargeIssueSignature => 'وقّع قبل الإرسال.';
+
+  @override
+  String get driverChargeIssueReason =>
+      'اكتب 10 أحرف على الأقل لأسباب الاعتراض.';
+
+  @override
+  String get driverChargeOffline =>
+      'أنت غير متصل. يسجل الرد على المطالبة عبر الاتصال فقط، لذلك لم يحفظ شيء. اتصل بالإنترنت وأعد المحاولة.';
+
+  @override
+  String get driverChargeSaved => 'سجل ردك بوقت الخادم.';
+
+  @override
+  String get driverChargeAppealSaved => 'سجل اعتراضك.';
+
+  @override
+  String get driverChargeStaffReadOnly =>
+      'تسجل الإشعارات والمراجعات والجدولة والخصومات عبر الويب. تعرضها هذه الشاشة للاطلاع فقط.';
+
+  @override
+  String get driverChargeNoActions =>
+      'لا يوجد إجراء مطلوب منك على هذه المطالبة.';
+
+  @override
+  String get driverChargeStatusIssued => 'صدرت ولم ترسل إليك بعد';
+
+  @override
+  String get driverChargeStatusNotified => 'بانتظار ردك';
+
+  @override
+  String get driverChargeStatusAccepted => 'قبلها السائق';
+
+  @override
+  String get driverChargeStatusDisputed => 'اعترض عليها السائق';
+
+  @override
+  String get driverChargeStatusRefused => 'سجل الرفض بحضور شاهد';
+
+  @override
+  String get driverChargeStatusSupervisorApproved => 'اعتمدها المشرف';
+
+  @override
+  String get driverChargeStatusFinanceApproved => 'اعتمدتها المالية';
+
+  @override
+  String get driverChargeStatusUnderAppeal => 'قيد الاعتراض';
+
+  @override
+  String get driverChargeStatusScheduled => 'الخصم مجدول';
+
+  @override
+  String get driverChargeStatusDeducted => 'خصمت بالكامل';
+
+  @override
+  String get driverChargeStatusWaived => 'تم الإعفاء';
+
+  @override
+  String get driverChargeStatusCancelled => 'ألغيت لأنها صدرت خطأ';
+
+  @override
+  String get driverChargeCatTrafficFine => 'مخالفة مرورية';
+
+  @override
+  String get driverChargeCatAccidentDamage => 'ضرر حادث';
+
+  @override
+  String get driverChargeCatTyreDamage => 'ضرر إطار';
+
+  @override
+  String get driverChargeCatMissingItem => 'قطعة مفقودة';
+
+  @override
+  String get driverChargeCatHandoverDamage => 'ضرر عند التسليم';
+
+  @override
+  String get driverChargeCatOther => 'أخرى';
+
+  @override
+  String get driverChargeSrcAccident => 'ملف حادث';
+
+  @override
+  String get driverChargeSrcHandover => 'تسليم مركبة';
+
+  @override
+  String get driverChargeSrcInspection => 'فحص';
+
+  @override
+  String get driverChargeSrcChecklist => 'قائمة تحقق';
+
+  @override
+  String get driverChargeSrcTyre => 'سجل إطار';
+
+  @override
+  String get driverChargeSrcFine => 'سجل مخالفة مرورية';
+
+  @override
+  String get driverChargeSrcNone => 'لا يوجد سجل مرتبط';
+
+  @override
+  String get driverChargeReplaced =>
+      'ألغيت هذه المطالبة لأنها صدرت خطأ واستبدلت بمطالبة أخرى.';
+
+  @override
+  String get handoverAuthSignaturesTitle => 'تواقيع السائقين';
+
+  @override
+  String get handoverAuthHanding => 'المسلّم';
+
+  @override
+  String get handoverAuthReceiving => 'المستلم';
+
+  @override
+  String get handoverAuthNotSigned => 'لم يوقع';
+
+  @override
+  String handoverAuthSignedLine(String name, String time) {
+    return '$name، وقّع في $time (وقت الخادم)';
+  }
+
+  @override
+  String get handoverAuthSignHanding => 'التوقيع بصفتي السائق المسلّم';
+
+  @override
+  String get handoverAuthSignReceiving => 'التوقيع بصفتي السائق المستلم';
+
+  @override
+  String get handoverAuthSignerName => 'اسم الشخص الموقّع';
+
+  @override
+  String get handoverAuthSignerHint =>
+      'مطلوب فقط إذا لم يختر السائق من سجل السائقين.';
+
+  @override
+  String get handoverAuthHandingFirst =>
+      'يوقع السائق المسلّم أولاً ثم السائق المستلم.';
+
+  @override
+  String get handoverAuthFrozen => 'سجل موقّع. المحتوى مقفل ولا يمكن تغييره.';
+
+  @override
+  String get handoverAuthLocation => 'موقع التسليم';
+
+  @override
+  String handoverAuthLocationCaptured(String coords) {
+    return 'سجله الجهاز: $coords';
+  }
+
+  @override
+  String get handoverAuthLocationDenied => 'رفض إذن الموقع.';
+
+  @override
+  String get handoverAuthLocationUnavailable => 'تعذرت قراءة الموقع.';
+
+  @override
+  String get handoverAuthLocationNone =>
+      'لم يسجل موقع بعد. يسجل الموقع مع كل توقيع.';
+
+  @override
+  String get handoverAuthOpenMap => 'فتح في الخريطة';
+
+  @override
+  String get handoverAuthReadingLocation => 'جارٍ قراءة موقع الجهاز...';
+
+  @override
+  String get handoverAuthSignSubmit => 'تسجيل التوقيع';
+
+  @override
+  String get handoverAuthOffline =>
+      'أنت غير متصل. يسجل توقيع التسليم عبر الاتصال فقط، لذلك لم يحفظ شيء. اتصل بالإنترنت وأعد المحاولة.';
+
+  @override
+  String get handoverAuthSigned => 'سجل التوقيع بوقت الخادم.';
+
+  @override
+  String handoverAuthDocumentNo(String number) {
+    return 'رقم المستند $number';
+  }
+
+  @override
+  String get handoverAuthHourMeter => 'عداد الساعات (ساعة)';
+
+  @override
+  String get handoverAuthSite => 'الموقع';
+
+  @override
+  String get handoverAuthDriverRegister => 'اختيار من سجل السائقين';
+
+  @override
+  String get handoverAuthDriverNotListed => 'غير موجود في السجل';
+
+  @override
+  String get handoverAuthSigningStepInfo =>
+      'يوقع السائقان في صفحة التسليم بعد حفظه وأثناء الاتصال. يختم كل توقيع بوقت الخادم وموقع الجهاز، ويقفل السجل بعد التوقيع الأول.';
+
+  @override
+  String get handoverAuthOpenToSign =>
+      'حفظ التسليم كمسودة. افتحه الآن لجمع التوقيعين.';
+
+  @override
+  String get handoverAuthLegacySignature =>
+      'توقيع السائق المسجل قبل التوقيع من الطرفين';
+
+  @override
+  String get handoverAuthNotAvailable =>
+      'التوقيع من الطرفين غير متاح على الخادم بعد. اسأل المسؤول.';
+
+  @override
+  String get storeHistoryCopyCatalog =>
+      'historyTitle=سجل المخزن~itemTitle=صنف المخزون~onHand=المتوفر~reserved=المحجوز~available=المتاح~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~levelsNote=يحدد المسؤول حدود إعادة الطلب من الويب.~recent=آخر الحركات~fullHistory=السجل الكامل~loadMore=عرض المزيد~noMovements=لا توجد حركات بعد~noMovementsBody=تظهر هنا الاستلامات والصرف والتحويلات والجرد لهذا الصنف بعد ترحيلها.~noMatch=لا توجد حركات تطابق هذه المرشحات~noMatchBody=وسّع نطاق التواريخ أو امسح أحد المرشحات.~balanceAfter=الرصيد~by=بواسطة~ref=المرجع~unknownUser=غير مسجل~cat_receipt=استلام~cat_issue=صرف~cat_returned=إرجاع~cat_transfer=تحويل~cat_adjustment=تسوية~cat_count=جرد~cat_opening=رصيد افتتاحي~cat_erpLedger=دفتر ERP~cat_other=أخرى~filter_all=كل الأنواع~dateRange=التواريخ~anyDate=أي تاريخ~allLocations=كل المواقع~location=الموقع~searchItem=ابحث عن صنف~clearFilters=مسح المرشحات~type=النوع~stockIn=الوارد~stockOut=الصادر~net=صافي التغير~openingsNote=الأرصدة الافتتاحية لا تُحسب ضمن الوارد.~byMonth=حسب الشهر~summaryFailed=تعذر تحميل الإجماليات.~summaryCapped=الحركات كثيرة جداً لحساب الإجمالي. ضيّق نطاق التواريخ.~receive=استلام مخزون~type_receipt=استلام (مخزون جديد)~type_returned=إرجاع إلى المخزن~quantity=الكمية~reference=المرجع (إذن استلام، أمر عمل)~reason=ملاحظة~post=ترحيل~cancel=إلغاء~postedTitle=تم ترحيل المخزون~postedBody=الرصيد الجديد~done=تم~receiveNote=يُرحّل مباشرة إلى دفتر المخزون. يتحقق الخادم من صلاحيتك لهذا النوع.~qtyRequired=أدخل الكمية~qtyPositive=يجب أن تكون الكمية أكبر من صفر~qtyWhole=استخدم عدداً صحيحاً~qtyTooLarge=الكمية كبيرة جداً~refTooLong=المرجع طويل جداً~postOffline=لا يوجد اتصال. لم يُرحّل شيء؛ أعد المحاولة عند الاتصال.~postFailed=تعذر ترحيل الحركة.~loadFailed=تعذر تحميل سجل المخزون.~openItem=فتح تفاصيل الصنف';
+
+  @override
+  String handoverAuthOnBehalf(String name) {
+    return 'أوقّع نيابة عن $name';
+  }
+
+  @override
+  String get handoverAuthOnBehalfRequired => 'أكد أنك توقع نيابة عن هذا الشخص.';
+
+  @override
+  String get handoverAuthBlocked =>
+      'حسابك مرتبط بالسائق الآخر في هذا التسليم، لذلك لا يمكنك التوقيع عن هذا الطرف. اترك هذا التوقيع للسائق أو للمشرف.';
+
+  @override
+  String get handoverAuthSignedOnBehalf => 'وقّع عنه مشرف نيابة عنه';
+
+  @override
+  String get handoverAuthSentBack =>
+      'أعيد للتصحيح. حذفت التواقيع. صحح التسليم ووقّع مرة أخرى.';
+
+  @override
+  String get handoverAuthBadSignature =>
+      'تعذرت قراءة التوقيع. امسحه ووقّع مرة أخرى.';
+
+  @override
+  String get driverChargeWitnessConfirm => 'تأكيد الرفض الذي شهدته';
+
+  @override
+  String get driverChargeWitnessIntro =>
+      'سميت شاهداً على رفض السائق التوقيع على هذا الإشعار. أكد فقط ما رأيته بنفسك.';
+
+  @override
+  String get driverChargeWitnessPending =>
+      'سجل الرفض. بانتظار تأكيد الشاهد المسمى من حسابه.';
+
+  @override
+  String get driverChargeWitnessSaved => 'سجل تأكيدك كشاهد بوقت الخادم.';
+
+  @override
+  String get handoverAuthReceivingOtherAccount =>
+      'قدمت توقيع التسليم من هذا الحساب. يجب أن يأتي توقيع الاستلام من شخص آخر: حساب السائق المستلم نفسه أو مشرف مختلف.';
+
+  @override
+  String get handoverAuthSiteRequired =>
+      'أدخل الموقع. لا يوجد موقع لهذه المركبة في سجل الأسطول.';
+
+  @override
+  String get handoverAuthSiteFromRegister =>
+      'مأخوذ من سجل الأسطول لهذه المركبة.';
+
+  @override
+  String get signatureSignAgain =>
+      'التوقيع قصير جداً ولا يمكن قراءته. يرجى التوقيع مرة أخرى بتوقيعك الكامل.';
+
+  @override
+  String get driverChargeLinkUnverified =>
+      'الربط بالسجل المصدر غير مؤكد من السجل';
+
+  @override
+  String get driverChargeAppealClosedDeducted =>
+      'بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي.';
 }

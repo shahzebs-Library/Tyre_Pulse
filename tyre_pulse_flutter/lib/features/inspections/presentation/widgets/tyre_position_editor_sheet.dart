@@ -24,7 +24,9 @@ import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.da
     show PhotoCaptureSource;
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_glyph.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_risk_colors.dart';
 import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
 import 'package:tyre_pulse/features/tyres/domain/tyre_lookup_record.dart';
 import 'package:tyre_pulse/features/tyres/presentation/serial_search_deps.dart';
@@ -197,23 +199,26 @@ class _TyrePositionEditorSheetState
                       ),
                       // A wheel nobody has marked yet is not "Good": the
                       // default selection below is only a starting point.
-                      if (r.checked)
-                        TpStatusChip(
-                          status: tyreConditionStatus(
-                            normaliseCondition(r.condition),
-                          ),
-                          label: tyreConditionLabel(
-                            l10n,
-                            normaliseCondition(r.condition),
-                          ),
-                          isCompact: true,
-                        )
-                      else
-                        TpStatusChip(
-                          status: TpStatus.unknown,
-                          label: l10n.tyreDetailFieldNotRecorded,
-                          isCompact: true,
-                        ),
+                      // Flexible so a large text scale never overflows the
+                      // header row (text scale 2 on a 360dp phone).
+                      Flexible(
+                        child: r.checked
+                            ? TpStatusChip(
+                                status: tyreConditionStatus(
+                                  normaliseCondition(r.condition),
+                                ),
+                                label: tyreConditionLabel(
+                                  l10n,
+                                  normaliseCondition(r.condition),
+                                ),
+                                isCompact: true,
+                              )
+                            : TpStatusChip(
+                                status: TpStatus.unknown,
+                                label: l10n.tyreDetailFieldNotRecorded,
+                                isCompact: true,
+                              ),
+                      ),
                     ],
                   ),
                 ),
@@ -225,8 +230,16 @@ class _TyrePositionEditorSheetState
                 const SizedBox(height: TpSpace.sm),
                 LayoutBuilder(
                   builder: (BuildContext context, BoxConstraints constraints) {
+                    // Three per row normally; two when the text is
+                    // scaled up or the sheet is narrow, so a word such as
+                    // "Puncture" is never cut off (text scale 2 on 360dp).
+                    final double textScale =
+                        MediaQuery.textScalerOf(context).scale(1);
+                    final int columns =
+                        textScale > 1.3 || constraints.maxWidth < 300 ? 2 : 3;
                     final double itemWidth =
-                        (constraints.maxWidth - (TpSpace.sm * 2)) / 3;
+                        (constraints.maxWidth - (TpSpace.sm * (columns - 1))) /
+                            columns;
                     return Wrap(
                       spacing: TpSpace.sm,
                       runSpacing: TpSpace.sm,
@@ -235,20 +248,11 @@ class _TyrePositionEditorSheetState
                           SizedBox(
                             width: itemWidth,
                             child: _ConditionChip(
+                              condition: normaliseCondition(condition),
                               label: tyreConditionLabel(
                                 l10n,
                                 normaliseCondition(condition),
                               ),
-                              status: tyreConditionStatus(
-                                normaliseCondition(condition),
-                              ),
-                              icon: switch (normaliseCondition(condition)) {
-                                TyreCondition.puncture =>
-                                  Icons.report_problem_outlined,
-                                TyreCondition.flat =>
-                                  Icons.warning_amber_rounded,
-                                _ => null,
-                              },
                               statusLabel: _statusLabel(
                                 l10n,
                                 tyreConditionStatus(
@@ -533,37 +537,47 @@ class _StickyEditorAction extends StatelessWidget {
 
 class _ConditionChip extends StatelessWidget {
   const _ConditionChip({
+    required this.condition,
     required this.label,
-    required this.status,
     required this.statusLabel,
     required this.isSelected,
     required this.onTap,
-    this.icon,
   });
 
+  final TyreCondition? condition;
   final String label;
-  final TpStatus status;
   final String statusLabel;
   final bool isSelected;
   final VoidCallback onTap;
-  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final TpStatusColors colors = palette.forStatus(status);
+    // One fixed colour and one picture per condition (shared tyre map), so
+    // a tyre man who cannot read the word still knows which button is
+    // which. Selected = filled in the deep band colour with white ink (at
+    // least 4.5:1 in light and dark) and a heavy outline; not selected =
+    // the card surface with the coloured picture and a coloured border.
+    final Color band = tyreRiskBaseColor(
+      tyreConditionTone(condition),
+      palette.brightness,
+    );
+    final Color fill =
+        isSelected ? tyreConditionSelectedFill(condition) : palette.surface;
+    final Color ink = isSelected ? Colors.white : palette.text;
     return Semantics(
       label: '$label, $statusLabel',
       excludeSemantics: true,
       selected: isSelected,
       button: true,
       child: Material(
-        color: isSelected ? colors.base : colors.soft,
+        color: fill,
+        elevation: isSelected ? 3 : 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(TpRadius.md),
           side: BorderSide(
-            color: colors.base,
-            width: isSelected ? TpBorderWidth.strong : TpBorderWidth.hairline,
+            color: isSelected ? palette.text : band,
+            width: isSelected ? 3 : TpBorderWidth.strong,
           ),
         ),
         child: InkWell(
@@ -571,33 +585,31 @@ class _ConditionChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(TpRadius.md),
           onTap: onTap,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minHeight: TpSizing.minTouchTarget,
-            ),
+            constraints: const BoxConstraints(minHeight: 72),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: TpSpace.sm),
-              child: Row(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TpSpace.xs,
+                vertical: TpSpace.sm,
+              ),
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  if (icon != null) ...<Widget>[
-                    TpIcon(
-                      icon,
-                      size: TpSizing.iconSm,
-                      color: isSelected ? colors.onBase : colors.onSoft,
-                    ),
-                    const SizedBox(width: TpSpace.xs),
-                  ],
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: isSelected ? colors.onBase : colors.onSoft,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
+                  TyreConditionGlyph(
+                    condition: condition,
+                    size: 30,
+                    color: isSelected ? Colors.white : band,
+                  ),
+                  const SizedBox(height: TpSpace.xs),
+                  Text(
+                    label,
+                    maxLines: 3,
+                    softWrap: true,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: ink,
+                          fontWeight: FontWeight.w800,
+                        ),
                   ),
                 ],
               ),

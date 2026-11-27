@@ -45,13 +45,13 @@ function LedgerPanel({ scope, can }) {
     { key: 'movement_type', header: t('inventory.movements.type'), cell: (m) => (
       <StatusPill value={m.movement_type} tone={m.reverses_movement_id ? 'muted' : inflow.has(m.movement_type) ? 'good' : 'warning'} />
     ) },
-    { key: 'item_code', header: t('inventory.common.item'), cell: (m) => m.item_code || <span className="cc-na">N/A</span> },
-    { key: 'location_code', header: t('inventory.common.location'), cell: (m) => m.location_code || m.site || <span className="cc-na">N/A</span> },
+    { key: 'item_code', header: t('inventory.common.item'), cell: (m) => m.item_code || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+    { key: 'location_code', header: t('inventory.common.location'), cell: (m) => m.location_code || m.site || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
     { key: 'qty_change', header: t('inventory.movements.qty'), numeric: true, cell: (m) => <span className="inv-num">{Number(m.qty_change) > 0 ? '+' : ''}{formatQty(m.qty_change)}</span> },
     { key: 'qty_after', header: t('inventory.movements.after'), numeric: true, cell: (m) => <span className="inv-num">{formatQty(m.qty_after)}</span> },
     ...(showValue ? [{ key: 'value_change', header: t('inventory.movements.value'), numeric: true, cell: (m) => formatMoney(m.value_change, m.currency) }] : []),
-    { key: 'source', header: t('inventory.movements.source'), cell: (m) => [m.source_doc_type, m.source_doc_id || m.reference_no].filter(Boolean).join(' ') || <span className="cc-na">N/A</span> },
-    { key: 'reason', header: t('inventory.movements.reason'), cell: (m) => m.reason || <span className="cc-na">N/A</span> },
+    { key: 'source', header: t('inventory.movements.source'), cell: (m) => [m.source_doc_type, m.source_doc_id || m.reference_no].filter(Boolean).join(' ') || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+    { key: 'reason', header: t('inventory.movements.reason'), cell: (m) => m.reason || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
     ...(canReverse ? [{ key: 'act', header: '', sortable: false, cell: (m) => (m.reverses_movement_id ? null : (
       <button type="button" className="cc-icon-btn" aria-label={t('inventory.movements.reverse')} title={t('inventory.movements.reverse')}
         onClick={(e) => { e.stopPropagation(); setErr(''); setReversing({ m, reason: '', key: newIdempotencyKey() }) }}>

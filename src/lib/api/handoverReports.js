@@ -10,7 +10,7 @@
  * run the migration) degrades listing to an empty array so the page can render
  * its "apply the migration" empty state instead of erroring.
  */
-import { supabase, unwrap, applyCountry, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, ServiceError, isMissingColumn } from './_client'
 import { toFiniteNumber } from '../handoverReports'
 import { safeHref } from '../safeUrl'
 import { toUserMessage } from '../safeError'
@@ -40,6 +40,33 @@ export const COLS =
   'created_at,updated_at,document_no,approval_status,review_note,' +
   'supervisor_name,supervisor_signature,supervisor_at,supervisor_by,' +
   'incharge_name,incharge_signature,incharge_at,incharge_by'
+
+/**
+ * The authorization paper columns (the handover authorization paper migration). Selected on top of
+ * COLS; when the database has not had that migration applied PostgREST refuses
+ * the whole select (42703 / PGRST204), so every read retries with COLS alone and
+ * the screen falls back to the single legacy signature.
+ */
+export const AUTH_COLS =
+  'from_driver_id,to_driver_id,hour_meter,site,from_signature,from_signed_name,' +
+  'from_signed_at,from_signed_by,to_signature,to_signed_name,to_signed_at,' +
+  'to_signed_by,latitude,longitude,location_accuracy_m,location_status,' +
+  'location_captured_at,frozen_at,from_on_behalf,to_on_behalf'
+export const FULL_COLS = `${COLS},${AUTH_COLS}`
+const AUTH_WRITE_KEYS = ['from_driver_id', 'to_driver_id', 'hour_meter', 'site']
+
+async function withColumnFallback(run) {
+  try {
+    return await run(FULL_COLS)
+  } catch (err) {
+    if (isMissingColumn(err)) return run(COLS)
+    throw err
+  }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const asUuid = (v) => (v && UUID_RE.test(String(v).trim()) ? String(v).trim().toLowerCase() : null)
+const asSite = (v) => (v == null || String(v).trim() === '' ? null : String(v).trim().toUpperCase().slice(0, 120))
 
 // Photos live in the PRIVATE `tyre-photos` bucket, the same bucket the wash and
 // inspection modules use, so a handover's photos resolve identically through
@@ -161,14 +188,16 @@ function deriveDamageCount(explicit, damages) {
  */
 export async function listHandoverReports({ country, limit = 500 } = {}) {
   try {
-    let q = supabase.from('handover_reports').select(COLS)
-    q = applyCountry(q, country)
-    return unwrap(
-      await q
-        .order('handover_at', { ascending: false, nullsFirst: false })
-        .order('created_at', { ascending: false })
-        .limit(limit),
-    ) || []
+    return await withColumnFallback(async (cols) => {
+      let q = supabase.from('handover_reports').select(cols)
+      q = applyCountry(q, country)
+      return unwrap(
+        await q
+          .order('handover_at', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false })
+          .limit(limit),
+      ) || []
+    })
   } catch (err) {
     if (isMissingRelation(err)) return []
     throw err
@@ -176,7 +205,8 @@ export async function listHandoverReports({ country, limit = 500 } = {}) {
 }
 
 export async function getHandoverReport(id) {
-  return unwrap(await supabase.from('handover_reports').select(COLS).eq('id', id).maybeSingle())
+  return withColumnFallback(async (cols) =>
+    unwrap(await supabase.from('handover_reports').select(cols).eq('id', id).maybeSingle()))
 }
 
 /**
@@ -210,8 +240,25 @@ export async function createHandoverReport(values = {}) {
     photos: asPhotos(values.photos),
     notes: values.notes ? String(values.notes).slice(0, 8000) : null,
     country: values.country ?? null,
+    // A new handover is a draft until both drivers have signed; the receiving
+    // signature (sign_handover) submits it for supervisor sign-off.
+    approval_status: values.approval_status === 'pending_supervisor' ? 'pending_supervisor' : 'draft',
+    from_driver_id: asUuid(values.from_driver_id),
+    to_driver_id: asUuid(values.to_driver_id),
+    hour_meter: asNonNegative(values.hour_meter, 'Hour meter (hours)'),
+    site: asSite(values.site),
   }
-  return unwrap(await supabase.from('handover_reports').insert(payload).select(COLS).single())
+  try {
+    return unwrap(await supabase.from('handover_reports').insert(payload).select(FULL_COLS).single())
+  } catch (err) {
+    if (!isMissingColumn(err)) throw err
+    // Pre-migration database: keep the legacy shape (single signature, submitted
+    // straight for sign-off as it always was).
+    const legacy = { ...payload, approval_status: 'pending_supervisor' }
+    for (const k of AUTH_WRITE_KEYS) delete legacy[k]
+    const row = unwrap(await supabase.from('handover_reports').insert(legacy).select(COLS).single())
+    return row ? { ...row, _legacy: true } : row
+  }
 }
 
 /**
@@ -247,8 +294,102 @@ export async function updateHandoverReport(id, patch = {}) {
   if (patch.photos !== undefined) clean.photos = asPhotos(patch.photos)
   if (patch.notes !== undefined) clean.notes = patch.notes ? String(patch.notes).slice(0, 8000) : null
   if (patch.country !== undefined) clean.country = patch.country ?? null
+  if (patch.from_driver_id !== undefined) clean.from_driver_id = asUuid(patch.from_driver_id)
+  if (patch.to_driver_id !== undefined) clean.to_driver_id = asUuid(patch.to_driver_id)
+  if (patch.hour_meter !== undefined) clean.hour_meter = asNonNegative(patch.hour_meter, 'Hour meter (hours)')
+  if (patch.site !== undefined) clean.site = asSite(patch.site)
 
-  return unwrap(await supabase.from('handover_reports').update(clean).eq('id', id).select(COLS).single())
+  return withColumnFallback(async (cols) => {
+    const body = cols === COLS ? Object.fromEntries(Object.entries(clean).filter(([k]) => !AUTH_WRITE_KEYS.includes(k))) : clean
+    return unwrap(await supabase.from('handover_reports').update(body).eq('id', id).select(cols).single())
+  })
+}
+
+/**
+ * Record one driver's signature through `sign_handover`. The server stamps the
+ * time (now()) and the signing account (auth.uid()); the driver's name comes
+ * from the driver register when a driver id is set. The handing party signs
+ * first; the receiving signature freezes the record and submits it for sign-off.
+ *
+ * @param {string} id
+ * @param {'handing'|'receiving'} party
+ * `onBehalf` must be true when the signing account is NOT the account linked to
+ * that party's driver: only a supervisor-level account may do that, and the
+ * flag is stored on the record and in the audit trail.
+ *
+ * @param {{ signature:string, name?:string|null, location?:{latitude,longitude,accuracy,status}, onBehalf?:boolean }} opts
+ * @returns {Promise<{ok:boolean, party:string, signed_name:string, signed_at:string, signed_by:string, on_behalf:boolean, status:string}>}
+ */
+export async function signHandover(id, party, { signature, name = null, location = null, onBehalf = false } = {}) {
+  if (!id) throw new Error('A handover is required to sign.')
+  if (party !== 'handing' && party !== 'receiving') throw new Error('Choose who is signing.')
+  const sig = asSignature(signature)
+  if (!sig) throw new Error('A signature is required.')
+  const loc = location || {}
+  const { data, error } = await supabase.rpc('sign_handover', {
+    p_id: id,
+    p_party: party,
+    p_signature: sig,
+    p_signer_name: asText(name, 200),
+    p_latitude: Number.isFinite(loc.latitude) ? loc.latitude : null,
+    p_longitude: Number.isFinite(loc.longitude) ? loc.longitude : null,
+    p_accuracy_m: Number.isFinite(loc.accuracy) ? loc.accuracy : null,
+    p_location_status: loc.status === 'denied' ? 'denied' : loc.status === 'captured' ? 'captured' : 'unavailable',
+    p_on_behalf: onBehalf === true,
+  })
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not record the signature.'), error.code, error)
+  if (!data || data.ok !== true) throw new ServiceError('The server did not confirm the signature. Refresh before retrying.')
+  return data
+}
+
+let myDriverPromise = null
+/**
+ * The driver-register id linked to the signed-in account (driver_account_links),
+ * or null. Cached for the session; any read failure resolves to null, which only
+ * means the screen asks "signing on behalf" and the server decides.
+ */
+export function getMyLinkedDriverId({ refresh = false } = {}) {
+  if (!myDriverPromise || refresh) {
+    myDriverPromise = (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser()
+        const uid = auth?.user?.id
+        if (!uid) return null
+        const { data, error } = await supabase.from('driver_account_links').select('driver_id').eq('user_id', uid).maybeSingle()
+        if (error) return null
+        return data?.driver_id || null
+      } catch {
+        return null
+      }
+    })()
+  }
+  return myDriverPromise
+}
+
+/** The signed-in account id, or null. */
+export async function getMyUserId() {
+  try {
+    const { data } = await supabase.auth.getUser()
+    return data?.user?.id || null
+  } catch {
+    return null
+  }
+}
+
+/** Append-only audit trail of one handover, oldest first. [] before the migration. */
+export async function listHandoverEvents(id) {
+  if (!id) return []
+  try {
+    return unwrap(await supabase.from('handover_report_events')
+      .select('id,handover_id,action,actor,actor_name,changes,at')
+      .eq('handover_id', id)
+      .order('at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(500)) || []
+  } catch (err) {
+    if (isMissingRelation(err)) return []
+    throw err
+  }
 }
 
 export async function deleteHandoverReport(id) {

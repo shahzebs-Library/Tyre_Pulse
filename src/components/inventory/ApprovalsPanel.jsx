@@ -100,11 +100,11 @@ function DecideDrawer({ row, onClose, onDone }) {
       <div className="inv-hub" style={{ gap: 12 }}>
         <dl className="inv-dl">
           <dt>{t('inventory.approvals.stage')}</dt>
-          <dd>{row.stageName || 'N/A'}{row.stageCount ? ` (${(row.stageIndex ?? 0) + 1} / ${row.stageCount})` : ''}</dd>
+          <dd>{row.stageName || t('wmsfloor.common.na')}{row.stageCount ? ` (${(row.stageIndex ?? 0) + 1} / ${row.stageCount})` : ''}</dd>
           <dt>{t('inventory.approvals.requestedAt')}</dt><dd>{fmtDateTime(row.requestedAt)}</dd>
           {row.reason && (<><dt>{t('inventory.approvals.summary')}</dt><dd>{row.reason}</dd></>)}
           {row.proposal && Object.keys(row.proposal).length > 0 && (
-            <><dt>{t('inventory.approvals.proposal')}</dt><dd className="inv-mono">{Object.entries(row.proposal).map(([k, v]) => `${k}: ${v ?? 'N/A'}`).join(' | ')}</dd></>
+            <><dt>{t('inventory.approvals.proposal')}</dt><dd className="inv-mono">{Object.entries(row.proposal).map(([k, v]) => `${k}: ${v ?? t('wmsfloor.common.na')}`).join(' | ')}</dd></>
           )}
         </dl>
         <Note>{t('inventory.approvals.decideRule')}</Note>
@@ -138,9 +138,9 @@ export default function ApprovalsPanel({ scope, onNavigate }) {
   const query = { ...q, data: shaped }
 
   const columns = [
-    { key: 'entityType', header: t('inventory.approvals.type'), cell: (r) => (r.entityType ? t(`inventory.approvals.types.${r.entityType}`) : <span className="cc-na">N/A</span>) },
-    { key: 'entityRef', header: t('inventory.approvals.record'), cell: (r) => <span className="inv-mono">{r.entityRef || (r.entityId ? String(r.entityId).slice(0, 8) : 'N/A')}</span> },
-    { key: 'stageName', header: t('inventory.approvals.stage'), cell: (r) => r.stageName || <span className="cc-na">N/A</span> },
+    { key: 'entityType', header: t('inventory.approvals.type'), cell: (r) => (r.entityType ? t(`inventory.approvals.types.${r.entityType}`) : <span className="cc-na">{t('wmsfloor.common.na')}</span>) },
+    { key: 'entityRef', header: t('inventory.approvals.record'), cell: (r) => <span className="inv-mono">{r.entityRef || (r.entityId ? String(r.entityId).slice(0, 8) : t('wmsfloor.common.na'))}</span> },
+    { key: 'stageName', header: t('inventory.approvals.stage'), cell: (r) => r.stageName || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
     { key: 'requestedAt', header: t('inventory.approvals.requestedAt'), cell: (r) => fmtDateTime(r.requestedAt) },
     { key: 'decide', header: t('inventory.approvals.decision'), cell: (r) => (r.canDecide ? (
       <button type="button" className="cc-btn-primary" onClick={(e) => { e.stopPropagation(); setOpen(r) }}>
@@ -153,7 +153,7 @@ export default function ApprovalsPanel({ scope, onNavigate }) {
     )) },
     { key: 'go', header: '', cell: (r) => (APPROVAL_TARGET[r.entityType] ? (
       <button type="button" className="cc-btn-ghost" onClick={(e) => { e.stopPropagation(); onNavigate?.(APPROVAL_TARGET[r.entityType].section, APPROVAL_TARGET[r.entityType].tab) }}>
-        {t('inventory.approvals.open')} <ArrowRight size={14} aria-hidden="true" />
+        {t('inventory.approvals.open')} <ArrowRight size={14} aria-hidden="true" className="rtl-flip" />
       </button>
     ) : null) },
   ]

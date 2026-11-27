@@ -663,10 +663,42 @@ void main() {
     // 2525 + 3 = 2528: the Vehicle 360 tyre map names the inspection its
     // readings come from, and says when they could not be loaded; the
     // inspection meter fields refuse a date typed as a reading.
-    test('en, ar and ur each carry exactly 2549 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2549);
-      expect(_translatableKeys(ar).length, 2549);
-      expect(_translatableKeys(ur).length, 2549);
+    // 2549 + 115 + 1 = 2665: driver charges, the handover authorization paper and the store history copy
+    // (driverChargeSectionTitle ... driverChargeReplaced, the driver's "My
+    // charges" list, detail, consent / dispute / appeal sheets, status,
+    // category and linked-record labels; handoverAuthSignaturesTitle ...
+    // handoverAuthNotAvailable, the two-party signing panel, location line
+    // and wizard fields). Fragment copies: lib/l10n/fragments/driver_legal.*.
+    // 2665 + 10 = 2675: on-behalf signing (confirm line, required notice,
+    // blocked notice, signed-on-behalf line), the sent-back banner, the
+    // signature format refusal, and the refusal witness confirm sheet
+    // (driverChargeWitness*).
+    // 2675 + 6 = 2681: the receiving signature from another account, the
+    // site required / taken from the fleet register, the "please sign
+    // again" refusal for a too-short signature, the unconfirmed source link
+    // and the appeal closed after deductions.
+    // 2681 - 1 + 15 = 2695: driver charge consent in English, Arabic and Urdu
+    // (driverChargeStatementConsent / Dispute / Witness, the exact words the
+    // server stores, pinned against docs/document-specs/driver-charge-
+    // statements.json by src/test/driverChargeStatementsParity.test.js), the
+    // statement language picker and the three language names, the read-aloud
+    // line (replaces driverChargeStatementEnglishOnly), the photo section
+    // (title, none, could not load, look first) and the KSA / company rule
+    // lines with the objection day.
+    // 2695 + 5 = 2700: why a deduction cannot be scheduled yet (title,
+    // Article 92 consent, open objection, window with and without the KSA
+    // Article 91 wording), shown instead of a schedule the server refuses.
+    // 2700 + 1 = 2701: tyreConditionNotChecked (grey question-mark wheel).
+    // 2701 + 6 = 2707: driver charge review fixes (the driver's own company
+    // rule line without the legal caveat, photos blocked / still loading,
+    // retry, open larger, and the PDF refusing to print without the Arabic
+    // and Urdu font).
+    // 2707 + 7 = 2714: the Article 91 fault finding (title, not recorded, four
+    // findings) and the block when it was a third party or force majeure.
+    test('en, ar and ur each carry exactly 2714 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2714);
+      expect(_translatableKeys(ar).length, 2714);
+      expect(_translatableKeys(ur).length, 2714);
     });
   });
 

@@ -22,6 +22,7 @@
  *
  * Every function takes plain arrays so it can be tested without a database.
  */
+import { floorText } from './floorText'
 
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null
@@ -142,6 +143,23 @@ export const UNMATCHED_KINDS = {
 }
 
 /**
+ * Attach the reasons behind a candidate: `reasons` is the English text (kept
+ * for exports and older callers), `reasonKeys` the same list as
+ * `[key, vars]` pairs under wmsmsgfloor.reconcile.reason, for candidateReasons().
+ */
+function withReasons(candidate, why) {
+  return { ...candidate, reasons: why.map(([k, v]) => floorText()(`wmsmsgfloor.reconcile.reason.${k}`, v)), reasonKeys: why }
+}
+
+/** A candidate's reasons in the reader's language (English without `t`). */
+export function candidateReasons(candidate, t) {
+  const keys = candidate?.reasonKeys
+  if (!Array.isArray(keys) || !keys.length) return candidate?.reasons || []
+  const tx = floorText(t)
+  return keys.map(([k, v]) => tx(`wmsmsgfloor.reconcile.reason.${k}`, v))
+}
+
+/**
  * Exact-code proposal. `items` are material_master rows ({id, item_code,
  * item_name, country, organisation_id, brand}). Only the same country and the
  * same organisation count: the same code in another country is usually a
@@ -156,7 +174,7 @@ export function exactCodeProposal(row, items) {
   if (!hits.length) return { kind: 'code_missing', candidates: [] }
   return {
     kind: hits.length === 1 ? 'code_exact' : 'code_ambiguous',
-    candidates: hits.map((m) => ({ ...m, source: 'material_master', score: 100, reasons: ['Same item code and country'] })),
+    candidates: hits.map((m) => withReasons({ ...m, source: 'material_master', score: 100 }, [['sameCode']])),
   }
 }
 
@@ -183,17 +201,17 @@ export function tyreSuggestions(row, candidates, { limit = 5 } = {}) {
     seen.add(key)
     const cBrands = brandTokens(name, c.brand)
     const shared = brands.filter((b) => cBrands.includes(b))
-    const reasons = [`Same tyre size ${size}`]
+    const why = [['sameSize', { size }]]
     let score = 50
-    if (shared.length) { score += 40; reasons.push(`Same brand ${shared.join(', ')}`) } else if (brands.length && cBrands.length) {
-      score -= 30; reasons.push(`Different brand (${cBrands.join(', ')})`)
-    } else if (!brands.length) reasons.push('Brand not stated on the stock line')
-    else reasons.push('Brand not stated on the catalogue item')
-    out.push({
+    if (shared.length) { score += 40; why.push(['sameBrand', { brands: shared.join(', ') }]) } else if (brands.length && cBrands.length) {
+      score -= 30; why.push(['differentBrand', { brands: cBrands.join(', ') }])
+    } else if (!brands.length) why.push(['noBrandLine'])
+    else why.push(['noBrandCatalogue'])
+    out.push(withReasons({
       id: c.id, code, name, brand: c.brand || cBrands[0] || null, country: c.country || null,
       source: c.source || (c.company_sku !== undefined ? 'material_canonical' : 'material_master'),
-      linked: c.linked ?? null, score, reasons,
-    })
+      linked: c.linked ?? null, score,
+    }, why))
   }
   out.sort((a, b) => b.score - a.score || a.code.localeCompare(b.code))
   return { size, brands, suggestions: out.slice(0, limit) }
@@ -264,6 +282,12 @@ export const RECONCILE_CHECKS = [
   { key: 'not_in_catalogue', label: 'Item not in the governed catalogue', tone: 'muted',
     help: 'The Material Master item has no catalogue link.' },
 ]
+
+/** The label or help of a reconcile check in the reader's language. */
+export function reconcileCheckText(check, part, t) {
+  if (!check || !RECONCILE_CHECKS.some((c) => c.key === check.key)) return check?.[part]
+  return floorText(t)(`wmsmsgfloor.reconcile.check.${check.key}.${part}`)
+}
 
 /**
  * Run every check.

@@ -16,13 +16,19 @@ import { ArrowDownToLine, PackageCheck } from 'lucide-react'
 import { newIdempotencyKey } from '../../lib/api/inventory'
 import { listPutawayCandidates, startPutaway, finishPutaway } from '../../lib/api/floorWorkflow'
 import { putawayTargets, validatePutaway, putawayStage, freeQty, locationIndex, locationPath } from '../../lib/inventory/floorWorkflow'
+import { warmFloorText } from '../../lib/inventory/floorText'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { useInvQuery, PagedTable, Field, ErrorNote, Note, SectionCard, SearchBox } from './InvUi'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const freshAction = () => ({ dispatchKey: newIdempotencyKey(), receiveKey: newIdempotencyKey(), transferId: null, ref: null, done: false })
 
 export default function PutawayPanel({ scope, can }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`wmsfloor.putaway.${k}`, v)
+  warmFloorText(t)
+  const na = <span className="cc-na">{t('wmsfloor.common.na')}</span>
   const allowed = typeof can === 'function' && can('transfer')
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(25)
@@ -50,8 +56,8 @@ export default function PutawayPanel({ scope, can }) {
 
   if (!allowed) {
     return (
-      <SectionCard title="Put-away">
-        <Note tone="warn" title="Permission needed">Putting stock away needs the inventory transfer permission. Ask an administrator.</Note>
+      <SectionCard title={p('title')}>
+        <Note tone="warn" title={p('permissionTitle')}>{p('permissionBody')}</Note>
       </SectionCard>
     )
   }
@@ -70,21 +76,21 @@ export default function PutawayPanel({ scope, can }) {
     try {
       setBusy(true)
       if (putawayStage(state) === 'start') {
-        const v = validatePutaway({ stock, target, qty: form.qty })
+        const v = validatePutaway({ stock, target, qty: form.qty }, t)
         if (!v.ok) { setErr(v.error); return }
         const res = await startPutaway({ stock, targetId: target.id, qty: v.qty, note: form.note }, state.dispatchKey)
-        if (res.refused) { setErr('Not enough free stock on this line. Refresh and try a smaller quantity.'); return }
+        if (res.refused) { setErr(p('refused')); return }
         state = { ...state, transferId: res.transferId, ref: res.ref }
         setAction(state)
       }
       await finishPutaway(state.transferId, state.receiveKey)
       setAction({ ...state, done: true })
-      setDone(`Put away into ${target?.path || 'the bin'}${state.ref ? ` (${state.ref})` : ''}.`)
+      setDone(p('done', { path: target?.path || p('theBin'), ref: state.ref ? ` (${state.ref})` : '' }))
       setStock(null)
       setReload((n) => n + 1)
     } catch (e) {
       setErr(putawayStage(state) === 'receive'
-        ? `The stock left the receiving area${state.ref ? ` (${state.ref})` : ''} but was not yet received into the bin: ${toUserMessage(e)} Press "Finish put-away" to try again.`
+        ? p('halfDone', { ref: state.ref ? ` (${state.ref})` : '', error: toUserMessage(e) })
         : toUserMessage(e))
     } finally {
       setBusy(false)
@@ -92,60 +98,60 @@ export default function PutawayPanel({ scope, can }) {
   }
 
   const columns = [
-    { key: 'item_code', header: 'Item', cell: (r) => r.item_code || <span className="cc-na">N/A</span> },
-    { key: 'description', header: 'Description', cell: (r) => r.description || <span className="cc-na">N/A</span> },
-    { key: 'site', header: 'Site' },
-    { key: 'location_code', header: 'Receiving area', cell: (r) => locationPath(r.location_id, index, r.location_code) },
-    { key: 'qty_on_hand', header: 'On hand', numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
-    { key: 'free', header: 'Free to move', numeric: true, sortable: false, cell: (r) => formatQty(freeQty(r)) },
+    { key: 'item_code', header: p('colItem'), cell: (r) => r.item_code || na },
+    { key: 'description', header: p('colDescription'), cell: (r) => r.description || na },
+    { key: 'site', header: p('colSite') },
+    { key: 'location_code', header: p('colReceiving'), cell: (r) => locationPath(r.location_id, index, r.location_code, t) },
+    { key: 'qty_on_hand', header: p('colOnHand'), numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
+    { key: 'free', header: p('colFree'), numeric: true, sortable: false, cell: (r) => formatQty(freeQty(r)) },
   ]
 
   return (
     <>
-      <SectionCard title="Put-away" sub="Received stock waiting in a receiving area (warehouse, zone or rack). Choose a line, then the bin or shelf it goes into.">
-        <SearchBox value={search} onChange={(v) => { setSearch(v); setPage(0) }} placeholder="Search item, description or location" label="Search stock to put away" />
+      <SectionCard title={p('title')} sub={p('sub')}>
+        <SearchBox value={search} onChange={(v) => { setSearch(v); setPage(0) }} placeholder={p('searchPlaceholder')} label={p('searchLabel')} />
         {query.data?.status === 'ok' && !query.loading && !(query.data.rows || []).length && !search && (
-          <Note>Nothing is waiting in a receiving area for this scope. Received goods show here until they are put into a bin.</Note>
+          <Note>{p('nothingWaiting')}</Note>
         )}
         <PagedTable
           query={query} columns={columns} page={page} pageSize={pageSize}
           onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(0) }}
-          empty="No stock waiting to be put away" what="Put-away" noun="lines"
+          empty={p('empty')} what={p('title')} noun={p('noun')}
           onRowClick={pick}
         />
-        {query.data?.locationsTruncated && <Note tone="warn">Not every location could be loaded for this scope. Narrow the site to see all bins.</Note>}
+        {query.data?.locationsTruncated && <Note tone="warn">{p('locationsTruncated')}</Note>}
       </SectionCard>
 
       {(stock || stage === 'receive') && (
-        <SectionCard title={stage === 'receive' ? 'Finish put-away' : `Put away ${stock?.item_code || ''}`}
-          sub={stock ? `${stock.description || ''} at ${locationPath(stock.location_id, index, stock.location_code)}, ${formatQty(freeQty(stock))} free` : undefined}>
+        <SectionCard title={stage === 'receive' ? p('finish') : p('putAwayItem', { item: stock?.item_code || '' })}
+          sub={stock ? p('stockSub', { description: stock.description || '', location: locationPath(stock.location_id, index, stock.location_code, t), free: formatQty(freeQty(stock)) }) : undefined}>
           {stage === 'start' && (
             <div className="inv-form">
-              <Field label="Bin or shelf">
+              <Field label={p('binLabel')}>
                 <select className="cc-select" value={form.targetId} onChange={(e) => setForm((f) => ({ ...f, targetId: e.target.value }))}>
-                  <option value="">Choose a location</option>
+                  <option value="">{p('chooseLocation')}</option>
                   {targets.map((l) => <option key={l.id} value={l.id}>{l.nearby ? '* ' : ''}{l.path}</option>)}
                 </select>
               </Field>
-              <Field label="Quantity">
+              <Field label={p('qty')}>
                 <input className="inv-input inv-num" type="number" min="0" step="any" value={form.qty} onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))} />
               </Field>
-              <Field label="Note (optional)" full>
+              <Field label={p('note')} full>
                 <input className="inv-input" maxLength={200} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
               </Field>
             </div>
           )}
           {stage === 'start' && !targets.length && (
-            <Note tone="warn">This site has no active bin or shelf. Add one in Locations first.</Note>
+            <Note tone="warn">{p('noBins')}</Note>
           )}
-          {stage === 'start' && targets.some((l) => l.nearby) && <p className="cc-card-sub">* inside the same warehouse or zone as the stock.</p>}
+          {stage === 'start' && targets.some((l) => l.nearby) && <p className="cc-card-sub">{p('nearbyHint')}</p>}
           <div className="inv-actions">
             {stage === 'start' && (
-              <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => { setStock(null); setErr('') }}>Cancel</button>
+              <button type="button" className="cc-btn-ghost" disabled={busy} onClick={() => { setStock(null); setErr('') }}>{p('cancel')}</button>
             )}
             <button type="button" className="cc-btn-primary" disabled={busy || (stage === 'start' && !form.targetId)} onClick={submit}>
               {stage === 'receive' ? <PackageCheck size={14} aria-hidden="true" /> : <ArrowDownToLine size={14} aria-hidden="true" />}
-              {' '}{busy ? 'Saving...' : stage === 'receive' ? 'Finish put-away' : 'Put away'}
+              {' '}{busy ? p('saving') : stage === 'receive' ? p('finish') : p('putAway')}
             </button>
           </div>
           {err && <ErrorNote error={err} />}

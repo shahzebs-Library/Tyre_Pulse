@@ -1,0 +1,26 @@
+{
+  "id": "driver-charge-statements",
+  "description": "The exact statements a driver or witness signs for a driver charge. The server (private.driver_charge_statement in supabase/migrations/20261126170000_driver_charge_cases.sql) stores the chosen text verbatim with the signature. The web locale src/locales/{en,ar}/driverCharges.json, the Urdu web locale and the Flutter ARB files carry the same words; a test checks they are identical. Arabic and Urdu are plain-language drafts for low-literacy readers and need owner and legal approval before production use. deduction-consent-v3 contains {amount}: the server replaces it with the charge total and currency (for example 1,250.00 SAR) before it is shown or stored.",
+  "languages": [
+    "en",
+    "ar",
+    "ur"
+  ],
+  "statements": {
+    "deduction-consent-v3": {
+      "en": "I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay {amount} in total for this charge. I agree that the company may take this amount from my salary in monthly parts. The amount taken in any one month will never be more than the legal monthly limit, and I will be shown the amount for each month before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.",
+      "ar": "أنا السائق المذكور اسمه في هذه الورقة. اطلعت على هذه المطالبة: السبب والأدلة والصور. أوافق على أنني ملزم بدفع مبلغ {amount} إجمالا عن هذه المطالبة. وأوافق على أن تخصم الشركة هذا المبلغ من راتبي على أجزاء شهرية. لن يزيد جزء أي شهر عن الحد الشهري الذي يسمح به النظام، وسيعرض علي مبلغ كل شهر قبل خصمه. هذه الموافقة تخص هذه المطالبة فقط. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.",
+      "ur": "میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ میں نے یہ چارج دیکھ لیا ہے: اس کی وجہ، ثبوت اور تصویریں۔ میں مانتا ہوں کہ اس چارج کے لیے مجھے کل {amount} ادا کرنے ہیں۔ میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے ماہانہ قسطوں میں کاٹے۔ کسی بھی مہینے کی قسط قانون کی ماہانہ حد سے زیادہ نہیں ہوگی، اور ہر مہینے کی رقم کاٹنے سے پہلے مجھے دکھائی جائے گی۔ یہ اجازت صرف اسی چارج کے لیے ہے۔ میں اس کاغذ پر لکھی مدت کے اندر اب بھی اعتراض کر سکتا ہوں۔"
+    },
+    "receipt-dispute-v2": {
+      "en": "I am the driver named on this paper. I have received this charge and I have seen the reason, the evidence and the photos. I do not agree with this charge, for the reasons I wrote. My signature only shows that I received this paper. It does not mean that I agree. I can object within the time written on this paper.",
+      "ar": "أنا السائق المذكور اسمه في هذه الورقة. استلمت هذه المطالبة واطلعت على السبب والأدلة والصور. لا أوافق على هذه المطالبة للأسباب التي كتبتها. توقيعي يثبت فقط أنني استلمت هذه الورقة، ولا يعني أنني موافق. ويحق لي الاعتراض خلال المدة المكتوبة في هذه الورقة.",
+      "ur": "میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ مجھے یہ چارج مل گیا ہے اور میں نے اس کی وجہ، ثبوت اور تصویریں دیکھ لی ہیں۔ میں ان وجوہات کی وجہ سے جو میں نے لکھی ہیں، اس چارج سے متفق نہیں ہوں۔ میرے دستخط صرف یہ بتاتے ہیں کہ مجھے یہ کاغذ مل گیا ہے۔ اس کا مطلب یہ نہیں کہ میں متفق ہوں۔ میں اس کاغذ پر لکھی مدت کے اندر اعتراض کر سکتا ہوں۔"
+    },
+    "refusal-witness-v2": {
+      "en": "I saw this charge paper given to the driver named on it. The driver did not want to sign it or answer. The date and time of this record are set by the system.",
+      "ar": "رأيت أن ورقة هذه المطالبة سلمت إلى السائق المذكور اسمه فيها، وأن السائق رفض التوقيع عليها أو الرد. تاريخ ووقت هذا السجل يحددهما النظام.",
+      "ur": "میں نے دیکھا کہ اس چارج کا کاغذ اس پر لکھے ہوئے ڈرائیور کو دیا گیا۔ ڈرائیور نے اس پر دستخط کرنے یا جواب دینے سے انکار کیا۔ اس ریکارڈ کی تاریخ اور وقت سسٹم طے کرتا ہے۔"
+    }
+  }
+}

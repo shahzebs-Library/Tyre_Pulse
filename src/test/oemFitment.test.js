@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  normalizeMake, modelTokens, modelFamily, buildManualFitment, fitmentSentence,
+  normalizeMake, modelTokens, modelFamily, buildManualFitment, fitmentSentence, evidenceFieldLabel,
   stockBySite, catalogueStockRows, linkStockRows, summarizeStockRows,
   existingAlternatives, buildAlternativeRequest,
   significantWords, buildCandidateIndex, candidatesForEntry, buildUnmatchedRows, filterUnmatched, summarizeUnmatched, BROAD_LIMIT,
@@ -155,5 +155,25 @@ describe('unmatched manual rows', () => {
     expect(filterUnmatched(rows, { rule: 'words' }).map((r) => r.entry.id)).toEqual(['e2'])
     expect(filterUnmatched(rows, { search: 'spring' }).map((r) => r.entry.id)).toEqual(['e1'])
     expect(filterUnmatched(rows, { search: 'A8203' }).map((r) => r.entry.id)).toEqual(['e1'])
+  })
+})
+
+describe('fitment text translation', () => {
+  const fakeT = (k, v) => (v ? `${k}|${JSON.stringify(v)}` : k)
+  const [f] = buildManualFitment({
+    manuals: [{ id: 'm1', manufacturer: 'SANY', model: 'SY412C-8/ST' }],
+    fleet: [{ make: 'Sany', model: 'SY412C' }, { make: 'SANY', model: '' }],
+  })
+  it('keeps the English sentence without t', () => {
+    expect(fitmentSentence(f)).toBe('Manual says SANY SY412C-8/ST. 2 fleet assets carry the make SANY; 1 of them record a model; 1 record the model SY412C.')
+  })
+  it('uses the given t', () => {
+    expect(fitmentSentence({ basis: 'no_make' }, fakeT)).toBe('wmsmsgparts.fitment.noMake')
+    expect(fitmentSentence(f, fakeT)).toMatch(/^wmsmsgparts\.fitment\.full\|/)
+  })
+  it('labels evidence fields', () => {
+    expect(evidenceFieldLabel('reference_oem')).toBe('reference oem')
+    expect(evidenceFieldLabel('reference_oem', fakeT)).toBe('wmsmsgparts.evidence.reference_oem')
+    expect(evidenceFieldLabel('reference_mystery', fakeT)).toBe('reference mystery')
   })
 })

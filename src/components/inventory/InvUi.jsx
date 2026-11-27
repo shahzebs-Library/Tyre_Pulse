@@ -12,6 +12,7 @@ import ExplainThisNumber from '../trust/ExplainThisNumber'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { isInventoryNotSetUp } from '../../lib/api/inventory'
+import { floorText } from '../../lib/inventory/floorText'
 
 const TONE = { good: 'good', info: 'info', warning: 'warn', warn: 'warn', bad: 'bad', muted: 'muted' }
 
@@ -104,8 +105,16 @@ export function Denied({ capLabel }) {
   )
 }
 
-export function StatusPill({ value, tone, label }) {
-  if (value === null || value === undefined || value === '') return <span className="cc-na">N/A</span>
+/** "N/A" in the reader's language (exactly "N/A" in English). */
+export function useNa() {
+  const { t, language } = useLanguage()
+  return language === 'en' ? 'N/A' : floorText(t)('wmsmsgfloor.common.na')
+}
+
+/** An empty `value` shows `na` (default: "N/A" in the reader's language). */
+export function StatusPill({ value, tone, label, na }) {
+  const naText = useNa()
+  if (value === null || value === undefined || value === '') return <span className="cc-na">{na ?? naText}</span>
   return <span className={`cc-pill ${TONE[tone] || 'muted'}`}>{label || String(value).replace(/_/g, ' ')}</span>
 }
 
@@ -128,10 +137,13 @@ export function SearchBox({ value, onChange, placeholder, label }) {
   )
 }
 
-/** Right-align numeric cells (KitTable aligns the header; this aligns the value). */
-export function alignNumeric(columns) {
+/**
+ * Right-align numeric cells (KitTable aligns the header; this aligns the value).
+ * `na` is shown for an empty value without its own cell renderer (default "N/A").
+ */
+export function alignNumeric(columns, na = 'N/A') {
   return columns.map((c) => (c.numeric
-    ? { ...c, cell: (r) => <span className="inv-num-cell">{c.cell ? c.cell(r) : (r[c.key] ?? 'N/A')}</span> }
+    ? { ...c, cell: (r) => <span className="inv-num-cell">{c.cell ? c.cell(r) : (r[c.key] ?? na)}</span> }
     : c))
 }
 
@@ -140,13 +152,14 @@ export function alignNumeric(columns) {
  * data is `{ status, rows, total }`.
  */
 export function PagedTable({ query, columns, page, pageSize, onPage, onPageSize, empty, what, onRowClick, noun }) {
+  const na = useNa()
   if (query.error) return <ErrorNote error={query.error} onRetry={query.retry} />
   if (query.data?.status === 'not_provisioned') return <NotSetUp what={what} />
   const rows = query.data?.rows || []
   return (
     <>
       <div className="inv-scroll">
-        <KitTable compact columns={alignNumeric(columns)} rows={rows} loading={query.loading && !query.data} empty={empty} onRowClick={onRowClick} />
+        <KitTable compact columns={alignNumeric(columns, na)} rows={rows} loading={query.loading && !query.data} empty={empty} onRowClick={onRowClick} />
       </div>
       {(query.data?.total ?? 0) > 0 && (
         <Pager page={page} pageSize={pageSize} total={query.data.total} onPage={onPage} onPageSize={onPageSize} sizes={[25, 50, 100, 200]} noun={noun} />
@@ -159,15 +172,17 @@ export function SectionCard({ title, sub, action, children }) {
   return <Card title={title} sub={sub} action={action}>{children}</Card>
 }
 
-export function fmtDate(v) {
-  if (!v) return 'N/A'
+/** dd Mon yyyy; `na` is returned for an empty value (default "N/A"). */
+export function fmtDate(v, na = 'N/A') {
+  if (!v) return na
   const d = new Date(v)
   if (Number.isNaN(d.getTime())) return String(v)
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-export function fmtDateTime(v) {
-  if (!v) return 'N/A'
+/** dd Mon yyyy, hh:mm; `na` is returned for an empty value (default "N/A"). */
+export function fmtDateTime(v, na = 'N/A') {
+  if (!v) return na
   const d = new Date(v)
   if (Number.isNaN(d.getTime())) return String(v)
   return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })

@@ -11,6 +11,8 @@
  * summed per currency only; a date that is missing is "not set", never overdue.
  */
 
+import { textFn } from '../wmsText'
+
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null
   const n = Number(v)
@@ -46,33 +48,39 @@ export const LOCATION_RESTRICTIONS = Object.freeze([
 ])
 
 export const restrictionLabel = (v) => LOCATION_RESTRICTIONS.find((r) => r.value === (v || ''))?.label || 'No restriction'
+const restrictionKey = (v) => (v && LOCATION_RESTRICTIONS.some((r) => r.value === v) ? v : 'none')
 
 /** Validate the extra location fields. Returns { errors } keyed by field. */
-export function validateLocationClass(d = {}) {
+export function validateLocationClass(d = {}, t) {
+  const tx = textFn(t)
   const errors = {}
   const cap = num(d.capacity_qty)
   if (d.capacity_qty !== '' && d.capacity_qty !== null && d.capacity_qty !== undefined && (cap === null || cap <= 0)) {
-    errors.capacity_qty = 'Capacity must be a number above zero.'
+    errors.capacity_qty = tx('wmsmsgparts.loc.capacityPositive')
   }
-  if (cap !== null && cap > 0 && !String(d.capacity_uom || '').trim()) errors.capacity_uom = 'Say what the capacity is measured in.'
+  if (cap !== null && cap > 0 && !String(d.capacity_uom || '').trim()) errors.capacity_uom = tx('wmsmsgparts.loc.capacityUnit')
   if (d.van_asset_no && String(d.van_asset_no).trim() && d.location_type !== 'service_van') {
-    errors.van_asset_no = 'Only a service van names a vehicle.'
+    errors.van_asset_no = tx('wmsmsgparts.loc.vanOnlyService')
   }
   if (d.location_type === 'service_van' && !String(d.van_asset_no || '').trim()) {
-    errors.van_asset_no = 'Name the van (its fleet asset number).'
+    errors.van_asset_no = tx('wmsmsgparts.loc.vanRequired')
   }
   return { ok: Object.keys(errors).length === 0, errors }
 }
 
 /** Findings for one utilisation row: over capacity, rule breach, mixing. */
-export function locationFindings(row) {
+export function locationFindings(row, t) {
+  const tx = textFn(t)
   const out = []
   const pct = num(row?.pct_used)
-  if (pct !== null && pct > 100) out.push({ tone: 'bad', text: `Over capacity (${pct}%)` })
-  else if (pct !== null && pct >= 90) out.push({ tone: 'warn', text: `Nearly full (${pct}%)` })
+  if (pct !== null && pct > 100) out.push({ tone: 'bad', text: tx('wmsmsgparts.loc.over', { pct }) })
+  else if (pct !== null && pct >= 90) out.push({ tone: 'warn', text: tx('wmsmsgparts.loc.nearly', { pct }) })
   const br = num(row?.restriction_breaches) || 0
-  if (br > 0) out.push({ tone: 'bad', text: `${br} stock line${br === 1 ? '' : 's'} break the "${restrictionLabel(row.restriction)}" rule` })
-  if (row?.mixing_breach) out.push({ tone: 'bad', text: 'More than one item in a no-mixing location' })
+  if (br > 0) {
+    const rule = typeof t === 'function' ? tx(`wmsmsgparts.loc.restriction.${restrictionKey(row.restriction)}`) : restrictionLabel(row.restriction)
+    out.push({ tone: 'bad', text: tx(br === 1 ? 'wmsmsgparts.loc.breachOne' : 'wmsmsgparts.loc.breachMany', { n: br, rule }) })
+  }
+  if (row?.mixing_breach) out.push({ tone: 'bad', text: tx('wmsmsgparts.loc.mixing') })
   return out
 }
 
@@ -104,24 +112,26 @@ export function calibrationWatchList(tools, now = Date.now()) {
 }
 
 /** Validate a calibration record before sending. */
-export function validateCalibration(form = {}, now = Date.now()) {
+export function validateCalibration(form = {}, now = Date.now(), t) {
+  const tx = textFn(t)
   const on = dayStart(form.calibrated_on)
   const due = dayStart(form.next_due)
   const res = String(form.result || '')
-  if (on === null) return { error: 'Give the calibration date.' }
-  if (on > dayStart(now)) return { error: 'The calibration date cannot be in the future.' }
-  if (!['pass', 'adjusted', 'fail'].includes(res)) return { error: 'Choose the result.' }
-  if (res !== 'fail' && (due === null || due <= on)) return { error: 'Give the next due date after the calibration date.' }
+  if (on === null) return { error: tx('wmsmsgparts.tool.calDate') }
+  if (on > dayStart(now)) return { error: tx('wmsmsgparts.tool.calFuture') }
+  if (!['pass', 'adjusted', 'fail'].includes(res)) return { error: tx('wmsmsgparts.tool.calResult') }
+  if (res !== 'fail' && (due === null || due <= on)) return { error: tx('wmsmsgparts.tool.calNextDue') }
   return { error: null }
 }
 
 /** Validate a tool issue before sending. */
-export function validateToolIssue(form = {}, now = Date.now()) {
-  if (!form.holder_user_id && !String(form.holder_name || '').trim()) return { error: 'Say who is taking the tool.' }
+export function validateToolIssue(form = {}, now = Date.now(), t) {
+  const tx = textFn(t)
+  if (!form.holder_user_id && !String(form.holder_name || '').trim()) return { error: tx('wmsmsgparts.tool.holder') }
   if (form.due_back_at) {
     const t = new Date(form.due_back_at).getTime()
-    if (!Number.isFinite(t)) return { error: 'The due-back date is not a date.' }
-    if (t < now) return { error: 'The due-back date must be in the future.' }
+    if (!Number.isFinite(t)) return { error: tx('wmsmsgparts.tool.dueBackInvalid') }
+    if (t < now) return { error: tx('wmsmsgparts.tool.dueBackPast') }
   }
   return { error: null }
 }
@@ -129,18 +139,19 @@ export function validateToolIssue(form = {}, now = Date.now()) {
 // ── Lubricants ───────────────────────────────────────────────────────────────
 
 /** Validate a dispense form. `stock` is the chosen balance. */
-export function validateDispense(stock, form = {}) {
-  if (!stock?.id) return { error: 'Choose the lubricant stock line.' }
+export function validateDispense(stock, form = {}, t) {
+  const tx = textFn(t)
+  if (!stock?.id) return { error: tx('wmsmsgparts.lube.stockLine') }
   const qty = num(form.qty)
-  if (qty === null || qty <= 0) return { error: 'Enter how much was dispensed.' }
+  if (qty === null || qty <= 0) return { error: tx('wmsmsgparts.lube.qty') }
   const free = num(stock.qty_on_hand) === null ? null : (num(stock.qty_on_hand) || 0) - (num(stock.qty_reserved) || 0)
-  if (free !== null && qty > free) return { error: `Only ${free} is free on this line.` }
-  if (!String(form.asset_no || '').trim()) return { error: 'Choose the asset it went into.' }
+  if (free !== null && qty > free) return { error: tx('wmsmsgparts.lube.onlyFree', { free }) }
+  if (!String(form.asset_no || '').trim()) return { error: tx('wmsmsgparts.lube.asset') }
   const meter = num(form.meter_reading)
   if (form.meter_reading !== '' && form.meter_reading !== undefined && form.meter_reading !== null && (meter === null || meter < 0)) {
-    return { error: 'The meter reading must be a number.' }
+    return { error: tx('wmsmsgparts.lube.meterNumber') }
   }
-  if (meter !== null && !['km', 'hours'].includes(form.meter_type)) return { error: 'Say whether the reading is km or hours.' }
+  if (meter !== null && !['km', 'hours'].includes(form.meter_type)) return { error: tx('wmsmsgparts.lube.meterType') }
   return { error: null }
 }
 
@@ -205,14 +216,15 @@ export function allowedUnitEvents(latest, can = () => false) {
 }
 
 /** Validate a unit event before sending. */
-export function validateUnitEvent(form = {}) {
-  if (!form.item_id) return { error: 'Choose the item.' }
-  if (!String(form.serial || '').trim()) return { error: 'Give the serial number.' }
-  if (!UNIT_EVENTS.some((e) => e.value === form.event_type)) return { error: 'Choose what happened.' }
+export function validateUnitEvent(form = {}, t) {
+  const tx = textFn(t)
+  if (!form.item_id) return { error: tx('wmsmsgparts.unit.item') }
+  if (!String(form.serial || '').trim()) return { error: tx('wmsmsgparts.unit.serial') }
+  if (!UNIT_EVENTS.some((e) => e.value === form.event_type)) return { error: tx('wmsmsgparts.unit.event') }
   if (['installed_on_asset', 'removed_from_asset'].includes(form.event_type) && !String(form.asset_no || '').trim()) {
-    return { error: 'Choose the asset.' }
+    return { error: tx('wmsmsgparts.unit.asset') }
   }
-  if (form.event_type === 'sent_for_repair' && !form.supplier_id) return { error: 'Choose the repair vendor.' }
+  if (form.event_type === 'sent_for_repair' && !form.supplier_id) return { error: tx('wmsmsgparts.unit.vendor') }
   return { error: null }
 }
 

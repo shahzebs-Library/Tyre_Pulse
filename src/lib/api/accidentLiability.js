@@ -120,12 +120,15 @@ export async function getLiabilityAssessment(accidentId) {
  */
 export async function saveLiabilityAssessment(accidentId, patch, { existingId, isLocked } = {}) {
   if (!accidentId) throw new Error('An incident is required.')
-  if (isLocked && !patch.change_reason) {
-    throw new Error('A change reason is required to revise a locked liability assessment.')
+  // An approved assessment is locked on the server. It is never replaced by a
+  // second row (accident_id is unique): an administrator reopens it with a
+  // reason through reopenLiabilityAssessment, then it can be edited again.
+  if (isLocked) {
+    throw new Error('This assessment is approved and locked. An administrator must reopen it with a reason before it can be changed.')
   }
   const { result, parityProvisioned } = await withColumnFallback(async (cols, parity) => {
     const row = { accident_id: accidentId, ...(parity ? patch : stripParityFields(patch)) }
-    if (existingId && !isLocked) {
+    if (existingId) {
       return unwrap(
         await supabase
           .from('accident_liability_assessments')
@@ -140,21 +143,46 @@ export async function saveLiabilityAssessment(accidentId, patch, { existingId, i
   return parityProvisioned ? result : { ...result, _parityProvisioned: false }
 }
 
-/** Approve (and lock) a liability assessment. Locking is what makes a later
- *  edit require a change reason instead of silently overwriting the record. */
-export async function approveLiabilityAssessment(id, approvedBy) {
+/**
+ * Approve (and lock) a liability assessment through the server RPC
+ * approve_accident_liability (migration 20261126170000). The server stamps the
+ * approver from the session and the time from its own clock, freezes the row
+ * and writes the approval audit. When the payer is driver_recovery, `charge`
+ * ({ driver_id, currency, amount?, basis? }) opens the linked driver charge.
+ * Returns the reloaded assessment plus `approval` (the RPC result).
+ */
+export async function approveLiabilityAssessment(id, { reason, charge = null } = {}) {
   if (!id) throw new Error('A liability assessment is required.')
+  if (!reason || String(reason).trim().length < 3) throw new Error('An approval reason is required.')
+  const { data: approval, error } = await supabase.rpc('approve_accident_liability', {
+    p_assessment_id: id, p_reason: String(reason).trim(), p_charge: charge,
+  })
+  if (error) {
+    // Never fall back to a browser-stamped approval: that is the hole this RPC closes.
+    if (error.code === '42883' || error.code === 'PGRST202') {
+      throw new Error('Approval is not available until the server update for liability approval is installed.')
+    }
+    unwrap({ data: null, error })
+  }
   const { result } = await withColumnFallback(async (cols) =>
-    unwrap(
-      await supabase
-        .from('accident_liability_assessments')
-        .update({ approved: true, approved_by: approvedBy ?? null, approved_at: new Date().toISOString(), locked: true })
-        .eq('id', id)
-        .select(cols)
-        .single(),
-    ),
+    unwrap(await supabase.from('accident_liability_assessments').select(cols).eq('id', id).single()),
   )
-  return result
+  return { ...result, approval }
+}
+
+/**
+ * Reopen an approved liability assessment (administrators only, server
+ * enforced). The reason is audited; a driver charge the approval opened is
+ * reversed if nothing was deducted yet. Returns the reloaded assessment.
+ */
+export async function reopenLiabilityAssessment(id, { reason } = {}) {
+  if (!id) throw new Error('A liability assessment is required.')
+  if (!reason || String(reason).trim().length < 10) throw new Error('Explain why the decision is reopened (at least 10 characters).')
+  const reopen = unwrap(await supabase.rpc('reopen_accident_liability', { p_assessment_id: id, p_reason: String(reason).trim() }))
+  const { result } = await withColumnFallback(async (cols) =>
+    unwrap(await supabase.from('accident_liability_assessments').select(cols).eq('id', id).single()),
+  )
+  return { ...result, reopen }
 }
 
 /** Pure: merge one field's audit entry into a field_audit map (never mutates). */

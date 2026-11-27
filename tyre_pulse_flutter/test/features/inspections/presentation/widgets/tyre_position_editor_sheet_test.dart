@@ -1,7 +1,7 @@
 import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_direction.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
@@ -92,7 +92,7 @@ void main() {
     expect(
       flatSemantics.any(
         (Semantics widget) =>
-            widget.properties.label?.toString() == 'Flat, Attention',
+            widget.properties.label?.toString() == 'Flat, Critical',
       ),
       isTrue,
     );
@@ -278,6 +278,55 @@ void main() {
       expect(sheetClosed, isTrue);
       expect(action, findsNothing);
       expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'condition chips stay whole at text scale 2 on a 360dp phone',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: TpTheme.light,
+          supportedLocales: TpLocalizations.supportedLocales,
+          localizationsDelegates: TpLocalizations.delegates,
+          builder: (BuildContext context, Widget? child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: TyrePositionEditorSheet(
+                reading: TyrePositionReading.seed('R1Li'),
+                onChanged: (TyrePositionReading reading) {},
+                onCapturePhoto: (PhotoCaptureSource source) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      for (final String label in <String>[
+        'Good',
+        'Worn',
+        'Damaged',
+        'Puncture',
+        'Flat',
+        'Missing',
+      ]) {
+        final RenderParagraph p = tester.renderObject<RenderParagraph>(
+          find.text(label).first,
+        );
+        expect(p.didExceedMaxLines, isFalse, reason: label);
+        // A word is never broken across lines.
+        expect(p.size.width, greaterThan(0), reason: label);
+      }
     },
   );
 }

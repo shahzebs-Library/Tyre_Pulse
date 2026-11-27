@@ -28,16 +28,18 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/handover/data/handover_photo_capture.dart';
+import 'package:tyre_pulse/features/handover/data/handover_remote_repository.dart';
 import 'package:tyre_pulse/features/handover/data/handover_sync_engine.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_damage_marker.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_draft.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_payload.dart';
+import 'package:tyre_pulse/features/handover/domain/handover_record.dart';
+import 'package:tyre_pulse/features/handover/domain/handover_signing.dart';
 import 'package:tyre_pulse/features/handover/handover_providers.dart';
 import 'package:tyre_pulse/features/handover/presentation/handover_copy.dart';
 import 'package:tyre_pulse/features/handover/presentation/handover_ui.dart';
 import 'package:tyre_pulse/features/handover/presentation/widgets/handover_damage_sheet.dart';
 import 'package:tyre_pulse/features/handover/presentation/widgets/handover_photo_grid.dart';
-import 'package:tyre_pulse/features/handover/presentation/widgets/handover_signature_pad.dart';
 import 'package:uuid/uuid.dart';
 
 enum _HandoverStep { vehicle, condition, photos, signature, review }
@@ -69,7 +71,17 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
   HandoverCleanliness? _cleanliness;
   List<HandoverDamageMarker> _damages = <HandoverDamageMarker>[];
   List<String> _photos = <String>[];
-  String? _signature;
+  final TextEditingController _hourMeter = TextEditingController();
+  final TextEditingController _site = TextEditingController();
+
+  /// Driver register ids of the two parties. Cleared as soon as the typed
+  /// name no longer matches the picked driver, so a stale id can never sign
+  /// for somebody else.
+  String? _fromDriverId;
+  String? _toDriverId;
+  String? _fromPickedName;
+  String? _toPickedName;
+  List<HandoverDriverOption> _drivers = const <HandoverDriverOption>[];
 
   bool _restoring = true;
   bool _submitting = false;
@@ -85,10 +97,61 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
     }
     _fromDriver.addListener(_scheduleSave);
     _toDriver.addListener(_scheduleSave);
+    _fromDriver.addListener(_syncPickedIds);
+    _toDriver.addListener(_syncPickedIds);
+    _hourMeter.addListener(_scheduleSave);
+    _site.addListener(_scheduleSave);
     _odometer.addListener(_scheduleSave);
     _fuel.addListener(_scheduleSave);
     _notes.addListener(_scheduleSave);
     unawaited(_restore());
+    unawaited(_loadDrivers());
+  }
+
+  Future<void> _loadDrivers() async {
+    final List<HandoverDriverOption> drivers = await ref
+        .read(handoverRemoteRepositoryProvider)
+        .listDrivers(country: ref.read(activeCountryProvider));
+    if (mounted) setState(() => _drivers = drivers);
+  }
+
+  void _syncPickedIds() {
+    if (_fromDriverId != null && _fromDriver.text.trim() != _fromPickedName) {
+      _fromDriverId = null;
+      _fromPickedName = null;
+    }
+    if (_toDriverId != null && _toDriver.text.trim() != _toPickedName) {
+      _toDriverId = null;
+      _toPickedName = null;
+    }
+  }
+
+  Future<void> _pickDriver({required bool handing}) async {
+    final HandoverDriverOption? picked =
+        await showModalBottomSheet<HandoverDriverOption>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (BuildContext context) => FractionallySizedBox(
+        heightFactor: 0.85,
+        child: _DriverPickerSheet(drivers: _drivers),
+      ),
+    );
+    if (!mounted || picked == null) return;
+    _mutate(() {
+      if (handing) {
+        _fromPickedName = picked.name;
+        _fromDriver.text = picked.name;
+        _fromDriverId = picked.id;
+      } else {
+        _toPickedName = picked.name;
+        _toDriver.text = picked.name;
+        _toDriverId = picked.id;
+      }
+      if (_site.text.trim().isEmpty && (picked.site ?? '').trim().isNotEmpty) {
+        _site.text = picked.site!.trim();
+      }
+    });
   }
 
   @override
@@ -100,6 +163,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
     _fuel.dispose();
     _notes.dispose();
     _assetSearch.dispose();
+    _hourMeter.dispose();
+    _site.dispose();
     super.dispose();
   }
 
@@ -124,8 +189,13 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
         _cleanliness = draft.cleanliness;
         _damages = List<HandoverDamageMarker>.of(draft.damages);
         _photos = List<String>.of(draft.photos);
-        _signature = draft.signatureDataUrl;
         _notes.text = draft.notes;
+        _hourMeter.text = draft.hourMeterText;
+        _site.text = draft.site;
+        _fromDriverId = draft.fromDriverId;
+        _fromPickedName = draft.fromDriverId == null ? null : draft.fromDriver;
+        _toDriverId = draft.toDriverId;
+        _toPickedName = draft.toDriverId == null ? null : draft.toDriver;
       }
       _restoring = false;
     });
@@ -142,8 +212,11 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
         cleanliness: _cleanliness,
         damages: _damages,
         photos: _photos,
-        signatureDataUrl: _signature,
         notes: _notes.text,
+        fromDriverId: _fromDriverId,
+        toDriverId: _toDriverId,
+        hourMeterText: _hourMeter.text,
+        site: _site.text,
       );
 
   void _scheduleSave() {
@@ -167,6 +240,17 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
     _scheduleSave();
   }
 
+  /// The fleet-register site of the picked asset, or null.
+  String? get _registerSite {
+    final String? site =
+        _assetFor(_assetNo, ref.read(vehicleFleetListProvider))?.site;
+    final String trimmed = (site ?? '').trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  String? get _resolvedSite =>
+      resolveHandoverSite(registerSite: _registerSite, typedSite: _site.text);
+
   // --- navigation -----------------------------------------------------------
 
   bool get _canLeaveStep {
@@ -176,7 +260,8 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
       case _HandoverStep.condition:
         return _condition != null &&
             (_fromDriver.text.trim().isNotEmpty ||
-                _toDriver.text.trim().isNotEmpty);
+                _toDriver.text.trim().isNotEmpty) &&
+            _resolvedSite != null;
       case _HandoverStep.photos:
       case _HandoverStep.signature:
       case _HandoverStep.review:
@@ -191,7 +276,9 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
         _HandoverStep.vehicle => l10n.handoverNeedsVehicle,
         _HandoverStep.condition => _condition == null
             ? l10n.handoverNeedsCondition
-            : l10n.handoverNeedsDriver,
+            : (_resolvedSite == null
+                ? l10n.handoverAuthSiteRequired
+                : l10n.handoverNeedsDriver),
         _ => '',
       };
       if (message.isNotEmpty) {
@@ -228,7 +315,10 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
 
     final double? odometerKm = _parseNumber(_odometer.text);
     final double? fuelPct = _parseNumber(_fuel.text);
-    if (_odometer.text.trim().isNotEmpty && odometerKm == null) {
+    final double? hourMeter = _parseNumber(_hourMeter.text);
+    if ((_odometer.text.trim().isNotEmpty && odometerKm == null) ||
+        (_hourMeter.text.trim().isNotEmpty &&
+            (hourMeter == null || hourMeter < 0))) {
       await showHandoverInfoDialog(
         context,
         title: l10n.handoverNewTitle,
@@ -246,6 +336,18 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
       return;
     }
 
+    // Site is always written: the asset's fleet-register site wins, else the
+    // typed site; none at all refuses the save (web resolveHandoverSite).
+    final String? site = _resolvedSite;
+    if (site == null) {
+      await showHandoverInfoDialog(
+        context,
+        title: l10n.handoverNewTitle,
+        message: l10n.handoverAuthSiteRequired,
+      );
+      return;
+    }
+
     final String userId = _userKey;
     final HandoverPayload payload = HandoverPayload(
       assetNo: _assetNo.trim(),
@@ -259,11 +361,17 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
       conditionRating: _condition,
       cleanliness: _cleanliness,
       damages: _damages,
-      signatureDataUrl: _signature,
       photos: _photos,
       notes: _notes.text.trim(),
       createdBy: userId.isEmpty ? null : userId,
       country: ref.read(activeCountryProvider),
+      // A draft: both drivers sign it online through `sign_handover`, which
+      // moves it to `pending_supervisor` after the receiving signature.
+      approvalStatus: 'draft',
+      fromDriverId: _fromDriverId,
+      toDriverId: _toDriverId,
+      hourMeter: hourMeter,
+      site: site,
     );
 
     final List<HandoverSubmitIssue> issues = validateHandoverForSubmit(payload);
@@ -277,11 +385,12 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
     }
 
     setState(() => _submitting = true);
+    final String clientUuid = _uuid.v4();
     try {
       final HandoverSubmitResult result =
           await ref.read(handoverSyncEngineProvider).submitNow(
                 payload: payload,
-                clientUuid: _uuid.v4(),
+                clientUuid: clientUuid,
               );
       // Work is durable now - clear the in-progress draft.
       if (userId.isNotEmpty) {
@@ -307,6 +416,30 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
             result.warning?.message ?? l10n.handoverQueuedWarningMessage,
           ),
       };
+      if (result.outcome == HandoverSubmitOutcome.deliveredNow) {
+        // Delivered: open the saved draft so both drivers sign it now.
+        HandoverRecord? saved;
+        try {
+          saved = await ref
+              .read(handoverRemoteRepositoryProvider)
+              .byClientUuid(clientUuid);
+        } on Object {
+          saved = null;
+        }
+        if (!mounted) return;
+        if (saved != null) {
+          await showHandoverInfoDialog(
+            context,
+            title: title,
+            message: l10n.handoverAuthOpenToSign,
+          );
+          if (!mounted) return;
+          context.pushReplacement(
+            HandoverDetailRoute(handoverId: HandoverId(saved.id)).location,
+          );
+          return;
+        }
+      }
       await showHandoverInfoDialog(context, title: title, message: message);
       if (mounted) {
         TpBack.pop(context, fallback: TpBackFallbacks.forRoute(widget.route));
@@ -528,6 +661,13 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
 
   // --- step 2: condition & damage ------------------------------------------
 
+  String? _registerSiteWatched(WidgetRef ref) {
+    final String? site =
+        _assetFor(_assetNo, ref.watch(vehicleFleetListProvider))?.site;
+    final String trimmed = (site ?? '').trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
   Widget _conditionStep(AppLocalizations l10n) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -543,12 +683,43 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
           hint: l10n.handoverDriverHint,
           textCapitalization: TextCapitalization.words,
         ),
-        const SizedBox(height: TpSpace.md),
+        _RegisterPickButton(
+          linked: _fromDriverId != null,
+          enabled: _drivers.isNotEmpty,
+          onPressed: () => unawaited(_pickDriver(handing: true)),
+        ),
+        const SizedBox(height: TpSpace.sm),
         TpInput(
           label: l10n.handoverToDriverLabel,
           controller: _toDriver,
           hint: l10n.handoverDriverHint,
           textCapitalization: TextCapitalization.words,
+        ),
+        _RegisterPickButton(
+          linked: _toDriverId != null,
+          enabled: _drivers.isNotEmpty,
+          onPressed: () => unawaited(_pickDriver(handing: false)),
+        ),
+        const SizedBox(height: TpSpace.sm),
+        if (_registerSiteWatched(ref) case final String registerSite)
+          TpCard(
+            child: Text(
+              '${l10n.handoverAuthSite}: ${registerSite.toUpperCase()}\n'
+              '${l10n.handoverAuthSiteFromRegister}',
+            ),
+          )
+        else
+          TpInput(
+            label: l10n.handoverAuthSite,
+            controller: _site,
+            hint: l10n.handoverAuthSiteRequired,
+            textCapitalization: TextCapitalization.characters,
+          ),
+        const SizedBox(height: TpSpace.md),
+        TpInput(
+          label: l10n.handoverAuthHourMeter,
+          controller: _hourMeter,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
         ),
         const SizedBox(height: TpSpace.md),
         Row(
@@ -781,6 +952,9 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
   // --- step 4: signature ---------------------------------------------------
 
   Widget _signatureStep(AppLocalizations l10n) {
+    // Signing moved out of the wizard: it is a legal act recorded online by
+    // `sign_handover` with server time and location, once per party, on the
+    // saved draft. A wizard that is often finished offline must not hold it.
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         TpSpace.lg,
@@ -790,24 +964,11 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
       ),
       children: <Widget>[
         Text(
-          l10n.handoverSignatureLabel,
+          l10n.handoverAuthSignaturesTitle,
           style: Theme.of(context).textTheme.titleMedium,
         ),
-        const SizedBox(height: TpSpace.xs),
-        Text(
-          l10n.handoverSignatureHint,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: TpPalette.of(context).textMuted,
-              ),
-        ),
-        const SizedBox(height: TpSpace.md),
-        TpCard(
-          child: HandoverSignaturePad(
-            value: _signature,
-            height: 200,
-            onChanged: (String? dataUrl) => _mutate(() => _signature = dataUrl),
-          ),
-        ),
+        const SizedBox(height: TpSpace.sm),
+        TpCard(child: Text(l10n.handoverAuthSigningStepInfo)),
       ],
     );
   }
@@ -844,12 +1005,10 @@ class _NewHandoverScreenState extends ConsumerState<NewHandoverScreen> {
         ),
       (l10n.handoverDamageSectionTitle, '${_damages.length}'),
       (l10n.handoverPhotosLabel, '${_photos.length}'),
-      (
-        l10n.handoverSignatureLabel,
-        _signature == null
-            ? l10n.handoverSignatureMissing
-            : l10n.handoverSignatureSaved,
-      ),
+      if (_resolvedSite != null) (l10n.handoverAuthSite, _resolvedSite!),
+      if (_hourMeter.text.trim().isNotEmpty)
+        (l10n.handoverAuthHourMeter, _hourMeter.text.trim()),
+      (l10n.handoverAuthSignaturesTitle, l10n.handoverAuthNotSigned),
     ];
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -1195,6 +1354,90 @@ class _ReviewRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RegisterPickButton extends StatelessWidget {
+  const _RegisterPickButton({
+    required this.linked,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final bool linked;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: TextButton.icon(
+        onPressed: enabled ? onPressed : null,
+        icon:
+            Icon(linked ? Icons.verified_user_outlined : Icons.badge_outlined),
+        label: Text(l10n.handoverAuthDriverRegister),
+      ),
+    );
+  }
+}
+
+class _DriverPickerSheet extends StatefulWidget {
+  const _DriverPickerSheet({required this.drivers});
+  final List<HandoverDriverOption> drivers;
+
+  @override
+  State<_DriverPickerSheet> createState() => _DriverPickerSheetState();
+}
+
+class _DriverPickerSheetState extends State<_DriverPickerSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final AppLocalizations l10n = AppLocalizations.of(context);
+    final String q = _query.trim().toLowerCase();
+    final List<HandoverDriverOption> matches = <HandoverDriverOption>[
+      for (final HandoverDriverOption d in widget.drivers)
+        if (q.isEmpty ||
+            '${d.name} ${d.employeeId ?? ''} ${d.site ?? ''}'
+                .toLowerCase()
+                .contains(q))
+          d,
+    ];
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.handoverAuthDriverRegister)),
+      body: Column(
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.all(TpSpace.md),
+            child: TextField(
+              autofocus: true,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search),
+                labelText: l10n.handoverDriverHint,
+              ),
+              onChanged: (String v) => setState(() => _query = v),
+            ),
+          ),
+          Expanded(
+            child: matches.isEmpty
+                ? Center(child: Text(l10n.handoverAuthDriverNotListed))
+                : ListView.builder(
+                    itemCount: matches.length,
+                    itemBuilder: (BuildContext context, int i) => ListTile(
+                      title: Text(matches[i].label),
+                      subtitle: matches[i].site == null
+                          ? null
+                          : Text(matches[i].site!),
+                      onTap: () => Navigator.of(context).pop(matches[i]),
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

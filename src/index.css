@@ -31,6 +31,13 @@ html.rtl body {
   font-family: 'IBM Plex Sans Arabic', 'Inter', system-ui, -apple-system, sans-serif;
   font-feature-settings: normal;
 }
+/* Urdu uses the same Arabic-script typeface; Noto Sans Arabic covers the
+   Urdu-only letters (ٹ ڈ ڑ ں ے) if a glyph is missing from Plex. Urdu also
+   needs a little more line height for its deeper descenders. */
+html[lang='ur'] body {
+  font-family: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.7;
+}
 html.rtl { direction: rtl; }
 /* Numbers stay LTR/tabular even inside RTL text for correct KPI alignment. */
 html.rtl .tabular-nums,

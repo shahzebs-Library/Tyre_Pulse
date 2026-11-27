@@ -156,7 +156,7 @@ export default function LocationsSection({ scope }) {
 
   const submit = async () => {
     const v = validateLocationDraft({ ...editing.draft, site: String(editing.draft.site || '').toUpperCase() }, rows)
-    const c = validateLocationClass(editing.draft)
+    const c = validateLocationClass(editing.draft, t)
     const all = { ...v.errors, ...Object.fromEntries(Object.entries(c.errors).map(([k, m]) => [k, m])) }
     setErrors(all)
     if (!v.ok || !c.ok) return

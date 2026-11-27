@@ -8,6 +8,7 @@
  *   - the "lowest" quote is only ever chosen among quotes in the SAME currency
  *     that price EVERY line, the same rule inv_rfq_award enforces server side.
  */
+import { textFn } from '../wmsText'
 
 const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v))
 
@@ -152,8 +153,9 @@ export function rejectionReasonText(code, note) {
   return n ? `${c.value}: ${n}` : c.value
 }
 
-export function formatMoneyIn(amount, currency) {
+/** Money in its own currency; "No price" (translated when `t` is given) when unknown. */
+export function formatMoneyIn(amount, currency, t) {
   const v = num(amount)
-  if (v === null) return 'No price'
+  if (v === null) return textFn(t)('wmsmsgprocure.common.noPrice')
   return `${currency || ''} ${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim()
 }

@@ -1004,9 +1004,12 @@ export default function Inspections() {
     const fleetInfo = data || (vehicleType ? { asset_no: assetNo.trim(), vehicle_type: vehicleType, site: null } : null)
     if (fleetInfo) {
       const vtKey = layoutForAsset(resolveLayoutKey(vehicleType, assetNo.trim()), assetNo.trim(), activeCountry)
-      // Save the same resolved class used to collect the wheel readings, so
-      // the inspection viewer and PDF cannot select a different layout later.
-      setClFleetInfo({ ...fleetInfo, vehicle_type: isTyrelessEquipment(vehicleType) ? vehicleType : vtKey })
+      // Save the fleet's own type, as the Flutter app does. The layout is
+      // DERIVED from it (plus the asset number and its recorded axle count) by
+      // the one shared resolver, so the viewer and PDF still draw the wheels
+      // these readings were collected on. Older rows that stored a layout key
+      // keep working: a layout key resolves to itself.
+      setClFleetInfo({ ...fleetInfo, vehicle_type: vehicleType })
       // Tyreless equipment returns [], so the checklist offers no wheels at all
       // rather than inventing them.
       const positions = layoutSlotsFor(vehicleType, assetNo.trim(), activeCountry)

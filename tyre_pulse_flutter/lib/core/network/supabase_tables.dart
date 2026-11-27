@@ -350,6 +350,13 @@ abstract final class SupabaseRpcs {
   /// race. Mirrored by `lib/features/handover/domain/handover_approval.dart`.
   static const String decideHandoverApproval = 'decide_handover_approval';
 
+  /// One party's signature on the handover authorization paper
+  /// (`supabase/migrations/20261126171000_handover_authorization_paper.sql`).
+  /// Server time, signer and location are stamped server side; the record is
+  /// frozen after the first signature. Contract:
+  /// `docs/document-specs/handover-contract.md`.
+  static const String signHandover = 'sign_handover';
+
   static const String approvePendingUpload = 'approve_pending_upload';
   static const String rejectPendingUpload = 'reject_pending_upload';
   static const String restampPendingUploadCountry =
@@ -481,6 +488,7 @@ abstract final class SupabaseRpcs {
     decideInspectionApproval,
     decideChecklistApproval,
     decideHandoverApproval,
+    signHandover,
     approvePendingUpload,
     rejectPendingUpload,
     restampPendingUploadCountry,

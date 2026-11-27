@@ -23,12 +23,13 @@ import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import Modal from '../components/ui/Modal'
 import { useSettings } from '../contexts/SettingsContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import { formatCurrency } from '../lib/formatters'
 import {
   listMaterials, createMaterial, updateMaterial, deleteMaterial,
 } from '../lib/api/materials'
 import {
-  MATERIAL_CATEGORIES, CATEGORY_LABEL, STOCK_LABEL, filterMaterials, hasMaterialFilters,
+  MATERIAL_CATEGORIES, CATEGORY_LABEL, filterMaterials, hasMaterialFilters,
   materialOptions, materialTableRows, reorderWorklist, materialKpis, categoryBreakdown,
   materialExportRows, materialValue, MATERIAL_EXPORT_COLS, MATERIAL_EXPORT_HEADERS,
 } from '../lib/materialsAnalytics'
@@ -54,19 +55,25 @@ const STOCK_BADGE = {
   out_of_stock: 'bg-red-900/30 text-red-300 border border-red-800/50',
 }
 
-const fmtQty = (v, unit) => {
-  if (v == null || v === '') return 'N/A'
+const fmtQty = (v, unit, na = 'N/A') => {
+  if (v == null || v === '') return na
   const n = Number(v)
-  if (!Number.isFinite(n)) return 'N/A'
+  if (!Number.isFinite(n)) return na
   return `${n.toLocaleString()}${unit ? ` ${unit}` : ''}`
 }
 const sortBy = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
 
 export default function Materials() {
+  const { t } = useLanguage()
+  const na = t('wmsissue.common.na')
   const { activeCountry, activeCurrency } = useSettings()
   const currency = activeCurrency || 'SAR'
   // Money renders N/A for an unmeasured value, never a fabricated 0.
-  const money = useCallback((v) => (v == null ? 'N/A' : formatCurrency(v, currency, 0)), [currency])
+  const money = useCallback((v) => (v == null ? na : formatCurrency(v, currency, 0)), [currency, na])
+  // Category / stock-state tokens stay as data; only their labels are translated.
+  const catLabel = (c) => (Object.prototype.hasOwnProperty.call(CATEGORY_LABEL, c) ? t(`wmsissue.materials.cat.${c}`) : (String(c ?? '').trim() || t('wmsissue.materials.cat.uncategorised')))
+  const stockLabel = (s) => (s === 'active' || s === 'low' || s === 'out_of_stock' ? t(`wmsissue.materials.stock.${s}`) : '')
+  const statusLabel = (s) => t(`wmsissue.materials.status.${s}`)
 
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
@@ -97,11 +104,13 @@ export default function Materials() {
       setUpdatedAt(new Date())
     } catch (err) {
       if (isMissingRelation(err)) setNotProvisioned(true)
-      else setError(toUserMessage(err, 'Could not load materials.'))
+      else setError(toUserMessage(err, t('wmsissue.materials.loadError')))
       setRows([])
     } finally {
       setRefreshing(false)
     }
+    // t is read only for the error fallback; a language switch must not re-read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCountry])
 
   useEffect(() => { load() }, [load])
@@ -123,12 +132,12 @@ export default function Materials() {
   const maxCatValue = useMemo(() => categories.reduce((m, c) => Math.max(m, c.stockValue), 0), [categories])
 
   const kpis = [
-    { label: 'Items', value: kpi.totalItems, icon: Package, tone: 'text-[var(--text-primary)]' },
-    { label: 'Stock value', value: money(kpi.stockValue), sub: kpi.unpricedItems ? `${kpi.unpricedItems} unpriced item${kpi.unpricedItems === 1 ? '' : 's'} not valued` : 'every item priced', icon: DollarSign, tone: 'text-[var(--brand-bright)]' },
-    { label: 'Low stock', value: kpi.lowStock, icon: TrendingDown, tone: 'text-amber-400' },
-    { label: 'Out of stock', value: kpi.outOfStock, sub: kpi.availabilityPct == null ? '' : `${kpi.availabilityPct}% of items available`, icon: PackageX, tone: kpi.outOfStock > 0 ? 'text-red-400' : 'text-[var(--text-muted)]' },
-    { label: 'Reorder needed', value: kpi.reorderCount, sub: kpi.reorderSpend == null ? 'order cost not measurable' : `about ${money(kpi.reorderSpend)} to reorder`, icon: ShoppingCart, tone: 'text-[var(--text-primary)]' },
-    { label: 'Categories', value: kpi.categories, icon: Layers, tone: 'text-[var(--text-primary)]' },
+    { id: 'items', label: t('wmsissue.materials.kpiItems'), value: kpi.totalItems, icon: Package, tone: 'text-[var(--text-primary)]' },
+    { id: 'value', label: t('wmsissue.materials.kpiValue'), value: money(kpi.stockValue), sub: kpi.unpricedItems ? t(kpi.unpricedItems === 1 ? 'wmsissue.materials.unpricedOne' : 'wmsissue.materials.unpricedMany', { count: kpi.unpricedItems }) : t('wmsissue.materials.allPriced'), icon: DollarSign, tone: 'text-[var(--brand-bright)]' },
+    { id: 'low', label: t('wmsissue.materials.kpiLow'), value: kpi.lowStock, icon: TrendingDown, tone: 'text-amber-400' },
+    { id: 'out', label: t('wmsissue.materials.kpiOut'), value: kpi.outOfStock, sub: kpi.availabilityPct == null ? '' : t('wmsissue.materials.availability', { pct: kpi.availabilityPct }), icon: PackageX, tone: kpi.outOfStock > 0 ? 'text-red-400' : 'text-[var(--text-muted)]' },
+    { id: 'reorder', label: t('wmsissue.materials.kpiReorder'), value: kpi.reorderCount, sub: kpi.reorderSpend == null ? t('wmsissue.materials.reorderCostUnknown') : t('wmsissue.materials.reorderCost', { cost: money(kpi.reorderSpend) }), icon: ShoppingCart, tone: 'text-[var(--text-primary)]' },
+    { id: 'categories', label: t('wmsissue.materials.kpiCategories'), value: kpi.categories, icon: Layers, tone: 'text-[var(--text-primary)]' },
   ]
 
   const exportName = reportFileName('Materials')
@@ -139,7 +148,7 @@ export default function Materials() {
       if (kind === 'excel') await exportToExcel(out, MATERIAL_EXPORT_COLS, MATERIAL_EXPORT_HEADERS, exportName)
       else await exportToPdf(out, MATERIAL_EXPORT_COLS.map((k, i) => ({ key: k, header: MATERIAL_EXPORT_HEADERS[i] })), 'Materials Management', exportName, 'landscape')
     } catch (e) {
-      setActionError(toUserMessage(e, 'Could not export. Try again.'))
+      setActionError(toUserMessage(e, t('wmsissue.materials.exportError')))
     }
   }
 
@@ -162,7 +171,7 @@ export default function Materials() {
   const submit = useCallback(async (e) => {
     e?.preventDefault?.()
     setFormError('')
-    if (!form.name.trim()) { setFormError('A material name is required.'); return }
+    if (!form.name.trim()) { setFormError(t('wmsissue.materials.nameRequired')); return }
     setSaving(true)
     try {
       const payload = {
@@ -175,11 +184,11 @@ export default function Materials() {
       setShowModal(false); setEditing(null)
       await load()
     } catch (err) {
-      setFormError(toUserMessage(err, 'Could not save the material.'))
+      setFormError(toUserMessage(err, t('wmsissue.materials.saveError')))
     } finally {
       setSaving(false)
     }
-  }, [form, editing, activeCountry, currency, load])
+  }, [form, editing, activeCountry, currency, load, t])
 
   const doDelete = useCallback(async () => {
     if (!confirmDelete) return
@@ -189,39 +198,39 @@ export default function Materials() {
       setConfirmDelete(null)
       await load()
     } catch (err) {
-      setActionError(toUserMessage(err, 'Could not delete the material.'))
+      setActionError(toUserMessage(err, t('wmsissue.materials.deleteError')))
       setConfirmDelete(null)
     } finally {
       setDeleting(false)
     }
-  }, [confirmDelete, load])
+  }, [confirmDelete, load, t])
 
   const clearFilters = () => { setCategoryFilter(''); setStatusFilter(''); setCountryFilter(''); setSupplierFilter(''); setSearch('') }
 
   const columns = [
     {
-      id: 'name', header: 'Material', accessorFn: (r) => r.name || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 220,
+      id: 'name', header: t('wmsissue.materials.colMaterial'), accessorFn: (r) => r.name || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 220,
       cell: ({ row: { original: r } }) => (
         <div>
-          <div className="font-medium text-[var(--text-primary)]">{r.name || 'N/A'}</div>
-          {r.sku && <div className="text-[11px] text-[var(--text-muted)] font-mono">{r.sku}</div>}
+          <div className="font-medium text-[var(--text-primary)]">{r.name || na}</div>
+          {r.sku && <div className="text-[11px] text-[var(--text-muted)] font-mono" dir="ltr">{r.sku}</div>}
         </div>
       ),
     },
-    { id: 'category', header: 'Category', accessorFn: (r) => r._categoryLabel, sortingFn: sortBy, size: 120 },
-    { id: 'qty', header: 'On hand', accessorFn: (r) => r._qty ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="font-semibold text-[var(--text-primary)] tabular-nums">{fmtQty(r.quantity_on_hand, r.unit)}</span> },
-    { id: 'rp', header: 'Reorder pt', accessorFn: (r) => r._reorderPoint ?? undefined, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ row: { original: r } }) => fmtQty(r.reorder_point, r.unit) },
-    { id: 'cost', header: 'Unit cost', accessorFn: (r) => r._unitCost ?? undefined, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ row: { original: r } }) => money(r._unitCost) },
-    { id: 'value', header: 'Stock value', accessorFn: (r) => r._value ?? undefined, sortUndefined: 'last', size: 130, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="font-semibold text-[var(--text-primary)] tabular-nums">{money(r._value)}</span> },
-    { id: 'status', header: 'Stock', accessorFn: (r) => ['out_of_stock', 'low', 'active'].indexOf(r._status), size: 120, cell: ({ row: { original: r } }) => <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${STOCK_BADGE[r._status]}`}>{r._statusLabel}</span> },
-    { id: 'supplier', header: 'Supplier', accessorFn: (r) => r.supplier || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 150, cell: ({ getValue }) => getValue() || 'N/A' },
-    { id: 'location', header: 'Location', accessorFn: (r) => r.location || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 140, cell: ({ getValue }) => getValue() || 'N/A' },
+    { id: 'category', header: t('wmsissue.materials.colCategory'), accessorFn: (r) => catLabel(r.category), sortingFn: sortBy, size: 120 },
+    { id: 'qty', header: t('wmsissue.materials.colOnHand'), accessorFn: (r) => r._qty ?? undefined, sortUndefined: 'last', size: 120, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="font-semibold text-[var(--text-primary)] tabular-nums">{fmtQty(r.quantity_on_hand, r.unit, na)}</span> },
+    { id: 'rp', header: t('wmsissue.materials.colReorderPoint'), accessorFn: (r) => r._reorderPoint ?? undefined, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ row: { original: r } }) => fmtQty(r.reorder_point, r.unit, na) },
+    { id: 'cost', header: t('wmsissue.cols.unitCost'), accessorFn: (r) => r._unitCost ?? undefined, sortUndefined: 'last', size: 110, meta: { align: 'right' }, cell: ({ row: { original: r } }) => money(r._unitCost) },
+    { id: 'value', header: t('wmsissue.materials.kpiValue'), accessorFn: (r) => r._value ?? undefined, sortUndefined: 'last', size: 130, meta: { align: 'right' }, cell: ({ row: { original: r } }) => <span className="font-semibold text-[var(--text-primary)] tabular-nums">{money(r._value)}</span> },
+    { id: 'status', header: t('wmsissue.materials.colStock'), accessorFn: (r) => ['out_of_stock', 'low', 'active'].indexOf(r._status), size: 120, cell: ({ row: { original: r } }) => <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${STOCK_BADGE[r._status]}`}>{stockLabel(r._status) || r._statusLabel}</span> },
+    { id: 'supplier', header: t('wmsissue.materials.colSupplier'), accessorFn: (r) => r.supplier || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 150, cell: ({ getValue }) => getValue() || na },
+    { id: 'location', header: t('wmsissue.materials.colLocation'), accessorFn: (r) => r.location || undefined, sortingFn: sortBy, sortUndefined: 'last', size: 140, cell: ({ getValue }) => getValue() || na },
     {
       id: 'actions', header: '', enableSorting: false, size: 104, meta: { export: false },
       cell: ({ row: { original: r } }) => (
         <div className="flex items-center justify-end gap-1">
-          <button type="button" onClick={() => openEdit(r)} className="inline-flex items-center justify-center w-11 h-11 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label={`Edit material ${r.name || ''}`.trim()}><Pencil size={15} aria-hidden="true" /></button>
-          <button type="button" onClick={() => setConfirmDelete(r)} className="inline-flex items-center justify-center w-11 h-11 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label={`Delete material ${r.name || ''}`.trim()}><Trash2 size={15} aria-hidden="true" /></button>
+          <button type="button" onClick={() => openEdit(r)} className="inline-flex items-center justify-center w-11 h-11 rounded hover:bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-primary)]" aria-label={t('wmsissue.materials.editAria', { name: r.name || '' }).trim()}><Pencil size={15} aria-hidden="true" /></button>
+          <button type="button" onClick={() => setConfirmDelete(r)} className="inline-flex items-center justify-center w-11 h-11 rounded hover:bg-red-900/30 text-[var(--text-muted)] hover:text-red-400" aria-label={t('wmsissue.materials.deleteAria', { name: r.name || '' }).trim()}><Trash2 size={15} aria-hidden="true" /></button>
         </div>
       ),
     },
@@ -233,13 +242,13 @@ export default function Materials() {
       {input}
     </div>
   )
-  const unavailable = 'Unavailable: the materials could not be read.'
+  const unavailable = t('wmsissue.materials.unavailable')
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Materials Management"
-        subtitle="Track workshop consumable inventory (oils, filters, valves, sealants, greases and shop supplies) with on-hand quantities, reorder thresholds, unit costs and live stock value."
+        title={t('wmsissue.materials.title')}
+        subtitle={t('wmsissue.materials.subtitle')}
         icon={Boxes}
         onRefresh={load}
         refreshing={refreshing}
@@ -247,13 +256,13 @@ export default function Materials() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => runExport('excel')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!known || !filtered.length}>
-              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+              <FileSpreadsheet size={14} aria-hidden="true" /> {t('wmsissue.common.excel')}
             </button>
             <button type="button" onClick={() => runExport('pdf')} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={!known || !filtered.length}>
-              <FileText size={14} aria-hidden="true" /> PDF
+              <FileText size={14} aria-hidden="true" /> {t('wmsissue.common.pdf')}
             </button>
             <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" disabled={notProvisioned}>
-              <Plus size={14} aria-hidden="true" /> Add material
+              <Plus size={14} aria-hidden="true" /> {t('wmsissue.materials.add')}
             </button>
           </div>
         }
@@ -263,9 +272,9 @@ export default function Materials() {
         <div role="status" className="card border border-amber-800/50 flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" aria-hidden="true" />
           <div>
-            <p className="text-amber-300 font-medium">Materials management is not enabled on this database yet.</p>
+            <p className="text-amber-300 font-medium">{t('wmsissue.materials.notEnabled')}</p>
             <p className="text-[var(--text-muted)] text-sm mt-1">
-              Apply <span className="font-mono text-[var(--text-primary)]">MIGRATIONS_V190_MATERIALS.sql</span>, then reload.
+              {t('wmsissue.materials.applyPrefix')} <span className="font-mono text-[var(--text-primary)]" dir="ltr">MIGRATIONS_V190_MATERIALS.sql</span>{t('wmsissue.materials.applySuffix')}
             </p>
           </div>
         </div>
@@ -274,8 +283,8 @@ export default function Materials() {
       {error && (
         <div role="alert" className="card border border-red-800/50 flex flex-wrap items-start gap-3">
           <AlertTriangle size={18} className="text-red-400 mt-0.5 shrink-0" aria-hidden="true" />
-          <div className="flex-1 min-w-0"><p className="text-red-300 font-medium">Could not load materials.</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
-          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> Retry</button>
+          <div className="flex-1 min-w-0"><p className="text-red-300 font-medium">{t('wmsissue.materials.loadError')}</p><p className="text-[var(--text-muted)] text-sm mt-1">{error}</p></div>
+          <button type="button" onClick={load} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><RefreshCw size={14} aria-hidden="true" /> {t('wmsissue.common.retry')}</button>
         </div>
       )}
       {actionError && <p role="alert" className="card text-sm text-red-300">{actionError}</p>}
@@ -285,12 +294,12 @@ export default function Materials() {
         {kpis.map((k) => {
           const Icon = k.icon
           return (
-            <div key={k.label} className="card">
+            <div key={k.id} className="card">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-[var(--text-muted)]">{k.label}</p>
                 <Icon size={16} className={k.tone} aria-hidden="true" />
               </div>
-              <p className={`text-2xl font-bold mt-1 tabular-nums ${k.tone}`}>{known ? k.value : 'N/A'}</p>
+              <p className={`text-2xl font-bold mt-1 tabular-nums ${k.tone}`}>{known ? k.value : na}</p>
               {k.sub && known ? <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{k.sub}</p> : null}
             </div>
           )
@@ -301,57 +310,57 @@ export default function Materials() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="card">
           <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <ShoppingCart size={15} className="text-green-400" aria-hidden="true" /> Reorder worklist
-            {known && kpi.reorderCount > 0 && <span className="ml-1 text-xs font-normal text-[var(--text-muted)]">({kpi.reorderCount})</span>}
+            <ShoppingCart size={15} className="text-green-400" aria-hidden="true" /> {t('wmsissue.materials.worklist')}
+            {known && kpi.reorderCount > 0 && <span className="ms-1 text-xs font-normal text-[var(--text-muted)]">({kpi.reorderCount})</span>}
           </h2>
           {rows === null ? (
             <div className="space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
           ) : !known ? (
             <p className="text-sm text-[var(--text-muted)]">{unavailable}</p>
           ) : reorder.head.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">Nothing to reorder in this view. Every item is above its reorder point.</p>
+            <p className="text-sm text-[var(--text-muted)]">{t('wmsissue.materials.nothingToReorder')}</p>
           ) : (
-            <ul className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            <ul className="space-y-1.5 max-h-72 overflow-y-auto pe-1">
               {reorder.head.map((it, idx) => (
                 <li key={it.id || `${it.sku || it.name}-${idx}`} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)]/40 px-3 py-2">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-[var(--text-primary)] truncate">{it.name}</p>
-                    <p className="text-[11px] text-[var(--text-muted)] truncate">{[it.sku, it.supplier, STOCK_LABEL[it.status]].filter(Boolean).join(' | ')}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate">{[it.sku, it.supplier, stockLabel(it.status)].filter(Boolean).join(' | ')}</p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold text-amber-400 tabular-nums">Order {it.orderQty.toLocaleString()}</p>
-                    <p className="text-[11px] text-[var(--text-muted)]">short {it.shortfall.toLocaleString()} | {money(it.estCost)}</p>
+                  <div className="text-end shrink-0">
+                    <p className="text-sm font-semibold text-amber-400 tabular-nums">{t('wmsissue.materials.order', { qty: it.orderQty.toLocaleString() })}</p>
+                    <p className="text-[11px] text-[var(--text-muted)]">{t('wmsissue.materials.short', { qty: it.shortfall.toLocaleString() })} | {money(it.estCost)}</p>
                   </div>
                 </li>
               ))}
-              {reorder.rest > 0 && <li className="text-xs text-[var(--text-muted)] pt-1">and {reorder.rest} more. Filter by stock state or export for the full list.</li>}
+              {reorder.rest > 0 && <li className="text-xs text-[var(--text-muted)] pt-1">{t('wmsissue.materials.andMore', { count: reorder.rest })}</li>}
             </ul>
           )}
         </div>
 
         <div className="card">
           <h2 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <Warehouse size={15} className="text-green-400" aria-hidden="true" /> On-hand value by category
+            <Warehouse size={15} className="text-green-400" aria-hidden="true" /> {t('wmsissue.materials.valueByCategory')}
           </h2>
           {rows === null ? (
             <div className="space-y-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-7 bg-[var(--input-bg)] rounded animate-pulse" />)}</div>
           ) : !known ? (
             <p className="text-sm text-[var(--text-muted)]">{unavailable}</p>
           ) : categories.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">{hasFilters ? 'No materials match these filters.' : 'No materials recorded yet.'}</p>
+            <p className="text-sm text-[var(--text-muted)]">{hasFilters ? t('wmsissue.materials.noMatch') : t('wmsissue.materials.noneYet')}</p>
           ) : (
-            <ul className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+            <ul className="space-y-2.5 max-h-72 overflow-y-auto pe-1">
               {categories.map((c, i) => (
                 <li key={c.category}>
                   <button
                     type="button"
                     onClick={() => setCategoryFilter(categoryFilter === c.category || c.category === 'uncategorised' ? '' : c.category)}
                     aria-pressed={categoryFilter === c.category}
-                    className="w-full text-left rounded-lg px-1 py-1 min-h-[44px] hover:bg-[var(--input-bg)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"
+                    className="w-full text-start rounded-lg px-1 py-1 min-h-[44px] hover:bg-[var(--input-bg)] focus-visible:ring-2 focus-visible:ring-[var(--brand-bright)]"
                   >
                     <span className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-[var(--text-secondary)]">{c.label} <span className="text-[var(--text-muted)]">| {c.items} item{c.items === 1 ? '' : 's'}{c.unpriced ? `, ${c.unpriced} unpriced` : ''}</span></span>
-                      <span className="font-semibold text-[var(--text-primary)] tabular-nums">{c.unpriced === c.items ? 'N/A' : money(c.stockValue)}</span>
+                      <span className="text-[var(--text-secondary)]">{catLabel(c.category)} <span className="text-[var(--text-muted)]">| {t(c.items === 1 ? 'wmsissue.materials.itemsOne' : 'wmsissue.materials.itemsMany', { count: c.items })}{c.unpriced ? `, ${t('wmsissue.materials.unpricedCount', { count: c.unpriced })}` : ''}</span></span>
+                      <span className="font-semibold text-[var(--text-primary)] tabular-nums">{c.unpriced === c.items ? na : money(c.stockValue)}</span>
                     </span>
                     <span className="block h-1.5 rounded-full bg-[var(--input-bg)] overflow-hidden">
                       <span className="block h-full rounded-full" style={{ backgroundColor: colorAt(i), width: `${maxCatValue > 0 ? Math.max(3, (c.stockValue / maxCatValue) * 100) : 0}%` }} />
@@ -368,34 +377,34 @@ export default function Materials() {
       <div className="card">
         <div className="flex flex-wrap items-end gap-2">
           <div className="relative flex-1 min-w-[200px]">
-            <label htmlFor="mat-search" className="sr-only">Search materials</label>
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-            <input id="mat-search" type="search" className="input pl-9 w-full min-h-[44px]" placeholder="Search name, SKU, supplier, location, notes" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <label htmlFor="mat-search" className="sr-only">{t('wmsissue.materials.searchLabel')}</label>
+            <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+            <input id="mat-search" type="search" className="input ps-9 w-full min-h-[44px]" placeholder={t('wmsissue.materials.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="input min-h-[44px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label="Category">
-            <option value="">All categories</option>
-            {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
+          <select className="input min-h-[44px]" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} aria-label={t('wmsissue.materials.colCategory')}>
+            <option value="">{t('wmsissue.materials.allCategories')}</option>
+            {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{catLabel(c)}</option>)}
           </select>
-          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Stock status">
-            <option value="">All stock states</option>
-            <option value="active">In stock</option>
-            <option value="low">Low</option>
-            <option value="out_of_stock">Out of stock</option>
+          <select className="input min-h-[44px]" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label={t('wmsissue.materials.stockStatus')}>
+            <option value="">{t('wmsissue.materials.allStockStates')}</option>
+            <option value="active">{t('wmsissue.materials.stock.active')}</option>
+            <option value="low">{t('wmsissue.materials.stock.low')}</option>
+            <option value="out_of_stock">{t('wmsissue.materials.stock.out_of_stock')}</option>
           </select>
           {supplierOptions.length > 0 && (
-            <select className="input min-h-[44px]" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} aria-label="Supplier">
-              <option value="">All suppliers</option>
+            <select className="input min-h-[44px]" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} aria-label={t('wmsissue.materials.colSupplier')}>
+              <option value="">{t('wmsissue.materials.allSuppliers')}</option>
               {supplierOptions.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
           {countryOptions.length > 0 && (
-            <select className="input min-h-[44px]" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label="Country">
-              <option value="">All countries</option>
+            <select className="input min-h-[44px]" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)} aria-label={t('wmsissue.raise.country')}>
+              <option value="">{t('wmsissue.materials.allCountries')}</option>
               {countryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           )}
-          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear</button>}
-          <span className="text-xs text-[var(--text-muted)] ml-auto" aria-live="polite">{known ? `${filtered.length} of ${rows.length}` : 'N/A'}</span>
+          {hasFilters && <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> {t('wmsissue.materials.clear')}</button>}
+          <span className="text-xs text-[var(--text-muted)] ms-auto" aria-live="polite">{known ? t('wmsissue.materials.countOf', { shown: filtered.length, total: rows.length }) : na}</span>
         </div>
       </div>
 
@@ -406,16 +415,16 @@ export default function Materials() {
             {rows.length === 0 && !notProvisioned ? (
               <div className="flex flex-col items-center gap-3">
                 <Package size={26} className="opacity-60" aria-hidden="true" />
-                <p>No materials recorded yet.</p>
-                <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><Plus size={14} aria-hidden="true" /> Add your first item</button>
+                <p>{t('wmsissue.materials.noneYet')}</p>
+                <button type="button" onClick={openCreate} className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><Plus size={14} aria-hidden="true" /> {t('wmsissue.materials.addFirst')}</button>
               </div>
             ) : notProvisioned ? (
-              <p>Materials management is not provisioned on this database.</p>
+              <p>{t('wmsissue.materials.notProvisioned')}</p>
             ) : (
               <div className="flex flex-col items-center gap-2">
                 <Filter size={22} className="opacity-60" aria-hidden="true" />
-                <p>No materials match these filters.</p>
-                <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> Clear filters</button>
+                <p>{t('wmsissue.materials.noMatch')}</p>
+                <button type="button" onClick={clearFilters} className="btn-secondary text-sm inline-flex items-center gap-1.5 min-h-[44px]"><X size={14} aria-hidden="true" /> {t('wmsissue.common.clearFilters')}</button>
               </div>
             )}
           </div>
@@ -431,7 +440,7 @@ export default function Materials() {
             enableColumnFilters={false}
             enableExport={false}
             initialPageSize={25}
-            emptyMessage="No materials to show."
+            emptyMessage={t('wmsissue.materials.emptyTable')}
           />
         )}
       </div>
@@ -440,49 +449,49 @@ export default function Materials() {
       <Modal
         open={showModal}
         onClose={closeModal}
-        title={editing ? 'Edit material' : 'Add material'}
+        title={editing ? t('wmsissue.materials.editTitle') : t('wmsissue.materials.add')}
         size="lg"
         footer={(
           <>
-            <button type="button" onClick={closeModal} className="btn-secondary text-sm min-h-[44px]" disabled={saving}>Cancel</button>
+            <button type="button" onClick={closeModal} className="btn-secondary text-sm min-h-[44px]" disabled={saving}>{t('wmsissue.common.cancel')}</button>
             <button type="submit" form="material-form" className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={saving}>
-              {saving ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Saving</> : editing ? 'Save changes' : 'Add material'}
+              {saving ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> {t('wmsissue.materials.saving')}</> : editing ? t('wmsissue.materials.saveChanges') : t('wmsissue.materials.add')}
             </button>
           </>
         )}
       >
         <form id="material-form" onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {field('mat-name', 'Material name (required)', <input id="mat-name" required className="input w-full" placeholder="e.g. 15W-40 Engine Oil" value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} />)}
-            {field('mat-sku', 'SKU (optional)', <input id="mat-sku" className="input w-full" placeholder="e.g. OIL-15W40-20L" value={form.sku} maxLength={120} onChange={(e) => set('sku', e.target.value)} />)}
+            {field('mat-name', t('wmsissue.materials.nameLabel'), <input id="mat-name" required className="input w-full" placeholder={t('wmsissue.materials.namePlaceholder')} value={form.name} maxLength={200} onChange={(e) => set('name', e.target.value)} />)}
+            {field('mat-sku', t('wmsissue.materials.skuLabel'), <input id="mat-sku" dir="ltr" className="input w-full" placeholder="OIL-15W40-20L" value={form.sku} maxLength={120} onChange={(e) => set('sku', e.target.value)} />)}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {field('mat-category', 'Category', (
+            {field('mat-category', t('wmsissue.materials.colCategory'), (
               <select id="mat-category" className="input w-full" value={form.category} onChange={(e) => set('category', e.target.value)}>
-                <option value="">Select</option>
-                {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
+                <option value="">{t('wmsissue.materials.select')}</option>
+                {MATERIAL_CATEGORIES.map((c) => <option key={c} value={c}>{catLabel(c)}</option>)}
               </select>
             ))}
-            {field('mat-unit', 'Unit', <input id="mat-unit" className="input w-full" placeholder="e.g. litre, each, kg" value={form.unit} maxLength={40} onChange={(e) => set('unit', e.target.value)} />)}
-            {field('mat-status', 'Status', (
+            {field('mat-unit', t('wmsissue.cols.unit'), <input id="mat-unit" className="input w-full" placeholder={t('wmsissue.materials.unitPlaceholder')} value={form.unit} maxLength={40} onChange={(e) => set('unit', e.target.value)} />)}
+            {field('mat-status', t('wmsissue.cols.status'), (
               <select id="mat-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                <option value="">Auto</option>
-                {STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+                <option value="">{t('wmsissue.materials.auto')}</option>
+                {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
               </select>
             ))}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {field('mat-qty', 'Qty on hand', <input id="mat-qty" className="input w-full" type="number" inputMode="decimal" step="any" min="0" placeholder="0" value={form.quantity_on_hand} onChange={(e) => set('quantity_on_hand', e.target.value)} />)}
-            {field('mat-rp', 'Reorder point', <input id="mat-rp" className="input w-full" type="number" inputMode="decimal" step="any" min="0" placeholder="0" value={form.reorder_point} onChange={(e) => set('reorder_point', e.target.value)} />)}
-            {field('mat-rq', 'Reorder qty', <input id="mat-rq" className="input w-full" type="number" inputMode="decimal" step="any" min="0" placeholder="0" value={form.reorder_qty} onChange={(e) => set('reorder_qty', e.target.value)} />)}
-            {field('mat-cost', `Unit cost (${currency})`, <input id="mat-cost" className="input w-full" type="number" inputMode="decimal" step="any" min="0" placeholder="0.00" value={form.unit_cost} onChange={(e) => set('unit_cost', e.target.value)} />)}
+            {field('mat-qty', t('wmsissue.materials.qtyOnHand'), <input id="mat-qty" className="input w-full" type="number" inputMode="decimal" step="any" min="0" placeholder="0" value={form.quantity_on_hand} onChange={(e) => set('quantity_on_hand', e.target.value)} />)}
+            {field('mat-rp', t('wmsissue.materials.reorderPoint'), <input id="mat-rp" className="input w-full" type="number" inputMode="decimal" step="any" min="0" placeholder="0" value={form.reorder_point} onChange={(e) => set('reorder_point', e.target.value)} />)}
+            {field('mat-rq', t('wmsissue.materials.reorderQty'), <input id="mat-rq" className="input w-full" type="number" inputMode="decimal" step="any" min="0" placeholder="0" value={form.reorder_qty} onChange={(e) => set('reorder_qty', e.target.value)} />)}
+            {field('mat-cost', t('wmsissue.materials.unitCostIn', { currency }), <input id="mat-cost" className="input w-full" type="number" inputMode="decimal" step="any" min="0" placeholder="0.00" value={form.unit_cost} onChange={(e) => set('unit_cost', e.target.value)} />)}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {field('mat-supplier', 'Supplier (optional)', <input id="mat-supplier" className="input w-full" placeholder="e.g. Gulf Lubricants Co." value={form.supplier} maxLength={200} onChange={(e) => set('supplier', e.target.value)} list="mat-supplier-options" />)}
-            {field('mat-location', 'Location (optional)', <input id="mat-location" className="input w-full" placeholder="e.g. Store A, Rack 3" value={form.location} maxLength={200} onChange={(e) => set('location', e.target.value)} />)}
+            {field('mat-supplier', t('wmsissue.materials.supplierLabel'), <input id="mat-supplier" className="input w-full" placeholder={t('wmsissue.materials.supplierPlaceholder')} value={form.supplier} maxLength={200} onChange={(e) => set('supplier', e.target.value)} list="mat-supplier-options" />)}
+            {field('mat-location', t('wmsissue.materials.locationLabel'), <input id="mat-location" className="input w-full" placeholder={t('wmsissue.materials.locationPlaceholder')} value={form.location} maxLength={200} onChange={(e) => set('location', e.target.value)} />)}
           </div>
           <datalist id="mat-supplier-options">{supplierOptions.map((s) => <option key={s} value={s} />)}</datalist>
-          {field('mat-notes', 'Notes (optional)', <textarea id="mat-notes" className="input w-full min-h-[70px] resize-y" placeholder="e.g. bulk supply, hazardous, batch tracked" value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />)}
+          {field('mat-notes', t('wmsissue.quick.notesOptional'), <textarea id="mat-notes" className="input w-full min-h-[70px] resize-y" placeholder={t('wmsissue.materials.notesPlaceholder')} value={form.notes} maxLength={8000} onChange={(e) => set('notes', e.target.value)} />)}
           {formError && (
             <div role="alert" className="flex items-start gap-2 text-sm text-red-300 bg-red-900/20 border border-red-800/50 rounded-lg px-3 py-2">
               <AlertTriangle size={15} className="mt-0.5 shrink-0" aria-hidden="true" /> {formError}
@@ -495,19 +504,19 @@ export default function Materials() {
       <Modal
         open={!!confirmDelete}
         onClose={() => { if (!deleting) setConfirmDelete(null) }}
-        title="Delete this material?"
+        title={t('wmsissue.materials.deleteTitle')}
         size="sm"
         footer={(
           <>
-            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deleting}>Cancel</button>
+            <button type="button" onClick={() => setConfirmDelete(null)} className="btn-secondary text-sm min-h-[44px]" disabled={deleting}>{t('wmsissue.common.cancel')}</button>
             <button type="button" onClick={doDelete} className="btn-danger text-sm inline-flex items-center gap-1.5 min-h-[44px] disabled:opacity-60" disabled={deleting}>
-              <Trash2 size={14} aria-hidden="true" /> {deleting ? 'Deleting' : 'Delete'}
+              <Trash2 size={14} aria-hidden="true" /> {deleting ? t('wmsissue.materials.deleting') : t('wmsissue.materials.delete')}
             </button>
           </>
         )}
       >
         <p className="text-sm text-[var(--text-muted)]">
-          {confirmDelete?.name || 'Material'}{confirmDelete?.sku ? ` | ${confirmDelete.sku}` : ''} | {money(confirmDelete ? materialValue(confirmDelete) : null)} on hand. This cannot be undone.
+          {t('wmsissue.materials.deleteBody', { name: `${confirmDelete?.name || t('wmsissue.materials.colMaterial')}${confirmDelete?.sku ? ` | ${confirmDelete.sku}` : ''}`, value: money(confirmDelete ? materialValue(confirmDelete) : null) })}
         </p>
       </Modal>
     </div>

@@ -13,6 +13,7 @@
 import { supabase } from '../supabase'
 import { ServiceError, toServiceError } from './_client'
 import { toUserMessage } from '../safeError'
+import { allInOrder } from '../concurrency'
 
 // Row ids we scan to resolve issues (import_row_issues has no batch_id, so we
 // bridge batch → row ids → issues). Bounded so a huge batch can't run away.
@@ -105,9 +106,13 @@ export async function listBatchIssues(batchId, { onlyErrors = true, limit = 500 
  * @param {string} batchId
  */
 export async function getBatchDiagnostics(batchId) {
-  const batch = await getBatch(batchId)
-  const rows = await listBatchRows(batchId, { limit: 500 })
-  const issues = await listBatchIssues(batchId, { onlyErrors: true })
+  // Three independent reads: sent together (one round trip instead of three),
+  // and the earliest failing one still decides the error, as before.
+  const [batch, rows, issues] = await allInOrder([
+    () => getBatch(batchId),
+    () => listBatchRows(batchId, { limit: 500 }),
+    () => listBatchIssues(batchId, { onlyErrors: true }),
+  ])
 
   const failedRows = rows.filter(
     (r) =>

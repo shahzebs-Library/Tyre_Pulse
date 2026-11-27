@@ -106,7 +106,13 @@ function ExpenseModal({ open, initial, onClose, onSaved }) {
     setBusy(true)
     try {
       if (initial?.id) await updateExpense(initial.id, form)
-      else await createExpense(form)
+      else {
+        const created = await createExpense(form)
+        if (created?.review_error) {
+          // Saved, but its decision needs a different reviewer; say so instead of failing.
+          window.alert('The claim was saved as pending. Its decision must be recorded by a different reviewer.')
+        }
+      }
       onSaved?.()
     } catch (err) {
       setError(toUserMessage(err, 'Could not save the expense claim.'))

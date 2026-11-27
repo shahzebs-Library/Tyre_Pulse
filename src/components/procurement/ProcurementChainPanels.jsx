@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, PackageCheck, Plus, Save, Search, ShoppingCart, Truck, AlertTriangle, Pencil, Building2 } from 'lucide-react'
 import Modal from '../ui/Modal'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { toUserMessage } from '../../lib/safeError'
 import { listLocations } from '../../lib/api/inventory'
 import {
@@ -27,10 +28,12 @@ import {
 } from '../../lib/procurementChain'
 import { REJECTION_CODES, rejectionReasonText } from '../../lib/procurement/procurementDepth'
 import { findOpenRfqForRequisition } from '../../lib/api/procurementDepth'
+import { textFn } from '../../lib/wmsText'
 
 const fmtNum = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? 'N/A' : Number(v).toLocaleString())
-const fmtMoney = (v, cur) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))
-  ? 'No cost recorded'
+// Pass `t` for the translated "No cost recorded"; without it the text is English.
+const fmtMoney = (v, cur, t) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v))
+  ? textFn(t)('wmsmsgprocure.common.noCost')
   : `${cur || ''} ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim())
 
 /** Server-decided procurement rights. `loading` stays true until the answer lands. */
@@ -53,7 +56,8 @@ function useDebounced(value, ms = 250) {
 }
 
 /** Type-ahead over the Material Master. `value` = { id, item_code, item_name }. */
-export function MaterialPicker({ value, onPick, country, label = 'Item (Material Master)', id = 'proc-material' }) {
+export function MaterialPicker({ value, onPick, country, label, id = 'proc-material' }) {
+  const { t } = useLanguage()
   const [term, setTerm] = useState(value ? value.item_code : '')
   const q = useDebounced(term)
   const [hits, setHits] = useState([])
@@ -65,26 +69,26 @@ export function MaterialPicker({ value, onPick, country, label = 'Item (Material
     setBusy(true)
     searchItems(q, { country: scopedCountry(country) || undefined })
       .then((r) => { if (live) { setHits(r); setErr('') } })
-      .catch((e) => { if (live) setErr(toUserMessage(e, 'Could not search the Material Master.')) })
+      .catch((e) => { if (live) setErr(toUserMessage(e, t('wmsprocure.chain.materialSearchErr'))) })
       .finally(() => { if (live) setBusy(false) })
     return () => { live = false }
   }, [q, country, value])
   return (
     <div className="relative">
-      <label className="label" htmlFor={id}>{label}</label>
+      <label className="label" htmlFor={id}>{label || t('wmsprocure.chain.materialLabel')}</label>
       <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
-        <input id={id} className="input w-full pl-8" maxLength={80} placeholder="Type an item code or name"
+        <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
+        <input id={id} className="input w-full ps-8" maxLength={80} placeholder={t('wmsprocure.chain.materialPlaceholder')}
           value={term} onChange={(e) => { setTerm(e.target.value); if (value) onPick(null) }} autoComplete="off" />
       </div>
       {value && <p className="text-xs text-[var(--text-muted)] mt-1"><span className="font-mono">{value.item_code}</span> {value.item_name}</p>}
-      {busy && <p className="text-xs text-[var(--text-muted)] mt-1">Searching</p>}
-      {!busy && q.length >= 2 && !value && hits.length === 0 && !err && <p className="text-xs text-[var(--text-muted)] mt-1">No Material Master item matches.</p>}
+      {busy && <p className="text-xs text-[var(--text-muted)] mt-1">{t('wmsprocure.chain.searching')}</p>}
+      {!busy && q.length >= 2 && !value && hits.length === 0 && !err && <p className="text-xs text-[var(--text-muted)] mt-1">{t('wmsprocure.chain.noMaterialMatch')}</p>}
       {hits.length > 0 && (
         <ul className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-[var(--input-border)] bg-[var(--panel)] shadow-lg">
           {hits.map((h) => (
             <li key={h.id}>
-              <button type="button" className="w-full text-left px-3 py-2 min-h-[44px] text-sm hover:bg-[var(--input-bg)]"
+              <button type="button" className="w-full text-start px-3 py-2 min-h-[44px] text-sm hover:bg-[var(--input-bg)]"
                 onClick={() => { onPick(h); setTerm(h.item_code); setHits([]) }}>
                 <span className="font-mono text-xs">{h.item_code}</span> {h.item_name}
                 {h.country ? <span className="text-[var(--text-muted)]"> | {h.country}</span> : null}
@@ -100,6 +104,7 @@ export function MaterialPicker({ value, onPick, country, label = 'Item (Material
 
 /** Type-ahead over the supplier master. `value` = supplier row. */
 export function SupplierPicker({ value, onPick, country, id = 'proc-supplier' }) {
+  const { t } = useLanguage()
   const [term, setTerm] = useState(value?.supplier_name || '')
   const q = useDebounced(term)
   const [hits, setHits] = useState([])
@@ -109,19 +114,19 @@ export function SupplierPicker({ value, onPick, country, id = 'proc-supplier' })
     let live = true
     listSuppliers({ country: scopedCountry(country) || undefined, search: q, limit: 20 })
       .then((r) => { if (live) { setHits(r.filter((s) => s.status !== 'inactive')); setErr('') } })
-      .catch((e) => { if (live) setErr(toUserMessage(e, 'Could not load suppliers.')) })
+      .catch((e) => { if (live) setErr(toUserMessage(e, t('wmsprocure.chain.suppliersLoadErr'))) })
     return () => { live = false }
   }, [q, country, value])
   return (
     <div className="relative">
-      <label className="label" htmlFor={id}>Supplier</label>
-      <input id={id} className="input w-full" maxLength={200} placeholder="Search the supplier list" autoComplete="off"
+      <label className="label" htmlFor={id}>{t('wmsprocure.chain.supplier')}</label>
+      <input id={id} className="input w-full" maxLength={200} placeholder={t('wmsprocure.chain.supplierPlaceholder')} autoComplete="off"
         value={term} onChange={(e) => { setTerm(e.target.value); if (value) onPick(null) }} />
       {!value && hits.length > 0 && term !== '' && (
         <ul className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-[var(--input-border)] bg-[var(--panel)] shadow-lg">
           {hits.map((s) => (
             <li key={s.id}>
-              <button type="button" className="w-full text-left px-3 py-2 min-h-[44px] text-sm hover:bg-[var(--input-bg)]"
+              <button type="button" className="w-full text-start px-3 py-2 min-h-[44px] text-sm hover:bg-[var(--input-bg)]"
                 onClick={() => { onPick(s); setTerm(s.supplier_name); setHits([]) }}>
                 {s.supplier_name}{s.supplier_code ? <span className="font-mono text-xs text-[var(--text-muted)]"> {s.supplier_code}</span> : null}
               </button>
@@ -130,7 +135,7 @@ export function SupplierPicker({ value, onPick, country, id = 'proc-supplier' })
         </ul>
       )}
       {!value && term.length >= 2 && hits.length === 0 && !err && (
-        <p className="text-xs text-amber-300 mt-1">No supplier matches. Add it under Suppliers, Supplier register first.</p>
+        <p className="text-xs text-amber-300 mt-1">{t('wmsprocure.chain.noSupplierMatch')}</p>
       )}
       {err && <p role="alert" className="text-xs text-red-300 mt-1">{err}</p>}
     </div>
@@ -147,6 +152,7 @@ export function SupplierPicker({ value, onPick, country, id = 'proc-supplier' })
  * PO, or an open quotation request, cannot be raised here.
  */
 export function RaisePoModal({ requisition, onClose, onDone }) {
+  const { t } = useLanguage()
   const [supplier, setSupplier] = useState(null)
   const [material, setMaterial] = useState(() => requisitionMaterial(requisition))
   const [unitPrice, setUnitPrice] = useState(requisition?.est_cost ?? '')
@@ -165,26 +171,26 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
     let alive = true
     if (!requisition) return undefined
     if (requisition.po_ref) {
-      setBlock({ state: 'blocked', reason: `This requisition already has purchase order ${requisition.po_ref}.` })
+      setBlock({ state: 'blocked', reason: t('wmsprocure.chain.alreadyHasPo', { po: requisition.po_ref }) })
       return undefined
     }
     findOpenRfqForRequisition(requisition.id)
       .then((rfq) => {
         if (!alive) return
         setBlock(rfq
-          ? { state: 'blocked', reason: `Quotation request ${rfq.rfq_no || ''} is open for this requisition. Award or cancel it instead of raising a PO directly.` }
+          ? { state: 'blocked', reason: t('wmsprocure.chain.openRfq', { rfq: rfq.rfq_no || '' }) }
           : { state: 'ok', reason: '' })
       })
-      .catch((e) => { if (alive) setBlock({ state: 'error', reason: toUserMessage(e, 'Could not check for an open quotation request.') }) })
+      .catch((e) => { if (alive) setBlock({ state: 'error', reason: toUserMessage(e, t('wmsprocure.chain.rfqCheckErr')) }) })
     return () => { alive = false }
   }, [requisition])
   if (!requisition) return null
   const currency = currencyForCountry(requisition.country)
-  const draft = requisitionPoDraft(requisition, { supplier, material, unitPrice, country: requisition.country })
+  const draft = requisitionPoDraft(requisition, { supplier, material, unitPrice, country: requisition.country, t })
   const submit = async () => {
     setError(''); setWarning('')
     // Once this modal created the PO, its own link sets po_ref; do not block the retry on it.
-    if (!createdPo && block.state !== 'ok') { setError(block.reason || 'This requisition cannot be raised as a PO right now.'); return }
+    if (!createdPo && block.state !== 'ok') { setError(block.reason || t('wmsprocure.chain.cannotRaise')); return }
     if (draft.errors.length) { setError(draft.errors.join(' ')); return }
     setBusy(true)
     let po = createdPo
@@ -200,50 +206,50 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
       }
       setLineTried(true)
       const { failedLines } = await addPurchaseOrderLines(po.id, [{ ...draft.line, idempotency_key: lineKey }])
-      if (failedLines.length) setWarning(`PO ${po.po_number} is created and linked, but its line did not save: ${failedLines[0].message} Press Retry line to try again.`)
+      if (failedLines.length) setWarning(t('wmsprocure.chain.lineNotSaved', { po: po.po_number, message: failedLines[0].message }))
       else onDone?.(po)
     } catch (e) {
-      const why = toUserMessage(e, 'Could not raise the purchase order.')
-      setError(po ? `PO ${po.po_number} was created. ${why} Press the button again to finish: the same PO is reused.` : why)
+      const why = toUserMessage(e, t('wmsprocure.chain.raiseErr'))
+      setError(po ? t('wmsprocure.chain.poCreatedRetry', { po: po.po_number, why }) : why)
     } finally { setBusy(false) }
   }
   const started = !!createdPo
   return (
     <Modal open onClose={busy ? undefined : (started ? () => onDone?.(createdPo) : onClose)} size="md" title={(
-      <span className="inline-flex items-center gap-2"><ShoppingCart size={18} aria-hidden="true" /> Raise purchase order</span>
+      <span className="inline-flex items-center gap-2"><ShoppingCart size={18} aria-hidden="true" /> {t('wmsprocure.chain.raiseTitle')}</span>
     )}>
       <div className="space-y-4">
         <p className="text-sm text-[var(--text-muted)]">
-          From requisition <span className="font-mono">{requisition.requisition_no || 'without a number'}</span>: {requisition.item}, quantity {fmtNum(requisition.quantity)}.
-          {!requisition.country && ' This requisition has no country, so the PO currency cannot be set.'}
+          {t('wmsprocure.chain.fromRequisition')} <span className="font-mono" dir="ltr">{requisition.requisition_no || t('wmsprocure.chain.withoutNumber')}</span>: {requisition.item}, {t('wmsprocure.chain.quantity', { qty: fmtNum(requisition.quantity) })}
+          {!requisition.country && t('wmsprocure.chain.noCountry')}
         </p>
-        {block.state === 'checking' && <p role="status" className="text-sm text-[var(--text-muted)] inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Checking for an open quotation request</p>}
+        {block.state === 'checking' && <p role="status" className="text-sm text-[var(--text-muted)] inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> {t('wmsprocure.chain.checkingRfq')}</p>}
         {(block.state === 'blocked' || block.state === 'error') && (
           <div role="alert" className="flex items-start gap-2 text-sm text-amber-300"><AlertTriangle size={15} className="mt-0.5 shrink-0" />{block.reason}</div>
         )}
-        {started && <p role="status" className="text-sm text-[var(--text-secondary)]">Purchase order <span className="font-mono">{createdPo.po_number}</span> {linked ? 'is linked to this requisition.' : 'is created. The requisition is not linked yet.'}</p>}
+        {started && <p role="status" className="text-sm text-[var(--text-secondary)]">{t('wmsprocure.chain.purchaseOrder')} <span className="font-mono" dir="ltr">{createdPo.po_number}</span> {linked ? t('wmsprocure.chain.linkedToReq') : t('wmsprocure.chain.createdNotLinked')}</p>}
         {/* The supplier is on the PO header, which already exists once created. */}
         {!started && <SupplierPicker value={supplier} onPick={setSupplier} country={requisition.country} />}
         {lineTried ? (
           <p className="text-sm text-[var(--text-secondary)]">
-            Line: {[material?.item_code, material?.item_name].filter(Boolean).join(' ') || requisition.item}, unit price {unitPrice === '' ? 'not set' : unitPrice} {currency || ''}.
-            Locked so a retry cannot add a second line.
+            {t('wmsprocure.chain.lineSummary', { item: [material?.item_code, material?.item_name].filter(Boolean).join(' ') || requisition.item, price: unitPrice === '' ? t('wmsprocure.chain.notSet') : unitPrice, currency: currency || '' })}
+            {' '}{t('wmsprocure.chain.lineLocked')}
           </p>
         ) : <>
         <MaterialPicker value={material} onPick={setMaterial} country={requisition.country} />
         <div>
-          <label className="label" htmlFor="raise-po-price">Unit price {currency ? `(${currency})` : ''}</label>
-          <input id="raise-po-price" className="input w-full" type="number" min="0" step="0.01" placeholder="Leave blank if not agreed yet"
+          <label className="label" htmlFor="raise-po-price">{t('wmsprocure.chain.unitPrice')} {currency ? `(${currency})` : ''}</label>
+          <input id="raise-po-price" className="input w-full" type="number" min="0" step="0.01" placeholder={t('wmsprocure.chain.pricePlaceholder')}
             value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
         </div>
         </>}
         {error && <div role="alert" className="flex items-start gap-2 text-sm text-red-300"><AlertTriangle size={15} className="mt-0.5 shrink-0" />{error}</div>}
         {warning && <div role="status" className="text-sm text-amber-300">{warning}</div>}
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={started ? () => onDone?.(createdPo) : onClose} disabled={busy}>{started ? 'Close' : 'Cancel'}</button>
+          <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={started ? () => onDone?.(createdPo) : onClose} disabled={busy}>{started ? t('wmsprocure.chain.close') : t('wmsprocure.chain.cancel')}</button>
           <button type="button" className="btn-primary text-sm inline-flex items-center gap-2 min-h-[44px]" onClick={submit}
             disabled={busy || (!started && block.state !== 'ok')}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <ShoppingCart size={15} />} {warning ? 'Retry line' : started ? 'Finish' : 'Create PO'}
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <ShoppingCart size={15} />} {warning ? t('wmsprocure.chain.retryLine') : started ? t('wmsprocure.chain.finish') : t('wmsprocure.chain.createPo')}
           </button>
         </div>
       </div>
@@ -253,6 +259,7 @@ export function RaisePoModal({ requisition, onClose, onDone }) {
 
 /** Receive goods against an approved / ordered PO into stock locations. */
 export function ReceiveAgainstPoPanel({ country, onReceived }) {
+  const { t } = useLanguage()
   const caps = useProcurementCaps()
   const [pos, setPos] = useState(null)
   const [poErr, setPoErr] = useState('')
@@ -272,7 +279,7 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
   const loadPos = useCallback(() => {
     setPoErr(''); setPos(null)
     listReceivablePurchaseOrders({ country: scopedCountry(country) || undefined })
-      .then(setPos).catch((e) => { setPoErr(toUserMessage(e, 'Could not load purchase orders.')); setPos([]) })
+      .then(setPos).catch((e) => { setPoErr(toUserMessage(e, t('wmsprocure.chain.posLoadErr'))); setPos([]) })
   }, [country])
   useEffect(() => { if (caps.receive) loadPos() }, [caps.receive, loadPos])
 
@@ -283,7 +290,7 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
     let live = true
     setSite(po.site || '')
     listPurchaseOrderLines(po.id).then((r) => { if (live) setLines(r) })
-      .catch((e) => { if (live) { setLinesErr(toUserMessage(e, 'Could not load the PO lines.')); setLines([]) } })
+      .catch((e) => { if (live) { setLinesErr(toUserMessage(e, t('wmsprocure.chain.linesLoadErr'))); setLines([]) } })
     listLocations({ country: po.country || undefined }).then((r) => { if (live) setLocs((r.rows || []).filter((l) => l.active !== false)) })
       .catch(() => { if (live) setLocs([]) })
     return () => { live = false }
@@ -294,17 +301,17 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
   const sites = [...new Set(locs.map((l) => l.site).filter(Boolean))].sort()
   const setEntry = (id, patch) => setEntries((e) => ({ ...e, [id]: { ...e[id], ...patch } }))
 
-  if (caps.loading) return <div className="card text-sm text-[var(--text-muted)]">Checking receiving rights</div>
+  if (caps.loading) return <div className="card text-sm text-[var(--text-muted)]">{t('wmsprocure.chain.checkingRights')}</div>
   if (!caps.receive) return null
 
   const submit = async () => {
     setError('')
-    if (!site) { setError('Choose the receiving site.'); return }
-    if (supplierOwned && !po?.supplier_id) { setError('Supplier-owned stock needs a PO linked to a supplier record.'); return }
+    if (!site) { setError(t('wmsprocure.chain.chooseSite')); return }
+    if (supplierOwned && !po?.supplier_id) { setError(t('wmsprocure.chain.consignNeedsSupplier')); return }
     const withReasons = Object.fromEntries(Object.entries(entries).map(([id, e]) => [id, {
       ...e, rejection_reason: Number(e.qty_rejected) > 0 && e.rejection_code ? rejectionReasonText(e.rejection_code, e.rejection_note) : null,
     }]))
-    const plan = receiptPlan(lines || [], withReasons)
+    const plan = receiptPlan(lines || [], withReasons, t)
     if (plan.errors.length) { setError(plan.errors.join(' ')); return }
     if (supplierOwned) plan.lines = plan.lines.map((l) => ({ ...l, ownership: 'consignment', owner_supplier_id: po.supplier_id }))
     setBusy(true)
@@ -315,59 +322,59 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
       if (fresh) setLines(fresh)
       onReceived?.(res)
       loadPos()
-    } catch (e) { setError(toUserMessage(e, 'Could not receive the goods.')) } finally { setBusy(false) }
+    } catch (e) { setError(toUserMessage(e, t('wmsprocure.chain.receiveErr'))) } finally { setBusy(false) }
   }
 
   return (
     <div className="card space-y-3">
       <div className="flex items-center gap-2">
         <Truck size={16} aria-hidden="true" />
-        <h2 className="text-sm font-semibold text-[var(--text-primary)]">Receive against a purchase order</h2>
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('wmsprocure.chain.receiveTitle')}</h2>
       </div>
       <p className="text-xs text-[var(--text-muted)]">
-        Posts the receipt to stock through the movement ledger. Rejected quantity never enters stock and needs a reason; it can be sent back from Supplier returns. A line cannot receive more than is still outstanding.
+        {t('wmsprocure.chain.receiveHelp')}
       </p>
-      {poErr && <p role="alert" className="text-xs text-red-300">{poErr} <button type="button" className="underline" onClick={loadPos}>Retry</button></p>}
+      {poErr && <p role="alert" className="text-xs text-red-300">{poErr} <button type="button" className="underline" onClick={loadPos}>{t('wmsprocure.chain.retry')}</button></p>}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label className="label" htmlFor="rcv-po">Purchase order</label>
+          <label className="label" htmlFor="rcv-po">{t('wmsprocure.chain.purchaseOrder')}</label>
           <select id="rcv-po" className="input w-full min-h-[44px]" value={poId} onChange={(e) => setPoId(e.target.value)} disabled={pos === null}>
-            <option value="">{pos === null ? 'Loading' : pos.length ? 'Choose a PO' : 'No approved or ordered POs'}</option>
+            <option value="">{pos === null ? t('wmsprocure.chain.loading') : pos.length ? t('wmsprocure.chain.choosePo') : t('wmsprocure.chain.noPos')}</option>
             {(pos || []).map((p) => <option key={p.id} value={p.id}>{p.po_number} | {p.supplier_name || p.vendor_name} | {p.status}</option>)}
           </select>
         </div>
         <div>
-          <label className="label" htmlFor="rcv-site">Receiving site</label>
+          <label className="label" htmlFor="rcv-site">{t('wmsprocure.chain.receivingSite')}</label>
           <select id="rcv-site" className="input w-full min-h-[44px]" value={site} onChange={(e) => setSite(e.target.value)} disabled={!po}>
-            <option value="">Choose a site</option>
+            <option value="">{t('wmsprocure.chain.chooseASite')}</option>
             {[...new Set([...(po?.site ? [po.site] : []), ...sites])].map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div>
-          <label className="label" htmlFor="rcv-grn">GRN number (optional)</label>
+          <label className="label" htmlFor="rcv-grn">{t('wmsprocure.chain.grnOptional')}</label>
           <input id="rcv-grn" className="input w-full min-h-[44px]" maxLength={60} value={grnNo} onChange={(e) => setGrnNo(e.target.value)} disabled={!po} />
         </div>
       </div>
       {po && (
         <label className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
           <input type="checkbox" className="mt-0.5" checked={supplierOwned} onChange={(e) => setSupplierOwned(e.target.checked)} />
-          <span>Supplier-owned (consignment) stock. It is counted on hand but not in our stock value, and needs an active consignment agreement with this supplier.</span>
+          <span>{t('wmsprocure.chain.consignHelp')}</span>
         </label>
       )}
-      {po && lines === null && <p className="text-xs text-[var(--text-muted)]">Loading PO lines</p>}
+      {po && lines === null && <p className="text-xs text-[var(--text-muted)]">{t('wmsprocure.chain.loadingLines')}</p>}
       {linesErr && <p role="alert" className="text-xs text-red-300">{linesErr}</p>}
       {po && lines && lines.length === 0 && !linesErr && (
-        <p className="text-xs text-amber-300">This PO has no catalogued lines, so nothing can be received into stock against it. Add lines with Material Master items on the PO first.</p>
+        <p className="text-xs text-amber-300">{t('wmsprocure.chain.noLines')}</p>
       )}
       {po && site && siteLocs.length === 0 && (
-        <p className="text-xs text-amber-300">No active stock location exists at {site}. Set one up under Inventory, Locations.</p>
+        <p className="text-xs text-amber-300">{t('wmsprocure.chain.noLocation', { site })}</p>
       )}
       {lines && lines.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-[var(--text-muted)]">
-              <th className="py-2 pr-2">Item</th><th className="pr-2 text-right">Ordered</th><th className="pr-2 text-right">Outstanding</th>
-              <th className="pr-2">Received</th><th className="pr-2">Rejected</th><th className="pr-2">Location</th>
+            <thead><tr className="text-start text-xs text-[var(--text-muted)]">
+              <th className="py-2 pe-2 text-start">{t('wmsprocure.chain.colItem')}</th><th className="pe-2 text-end">{t('wmsprocure.chain.colOrdered')}</th><th className="pe-2 text-end">{t('wmsprocure.chain.colOutstanding')}</th>
+              <th className="pe-2 text-start">{t('wmsprocure.chain.colReceived')}</th><th className="pe-2 text-start">{t('wmsprocure.chain.colRejected')}</th><th className="pe-2 text-start">{t('wmsprocure.chain.colLocation')}</th>
             </tr></thead>
             <tbody>
               {lines.map((l) => {
@@ -375,25 +382,25 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
                 const e = entries[l.id] || {}
                 return (
                   <tr key={l.id} className="border-t border-[var(--hairline)]">
-                    <td className="py-2 pr-2"><span className="font-mono text-xs">{l.item_code || 'Not catalogued'}</span> {l.item_name || l.description}</td>
-                    <td className="pr-2 text-right tabular-nums">{fmtNum(l.qty_ordered)}</td>
-                    <td className="pr-2 text-right tabular-nums">{fmtNum(out)}</td>
-                    <td className="pr-2"><input aria-label={`Received ${l.item_code || ''}`} className="input w-24 min-h-[40px]" type="number" min="0" step="any" disabled={!out} value={e.qty_received ?? ''} onChange={(ev) => setEntry(l.id, { qty_received: ev.target.value })} /></td>
-                    <td className="pr-2">
-                      <input aria-label={`Rejected ${l.item_code || ''}`} className="input w-24 min-h-[40px]" type="number" min="0" step="any" disabled={!out} value={e.qty_rejected ?? ''} onChange={(ev) => setEntry(l.id, { qty_rejected: ev.target.value })} />
+                    <td className="py-2 pe-2"><span className="font-mono text-xs" dir="ltr">{l.item_code || t('wmsprocure.chain.notCatalogued')}</span> {l.item_name || l.description}</td>
+                    <td className="pe-2 text-end tabular-nums">{fmtNum(l.qty_ordered)}</td>
+                    <td className="pe-2 text-end tabular-nums">{fmtNum(out)}</td>
+                    <td className="pe-2"><input aria-label={t('wmsprocure.chain.receivedAria', { code: l.item_code || '' })} className="input w-24 min-h-[40px]" type="number" min="0" step="any" disabled={!out} value={e.qty_received ?? ''} onChange={(ev) => setEntry(l.id, { qty_received: ev.target.value })} /></td>
+                    <td className="pe-2">
+                      <input aria-label={t('wmsprocure.chain.rejectedAria', { code: l.item_code || '' })} className="input w-24 min-h-[40px]" type="number" min="0" step="any" disabled={!out} value={e.qty_rejected ?? ''} onChange={(ev) => setEntry(l.id, { qty_rejected: ev.target.value })} />
                       {Number(e.qty_rejected) > 0 && (
                         <div className="mt-1 grid gap-1">
-                          <select aria-label={`Rejection reason ${l.item_code || ''}`} className="input min-h-[40px]" value={e.rejection_code || ''} onChange={(ev) => setEntry(l.id, { rejection_code: ev.target.value })}>
-                            <option value="">Why rejected?</option>
-                            {REJECTION_CODES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                          <select aria-label={t('wmsprocure.chain.rejectionReasonAria', { code: l.item_code || '' })} className="input min-h-[40px]" value={e.rejection_code || ''} onChange={(ev) => setEntry(l.id, { rejection_code: ev.target.value })}>
+                            <option value="">{t('wmsprocure.chain.whyRejected')}</option>
+                            {REJECTION_CODES.map((c) => <option key={c.value} value={c.value}>{t(`wmsprocure.rejection.${c.value}`)}</option>)}
                           </select>
-                          <input aria-label={`Rejection note ${l.item_code || ''}`} className="input min-h-[40px]" maxLength={200} placeholder="Note (optional)" value={e.rejection_note || ''} onChange={(ev) => setEntry(l.id, { rejection_note: ev.target.value })} />
+                          <input aria-label={t('wmsprocure.chain.rejectionNoteAria', { code: l.item_code || '' })} className="input min-h-[40px]" maxLength={200} placeholder={t('wmsprocure.chain.noteOptional')} value={e.rejection_note || ''} onChange={(ev) => setEntry(l.id, { rejection_note: ev.target.value })} />
                         </div>
                       )}
                     </td>
-                    <td className="pr-2">
-                      <select aria-label={`Location ${l.item_code || ''}`} className="input min-h-[40px]" disabled={!out} value={e.location_id || ''} onChange={(ev) => setEntry(l.id, { location_id: ev.target.value })}>
-                        <option value="">Choose</option>
+                    <td className="pe-2">
+                      <select aria-label={t('wmsprocure.chain.locationAria', { code: l.item_code || '' })} className="input min-h-[40px]" disabled={!out} value={e.location_id || ''} onChange={(ev) => setEntry(l.id, { location_id: ev.target.value })}>
+                        <option value="">{t('wmsprocure.chain.choose')}</option>
                         {siteLocs.map((loc) => <option key={loc.id} value={loc.id}>{[loc.code, loc.name].filter(Boolean).join(' / ')}</option>)}
                       </select>
                     </td>
@@ -405,11 +412,11 @@ export function ReceiveAgainstPoPanel({ country, onReceived }) {
         </div>
       )}
       {error && <div role="alert" className="flex items-start gap-2 text-sm text-red-300"><AlertTriangle size={15} className="mt-0.5 shrink-0" />{error}</div>}
-      {done && <p role="status" className="text-sm text-green-300">{done.replayed ? 'This receipt was already posted.' : `Received into stock as ${done.grn_no || 'a new GRN'} (${done.lines || 0} lines).`}</p>}
+      {done && <p role="status" className="text-sm text-green-300">{done.replayed ? t('wmsprocure.chain.alreadyPosted') : t('wmsprocure.chain.receivedAs', { grn: done.grn_no || t('wmsprocure.chain.newGrn'), lines: done.lines || 0 })}</p>}
       {po && lines && lines.length > 0 && (
         <div className="flex justify-end">
           <button type="button" className="btn-primary text-sm inline-flex items-center gap-2 min-h-[44px]" onClick={submit} disabled={busy}>
-            {busy ? <Loader2 size={15} className="animate-spin" /> : <PackageCheck size={15} />} Receive into stock
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <PackageCheck size={15} />} {t('wmsprocure.chain.receiveIntoStock')}
           </button>
         </div>
       )}
@@ -421,6 +428,7 @@ const EMPTY_SUPPLIER = { supplier_name: '', supplier_code: '', supplier_type: ''
 
 /** The supplier master (the `suppliers` table POs and GRNs link to). */
 export function SupplierRegister({ country }) {
+  const { t } = useLanguage()
   const caps = useProcurementCaps()
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
@@ -434,7 +442,7 @@ export function SupplierRegister({ country }) {
   const load = useCallback(() => {
     setError('')
     listSuppliers({ country: scopedCountry(country) || undefined, search: q, limit: 200 })
-      .then(setRows).catch((e) => { setError(toUserMessage(e, 'Could not load suppliers.')); setRows([]) })
+      .then(setRows).catch((e) => { setError(toUserMessage(e, t('wmsprocure.chain.suppliersLoadErr'))); setRows([]) })
   }, [country, q])
   useEffect(() => { load() }, [load])
 
@@ -446,7 +454,7 @@ export function SupplierRegister({ country }) {
       if (editing?.id) await updateSupplier(editing.id, values)
       else await createSupplier(values)
       setEditing(null); load()
-    } catch (e) { setFormErr(toUserMessage(e, 'Could not save the supplier.')) } finally { setBusy(false) }
+    } catch (e) { setFormErr(toUserMessage(e, t('wmsprocure.chain.saveSupplierErr'))) } finally { setBusy(false) }
   }
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -454,34 +462,34 @@ export function SupplierRegister({ country }) {
     <div className="card space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Building2 size={16} aria-hidden="true" />
-        <h2 className="text-sm font-semibold text-[var(--text-primary)]">Supplier register</h2>
-        <span className="text-xs text-[var(--text-muted)]">The suppliers purchase orders and goods receipts are raised against.</span>
-        <div className="ml-auto flex gap-2">
-          <input className="input min-h-[44px]" aria-label="Search suppliers" placeholder="Search suppliers" value={search} onChange={(e) => setSearch(e.target.value)} />
-          {caps.procure && <button type="button" className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" onClick={() => open(null)}><Plus size={15} /> Add supplier</button>}
+        <h2 className="text-sm font-semibold text-[var(--text-primary)]">{t('wmsprocure.chain.registerTitle')}</h2>
+        <span className="text-xs text-[var(--text-muted)]">{t('wmsprocure.chain.registerHelp')}</span>
+        <div className="ms-auto flex gap-2">
+          <input className="input min-h-[44px]" aria-label={t('wmsprocure.chain.searchSuppliers')} placeholder={t('wmsprocure.chain.searchSuppliers')} value={search} onChange={(e) => setSearch(e.target.value)} />
+          {caps.procure && <button type="button" className="btn-primary text-sm inline-flex items-center gap-1.5 min-h-[44px]" onClick={() => open(null)}><Plus size={15} /> {t('wmsprocure.chain.addSupplier')}</button>}
         </div>
       </div>
-      {error && <p role="alert" className="text-xs text-red-300">{error} <button type="button" className="underline" onClick={load}>Retry</button></p>}
-      {rows === null && !error && <p className="text-xs text-[var(--text-muted)]">Loading suppliers</p>}
+      {error && <p role="alert" className="text-xs text-red-300">{error} <button type="button" className="underline" onClick={load}>{t('wmsprocure.chain.retry')}</button></p>}
+      {rows === null && !error && <p className="text-xs text-[var(--text-muted)]">{t('wmsprocure.chain.loadingSuppliers')}</p>}
       {rows && rows.length === 0 && !error && (
-        <p className="text-sm text-[var(--text-muted)]">{q ? 'No supplier matches this search.' : 'No suppliers recorded yet.'}{!q && caps.procure ? ' Add the first one to start raising purchase orders.' : ''}</p>
+        <p className="text-sm text-[var(--text-muted)]">{q ? t('wmsprocure.chain.noSupplierSearch') : t('wmsprocure.chain.noSuppliersYet')}{!q && caps.procure ? t('wmsprocure.chain.addFirst') : ''}</p>
       )}
       {rows && rows.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-[var(--text-muted)]">
-              <th className="py-2 pr-2">Supplier</th><th className="pr-2">Code</th><th className="pr-2">Contact</th><th className="pr-2">Country</th><th className="pr-2">Status</th><th />
+            <thead><tr className="text-start text-xs text-[var(--text-muted)]">
+              <th className="py-2 pe-2 text-start">{t('wmsprocure.chain.colSupplier')}</th><th className="pe-2 text-start">{t('wmsprocure.chain.colCode')}</th><th className="pe-2 text-start">{t('wmsprocure.chain.colContact')}</th><th className="pe-2 text-start">{t('wmsprocure.chain.colCountry')}</th><th className="pe-2 text-start">{t('wmsprocure.chain.colStatus')}</th><th />
             </tr></thead>
             <tbody>
               {rows.map((s) => (
                 <tr key={s.id} className="border-t border-[var(--hairline)]">
-                  <td className="py-2 pr-2 font-medium">{s.supplier_name}</td>
-                  <td className="pr-2 font-mono text-xs">{s.supplier_code || 'N/A'}</td>
-                  <td className="pr-2">{[s.contact_person, s.phone, s.email].filter(Boolean).join(' | ') || 'N/A'}</td>
-                  <td className="pr-2">{s.country || 'All'}</td>
-                  <td className="pr-2">{s.status}</td>
-                  <td className="text-right">{caps.procure && (
-                    <button type="button" aria-label={`Edit ${s.supplier_name}`} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)]" onClick={() => open(s)}><Pencil size={15} /></button>
+                  <td className="py-2 pe-2 font-medium">{s.supplier_name}</td>
+                  <td className="pe-2 font-mono text-xs" dir="ltr">{s.supplier_code || t('wmsprocure.chain.na')}</td>
+                  <td className="pe-2">{[s.contact_person, s.phone, s.email].filter(Boolean).join(' | ') || t('wmsprocure.chain.na')}</td>
+                  <td className="pe-2">{s.country || t('wmsprocure.chain.all')}</td>
+                  <td className="pe-2">{t(`wmsprocure.supplierStatus.${s.status}`)}</td>
+                  <td className="text-end">{caps.procure && (
+                    <button type="button" aria-label={t('wmsprocure.chain.editAria', { name: s.supplier_name })} className="min-w-[44px] min-h-[44px] inline-flex items-center justify-center rounded-lg hover:bg-[var(--input-bg)]" onClick={() => open(s)}><Pencil size={15} /></button>
                   )}</td>
                 </tr>
               ))}
@@ -490,11 +498,11 @@ export function SupplierRegister({ country }) {
         </div>
       )}
       {editing && (
-        <Modal open onClose={busy ? undefined : () => setEditing(null)} size="md" title={editing.id ? 'Edit supplier' : 'Add supplier'}>
+        <Modal open onClose={busy ? undefined : () => setEditing(null)} size="md" title={editing.id ? t('wmsprocure.chain.editSupplier') : t('wmsprocure.chain.addSupplier')}>
           <div className="space-y-3">
             {[
-              ['supplier_name', 'Supplier name *', 200], ['supplier_code', 'Supplier code', 60], ['supplier_type', 'Type (e.g. tyres, spares)', 60],
-              ['contact_person', 'Contact person', 200], ['phone', 'Phone', 60], ['email', 'Email', 200], ['site', 'Site', 120], ['region', 'Region', 120],
+              ['supplier_name', t('wmsprocure.chain.fSupplierName'), 200], ['supplier_code', t('wmsprocure.chain.fSupplierCode'), 60], ['supplier_type', t('wmsprocure.chain.fType'), 60],
+              ['contact_person', t('wmsprocure.chain.fContact'), 200], ['phone', t('wmsprocure.chain.fPhone'), 60], ['email', t('wmsprocure.chain.fEmail'), 200], ['site', t('wmsprocure.chain.fSite'), 120], ['region', t('wmsprocure.chain.fRegion'), 120],
             ].map(([k, l, n]) => (
               <div key={k}>
                 <label className="label" htmlFor={`sup-${k}`}>{l}</label>
@@ -502,17 +510,17 @@ export function SupplierRegister({ country }) {
               </div>
             ))}
             <div>
-              <label className="label" htmlFor="sup-status">Status</label>
+              <label className="label" htmlFor="sup-status">{t('wmsprocure.chain.status')}</label>
               <select id="sup-status" className="input w-full" value={form.status} onChange={(e) => set('status', e.target.value)}>
-                {SUPPLIER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {SUPPLIER_STATUSES.map((s) => <option key={s} value={s}>{t(`wmsprocure.supplierStatus.${s}`)}</option>)}
               </select>
             </div>
-            <p className="text-xs text-[var(--text-muted)]">Country: {form.country || scopedCountry(country) || 'not set (visible in every country)'}</p>
+            <p className="text-xs text-[var(--text-muted)]">{t('wmsprocure.chain.countryLabel', { country: form.country || scopedCountry(country) || t('wmsprocure.chain.countryNotSet') })}</p>
             {formErr && <p role="alert" className="text-sm text-red-300">{formErr}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={() => setEditing(null)} disabled={busy}>Cancel</button>
+              <button type="button" className="btn-secondary text-sm min-h-[44px]" onClick={() => setEditing(null)} disabled={busy}>{t('wmsprocure.chain.cancel')}</button>
               <button type="button" className="btn-primary text-sm inline-flex items-center gap-2 min-h-[44px]" onClick={save} disabled={busy}>
-                {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save supplier
+                {busy ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} {t('wmsprocure.chain.saveSupplier')}
               </button>
             </div>
           </div>

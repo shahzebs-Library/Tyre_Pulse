@@ -8,7 +8,9 @@ import 'package:tyre_pulse/features/inventory/inventory_providers.dart';
 import 'package:tyre_pulse/features/inventory/physical_inventory_providers.dart';
 import 'package:tyre_pulse/features/stock_count/data/stock_count_recorder.dart';
 import 'package:tyre_pulse/features/stock_count/data/stock_count_repository.dart';
+import 'package:tyre_pulse/features/stock_count/data/stock_history_repository.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
+import 'package:tyre_pulse/features/stock_count/domain/stock_movement.dart';
 
 final Provider<StockCountRepository> stockCountRepositoryProvider =
     Provider<StockCountRepository>(
@@ -31,4 +33,17 @@ final Provider<StockCountRecorder> stockCountRecorderProvider =
     store: ref.watch(secureStoreProvider),
     newId: ref.watch(inventoryIdFactoryProvider),
   ),
+);
+
+/// The stock ledger reader / receipt poster for the store history screens.
+final Provider<StockHistoryRepository> stockHistoryRepositoryProvider =
+    Provider<StockHistoryRepository>(
+  (Ref ref) => DefaultStockHistoryRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// In / out / net totals for one history filter.
+final stockHistorySummaryProvider =
+    FutureProvider.autoDispose.family<MovementSummary, StockHistoryQuery>(
+  (Ref ref, StockHistoryQuery query) =>
+      ref.watch(stockHistoryRepositoryProvider).summary(query),
 );

@@ -22,6 +22,24 @@ const String handoverRecordColumns = 'id,document_no,report_no,asset_no,'
     'supervisor_name,supervisor_signature,supervisor_at,'
     'incharge_name,incharge_signature,incharge_at,created_by,created_at';
 
+/// The authorization-paper columns (20261126171000). Selected on top of
+/// [handoverRecordColumns]; a server without that migration answers
+/// 42703 / PGRST204, and the repository then re-reads with the legacy list.
+const String handoverAuthorizationColumns = 'from_driver_id,to_driver_id,'
+    'hour_meter,site,from_signature,from_signed_name,from_signed_at,'
+    'from_signed_by,to_signature,to_signed_name,to_signed_at,to_signed_by,'
+    'latitude,longitude,location_accuracy_m,location_status,'
+    'location_captured_at,frozen_at,from_on_behalf,to_on_behalf';
+
+/// Which driver signs which side of the paper.
+enum HandoverParty {
+  handing('handing'),
+  receiving('receiving');
+
+  const HandoverParty(this.key);
+  final String key;
+}
+
 @immutable
 class HandoverRecord {
   const HandoverRecord({
@@ -53,7 +71,61 @@ class HandoverRecord {
     this.inchargeAt,
     this.createdBy,
     this.createdAt,
+    this.row = const <String, Object?>{},
   });
+
+  /// The row exactly as read, for the spec-driven PDF (which reads columns by
+  /// the names in `docs/document-specs/handover-authorization.json`).
+  final Map<String, Object?> row;
+
+  /// True when the server returned the authorization columns at all. Without
+  /// them the screen keeps the legacy single signature.
+  bool get hasAuthorizationColumns => row.containsKey('to_signed_at');
+
+  String? _text(String key) {
+    final Object? v = row[key];
+    if (v is! String) return null;
+    final String t = v.trim();
+    return t.isEmpty ? null : t;
+  }
+
+  String? get fromSignature => _text('from_signature');
+  String? get fromSignedName => _text('from_signed_name');
+  String? get fromSignedAt => _text('from_signed_at');
+  String? get fromSignedBy => _text('from_signed_by');
+  String? get toSignature => _text('to_signature');
+  String? get toSignedName => _text('to_signed_name');
+  String? get toSignedAt => _text('to_signed_at');
+  String? get fromDriverId => _text('from_driver_id');
+  String? get toDriverId => _text('to_driver_id');
+  String? get site => _text('site');
+  String? get frozenAt => _text('frozen_at');
+  String? get locationStatus => _text('location_status');
+  double? get hourMeter => (row['hour_meter'] as num?)?.toDouble();
+
+  /// True when a supervisor signed for that party (not the driver's own
+  /// account). Shown on screen and on the paper.
+  bool get fromOnBehalf => row['from_on_behalf'] == true;
+  bool get toOnBehalf => row['to_on_behalf'] == true;
+
+  /// Locked once the first driver signed (server freeze).
+  bool get isFrozen =>
+      frozenAt != null || fromSignedAt != null || toSignedAt != null;
+
+  /// The party whose signature is due, or null when both signed or the row is
+  /// already past the signing stage.
+  HandoverParty? get nextParty {
+    if (!hasAuthorizationColumns) return null;
+    final String status = approvalStatus ?? 'pending_supervisor';
+    if (status != 'draft' && status != 'pending_supervisor') return null;
+    if (fromSignedAt == null) return HandoverParty.handing;
+    if (toSignedAt == null) return HandoverParty.receiving;
+    return null;
+  }
+
+  /// The stored name for [party] when it was not picked from the register.
+  bool partyHasRegisterDriver(HandoverParty party) =>
+      (party == HandoverParty.handing ? fromDriverId : toDriverId) != null;
 
   final String id;
   final String? documentNo;
@@ -158,6 +230,7 @@ class HandoverRecord {
       inchargeAt: _stringOrNull(row['incharge_at']),
       createdBy: _stringOrNull(row['created_by']),
       createdAt: _dateTimeOrNull(row['created_at']),
+      row: Map<String, Object?>.from(row),
     );
   }
 

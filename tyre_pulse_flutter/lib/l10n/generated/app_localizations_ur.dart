@@ -641,10 +641,13 @@ class AppLocalizationsUr extends AppLocalizations {
   String get tyreConditionPuncture => 'پنکچر';
 
   @override
-  String get tyreConditionFlat => 'سپاٹ';
+  String get tyreConditionFlat => 'ہوا نکلی ہوئی';
 
   @override
   String get tyreConditionMissing => 'غائب';
+
+  @override
+  String get tyreConditionNotChecked => 'چیک نہیں ہوا';
 
   @override
   String get inspectionNavTitle => 'نیا معائنہ';
@@ -8741,7 +8744,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get inventoryCopyCatalog =>
-      'myAuditsTitle=میری گنتیاں~audit=انوینٹری آڈٹ~noAudits=کوئی گنتی تفویض نہیں~noAuditsBody=اس وقت آپ کو کوئی انوینٹری گنتی تفویض نہیں ہے۔~draftsUnreadable=اس فون پر محفوظ گنتیاں ابھی پڑھی نہیں جا سکیں۔ کچھ تبدیل نہیں ہوا۔ دوبارہ کوشش کریں۔~unsyncedLines=%n گنی گئی لائنیں اس فون پر محفوظ ہیں اور ابھی بھیجی نہیں گئیں۔ کھولنے کے لیے دبائیں۔~pendingN=%n نہیں بھیجی گئیں~overdue=تاخیر شدہ~due=آخری تاریخ~notCounting=یہ آڈٹ گنتی کے لیے کھلا نہیں ہے۔~notProvisionedTitle=انوینٹری گنتی ابھی ترتیب نہیں دی گئی~notProvisionedBody=سرور پر ابھی انوینٹری گنتی فعال نہیں ہے۔ آپ کے منتظم کو انوینٹری سیٹ اپ مکمل کرنا ہوگا۔~loadFailed=یہ لوڈ نہیں ہو سکا۔~countTitle=بلائنڈ گنتی~resumed=دوبارہ شروع: آپ کے پچھلے سیشن کی %n لائنیں۔~noLocations=اس آڈٹ میں کوئی مقام نہیں ہے۔~progress=گنے گئے مقامات: %b میں سے %a~linesDone=%n لائنیں گنی گئیں~unexpectedN=%n غیر متوقع~scanLocation=پہلے مقام کا لیبل اسکین کریں~scanItem=آئٹم، سیریل یا بارکوڈ اسکین کریں~scanCamera=کیمرے سے اسکین کریں~locations=مقامات~atLocation=گنتی کا مقام~scanningSerialsOf=سیریل اسکین ہو رہے ہیں~stopSerials=روکیں~serialTracked=سیریل سے ٹریک~linesN=%n لائنیں~myLines=یہاں میری گنتیاں~noLinesHere=اس مقام پر ابھی کچھ نہیں گنا گیا۔~confirmedZero=صفر (تصدیق شدہ)~notCountedYet=ابھی نہیں گنا~unexpected=غیر متوقع آئٹم~unexpectedHint=اس مقام کی فہرست میں نہیں۔ اس کا جائزہ لیا جائے گا۔~photosN=%n تصاویر~submitN=%n گنی گئی لائنیں بھیجیں~submitDone=%n لائنیں بھیج دی گئیں۔~submitNothing=بھیجنے سے پہلے ایک لائن مکمل کریں۔~submitOffline=کنکشن نہیں۔ آپ کی گنتیاں اس فون پر محفوظ ہیں؛ سگنل آنے پر دوبارہ بھیجیں۔~submitQueued=کنکشن نہیں ہے۔ %n گنی ہوئی لائنیں کنکشن واپس آنے پر خود بخود بھیجی جائیں گی۔~submitPartial=کچھ لائنیں قبول نہیں ہوئیں یا ان کی تصاویر اپ لوڈ نہیں ہو سکیں۔ نشان زدہ لائنیں دیکھیں۔~submitFailed=گنتیاں بھیجی نہیں جا سکیں۔ یہ اب بھی اس فون پر محفوظ ہیں۔~draftSaveFailed=یہ فون ابھی گنتی محفوظ نہیں کر سکا۔ ایپ بند نہ کریں؛ دوبارہ کوشش کریں۔~serialCounted=سیریل گن لیا گیا۔~scan_locationSelected=مقام منتخب ہو گیا۔~scan_serialItemSelected=اب ہر یونٹ کا سیریل اسکین کریں۔~scan_locationOutOfScope=یہ مقام اس آڈٹ کا حصہ نہیں ہے۔~scan_duplicateSerial=یہ سیریل اس آڈٹ میں پہلے ہی گنا جا چکا ہے۔~scan_needsLocation=آئٹم گننے سے پہلے مقام کا لیبل اسکین کریں۔~countedQty=گنی گئی مقدار~confirmZero=یہاں کچھ نہیں ملا~confirmZeroHint=دیکھنے کے بعد ہی نشان لگائیں: خالی خانہ صفر کی گنتی نہیں ہے۔~serialOne=ایک سیریل والا یونٹ۔~condition=حالت~condition_good=اچھی~condition_damaged=خراب~condition_repairable=مرمت کے قابل~condition_quarantine=قرنطینہ~condition_scrap=اسکریپ~remarks=ریمارکس (اختیاری)~photo=تصویر~addPhoto=تصویر شامل کریں~photoFailed=تصویر نہیں لی جا سکی۔~removeLine=ہٹائیں~saveLine=محفوظ کریں~enterQty=گنی گئی مقدار درج کریں، یا یہاں کچھ نہیں ملا پر نشان لگائیں۔~invalidQty=مقدار منفی نہیں ہو سکتی۔~confirmZeroFirst=صفر کے لیے یہاں کچھ نہیں ملا پر نشان لگائیں۔~state_draft=فون پر~state_submitted=بھیج دیا~state_rejected=قبول نہیں~status_draft=مسودہ~status_scheduled=شیڈول~status_assigned=تفویض شدہ~status_in_progress=جاری~status_counting_completed=گنتی مکمل~status_reconciliation=مطابقت~status_recount=دوبارہ گنتی~status_investigation=تحقیقات~status_approval=منظوری کا انتظار~status_adjustment_posted=ایڈجسٹمنٹ درج~status_closed=بند~status_cancelled=منسوخ~status_rejected=مسترد~status_unknown=حالت درج نہیں~type_full=مکمل گنتی~type_partial=جزوی گنتی~type_cycle=سائیکل گنتی~type_category=زمرہ گنتی~type_high_value=زیادہ قیمت گنتی~type_surprise=اچانک گنتی~type_bin=بن گنتی~type_tyre_serial=ٹائر سیریل گنتی~type_vehicle_tyre=گاڑی ٹائر گنتی~transfersTitle=اسٹاک منتقلیاں~transfer=منتقلی~noTransfers=کوئی منتقلی نہیں~noTransfersBody=آپ کو کوئی اسٹاک منتقلی نظر نہیں آ رہی۔~tstatus_dispatched=روانہ~tstatus_in_transit=راستے میں~tstatus_partially_received=جزوی وصول~tstatus_completed=مکمل~tstatus_cancelled=منسوخ~tstatus_unknown=حالت درج نہیں~dispatchTitle=اسٹاک روانہ کریں~scanFrom=روانگی کے مقام کا لیبل اسکین کریں~scanTo=منزل کے مقام کا لیبل اسکین کریں~from=سے~to=تک~items=اشیاء~noItemsScanned=ابھی کوئی آئٹم اسکین نہیں ہوا۔~needFrom=وہ مقام اسکین کریں جہاں سے اسٹاک نکلتا ہے۔~needTo=وہ مقام اسکین کریں جہاں اسٹاک جاتا ہے۔~sameLocation=روانگی اور منزل الگ مقام ہونے چاہئیں۔~needLines=کم از کم ایک لائن شامل کریں۔~dispatchSend=روانہ کریں~dispatchDone=منتقلی روانہ ہو گئی۔~transferOffline=کنکشن نہیں۔ کچھ نہیں بھیجا گیا؛ سگنل آنے پر دوبارہ کوشش کریں۔~transferFailed=منتقلی محفوظ نہیں ہو سکی۔~receiveTitle=منتقلی وصول کریں~noLines=اس منتقلی میں کوئی لائن نہیں۔~outstanding=ابھی آنا باقی~outstandingUnknown=بھیجی گئی مقدار درج نہیں~receiveSend=وصولی کی تصدیق کریں~receiveDone=وصولی درج ہو گئی۔~manualSendNote=آپ کی گنتی اس فون پر رہتی ہے جب تک سرور تصدیق نہ کرے۔ سگنل نہ ہونے پر مکمل لائنیں (اپنی تصاویر سمیت) کنکشن واپس آنے پر خود بخود بھیجی جاتی ہیں۔ ابھی بھیجنے کے لیے بھیجیں دبائیں۔~finishCounting=گنتی مکمل کریں~finishNote=جب ہر مقام گن کر بھیج دیا جائے تو گنتی مکمل کریں تاکہ آڈٹ کا ملان ہو سکے۔ اس کے بعد گنتی شامل نہیں کی جا سکتی۔~finishUnsent=%n لائنیں ابھی اس فون پر ہیں۔ گنتی مکمل کرنے سے پہلے انہیں بھیجیں۔~finishNotOpen=اس آڈٹ پر گنتی کھلی نہیں ہے، اس لیے اسے مکمل نہیں کیا جا سکتا۔~finishOffline=کنکشن نہیں۔ گنتی مکمل کرنے کے لیے سگنل درکار ہے؛ کچھ تبدیل نہیں ہوا۔~finishConfirmTitle=گنتی مکمل کریں؟~finishConfirmBody=آڈٹ ملان کے مرحلے میں چلا جائے گا اور مزید گنتی شامل نہیں ہو سکے گی۔ یقینی بنائیں کہ ہر مقام گنا جا چکا ہے۔~finishCancel=گنتی جاری رکھیں~finishDone=گنتی مکمل ہو گئی۔ آڈٹ ملان کے لیے تیار ہے۔~finishFailed=گنتی مکمل نہیں ہو سکی۔ دوبارہ کوشش کریں۔~pi_title=فزیکل انوینٹری~pi_entry=فزیکل انوینٹری~pi_pendingN=%n بھیجنے کے منتظر~pi_startLead=شیلف پر موجود اشیاء درج کریں۔ یہاں کچھ بھی سرکاری اسٹاک نہیں بدلتا؛ مینیجر بعد میں ابتدائی بیلنس منظور کرتا ہے۔~pi_store=اسٹور~pi_start=فزیکل انوینٹری شروع کریں~pi_pickStore=پہلے اسٹور منتخب کریں۔~pi_scanHint=بن لیبل، بارکوڈ، SKU، OEM یا متبادل نمبر اسکین کریں یا لکھیں~pi_scanned=اسکین شدہ~pi_change=تبدیل کریں~pi_variantUnknown=مواد (قسم معلوم نہیں)~pi_describe=نہیں ملا؟ چیز کی تفصیل لکھیں~pi_ref_description=تفصیل~pi_ref_manufacturer=صانع~pi_ref_oem=OEM پارٹ نمبر~pi_ref_aftermarket=متبادل پارٹ نمبر~pi_ref_company_sku=کمپنی SKU~pi_unidentifiedHint=قیمت یا پرچیز آرڈر ضروری نہیں۔ نامعلوم اشیاء کو عارضی حوالہ ملتا ہے اور جائزے تک جاری نہیں ہو سکتیں۔~pi_qty=مقدار~pi_uom=یونٹ~pi_condition=حالت~pi_ownership=ملکیت~pi_locationHint=ریک، شیلف یا بن~pi_remarks=تبصرے~pi_photoRole=تصویر میں~pi_takePhoto=تصویر لیں~pi_photosN=%n تصاویر~pi_saveNext=محفوظ کریں اور اگلا~pi_leave=سیشنز پر واپس~pi_ledgerRule=محفوظ اشیاء بھیجے جانے تک اسی فون پر رہتی ہیں۔ سرکاری اسٹاک صرف تب بدلتا ہے جب کوئی دوسرا شخص ابتدائی بیلنس منظور کرے۔~pi_noMatch=کوئی منظور شدہ مواد نہیں ملا۔ چیز کی تفصیل لکھ کر محفوظ کریں۔~pi_searchOffline=آف لائن: چیز کی تفصیل لکھیں؛ بعد میں بھیجی جائے گی۔~pi_qtyInvalid=صفر یا اس سے زیادہ مقدار درج کریں۔~pi_savedLocal=محفوظ ہو گیا۔ اگلی چیز کے لیے تیار۔~pi_saveFailed=فون چیز محفوظ نہیں کر سکا۔ کچھ ضائع نہیں ہوا؛ دوبارہ کوشش کریں۔~pi_cls_genuine=اصلی~pi_cls_oes=OES~pi_cls_aftermarket=متبادل~pi_cls_unknown=غیر تصدیق شدہ~pi_cond_new=نیا~pi_cond_used=استعمال شدہ~pi_cond_refurbished=مرمت شدہ~pi_cond_repairable=قابل مرمت~pi_cond_damaged=خراب~pi_cond_scrap=کباڑ~pi_cond_unknown=نامعلوم~pi_own_owned=کمپنی کی ملکیت~pi_own_consignment=امانت~pi_own_supplier=سپلائر کی ملکیت~pi_own_customer=گاہک کی ملکیت~pi_own_unknown=نامعلوم~pi_role_item=چیز~pi_role_label=لیبل~pi_role_location=مقام~pi_role_packaging=پیکنگ~pi_role_damage=نقصان~pi_role_other=دیگر~pi_attention=چیز پر توجہ درکار~pi_dismiss=نظر انداز کریں~pi_err_photo_missing=ایک تصویر کی فائل بھیجنے سے پہلے فون سے ہٹ گئی۔ چیز خود محفوظ ہے؛ گمشدہ تصویر قبول کرنے کے لیے نظر انداز کریں۔~pi_err_photo_read_failed=ایک تصویر ابھی پڑھی نہیں جا سکی۔ یہ فون پر رہے گی اور بعد میں بھیجی جائے گی۔~pi_noStores=آپ کے لیے ابھی کوئی اسٹور سیٹ نہیں۔ ایڈمنسٹریٹر سے ویب پر اسٹور شامل کرنے کو کہیں۔~pi_scanStoreLabel=یا اسٹور یا بن کا لیبل اسکین کریں~pi_bin=بن~pi_clearBin=بن ہٹائیں~pi_binUnknown=یہ لیبل نہیں ملا۔ فہرست سے اسٹور منتخب کریں۔~pi_binOtherStore=یہ بن کسی دوسرے اسٹور کا ہے۔~pi_binOffline=آف لائن: بن محفوظ ہے۔ آئٹم بھیجتے وقت اس کی جانچ ہوگی۔~pi_captureTitle=ابتدائی فزیکل انوینٹری~pi_online=آن لائن~pi_offline=آف لائن~pi_location=مقام~pi_chooseBin=بن منتخب کرنے کے لیے ٹیپ کریں~pi_scanBin=بن کا لیبل اسکین کریں~pi_searchHint=بارکوڈ اسکین کریں / SKU، OEM یا پارٹ نمبر تلاش کریں...~pi_ref_part_number=مینوفیکچرر پارٹ نمبر~pi_classification=درجہ بندی~pi_clsPick_genuine=اصلی OEM~pi_clsPick_aftermarket=متبادل~pi_clsPick_unknown=نامعلوم~pi_clsFromCatalog=منظور شدہ مواد سے طے شدہ~pi_photoEvidence=تصویری ثبوت (کم از کم 1 ضروری)~pi_slot_label=پارٹ نمبر~pi_photoRequired=محفوظ کرنے سے پہلے کم از کم ایک تصویر لیں۔~pi_removePhoto=تصویر ہٹائیں~pi_saveCountNext=محفوظ کریں اور اگلا آئٹم گنیں~pi_moreDetails=مزید تفصیلات~pi_qtyMinus=مقدار کم کریں (10 کے لیے دبائے رکھیں)~pi_qtyPlus=مقدار بڑھائیں (10 کے لیے دبائے رکھیں)~jc_menu=جاری کریں یا واپس لیں~jc_issueTitle=جاب کارڈ پر جاری کریں~jc_returnTitle=جاب کارڈ سے واپسی~jc_stockLine=اسٹاک لائن~jc_jobCard=جاب کارڈ نمبر~jc_find=جاب کارڈ چیک کریں~jc_asset=اثاثہ~jc_status=حیثیت~jc_notFound=اس نمبر کا کوئی جاب کارڈ آپ کو نظر نہیں آتا۔~jc_lookupFailed=جاب کارڈ چیک نہیں ہو سکا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔~jc_checkFirst=بھیجنے سے پہلے جاب کارڈ چیک کریں۔~jc_closed=یہ جاب کارڈ بند ہے۔ اس پر سامان جاری نہیں ہو سکتا۔~jc_qty=مقدار~jc_reason=وجہ~jc_reasonOptional=وجہ (اختیاری)~jc_onHand=موجود~jc_available=دستیاب~jc_send=اسٹاک جاری کریں~jc_sendReturn=اسٹاک واپس کریں~jc_needStock=اسٹاک لائن منتخب کریں۔~jc_needJobCard=جاب کارڈ نمبر درج کریں۔~jc_needQty=صفر سے زیادہ مقدار درج کریں۔~jc_moreThanOnHand=یہ اس لائن پر دستیاب مقدار سے زیادہ ہے۔~jc_needReason=واپسی کی وجہ لکھیں۔~jc_issued=اسٹاک جاب کارڈ پر جاری ہو گیا۔~jc_returned=اسٹاک جاب کارڈ سے واپس آ گیا۔~jc_alreadyPosted=یہ پہلے ہی درج تھا۔ کچھ بھی دو بار درج نہیں ہوا۔~jc_shortage=اسٹاک کافی نہیں: %n دستیاب۔ کچھ درج نہیں ہوا۔~jc_reserved=اس جاب کارڈ کے لیے محفوظ: %n۔ اجرا یہی ریزرویشن استعمال کرتا ہے۔~jc_reservedOldest=(%n ریزرویشنز، سب سے پرانی پہلے استعمال ہوتی ہے۔)~jc_noReservation=اس اسٹاک لائن پر اس جاب کارڈ کی کوئی کھلی ریزرویشن نہیں۔~jc_reservationFailed=ریزرویشنز چیک نہیں ہو سکیں۔ اجرا پھر بھی بھیجا جا سکتا ہے۔~jc_offline=کنکشن نہیں۔ کچھ درج نہیں ہوا؛ آن لائن ہونے پر دوبارہ کوشش کریں۔~jc_failed=اسٹاک منتقل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~jc_onlineNote=کنکشن ضروری ہے۔ اسٹاک صرف سرور کی تصدیق پر منتقل ہوتا ہے۔~jc_returnNote=واپسی صرف اتنی ہو سکتی ہے جتنی اس جاب کارڈ نے اس لائن سے لی، اور اسی لاگت پر واپس آتی ہے جس پر جاری ہوئی تھی۔';
+      'myAuditsTitle=میری گنتیاں~audit=انوینٹری آڈٹ~noAudits=کوئی گنتی تفویض نہیں~noAuditsBody=اس وقت آپ کو کوئی انوینٹری گنتی تفویض نہیں ہے۔~draftsUnreadable=اس فون پر محفوظ گنتیاں ابھی پڑھی نہیں جا سکیں۔ کچھ تبدیل نہیں ہوا۔ دوبارہ کوشش کریں۔~unsyncedLines=%n گنی گئی لائنیں اس فون پر محفوظ ہیں اور ابھی بھیجی نہیں گئیں۔ کھولنے کے لیے دبائیں۔~pendingN=%n نہیں بھیجی گئیں~overdue=تاخیر شدہ~due=آخری تاریخ~notCounting=یہ آڈٹ گنتی کے لیے کھلا نہیں ہے۔~notProvisionedTitle=انوینٹری گنتی ابھی ترتیب نہیں دی گئی~notProvisionedBody=سرور پر ابھی انوینٹری گنتی فعال نہیں ہے۔ آپ کے منتظم کو انوینٹری سیٹ اپ مکمل کرنا ہوگا۔~loadFailed=یہ لوڈ نہیں ہو سکا۔~countTitle=بلائنڈ گنتی~resumed=دوبارہ شروع: آپ کے پچھلے سیشن کی %n لائنیں۔~noLocations=اس آڈٹ میں کوئی مقام نہیں ہے۔~progress=گنے گئے مقامات: %b میں سے %a~linesDone=%n لائنیں گنی گئیں~unexpectedN=%n غیر متوقع~scanLocation=پہلے مقام کا لیبل اسکین کریں~scanItem=آئٹم، سیریل یا بارکوڈ اسکین کریں~scanCamera=کیمرے سے اسکین کریں~locations=مقامات~atLocation=گنتی کا مقام~scanningSerialsOf=سیریل اسکین ہو رہے ہیں~stopSerials=روکیں~serialTracked=سیریل سے ٹریک~linesN=%n لائنیں~myLines=یہاں میری گنتیاں~noLinesHere=اس مقام پر ابھی کچھ نہیں گنا گیا۔~confirmedZero=صفر (تصدیق شدہ)~notCountedYet=ابھی نہیں گنا~unexpected=غیر متوقع آئٹم~unexpectedHint=اس مقام کی فہرست میں نہیں۔ اس کا جائزہ لیا جائے گا۔~photosN=%n تصاویر~submitN=%n گنی گئی لائنیں بھیجیں~submitDone=%n لائنیں بھیج دی گئیں۔~submitNothing=بھیجنے سے پہلے ایک لائن مکمل کریں۔~submitOffline=کنکشن نہیں۔ آپ کی گنتیاں اس فون پر محفوظ ہیں؛ سگنل آنے پر دوبارہ بھیجیں۔~submitQueued=کنکشن نہیں ہے۔ %n گنی ہوئی لائنیں کنکشن واپس آنے پر خود بخود بھیجی جائیں گی۔~submitPartial=کچھ لائنیں قبول نہیں ہوئیں یا ان کی تصاویر اپ لوڈ نہیں ہو سکیں۔ نشان زدہ لائنیں دیکھیں۔~submitFailed=گنتیاں بھیجی نہیں جا سکیں۔ یہ اب بھی اس فون پر محفوظ ہیں۔~draftSaveFailed=یہ فون ابھی گنتی محفوظ نہیں کر سکا۔ ایپ بند نہ کریں؛ دوبارہ کوشش کریں۔~serialCounted=سیریل گن لیا گیا۔~scan_locationSelected=مقام منتخب ہو گیا۔~scan_serialItemSelected=اب ہر یونٹ کا سیریل اسکین کریں۔~scan_locationOutOfScope=یہ مقام اس آڈٹ کا حصہ نہیں ہے۔~scan_duplicateSerial=یہ سیریل اس آڈٹ میں پہلے ہی گنا جا چکا ہے۔~scan_needsLocation=آئٹم گننے سے پہلے مقام کا لیبل اسکین کریں۔~countedQty=گنی گئی مقدار~confirmZero=یہاں کچھ نہیں ملا~confirmZeroHint=دیکھنے کے بعد ہی نشان لگائیں: خالی خانہ صفر کی گنتی نہیں ہے۔~serialOne=ایک سیریل والا یونٹ۔~condition=حالت~condition_good=اچھی~condition_damaged=خراب~condition_repairable=مرمت کے قابل~condition_quarantine=قرنطینہ~condition_scrap=اسکریپ~remarks=ریمارکس (اختیاری)~photo=تصویر~addPhoto=تصویر شامل کریں~photoFailed=تصویر نہیں لی جا سکی۔~removeLine=ہٹائیں~saveLine=محفوظ کریں~enterQty=گنی گئی مقدار درج کریں، یا یہاں کچھ نہیں ملا پر نشان لگائیں۔~invalidQty=مقدار منفی نہیں ہو سکتی۔~confirmZeroFirst=صفر کے لیے یہاں کچھ نہیں ملا پر نشان لگائیں۔~state_draft=فون پر~state_submitted=بھیج دیا~state_rejected=قبول نہیں~status_draft=مسودہ~status_scheduled=شیڈول~status_assigned=تفویض شدہ~status_in_progress=جاری~status_counting_completed=گنتی مکمل~status_reconciliation=مطابقت~status_recount=دوبارہ گنتی~status_investigation=تحقیقات~status_approval=منظوری کا انتظار~status_adjustment_posted=ایڈجسٹمنٹ درج~status_closed=بند~status_cancelled=منسوخ~status_rejected=مسترد~status_unknown=حالت درج نہیں~type_full=مکمل گنتی~type_partial=جزوی گنتی~type_cycle=سائیکل گنتی~type_category=زمرہ گنتی~type_high_value=زیادہ قیمت گنتی~type_surprise=اچانک گنتی~type_bin=بن گنتی~type_tyre_serial=ٹائر سیریل گنتی~type_vehicle_tyre=گاڑی ٹائر گنتی~transfersTitle=اسٹاک منتقلیاں~transfer=منتقلی~noTransfers=کوئی منتقلی نہیں~noTransfersBody=آپ کو کوئی اسٹاک منتقلی نظر نہیں آ رہی۔~tstatus_dispatched=روانہ~tstatus_in_transit=راستے میں~tstatus_partially_received=جزوی وصول~tstatus_completed=مکمل~tstatus_cancelled=منسوخ~tstatus_unknown=حالت درج نہیں~dispatchTitle=اسٹاک روانہ کریں~scanFrom=روانگی کے مقام کا لیبل اسکین کریں~scanTo=منزل کے مقام کا لیبل اسکین کریں~from=سے~to=تک~items=اشیاء~noItemsScanned=ابھی کوئی آئٹم اسکین نہیں ہوا۔~needFrom=وہ مقام اسکین کریں جہاں سے اسٹاک نکلتا ہے۔~needTo=وہ مقام اسکین کریں جہاں اسٹاک جاتا ہے۔~sameLocation=روانگی اور منزل الگ مقام ہونے چاہئیں۔~needLines=کم از کم ایک لائن شامل کریں۔~dispatchSend=روانہ کریں~dispatchDone=منتقلی روانہ ہو گئی۔~transferOffline=کنکشن نہیں۔ کچھ نہیں بھیجا گیا؛ سگنل آنے پر دوبارہ کوشش کریں۔~transferFailed=منتقلی محفوظ نہیں ہو سکی۔~receiveTitle=منتقلی وصول کریں~noLines=اس منتقلی میں کوئی لائن نہیں۔~outstanding=ابھی آنا باقی~outstandingUnknown=بھیجی گئی مقدار درج نہیں~receiveSend=وصولی کی تصدیق کریں~receiveDone=وصولی درج ہو گئی۔~manualSendNote=آپ کی گنتی اس فون پر رہتی ہے جب تک سرور تصدیق نہ کرے۔ سگنل نہ ہونے پر مکمل لائنیں (اپنی تصاویر سمیت) کنکشن واپس آنے پر خود بخود بھیجی جاتی ہیں۔ ابھی بھیجنے کے لیے بھیجیں دبائیں۔~finishCounting=گنتی مکمل کریں~finishNote=جب ہر مقام گن کر بھیج دیا جائے تو گنتی مکمل کریں تاکہ آڈٹ کا ملان ہو سکے۔ اس کے بعد گنتی شامل نہیں کی جا سکتی۔~finishUnsent=%n لائنیں ابھی اس فون پر ہیں۔ گنتی مکمل کرنے سے پہلے انہیں بھیجیں۔~finishNotOpen=اس آڈٹ پر گنتی کھلی نہیں ہے، اس لیے اسے مکمل نہیں کیا جا سکتا۔~finishOffline=کنکشن نہیں۔ گنتی مکمل کرنے کے لیے سگنل درکار ہے؛ کچھ تبدیل نہیں ہوا۔~finishConfirmTitle=گنتی مکمل کریں؟~finishConfirmBody=آڈٹ ملان کے مرحلے میں چلا جائے گا اور مزید گنتی شامل نہیں ہو سکے گی۔ یقینی بنائیں کہ ہر مقام گنا جا چکا ہے۔~finishCancel=گنتی جاری رکھیں~finishDone=گنتی مکمل ہو گئی۔ آڈٹ ملان کے لیے تیار ہے۔~finishFailed=گنتی مکمل نہیں ہو سکی۔ دوبارہ کوشش کریں۔~pi_title=فزیکل انوینٹری~pi_entry=فزیکل انوینٹری~pi_pendingN=%n بھیجنے کے منتظر~pi_startLead=شیلف پر موجود اشیاء درج کریں۔ یہاں کچھ بھی سرکاری اسٹاک نہیں بدلتا؛ مینیجر بعد میں ابتدائی بیلنس منظور کرتا ہے۔~pi_store=اسٹور~pi_start=فزیکل انوینٹری شروع کریں~pi_pickStore=پہلے اسٹور منتخب کریں۔~pi_scanHint=بن لیبل، بارکوڈ، SKU، OEM یا متبادل نمبر اسکین کریں یا لکھیں~pi_scanned=اسکین شدہ~pi_change=تبدیل کریں~pi_variantUnknown=مواد (قسم معلوم نہیں)~pi_describe=نہیں ملا؟ چیز کی تفصیل لکھیں~pi_ref_description=تفصیل~pi_ref_manufacturer=صانع~pi_ref_oem=OEM پارٹ نمبر~pi_ref_aftermarket=متبادل پارٹ نمبر~pi_ref_company_sku=کمپنی SKU~pi_unidentifiedHint=قیمت یا پرچیز آرڈر ضروری نہیں۔ نامعلوم اشیاء کو عارضی حوالہ ملتا ہے اور جائزے تک جاری نہیں ہو سکتیں۔~pi_qty=مقدار~pi_uom=یونٹ~pi_condition=حالت~pi_ownership=ملکیت~pi_locationHint=ریک، شیلف یا بن~pi_remarks=تبصرے~pi_photoRole=تصویر میں~pi_takePhoto=تصویر لیں~pi_photosN=%n تصاویر~pi_saveNext=محفوظ کریں اور اگلا~pi_leave=سیشنز پر واپس~pi_ledgerRule=محفوظ اشیاء بھیجے جانے تک اسی فون پر رہتی ہیں۔ سرکاری اسٹاک صرف تب بدلتا ہے جب کوئی دوسرا شخص ابتدائی بیلنس منظور کرے۔~pi_noMatch=کوئی منظور شدہ مواد نہیں ملا۔ چیز کی تفصیل لکھ کر محفوظ کریں۔~pi_searchOffline=آف لائن: چیز کی تفصیل لکھیں؛ بعد میں بھیجی جائے گی۔~pi_qtyInvalid=صفر یا اس سے زیادہ مقدار درج کریں۔~pi_savedLocal=محفوظ ہو گیا۔ اگلی چیز کے لیے تیار۔~pi_saveFailed=فون چیز محفوظ نہیں کر سکا۔ کچھ ضائع نہیں ہوا؛ دوبارہ کوشش کریں۔~pi_cls_genuine=اصلی~pi_cls_oes=OES~pi_cls_aftermarket=متبادل~pi_cls_unknown=غیر تصدیق شدہ~pi_cond_new=نیا~pi_cond_used=استعمال شدہ~pi_cond_refurbished=مرمت شدہ~pi_cond_repairable=قابل مرمت~pi_cond_damaged=خراب~pi_cond_scrap=کباڑ~pi_cond_unknown=نامعلوم~pi_own_owned=کمپنی کی ملکیت~pi_own_consignment=امانت~pi_own_supplier=سپلائر کی ملکیت~pi_own_customer=گاہک کی ملکیت~pi_own_unknown=نامعلوم~pi_role_item=چیز~pi_role_label=لیبل~pi_role_location=مقام~pi_role_packaging=پیکنگ~pi_role_damage=نقصان~pi_role_other=دیگر~pi_attention=چیز پر توجہ درکار~pi_dismiss=نظر انداز کریں~pi_err_photo_missing=ایک تصویر کی فائل بھیجنے سے پہلے فون سے ہٹ گئی۔ چیز خود محفوظ ہے؛ گمشدہ تصویر قبول کرنے کے لیے نظر انداز کریں۔~pi_err_photo_read_failed=ایک تصویر ابھی پڑھی نہیں جا سکی۔ یہ فون پر رہے گی اور بعد میں بھیجی جائے گی۔~pi_noStores=آپ کے لیے ابھی کوئی اسٹور سیٹ نہیں۔ ایڈمنسٹریٹر سے ویب پر اسٹور شامل کرنے کو کہیں۔~pi_scanStoreLabel=یا اسٹور یا بن کا لیبل اسکین کریں~pi_bin=بن~pi_clearBin=بن ہٹائیں~pi_binUnknown=یہ لیبل نہیں ملا۔ فہرست سے اسٹور منتخب کریں۔~pi_binOtherStore=یہ بن کسی دوسرے اسٹور کا ہے۔~pi_binOffline=آف لائن: بن محفوظ ہے۔ آئٹم بھیجتے وقت اس کی جانچ ہوگی۔~pi_captureTitle=ابتدائی فزیکل انوینٹری~pi_online=آن لائن~pi_offline=آف لائن~pi_location=مقام~pi_chooseBin=بن منتخب کرنے کے لیے ٹیپ کریں~pi_scanBin=بن کا لیبل اسکین کریں~pi_searchHint=بارکوڈ اسکین کریں / SKU، OEM یا پارٹ نمبر تلاش کریں...~pi_ref_part_number=مینوفیکچرر پارٹ نمبر~pi_classification=درجہ بندی~pi_clsPick_genuine=اصلی OEM~pi_clsPick_aftermarket=متبادل~pi_clsPick_unknown=نامعلوم~pi_clsFromCatalog=منظور شدہ مواد سے طے شدہ~pi_photoEvidence=تصویری ثبوت (کم از کم 1 ضروری)~pi_slot_label=پارٹ نمبر~pi_photoRequired=محفوظ کرنے سے پہلے کم از کم ایک تصویر لیں۔~pi_removePhoto=تصویر ہٹائیں~pi_saveCountNext=محفوظ کریں اور اگلا آئٹم گنیں~pi_moreDetails=مزید تفصیلات~pi_qtyMinus=مقدار کم کریں (10 کے لیے دبائے رکھیں)~pi_qtyPlus=مقدار بڑھائیں (10 کے لیے دبائے رکھیں)~jc_menu=جاری کریں یا واپس لیں~jc_issueTitle=جاب کارڈ پر جاری کریں~jc_returnTitle=جاب کارڈ سے واپسی~jc_stockLine=اسٹاک لائن~jc_jobCard=جاب کارڈ نمبر~jc_find=جاب کارڈ چیک کریں~jc_asset=اثاثہ~jc_status=حیثیت~jc_notFound=اس نمبر کا کوئی جاب کارڈ آپ کو نظر نہیں آتا۔~jc_lookupFailed=جاب کارڈ چیک نہیں ہو سکا۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔~jc_checkFirst=بھیجنے سے پہلے جاب کارڈ چیک کریں۔~jc_closed=یہ جاب کارڈ بند ہے۔ اس پر سامان جاری نہیں ہو سکتا۔~jc_qty=مقدار~jc_reason=وجہ~jc_reasonOptional=وجہ (اختیاری)~jc_onHand=موجود~jc_available=دستیاب~jc_send=اسٹاک جاری کریں~jc_sendReturn=اسٹاک واپس کریں~jc_needStock=اسٹاک لائن منتخب کریں۔~jc_needJobCard=جاب کارڈ نمبر درج کریں۔~jc_needQty=صفر سے زیادہ مقدار درج کریں۔~jc_moreThanOnHand=یہ اس لائن پر دستیاب مقدار سے زیادہ ہے۔~jc_needReason=واپسی کی وجہ لکھیں۔~jc_issued=اسٹاک جاب کارڈ پر جاری ہو گیا۔~jc_returned=اسٹاک جاب کارڈ سے واپس آ گیا۔~jc_alreadyPosted=یہ پہلے ہی درج تھا۔ کچھ بھی دو بار درج نہیں ہوا۔~jc_shortage=اسٹاک کافی نہیں: %n دستیاب۔ کچھ درج نہیں ہوا۔~jc_reserved=اس جاب کارڈ کے لیے محفوظ: %n۔ اجرا یہی ریزرویشن استعمال کرتا ہے۔~jc_reservedOldest=(%n ریزرویشنز، سب سے پرانی پہلے استعمال ہوتی ہے۔)~jc_noReservation=اس اسٹاک لائن پر اس جاب کارڈ کی کوئی کھلی ریزرویشن نہیں۔~jc_reservationFailed=ریزرویشنز چیک نہیں ہو سکیں۔ اجرا پھر بھی بھیجا جا سکتا ہے۔~jc_offline=کنکشن نہیں۔ کچھ درج نہیں ہوا؛ آن لائن ہونے پر دوبارہ کوشش کریں۔~jc_failed=اسٹاک منتقل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~jc_onlineNote=کنکشن ضروری ہے۔ اسٹاک صرف سرور کی تصدیق پر منتقل ہوتا ہے۔~jc_returnNote=واپسی صرف اتنی ہو سکتی ہے جتنی اس جاب کارڈ نے اس لائن سے لی، اور اسی لاگت پر واپس آتی ہے جس پر جاری ہوئی تھی۔~sr_entry=سامان وصول کریں~sr_title=سامان وصول کریں~sr_intro=منظور شدہ پرچیز آرڈر کے مقابل جو آیا وہ درج کریں۔ اسٹاک میں مقدار صرف دوسرے شخص کی منظوری کے بعد شامل ہوگی۔~sr_noLines=پرچیز آرڈر کی کوئی کھلی لائن نہیں~sr_noLinesBody=آپ کی سائٹس پر وصول کرنے کو کچھ کھلا نہیں۔ پرچیز آرڈر منظور شدہ یا آرڈر شدہ ہو اور اس میں لائنیں ہوں، اور آپ کی سائٹس نام سے آپ کو دی گئی ہوں۔~sr_search=پرچیز آرڈر، آئٹم کوڈ یا نام تلاش کریں~sr_open=باقی %n~sr_ordered=آرڈر %n~sr_mine=میری حالیہ وصولیاں~sr_status_pending=منظوری کا انتظار~sr_status_approved=منظور، اسٹاک میں~sr_status_rejected=مسترد~sr_status_cancelled=واپس لی گئی~sr_formTitle=ڈیلیوری درج کریں~sr_qtyReceived=وصول شدہ مقدار~sr_qtyRejected=مسترد مقدار~sr_rejectionReason=مسترد کرنے کی وجہ~sr_location=وصولی کی جگہ~sr_noLocation=اس سائٹ پر وصولی کی کوئی جگہ نہیں۔ ایڈمن سے شامل کرائیں۔~sr_deliveryNoteNo=ڈیلیوری نوٹ نمبر (اختیاری)~sr_notes=نوٹس (اختیاری)~sr_photo=ڈیلیوری نوٹ کی تصویر (اختیاری)~sr_photoTaken=تصویر لگا دی گئی~sr_photoRemove=تصویر ہٹائیں~sr_noPrice=یونٹ قیمت اور لاگت پرچیز آرڈر سے آتی ہیں، آپ انہیں نہیں بدل سکتے۔~sr_send=منظوری کے لیے بھیجیں~sr_sent=وصولی منظوری کے لیے بھیج دی گئی~sr_alreadySent=یہ وصولی پہلے ہی بھیجی جا چکی ہے~sr_withdraw=واپس لیں~sr_withdrawn=وصولی واپس لے لی گئی~sr_offline=کنکشن نہیں۔ کچھ نہیں بھیجا گیا۔ آن لائن ہونے پر دوبارہ کوشش کریں، ایک ہی وصولی دو بار درج نہیں ہوگی۔~sr_failed=وصولی نہیں بھیجی جا سکی۔ دوبارہ کوشش کریں۔~sr_photoFailed=تصویر اپ لوڈ نہیں ہو سکی۔ کچھ نہیں بھیجا گیا۔ دوبارہ کوشش کریں یا تصویر ہٹا دیں۔~sr_qtyRequired=وصول شدہ مقدار درج کریں۔~sr_qtyPositive=مقدار صفر سے زیادہ ہونی چاہیے۔~sr_qtyTooLarge=یہ مقدار بہت زیادہ ہے۔~sr_rejectedRange=مسترد مقدار منفی یا وصول شدہ سے زیادہ نہیں ہو سکتی۔~sr_reasonRequired=سامان مسترد کرنے کی وجہ لکھیں۔~sr_overOpen=اس لائن پر باقی مقدار سے زیادہ ہے۔~sr_locationRequired=وصولی کی جگہ منتخب کریں۔~sr_noteTooLong=ڈیلیوری نوٹ نمبر بہت لمبا ہے۔~sr_onlineNote=صرف آن لائن۔ دوسرے شخص کی منظوری تک اسٹاک نہیں بدلتا۔~sr_qtyInvalid=مقدار صرف عدد میں لکھیں، جیسے 12 یا 2.5، کوما کے بغیر۔~sr_rejectedInvalid=مسترد مقدار صرف عدد میں لکھیں، یا خالی چھوڑ دیں۔~sr_photoOffline=کنکشن نہیں۔ تصویر لینے سے پہلے کنکشن جوڑیں، یہ وصولی کے ساتھ اپ لوڈ ہوتی ہے۔~sr_withdrawTitle=یہ وصولی واپس لیں؟~sr_withdrawBody=یہ منظوری کے لیے نہیں جائے گی اور اسٹاک نہیں بدلے گا۔ آپ ڈیلیوری دوبارہ درج کر سکتے ہیں۔~sr_keep=رہنے دیں~sr_errSite=یہ سائٹ نام سے آپ کو نہیں دی گئی۔ ایڈمن سے اپنی سائٹس میں شامل کرائیں۔~sr_errPoStatus=یہ پرچیز آرڈر ابھی منظور یا جاری نہیں ہوا۔~sr_errLineClosed=پرچیز آرڈر کی یہ لائن پہلے ہی بند ہے۔~sr_errNotKeeper=وصول شدہ سامان صرف منظور شدہ اسٹور کیپر درج کر سکتا ہے۔~sr_more=مزید~sr_noMatch=آپ کی تلاش سے کوئی کھلی لائن نہیں ملی۔';
 
   @override
   String get captchaSemanticLabel => 'سیکیورٹی چیک';
@@ -8827,4 +8830,582 @@ class AppLocalizationsUr extends AppLocalizations {
   String approvalsBulkProgress(int done, int total) {
     return '$total میں سے $done منظور ہو رہے ہیں';
   }
+
+  @override
+  String get driverChargeSectionTitle => 'میرے ذمے رقوم';
+
+  @override
+  String get driverChargeNone => 'اس ڈرائیور پر کوئی رقم درج نہیں۔';
+
+  @override
+  String driverChargeOutstanding(String amount) {
+    return 'باقی: $amount';
+  }
+
+  @override
+  String get driverChargeFilterAll => 'سب';
+
+  @override
+  String get driverChargeLoadError =>
+      'رقوم لوڈ نہیں ہو سکیں۔ کنکشن چیک کر کے دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverChargeLoadMore => 'مزید لوڈ کریں';
+
+  @override
+  String driverChargeDetailTitle(String number) {
+    return 'واجب الادا $number';
+  }
+
+  @override
+  String get driverChargeAmount => 'رقم';
+
+  @override
+  String get driverChargeDeducted => 'اب تک کٹوتی';
+
+  @override
+  String get driverChargeStatusLabel => 'حیثیت';
+
+  @override
+  String get driverChargeCategoryLabel => 'زمرہ';
+
+  @override
+  String get driverChargeLinkedRecord => 'منسلک ریکارڈ';
+
+  @override
+  String get driverChargeVehicle => 'گاڑی';
+
+  @override
+  String get driverChargeIncident => 'واقعے کی تاریخ اور وقت';
+
+  @override
+  String get driverChargeIssuedAt => 'جاری ہونے کا وقت';
+
+  @override
+  String get driverChargeNotifiedAt => 'آپ کو مطلع کرنے کا وقت';
+
+  @override
+  String get driverChargeBasis => 'واجب الادا کی تحریری وجہ';
+
+  @override
+  String get driverChargeEvidence => 'ثبوت';
+
+  @override
+  String get driverChargeNoEvidence =>
+      'کوئی ثبوت درج نہیں۔ یہ واجب الادا منسلک ریکارڈ پر مبنی ہے۔';
+
+  @override
+  String get driverChargeSignatures => 'دستخط';
+
+  @override
+  String driverChargeSignedBy(String name, String time) {
+    return '$name نے $time پر دستخط کیے (سرور کا وقت)';
+  }
+
+  @override
+  String get driverChargeSignatureHidden =>
+      'آپ کی رسائی کی سطح پر دستخط کی تصویر نہیں دکھائی جاتی۔';
+
+  @override
+  String get driverChargeDecisions => 'جائزے اور فیصلے';
+
+  @override
+  String get driverChargeNoDecisions => 'ابھی کوئی جائزہ درج نہیں۔';
+
+  @override
+  String get driverChargeSchedule => 'کٹوتی کا شیڈول';
+
+  @override
+  String get driverChargeNoSchedule => 'کوئی کٹوتی شیڈول نہیں۔';
+
+  @override
+  String driverChargeInstalmentLine(
+      String month, String amount, String status) {
+    return '$month: $amount ($status)';
+  }
+
+  @override
+  String driverChargeCapLine(String percent) {
+    return 'کوئی ماہانہ قسط تنخواہ کے $percent% سے زیادہ نہیں ہو سکتی۔';
+  }
+
+  @override
+  String get driverChargeAppealTitle => 'اپیل';
+
+  @override
+  String get driverChargeNoAppeal => 'کوئی اپیل دائر نہیں کی گئی۔';
+
+  @override
+  String driverChargeAppealFiled(String time) {
+    return 'اپیل $time پر دائر کی گئی';
+  }
+
+  @override
+  String driverChargeAppealOutcome(String outcome) {
+    return 'نتیجہ: $outcome';
+  }
+
+  @override
+  String get driverChargeAppealPending =>
+      'ایسے شخص کے فیصلے کا انتظار ہے جس نے یہ واجب الادا جاری یا منظور نہیں کیا۔';
+
+  @override
+  String get driverChargeTimeline => 'مکمل ٹائم لائن';
+
+  @override
+  String get driverChargeSharePdf => 'نوٹس PDF شیئر کریں';
+
+  @override
+  String get driverChargePdfFailed => 'نوٹس PDF نہیں بن سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverChargeRespond => 'اس واجب الادا کا جواب دیں';
+
+  @override
+  String get driverChargeAccept => 'قبول کریں';
+
+  @override
+  String get driverChargeDispute => 'اعتراض کریں';
+
+  @override
+  String get driverChargeStatementTitle => 'وہ بیان جس پر آپ دستخط کر رہے ہیں';
+
+  @override
+  String get driverChargeStatementLanguage =>
+      'اس بیان کی زبان جس پر آپ دستخط کرتے ہیں';
+
+  @override
+  String get driverChargeStatementReadAloud =>
+      'اگر آپ یہ نہیں پڑھ سکتے تو دستخط سے پہلے اپنے سپروائزر سے کہیں کہ آپ کو پڑھ کر سنائے۔';
+
+  @override
+  String get driverChargePhotosTitle => 'اس چارج کی تصویریں';
+
+  @override
+  String get driverChargePhotosNone => 'اس چارج کے ساتھ کوئی تصویر نہیں ہے۔';
+
+  @override
+  String get driverChargePhotoUnavailable => 'تصویر لوڈ نہیں ہو سکی۔';
+
+  @override
+  String get driverChargePhotosSeen => 'جواب دینے سے پہلے تصویریں دیکھیں۔';
+
+  @override
+  String get driverChargeKsaRule =>
+      'اس چارج پر سعودی لیبر قانون لاگو ہے۔ نقصان یا گمشدگی: صرف تب جب یہ آپ کی اپنی غلطی سے یا کمپنی کی ہدایات پر عمل نہ کرنے سے ہوا ہو، کسی دوسرے شخص یا ناگہانی آفت سے نہیں، اور ہر مہینے زیادہ سے زیادہ 5 دن کی تنخواہ۔ کوئی اور چارج، ٹریفک جرمانے سمیت: صرف آپ کی تحریری اجازت سے۔ تمام کٹوتیاں ملا کر: زیادہ سے زیادہ آدھی تنخواہ۔ یہ چارج ملنے کے دن سے آپ کے پاس اعتراض کے لیے 15 کام کے دن ہیں۔';
+
+  @override
+  String get driverChargeOtherRule =>
+      'اس چارج پر کمپنی کی حد لاگو ہے۔ اس ملک کے لیے اس اصول کی ابھی قانونی تصدیق باقی ہے۔';
+
+  @override
+  String get driverChargeBlockNoFault =>
+      'سعودی لیبر قانون (دفعہ 91): نقصان کسی دوسرے یا ناگہانی آفت سے ہوا، اس لیے یہ ڈرائیور سے کبھی نہیں کاٹا جائے گا۔';
+
+  @override
+  String get driverChargeFaultForceMajeure =>
+      'ناگہانی آفت (کٹوتی نہیں ہو سکتی)';
+
+  @override
+  String get driverChargeFaultThirdParty =>
+      'کسی دوسرے کی غلطی (کٹوتی نہیں ہو سکتی)';
+
+  @override
+  String get driverChargeFaultInstruction => 'کمپنی کی ہدایات پر عمل نہیں کیا';
+
+  @override
+  String get driverChargeFaultDriver => 'ڈرائیور کی اپنی غلطی';
+
+  @override
+  String get driverChargeFaultNone => 'درج نہیں';
+
+  @override
+  String get driverChargeFaultTitle => 'غلطی کا فیصلہ (دفعہ 91)';
+
+  @override
+  String get driverChargePdfFontFailed =>
+      'عربی اور اردو حروف لوڈ نہیں ہو سکے، اس لیے کاغذ نہیں بنا۔ انٹرنیٹ کنکشن دیکھیں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverChargePhotoOpen => 'تصویر بڑی کر کے کھولیں';
+
+  @override
+  String get driverChargePhotoRetry => 'دوبارہ کوشش';
+
+  @override
+  String get driverChargePhotosWait =>
+      'دستخط سے پہلے انتظار کریں جب تک ہر تصویر لوڈ نہ ہو جائے۔';
+
+  @override
+  String get driverChargePhotosBlocked =>
+      'ایک تصویر لوڈ نہیں ہو سکی۔ دستخط سے پہلے آپ کو ہر تصویر دیکھنی ہے۔ دوبارہ کوشش پر ٹیپ کریں۔';
+
+  @override
+  String get driverChargeOtherRuleDriver =>
+      'اس چارج پر کمپنی کی کٹوتی کی حد لاگو ہے۔';
+
+  @override
+  String driverChargeObjectionUntil(String date) {
+    return 'آپ $date تک اعتراض کر سکتے ہیں۔';
+  }
+
+  @override
+  String get driverChargeLangEnglish => 'English';
+
+  @override
+  String get driverChargeLangArabic => 'العربية';
+
+  @override
+  String get driverChargeLangUrdu => 'اردو';
+
+  @override
+  String driverChargeStatementConsent(String amount) {
+    return 'میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ میں نے یہ چارج دیکھ لیا ہے: اس کی وجہ، ثبوت اور تصویریں۔ میں مانتا ہوں کہ اس چارج کے لیے مجھے کل $amount ادا کرنے ہیں۔ میں اجازت دیتا ہوں کہ کمپنی یہ رقم میری تنخواہ سے ماہانہ قسطوں میں کاٹے۔ کسی بھی مہینے کی قسط قانون کی ماہانہ حد سے زیادہ نہیں ہوگی، اور ہر مہینے کی رقم کاٹنے سے پہلے مجھے دکھائی جائے گی۔ یہ اجازت صرف اسی چارج کے لیے ہے۔ میں اس کاغذ پر لکھی مدت کے اندر اب بھی اعتراض کر سکتا ہوں۔';
+  }
+
+  @override
+  String get driverChargeStatementDispute =>
+      'میں اس کاغذ پر لکھا ہوا ڈرائیور ہوں۔ مجھے یہ چارج مل گیا ہے اور میں نے اس کی وجہ، ثبوت اور تصویریں دیکھ لی ہیں۔ میں ان وجوہات کی وجہ سے جو میں نے لکھی ہیں، اس چارج سے متفق نہیں ہوں۔ میرے دستخط صرف یہ بتاتے ہیں کہ مجھے یہ کاغذ مل گیا ہے۔ اس کا مطلب یہ نہیں کہ میں متفق ہوں۔ میں اس کاغذ پر لکھی مدت کے اندر اعتراض کر سکتا ہوں۔';
+
+  @override
+  String get driverChargeStatementWitness =>
+      'میں نے دیکھا کہ اس چارج کا کاغذ اس پر لکھے ہوئے ڈرائیور کو دیا گیا۔ ڈرائیور نے اس پر دستخط کرنے یا جواب دینے سے انکار کیا۔ اس ریکارڈ کی تاریخ اور وقت سسٹم طے کرتا ہے۔';
+
+  @override
+  String get driverChargeBlockTitle => 'کٹوتی ابھی شیڈول نہیں ہو سکتی';
+
+  @override
+  String get driverChargeBlockConsent =>
+      'سعودی لیبر قانون (آرٹیکل 92): یہ چارج تنخواہ سے صرف ڈرائیور کی تحریری اجازت سے کاٹا جا سکتا ہے۔ ڈرائیور متفق نہیں ہوا، اس لیے یہ نہیں کاٹا جا سکتا۔';
+
+  @override
+  String get driverChargeBlockObjection =>
+      'ایک اعتراض کھلا ہے۔ پہلے اس کا فیصلہ ہونا ضروری ہے۔';
+
+  @override
+  String driverChargeBlockWindow(String date) {
+    return 'ڈرائیور ابھی $date تک اعتراض کر سکتا ہے۔ اس سے پہلے کچھ بھی شیڈول نہیں ہو سکتا۔';
+  }
+
+  @override
+  String driverChargeBlockWindowKsa(String date) {
+    return 'سعودی لیبر قانون (آرٹیکل 91): ڈرائیور کے پاس اعتراض کے لیے $date تک 15 کام کے دن ہیں۔ اس سے پہلے کچھ بھی شیڈول نہیں ہو سکتا۔';
+  }
+
+  @override
+  String get driverChargeStatementMissing =>
+      'بیان لوڈ نہیں ہو سکا۔ دستخط سے پہلے ریفریش کریں۔';
+
+  @override
+  String get driverChargeAcknowledge =>
+      'میں نے یہ بیان پڑھ لیا ہے اور اس پر دستخط سے متفق ہوں۔';
+
+  @override
+  String get driverChargeExplanation =>
+      'آپ اس واجب الادا پر اعتراض کیوں کر رہے ہیں؟';
+
+  @override
+  String get driverChargeSignBelow => 'نیچے دستخط کریں';
+
+  @override
+  String get driverChargeSubmit => 'دستخط کر کے بھیجیں';
+
+  @override
+  String get driverChargeAppealAction => 'اس واجب الادا کے خلاف اپیل کریں';
+
+  @override
+  String get driverChargeAppealReason => 'آپ کی اپیل کی بنیاد';
+
+  @override
+  String get driverChargeAppealSubmit => 'اپیل بھیجیں';
+
+  @override
+  String get driverChargeAppealOnce =>
+      'آپ ایک واجب الادا کے خلاف صرف ایک بار اپیل کر سکتے ہیں۔ اپیل کا فیصلہ وہ شخص کرتا ہے جس نے اسے جاری یا منظور نہیں کیا۔';
+
+  @override
+  String get driverChargeIssueExplanation =>
+      'اعتراض کی وجہ کم از کم 10 حروف میں لکھیں۔';
+
+  @override
+  String get driverChargeIssueAck => 'تصدیق کریں کہ آپ نے بیان پڑھ لیا ہے۔';
+
+  @override
+  String get driverChargeIssueSignature => 'بھیجنے سے پہلے دستخط کریں۔';
+
+  @override
+  String get driverChargeIssueReason => 'اپیل کے لیے کم از کم 10 حروف لکھیں۔';
+
+  @override
+  String get driverChargeOffline =>
+      'آپ آف لائن ہیں۔ واجب الادا کا جواب صرف آن لائن درج ہوتا ہے، اس لیے کچھ محفوظ نہیں ہوا۔ کنکشن جوڑ کر دوبارہ کوشش کریں۔';
+
+  @override
+  String get driverChargeSaved => 'آپ کا جواب سرور کے وقت کے ساتھ درج ہو گیا۔';
+
+  @override
+  String get driverChargeAppealSaved => 'آپ کی اپیل درج ہو گئی۔';
+
+  @override
+  String get driverChargeStaffReadOnly =>
+      'نوٹس، جائزے، شیڈولنگ اور کٹوتیاں ویب پر درج ہوتی ہیں۔ یہ اسکرین انہیں صرف دکھاتی ہے۔';
+
+  @override
+  String get driverChargeNoActions =>
+      'اس واجب الادا پر آپ کے لیے کوئی کارروائی زیر التوا نہیں۔';
+
+  @override
+  String get driverChargeStatusIssued => 'جاری ہوا، ابھی آپ کو نہیں بھیجا گیا';
+
+  @override
+  String get driverChargeStatusNotified => 'آپ کے جواب کا انتظار';
+
+  @override
+  String get driverChargeStatusAccepted => 'ڈرائیور نے قبول کیا';
+
+  @override
+  String get driverChargeStatusDisputed => 'ڈرائیور نے اعتراض کیا';
+
+  @override
+  String get driverChargeStatusRefused => 'انکار گواہ کے ساتھ درج کیا گیا';
+
+  @override
+  String get driverChargeStatusSupervisorApproved => 'سپروائزر نے منظور کیا';
+
+  @override
+  String get driverChargeStatusFinanceApproved => 'فنانس نے منظور کیا';
+
+  @override
+  String get driverChargeStatusUnderAppeal => 'زیر اپیل';
+
+  @override
+  String get driverChargeStatusScheduled => 'کٹوتی شیڈول ہے';
+
+  @override
+  String get driverChargeStatusDeducted => 'مکمل کٹوتی ہو گئی';
+
+  @override
+  String get driverChargeStatusWaived => 'معاف کر دیا گیا';
+
+  @override
+  String get driverChargeStatusCancelled => 'غلط جاری ہونے پر منسوخ';
+
+  @override
+  String get driverChargeCatTrafficFine => 'ٹریفک جرمانہ';
+
+  @override
+  String get driverChargeCatAccidentDamage => 'حادثے کا نقصان';
+
+  @override
+  String get driverChargeCatTyreDamage => 'ٹائر کا نقصان';
+
+  @override
+  String get driverChargeCatMissingItem => 'گمشدہ چیز';
+
+  @override
+  String get driverChargeCatHandoverDamage => 'حوالگی کے وقت نقصان';
+
+  @override
+  String get driverChargeCatOther => 'دیگر';
+
+  @override
+  String get driverChargeSrcAccident => 'حادثے کا کیس';
+
+  @override
+  String get driverChargeSrcHandover => 'گاڑی کی حوالگی';
+
+  @override
+  String get driverChargeSrcInspection => 'معائنہ';
+
+  @override
+  String get driverChargeSrcChecklist => 'چیک لسٹ';
+
+  @override
+  String get driverChargeSrcTyre => 'ٹائر ریکارڈ';
+
+  @override
+  String get driverChargeSrcFine => 'ٹریفک جرمانے کا ریکارڈ';
+
+  @override
+  String get driverChargeSrcNone => 'کوئی منسلک ریکارڈ نہیں';
+
+  @override
+  String get driverChargeReplaced =>
+      'یہ واجب الادا غلط جاری ہونے پر منسوخ ہوا اور اس کی جگہ دوسرا جاری کیا گیا۔';
+
+  @override
+  String get handoverAuthSignaturesTitle => 'ڈرائیوروں کے دستخط';
+
+  @override
+  String get handoverAuthHanding => 'حوالے کرنے والا';
+
+  @override
+  String get handoverAuthReceiving => 'وصول کرنے والا';
+
+  @override
+  String get handoverAuthNotSigned => 'دستخط نہیں ہوئے';
+
+  @override
+  String handoverAuthSignedLine(String name, String time) {
+    return '$name، $time پر دستخط کیے (سرور کا وقت)';
+  }
+
+  @override
+  String get handoverAuthSignHanding =>
+      'حوالے کرنے والے ڈرائیور کے طور پر دستخط کریں';
+
+  @override
+  String get handoverAuthSignReceiving =>
+      'وصول کرنے والے ڈرائیور کے طور پر دستخط کریں';
+
+  @override
+  String get handoverAuthSignerName => 'دستخط کرنے والے کا نام';
+
+  @override
+  String get handoverAuthSignerHint =>
+      'صرف اس وقت ضروری ہے جب ڈرائیور رجسٹر سے منتخب نہ کیا گیا ہو۔';
+
+  @override
+  String get handoverAuthHandingFirst =>
+      'پہلے حوالے کرنے والا ڈرائیور دستخط کرتا ہے، پھر وصول کرنے والا۔';
+
+  @override
+  String get handoverAuthFrozen =>
+      'دستخط شدہ ریکارڈ۔ مواد مقفل ہے اور تبدیل نہیں ہو سکتا۔';
+
+  @override
+  String get handoverAuthLocation => 'حوالگی کا مقام';
+
+  @override
+  String handoverAuthLocationCaptured(String coords) {
+    return 'ڈیوائس نے درج کیا: $coords';
+  }
+
+  @override
+  String get handoverAuthLocationDenied => 'مقام کی اجازت مسترد کر دی گئی۔';
+
+  @override
+  String get handoverAuthLocationUnavailable => 'مقام نہیں پڑھا جا سکا۔';
+
+  @override
+  String get handoverAuthLocationNone =>
+      'ابھی کوئی مقام درج نہیں۔ ہر دستخط کے ساتھ مقام درج ہوتا ہے۔';
+
+  @override
+  String get handoverAuthOpenMap => 'نقشے میں کھولیں';
+
+  @override
+  String get handoverAuthReadingLocation => 'ڈیوائس کا مقام پڑھا جا رہا ہے...';
+
+  @override
+  String get handoverAuthSignSubmit => 'دستخط درج کریں';
+
+  @override
+  String get handoverAuthOffline =>
+      'آپ آف لائن ہیں۔ حوالگی کا دستخط صرف آن لائن درج ہوتا ہے، اس لیے کچھ محفوظ نہیں ہوا۔ کنکشن جوڑ کر دوبارہ کوشش کریں۔';
+
+  @override
+  String get handoverAuthSigned => 'دستخط سرور کے وقت کے ساتھ درج ہو گیا۔';
+
+  @override
+  String handoverAuthDocumentNo(String number) {
+    return 'دستاویز نمبر $number';
+  }
+
+  @override
+  String get handoverAuthHourMeter => 'آور میٹر (گھنٹے)';
+
+  @override
+  String get handoverAuthSite => 'سائٹ';
+
+  @override
+  String get handoverAuthDriverRegister => 'ڈرائیور رجسٹر سے منتخب کریں';
+
+  @override
+  String get handoverAuthDriverNotListed => 'رجسٹر میں نہیں';
+
+  @override
+  String get handoverAuthSigningStepInfo =>
+      'محفوظ کرنے کے بعد دونوں ڈرائیور آن لائن حوالگی کے صفحے پر دستخط کرتے ہیں۔ ہر دستخط پر سرور کا وقت اور ڈیوائس کا مقام لگتا ہے، اور پہلے دستخط کے بعد ریکارڈ مقفل ہو جاتا ہے۔';
+
+  @override
+  String get handoverAuthOpenToSign =>
+      'حوالگی مسودے کے طور پر محفوظ ہو گئی۔ دونوں دستخط لینے کے لیے اسے ابھی کھولیں۔';
+
+  @override
+  String get handoverAuthLegacySignature =>
+      'دو فریقی دستخط سے پہلے درج ڈرائیور کا دستخط';
+
+  @override
+  String get handoverAuthNotAvailable =>
+      'دو فریقی دستخط ابھی سرور پر دستیاب نہیں۔ منتظم سے پوچھیں۔';
+
+  @override
+  String get storeHistoryCopyCatalog =>
+      'historyTitle=اسٹور کی تاریخ~itemTitle=اسٹاک آئٹم~onHand=موجود~reserved=محفوظ~available=دستیاب~minLevel=کم از کم~criticalLevel=نازک حد~levelsNote=دوبارہ آرڈر کی حدیں ایڈمن ویب پر طے کرتا ہے۔~recent=حالیہ نقل و حرکت~fullHistory=مکمل تاریخ~loadMore=مزید دکھائیں~noMovements=ابھی کوئی نقل و حرکت نہیں~noMovementsBody=اس آئٹم کی وصولی، اجرا، منتقلی اور گنتی پوسٹ ہونے کے بعد یہاں نظر آئیں گی۔~noMatch=ان فلٹرز سے کوئی نقل و حرکت نہیں ملی~noMatchBody=تاریخیں بڑھائیں یا کوئی فلٹر ہٹائیں۔~balanceAfter=بیلنس~by=بذریعہ~ref=حوالہ~unknownUser=درج نہیں~cat_receipt=وصولی~cat_issue=اجرا~cat_returned=واپسی~cat_transfer=منتقلی~cat_adjustment=ایڈجسٹمنٹ~cat_count=گنتی~cat_opening=ابتدائی بیلنس~cat_erpLedger=ERP لیجر~cat_other=دیگر~filter_all=تمام اقسام~dateRange=تاریخیں~anyDate=کوئی بھی تاریخ~allLocations=تمام مقامات~location=مقام~searchItem=آئٹم تلاش کریں~clearFilters=فلٹر صاف کریں~type=قسم~stockIn=آمد~stockOut=اخراج~net=خالص تبدیلی~openingsNote=ابتدائی بیلنس آمد میں شمار نہیں ہوتے۔~byMonth=ماہانہ~summaryFailed=مجموعے لوڈ نہیں ہو سکے۔~summaryCapped=مجموعے کے لیے نقل و حرکت بہت زیادہ ہے۔ تاریخیں محدود کریں۔~receive=اسٹاک وصول کریں~type_receipt=وصولی (نیا اسٹاک)~type_returned=اسٹور میں واپسی~quantity=مقدار~reference=حوالہ (GRN، جاب کارڈ)~reason=نوٹ~post=پوسٹ کریں~cancel=منسوخ~postedTitle=اسٹاک پوسٹ ہو گیا~postedBody=نیا بیلنس~done=ہو گیا~receiveNote=سیدھا اسٹاک لیجر میں پوسٹ ہوتا ہے۔ سرور جانچتا ہے کہ آپ یہ قسم پوسٹ کر سکتے ہیں۔~qtyRequired=مقدار درج کریں~qtyPositive=مقدار صفر سے زیادہ ہونی چاہیے~qtyWhole=پورا عدد استعمال کریں~qtyTooLarge=یہ مقدار بہت زیادہ ہے~refTooLong=حوالہ بہت لمبا ہے~postOffline=کنکشن نہیں۔ کچھ پوسٹ نہیں ہوا؛ آن لائن ہونے پر دوبارہ کوشش کریں۔~postFailed=نقل و حرکت پوسٹ نہیں ہو سکی۔~loadFailed=اسٹاک کی تاریخ لوڈ نہیں ہو سکی۔~openItem=آئٹم کی تفصیل کھولیں';
+
+  @override
+  String handoverAuthOnBehalf(String name) {
+    return 'میں $name کی جانب سے دستخط کر رہا ہوں';
+  }
+
+  @override
+  String get handoverAuthOnBehalfRequired =>
+      'تصدیق کریں کہ آپ اس شخص کی جانب سے دستخط کر رہے ہیں۔';
+
+  @override
+  String get handoverAuthBlocked =>
+      'آپ کا اکاؤنٹ اس حوالگی کے دوسرے ڈرائیور سے منسلک ہے، اس لیے آپ اس فریق کے لیے دستخط نہیں کر سکتے۔ یہ دستخط ڈرائیور یا سپروائزر پر چھوڑ دیں۔';
+
+  @override
+  String get handoverAuthSignedOnBehalf =>
+      'سپروائزر نے ان کی جانب سے دستخط کیے';
+
+  @override
+  String get handoverAuthSentBack =>
+      'درستی کے لیے واپس بھیجا گیا۔ دستخط ہٹا دیے گئے۔ حوالگی درست کر کے دوبارہ دستخط کریں۔';
+
+  @override
+  String get handoverAuthBadSignature =>
+      'دستخط پڑھا نہیں جا سکا۔ اسے مٹا کر دوبارہ دستخط کریں۔';
+
+  @override
+  String get driverChargeWitnessConfirm =>
+      'جس انکار کے آپ گواہ تھے اس کی تصدیق کریں';
+
+  @override
+  String get driverChargeWitnessIntro =>
+      'آپ کو ڈرائیور کے اس نوٹس پر دستخط سے انکار کا گواہ نامزد کیا گیا ہے۔ صرف وہی تصدیق کریں جو آپ نے خود دیکھا۔';
+
+  @override
+  String get driverChargeWitnessPending =>
+      'انکار درج ہو گیا۔ نامزد گواہ کی اپنے اکاؤنٹ سے تصدیق کا انتظار ہے۔';
+
+  @override
+  String get driverChargeWitnessSaved =>
+      'آپ کی گواہی کی تصدیق سرور کے وقت کے ساتھ درج ہو گئی۔';
+
+  @override
+  String get handoverAuthReceivingOtherAccount =>
+      'آپ نے اس اکاؤنٹ سے حوالے کرنے کا دستخط دیا ہے۔ وصولی کا دستخط کسی دوسرے شخص سے آنا چاہیے: وصول کرنے والے ڈرائیور کا اپنا اکاؤنٹ یا کوئی دوسرا سپروائزر۔';
+
+  @override
+  String get handoverAuthSiteRequired =>
+      'سائٹ درج کریں۔ فلیٹ رجسٹر میں اس گاڑی کی کوئی سائٹ نہیں۔';
+
+  @override
+  String get handoverAuthSiteFromRegister =>
+      'اس گاڑی کے لیے فلیٹ رجسٹر سے لیا گیا۔';
+
+  @override
+  String get signatureSignAgain =>
+      'دستخط بہت چھوٹا ہے اور پڑھا نہیں جا سکتا۔ براہ کرم اپنے پورے دستخط کے ساتھ دوبارہ دستخط کریں۔';
+
+  @override
+  String get driverChargeLinkUnverified =>
+      'ماخذ سے تعلق ریکارڈ سے تصدیق شدہ نہیں';
+
+  @override
+  String get driverChargeAppealClosedDeducted =>
+      'کٹوتیاں شروع ہو چکی ہیں، اس لیے اب یہاں اس واجب الادا کے خلاف اپیل نہیں ہو سکتی۔ مینیجر یا فنانس باقی رقم معاف کر سکتے ہیں۔';
 }

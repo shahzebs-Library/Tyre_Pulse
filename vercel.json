@@ -136,6 +136,7 @@
   ],
   "git": {
     "deploymentEnabled": {
+      "claude/owner-batch-1126": false,
       "claude/wms-wp0-register": false,
       "claude/live-test-fixes": false,
       "claude/flutter-qa": false,

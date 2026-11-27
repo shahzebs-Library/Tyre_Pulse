@@ -244,7 +244,7 @@ for name in ('pump_cr_spelling', 'pump_rr_spelling', 'mixer_cr_spelling', 'pump_
     check('A position', f'ERP rear spelling is not read without a verified mapping: {name}',
           v is not None and v['pending_reasons'] == {'erp_spelling_not_verified': 1}, v and v['pending_reasons'] or (code, msg))
 v, code, msg = evaluate('mixer_match')
-check('A position', 'the function reports the rules version the client checks', v is not None and v.get('rules_version') == 'position-service-3', v and v.get('rules_version'))
+check('A position', 'the function reports the rules version the client checks', v is not None and v.get('rules_version') == 'position-service-4', v and v.get('rules_version'))
 
 check('A position', 'evaluating wrote nothing (never auto confirms)', links() == 0 and events() == 0 and fingerprint() == BASE,
       (links(), events()))
@@ -412,7 +412,7 @@ check('X exception', 'refused requests wrote nothing', (links(), events(), reque
 r = rules('alpha.manager')
 check('X exception', 'rules: a Manager may review and ask for an exception but may not approve one',
       r.get('can_review') is True and r.get('can_request_exception') is True and r.get('can_approve_exception') is False
-      and r.get('rules_version') == 'position-service-3' and r.get('exception_needs_second_person') is True, r)
+      and r.get('rules_version') == 'position-service-4' and r.get('exception_needs_second_person') is True, r)
 r = rules('alpha.admin')
 check('X exception', 'rules: an Admin may approve an exception (default)', r.get('can_review') is True and r.get('can_approve_exception') is True, r)
 r = rules('alpha.tyreman')

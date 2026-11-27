@@ -3,6 +3,7 @@
  * flags (single-calc rule: the band judgement is bandFor from tyreRunningLife,
  * never re-derived here). No I/O; everything injectable and null-tolerant.
  */
+import { isFaultCondition, isSevereConditionText, isWearCondition, isGoodCondition } from './tyreLayoutSpec'
 import { bandFor } from './tyreRunningLife'
 import { displayPositionCode, inspectionTypeHint } from './tyreBay'
 import {
@@ -68,7 +69,9 @@ export function buildAssetFlagMap(lifeRows = []) {
  * Kept deliberately tight: it must never match "Good", which is 88% of every
  * condition ever recorded and the one word that means nothing is wrong.
  */
-const FAULT_RE = /damage|puncture|worn|wear|flat|burst|blast|\bcut\b|bulge|separat/i
+// "Good, no damage" is not a fault: the shared reader drops negated fault
+// words before testing (tyreLayoutSpec.neutraliseCondition).
+const FAULT_RE = { test: isFaultCondition }
 
 /**
  * The subset that stops a vehicle rather than schedules work. A flat, a cut
@@ -80,7 +83,7 @@ const FAULT_RE = /damage|puncture|worn|wear|flat|burst|blast|\bcut\b|bulge|separ
  * flat tyre is the one condition on the list where the vehicle cannot be driven
  * at all.
  */
-const SEVERE_RE = /damage|puncture|flat|burst|blast|\bcut\b|bulge|separat/i
+const SEVERE_RE = { test: isSevereConditionText }
 
 function conditionOf(value) {
   if (value == null) return ''
@@ -156,8 +159,8 @@ function inWindow(r, from, to) {
  * from/to, YYYY-MM-DD string-prefix compare - same rule as the page filter).
  * Honest zeros; flagMap-derived figures are 0 when flagMap is empty.
  */
-const WEAR_RE = /wear|worn/i
-const GOOD_RE = /good|ok/i
+const WEAR_RE = { test: isWearCondition }
+const GOOD_RE = { test: isGoodCondition }
 
 /**
  * Count one inspection's tyre conditions into good / wear / damage / other.
@@ -174,11 +177,11 @@ export function conditionCounts(inspection) {
   for (const v of values) {
     const cond = conditionOf(v)
     if (!cond) continue
-    // Wear is tested FIRST so a worn tyre is counted as wear rather than as
-    // damage - this breakdown exists to keep the two apart. Everything else the
-    // fault test recognises (flat, burst, cut) is damage; before this a burst
-    // tyre fell into "other", which is a category nobody looks at.
-    if (WEAR_RE.test(cond)) out.wear += 1
+    // Safety first, the shared rule: a severe fault (flat, burst, cut,
+    // puncture) is damage even when wear is mentioned too ("Worn, flat").
+    // A tyre that is only worn is wear - this breakdown keeps the two apart.
+    if (SEVERE_RE.test(cond)) out.damage += 1
+    else if (WEAR_RE.test(cond)) out.wear += 1
     else if (FAULT_RE.test(cond)) out.damage += 1
     else if (GOOD_RE.test(cond)) out.good += 1
     else out.other += 1

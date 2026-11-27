@@ -5,12 +5,17 @@
  * counts for the rows their scope can read. Nothing here writes.
  */
 import { RefreshCw, ShieldCheck, ShieldAlert } from 'lucide-react'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { loadLinkHealth } from '../../lib/api/materialLinks'
 import { healthRows } from '../../lib/oem/materialLinks'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, StatusPill, fmtDateTime } from '../inventory/InvUi'
 
 export default function MaterialLinkHealthCard() {
+  const { t } = useLanguage()
+  const rowLabel = (r) => (r.key.startsWith('unlinked_')
+    ? t('wmsparts.health.unlinked', { country: r.key.slice('unlinked_'.length) })
+    : t(`wmsparts.health.row.${r.key}`))
   const q = useInvQuery(() => loadLinkHealth(), [])
   const rows = healthRows(q.data?.health)
   const problems = rows.filter((r) => r.problem && Number(r.value) > 0)
@@ -19,29 +24,29 @@ export default function MaterialLinkHealthCard() {
 
   return (
     <SectionCard
-      title="Link health"
-      sub={q.data?.health?.generated_at ? `Checked ${fmtDateTime(q.data.health.generated_at)}. Read only.` : 'Read only.'}
+      title={t('wmsparts.health.title')}
+      sub={q.data?.health?.generated_at ? t('wmsparts.health.checked', { time: fmtDateTime(q.data.health.generated_at) }) : t('wmsparts.common.readOnly')}
       action={(
         <button type="button" className="cc-btn-ghost" onClick={q.retry} disabled={q.loading}>
-          <RefreshCw size={14} aria-hidden="true" /> Refresh
+          <RefreshCw size={14} aria-hidden="true" /> {t('wmsparts.common.refresh')}
         </button>
       )}>
       {q.error ? <ErrorNote error={q.error} onRetry={q.retry} />
-        : q.data?.status === 'not_provisioned' ? <NotSetUp what="The link health check" />
+        : q.data?.status === 'not_provisioned' ? <NotSetUp what={t('wmsparts.health.what')} />
           : q.loading && !q.data ? <div className="cc-skel" style={{ height: 160 }} aria-busy="true" />
             : (
               <>
                 {problems.length
-                  ? <Note tone="bad" icon={ShieldAlert} title="Link problems found">Each count below in red needs a correction request. Nothing is fixed automatically.</Note>
+                  ? <Note tone="bad" icon={ShieldAlert} title={t('wmsparts.health.problemsTitle')}>{t('wmsparts.health.problemsBody')}</Note>
                   : unmeasured
-                    ? <Note>Some checks could not be measured, so this is not an all-clear.</Note>
-                    : <Note tone="good" icon={ShieldCheck}>No duplicate links and no links across countries.</Note>}
+                    ? <Note>{t('wmsparts.health.unmeasured')}</Note>
+                    : <Note tone="good" icon={ShieldCheck}>{t('wmsparts.health.allClear')}</Note>}
                 <dl className="oem-health-list">
                   {rows.map((r) => (
                     <div key={r.key} className="oem-health-row">
-                      <dt>{r.label}</dt>
+                      <dt>{rowLabel(r)}</dt>
                       <dd>
-                        {r.value === null ? <span className="cc-na">Not recorded</span>
+                        {r.value === null ? <span className="cc-na">{t('wmsparts.common.notRecorded')}</span>
                           : r.problem
                             ? <StatusPill value={String(r.value)} tone={r.value > 0 ? 'bad' : 'good'} label={formatQty(r.value)} />
                             : formatQty(r.value)}

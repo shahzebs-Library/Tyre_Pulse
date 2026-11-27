@@ -24,7 +24,10 @@ import { bandFor, measureFor } from './tyreRunningLife'
 // the canonical code (LHF1, RHRI) the tyre records use, so an export can never
 // disagree with the screen it came from.
 import { displayPositionCode, inspectionTypeHint, canonicalToSlotId, slotDisplayCode } from './tyreBay'
-import { resolveLayoutKey, isTyrelessEquipment } from './vehicleTyreLayout'
+import { resolveLayoutKey, resolveLayoutKeyStrict, isTyrelessEquipment, layoutForAsset } from './vehicleTyreLayout'
+import { slotForPosition } from './tyrePositionService'
+import { LAYOUT_GEOMETRY, RISK_ORDER, riskRgb, kindForWheel, CONDITION_KINDS } from './tyreLayoutSpec'
+import { drawConditionBadge, drawConditionLegendRow } from './pdfConditionGlyph'
 import { serializeSvgInlined } from './svgInline'
 import { inspectionReportFileNameForRow, ordinal } from './inspectionFileName'
 import { shrinkImageForPdf } from './pdfImage'
@@ -528,150 +531,43 @@ function _kpiBox(doc, x, y, w, h, value, label, subtext, accentRgb) {
 }
 
 // ── Risk helpers ───────────────────────────────────────────────────────────────
-const RISK_RGB = {
-  good:     [...P.emerald],
-  warning:  [...P.scarlet],
-  critical: [...P.crimson],
-  none:     [...P.iron],
-}
+// The printed report uses the shared tyre map's LIGHT palette (paper is white),
+// the same colours the light-theme screen and the Flutter app use.
+const RISK_RGB = Object.fromEntries(RISK_ORDER.map((band) => [band, riskRgb(band, 'light')]))
 // RISK_LABEL / riskForCondition now come from ./inspectionView (imported above) so
 // the report and the on-screen viewer read a condition the same way.
 
 // ── Tyre Diagram Layouts ───────────────────────────────────────────────────────
-const _TYRE_LAYOUTS = {
-  Pickup: {
-    body: { x: 60, y: 40, w: 80, h: 200, rx: 8 },
-    tyres: [
-      { id: 'FL', x: 35, y: 55, w: 22, h: 38, rx: 4 },
-      { id: 'FR', x: 143, y: 55, w: 22, h: 38, rx: 4 },
-      { id: 'RL', x: 35, y: 185, w: 22, h: 38, rx: 4 },
-      { id: 'RR', x: 143, y: 185, w: 22, h: 38, rx: 4 },
-    ],
-  },
-  // Dual-rear-axle layout shared by Canter / Bus / Tata / Ashok Leyland
-  ...(function() {
-    const _dualRear = {
-      body:  { x: 60, y: 30, w: 80, h: 240, rx: 8 },
-      tyres: [
-        { id: 'FL',  x: 35,  y: 45,  w: 22, h: 36, rx: 4 },
-        { id: 'FR',  x: 143, y: 45,  w: 22, h: 36, rx: 4 },
-        { id: 'RLo', x: 22,  y: 175, w: 20, h: 34, rx: 3 },
-        { id: 'RLi', x: 44,  y: 175, w: 20, h: 34, rx: 3 },
-        { id: 'RRi', x: 136, y: 175, w: 20, h: 34, rx: 3 },
-        { id: 'RRo', x: 158, y: 175, w: 20, h: 34, rx: 3 },
-      ],
-    }
-    const _loader = {
-      body:  { x: 60, y: 40, w: 80, h: 200, rx: 8 },
-      tyres: [
-        { id: 'FL', x: 30,  y: 55,  w: 28, h: 44, rx: 5 },
-        { id: 'FR', x: 142, y: 55,  w: 28, h: 44, rx: 5 },
-        { id: 'RL', x: 30,  y: 185, w: 28, h: 44, rx: 5 },
-        { id: 'RR', x: 142, y: 185, w: 28, h: 44, rx: 5 },
-      ],
-    }
-    return {
-      Canter: _dualRear, Bus: _dualRear, Tata: _dualRear, 'Ashok Leyland': _dualRear,
-      'Wheel loader': _loader, 'Skid loader': _loader,
-    }
-  }()),
-  'Tri-mixer': {
-    body: { x: 55, y: 20, w: 90, h: 290, rx: 8 },
-    tyres: [
-      { id: 'F1L', x: 28, y: 30, w: 22, h: 34, rx: 4 },
-      { id: 'F1R', x: 150, y: 30, w: 22, h: 34, rx: 4 },
-      { id: 'F2L', x: 28, y: 80, w: 22, h: 34, rx: 4 },
-      { id: 'F2R', x: 150, y: 80, w: 22, h: 34, rx: 4 },
-      { id: 'R1Lo', x: 16, y: 170, w: 18, h: 32, rx: 3 },
-      { id: 'R1Li', x: 36, y: 170, w: 18, h: 32, rx: 3 },
-      { id: 'R1Ri', x: 146, y: 170, w: 18, h: 32, rx: 3 },
-      { id: 'R1Ro', x: 166, y: 170, w: 18, h: 32, rx: 3 },
-      { id: 'R2Lo', x: 16, y: 215, w: 18, h: 32, rx: 3 },
-      { id: 'R2Li', x: 36, y: 215, w: 18, h: 32, rx: 3 },
-      { id: 'R2Ri', x: 146, y: 215, w: 18, h: 32, rx: 3 },
-      { id: 'R2Ro', x: 166, y: 215, w: 18, h: 32, rx: 3 },
-    ],
-  },
-  // Tanker (6) / Trailer (8) / heavy 6x4 (10) / line pump (12). Same wheel
-  // arrangements the on-screen diagram draws; see lib/vehicleTyreLayout.
-  ...(function() {
-    const _drive2 = (y1, y2) => ([
-      { id: 'R1Lo', x: 16, y: y1, w: 18, h: 32, rx: 3 },
-      { id: 'R1Li', x: 36, y: y1, w: 18, h: 32, rx: 3 },
-      { id: 'R1Ri', x: 146, y: y1, w: 18, h: 32, rx: 3 },
-      { id: 'R1Ro', x: 166, y: y1, w: 18, h: 32, rx: 3 },
-      { id: 'R2Lo', x: 16, y: y2, w: 18, h: 32, rx: 3 },
-      { id: 'R2Li', x: 36, y: y2, w: 18, h: 32, rx: 3 },
-      { id: 'R2Ri', x: 146, y: y2, w: 18, h: 32, rx: 3 },
-      { id: 'R2Ro', x: 166, y: y2, w: 18, h: 32, rx: 3 },
-    ])
-    return {
-      Tanker: {
-        body: { x: 60, y: 30, w: 80, h: 240, rx: 8 },
-        tyres: [
-          { id: 'FL',  x: 35,  y: 45,  w: 22, h: 36, rx: 4 },
-          { id: 'FR',  x: 143, y: 45,  w: 22, h: 36, rx: 4 },
-          { id: 'RLo', x: 22,  y: 175, w: 20, h: 34, rx: 3 },
-          { id: 'RLi', x: 44,  y: 175, w: 20, h: 34, rx: 3 },
-          { id: 'RRi', x: 136, y: 175, w: 20, h: 34, rx: 3 },
-          { id: 'RRo', x: 158, y: 175, w: 20, h: 34, rx: 3 },
-        ],
-      },
-      Trailer: {
-        body: { x: 60, y: 30, w: 80, h: 220, rx: 8 },
-        tyres: _drive2(90, 175),
-      },
-      'Truck 6x4': {
-        body: { x: 60, y: 30, w: 80, h: 250, rx: 8 },
-        tyres: [
-          { id: 'FL', x: 35,  y: 45, w: 22, h: 36, rx: 4 },
-          { id: 'FR', x: 143, y: 45, w: 22, h: 36, rx: 4 },
-          ..._drive2(170, 215),
-        ],
-      },
-      'Line pump': {
-        body: { x: 55, y: 20, w: 90, h: 290, rx: 8 },
-        tyres: [
-          { id: 'F1L', x: 28, y: 40, w: 22, h: 34, rx: 4 },
-          { id: 'F1R', x: 150, y: 40, w: 22, h: 34, rx: 4 },
-          { id: 'F2L', x: 28, y: 90, w: 22, h: 34, rx: 4 },
-          { id: 'F2R', x: 150, y: 90, w: 22, h: 34, rx: 4 },
-          ..._drive2(215, 260),
-        ],
-      },
-    }
-  }()),
-  // MP concrete pump: 3 single-tyre steer axles + 2 dual-tyre drive axles.
-  'Concrete pump': {
-    body: { x: 55, y: 20, w: 90, h: 310, rx: 8 },
-    tyres: [
-      { id: 'F1L', x: 28, y: 40, w: 22, h: 34, rx: 4 },
-      { id: 'F1R', x: 150, y: 40, w: 22, h: 34, rx: 4 },
-      { id: 'F2L', x: 28, y: 90, w: 22, h: 34, rx: 4 },
-      { id: 'F2R', x: 150, y: 90, w: 22, h: 34, rx: 4 },
-      { id: 'F3L', x: 28, y: 140, w: 22, h: 34, rx: 4 },
-      { id: 'F3R', x: 150, y: 140, w: 22, h: 34, rx: 4 },
-      { id: 'R1Lo', x: 16, y: 235, w: 18, h: 30, rx: 3 },
-      { id: 'R1Li', x: 36, y: 235, w: 18, h: 30, rx: 3 },
-      { id: 'R1Ri', x: 146, y: 235, w: 18, h: 30, rx: 3 },
-      { id: 'R1Ro', x: 166, y: 235, w: 18, h: 30, rx: 3 },
-      { id: 'R2Lo', x: 16, y: 280, w: 18, h: 30, rx: 3 },
-      { id: 'R2Li', x: 36, y: 280, w: 18, h: 30, rx: 3 },
-      { id: 'R2Ri', x: 146, y: 280, w: 18, h: 30, rx: 3 },
-      { id: 'R2Ro', x: 166, y: 280, w: 18, h: 30, rx: 3 },
-    ],
-  },
-}
+// The wheel arrangement and coordinates are the shared tyre map's
+// (docs/document-specs/tyre-layouts.json), so the fallback drawing places every
+// wheel where the screen and the phone draw it. The body is a plain rounded
+// rectangle around the wheels, with the inset the old hand-drawn boxes used.
+const _TYRE_LAYOUTS = Object.fromEntries(Object.entries(LAYOUT_GEOMETRY).map(([key, g]) => {
+  const minY = Math.min(...g.tyres.map((t) => t.y))
+  const maxY = Math.max(...g.tyres.map((t) => t.y + t.h))
+  const tyres = g.tyres.map((t) => ({ ...t, rx: t.w >= 22 ? 4 : 3 }))
+  return [key, { body: { x: 57, y: Math.max(0, minY - 18), w: 86, h: (maxY - minY) + 36, rx: 8 }, tyres }]
+}))
 
 // Resolution comes from lib/vehicleTyreLayout - THE shared resolver the on-screen
 // diagram uses - so the printed report can never draw a different machine from
 // the screen. A machine with no tyres returns null and the caller draws no
 // diagram at all, which is the honest output for a stationary pump or a plant.
-function _resolveLayoutKey(vehicleType) {
-  if (!vehicleType) return null
+// The asset number picks the recorded build (a 4-axle pump draws 12 wheels).
+function _resolveLayoutKey(vehicleType, assetNo, country) {
+  if (!vehicleType && !assetNo) return null
   if (isTyrelessEquipment(vehicleType)) return null
-  const key = resolveLayoutKey(vehicleType)
+  // With no type, only an asset class that names a machine draws one.
+  if (!vehicleType && !resolveLayoutKeyStrict(null, assetNo)) return null
+  const key = layoutForAsset(resolveLayoutKey(vehicleType, assetNo), assetNo, country)
   return _TYRE_LAYOUTS[key] ? key : 'Pickup'
+}
+
+/** tyre_conditions re-keyed onto the layout's slots (a code such as LHRCO lands on its wheel). */
+function _conditionsOnSlots(layoutKey, tc) {
+  const out = {}
+  for (const [k, v] of Object.entries(tc || {})) out[slotForPosition(layoutKey, k) || k] = v
+  return out
 }
 
 // Draw programmatic tyre diagram (used as fallback)
@@ -760,6 +656,11 @@ function _drawTyreDiagram(doc, layout, tyreConditions, originX, originY, scale) 
     // Hub
     doc.setFillColor(8, 10, 18)
     doc.circle(cx, cy, clamp(Math.min(tw, th) * 0.09, 0.5, 3), 'F')
+    // Condition picture straddling the top of the tyre (shared glyph).
+    {
+      const word = (typeof cond === 'object') ? cond?.condition : cond
+      drawConditionBadge(doc, kindForWheel(word, risk), cx, ty, clamp(Math.min(tw * 0.42, 8 * scale), 1.2, 4))
+    }
     // Label
     doc.setFontSize(clamp(tw < 18 ? 3 : tw < 22 ? 4 : 5, 2.5, 6))
     doc.setTextColor(210, 215, 225)
@@ -1518,7 +1419,7 @@ async function _rasterIntoBox(src, boxW, boxH, { fit = 'contain', rotate180 = fa
   } catch { return null }
 }
 
-const _BOARD_RGB = { good: [22, 163, 74], warning: [217, 119, 6], critical: [220, 38, 38], none: [148, 163, 184], known: [100, 116, 139] }
+const _BOARD_RGB = { ...RISK_RGB, known: [100, 116, 139] }
 
 /**
  * Read the rendered Vehicle Overview board (TyreBoard) into plain geometry so the
@@ -1606,7 +1507,7 @@ async function captureTyreBoard(boardEl) {
         pending: card.classList.contains('tb-pending'),
         body: rel(body),
         code: codeEl ? { text: codeEl.textContent, ...rel(codeEl), px: fontPx(codeEl) } : null,
-        dot: dot ? { ...rel(dot), glyph: dot.textContent } : null,
+        dot: dot ? { ...rel(dot), glyph: dot.textContent, kind: dot.getAttribute('data-kind') || null } : null,
         lines,
       })
     })
@@ -1661,6 +1562,10 @@ function _drawTyreBoard(doc, cap, x, y, s) {
     }
     if (c.dot) {
       const cx = X(c.dot.x + c.dot.w / 2), cy = Y(c.dot.y + c.dot.h / 2), rr = (c.dot.w / 2) * s
+      if (c.dot.kind && !c.pending) {
+        // The shared condition picture, the same one the screen shows.
+        drawConditionBadge(doc, c.dot.kind, cx, cy, rr)
+      } else {
       doc.setFillColor(...rgb); doc.circle(cx, cy, rr, 'F')
       doc.setDrawColor(255, 255, 255); doc.setLineWidth(rr * 0.3)
       if (c.tone === 'good' && !c.pending) {
@@ -1671,6 +1576,7 @@ function _drawTyreBoard(doc, cap, x, y, s) {
       } else {
         doc.line(cx, cy - rr * 0.52, cx, cy + rr * 0.12)
         doc.setFillColor(255, 255, 255); doc.circle(cx, cy + rr * 0.45, rr * 0.13, 'F')
+      }
       }
     }
     for (const ln of c.lines) {
@@ -1920,14 +1826,10 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     cy += 2.5
     _drawTyreBoard(doc, board, bx, cy, s)
     cy += boardH + 6
-    const legend = [['good', 'Good'], ['warning', 'Warning'], ['critical', 'Critical'], ['none', 'Not recorded']]
-    doc.setFontSize(7.2); doc.setFont('helvetica', 'normal')
-    const itemW = legend.map(([, l]) => 6 + doc.getTextWidth(l) + 5)
-    let lx = mx + (W - itemW.reduce((a, b) => a + b, 0)) / 2
-    legend.forEach(([tone, label], i) => {
-      doc.setFillColor(..._BOARD_RGB[tone]); doc.circle(lx + 1.8, cy - 1.1, 1.8, 'F')
-      doc.setTextColor(...P.iron); doc.text(label, lx + 5, cy)
-      lx += itemW[i]
+    // One picture + word per condition, the same as the screen's legend.
+    drawConditionLegendRow(doc, mx, cy, W, {
+      labelOf: (k) => (k === 'none' ? 'Not recorded' : null),
+      textRgb: P.iron, fontSize: 7.2,
     })
     cy += 6
     doc.setFontSize(7.5); doc.setTextColor(...P.ghost)
@@ -1941,7 +1843,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     let estH = null
     if (opts.svgEl) estH = 64
     else {
-      const lk = _resolveLayoutKey(row.vehicle_type)
+      const lk = _resolveLayoutKey(row.vehicle_type, row.asset_no, row.country)
       const ly = lk ? _TYRE_LAYOUTS[lk] : null
       if (ly) estH = Math.min(64, ((ly.body.y + ly.body.h + 10) * (108 / 200)) + 12)
     }
@@ -1957,18 +1859,18 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
   const drawLegend = (bx, by, bw) => {
     const lx = bx + bw - 40
     doc.setFillColor(...(dbgLight ? [241, 245, 249] : [30, 41, 59]))
-    doc.roundedRect(lx - 3, by + 4, 38, 40, 2, 2, 'F')
-    let ly = by + 10
+    doc.roundedRect(lx - 3, by + 3, 38, 44, 2, 2, 'F')
+    let ly = by + 8.5
     doc.setFontSize(6.8); doc.setFont('helvetica', 'bold')
     doc.setTextColor(...(dbgLight ? [55, 65, 81] : [226, 232, 240]))
-    doc.text('LEGEND', lx, ly); ly += 6.5
-    Object.entries(RISK_LABEL).forEach(([key, label]) => {
-      const [r, g, b] = RISK_RGB[key]
-      doc.setFillColor(r, g, b); doc.circle(lx + 1.8, ly - 1.1, 1.6, 'F')
+    doc.text('LEGEND', lx, ly); ly += 5.4
+    // One fixed colour + one picture + one word per condition (shared tyre map).
+    CONDITION_KINDS.forEach((k) => {
+      drawConditionBadge(doc, k.kind, lx + 1.8, ly - 1.1, 1.8)
       doc.setFontSize(7); doc.setFont('helvetica', 'normal')
       doc.setTextColor(...(dbgLight ? [31, 41, 55] : [220, 225, 235]))
-      doc.text(label, lx + 5.5, ly)
-      ly += 7
+      doc.text(k.label, lx + 5.5, ly)
+      ly += 5.4
     })
   }
   let diagramH = 0
@@ -1984,7 +1886,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
     drawLegend(mx, y, W)
     diagramH = bgH
   } else {
-    const layoutKey = _resolveLayoutKey(row.vehicle_type)
+    const layoutKey = _resolveLayoutKey(row.vehicle_type, row.asset_no, row.country)
     const layout    = layoutKey ? _TYRE_LAYOUTS[layoutKey] : null
     if (layout) {
       const bodyH    = layout.body.y + layout.body.h + 10
@@ -1995,7 +1897,7 @@ export async function exportInspectionDetailPdf(row, opts = {}) {
       doc.setFillColor(8, 12, 28); doc.roundedRect(mx, y, W, bgH, 3, 3, 'F')
       const minTyreX = layout.tyres.reduce((m, t) => Math.min(m, t.x), 999)
       const originX  = mx + (W - 44 - maxDiagW) / 2 - minTyreX * scale
-      const normTcForDraw = normalizeTyreConditions(row)
+      const normTcForDraw = _conditionsOnSlots(layoutKey, normalizeTyreConditions(row))
       _drawTyreDiagram(doc, layout, normTcForDraw, originX, y + 5, scale)
       drawLegend(mx, y, W)
       diagramH = bgH

@@ -1,0 +1,1492 @@
+{
+  "$comment": "THE one tyre map definition for web screens, the PDF and the Flutter app. Web reads it through src/lib/tyreLayoutSpec.js. Flutter reads lib/features/tyre_diagram/domain/tyre_layout_spec.g.dart, generated from this file by scripts/gen-tyre-layout-spec.mjs and pinned to it by test/features/tyre_diagram/domain/tyre_layout_spec_parity_test.dart. Change the data here, then run: node scripts/gen-tyre-layout-spec.mjs",
+  "version": 1,
+  "fallbackLayout": "Pickup",
+  "layouts": {
+    "Pickup": {
+      "viewH": 320,
+      "body": "pickup",
+      "slots": [
+        [
+          "FL",
+          32,
+          48,
+          23,
+          44
+        ],
+        [
+          "FR",
+          145,
+          48,
+          23,
+          44
+        ],
+        [
+          "RL",
+          32,
+          192,
+          23,
+          44
+        ],
+        [
+          "RR",
+          145,
+          192,
+          23,
+          44
+        ]
+      ]
+    },
+    "Wheel loader": {
+      "viewH": 258,
+      "body": "wheelLoader",
+      "slots": [
+        [
+          "FL",
+          24,
+          22,
+          32,
+          56
+        ],
+        [
+          "FR",
+          144,
+          22,
+          32,
+          56
+        ],
+        [
+          "RL",
+          24,
+          155,
+          32,
+          56
+        ],
+        [
+          "RR",
+          144,
+          155,
+          32,
+          56
+        ]
+      ]
+    },
+    "Skid loader": {
+      "viewH": 258,
+      "body": "skidLoader",
+      "slots": [
+        [
+          "FL",
+          24,
+          22,
+          32,
+          56
+        ],
+        [
+          "FR",
+          144,
+          22,
+          32,
+          56
+        ],
+        [
+          "RL",
+          24,
+          155,
+          32,
+          56
+        ],
+        [
+          "RR",
+          144,
+          155,
+          32,
+          56
+        ]
+      ]
+    },
+    "Canter": {
+      "viewH": 310,
+      "body": "canter",
+      "slots": [
+        [
+          "FL",
+          31,
+          36,
+          22,
+          40
+        ],
+        [
+          "FR",
+          147,
+          36,
+          22,
+          40
+        ],
+        [
+          "RLo",
+          16,
+          170,
+          20,
+          38
+        ],
+        [
+          "RLi",
+          38,
+          170,
+          20,
+          38
+        ],
+        [
+          "RRi",
+          142,
+          170,
+          20,
+          38
+        ],
+        [
+          "RRo",
+          164,
+          170,
+          20,
+          38
+        ]
+      ]
+    },
+    "Bus": {
+      "viewH": 330,
+      "body": "bus",
+      "slots": [
+        [
+          "FL",
+          14,
+          38,
+          22,
+          42
+        ],
+        [
+          "FR",
+          164,
+          38,
+          22,
+          42
+        ],
+        [
+          "RLo",
+          0,
+          192,
+          20,
+          38
+        ],
+        [
+          "RLi",
+          22,
+          192,
+          20,
+          38
+        ],
+        [
+          "RRi",
+          158,
+          192,
+          20,
+          38
+        ],
+        [
+          "RRo",
+          180,
+          192,
+          20,
+          38
+        ]
+      ]
+    },
+    "Tata": {
+      "viewH": 305,
+      "body": "tata",
+      "slots": [
+        [
+          "FL",
+          31,
+          32,
+          22,
+          40
+        ],
+        [
+          "FR",
+          147,
+          32,
+          22,
+          40
+        ],
+        [
+          "RLo",
+          16,
+          178,
+          20,
+          36
+        ],
+        [
+          "RLi",
+          38,
+          178,
+          20,
+          36
+        ],
+        [
+          "RRi",
+          142,
+          178,
+          20,
+          36
+        ],
+        [
+          "RRo",
+          164,
+          178,
+          20,
+          36
+        ]
+      ]
+    },
+    "Ashok Leyland": {
+      "viewH": 305,
+      "body": "ashokLeyland",
+      "slots": [
+        [
+          "FL",
+          31,
+          32,
+          22,
+          40
+        ],
+        [
+          "FR",
+          147,
+          32,
+          22,
+          40
+        ],
+        [
+          "RLo",
+          16,
+          178,
+          20,
+          36
+        ],
+        [
+          "RLi",
+          38,
+          178,
+          20,
+          36
+        ],
+        [
+          "RRi",
+          142,
+          178,
+          20,
+          36
+        ],
+        [
+          "RRo",
+          164,
+          178,
+          20,
+          36
+        ]
+      ]
+    },
+    "Tanker": {
+      "viewH": 310,
+      "body": "canter",
+      "note": "1 steer axle + 1 dual drive axle = 6 tyres.",
+      "slots": [
+        [
+          "FL",
+          31,
+          36,
+          22,
+          40
+        ],
+        [
+          "FR",
+          147,
+          36,
+          22,
+          40
+        ],
+        [
+          "RLo",
+          16,
+          170,
+          20,
+          38
+        ],
+        [
+          "RLi",
+          38,
+          170,
+          20,
+          38
+        ],
+        [
+          "RRi",
+          142,
+          170,
+          20,
+          38
+        ],
+        [
+          "RRo",
+          164,
+          170,
+          20,
+          38
+        ]
+      ]
+    },
+    "Trailer": {
+      "viewH": 270,
+      "body": "canter",
+      "note": "2 dual axles, no steer axle = 8 tyres.",
+      "slots": [
+        [
+          "R1Lo",
+          14,
+          96,
+          19,
+          35
+        ],
+        [
+          "R1Li",
+          35,
+          96,
+          19,
+          35
+        ],
+        [
+          "R1Ri",
+          146,
+          96,
+          19,
+          35
+        ],
+        [
+          "R1Ro",
+          167,
+          96,
+          19,
+          35
+        ],
+        [
+          "R2Lo",
+          14,
+          168,
+          19,
+          35
+        ],
+        [
+          "R2Li",
+          35,
+          168,
+          19,
+          35
+        ],
+        [
+          "R2Ri",
+          146,
+          168,
+          19,
+          35
+        ],
+        [
+          "R2Ro",
+          167,
+          168,
+          19,
+          35
+        ]
+      ]
+    },
+    "Truck 6x4": {
+      "viewH": 310,
+      "body": "canter",
+      "note": "1 steer axle + 2 dual drive axles = 10 tyres (spider pump, crane, generic truck).",
+      "slots": [
+        [
+          "FL",
+          31,
+          36,
+          22,
+          40
+        ],
+        [
+          "FR",
+          147,
+          36,
+          22,
+          40
+        ],
+        [
+          "R1Lo",
+          14,
+          170,
+          19,
+          35
+        ],
+        [
+          "R1Li",
+          35,
+          170,
+          19,
+          35
+        ],
+        [
+          "R1Ri",
+          146,
+          170,
+          19,
+          35
+        ],
+        [
+          "R1Ro",
+          167,
+          170,
+          19,
+          35
+        ],
+        [
+          "R2Lo",
+          14,
+          218,
+          19,
+          35
+        ],
+        [
+          "R2Li",
+          35,
+          218,
+          19,
+          35
+        ],
+        [
+          "R2Ri",
+          146,
+          218,
+          19,
+          35
+        ],
+        [
+          "R2Ro",
+          167,
+          218,
+          19,
+          35
+        ]
+      ]
+    },
+    "Tri-mixer": {
+      "viewH": 360,
+      "body": "triMixer",
+      "slots": [
+        [
+          "F1L",
+          29,
+          24,
+          22,
+          38
+        ],
+        [
+          "F1R",
+          149,
+          24,
+          22,
+          38
+        ],
+        [
+          "F2L",
+          29,
+          76,
+          22,
+          38
+        ],
+        [
+          "F2R",
+          149,
+          76,
+          22,
+          38
+        ],
+        [
+          "R1Lo",
+          14,
+          170,
+          19,
+          35
+        ],
+        [
+          "R1Li",
+          35,
+          170,
+          19,
+          35
+        ],
+        [
+          "R1Ri",
+          146,
+          170,
+          19,
+          35
+        ],
+        [
+          "R1Ro",
+          167,
+          170,
+          19,
+          35
+        ],
+        [
+          "R2Lo",
+          14,
+          218,
+          19,
+          35
+        ],
+        [
+          "R2Li",
+          35,
+          218,
+          19,
+          35
+        ],
+        [
+          "R2Ri",
+          146,
+          218,
+          19,
+          35
+        ],
+        [
+          "R2Ro",
+          167,
+          218,
+          19,
+          35
+        ]
+      ]
+    },
+    "Line pump": {
+      "viewH": 375,
+      "body": "linePump",
+      "note": "2 steer axles + 2 dual drive axles = 12 tyres.",
+      "slots": [
+        [
+          "F1L",
+          29,
+          40,
+          22,
+          38
+        ],
+        [
+          "F1R",
+          149,
+          40,
+          22,
+          38
+        ],
+        [
+          "F2L",
+          29,
+          84,
+          22,
+          38
+        ],
+        [
+          "F2R",
+          149,
+          84,
+          22,
+          38
+        ],
+        [
+          "R1Lo",
+          13,
+          258,
+          19,
+          33
+        ],
+        [
+          "R1Li",
+          34,
+          258,
+          19,
+          33
+        ],
+        [
+          "R1Ri",
+          147,
+          258,
+          19,
+          33
+        ],
+        [
+          "R1Ro",
+          168,
+          258,
+          19,
+          33
+        ],
+        [
+          "R2Lo",
+          13,
+          300,
+          19,
+          33
+        ],
+        [
+          "R2Li",
+          34,
+          300,
+          19,
+          33
+        ],
+        [
+          "R2Ri",
+          147,
+          300,
+          19,
+          33
+        ],
+        [
+          "R2Ro",
+          168,
+          300,
+          19,
+          33
+        ]
+      ]
+    },
+    "Concrete pump": {
+      "viewH": 375,
+      "body": "concretePump",
+      "note": "MP truck-mounted pump: 3 single axles + 2 dual drive axles = 14 tyres, the most any pump carries.",
+      "slots": [
+        [
+          "F1L",
+          29,
+          40,
+          22,
+          38
+        ],
+        [
+          "F1R",
+          149,
+          40,
+          22,
+          38
+        ],
+        [
+          "F2L",
+          29,
+          84,
+          22,
+          38
+        ],
+        [
+          "F2R",
+          149,
+          84,
+          22,
+          38
+        ],
+        [
+          "F3L",
+          29,
+          128,
+          22,
+          38
+        ],
+        [
+          "F3R",
+          149,
+          128,
+          22,
+          38
+        ],
+        [
+          "R1Lo",
+          13,
+          258,
+          19,
+          33
+        ],
+        [
+          "R1Li",
+          34,
+          258,
+          19,
+          33
+        ],
+        [
+          "R1Ri",
+          147,
+          258,
+          19,
+          33
+        ],
+        [
+          "R1Ro",
+          168,
+          258,
+          19,
+          33
+        ],
+        [
+          "R2Lo",
+          13,
+          300,
+          19,
+          33
+        ],
+        [
+          "R2Li",
+          34,
+          300,
+          19,
+          33
+        ],
+        [
+          "R2Ri",
+          147,
+          300,
+          19,
+          33
+        ],
+        [
+          "R2Ro",
+          168,
+          300,
+          19,
+          33
+        ]
+      ]
+    },
+    "Concrete pump 4-axle": {
+      "viewH": 375,
+      "body": "concretePump",
+      "note": "Chosen only from a recorded axle_count of 4: 2 single + 2 dual = 12 tyres.",
+      "slots": [
+        [
+          "F1L",
+          29,
+          40,
+          22,
+          38
+        ],
+        [
+          "F1R",
+          149,
+          40,
+          22,
+          38
+        ],
+        [
+          "F2L",
+          29,
+          84,
+          22,
+          38
+        ],
+        [
+          "F2R",
+          149,
+          84,
+          22,
+          38
+        ],
+        [
+          "R1Lo",
+          13,
+          258,
+          19,
+          33
+        ],
+        [
+          "R1Li",
+          34,
+          258,
+          19,
+          33
+        ],
+        [
+          "R1Ri",
+          147,
+          258,
+          19,
+          33
+        ],
+        [
+          "R1Ro",
+          168,
+          258,
+          19,
+          33
+        ],
+        [
+          "R2Lo",
+          13,
+          300,
+          19,
+          33
+        ],
+        [
+          "R2Li",
+          34,
+          300,
+          19,
+          33
+        ],
+        [
+          "R2Ri",
+          147,
+          300,
+          19,
+          33
+        ],
+        [
+          "R2Ro",
+          168,
+          300,
+          19,
+          33
+        ]
+      ]
+    }
+  },
+  "axleVariants": {
+    "Concrete pump": {
+      "4": "Concrete pump 4-axle"
+    }
+  },
+  "tyreless": [
+    "generator",
+    "genset",
+    "chiller",
+    "reclaimer",
+    "compressor",
+    "tower light",
+    "light tower",
+    "plant",
+    "batch",
+    "placing boom",
+    "placing",
+    "stationary",
+    "building"
+  ],
+  "assetPrefix": {
+    "$comment": "Two or three letters, an optional space or hyphen (PL-090), then a digit. The first two letters pick the class. A word such as PLACING BOOM has no digit and is never read as a class.",
+    "pattern": "^([A-Za-z]{2,3})[\\s-]*\\d",
+    "map": {
+      "TM": "Tri-mixer",
+      "MP": "Concrete pump",
+      "CP": "Concrete pump",
+      "WL": "Wheel loader",
+      "SL": "Skid loader",
+      "PL": "Pickup",
+      "BH": "Bus",
+      "LP": "Line pump",
+      "MB": "Bus"
+    }
+  },
+  "pickupModels": {
+    "$comment": "Identified pickup models win over the imported type and over make words such as Tata or the \"tri\" in Triton.",
+    "words": [
+      "triton",
+      "xenon",
+      "double cab"
+    ],
+    "compact": [
+      "l200",
+      "maxust60"
+    ]
+  },
+  "wheeler": [
+    [
+      12,
+      "Tri-mixer"
+    ],
+    [
+      8,
+      "Truck 6x4"
+    ],
+    [
+      6,
+      "Canter"
+    ],
+    [
+      0,
+      "Pickup"
+    ]
+  ],
+  "keywordRules": [
+    {
+      "layout": "Tri-mixer",
+      "words": [
+        "tri",
+        "mixer",
+        "transit"
+      ]
+    },
+    {
+      "layout": "Pickup",
+      "words": [
+        "placing",
+        "stationary"
+      ],
+      "$comment": "Defensive stop for tyreless gear a caller did not filter. Must sit above the pump rules."
+    },
+    {
+      "layout": "Line pump",
+      "compact": [
+        "linepump"
+      ]
+    },
+    {
+      "layout": "Truck 6x4",
+      "words": [
+        "spider"
+      ],
+      "compact": [
+        "spiderpump"
+      ]
+    },
+    {
+      "layout": "Concrete pump",
+      "words": [
+        "boom",
+        "concrete",
+        "pump"
+      ]
+    },
+    {
+      "layout": "Skid loader",
+      "words": [
+        "skid"
+      ]
+    },
+    {
+      "layout": "Wheel loader",
+      "words": [
+        "wheel",
+        "loader",
+        "load"
+      ]
+    },
+    {
+      "layout": "Canter",
+      "words": [
+        "canter"
+      ]
+    },
+    {
+      "layout": "Bus",
+      "words": [
+        "bus",
+        "coaster"
+      ]
+    },
+    {
+      "layout": "Tata",
+      "words": [
+        "tata"
+      ]
+    },
+    {
+      "layout": "Ashok Leyland",
+      "words": [
+        "ashok",
+        "leyland"
+      ]
+    },
+    {
+      "layout": "Pickup",
+      "words": [
+        "pickup",
+        "pick up",
+        "pick-up"
+      ]
+    },
+    {
+      "layout": "Tanker",
+      "words": [
+        "tanker"
+      ]
+    },
+    {
+      "layout": "Trailer",
+      "words": [
+        "trailer"
+      ],
+      "compact": [
+        "trl"
+      ]
+    },
+    {
+      "layout": "Truck 6x4",
+      "words": [
+        "crane",
+        "truck"
+      ]
+    }
+  ],
+  "positionCodes": {
+    "$comment": "Slot id -> GCC position code shown on every surface. An override applies when the layout key contains one of `match`. Overrides with scope \"display\" are not used by the ERP position service (src/lib/tyrePositionService.js), whose code table is mirrored in SQL and changes only with a migration.",
+    "base": {
+      "FL": "LHF1",
+      "FR": "RHF1",
+      "RL": "LHR1",
+      "RR": "RHR1",
+      "RLo": "LHRO",
+      "RLi": "LHRI",
+      "RRi": "RHRI",
+      "RRo": "RHRO",
+      "F1L": "LHF1",
+      "F1R": "RHF1",
+      "F2L": "LHF2",
+      "F2R": "RHF2",
+      "F3L": "LHF3",
+      "F3R": "RHF3",
+      "R1Lo": "LHR1-O",
+      "R1Li": "LHR1-I",
+      "R1Ri": "RHR1-I",
+      "R1Ro": "RHR1-O",
+      "R2Lo": "LHR2-O",
+      "R2Li": "LHR2-I",
+      "R2Ri": "RHR2-I",
+      "R2Ro": "RHR2-O",
+      "R3Lo": "LHR3-O",
+      "R3Li": "LHR3-I",
+      "R3Ri": "RHR3-I",
+      "R3Ro": "RHR3-O"
+    },
+    "overrides": [
+      {
+        "match": [
+          "tri",
+          "mixer"
+        ],
+        "scope": "all",
+        "codes": {
+          "R1Lo": "LHCO",
+          "R1Li": "LHCI",
+          "R1Ri": "RHCI",
+          "R1Ro": "RHCO",
+          "R2Lo": "LHRO",
+          "R2Li": "LHRI",
+          "R2Ri": "RHRI",
+          "R2Ro": "RHRO"
+        }
+      },
+      {
+        "match": [
+          "concrete pump"
+        ],
+        "scope": "display",
+        "$comment": "The codes concrete pump records carry in live data: axle 3 single R1-I, axle 4 dual RC, axle 5 dual RR.",
+        "codes": {
+          "F3L": "LHR1-I",
+          "F3R": "RHR1-I",
+          "R1Lo": "LHRCO",
+          "R1Li": "LHRCI",
+          "R1Ri": "RHRCI",
+          "R1Ro": "RHRCO",
+          "R2Lo": "LHRRO",
+          "R2Li": "LHRRI",
+          "R2Ri": "RHRRI",
+          "R2Ro": "RHRRO"
+        }
+      }
+    ]
+  },
+  "positionAliases": {
+    "$comment": "Other spellings found in live records for the same wheel. Used to place a record on the map, never to rename what is stored.",
+    "Concrete pump": {
+      "F3L": [
+        "LHR1-O",
+        "LHR1",
+        "LHF3"
+      ],
+      "F3R": [
+        "RHR1-O",
+        "RHR1",
+        "RHF3"
+      ],
+      "R1Lo": [
+        "LHCO"
+      ],
+      "R1Li": [
+        "LHCI"
+      ],
+      "R1Ri": [
+        "RHCI"
+      ],
+      "R1Ro": [
+        "RHCO"
+      ],
+      "R2Lo": [
+        "LHRO",
+        "LHR2-O"
+      ],
+      "R2Li": [
+        "LHRI",
+        "LHR2-I"
+      ],
+      "R2Ri": [
+        "RHRI",
+        "RHR2-I"
+      ],
+      "R2Ro": [
+        "RHRO",
+        "RHR2-O"
+      ]
+    },
+    "Concrete pump 4-axle": {
+      "R1Lo": [
+        "LHCO"
+      ],
+      "R1Li": [
+        "LHCI"
+      ],
+      "R1Ri": [
+        "RHCI"
+      ],
+      "R1Ro": [
+        "RHCO"
+      ],
+      "R2Lo": [
+        "LHRO",
+        "LHR2-O"
+      ],
+      "R2Li": [
+        "LHRI",
+        "LHR2-I"
+      ],
+      "R2Ri": [
+        "RHRI",
+        "RHR2-I"
+      ],
+      "R2Ro": [
+        "RHRO",
+        "RHR2-O"
+      ]
+    }
+  },
+  "conditions": {
+    "$comment": "Condition word -> band, then band -> kind (the picture). A phrase that DENIES a good word (\"not good\", \"not ok\") is first replaced by \"needsattention\" (`negatedGood`), which bands critical with the warning-triangle picture. A phrase that DENIES a fault (\"no damage\", \"not damaged\", \"without cuts\", \"undamaged\", \"damage: none\") is first replaced by \"ok\" using `negation`, so \"Good, no damage\" is good and never red. Then: exact first, then the patterns in `order` (case-insensitive). Severe is tested FIRST (safety first): \"Worn, flat\" or \"wear + cut\" is red, never amber. A word no rule knows is \"none\" (No data), never good. `kinds` gives each condition ONE fixed colour (its band's palette entry), ONE glyph and one short label, used on the picker buttons, the map wheels, the legend and the printed report on the web and the phone. Inside a band the first kind whose `match` hits wins; the kind with no `match` is the band's default. Glyphs are drawn on a 24x24 grid with round-capped strokes: `strokes` open polylines, `closed` polygons, `circles` outlines, `dots` filled circles, as flat [x, y, x, y ...] / [cx, cy, r] lists so every surface draws the same picture with its own primitives.",
+    "negatedGood": "\\b(?:not|no|never|isn'?t|is not)\\s+(?:good|ok|okay|fine)\\b",
+    "negation": "\\b(?:no|not|without|nil|zero|free of)\\s+(?:any\\s+)?(?:visible\\s+)?(?:signs?\\s+of\\s+)?(?:damages?|damaged|punctures?|punctured|cuts?|bulges?|bulging|cracks?|cracked|burst|flats?|wear|worn|separation)\\b|\\b(?:damages?|punctures?|cuts?|cracks?|bulges?)\\s*[:\\-]\\s*(?:none|nil|no|n/?a)\\b|\\bun(?:damaged|punctured)\\b|\\b(?:damage|puncture)[\\s-]*free\\b",
+    "exact": {
+      "Good": "good",
+      "Wear": "warning",
+      "Damage": "critical",
+      "Puncture": "critical",
+      "None": "none",
+      "Missing": "critical"
+    },
+    "order": [
+      "critical",
+      "warning",
+      "good"
+    ],
+    "patterns": {
+      "warning": "wear|worn",
+      "critical": "needsattention|damage|puncture|nail|flat|deflat|burst|blast|\\bcuts?\\b|bulg|crack|separat|missing",
+      "good": "good|\\bok\\b"
+    },
+    "kinds": [
+      {
+        "kind": "good",
+        "band": "good",
+        "label": "Good",
+        "glyph": {
+          "strokes": [
+            [
+              5,
+              12.5,
+              10,
+              17.5,
+              19,
+              7
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "worn",
+        "band": "warning",
+        "label": "Worn",
+        "glyph": {
+          "strokes": [
+            [
+              3,
+              8.5,
+              7.5,
+              4,
+              12,
+              8.5,
+              16.5,
+              4,
+              21,
+              8.5
+            ],
+            [
+              12,
+              11,
+              12,
+              17
+            ],
+            [
+              8.5,
+              14,
+              12,
+              17.5,
+              15.5,
+              14
+            ],
+            [
+              3,
+              20.5,
+              21,
+              20.5
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "puncture",
+        "band": "critical",
+        "label": "Puncture",
+        "match": "punct|nail",
+        "glyph": {
+          "strokes": [
+            [
+              13.5,
+              10.5,
+              20,
+              4
+            ],
+            [
+              17.5,
+              2.5,
+              21.5,
+              6.5
+            ]
+          ],
+          "circles": [
+            [
+              10,
+              14,
+              7
+            ],
+            [
+              10,
+              14,
+              2
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "flat",
+        "band": "critical",
+        "label": "Flat",
+        "match": "flat|deflat",
+        "glyph": {
+          "strokes": [
+            [
+              1.5,
+              19.5,
+              22.5,
+              19.5
+            ],
+            [
+              12,
+              2.5,
+              12,
+              7.5
+            ],
+            [
+              9.5,
+              5.5,
+              12,
+              8,
+              14.5,
+              5.5
+            ]
+          ],
+          "closed": [
+            [
+              21.5,
+              14.5,
+              20.8,
+              16.2,
+              18.7,
+              17.7,
+              15.6,
+              18.7,
+              12.0,
+              19.0,
+              8.4,
+              18.7,
+              5.3,
+              17.7,
+              3.2,
+              16.2,
+              2.5,
+              14.5,
+              3.2,
+              12.8,
+              5.3,
+              11.3,
+              8.4,
+              10.3,
+              12.0,
+              10.0,
+              15.6,
+              10.3,
+              18.7,
+              11.3,
+              20.8,
+              12.8
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "damaged",
+        "band": "critical",
+        "label": "Damaged",
+        "glyph": {
+          "strokes": [
+            [
+              12,
+              9.5,
+              12,
+              14.5
+            ]
+          ],
+          "closed": [
+            [
+              12,
+              3,
+              21.5,
+              20,
+              2.5,
+              20
+            ]
+          ],
+          "dots": [
+            [
+              12,
+              17.3,
+              1.2
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "missing",
+        "band": "critical",
+        "label": "Missing",
+        "match": "missing",
+        "glyph": {
+          "strokes": [
+            [
+              7.5,
+              12,
+              16.5,
+              12
+            ]
+          ],
+          "circles": [
+            [
+              12,
+              12,
+              9
+            ]
+          ]
+        }
+      },
+      {
+        "kind": "none",
+        "band": "none",
+        "label": "Not checked",
+        "glyph": {
+          "strokes": [
+            [
+              9,
+              9.5,
+              9.6,
+              7.4,
+              12,
+              6.6,
+              14.4,
+              7.4,
+              15,
+              9.5,
+              14.2,
+              11,
+              12,
+              12.2,
+              12,
+              14
+            ]
+          ],
+          "circles": [
+            [
+              12,
+              12,
+              9.5
+            ]
+          ],
+          "dots": [
+            [
+              12,
+              17.2,
+              1.1
+            ]
+          ]
+        }
+      }
+    ]
+  },
+  "risk": {
+    "order": [
+      "good",
+      "warning",
+      "critical",
+      "none"
+    ],
+    "labels": {
+      "good": "Good",
+      "warning": "Warning",
+      "critical": "Critical",
+      "none": "No Data"
+    },
+    "palette": {
+      "light": {
+        "good": "#15803D",
+        "warning": "#B45309",
+        "critical": "#B91C1C",
+        "none": "#64748B"
+      },
+      "dark": {
+        "good": "#22C55E",
+        "warning": "#F59E0B",
+        "critical": "#EF4444",
+        "none": "#94A3B8"
+      }
+    }
+  }
+}

@@ -29,7 +29,7 @@ import {
   ChevronDown, ChevronRight, Paperclip, Upload, Check, X, FileText, ArrowRight, Send, Info,
 } from 'lucide-react'
 import {
-  getLiabilityAssessmentWithMeta, saveLiabilityAssessment, approveLiabilityAssessment,
+  getLiabilityAssessmentWithMeta, saveLiabilityAssessment, approveLiabilityAssessment, reopenLiabilityAssessment,
   listAuthorityReports, saveAuthorityReport, saveFieldAudit, mergeFieldAudit, stripParityFields,
 } from '../../lib/api/accidentLiability'
 import { listEvidence, addEvidence, verifyEvidence } from '../../lib/api/accidentEvidence'
@@ -37,6 +37,7 @@ import { logCommunication } from '../../lib/api/accidentCommunications'
 import { listWorkstreams } from '../../lib/api/accidentCase'
 import { listDirectoryPeople as listProfiles } from '../../lib/api/profileDirectory'
 import { isMissingColumn } from '../../lib/api/_client'
+import { driverWorkspaceOptions } from '../../lib/api/driverWorkspace'
 import { useAuth } from '../../contexts/AuthContext'
 import {
   FAULT_TILES, faultStatusFor, PAYER_TILES, payerLabel, recoveryRequiredFor,
@@ -133,6 +134,12 @@ function Derived({ label, children }) {
   )
 }
 
+// The charge opens in the accident's own country currency; never assume SAR.
+const COUNTRY_CURRENCY = { KSA: 'SAR', UAE: 'AED', EGYPT: 'EGP' }
+function currencyForCountry(country) {
+  return COUNTRY_CURRENCY[String(country || '').trim().toUpperCase()] || ''
+}
+
 function Field({ label, value, onChange, disabled, placeholder }) {
   return (
     <div>
@@ -159,6 +166,9 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
   const [notice, setNotice] = useState('')
   const [parityProvisioned, setParityProvisioned] = useState(true)
   const [changeReason, setChangeReason] = useState('')
+  const [approveReason, setApproveReason] = useState('')
+  const [recoveryCharge, setRecoveryCharge] = useState({ driver_id: '', currency: currencyForCountry(acc?.country), amount: '' })
+  const [recoveryDrivers, setRecoveryDrivers] = useState([])
   const [safetyOpen, setSafetyOpen] = useState(false)
   const [uploadingKey, setUploadingKey] = useState('')
   const [requesting, setRequesting] = useState(false)
@@ -189,6 +199,16 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
   }, [accidentId, acc?.gcc_liability_ratio, workstreams])
 
   useEffect(() => { load() }, [load])
+
+  const needsRecoveryDriver = !!elevated && draft?.payer === 'driver_recovery' && !!assessment?.id && !assessment?.approved
+  useEffect(() => {
+    if (!needsRecoveryDriver) return undefined
+    let live = true
+    driverWorkspaceOptions('drivers', '', 0)
+      .then((rows) => { if (live) setRecoveryDrivers(Array.isArray(rows) ? rows : []) })
+      .catch((e) => { if (live) setErr(toUserMessage(e, 'Could not load drivers for recovery.')) })
+    return () => { live = false }
+  }, [needsRecoveryDriver])
 
   const usersById = useMemo(() => {
     const m = new Map()
@@ -264,13 +284,38 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
 
   async function approve() {
     if (!assessment?.id || saving) return
+    if (draft?.payer === 'driver_recovery' && !/^[A-Z]{3}$/.test(String(recoveryCharge.currency || '').toUpperCase())) {
+      setErr('Enter the currency of the driver charge (for example SAR, AED or EGP).')
+      return
+    }
     setSaving(true); setErr('')
     try {
-      const saved = await approveLiabilityAssessment(assessment.id, me)
-      setAssessment(saved); setDraft(saved)
+      const charge = draft?.payer === 'driver_recovery'
+        ? { driver_id: recoveryCharge.driver_id || null, currency: (recoveryCharge.currency || '').toUpperCase(), ...(recoveryCharge.amount ? { amount: Number(recoveryCharge.amount) } : {}) }
+        : null
+      const saved = await approveLiabilityAssessment(assessment.id, { reason: approveReason, charge })
+      const { approval, ...row } = saved || {}
+      setAssessment(row); setDraft(row); setApproveReason('')
+      if (approval?.charge_no) setNotice(`Driver charge ${approval.charge_no} opened for driver recovery.`)
       onChanged?.()
     } catch (e) {
       setErr(toUserMessage(e, 'Could not approve the assessment.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function reopen() {
+    if (!assessment?.id || saving) return
+    setSaving(true); setErr(''); setNotice('')
+    try {
+      const saved = await reopenLiabilityAssessment(assessment.id, { reason: changeReason })
+      const { reopen: result, ...row } = saved || {}
+      setAssessment(row); setDraft(row); setChangeReason('')
+      setNotice(result?.reversed_charge_id ? 'Reopened. The driver charge opened by the approval was reversed.' : 'Reopened for changes.')
+      onChanged?.()
+    } catch (e) {
+      setErr(toUserMessage(e, 'Could not reopen the assessment.'))
     } finally {
       setSaving(false)
     }
@@ -529,7 +574,7 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
         {!locked ? (
           <p className="text-xs text-[var(--text-muted)] flex items-center gap-1.5"><FileWarning size={12} /> Provisional until authority/insurer confirmation.</p>
         ) : (
-          <p className="text-xs text-green-400 flex items-center gap-1.5"><Lock size={12} /> Approved and locked. A further edit requires a change reason.</p>
+          <p className="text-xs text-green-400 flex items-center gap-1.5"><Lock size={12} /> Approved and locked. An administrator can reopen it with a reason.</p>
         )}
 
         <div className="border-t border-[var(--input-border)] pt-3">
@@ -555,10 +600,30 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
                 ))}
               </div>
               {locked && elevated && (
-                <Field label="Change reason (required to revise a locked assessment)" value={changeReason} onChange={setChangeReason} />
+                <div className="space-y-2">
+                  <Field label="Reason to reopen (administrators only, at least 10 characters)" value={changeReason} onChange={setChangeReason} />
+                  <button className="btn-secondary text-xs" disabled={saving || changeReason.trim().length < 10} onClick={reopen}>Reopen for changes</button>
+                </div>
               )}
               {elevated && assessment?.id && !assessment.approved && (
-                <button className="btn-secondary text-xs" disabled={saving} onClick={approve}>Approve and lock</button>
+                <div className="space-y-2">
+                  <Field label="Approval reason (recorded with your name and the server time)" value={approveReason} onChange={setApproveReason} />
+                  {draft?.payer === 'driver_recovery' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="label" htmlFor="liability-recovery-driver">Driver to recover from</label>
+                        <select id="liability-recovery-driver" className="input w-full" value={recoveryCharge.driver_id} onChange={(e) => setRecoveryCharge((r) => ({ ...r, driver_id: e.target.value }))}>
+                          <option value="">Select driver</option>
+                          {recoveryDrivers.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                        </select>
+                      </div>
+                      <Field label="Amount (blank uses the repair cost)" value={recoveryCharge.amount} onChange={(v) => setRecoveryCharge((r) => ({ ...r, amount: v }))} />
+                      <Field label="Currency" value={recoveryCharge.currency} onChange={(v) => setRecoveryCharge((r) => ({ ...r, currency: v.toUpperCase().slice(0, 3) }))} />
+                      <p className="text-xs text-[var(--text-muted)] sm:col-span-3">Approving opens a driver charge linked to this accident. The driver must be notified and accept or dispute it before any deduction.</p>
+                    </div>
+                  )}
+                  <button className="btn-secondary text-xs" disabled={saving || approveReason.trim().length < 3} onClick={approve}>Approve and lock</button>
+                </div>
               )}
             </div>
           )}
@@ -659,7 +724,7 @@ export default function LiabilityPaymentPanel({ accidentId, elevated, acc, onCha
 
       <div className="flex flex-wrap gap-2">
         {elevated && (
-          <button className="btn-primary text-xs" disabled={saving || (locked && !changeReason.trim())} onClick={save}>
+          <button className="btn-primary text-xs" disabled={saving || locked} onClick={save}>
             {saving ? <Loader2 size={13} className="animate-spin" /> : 'Save responsibility details'}
           </button>
         )}

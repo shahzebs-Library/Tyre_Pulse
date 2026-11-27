@@ -21,7 +21,7 @@
 .tb-line.tb-bad { stroke: var(--tb-bad); } .tb-knob.tb-bad { fill: var(--tb-bad); }
 .tb-line.tb-none { stroke: var(--tb-none); } .tb-knob.tb-none { fill: var(--tb-none); }
 .tb-group { position: absolute; display: flex; gap: 4px; }
-.tb-card { width: 70px; display: flex; flex-direction: column; gap: 2px; }
+.tb-card { width: 90px; display: flex; flex-direction: column; gap: 2px; }
 .tb-code { font-size: 9.5px; font-weight: 700; letter-spacing: .02em; text-align: center;
   color: var(--text-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .tb-body { display: flex; align-items: flex-start; gap: 3px; min-height: 36px; padding: 4px 3px 4px 4px;
@@ -31,7 +31,7 @@
 .tb-warn .tb-body { border-left-color: var(--tb-warn); }
 .tb-bad .tb-body { border-left-color: var(--tb-bad); }
 .tb-none .tb-body { border-left-color: var(--tb-none); border-style: dashed; border-left-style: solid; }
-.tb-dot { flex: 0 0 13px; width: 13px; height: 13px; border-radius: 50%; display: inline-flex;
+.tb-dot { flex: 0 0 16px; width: 16px; height: 16px; border-radius: 50%; display: inline-flex;
   align-items: center; justify-content: center; font-size: 9px; font-style: normal; font-weight: 800;
   color: #fff; background: var(--tb-none); line-height: 1; }
 .tb-good .tb-dot, .tb-dot.tb-good { background: var(--tb-good); }
@@ -41,18 +41,23 @@
 .tb-vals b { font-size: 11px; font-weight: 700; white-space: nowrap; }
 .tb-vals b small { font-weight: 500; font-size: 9px; color: var(--text-secondary); }
 .tb-muted { font-size: 9.5px; color: var(--text-secondary); }
-.tb-cond { font-size: 9px; letter-spacing: -0.2px; color: var(--text-secondary); overflow-wrap: break-word; }
+/* A condition word is never split mid-letters ("Damage d") and never shrunk
+   below 11px: the card is wide enough for one word, and two words wrap
+   between words. */
+.tb-cond { font-size: 11px; line-height: 1.2; color: var(--text-secondary);
+  white-space: normal; overflow-wrap: normal; word-break: keep-all; hyphens: none; }
 .tb-bad .tb-cond { color: var(--tb-bad); font-weight: 600; }
 .tb-warn .tb-cond { color: var(--tb-warn); font-weight: 600; }
 .tb-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px;
   font-size: 10.5px; color: var(--text-secondary); }
 .tb-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.tb-dot .tp-cond-glyph { display: block; }
 
 /* Fitted tyre identity (brand / serial) - one line, never wraps the card. */
 .tb-ident { font-size: 9px; color: var(--text-secondary); white-space: nowrap; overflow: hidden;
   text-overflow: ellipsis; max-width: 100%; }
 /* Tappable cards (data entry, tyre bay, exchange). */
-.tb-tap { all: unset; box-sizing: border-box; width: 70px; display: flex; flex-direction: column; gap: 2px;
+.tb-tap { all: unset; box-sizing: border-box; width: 90px; display: flex; flex-direction: column; gap: 2px;
   cursor: pointer; border-radius: 8px; }
 .tb-tap:hover .tb-body { background: var(--surface-3, var(--surface-2)); }
 .tb-tap:focus-visible { outline: 2px solid var(--accent, #16a34a); outline-offset: 2px; }

@@ -19,7 +19,11 @@
  *                             never enters stock
  *
  * Money is never added across currencies: SAR, AED and EGP stay separate.
+ *
+ * Validation messages are English unless the caller passes `t` (the
+ * LanguageContext translator), see src/lib/wmsText.js.
  */
+import { textFn } from './wmsText'
 
 export const COUNTRY_CURRENCY = Object.freeze({ KSA: 'SAR', UAE: 'AED', Egypt: 'EGP' })
 
@@ -134,15 +138,16 @@ export function canRaisePo(row, { canProcure = false } = {}) {
  * Nothing is invented: a blank unit price stays null (no cost known), it is
  * never written as 0.
  */
-export function requisitionPoDraft(req, { supplier, material, unitPrice, country, today } = {}) {
+export function requisitionPoDraft(req, { supplier, material, unitPrice, country, today, t } = {}) {
+  const tx = textFn(t)
   const errors = []
-  if (!req) errors.push('No requisition.')
-  if (!supplier?.supplier_name) errors.push('Choose a supplier.')
-  if (!material?.id) errors.push('Choose the item from the Material Master.')
+  if (!req) errors.push(tx('wmsmsgprocure.chain.draft.noRequisition'))
+  if (!supplier?.supplier_name) errors.push(tx('wmsmsgprocure.chain.draft.chooseSupplier'))
+  if (!material?.id) errors.push(tx('wmsmsgprocure.chain.draft.chooseItem'))
   const qty = Number(req?.quantity)
-  if (!Number.isFinite(qty) || qty <= 0) errors.push('The requisition needs a quantity above zero.')
+  if (!Number.isFinite(qty) || qty <= 0) errors.push(tx('wmsmsgprocure.chain.draft.needQty'))
   const price = unitPrice === '' || unitPrice === null || unitPrice === undefined ? null : Number(unitPrice)
-  if (price !== null && (!Number.isFinite(price) || price < 0)) errors.push('Unit price must be zero or more.')
+  if (price !== null && (!Number.isFinite(price) || price < 0)) errors.push(tx('wmsmsgprocure.chain.draft.unitPrice'))
   const ctry = country || req?.country || null
   const currency = currencyForCountry(ctry)
   const lineTotal = price === null || !Number.isFinite(qty) ? null : Math.round(qty * price * 100) / 100
@@ -256,7 +261,8 @@ export function outstandingQty(line) {
  * outstanding, rejected cannot exceed received, each line needs a location.
  * Returns { lines (payloads for receiveGoods), errors }.
  */
-export function receiptPlan(poLines = [], entries = {}) {
+export function receiptPlan(poLines = [], entries = {}, t) {
+  const tx = textFn(t)
   const lines = []
   const errors = []
   for (const pl of poLines || []) {
@@ -264,23 +270,24 @@ export function receiptPlan(poLines = [], entries = {}) {
     const rec = e.qty_received === '' || e.qty_received == null ? 0 : Number(e.qty_received)
     if (!rec) continue
     const rej = e.qty_rejected === '' || e.qty_rejected == null ? 0 : Number(e.qty_rejected)
-    const label = pl.item_code || pl.description || `Line ${pl.line_no ?? ''}`.trim()
-    if (!Number.isFinite(rec) || rec < 0) { errors.push(`${label}: received quantity must be a number above zero.`); continue }
-    if (!Number.isFinite(rej) || rej < 0) { errors.push(`${label}: rejected quantity must be zero or more.`); continue }
-    if (rej > rec) { errors.push(`${label}: rejected cannot be more than received.`); continue }
+    const label = pl.item_code || pl.description
+      || (pl.line_no == null || pl.line_no === '' ? tx('wmsmsgprocure.chain.receipt.lineBare') : tx('wmsmsgprocure.chain.receipt.line', { no: pl.line_no }))
+    if (!Number.isFinite(rec) || rec < 0) { errors.push(tx('wmsmsgprocure.chain.receipt.receivedQty', { label })); continue }
+    if (!Number.isFinite(rej) || rej < 0) { errors.push(tx('wmsmsgprocure.chain.receipt.rejectedQty', { label })); continue }
+    if (rej > rec) { errors.push(tx('wmsmsgprocure.chain.receipt.rejectedOverReceived', { label })); continue }
     // The database refuses a rejected quantity with no reason (20261124130000); say so before posting.
-    if (rej > 0 && !String(e.rejection_reason || '').trim()) { errors.push(`${label}: give a reason for the rejected quantity (damaged, wrong part, quality, expired).`); continue }
+    if (rej > 0 && !String(e.rejection_reason || '').trim()) { errors.push(tx('wmsmsgprocure.chain.receipt.rejectedReason', { label })); continue }
     const out = outstandingQty(pl)
-    if (out !== null && rec - rej > out) { errors.push(`${label}: accepting ${rec - rej} exceeds the ${out} still outstanding.`); continue }
-    if (!pl.item_id) { errors.push(`${label}: this PO line has no Material Master item, so it cannot be received into stock.`); continue }
-    if (!e.location_id) { errors.push(`${label}: choose a receiving location.`); continue }
+    if (out !== null && rec - rej > out) { errors.push(tx('wmsmsgprocure.chain.receipt.overOutstanding', { label, qty: rec - rej, outstanding: out })); continue }
+    if (!pl.item_id) { errors.push(tx('wmsmsgprocure.chain.receipt.noMaterial', { label })); continue }
+    if (!e.location_id) { errors.push(tx('wmsmsgprocure.chain.receipt.chooseLocation', { label })); continue }
     lines.push({
       item_id: pl.item_id, po_line_id: pl.id, location_id: e.location_id,
       qty_received: rec, qty_rejected: rej, rejection_reason: rej > 0 ? (e.rejection_reason || null) : null,
       unit_cost: pl.unit_price ?? null, currency: pl.currency || null, condition: e.condition || 'new',
     })
   }
-  if (!lines.length && !errors.length) errors.push('Enter a received quantity on at least one line.')
+  if (!lines.length && !errors.length) errors.push(tx('wmsmsgprocure.chain.receipt.nothingEntered'))
   return { lines, errors }
 }
 

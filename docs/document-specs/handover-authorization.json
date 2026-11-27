@@ -1,0 +1,177 @@
+{
+  "id": "handover-authorization",
+  "version": 1,
+  "title": "Vehicle Handover Authorization",
+  "file_name": "TyrePulse Vehicle Handover",
+  "source_table": "handover_reports",
+  "page": { "size": "A4", "orientation": "portrait", "unit": "mm", "margin": 14 },
+  "document_no": {
+    "column": "document_no",
+    "format": "HO-<ASSET>-<YEAR>-<NNNN>",
+    "fallback": "HND-<first 8 hex of id, upper case>",
+    "note": "Minted by the server at insert. Rows created before 20261126171000 keep their HND- number."
+  },
+  "header": {
+    "logo": "tenant branding logo, else the company name under the title",
+    "right_lines": [
+      { "label": "Document No", "source": "document_no" },
+      { "label": "Handover Date", "column": "handover_at", "format": "date" },
+      { "label": "Generated", "source": "generated_at", "format": "date" }
+    ],
+    "rule_color": "brand accent"
+  },
+  "status_words": {
+    "draft": { "word": "Draft", "tone": "none" },
+    "pending_supervisor": { "word": "Awaiting supervisor", "tone": "warning" },
+    "pending_incharge": { "word": "Awaiting fleet incharge", "tone": "warning" },
+    "approved": { "word": "Closed", "tone": "good" },
+    "rejected": { "word": "Sent back", "tone": "critical" }
+  },
+  "sections": [
+    {
+      "key": "details",
+      "type": "fields",
+      "title": "Vehicle and Handover Details",
+      "with_vehicle_photo": true,
+      "fields": [
+        { "label": "Asset", "column": "asset_no" },
+        { "label": "Document no", "source": "document_no" },
+        { "label": "Report no", "column": "report_no" },
+        { "label": "Type", "column": "handover_type", "format": "handover_type" },
+        { "label": "Handover at", "column": "handover_at", "format": "datetime" },
+        { "label": "Handing over", "column": "from_signed_name", "fallback_column": "from_driver" },
+        { "label": "Receiving", "column": "to_signed_name", "fallback_column": "to_driver" },
+        { "label": "Site", "column": "site" },
+        { "label": "Country", "column": "country" },
+        { "label": "Odometer", "column": "odometer_km", "format": "km" },
+        { "label": "Hour meter", "column": "hour_meter", "format": "hours" },
+        { "label": "Fuel level", "column": "fuel_level_pct", "format": "percent" },
+        { "label": "Condition", "column": "condition_rating", "format": "capitalize" },
+        { "label": "Cleanliness", "column": "cleanliness", "format": "capitalize" },
+        { "label": "Sign-off status", "column": "approval_status", "format": "status_pill" }
+      ]
+    },
+    {
+      "key": "condition",
+      "type": "tiles",
+      "title": "Condition Summary",
+      "tiles": [
+        { "label": "Overall condition", "column": "condition_rating", "format": "capitalize" },
+        { "label": "Cleanliness", "column": "cleanliness", "format": "capitalize" },
+        { "label": "Damage marks", "source": "damage_mark_count" },
+        { "label": "Photos attached", "source": "photo_count" }
+      ]
+    },
+    {
+      "key": "damage",
+      "type": "damage_views",
+      "title": "Damage marked on the vehicle",
+      "views": {
+        "source": "the asset's own five-view picture (vehicleHandoverMarks.handoverViewsFor)",
+        "show": "every view that carries a mark; when marks exist but none is placed, the first two views",
+        "pins": "numbered circles coloured by level: minor, moderate, severe (shown as Major)"
+      },
+      "empty_text": "No damage was marked on this handover.",
+      "table_columns": ["No", "Side", "Damage", "Level", "Note", "Photo"]
+    },
+    {
+      "key": "photos",
+      "type": "photos",
+      "title": "Handover photos",
+      "max": 12,
+      "columns": 4,
+      "order": "photos array, then photo_url, then per-mark close-ups",
+      "missing_text": "Could not load"
+    },
+    {
+      "key": "location",
+      "type": "location",
+      "title": "Handover location",
+      "columns": ["latitude", "longitude", "location_accuracy_m", "location_status", "location_captured_at"],
+      "status_text": {
+        "captured": "Recorded by the device",
+        "denied": "Location permission was refused",
+        "unavailable": "Location could not be read"
+      },
+      "link": "https://www.openstreetmap.org/?mlat=<lat>&mlon=<lng>#map=17/<lat>/<lng>"
+    },
+    {
+      "key": "driver_signatures",
+      "type": "signatures",
+      "title": "Driver Signatures",
+      "note": "Times are server times recorded by sign_handover. Signed by = the account that collected the signature.",
+      "blocks": [
+        {
+          "title": "Handing over",
+          "signature": "from_signature",
+          "name": "from_signed_name",
+          "name_fallback": "from_driver",
+          "at": "from_signed_at",
+          "at_label": "Signed",
+          "pending_text": "Not signed",
+          "behalf": "from_on_behalf",
+          "behalf_text": "signed on their behalf by a supervisor"
+        },
+        {
+          "title": "Receiving",
+          "signature": "to_signature",
+          "name": "to_signed_name",
+          "name_fallback": "to_driver",
+          "at": "to_signed_at",
+          "at_label": "Signed",
+          "pending_text": "Not signed",
+          "behalf": "to_on_behalf",
+          "behalf_text": "signed on their behalf by a supervisor"
+        }
+      ],
+      "legacy_block": {
+        "title": "Driver",
+        "signature": "signature_url",
+        "name_fallback": "to_driver",
+        "when": "the row has no from_signature and no to_signature (created before 20261126171000)"
+      }
+    },
+    {
+      "key": "approval",
+      "type": "signatures",
+      "title": "Approval",
+      "blocks": [
+        {
+          "title": "Fleet Supervisor",
+          "signature": "supervisor_signature",
+          "name": "supervisor_name",
+          "at": "supervisor_at",
+          "at_label": "Checked",
+          "pending_text": "Checked: pending"
+        },
+        {
+          "title": "Fleet Incharge",
+          "signature": "incharge_signature",
+          "name": "incharge_name",
+          "at": "incharge_at",
+          "at_label": "Approved",
+          "pending_text": "Approval pending"
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "left": "tenant footer text, else '<title>  |  <company>'",
+    "right": "Page <n> of <total>",
+    "qr": {
+      "target": "<origin>/handovers?view=<id>",
+      "caption": ["Scan to verify", "this report"]
+    },
+    "locked_note": "When frozen_at is set: 'Signed record. Content locked at <frozen_at>.'"
+  },
+  "formats": {
+    "date": "en-GB medium date",
+    "datetime": "en-GB medium date, short time",
+    "km": "<n> km with thousands separators",
+    "hours": "<n> h with thousands separators",
+    "percent": "<n>%",
+    "capitalize": "first letter upper case",
+    "handover_type": { "checkout": "Check-out", "checkin": "Check-in" },
+    "blank": "N/A (never a fabricated 0)"
+  }
+}

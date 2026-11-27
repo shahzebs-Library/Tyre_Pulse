@@ -66,7 +66,7 @@
  * Pure. No I/O, no clock, safe in render.
  */
 
-import { layoutSlotsFor, resolveLayoutKey, isTyrelessEquipment, layoutForAsset } from './vehicleTyreLayout'
+import { layoutSlotsFor, resolveLayoutKey, resolveLayoutKeyStrict, isTyrelessEquipment, layoutForAsset } from './vehicleTyreLayout'
 import { legacyPositionCode } from './tyrePositions'
 
 // #mirror: STATES
@@ -185,9 +185,10 @@ export function layoutIsKnown(vehicleType, assetNo) {
   const vt = String(vehicleType == null ? '' : vehicleType).trim()
   const an = String(assetNo == null ? '' : assetNo).trim()
   if (!vt && !an) return false
-  if (resolveLayoutKey(vt, an) !== 'Pickup') return true
-  // Pickup is also a real answer, but only when something actually said so.
-  return /pickup|pick[\s-]?up/i.test(vt) || /^PL\s*\d/i.test(vt) || /^PL\s*\d/i.test(an)
+  // Known = the shared resolver identified a machine without falling back
+  // (Pickup is a real answer only when the type, a pickup model or a PL asset
+  // class said so).
+  return resolveLayoutKeyStrict(vt, an) != null
 }
 
 /**

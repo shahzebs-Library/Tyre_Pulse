@@ -17,6 +17,7 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_diagram_layouts.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 
@@ -172,6 +173,21 @@ List<MatchedTyreSlot> matchPositionsToLayout(
       exact.used = true;
       matched.add(MatchedTyreSlot._fromSlot(exact.tyre, pos));
       continue;
+    }
+
+    // 2. A GCC position code (LHF1, LHCO, RHR2-O) or a spelling the shared
+    //    tyre map confirms for a wheel (the pump's LHRCO / LHCO / LHR1-O):
+    //    the struct parser below reads only slot-id shapes, so a record
+    //    stored under its code would otherwise never reach its wheel.
+    final String? bySpec = slotForStoredPosition(layout.key, pos);
+    if (bySpec != null) {
+      final _Candidate? coded =
+          _firstUnused(slots, (_Candidate c) => c.tyre.id == bySpec);
+      if (coded != null) {
+        coded.used = true;
+        matched.add(MatchedTyreSlot._fromSlot(coded.tyre, pos));
+        continue;
+      }
     }
 
     final PositionStruct ps = parsePositionStruct(pos);

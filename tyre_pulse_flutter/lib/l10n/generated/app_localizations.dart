@@ -1180,6 +1180,12 @@ abstract class AppLocalizations {
   /// **'Missing'**
   String get tyreConditionMissing;
 
+  /// Picker/legend label for a wheel nobody has checked yet (grey question mark).
+  ///
+  /// In en, this message translates to:
+  /// **'Not checked'**
+  String get tyreConditionNotChecked;
+
   /// App bar title on the header step of the inspection capture wizard.
   ///
   /// In en, this message translates to:
@@ -15260,7 +15266,7 @@ abstract class AppLocalizations {
   /// Packed key=value~key=value copy for the inventory count and transfer screens (InventoryCopy).
   ///
   /// In en, this message translates to:
-  /// **'myAuditsTitle=My counts~audit=Inventory audit~noAudits=No counts assigned~noAuditsBody=No inventory count is assigned to you right now.~draftsUnreadable=Counts saved on this phone could not be read just now. Nothing was changed. Try again.~unsyncedLines=%n counted lines are saved on this phone and not yet sent. Tap to open.~pendingN=%n not sent~overdue=Overdue~due=Due~notCounting=This audit is not open for counting.~notProvisionedTitle=Inventory counts are not set up yet~notProvisionedBody=The server does not have inventory counting switched on yet. Your administrator needs to finish the inventory setup.~loadFailed=This could not be loaded.~countTitle=Blind count~resumed=Resumed: %n lines from your earlier session.~noLocations=No locations are in this audit.~progress=Locations counted: %a of %b~linesDone=%n lines counted~unexpectedN=%n unexpected~scanLocation=Scan the location label first~scanItem=Scan an item, serial or barcode~scanCamera=Scan with camera~locations=Locations~atLocation=Counting at~scanningSerialsOf=Scanning serials of~stopSerials=Stop~serialTracked=Serial tracked~linesN=%n lines~myLines=My counts here~noLinesHere=Nothing counted at this location yet.~confirmedZero=Zero (confirmed)~notCountedYet=Not counted yet~unexpected=Unexpected item~unexpectedHint=Not in this location\'s list. It will be reviewed.~photosN=%n photos~submitN=Send %n counted lines~submitDone=%n lines sent.~submitNothing=Finish a line before sending.~submitOffline=No connection. Your counts are safe on this phone; send again when you have signal.~submitQueued=No connection. %n counted lines will be sent automatically when the connection returns.~submitPartial=Some lines were not accepted or their photos could not be uploaded. Check the lines marked.~submitFailed=The counts could not be sent. They are still saved on this phone.~draftSaveFailed=This phone could not save the count just now. Do not close the app; try again.~serialCounted=Serial counted.~scan_locationSelected=Location selected.~scan_serialItemSelected=Now scan each unit\'s serial.~scan_locationOutOfScope=That location is not part of this audit.~scan_duplicateSerial=That serial is already counted in this audit.~scan_needsLocation=Scan the location label before counting items.~countedQty=Counted quantity~confirmZero=None found here~confirmZeroHint=Tick only after looking: an empty box is not a count of zero.~serialOne=One serialised unit.~condition=Condition~condition_good=Good~condition_damaged=Damaged~condition_repairable=Repairable~condition_quarantine=Quarantine~condition_scrap=Scrap~remarks=Remarks (optional)~photo=Photo~addPhoto=Add photo~photoFailed=The photo could not be taken.~removeLine=Remove~saveLine=Save~enterQty=Enter the counted quantity, or tick None found here.~invalidQty=Quantities cannot be negative.~confirmZeroFirst=For zero, tick None found here.~state_draft=On phone~state_submitted=Sent~state_rejected=Not accepted~status_draft=Draft~status_scheduled=Scheduled~status_assigned=Assigned~status_in_progress=In progress~status_counting_completed=Counting completed~status_reconciliation=Reconciliation~status_recount=Recount~status_investigation=Investigation~status_approval=Awaiting approval~status_adjustment_posted=Adjustment posted~status_closed=Closed~status_cancelled=Cancelled~status_rejected=Rejected~status_unknown=Status not recorded~type_full=Full count~type_partial=Partial count~type_cycle=Cycle count~type_category=Category count~type_high_value=High-value count~type_surprise=Surprise count~type_bin=Bin count~type_tyre_serial=Tyre serial count~type_vehicle_tyre=Vehicle tyre count~transfersTitle=Stock transfers~transfer=Transfer~noTransfers=No transfers~noTransfersBody=No stock transfers are visible to you.~tstatus_dispatched=Dispatched~tstatus_in_transit=In transit~tstatus_partially_received=Partly received~tstatus_completed=Completed~tstatus_cancelled=Cancelled~tstatus_unknown=Status not recorded~dispatchTitle=Dispatch stock~scanFrom=Scan the FROM location label~scanTo=Scan the TO location label~from=From~to=To~items=Items~noItemsScanned=No items scanned yet.~needFrom=Scan the location the stock leaves from.~needTo=Scan the location the stock goes to.~sameLocation=From and To must be different locations.~needLines=Add at least one line.~dispatchSend=Dispatch~dispatchDone=Transfer dispatched.~transferOffline=No connection. Nothing was sent; try again when you have signal.~transferFailed=The transfer could not be saved.~receiveTitle=Receive transfer~noLines=This transfer has no lines.~outstanding=Still to arrive~outstandingUnknown=Quantity sent not recorded~receiveSend=Confirm receipt~receiveDone=Receipt recorded.~manualSendNote=Your counts stay on this phone until the server confirms them. Without signal, finished lines (with their photos) are sent automatically when the connection returns. Tap Send to send them now.~finishCounting=Finish counting~finishNote=When every location is counted and sent, finish counting so the audit can be reconciled. You cannot add counts afterwards.~finishUnsent=%n lines are still on this phone. Send them before you finish counting.~finishNotOpen=Counting is not open on this audit, so it cannot be finished.~finishOffline=No connection. Finishing counting needs signal; nothing was changed.~finishConfirmTitle=Finish counting?~finishConfirmBody=The audit moves to reconciliation and no more counts can be added. Make sure every location has been counted.~finishCancel=Keep counting~finishDone=Counting finished. The audit is ready for reconciliation.~finishFailed=Counting could not be finished. Try again.~pi_title=Physical inventory~pi_entry=Physical inventory~pi_pendingN=%n waiting to send~pi_startLead=Register what is on the shelves. Nothing here changes official stock; a manager approves the opening balance later.~pi_store=Store~pi_start=Start physical inventory~pi_pickStore=Choose a store first.~pi_scanHint=Scan a bin label, barcode, SKU, OEM or aftermarket number~pi_scanned=Scanned~pi_change=Change~pi_variantUnknown=Material (variant not known)~pi_describe=Not found? Describe the item~pi_ref_description=Description~pi_ref_manufacturer=Manufacturer~pi_ref_oem=OEM part number~pi_ref_aftermarket=Aftermarket part number~pi_ref_company_sku=Company SKU~pi_unidentifiedHint=No price or purchase order needed. Unidentified items get a temporary reference and cannot be issued until reviewed.~pi_qty=Quantity~pi_uom=Unit~pi_condition=Condition~pi_ownership=Ownership~pi_locationHint=Rack, shelf or bin~pi_remarks=Remarks~pi_photoRole=Photo shows~pi_takePhoto=Take photo~pi_photosN=%n photos~pi_saveNext=Save and next~pi_leave=Back to sessions~pi_ledgerRule=Saved items wait on this phone until they are sent. Official stock changes only after another person approves the opening balance.~pi_noMatch=No approved material matches. Describe the item and save it.~pi_searchOffline=Offline: describe the item; it will be sent later.~pi_qtyInvalid=Enter a quantity of zero or more.~pi_savedLocal=Saved. Ready for the next item.~pi_saveFailed=This phone could not save the item. Nothing was lost; try again.~pi_cls_genuine=Genuine~pi_cls_oes=OES~pi_cls_aftermarket=Aftermarket~pi_cls_unknown=Not verified~pi_cond_new=New~pi_cond_used=Used~pi_cond_refurbished=Refurbished~pi_cond_repairable=Repairable~pi_cond_damaged=Damaged~pi_cond_scrap=Scrap~pi_cond_unknown=Unknown~pi_own_owned=Company owned~pi_own_consignment=Consignment~pi_own_supplier=Supplier owned~pi_own_customer=Customer owned~pi_own_unknown=Unknown~pi_role_item=Item~pi_role_label=Label~pi_role_location=Location~pi_role_packaging=Packaging~pi_role_damage=Damage~pi_role_other=Other~pi_attention=Item needs attention~pi_dismiss=Dismiss~pi_err_photo_missing=A photo file was removed from this phone before it was sent. The item itself is saved; dismiss to accept the missing photo.~pi_err_photo_read_failed=A photo could not be read just now. It stays on this phone and will be sent later.~pi_noStores=No store is set up for you yet. Ask an administrator to add the store on the web.~pi_scanStoreLabel=Or scan a store or bin label~pi_bin=Bin~pi_clearBin=Clear bin~pi_binUnknown=This label was not found. Pick the store from the list.~pi_binOtherStore=This bin belongs to another store.~pi_binOffline=Offline: bin kept. It is checked when the item is sent.~pi_captureTitle=Initial Physical Inventory~pi_online=Online~pi_offline=Offline~pi_location=Location~pi_chooseBin=Tap to choose a bin~pi_scanBin=Scan a bin label~pi_searchHint=Scan barcode / Search SKU, OEM, part no...~pi_ref_part_number=Manufacturer part number~pi_classification=Classification~pi_clsPick_genuine=Genuine OEM~pi_clsPick_aftermarket=Aftermarket~pi_clsPick_unknown=Unknown~pi_clsFromCatalog=Set by the approved material~pi_photoEvidence=Photo evidence (min. 1 required)~pi_slot_label=Part number~pi_photoRequired=Take at least one photo before saving.~pi_removePhoto=Remove photo~pi_saveCountNext=Save & count next item~pi_moreDetails=More details~pi_qtyMinus=Decrease quantity (hold for 10)~pi_qtyPlus=Increase quantity (hold for 10)~jc_menu=Issue or return~jc_issueTitle=Issue to job card~jc_returnTitle=Return from job card~jc_stockLine=Stock line~jc_jobCard=Job card number~jc_find=Check job card~jc_asset=Asset~jc_status=Status~jc_notFound=No job card with this number that you can see.~jc_lookupFailed=The job card could not be checked. Check the connection and try again.~jc_checkFirst=Check the job card before sending.~jc_closed=This job card is closed. Material cannot be issued to it.~jc_qty=Quantity~jc_reason=Reason~jc_reasonOptional=Reason (optional)~jc_onHand=On hand~jc_available=Available~jc_send=Issue stock~jc_sendReturn=Return stock~jc_needStock=Choose a stock line.~jc_needJobCard=Enter the job card number.~jc_needQty=Enter a quantity above zero.~jc_moreThanOnHand=That is more than is available on this line.~jc_needReason=Give a reason for the return.~jc_issued=Stock issued to the job card.~jc_returned=Stock returned from the job card.~jc_alreadyPosted=This was already recorded. Nothing was posted twice.~jc_shortage=Not enough stock: %n available. Nothing was posted.~jc_reserved=Reserved for this job card: %n. The issue uses this reservation.~jc_reservedOldest=(%n reservations, the oldest is used first.)~jc_noReservation=No open reservation for this job card on this stock line.~jc_reservationFailed=Could not check reservations. The issue can still be sent.~jc_offline=No connection. Nothing was posted; try again when online.~jc_failed=The stock could not be moved. Please try again.~jc_onlineNote=Needs a connection. The stock moves only when the server confirms it.~jc_returnNote=A return is limited to what this job card took from this line, and comes back at the cost it was issued at.'**
+  /// **'myAuditsTitle=My counts~audit=Inventory audit~noAudits=No counts assigned~noAuditsBody=No inventory count is assigned to you right now.~draftsUnreadable=Counts saved on this phone could not be read just now. Nothing was changed. Try again.~unsyncedLines=%n counted lines are saved on this phone and not yet sent. Tap to open.~pendingN=%n not sent~overdue=Overdue~due=Due~notCounting=This audit is not open for counting.~notProvisionedTitle=Inventory counts are not set up yet~notProvisionedBody=The server does not have inventory counting switched on yet. Your administrator needs to finish the inventory setup.~loadFailed=This could not be loaded.~countTitle=Blind count~resumed=Resumed: %n lines from your earlier session.~noLocations=No locations are in this audit.~progress=Locations counted: %a of %b~linesDone=%n lines counted~unexpectedN=%n unexpected~scanLocation=Scan the location label first~scanItem=Scan an item, serial or barcode~scanCamera=Scan with camera~locations=Locations~atLocation=Counting at~scanningSerialsOf=Scanning serials of~stopSerials=Stop~serialTracked=Serial tracked~linesN=%n lines~myLines=My counts here~noLinesHere=Nothing counted at this location yet.~confirmedZero=Zero (confirmed)~notCountedYet=Not counted yet~unexpected=Unexpected item~unexpectedHint=Not in this location\'s list. It will be reviewed.~photosN=%n photos~submitN=Send %n counted lines~submitDone=%n lines sent.~submitNothing=Finish a line before sending.~submitOffline=No connection. Your counts are safe on this phone; send again when you have signal.~submitQueued=No connection. %n counted lines will be sent automatically when the connection returns.~submitPartial=Some lines were not accepted or their photos could not be uploaded. Check the lines marked.~submitFailed=The counts could not be sent. They are still saved on this phone.~draftSaveFailed=This phone could not save the count just now. Do not close the app; try again.~serialCounted=Serial counted.~scan_locationSelected=Location selected.~scan_serialItemSelected=Now scan each unit\'s serial.~scan_locationOutOfScope=That location is not part of this audit.~scan_duplicateSerial=That serial is already counted in this audit.~scan_needsLocation=Scan the location label before counting items.~countedQty=Counted quantity~confirmZero=None found here~confirmZeroHint=Tick only after looking: an empty box is not a count of zero.~serialOne=One serialised unit.~condition=Condition~condition_good=Good~condition_damaged=Damaged~condition_repairable=Repairable~condition_quarantine=Quarantine~condition_scrap=Scrap~remarks=Remarks (optional)~photo=Photo~addPhoto=Add photo~photoFailed=The photo could not be taken.~removeLine=Remove~saveLine=Save~enterQty=Enter the counted quantity, or tick None found here.~invalidQty=Quantities cannot be negative.~confirmZeroFirst=For zero, tick None found here.~state_draft=On phone~state_submitted=Sent~state_rejected=Not accepted~status_draft=Draft~status_scheduled=Scheduled~status_assigned=Assigned~status_in_progress=In progress~status_counting_completed=Counting completed~status_reconciliation=Reconciliation~status_recount=Recount~status_investigation=Investigation~status_approval=Awaiting approval~status_adjustment_posted=Adjustment posted~status_closed=Closed~status_cancelled=Cancelled~status_rejected=Rejected~status_unknown=Status not recorded~type_full=Full count~type_partial=Partial count~type_cycle=Cycle count~type_category=Category count~type_high_value=High-value count~type_surprise=Surprise count~type_bin=Bin count~type_tyre_serial=Tyre serial count~type_vehicle_tyre=Vehicle tyre count~transfersTitle=Stock transfers~transfer=Transfer~noTransfers=No transfers~noTransfersBody=No stock transfers are visible to you.~tstatus_dispatched=Dispatched~tstatus_in_transit=In transit~tstatus_partially_received=Partly received~tstatus_completed=Completed~tstatus_cancelled=Cancelled~tstatus_unknown=Status not recorded~dispatchTitle=Dispatch stock~scanFrom=Scan the FROM location label~scanTo=Scan the TO location label~from=From~to=To~items=Items~noItemsScanned=No items scanned yet.~needFrom=Scan the location the stock leaves from.~needTo=Scan the location the stock goes to.~sameLocation=From and To must be different locations.~needLines=Add at least one line.~dispatchSend=Dispatch~dispatchDone=Transfer dispatched.~transferOffline=No connection. Nothing was sent; try again when you have signal.~transferFailed=The transfer could not be saved.~receiveTitle=Receive transfer~noLines=This transfer has no lines.~outstanding=Still to arrive~outstandingUnknown=Quantity sent not recorded~receiveSend=Confirm receipt~receiveDone=Receipt recorded.~manualSendNote=Your counts stay on this phone until the server confirms them. Without signal, finished lines (with their photos) are sent automatically when the connection returns. Tap Send to send them now.~finishCounting=Finish counting~finishNote=When every location is counted and sent, finish counting so the audit can be reconciled. You cannot add counts afterwards.~finishUnsent=%n lines are still on this phone. Send them before you finish counting.~finishNotOpen=Counting is not open on this audit, so it cannot be finished.~finishOffline=No connection. Finishing counting needs signal; nothing was changed.~finishConfirmTitle=Finish counting?~finishConfirmBody=The audit moves to reconciliation and no more counts can be added. Make sure every location has been counted.~finishCancel=Keep counting~finishDone=Counting finished. The audit is ready for reconciliation.~finishFailed=Counting could not be finished. Try again.~pi_title=Physical inventory~pi_entry=Physical inventory~pi_pendingN=%n waiting to send~pi_startLead=Register what is on the shelves. Nothing here changes official stock; a manager approves the opening balance later.~pi_store=Store~pi_start=Start physical inventory~pi_pickStore=Choose a store first.~pi_scanHint=Scan a bin label, barcode, SKU, OEM or aftermarket number~pi_scanned=Scanned~pi_change=Change~pi_variantUnknown=Material (variant not known)~pi_describe=Not found? Describe the item~pi_ref_description=Description~pi_ref_manufacturer=Manufacturer~pi_ref_oem=OEM part number~pi_ref_aftermarket=Aftermarket part number~pi_ref_company_sku=Company SKU~pi_unidentifiedHint=No price or purchase order needed. Unidentified items get a temporary reference and cannot be issued until reviewed.~pi_qty=Quantity~pi_uom=Unit~pi_condition=Condition~pi_ownership=Ownership~pi_locationHint=Rack, shelf or bin~pi_remarks=Remarks~pi_photoRole=Photo shows~pi_takePhoto=Take photo~pi_photosN=%n photos~pi_saveNext=Save and next~pi_leave=Back to sessions~pi_ledgerRule=Saved items wait on this phone until they are sent. Official stock changes only after another person approves the opening balance.~pi_noMatch=No approved material matches. Describe the item and save it.~pi_searchOffline=Offline: describe the item; it will be sent later.~pi_qtyInvalid=Enter a quantity of zero or more.~pi_savedLocal=Saved. Ready for the next item.~pi_saveFailed=This phone could not save the item. Nothing was lost; try again.~pi_cls_genuine=Genuine~pi_cls_oes=OES~pi_cls_aftermarket=Aftermarket~pi_cls_unknown=Not verified~pi_cond_new=New~pi_cond_used=Used~pi_cond_refurbished=Refurbished~pi_cond_repairable=Repairable~pi_cond_damaged=Damaged~pi_cond_scrap=Scrap~pi_cond_unknown=Unknown~pi_own_owned=Company owned~pi_own_consignment=Consignment~pi_own_supplier=Supplier owned~pi_own_customer=Customer owned~pi_own_unknown=Unknown~pi_role_item=Item~pi_role_label=Label~pi_role_location=Location~pi_role_packaging=Packaging~pi_role_damage=Damage~pi_role_other=Other~pi_attention=Item needs attention~pi_dismiss=Dismiss~pi_err_photo_missing=A photo file was removed from this phone before it was sent. The item itself is saved; dismiss to accept the missing photo.~pi_err_photo_read_failed=A photo could not be read just now. It stays on this phone and will be sent later.~pi_noStores=No store is set up for you yet. Ask an administrator to add the store on the web.~pi_scanStoreLabel=Or scan a store or bin label~pi_bin=Bin~pi_clearBin=Clear bin~pi_binUnknown=This label was not found. Pick the store from the list.~pi_binOtherStore=This bin belongs to another store.~pi_binOffline=Offline: bin kept. It is checked when the item is sent.~pi_captureTitle=Initial Physical Inventory~pi_online=Online~pi_offline=Offline~pi_location=Location~pi_chooseBin=Tap to choose a bin~pi_scanBin=Scan a bin label~pi_searchHint=Scan barcode / Search SKU, OEM, part no...~pi_ref_part_number=Manufacturer part number~pi_classification=Classification~pi_clsPick_genuine=Genuine OEM~pi_clsPick_aftermarket=Aftermarket~pi_clsPick_unknown=Unknown~pi_clsFromCatalog=Set by the approved material~pi_photoEvidence=Photo evidence (min. 1 required)~pi_slot_label=Part number~pi_photoRequired=Take at least one photo before saving.~pi_removePhoto=Remove photo~pi_saveCountNext=Save & count next item~pi_moreDetails=More details~pi_qtyMinus=Decrease quantity (hold for 10)~pi_qtyPlus=Increase quantity (hold for 10)~jc_menu=Issue or return~jc_issueTitle=Issue to job card~jc_returnTitle=Return from job card~jc_stockLine=Stock line~jc_jobCard=Job card number~jc_find=Check job card~jc_asset=Asset~jc_status=Status~jc_notFound=No job card with this number that you can see.~jc_lookupFailed=The job card could not be checked. Check the connection and try again.~jc_checkFirst=Check the job card before sending.~jc_closed=This job card is closed. Material cannot be issued to it.~jc_qty=Quantity~jc_reason=Reason~jc_reasonOptional=Reason (optional)~jc_onHand=On hand~jc_available=Available~jc_send=Issue stock~jc_sendReturn=Return stock~jc_needStock=Choose a stock line.~jc_needJobCard=Enter the job card number.~jc_needQty=Enter a quantity above zero.~jc_moreThanOnHand=That is more than is available on this line.~jc_needReason=Give a reason for the return.~jc_issued=Stock issued to the job card.~jc_returned=Stock returned from the job card.~jc_alreadyPosted=This was already recorded. Nothing was posted twice.~jc_shortage=Not enough stock: %n available. Nothing was posted.~jc_reserved=Reserved for this job card: %n. The issue uses this reservation.~jc_reservedOldest=(%n reservations, the oldest is used first.)~jc_noReservation=No open reservation for this job card on this stock line.~jc_reservationFailed=Could not check reservations. The issue can still be sent.~jc_offline=No connection. Nothing was posted; try again when online.~jc_failed=The stock could not be moved. Please try again.~jc_onlineNote=Needs a connection. The stock moves only when the server confirms it.~jc_returnNote=A return is limited to what this job card took from this line, and comes back at the cost it was issued at.~sr_entry=Receive goods~sr_title=Receive goods~sr_intro=Record what arrived against an approved purchase order. Stock goes in only after a second person approves.~sr_noLines=No open purchase order lines~sr_noLinesBody=Nothing is open to receive at your sites. The purchase order must be approved or ordered and have lines, and your sites must be assigned to you by name.~sr_search=Search PO, item code or name~sr_open=Open %n~sr_ordered=Ordered %n~sr_mine=My recent receipts~sr_status_pending=Waiting for approval~sr_status_approved=Approved, in stock~sr_status_rejected=Rejected~sr_status_cancelled=Withdrawn~sr_formTitle=Record delivery~sr_qtyReceived=Quantity received~sr_qtyRejected=Quantity rejected~sr_rejectionReason=Why rejected~sr_location=Receiving location~sr_noLocation=No receiving location at this site. Ask an admin to add one.~sr_deliveryNoteNo=Delivery note number (optional)~sr_notes=Notes (optional)~sr_photo=Photo of delivery note (optional)~sr_photoTaken=Photo attached~sr_photoRemove=Remove photo~sr_noPrice=The unit price and cost come from the purchase order. You cannot change them.~sr_send=Send for approval~sr_sent=Receipt sent for approval~sr_alreadySent=This receipt was already sent~sr_withdraw=Withdraw~sr_withdrawn=Receipt withdrawn~sr_offline=No connection. Nothing was sent. Try again when online; the same receipt will not be recorded twice.~sr_failed=The receipt could not be sent. Try again.~sr_photoFailed=The photo could not be uploaded. Nothing was sent. Try again, or remove the photo.~sr_qtyRequired=Enter the quantity received.~sr_qtyPositive=The quantity must be above zero.~sr_qtyTooLarge=That quantity is too large.~sr_rejectedRange=Rejected cannot be negative or more than received.~sr_reasonRequired=Say why goods were rejected.~sr_overOpen=More than is still open on this line.~sr_locationRequired=Choose a receiving location.~sr_noteTooLong=The delivery note number is too long.~sr_onlineNote=Online only. Stock does not change until a second person approves.~sr_qtyInvalid=Type the quantity as a plain number, for example 12 or 2.5. Do not use commas.~sr_rejectedInvalid=Type the rejected quantity as a plain number, or leave it empty.~sr_photoOffline=No connection. Connect before taking the photo; it is uploaded with the receipt.~sr_withdrawTitle=Withdraw this receipt?~sr_withdrawBody=It will not go for approval and no stock will change. You can record the delivery again.~sr_keep=Keep it~sr_errSite=This site is not assigned to you by name. Ask an admin to add it to your sites.~sr_errPoStatus=This purchase order is not approved or ordered yet.~sr_errLineClosed=This purchase order line is already closed.~sr_errNotKeeper=Only an approved store keeper can record goods received.~sr_more=More~sr_noMatch=No open line matches your search.'**
   String get inventoryCopyCatalog;
 
   /// Accessibility label on the Cloudflare Turnstile security check shown above the sign-in and register buttons when CAPTCHA is enabled for this build.
@@ -15395,6 +15401,990 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Approving {done} of {total}'**
   String approvalsBulkProgress(int done, int total);
+
+  /// No description provided for @driverChargeSectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My charges'**
+  String get driverChargeSectionTitle;
+
+  /// No description provided for @driverChargeNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No charges recorded for this driver.'**
+  String get driverChargeNone;
+
+  /// No description provided for @driverChargeOutstanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Outstanding: {amount}'**
+  String driverChargeOutstanding(String amount);
+
+  /// No description provided for @driverChargeFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get driverChargeFilterAll;
+
+  /// No description provided for @driverChargeLoadError.
+  ///
+  /// In en, this message translates to:
+  /// **'Charges could not be loaded. Check your connection and try again.'**
+  String get driverChargeLoadError;
+
+  /// No description provided for @driverChargeLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get driverChargeLoadMore;
+
+  /// No description provided for @driverChargeDetailTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Charge {number}'**
+  String driverChargeDetailTitle(String number);
+
+  /// No description provided for @driverChargeAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get driverChargeAmount;
+
+  /// No description provided for @driverChargeDeducted.
+  ///
+  /// In en, this message translates to:
+  /// **'Deducted so far'**
+  String get driverChargeDeducted;
+
+  /// No description provided for @driverChargeStatusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get driverChargeStatusLabel;
+
+  /// No description provided for @driverChargeCategoryLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Category'**
+  String get driverChargeCategoryLabel;
+
+  /// No description provided for @driverChargeLinkedRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Linked record'**
+  String get driverChargeLinkedRecord;
+
+  /// No description provided for @driverChargeVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get driverChargeVehicle;
+
+  /// No description provided for @driverChargeIncident.
+  ///
+  /// In en, this message translates to:
+  /// **'Incident date and time'**
+  String get driverChargeIncident;
+
+  /// No description provided for @driverChargeIssuedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued at'**
+  String get driverChargeIssuedAt;
+
+  /// No description provided for @driverChargeNotifiedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'You were notified at'**
+  String get driverChargeNotifiedAt;
+
+  /// No description provided for @driverChargeBasis.
+  ///
+  /// In en, this message translates to:
+  /// **'Written basis for the charge'**
+  String get driverChargeBasis;
+
+  /// No description provided for @driverChargeEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Evidence'**
+  String get driverChargeEvidence;
+
+  /// No description provided for @driverChargeNoEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'No evidence listed. The charge relies on the linked record.'**
+  String get driverChargeNoEvidence;
+
+  /// No description provided for @driverChargeSignatures.
+  ///
+  /// In en, this message translates to:
+  /// **'Signatures'**
+  String get driverChargeSignatures;
+
+  /// No description provided for @driverChargeSignedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed by {name} at {time} (server time)'**
+  String driverChargeSignedBy(String name, String time);
+
+  /// No description provided for @driverChargeSignatureHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'The signature image is not shown for your access level.'**
+  String get driverChargeSignatureHidden;
+
+  /// No description provided for @driverChargeDecisions.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviews and decisions'**
+  String get driverChargeDecisions;
+
+  /// No description provided for @driverChargeNoDecisions.
+  ///
+  /// In en, this message translates to:
+  /// **'No review recorded yet.'**
+  String get driverChargeNoDecisions;
+
+  /// No description provided for @driverChargeSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'Deduction schedule'**
+  String get driverChargeSchedule;
+
+  /// No description provided for @driverChargeNoSchedule.
+  ///
+  /// In en, this message translates to:
+  /// **'No deduction scheduled.'**
+  String get driverChargeNoSchedule;
+
+  /// No description provided for @driverChargeInstalmentLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{month}: {amount} ({status})'**
+  String driverChargeInstalmentLine(String month, String amount, String status);
+
+  /// No description provided for @driverChargeCapLine.
+  ///
+  /// In en, this message translates to:
+  /// **'No monthly instalment may exceed {percent}% of the wage.'**
+  String driverChargeCapLine(String percent);
+
+  /// No description provided for @driverChargeAppealTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Appeal'**
+  String get driverChargeAppealTitle;
+
+  /// No description provided for @driverChargeNoAppeal.
+  ///
+  /// In en, this message translates to:
+  /// **'No appeal filed.'**
+  String get driverChargeNoAppeal;
+
+  /// No description provided for @driverChargeAppealFiled.
+  ///
+  /// In en, this message translates to:
+  /// **'Appeal filed at {time}'**
+  String driverChargeAppealFiled(String time);
+
+  /// No description provided for @driverChargeAppealOutcome.
+  ///
+  /// In en, this message translates to:
+  /// **'Outcome: {outcome}'**
+  String driverChargeAppealOutcome(String outcome);
+
+  /// No description provided for @driverChargeAppealPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a decision by someone who did not issue or review this charge.'**
+  String get driverChargeAppealPending;
+
+  /// No description provided for @driverChargeTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Full timeline'**
+  String get driverChargeTimeline;
+
+  /// No description provided for @driverChargeSharePdf.
+  ///
+  /// In en, this message translates to:
+  /// **'Share notice PDF'**
+  String get driverChargeSharePdf;
+
+  /// No description provided for @driverChargePdfFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The notice PDF could not be created. Try again.'**
+  String get driverChargePdfFailed;
+
+  /// No description provided for @driverChargeRespond.
+  ///
+  /// In en, this message translates to:
+  /// **'Respond to this charge'**
+  String get driverChargeRespond;
+
+  /// No description provided for @driverChargeAccept.
+  ///
+  /// In en, this message translates to:
+  /// **'Accept'**
+  String get driverChargeAccept;
+
+  /// No description provided for @driverChargeDispute.
+  ///
+  /// In en, this message translates to:
+  /// **'Dispute'**
+  String get driverChargeDispute;
+
+  /// No description provided for @driverChargeStatementTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Statement you are signing'**
+  String get driverChargeStatementTitle;
+
+  /// No description provided for @driverChargeStatementLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language of the statement you sign'**
+  String get driverChargeStatementLanguage;
+
+  /// No description provided for @driverChargeStatementReadAloud.
+  ///
+  /// In en, this message translates to:
+  /// **'If you cannot read this, ask your supervisor to read it to you before you sign.'**
+  String get driverChargeStatementReadAloud;
+
+  /// No description provided for @driverChargePhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos of this charge'**
+  String get driverChargePhotosTitle;
+
+  /// No description provided for @driverChargePhotosNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No photos attached to this charge.'**
+  String get driverChargePhotosNone;
+
+  /// No description provided for @driverChargePhotoUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo could not be loaded.'**
+  String get driverChargePhotoUnavailable;
+
+  /// No description provided for @driverChargePhotosSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'Look at the photos before you answer.'**
+  String get driverChargePhotosSeen;
+
+  /// No description provided for @driverChargeKsaRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Saudi Labour Law applies to this charge. Damage or loss: only when caused by your own fault or by not following the company\'s instructions, never by another person or force majeure, and at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days from the day you received this charge to object.'**
+  String get driverChargeKsaRule;
+
+  /// No description provided for @driverChargeOtherRule.
+  ///
+  /// In en, this message translates to:
+  /// **'The company limit applies to this charge. This rule still needs legal confirmation for this country.'**
+  String get driverChargeOtherRule;
+
+  /// No description provided for @driverChargeBlockNoFault.
+  ///
+  /// In en, this message translates to:
+  /// **'Saudi Labour Law (Article 91): the damage was caused by a third party or force majeure, so it can never be deducted from the driver.'**
+  String get driverChargeBlockNoFault;
+
+  /// No description provided for @driverChargeFaultForceMajeure.
+  ///
+  /// In en, this message translates to:
+  /// **'Force majeure (cannot be deducted)'**
+  String get driverChargeFaultForceMajeure;
+
+  /// No description provided for @driverChargeFaultThirdParty.
+  ///
+  /// In en, this message translates to:
+  /// **'Another person\'s fault (cannot be deducted)'**
+  String get driverChargeFaultThirdParty;
+
+  /// No description provided for @driverChargeFaultInstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Did not follow the company\'s instructions'**
+  String get driverChargeFaultInstruction;
+
+  /// No description provided for @driverChargeFaultDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver\'s own fault'**
+  String get driverChargeFaultDriver;
+
+  /// No description provided for @driverChargeFaultNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Not recorded'**
+  String get driverChargeFaultNone;
+
+  /// No description provided for @driverChargeFaultTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fault finding (Article 91)'**
+  String get driverChargeFaultTitle;
+
+  /// No description provided for @driverChargePdfFontFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The Arabic and Urdu letters could not be loaded, so the paper was not made. Check the internet connection and try again.'**
+  String get driverChargePdfFontFailed;
+
+  /// No description provided for @driverChargePhotoOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the photo larger'**
+  String get driverChargePhotoOpen;
+
+  /// No description provided for @driverChargePhotoRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get driverChargePhotoRetry;
+
+  /// No description provided for @driverChargePhotosWait.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait until every photo has loaded before you sign.'**
+  String get driverChargePhotosWait;
+
+  /// No description provided for @driverChargePhotosBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'A photo could not be loaded. You must see every photo before you sign. Tap Retry.'**
+  String get driverChargePhotosBlocked;
+
+  /// No description provided for @driverChargeOtherRuleDriver.
+  ///
+  /// In en, this message translates to:
+  /// **'The company deduction limit applies to this charge.'**
+  String get driverChargeOtherRuleDriver;
+
+  /// No description provided for @driverChargeObjectionUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'You can object until {date}.'**
+  String driverChargeObjectionUntil(String date);
+
+  /// No description provided for @driverChargeLangEnglish.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get driverChargeLangEnglish;
+
+  /// No description provided for @driverChargeLangArabic.
+  ///
+  /// In en, this message translates to:
+  /// **'العربية'**
+  String get driverChargeLangArabic;
+
+  /// No description provided for @driverChargeLangUrdu.
+  ///
+  /// In en, this message translates to:
+  /// **'اردو'**
+  String get driverChargeLangUrdu;
+
+  /// No description provided for @driverChargeStatementConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay {amount} in total for this charge. I agree that the company may take this amount from my salary in monthly parts. The amount taken in any one month will never be more than the legal monthly limit, and I will be shown the amount for each month before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.'**
+  String driverChargeStatementConsent(String amount);
+
+  /// No description provided for @driverChargeStatementDispute.
+  ///
+  /// In en, this message translates to:
+  /// **'I am the driver named on this paper. I have received this charge and I have seen the reason, the evidence and the photos. I do not agree with this charge, for the reasons I wrote. My signature only shows that I received this paper. It does not mean that I agree. I can object within the time written on this paper.'**
+  String get driverChargeStatementDispute;
+
+  /// No description provided for @driverChargeStatementWitness.
+  ///
+  /// In en, this message translates to:
+  /// **'I saw this charge paper given to the driver named on it. The driver did not want to sign it or answer. The date and time of this record are set by the system.'**
+  String get driverChargeStatementWitness;
+
+  /// No description provided for @driverChargeBlockTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Deduction cannot be scheduled yet'**
+  String get driverChargeBlockTitle;
+
+  /// No description provided for @driverChargeBlockConsent.
+  ///
+  /// In en, this message translates to:
+  /// **'Saudi Labour Law (Article 92): this charge can be taken from the salary only with the driver’s written consent. The driver did not agree, so it cannot be deducted.'**
+  String get driverChargeBlockConsent;
+
+  /// No description provided for @driverChargeBlockObjection.
+  ///
+  /// In en, this message translates to:
+  /// **'An objection is open. It must be decided first.'**
+  String get driverChargeBlockObjection;
+
+  /// No description provided for @driverChargeBlockWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'The driver can still object until {date}. Nothing can be scheduled before then.'**
+  String driverChargeBlockWindow(String date);
+
+  /// No description provided for @driverChargeBlockWindowKsa.
+  ///
+  /// In en, this message translates to:
+  /// **'Saudi Labour Law (Article 91): the driver has 15 working days to object, until {date}. Nothing can be scheduled before then.'**
+  String driverChargeBlockWindowKsa(String date);
+
+  /// No description provided for @driverChargeStatementMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'The statement could not be loaded. Refresh before signing.'**
+  String get driverChargeStatementMissing;
+
+  /// No description provided for @driverChargeAcknowledge.
+  ///
+  /// In en, this message translates to:
+  /// **'I have read this statement and I agree to sign it.'**
+  String get driverChargeAcknowledge;
+
+  /// No description provided for @driverChargeExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Why do you dispute this charge?'**
+  String get driverChargeExplanation;
+
+  /// No description provided for @driverChargeSignBelow.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign below'**
+  String get driverChargeSignBelow;
+
+  /// No description provided for @driverChargeSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign and submit'**
+  String get driverChargeSubmit;
+
+  /// No description provided for @driverChargeAppealAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Appeal this charge'**
+  String get driverChargeAppealAction;
+
+  /// No description provided for @driverChargeAppealReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Grounds for your appeal'**
+  String get driverChargeAppealReason;
+
+  /// No description provided for @driverChargeAppealSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit appeal'**
+  String get driverChargeAppealSubmit;
+
+  /// No description provided for @driverChargeAppealOnce.
+  ///
+  /// In en, this message translates to:
+  /// **'You can appeal a charge only once. The appeal is decided by someone who did not issue or approve it.'**
+  String get driverChargeAppealOnce;
+
+  /// No description provided for @driverChargeIssueExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Write at least 10 characters explaining why you dispute the charge.'**
+  String get driverChargeIssueExplanation;
+
+  /// No description provided for @driverChargeIssueAck.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm that you have read the statement.'**
+  String get driverChargeIssueAck;
+
+  /// No description provided for @driverChargeIssueSignature.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign before submitting.'**
+  String get driverChargeIssueSignature;
+
+  /// No description provided for @driverChargeIssueReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Write at least 10 characters for the appeal.'**
+  String get driverChargeIssueReason;
+
+  /// No description provided for @driverChargeOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'You are offline. A charge response is recorded only online, so nothing was saved. Connect and try again.'**
+  String get driverChargeOffline;
+
+  /// No description provided for @driverChargeSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your response was recorded with the server time.'**
+  String get driverChargeSaved;
+
+  /// No description provided for @driverChargeAppealSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your appeal was recorded.'**
+  String get driverChargeAppealSaved;
+
+  /// No description provided for @driverChargeStaffReadOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Notices, reviews, scheduling and deductions are recorded on the web. This screen shows them read only.'**
+  String get driverChargeStaffReadOnly;
+
+  /// No description provided for @driverChargeNoActions.
+  ///
+  /// In en, this message translates to:
+  /// **'No action is waiting for you on this charge.'**
+  String get driverChargeNoActions;
+
+  /// No description provided for @driverChargeStatusIssued.
+  ///
+  /// In en, this message translates to:
+  /// **'Issued, not yet sent to you'**
+  String get driverChargeStatusIssued;
+
+  /// No description provided for @driverChargeStatusNotified.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your response'**
+  String get driverChargeStatusNotified;
+
+  /// No description provided for @driverChargeStatusAccepted.
+  ///
+  /// In en, this message translates to:
+  /// **'Accepted by driver'**
+  String get driverChargeStatusAccepted;
+
+  /// No description provided for @driverChargeStatusDisputed.
+  ///
+  /// In en, this message translates to:
+  /// **'Disputed by driver'**
+  String get driverChargeStatusDisputed;
+
+  /// No description provided for @driverChargeStatusRefused.
+  ///
+  /// In en, this message translates to:
+  /// **'Refusal recorded with a witness'**
+  String get driverChargeStatusRefused;
+
+  /// No description provided for @driverChargeStatusSupervisorApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved by supervisor'**
+  String get driverChargeStatusSupervisorApproved;
+
+  /// No description provided for @driverChargeStatusFinanceApproved.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved by finance'**
+  String get driverChargeStatusFinanceApproved;
+
+  /// No description provided for @driverChargeStatusUnderAppeal.
+  ///
+  /// In en, this message translates to:
+  /// **'Under appeal'**
+  String get driverChargeStatusUnderAppeal;
+
+  /// No description provided for @driverChargeStatusScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'Deduction scheduled'**
+  String get driverChargeStatusScheduled;
+
+  /// No description provided for @driverChargeStatusDeducted.
+  ///
+  /// In en, this message translates to:
+  /// **'Fully deducted'**
+  String get driverChargeStatusDeducted;
+
+  /// No description provided for @driverChargeStatusWaived.
+  ///
+  /// In en, this message translates to:
+  /// **'Waived'**
+  String get driverChargeStatusWaived;
+
+  /// No description provided for @driverChargeStatusCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled, wrongly issued'**
+  String get driverChargeStatusCancelled;
+
+  /// No description provided for @driverChargeCatTrafficFine.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic fine'**
+  String get driverChargeCatTrafficFine;
+
+  /// No description provided for @driverChargeCatAccidentDamage.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident damage'**
+  String get driverChargeCatAccidentDamage;
+
+  /// No description provided for @driverChargeCatTyreDamage.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre damage'**
+  String get driverChargeCatTyreDamage;
+
+  /// No description provided for @driverChargeCatMissingItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing item'**
+  String get driverChargeCatMissingItem;
+
+  /// No description provided for @driverChargeCatHandoverDamage.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover damage'**
+  String get driverChargeCatHandoverDamage;
+
+  /// No description provided for @driverChargeCatOther.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get driverChargeCatOther;
+
+  /// No description provided for @driverChargeSrcAccident.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident case'**
+  String get driverChargeSrcAccident;
+
+  /// No description provided for @driverChargeSrcHandover.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle handover'**
+  String get driverChargeSrcHandover;
+
+  /// No description provided for @driverChargeSrcInspection.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection'**
+  String get driverChargeSrcInspection;
+
+  /// No description provided for @driverChargeSrcChecklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get driverChargeSrcChecklist;
+
+  /// No description provided for @driverChargeSrcTyre.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre record'**
+  String get driverChargeSrcTyre;
+
+  /// No description provided for @driverChargeSrcFine.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic fine record'**
+  String get driverChargeSrcFine;
+
+  /// No description provided for @driverChargeSrcNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No linked record'**
+  String get driverChargeSrcNone;
+
+  /// No description provided for @driverChargeReplaced.
+  ///
+  /// In en, this message translates to:
+  /// **'This charge was cancelled as wrongly issued and replaced by another charge.'**
+  String get driverChargeReplaced;
+
+  /// No description provided for @handoverAuthSignaturesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver signatures'**
+  String get handoverAuthSignaturesTitle;
+
+  /// No description provided for @handoverAuthHanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Handing over'**
+  String get handoverAuthHanding;
+
+  /// No description provided for @handoverAuthReceiving.
+  ///
+  /// In en, this message translates to:
+  /// **'Receiving'**
+  String get handoverAuthReceiving;
+
+  /// No description provided for @handoverAuthNotSigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed'**
+  String get handoverAuthNotSigned;
+
+  /// No description provided for @handoverAuthSignedLine.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}, signed {time} (server time)'**
+  String handoverAuthSignedLine(String name, String time);
+
+  /// No description provided for @handoverAuthSignHanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign as the handing driver'**
+  String get handoverAuthSignHanding;
+
+  /// No description provided for @handoverAuthSignReceiving.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign as the receiving driver'**
+  String get handoverAuthSignReceiving;
+
+  /// No description provided for @handoverAuthSignerName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name of the person signing'**
+  String get handoverAuthSignerName;
+
+  /// No description provided for @handoverAuthSignerHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Needed only when the driver was not picked from the driver register.'**
+  String get handoverAuthSignerHint;
+
+  /// No description provided for @handoverAuthHandingFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'The handing driver signs first, then the receiving driver.'**
+  String get handoverAuthHandingFirst;
+
+  /// No description provided for @handoverAuthFrozen.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed record. The content is locked and can no longer be changed.'**
+  String get handoverAuthFrozen;
+
+  /// No description provided for @handoverAuthLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Handover location'**
+  String get handoverAuthLocation;
+
+  /// No description provided for @handoverAuthLocationCaptured.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded by the device: {coords}'**
+  String handoverAuthLocationCaptured(String coords);
+
+  /// No description provided for @handoverAuthLocationDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission was refused.'**
+  String get handoverAuthLocationDenied;
+
+  /// No description provided for @handoverAuthLocationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Location could not be read.'**
+  String get handoverAuthLocationUnavailable;
+
+  /// No description provided for @handoverAuthLocationNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No location recorded yet. It is recorded with each signature.'**
+  String get handoverAuthLocationNone;
+
+  /// No description provided for @handoverAuthOpenMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in map'**
+  String get handoverAuthOpenMap;
+
+  /// No description provided for @handoverAuthReadingLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the device location...'**
+  String get handoverAuthReadingLocation;
+
+  /// No description provided for @handoverAuthSignSubmit.
+  ///
+  /// In en, this message translates to:
+  /// **'Record signature'**
+  String get handoverAuthSignSubmit;
+
+  /// No description provided for @handoverAuthOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'You are offline. A handover signature is recorded only online, so nothing was saved. Connect and try again.'**
+  String get handoverAuthOffline;
+
+  /// No description provided for @handoverAuthSigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Signature recorded with the server time.'**
+  String get handoverAuthSigned;
+
+  /// No description provided for @handoverAuthDocumentNo.
+  ///
+  /// In en, this message translates to:
+  /// **'Document no. {number}'**
+  String handoverAuthDocumentNo(String number);
+
+  /// No description provided for @handoverAuthHourMeter.
+  ///
+  /// In en, this message translates to:
+  /// **'Hour meter (hours)'**
+  String get handoverAuthHourMeter;
+
+  /// No description provided for @handoverAuthSite.
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get handoverAuthSite;
+
+  /// No description provided for @handoverAuthDriverRegister.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick from the driver register'**
+  String get handoverAuthDriverRegister;
+
+  /// No description provided for @handoverAuthDriverNotListed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not in the register'**
+  String get handoverAuthDriverNotListed;
+
+  /// No description provided for @handoverAuthSigningStepInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Both drivers sign on the handover page after you save it, while online. Each signature is stamped with the server time and the device location, and the record is locked after the first signature.'**
+  String get handoverAuthSigningStepInfo;
+
+  /// No description provided for @handoverAuthOpenToSign.
+  ///
+  /// In en, this message translates to:
+  /// **'The handover is saved as a draft. Open it now to collect both signatures.'**
+  String get handoverAuthOpenToSign;
+
+  /// No description provided for @handoverAuthLegacySignature.
+  ///
+  /// In en, this message translates to:
+  /// **'Driver signature recorded before two-party signing'**
+  String get handoverAuthLegacySignature;
+
+  /// No description provided for @handoverAuthNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-party signing is not available on the server yet. Ask an administrator.'**
+  String get handoverAuthNotAvailable;
+
+  /// Store history and stock item detail screens: packed key=value catalog separated by ~, read through StoreHistoryCopy. Keep keys; translate values only.
+  ///
+  /// In en, this message translates to:
+  /// **'historyTitle=Store history~itemTitle=Stock item~onHand=On hand~reserved=Reserved~available=Available~minLevel=Minimum~criticalLevel=Critical~levelsNote=Reorder levels are set on the web by an admin.~recent=Recent movements~fullHistory=Full history~loadMore=Load more~noMovements=No movements yet~noMovementsBody=Receipts, issues, transfers and counts for this item appear here once they are posted.~noMatch=No movements match these filters~noMatchBody=Widen the dates or clear a filter.~balanceAfter=Balance~by=By~ref=Ref~unknownUser=Not recorded~cat_receipt=Receipt~cat_issue=Issue~cat_returned=Return~cat_transfer=Transfer~cat_adjustment=Adjustment~cat_count=Count~cat_opening=Opening balance~cat_erpLedger=ERP ledger~cat_other=Other~filter_all=All types~dateRange=Dates~anyDate=Any date~allLocations=All locations~location=Location~searchItem=Search item~clearFilters=Clear filters~type=Type~stockIn=Stock in~stockOut=Stock out~net=Net change~openingsNote=Opening balances are not counted as stock in.~byMonth=By month~summaryFailed=Totals could not be loaded.~summaryCapped=Too many movements to total. Narrow the dates.~receive=Receive stock~type_receipt=Receipt (new stock)~type_returned=Return to store~quantity=Quantity~reference=Reference (GRN, job card)~reason=Note~post=Post~cancel=Cancel~postedTitle=Stock posted~postedBody=New balance~done=Done~receiveNote=Posted straight to the stock ledger. The server checks that you are allowed to post this type.~qtyRequired=Enter a quantity~qtyPositive=Quantity must be more than zero~qtyWhole=Use a whole number~qtyTooLarge=That quantity is too large~refTooLong=The reference is too long~postOffline=No connection. Nothing was posted; try again when you are online.~postFailed=The movement could not be posted.~loadFailed=Stock history could not be loaded.~openItem=Open item details'**
+  String get storeHistoryCopyCatalog;
+
+  /// No description provided for @handoverAuthOnBehalf.
+  ///
+  /// In en, this message translates to:
+  /// **'I am signing on behalf of {name}'**
+  String handoverAuthOnBehalf(String name);
+
+  /// No description provided for @handoverAuthOnBehalfRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm that you are signing on behalf of this person.'**
+  String get handoverAuthOnBehalfRequired;
+
+  /// No description provided for @handoverAuthBlocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is linked to the other driver on this handover, so you cannot sign for this party. Leave this signature for the driver or a supervisor.'**
+  String get handoverAuthBlocked;
+
+  /// No description provided for @handoverAuthSignedOnBehalf.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed on their behalf by a supervisor'**
+  String get handoverAuthSignedOnBehalf;
+
+  /// No description provided for @handoverAuthSentBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent back for correction. The signatures were cleared. Correct the handover and sign again.'**
+  String get handoverAuthSentBack;
+
+  /// No description provided for @handoverAuthBadSignature.
+  ///
+  /// In en, this message translates to:
+  /// **'The signature could not be read. Clear it and sign again.'**
+  String get handoverAuthBadSignature;
+
+  /// No description provided for @driverChargeWitnessConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the refusal you witnessed'**
+  String get driverChargeWitnessConfirm;
+
+  /// No description provided for @driverChargeWitnessIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'You were named as the witness to the driver refusing to sign this notice. Confirm only what you saw yourself.'**
+  String get driverChargeWitnessIntro;
+
+  /// No description provided for @driverChargeWitnessPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Refusal recorded. Waiting for the named witness to confirm it from their own account.'**
+  String get driverChargeWitnessPending;
+
+  /// No description provided for @driverChargeWitnessSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Your witness confirmation was recorded with the server time.'**
+  String get driverChargeWitnessSaved;
+
+  /// No description provided for @handoverAuthReceivingOtherAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'You gave the handing signature on this device account. The receiving signature must come from another person: the receiving driver\'s own account or a different supervisor.'**
+  String get handoverAuthReceivingOtherAccount;
+
+  /// No description provided for @handoverAuthSiteRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the site. This vehicle has no site in the fleet register.'**
+  String get handoverAuthSiteRequired;
+
+  /// No description provided for @handoverAuthSiteFromRegister.
+  ///
+  /// In en, this message translates to:
+  /// **'Taken from the fleet register for this vehicle.'**
+  String get handoverAuthSiteFromRegister;
+
+  /// No description provided for @signatureSignAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'The signature is too short to be read. Please sign again with your full signature.'**
+  String get signatureSignAgain;
+
+  /// No description provided for @driverChargeLinkUnverified.
+  ///
+  /// In en, this message translates to:
+  /// **'Link to source not confirmed by record'**
+  String get driverChargeLinkUnverified;
+
+  /// No description provided for @driverChargeAppealClosedDeducted.
+  ///
+  /// In en, this message translates to:
+  /// **'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.'**
+  String get driverChargeAppealClosedDeducted;
 }
 
 class _AppLocalizationsDelegate

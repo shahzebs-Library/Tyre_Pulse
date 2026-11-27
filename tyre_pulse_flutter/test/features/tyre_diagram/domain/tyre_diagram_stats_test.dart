@@ -29,7 +29,7 @@ void main() {
   });
 
   test(
-      'Good sorts into OK, Worn and Flat into Monitor, Damaged and '
+      'Good sorts into OK, Worn into Monitor, Flat, Damaged and '
       'Puncture into Critical - the same bands the diagram itself colours '
       'a wheel by', () {
     final TyreDiagramStats stats = computeTyreDiagramStats(
@@ -44,8 +44,8 @@ void main() {
     );
     expect(stats.total, 5);
     expect(stats.ok, 1);
-    expect(stats.monitor, 2);
-    expect(stats.critical, 2);
+    expect(stats.monitor, 1);
+    expect(stats.critical, 3);
     expect(stats.unrecorded, 0);
   });
 
@@ -62,15 +62,16 @@ void main() {
     expect(stats.critical, 0);
   });
 
-  test('Missing condition counts as unrecorded, matching TpStatus.unknown', () {
+  test('a missing tyre is critical (stop the vehicle), like the shared map',
+      () {
     final TyreDiagramStats stats = computeTyreDiagramStats(
       const <String>['A'],
       const <String, Map<String, Object?>>{
         'A': <String, Object?>{'condition': 'Missing'},
       },
     );
-    expect(stats.unrecorded, 1);
-    expect(stats.ok + stats.monitor + stats.critical, 0);
+    expect(stats.critical, 1);
+    expect(stats.ok + stats.monitor + stats.unrecorded, 0);
   });
 
   test('every position is counted exactly once, across every band', () {

@@ -17,7 +17,9 @@ import 'package:tyre_pulse/features/inventory/data/inventory_audit_repository.da
 import 'package:tyre_pulse/features/inventory/data/inventory_transfer_repository.dart';
 import 'package:tyre_pulse/features/inventory/data/job_card_issue_repository.dart';
 import 'package:tyre_pulse/features/inventory/data/physical_outbox_runner.dart';
+import 'package:tyre_pulse/features/inventory/data/store_receipt_repository.dart';
 import 'package:tyre_pulse/features/inventory/domain/count_models.dart';
+import 'package:tyre_pulse/features/inventory/domain/store_receipt.dart';
 import 'package:tyre_pulse/features/inventory/domain/transfer_models.dart';
 import 'package:uuid/uuid.dart';
 
@@ -57,6 +59,49 @@ final Provider<JobCardIssueRepository> jobCardIssueRepositoryProvider =
   (Ref ref) => SupabaseJobCardIssueRepository(
     ref.watch(supabaseClientProvider),
   ),
+);
+
+/// Goods received on the phone against an open PO line (online, recorded
+/// for a second person's approval; never a direct stock write).
+final Provider<StoreReceiptRepository> storeReceiptRepositoryProvider =
+    Provider<StoreReceiptRepository>(
+  (Ref ref) => SupabaseStoreReceiptRepository(
+    ref.watch(supabaseClientProvider),
+  ),
+);
+
+/// Open PO lines, receiving locations and the keeper's own recent receipts.
+final storeReceiptBoardProvider = FutureProvider.autoDispose<StoreReceiptBoard>(
+  (Ref ref) => ref.watch(storeReceiptRepositoryProvider).board(),
+);
+
+/// One request key per purchase-order line draft. It survives leaving and
+/// reopening the form and editing it, and is dropped only once the server has
+/// confirmed the receipt, so a retry after a lost answer never records twice.
+final class StoreReceiptKeys extends Notifier<Map<String, String>> {
+  @override
+  Map<String, String> build() => <String, String>{};
+
+  /// The key for [poLineId], minting one with [mint] the first time.
+  String keyFor(String poLineId, String Function() mint) {
+    final String? have = state[poLineId];
+    if (have != null) return have;
+    final String key = mint();
+    state = <String, String>{...state, poLineId: key};
+    return key;
+  }
+
+  /// The server confirmed (or answered with the stored receipt): the next
+  /// delivery on this line is a new request.
+  void confirmed(String poLineId) {
+    state = <String, String>{...state}..remove(poLineId);
+  }
+}
+
+final NotifierProvider<StoreReceiptKeys, Map<String, String>>
+    storeReceiptKeysProvider =
+    NotifierProvider<StoreReceiptKeys, Map<String, String>>(
+  StoreReceiptKeys.new,
 );
 
 final Provider<CountDraftStore> countDraftStoreProvider =

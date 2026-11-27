@@ -6,13 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
 import 'package:tyre_pulse/features/driver_workspace/data/driver_workspace_repository.dart';
 import 'package:tyre_pulse/features/driver_workspace/domain/driver_workspace.dart';
+import 'package:tyre_pulse/features/driver_workspace/presentation/driver_charges_panel.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_l10n.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -102,64 +101,6 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
       ),
     );
     if (saved == true && mounted) await _load();
-  }
-
-  Future<void> _report() async {
-    final DriverWorkspaceSnapshot? data = _snapshot;
-    if (data?.driver == null || data!.truncated) return;
-    try {
-      // The PDF is written in English on purpose: the default PDF font has no
-      // Arabic or Urdu glyphs and no Arabic-capable font is bundled, so a
-      // localized PDF would print empty boxes. The strings still come from
-      // the ARB catalog (English locale), never from literals here.
-      final AppLocalizations pdf =
-          await AppLocalizations.delegate.load(const Locale('en'));
-      final pw.Document document = pw.Document();
-      document.addPage(
-        pw.MultiPage(
-          build: (pw.Context context) => <pw.Widget>[
-            pw.Header(
-              level: 0,
-              text: pdf.driverWsPdfTitle('${data.driver!['driver_name']}'),
-            ),
-            pw.Text(pdf.driverWsPdfEmployeeId('${data.driver!['driver_id']}')),
-            pw.TableHelper.fromTextArray(
-              headers: <String>[
-                pdf.driverWsPdfColNotice,
-                pdf.driverWsPdfColCurrency,
-                pdf.driverWsPdfColAmount,
-                pdf.driverWsPdfColPaid,
-                pdf.driverWsPdfColStatus,
-                pdf.driverWsPdfColResponse,
-              ],
-              data: data
-                  .rows('fines')
-                  .map(
-                    (DriverRow f) => <String>[
-                      '${f['notice_reference']}',
-                      '${f['currency']}',
-                      '${f['amount']}',
-                      '${f['paid_amount']}',
-                      driverWsTermLabel(pdf, '${f['status']}'),
-                      driverWsTermLabel(pdf, '${f['response_status']}'),
-                    ],
-                  )
-                  .toList(),
-            ),
-          ],
-        ),
-      );
-      await Printing.sharePdf(
-        bytes: await document.save(),
-        filename: 'driver-fine-statement.pdf',
-      );
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => _error = (AppLocalizations l) => l.driverWsReportShareError,
-        );
-      }
-    }
   }
 
   @override
@@ -295,10 +236,6 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                         onPressed: () => _action('create_fine'),
                         child: Text(driverWsTermLabel(l10n, 'create_fine')),
                       ),
-                    OutlinedButton(
-                      onPressed: data.truncated ? null : _report,
-                      child: Text(l10n.driverWsSharePdf),
-                    ),
                     ...data.rows('balances').map(
                           (DriverRow b) => Text(
                             l10n.driverWsOutstanding(
@@ -307,6 +244,17 @@ class _DriverWorkspacePanelState extends ConsumerState<DriverWorkspacePanel> {
                             ),
                           ),
                         ),
+                    const SizedBox(height: 16),
+                    // Every recoverable amount (traffic fines sent from the
+                    // web, accident or handover damage, ...) with its signed
+                    // notice. The per-charge PDF is the spec-driven Driver
+                    // Charge Notice shared with the web; the old fines-only
+                    // summary table PDF was retired in its favour.
+                    if (!data.offline)
+                      DriverChargesSection(
+                        key: ValueKey<String>('charges-${data.driver!['id']}'),
+                        driverId: '${data.driver!['id']}',
+                      ),
                     const SizedBox(height: 16),
                     Text(l10n.driverWsTrafficFines),
                     if (data.rows('fines').isEmpty) Text(l10n.driverWsNoFines),

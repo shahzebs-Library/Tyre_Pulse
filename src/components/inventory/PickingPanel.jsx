@@ -18,13 +18,19 @@ import { loadPickList, confirmPick } from '../../lib/api/floorWorkflow'
 import {
   groupPickList, pickIssueArgs, pickExportRows, PICK_EXPORT_COLUMNS, normaliseJobCard,
 } from '../../lib/inventory/floorWorkflow'
+import { warmFloorText } from '../../lib/inventory/floorText'
 import { formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtils'
 import { KitTable } from '../commandCenter/kit'
 import { Field, ErrorNote, Note, NotSetUp, SectionCard, StatusPill, alignNumeric } from './InvUi'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 export default function PickingPanel({ scope, can }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`wmsfloor.picking.${k}`, v)
+  warmFloorText(t)
+  const na = <span className="cc-na">{t('wmsfloor.common.na')}</span>
   const canIssue = typeof can === 'function' && can('issue')
   const canExport = typeof can === 'function' && can('export')
   const [jobCard, setJobCard] = useState('')
@@ -39,10 +45,10 @@ export default function PickingPanel({ scope, can }) {
 
   const load = async (jc = jobCard) => {
     const j = normaliseJobCard(jc)
-    if (!j) { setState({ loading: false, error: 'Enter a job card number.', data: null }); return }
+    if (!j) { setState({ loading: false, error: p('enterJobCard'), data: null }); return }
     setState((s) => ({ ...s, loading: true, error: '' }))
     try {
-      const data = await loadPickList(j, { country: scope?.country })
+      const data = await loadPickList(j, { country: scope?.country, t })
       setState({ loading: false, error: '', data })
       setQtys({}); setLineErr({})
     } catch (e) {
@@ -52,12 +58,12 @@ export default function PickingPanel({ scope, can }) {
 
   const data = state.data
   const lines = data?.lines || []
-  const groups = groupPickList(lines)
+  const groups = groupPickList(lines, t)
   const pickable = lines.filter((l) => l.source === 'reservation')
 
   const keyFor = (l) => keys[l.key] || null
   const confirm = async (l) => {
-    const built = pickIssueArgs({ line: l, qty: qtys[l.key], jobCard: data.jobCard, receivedBy, note })
+    const built = pickIssueArgs({ line: l, qty: qtys[l.key], jobCard: data.jobCard, receivedBy, note }, t)
     if (!built.ok) { setLineErr((m) => ({ ...m, [l.key]: built.error })); return false }
     const key = keyFor(l) || newIdempotencyKey()
     if (!keyFor(l)) setKeys((m) => ({ ...m, [l.key]: key }))
@@ -65,7 +71,7 @@ export default function PickingPanel({ scope, can }) {
     try {
       const res = await confirmPick(built.args, key)
       if (res?.status === 'refused_shortage') {
-        setLineErr((m) => ({ ...m, [l.key]: 'Not enough stock on this line to issue. Nothing was posted.' }))
+        setLineErr((m) => ({ ...m, [l.key]: p('shortage') }))
         return false
       }
       setPicked((p) => [...p, { item: l.itemCode, qty: built.args.qty, location: l.locationPath }])
@@ -89,26 +95,26 @@ export default function PickingPanel({ scope, can }) {
   }
 
   const pickColumns = [
-    { key: 'itemCode', header: 'Item', cell: (l) => l.itemCode || <span className="cc-na">N/A</span> },
-    { key: 'description', header: 'Description', cell: (l) => l.description || <span className="cc-na">N/A</span> },
-    { key: 'qty', header: 'Reserved', numeric: true, cell: (l) => `${formatQty(l.qty)} ${l.uom || ''}`.trim() },
-    { key: 'onHand', header: 'On hand', numeric: true, cell: (l) => formatQty(l.onHand) },
-    { key: 'source', header: 'Source', cell: (l) => (l.source === 'reservation'
-      ? <StatusPill value="reservation" tone="info" label="Reservation" />
-      : <StatusPill value="hold" tone="muted" label="Job card hold" />) },
+    { key: 'itemCode', header: p('colItem'), cell: (l) => l.itemCode || na },
+    { key: 'description', header: p('colDescription'), cell: (l) => l.description || na },
+    { key: 'qty', header: p('colReserved'), numeric: true, cell: (l) => `${formatQty(l.qty)} ${l.uom || ''}`.trim() },
+    { key: 'onHand', header: p('colOnHand'), numeric: true, cell: (l) => formatQty(l.onHand) },
+    { key: 'source', header: p('colSource'), cell: (l) => (l.source === 'reservation'
+      ? <StatusPill value="reservation" tone="info" label={p('sourceReservation')} />
+      : <StatusPill value="hold" tone="muted" label={p('sourceHold')} />) },
     ...(canIssue ? [{
-      key: 'pick', header: 'Pick', sortable: false, cell: (l) => (
+      key: 'pick', header: p('colPick'), sortable: false, cell: (l) => (
         <>
           {l.source === 'reservation' ? (
             <div className="inv-actions">
               <input className="inv-input inv-num" type="number" min="0" step="any" style={{ width: 90 }}
-                aria-label={`Quantity to pick for ${l.itemCode || 'this line'}`}
+                aria-label={p('qtyAria', { item: l.itemCode || p('thisLine') })}
                 value={qtys[l.key] ?? String(l.qty)} onChange={(e) => setQtys((m) => ({ ...m, [l.key]: e.target.value }))} />
               <button type="button" className="cc-btn-primary" disabled={!!busy} onClick={async () => { if (await confirm(l)) load(data.jobCard) }}>
-                <PackageMinus size={14} aria-hidden="true" /> {busy === l.key ? 'Saving...' : 'Confirm pick'}
+                <PackageMinus size={14} aria-hidden="true" /> {busy === l.key ? p('saving') : p('confirmPick')}
               </button>
             </div>
-          ) : <span className="cc-na">Reserve first</span>}
+          ) : <span className="cc-na">{p('reserveFirst')}</span>}
           {lineErr[l.key] && <p className="inv-err" role="alert">{lineErr[l.key]}</p>}
         </>
       ),
@@ -121,33 +127,33 @@ export default function PickingPanel({ scope, can }) {
     reportFileName('Pick list', data.jobCard),
   )
   const exportPdf = () => exportToPdf(
-    exportRows(), PICK_EXPORT_COLUMNS, `Pick list: job card ${data.jobCard}`, reportFileName('Pick list', data.jobCard), 'landscape',
+    exportRows(), PICK_EXPORT_COLUMNS, p('pdfTitle', { jobCard: data.jobCard }), reportFileName('Pick list', data.jobCard), 'landscape',
   )
 
   return (
     <>
-      <SectionCard title="Pick list for a job card" sub="Stock reserved for the job card, grouped by site and location so the store keeper walks the store once.">
+      <SectionCard title={p('title')} sub={p('sub')}>
         <form className="inv-form" onSubmit={(e) => { e.preventDefault(); load() }}>
-          <Field label="Job card number">
-            <input className="inv-input" maxLength={80} value={jobCard} onChange={(e) => setJobCard(e.target.value)} placeholder="e.g. GCKR/JC/0082/0323" />
+          <Field label={p('jobCardLabel')}>
+            <input className="inv-input" maxLength={80} value={jobCard} onChange={(e) => setJobCard(e.target.value)} placeholder={p('jobCardPlaceholder')} dir="ltr" />
           </Field>
           <div className="inv-actions">
             <button type="submit" className="cc-btn-primary" disabled={state.loading}>
-              <Search size={14} aria-hidden="true" /> {state.loading ? 'Loading...' : 'Build pick list'}
+              <Search size={14} aria-hidden="true" /> {state.loading ? p('loading') : p('build')}
             </button>
           </div>
         </form>
         {state.error && <ErrorNote error={state.error} onRetry={data || jobCard ? () => load() : undefined} />}
       </SectionCard>
 
-      {data?.status === 'not_provisioned' && <NotSetUp what="Picking" />}
+      {data?.status === 'not_provisioned' && <NotSetUp what={p('what')} />}
 
       {data?.status === 'ok' && (
         <SectionCard
-          title={`Job card ${data.jobCard}`}
+          title={p('jobCardTitle', { jobCard: data.jobCard })}
           sub={data.workOrder
-            ? `Asset ${data.workOrder.asset_no || 'N/A'} at ${data.workOrder.site || 'N/A'}, status ${data.workOrder.status || 'N/A'}`
-            : 'No job card with this number was found in Work Orders; the list shows stock reserved under this number.'}
+            ? p('workOrderSub', { asset: data.workOrder.asset_no || t('wmsfloor.common.na'), site: data.workOrder.site || t('wmsfloor.common.na'), status: data.workOrder.status || t('wmsfloor.common.na') })
+            : p('noWorkOrder')}
           action={canExport && lines.length ? (
             <div className="inv-actions">
               <button type="button" className="cc-btn-ghost" onClick={exportPdf}><FileDown size={14} aria-hidden="true" /> PDF</button>
@@ -155,35 +161,35 @@ export default function PickingPanel({ scope, can }) {
             </div>
           ) : null}>
           {!lines.length && (
-            <Note icon={ClipboardList}>Nothing is reserved for this job card. Reserve the parts first (Stock movements, Reserve and issue), then build the pick list.</Note>
+            <Note icon={ClipboardList}>{p('nothingReserved')}</Note>
           )}
-          {data.truncated && <Note tone="warn">This job card has more reservations than one list can show. The first {lines.length} are listed.</Note>}
+          {data.truncated && <Note tone="warn">{p('truncated', { count: lines.length })}</Note>}
 
           {canIssue && pickable.length > 0 && (
             <div className="inv-form">
-              <Field label="Handed to (technician or workshop)">
-                <input className="inv-input" maxLength={120} value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} placeholder="Name of the person receiving the parts" />
+              <Field label={p('handedTo')}>
+                <input className="inv-input" maxLength={120} value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} placeholder={p('handedToPlaceholder')} />
               </Field>
-              <Field label="Note (optional)">
+              <Field label={p('note')}>
                 <input className="inv-input" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
               </Field>
             </div>
           )}
           {canIssue && pickable.length > 0 && !receivedBy.trim() && (
-            <Note tone="warn">No receiver named. The pick will post, but the handover will show "not recorded".</Note>
+            <Note tone="warn">{p('noReceiver')}</Note>
           )}
           {!canIssue && lines.length > 0 && (
-            <Note tone="warn">You can view and print this list. Confirming a pick needs the inventory issue permission.</Note>
+            <Note tone="warn">{p('viewOnly')}</Note>
           )}
 
           {groups.map((g) => (
             <div key={g.site} className="inv-pick-site">
-              <h4 className="cc-card-title">{g.site} <span className="cc-card-sub">({g.lineCount} lines)</span></h4>
+              <h4 className="cc-card-title">{g.site} <span className="cc-card-sub">{p('lineCount', { count: g.lineCount })}</span></h4>
               {g.locations.map((loc) => (
                 <div key={loc.path} className="inv-pick-loc">
                   <p className="cc-card-sub"><strong>{loc.path}</strong></p>
                   <div className="inv-scroll">
-                    <KitTable compact columns={alignNumeric(pickColumns)} rows={loc.lines} empty="No lines" />
+                    <KitTable compact columns={alignNumeric(pickColumns)} rows={loc.lines} empty={p('noLines')} />
                   </div>
                 </div>
               ))}
@@ -193,12 +199,12 @@ export default function PickingPanel({ scope, can }) {
           {canIssue && pickable.length > 1 && (
             <div className="inv-actions">
               <button type="button" className="cc-btn-primary" disabled={!!busy} onClick={confirmAll}>
-                <PackageMinus size={14} aria-hidden="true" /> Confirm all picks
+                <PackageMinus size={14} aria-hidden="true" /> {p('confirmAll')}
               </button>
             </div>
           )}
           {picked.length > 0 && (
-            <Note tone="good">Picked and issued: {picked.map((p) => `${formatQty(p.qty)} x ${p.item || 'item'}`).join(', ')}.</Note>
+            <Note tone="good">{p('pickedIssued', { list: picked.map((x) => `${formatQty(x.qty)} x ${x.item || p('item')}`).join(', ') })}</Note>
           )}
         </SectionCard>
       )}

@@ -15,8 +15,10 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 
 /// The user-facing word for [condition], in the active locale.
-String tyreConditionLabel(AppLocalizations l10n, TyreCondition condition) {
+String tyreConditionLabel(AppLocalizations l10n, TyreCondition? condition) {
   return switch (condition) {
+    // Nothing readable recorded: "No data", never Good.
+    null => l10n.tyreDetailFieldNotRecorded,
     TyreCondition.good => l10n.tyreConditionGood,
     TyreCondition.worn => l10n.tyreConditionWorn,
     TyreCondition.damaged => l10n.tyreConditionDamaged,

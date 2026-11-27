@@ -1,7 +1,7 @@
 import { useLanguage } from '../../contexts/LanguageContext'
 import {
   FileText, Camera, CheckSquare, Share2, WifiOff, PenLine, Image as ImageIcon, Gauge, Clock, Send,
-  ExternalLink, X, AlertTriangle, CircleDot,
+  ExternalLink, X, AlertTriangle,
 } from 'lucide-react'
 import VehicleTyreDiagram from '../VehicleTyreDiagram'
 import { layoutSlotsFor, isTyrelessEquipment } from '../../lib/vehicleTyreLayout'
@@ -11,6 +11,8 @@ import { inferVehicleTypeFromAsset, checklistProgress, checklistConditionTally }
 import TyreDueBanner from './TyreDueBanner'
 import PositionSheet from './PositionSheet'
 import { CHECKLIST_LABELS } from './checklistLabels'
+import TyreConditionGlyph from '../tyre/TyreConditionGlyph'
+import { conditionRisk, conditionKind, kindHex } from '../../lib/tyreLayoutSpec'
 
 const MAX_PHOTOS = 6
 
@@ -360,10 +362,8 @@ export default function ChecklistTab({
                       country={clFleetInfo?.country}
                       positions={clPositions.map(p => ({
                         position: p.position,
-                        risk_level: p.condition === 'Good' ? 'good'
-                          : p.condition === 'Wear' ? 'warning'
-                          : (p.condition === 'Damage' || p.condition === 'Puncture') ? 'critical'
-                          : 'none',
+                        // The shared rule (Flat and every other word included).
+                        risk_level: p.condition ? conditionRisk(p.condition) : 'none',
                         condition: p.condition || null,
                         pressure: p.pressure,
                         tread: p.tread_depth ?? p.tread,
@@ -380,9 +380,10 @@ export default function ChecklistTab({
                     {clPositions.map(p => {
                       const has = !!p.pressure
                       const isActive = p.position === clSelectedPos
-                      const isPuncture = p.condition === 'Puncture'
-                      const isDmg = p.condition === 'Damage' || isPuncture
-                      const isWear = p.condition === 'Wear'
+                      const band = p.condition ? conditionRisk(p.condition) : 'none'
+                      const kind = p.condition ? conditionKind(p.condition) : 'none'
+                      const isDmg = band === 'critical'
+                      const isWear = band === 'warning'
                       const bg = isActive ? '#16a34a'
                         : has && isWear ? '#fefce8'
                         : has && isDmg  ? '#fef2f2'
@@ -409,7 +410,10 @@ export default function ChecklistTab({
                           style={{ background: bg, color: fg, border: `1.5px solid ${bd}` }}
                         >
                           {p.label || p.position}{has ? ' ✓' : ''}
-                          {isPuncture && !isActive && <CircleDot size={10} className="inline ml-0.5" aria-hidden style={{ color: '#dc2626' }} />}
+                          {p.condition && (
+                            <TyreConditionGlyph kind={kind} size={12} strokeWidth={3}
+                              className="inline ml-1 align-[-2px]" color={isActive ? '#ffffff' : kindHex(kind, 'light')} />
+                          )}
                         </button>
                       )
                     })}

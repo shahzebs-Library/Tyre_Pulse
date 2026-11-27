@@ -1,0 +1,55 @@
+{
+  "statements": {
+    "deduction-consent-v3": "I am the driver named on this paper. I have seen this charge: the reason, the evidence and the photos. I agree that I must pay {amount} in total for this charge. I agree that the company may take this amount from my salary in monthly parts. The amount taken in any one month will never be more than the legal monthly limit, and I will be shown the amount for each month before it is taken. This agreement is only for this charge. I can still object within the time written on this paper.",
+    "receipt-dispute-v2": "I am the driver named on this paper. I have received this charge and I have seen the reason, the evidence and the photos. I do not agree with this charge, for the reasons I wrote. My signature only shows that I received this paper. It does not mean that I agree. I can object within the time written on this paper.",
+    "refusal-witness-v2": "I saw this charge paper given to the driver named on it. The driver did not want to sign it or answer. The date and time of this record are set by the system."
+  },
+  "consent": {
+    "languageLabel": "Language of the statement you sign",
+    "photosTitle": "Photos of this charge",
+    "photosNone": "No photos attached to this charge.",
+    "photosLoading": "Loading photos...",
+    "photoUnavailable": "Photo could not be loaded.",
+    "photosSeen": "Look at the photos before you answer.",
+    "readAloud": "If you cannot read this, ask your supervisor to read it to you before you sign.",
+    "acknowledge": "I have read this statement (or it was read to me) and I agree to sign it.",
+    "ksaRule": "Saudi Labour Law applies to this charge. Damage or loss: only when caused by your own fault or by not following the company's instructions, never by another person or force majeure, and at most 5 days of wage each month. Any other charge, including a traffic fine: only with your written consent. All deductions together: at most half the wage. You have 15 working days from the day you received this charge to object.",
+    "otherRule": "The company limit applies to this charge. This rule still needs legal confirmation for this country.",
+    "objectionUntil": "You can object until {date}.",
+    "photoRequired": "Add at least one photo of the damage before sending this charge to the driver.",
+    "addPhotos": "Add photos",
+    "uploadingPhotos": "Uploading photos...",
+    "statementUnavailable": "Statement unavailable. Refresh before signing.",
+    "languageAria": "Statement language",
+    "otherRuleDriver": "The company deduction limit applies to this charge."
+  },
+  "validate": {
+    "photoRequired": "Add at least one photo of the damage. The driver sees it before answering.",
+    "category": "Choose a charge category.",
+    "fineSource": "A traffic fine charge must link the traffic fine record.",
+    "sourceRecord": "Choose the linked record.",
+    "basis": "Write the basis for the charge (at least 10 characters).",
+    "amount": "Amount must be greater than zero.",
+    "currency": "Enter a three letter currency code.",
+    "evidenceRow": "Each evidence row needs a type, reference and description.",
+    "evidenceOrSource": "Link a source record or list at least one piece of evidence.",
+    "response": "Choose accept or dispute.",
+    "language": "Choose English, Arabic or Urdu.",
+    "explanation": "Explain why you dispute the charge.",
+    "acknowledge": "Read and confirm the statement.",
+    "signature": "Sign before submitting.",
+    "faultFinding": "Record the fault finding: whose fault was the damage (Saudi Labour Law, Article 91)."
+  },
+  "pdf": {
+    "scriptUnavailable": "This browser could not draw the Arabic or Urdu text. Open this PDF from Chrome, Edge or Safari to print it in that language."
+  },
+  "fault": {
+    "title": "Fault finding (Article 91)",
+    "help": "Required for a damage charge in Saudi Arabia. Damage caused by a third party or force majeure can never be deducted from the driver.",
+    "none": "Not recorded",
+    "driver_fault": "Driver's own fault",
+    "instruction_violation": "Did not follow the company's instructions",
+    "third_party": "Another person's fault (cannot be deducted)",
+    "force_majeure": "Force majeure (cannot be deducted)"
+  }
+}

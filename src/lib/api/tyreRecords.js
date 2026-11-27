@@ -18,7 +18,8 @@ import { sanitizeSearchTerm } from '../searchFilter'
 import { createServiceEvent } from './tyreServiceEvents'
 import { z } from 'zod'
 import { tyreRecordFormSchema } from '../validation/schemas'
-import { canonicalCode, layoutCodes, AXLE_LAYOUTS } from '../tyrePositions'
+import { canonicalCode } from '../tyrePositions'
+import { ALL_POSITION_CODES } from '../tyreLayoutSpec'
 
 /**
  * Distinct `site` + `brand` filter options for the records grid, in ONE round
@@ -268,11 +269,9 @@ export const tyreRecordEditSchema = tyreRecordFormSchema.extend({
 })
 
 /** Common wheel position codes, offered as suggestions in the form. */
-export const POSITION_SUGGESTIONS = Array.from(new Set([
-  ...Object.keys(AXLE_LAYOUTS).flatMap(layoutCodes),
-  'LHR1-O', 'LHR1-I', 'RHR1-I', 'RHR1-O',
-  'LHR2-O', 'LHR2-I', 'RHR2-I', 'RHR2-O',
-]))
+// Every code the shared tyre map uses (docs/document-specs/tyre-layouts.json),
+// so a suggestion can never name a wheel the diagram does not draw.
+export const POSITION_SUGGESTIONS = ALL_POSITION_CODES
 
 /** Form values for an existing record (two position columns exist; `position` is primary). */
 export function recordToFormValues(r = {}) {

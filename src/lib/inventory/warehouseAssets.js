@@ -28,6 +28,7 @@
  *     as zero cost. A value the user may not see (view_value) stays hidden (null).
  */
 import { sumByCurrency } from './inventoryMoney'
+import { floorText } from './floorText'
 
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null
@@ -207,16 +208,18 @@ export const STOCK_FAILURE_TYPES = Object.freeze([
  * supplier's decision, recorded on the Warranty page. Returns { payload } or
  * { error }.
  */
-export function stockWarrantyDraft(stock, form = {}) {
-  if (!stock?.stock_id && !stock?.id) return { error: 'Choose the stock line the claim is for.' }
+export function stockWarrantyDraft(stock, form = {}, t) {
+  const tx = floorText(t)
+  const fail = (k, v) => ({ error: tx(`wmsmsgfloor.warranty.${k}`, v) })
+  if (!stock?.stock_id && !stock?.id) return fail('noStock')
   const failure = String(form.failure_type || '').trim()
-  if (!failure) return { error: 'Choose what went wrong.' }
+  if (!failure) return fail('noFailure')
   const qty = num(form.qty)
   const onHand = num(stock.qty_on_hand)
-  if (qty === null || qty <= 0) return { error: 'Enter how many units the claim covers.' }
-  if (onHand !== null && qty > onHand) return { error: `The claim cannot cover more than the ${onHand} on hand.` }
+  if (qty === null || qty <= 0) return fail('noQty')
+  if (onHand !== null && qty > onHand) return fail('overOnHand', { onHand })
   const notes = String(form.notes || '').trim()
-  if (failure === 'Other' && !notes) return { error: 'Describe the failure.' }
+  if (failure === 'Other' && !notes) return fail('describe')
   const supplier = String(form.supplier || '').trim() || null
   return {
     payload: {
@@ -258,14 +261,16 @@ export function claimsByStock(claims) {
  * Validate a scrap proposal. It is only ever sent as a request for approval;
  * nothing is posted from the client. Returns { proposal } or { error }.
  */
-export function scrapProposal(stock, form = {}) {
-  if (!stock?.stock_id) return { error: 'Choose the stock line to scrap.' }
+export function scrapProposal(stock, form = {}, t) {
+  const tx = floorText(t)
+  const fail = (k, v) => ({ error: tx(`wmsmsgfloor.scrap.${k}`, v) })
+  if (!stock?.stock_id) return fail('noStock')
   const qty = num(form.qty)
   const onHand = num(stock.qty_on_hand)
-  if (qty === null || qty <= 0) return { error: 'Enter how many units to scrap.' }
-  if (onHand !== null && qty > onHand) return { error: `You cannot scrap more than the ${onHand} on hand.` }
+  if (qty === null || qty <= 0) return fail('noQty')
+  if (onHand !== null && qty > onHand) return fail('overOnHand', { onHand })
   const reason = String(form.reason || '').trim()
-  if (reason.length < 5) return { error: 'Give the reason for scrapping (at least a few words).' }
+  if (reason.length < 5) return fail('noReason')
   return { proposal: { stock_id: stock.stock_id, qty, reason: reason.slice(0, 1000) } }
 }
 
@@ -379,20 +384,29 @@ export function financeTotals(rows) {
 }
 
 /**
- * Plain-English finding for one recon row: what the ERP issued that the store
- * never recorded, or the reverse.
+ * Which finding applies to one recon row (a key of wmsmsgfloor.finance.finding),
+ * or null.
  */
-export function reconFinding(r) {
+export function reconFindingKey(r) {
   if (!r) return null
   const erp = (r.erpLines || 0) > 0
   const inv = r.invIssueQty !== null
-  if (erp && !inv) return 'Issued in the ERP, not recorded as an issue in the store.'
-  if (inv && !erp) return 'Issued in the store, not in the ERP.'
-  if (inv && (r.invIssueUnvaluedQty || 0) > 0) return 'Store issues include unvalued quantity; the cost is unknown, not zero.'
-  if (inv && erp && Math.abs((r.invIssueQty || 0) - (r.erpQty || 0)) > 0.0001) return 'Quantities differ between the store and the ERP.'
-  if (inv && erp) return 'Quantities agree.'
-  if ((r.receiptMovements || 0) > 0) return 'Receipts only this month.'
+  if (erp && !inv) return 'erpOnly'
+  if (inv && !erp) return 'storeOnly'
+  if (inv && (r.invIssueUnvaluedQty || 0) > 0) return 'unvalued'
+  if (inv && erp && Math.abs((r.invIssueQty || 0) - (r.erpQty || 0)) > 0.0001) return 'differ'
+  if (inv && erp) return 'agree'
+  if ((r.receiptMovements || 0) > 0) return 'receiptsOnly'
   return null
+}
+
+/**
+ * Plain-language finding for one recon row: what the ERP issued that the store
+ * never recorded, or the reverse. English unless `t` is given.
+ */
+export function reconFinding(r, t) {
+  const k = reconFindingKey(r)
+  return k ? floorText(t)(`wmsmsgfloor.finance.finding.${k}`) : null
 }
 
 /** First day of the month `n` months before `now`, as YYYY-MM-DD. */

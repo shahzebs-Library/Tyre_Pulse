@@ -1,5 +1,5 @@
 // Every literal t('ns.path') key in the web app must resolve to a STRING in
-// both the English and Arabic dictionaries. A missing key renders its raw
+// the English and Arabic (and, where present, Urdu) dictionaries. A missing key renders its raw
 // path on screen (the login button once read "auth.login.signingIn").
 // Also covers prefix helpers such as `const p = (k) => t(`auth.login.page.${k}`)`.
 import { describe, it, expect } from 'vitest'
@@ -42,6 +42,7 @@ function walk(dir, files = []) {
 
 const EN = loadLang('en')
 const AR = loadLang('ar')
+const UR = loadLang('ur')
 const LITERAL = /(?<![\w.])t\(\s*['"]([a-zA-Z][\w-]*(?:\.[\w-]+)+)['"]/g
 const HELPER = /const\s+(\w+)\s*=\s*\(\s*(\w+)[^)]*\)\s*=>\s*t\(\s*`([\w.-]+)\.\$\{\2\}`/g
 
@@ -80,6 +81,16 @@ describe('web i18n key coverage', () => {
     const missing = keys
       .filter(({ key }) => Object.prototype.hasOwnProperty.call(AR, key.split('.')[0]))
       .filter(({ key }) => typeof resolve(AR, key) !== 'string')
+      .map(({ rel, key }) => `${rel}: ${key}`)
+    expect(missing).toEqual([])
+  })
+
+  // Urdu is rolled out namespace by namespace: a namespace with no Urdu file
+  // falls back to English, but once a file exists it must be complete.
+  it('every key resolves to an Urdu string when the namespace has an Urdu file', () => {
+    const missing = keys
+      .filter(({ key }) => Object.prototype.hasOwnProperty.call(UR, key.split('.')[0]))
+      .filter(({ key }) => typeof resolve(UR, key) !== 'string')
       .map(({ rel, key }) => `${rel}: ${key}`)
     expect(missing).toEqual([])
   })

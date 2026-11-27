@@ -99,6 +99,13 @@ const EMPTY_FORM = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => formatDate(d)
+/** Display label for a database token (status, priority); an unknown token shows as stored. */
+const tv = (t, base, v) => {
+  if (v === null || v === undefined || v === '') return v
+  const k = `${base}.${String(v).replace(/\s+/g, '_')}`
+  const r = t(k)
+  return r === k ? String(v) : r
+}
 const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
@@ -114,10 +121,11 @@ const CHART_OPTS = {
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
+  const { t } = useLanguage()
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.Draft
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
-      {status}
+      {tv(t, 'wmsprocure.poStatus', status)}
     </span>
   )
 }
@@ -136,7 +144,7 @@ export default function Procurement() {
   const money = useMemo(() => currencyScope(orders), [orders])
   const fmtCur = (v, cur) => {
     if (v == null) return 'N/A'
-    if (!cur && money.mixed) return 'Mixed currencies'
+    if (!cur && money.mixed) return t('wmsprocure.proc.mixedCurrencies')
     return _fmtCurrencyBase(v, cur || money.currency || activeCurrency)
   }
   const poCur = (po) => po?.currency || currencyForCountry(po?.country) || null
@@ -287,7 +295,7 @@ export default function Procurement() {
     }
     const entries = Object.entries(statusCounts(statusChartBase)).filter(([, v]) => v > 0)
     return {
-      labels: entries.map(([k]) => k),
+      labels: entries.map(([k]) => tv(t, 'wmsprocure.poStatus', k)),
       datasets: [{
         data: entries.map(([, v]) => v),
         backgroundColor: entries.map(([k]) => colorMap[k] || '#6b7280'),
@@ -295,7 +303,7 @@ export default function Procurement() {
         borderWidth: 2,
       }],
     }
-  }, [statusChartBase])
+  }, [statusChartBase, t])
 
   // ── Chart: cumulative spend vs budget (whole register, like the budget) ───
   const cumulativeLineData = useMemo(() => {
@@ -415,15 +423,15 @@ export default function Procurement() {
   async function handleSave() {
     // Approval-locked records are immutable — the server RPCs are the real
     // boundary, this is the UI guard mirroring it.
-    if (editPO && poLocked) { alert('Locked, in approval'); return }
+    if (editPO && poLocked) { alert(t('wmsprocure.proc.locked')); return }
     const vendorName = (supplierPick?.supplier_name || formData.vendor_name || '').trim()
     if (!vendorName) { alert(t('procurement.alerts.vendorRequired')); return }
     if (formData.items.length === 0)  { alert(t('procurement.alerts.lineItemRequired')); return }
     if (!editPO && formData.is_emergency) {
       const check = validateEmergency(formData.emergency, {
-        currency: currencyForCountry(formData.country?.trim()), supplier: vendorName, country: formData.country?.trim(),
+        currency: currencyForCountry(formData.country?.trim()), supplier: vendorName, country: formData.country?.trim(), t,
       })
-      if (!check.ok) { setEmergencyTouched(true); alert(`Emergency purchase: ${check.first}`); return }
+      if (!check.ok) { setEmergencyTouched(true); alert(t('wmsprocure.proc.emergencyAlert', { message: check.first })); return }
     }
     setSaving(true)
     try {
@@ -468,10 +476,10 @@ export default function Procurement() {
         const { error: err } = await procurementApi.updatePurchaseOrder(editPO.id, { ...payload, created_by: editPO.created_by ?? payload.created_by })
         if (err) throw err
         if (lines.length) {
-          if (!LINE_EDITABLE_PO_STATUSES.includes(editPO.status)) notes.push(`Lines can only be added while a PO is Draft or Submitted; ${lines.length} item(s) were kept on the PO but not as receivable lines.`)
+          if (!LINE_EDITABLE_PO_STATUSES.includes(editPO.status)) notes.push(t('wmsprocure.proc.linesDraftOnly', { count: lines.length }))
           else {
             const res = await addPurchaseOrderLines(editPO.id, lines)
-            if (res.failedLines.length) notes.push(`${res.failedLines.length} line(s) did not save: ${res.failedLines[0].message}`)
+            if (res.failedLines.length) notes.push(t('wmsprocure.proc.linesFailed', { count: res.failedLines.length, message: res.failedLines[0].message }))
           }
         }
       } else {
@@ -479,14 +487,14 @@ export default function Procurement() {
         const wanted = payload.status
         const header = { ...payload, status: LINE_EDITABLE_PO_STATUSES.includes(wanted) ? wanted : 'Draft' }
         const { po, failedLines } = await createPurchaseOrderWithLines(header, lines)
-        if (failedLines.length) notes.push(`${failedLines.length} line(s) did not save: ${failedLines[0].message}`)
+        if (failedLines.length) notes.push(t('wmsprocure.proc.linesFailed', { count: failedLines.length, message: failedLines[0].message }))
         if (wanted !== header.status) {
           const { error: err } = await procurementApi.updatePurchaseOrder(po.id, { status: wanted })
-          if (err) notes.push(`PO ${po.po_number} was saved as Draft; the status could not be set to ${wanted}.`)
+          if (err) notes.push(t('wmsprocure.proc.savedAsDraft', { po: po.po_number, status: tv(t, 'wmsprocure.poStatus', wanted) }))
         }
       }
-      if (formData.items.some((it) => !it.item_id)) notes.push('Free-text items are not Material Master items, so they cannot be received into stock.')
-      if (uncatalogued.length) notes.push(`${uncatalogued.length} item(s) without a Material Master code were not added as lines.`)
+      if (formData.items.some((it) => !it.item_id)) notes.push(t('wmsprocure.proc.freeText'))
+      if (uncatalogued.length) notes.push(t('wmsprocure.proc.uncatalogued', { count: uncatalogued.length }))
 
       await load()
       setSaveNotice(notes.join(' '))
@@ -502,14 +510,14 @@ export default function Procurement() {
   async function updateStatus(po, newStatus) {
     // Block manual status changes on the PO that is currently under approval —
     // its lifecycle is driven by the workflow engine.
-    if (viewPO?.id === po.id && poLocked) { alert('Locked, in approval'); return }
+    if (viewPO?.id === po.id && poLocked) { alert(t('wmsprocure.proc.locked')); return }
     const patch = { status: newStatus }
     if (newStatus === 'Delivered') patch.actual_delivery = new Date().toISOString().slice(0, 10)
     const { data: changed, error: err } = await procurementApi.updatePurchaseOrder(po.id, patch)
     if (err) { alert(t('procurement.alerts.updateFailed', { message: toUserMessage(err) })); return }
     // RLS refuses silently (0 rows): tell the person instead of doing nothing.
     if (Array.isArray(changed) && changed.length === 0) {
-      alert(t('procurement.alerts.updateFailed', { message: 'You do not have permission to change this purchase order.' }))
+      alert(t('procurement.alerts.updateFailed', { message: t('wmsprocure.proc.noPermission') }))
       return
     }
     await load()
@@ -608,27 +616,27 @@ export default function Procurement() {
   // ── Register columns (EnterpriseTable) ────────────────────────────────────
   const iconBtn = 'min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-500'
   const poColumns = [
-    { accessorKey: 'po_number', header: t('procurement.table.columns.poNumber'), cell: ({ getValue }) => <span className="text-green-400 font-mono text-xs font-semibold">{getValue() || 'N/A'}</span> },
-    { accessorKey: 'vendor_name', header: t('procurement.table.columns.vendor'), cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue() || 'N/A'}</span> },
-    { accessorKey: 'order_date', header: t('procurement.table.columns.orderDate'), cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : 'N/A'}</span> },
-    { accessorKey: 'expected_delivery', header: t('procurement.table.columns.expDelivery'), cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : 'N/A'}</span> },
+    { accessorKey: 'po_number', header: t('procurement.table.columns.poNumber'), cell: ({ getValue }) => <span className="text-green-400 font-mono text-xs font-semibold" dir="ltr">{getValue() || t('wmsprocure.proc.na')}</span> },
+    { accessorKey: 'vendor_name', header: t('procurement.table.columns.vendor'), cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue() || t('wmsprocure.proc.na')}</span> },
+    { accessorKey: 'order_date', header: t('procurement.table.columns.orderDate'), cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : t('wmsprocure.proc.na')}</span> },
+    { accessorKey: 'expected_delivery', header: t('procurement.table.columns.expDelivery'), cell: ({ getValue }) => <span className="whitespace-nowrap">{getValue() ? fmtDate(getValue()) : t('wmsprocure.proc.na')}</span> },
     { accessorKey: 'status', header: t('procurement.table.columns.status'), cell: ({ getValue }) => <StatusBadge status={getValue()} /> },
     {
       accessorKey: 'priority', header: t('procurement.table.columns.priority'),
       cell: ({ getValue }) => {
         const pc = PRIORITY_CONFIG[getValue()] || PRIORITY_CONFIG.Normal
-        return <span className={`flex items-center gap-1.5 ${pc.color} text-xs`}><span className={`w-2 h-2 rounded-full ${pc.dot}`} aria-hidden="true" />{getValue() || 'Normal'}</span>
+        return <span className={`flex items-center gap-1.5 ${pc.color} text-xs`}><span className={`w-2 h-2 rounded-full ${pc.dot}`} aria-hidden="true" />{tv(t, 'wmsprocure.priority', getValue() || 'Normal')}</span>
       },
     },
     {
       id: 'items', header: t('procurement.table.columns.items'), accessorFn: (po) => (po.items || []).length, meta: { align: 'right' },
       cell: ({ row }) => {
         const r = receiptProgress(row.original.items)
-        return <span title={r.pct == null ? undefined : `${Math.round(r.pct)}% received`}>{(row.original.items || []).length}</span>
+        return <span title={r.pct == null ? undefined : t('wmsprocure.proc.pctReceived', { pct: Math.round(r.pct) })}>{(row.original.items || []).length}</span>
       },
     },
-    { accessorKey: 'total_amount', header: money.mixed ? t('procurement.table.columns.total') : `${t('procurement.table.columns.total')} (${money.currency || activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue, row }) => <span className="text-green-400 font-medium whitespace-nowrap">{getValue() == null ? 'N/A' : fmtCur(getValue(), poCur(row.original))}</span> },
-    { accessorKey: 'site', header: t('procurement.table.columns.site'), cell: ({ getValue }) => getValue() || 'N/A' },
+    { accessorKey: 'total_amount', header: money.mixed ? t('procurement.table.columns.total') : `${t('procurement.table.columns.total')} (${money.currency || activeCurrency})`, meta: { align: 'right' }, cell: ({ getValue, row }) => <span className="text-green-400 font-medium whitespace-nowrap">{getValue() == null ? t('wmsprocure.proc.na') : fmtCur(getValue(), poCur(row.original))}</span> },
+    { accessorKey: 'site', header: t('procurement.table.columns.site'), cell: ({ getValue }) => getValue() || t('wmsprocure.proc.na') },
     {
       id: 'actions', header: t('procurement.table.columns.actions'), enableSorting: false, meta: { export: false },
       cell: ({ row }) => {
@@ -648,12 +656,12 @@ export default function Procurement() {
     { accessorKey: 'brand', header: t('procurement.modal.columns.brand') },
     { accessorKey: 'size', header: t('procurement.modal.columns.size') },
     { accessorKey: 'quantity', header: t('procurement.modal.columns.qty'), meta: { align: 'right' } },
-    { accessorKey: 'unit_price', header: t('procurement.modal.columns.unitPrice'), meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? 'No price' : fmtCur(getValue(), formCur)) },
-    { id: 'line_total', header: t('procurement.modal.columns.lineTotal'), accessorFn: (it) => (it.unit_price == null || it.unit_price === '' ? null : calcItemTotal(it)), meta: { align: 'right' }, cell: ({ getValue }) => <span className="text-green-400 font-medium">{getValue() == null ? 'No price' : fmtCur(getValue(), formCur)}</span> },
+    { accessorKey: 'unit_price', header: t('procurement.modal.columns.unitPrice'), meta: { align: 'right' }, cell: ({ getValue }) => (getValue() == null ? t('wmsprocure.proc.noPrice') : fmtCur(getValue(), formCur)) },
+    { id: 'line_total', header: t('procurement.modal.columns.lineTotal'), accessorFn: (it) => (it.unit_price == null || it.unit_price === '' ? null : calcItemTotal(it)), meta: { align: 'right' }, cell: ({ getValue }) => <span className="text-green-400 font-medium">{getValue() == null ? t('wmsprocure.proc.noPrice') : fmtCur(getValue(), formCur)}</span> },
     {
       id: 'remove', header: '', enableSorting: false, meta: { export: false },
       cell: ({ row }) => (
-        <button type="button" onClick={() => removeItem(row.index)} aria-label={`Remove line ${row.index + 1}`} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-red-500 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 rounded-lg"><X size={14} /></button>
+        <button type="button" onClick={() => removeItem(row.index)} aria-label={t('wmsprocure.proc.removeLine', { n: row.index + 1 })} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center text-red-500 hover:text-red-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500 rounded-lg"><X size={14} /></button>
       ),
     },
   ]
@@ -693,26 +701,26 @@ export default function Procurement() {
           </div>
         }
       />
-      <TableNotInUse table="purchase_orders" label="purchase orders" hint="Records appear once a purchase order is raised." />
+      <TableNotInUse table="purchase_orders" label={t('wmsprocure.proc.notInUseLabel')} hint={t('wmsprocure.proc.notInUseHint')} />
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
       {saveNotice && (
         <div role="status" className="card border border-amber-800/50 text-sm text-amber-300 flex items-start justify-between gap-3">
           <span>{saveNotice}</span>
-          <button type="button" className="text-xs underline" onClick={() => setSaveNotice('')}>Dismiss</button>
+          <button type="button" className="text-xs underline" onClick={() => setSaveNotice('')}>{t('wmsprocure.proc.dismiss')}</button>
         </div>
       )}
       {money.mixed && (
         <p role="status" className="text-xs text-amber-300">
-          These purchase orders are in {money.currencies.join(', ')}. Totals are not added across currencies; pick a country to see one total.
+          {t('wmsprocure.proc.mixedNote', { currencies: money.currencies.join(', ') })}
         </p>
       )}
       {error && (
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 flex items-center gap-3 text-red-300">
           <AlertTriangle size={18} />
           <span className="text-sm">{error}</span>
-          <button type="button" onClick={load} className="ml-auto min-h-[44px] px-3 rounded-lg border border-red-700 text-sm hover:bg-red-900/40">Retry</button>
-          <button type="button" onClick={() => setError(null)} aria-label="Dismiss error" className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/40"><X size={16} /></button>
+          <button type="button" onClick={load} className="ms-auto min-h-[44px] px-3 rounded-lg border border-red-700 text-sm hover:bg-red-900/40">{t('wmsprocure.proc.retry')}</button>
+          <button type="button" onClick={() => setError(null)} aria-label={t('wmsprocure.proc.dismissError')} className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg hover:bg-red-900/40"><X size={16} /></button>
         </div>
       )}
 
@@ -757,7 +765,7 @@ export default function Procurement() {
           },
           {
             label: t('procurement.kpi.budgetUsed'),
-            value: budgetScope.variance != null ? `${budgetScope.variance.toFixed(1)}%` : 'N/A',
+            value: budgetScope.variance != null ? `${budgetScope.variance.toFixed(1)}%` : t('wmsprocure.proc.na'),
             suffix: '',
             color: budgetScope.variance > 100 ? 'red' : budgetScope.variance > 80 ? 'yellow' : 'teal',
             icon: BarChart2,
@@ -769,7 +777,7 @@ export default function Procurement() {
           },
           {
             label: t('procurement.kpi.avgLeadTime'),
-            value: kpis.avgLeadTime !== null ? `${kpis.avgLeadTime}d` : 'N/A',
+            value: kpis.avgLeadTime !== null ? t('wmsprocure.proc.daysShort', { days: kpis.avgLeadTime }) : t('wmsprocure.proc.na'),
             suffix: '',
             color: 'neutral',
             icon: Clock,
@@ -908,37 +916,37 @@ export default function Procurement() {
       <div className="bg-[var(--surface-1)] border border-[var(--border-dim)] rounded-xl p-4">
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+            <Search size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
               aria-label={t('procurement.filters.searchPlaceholder')}
               value={search}
               onChange={e => { setSearch(e.target.value)}}
               placeholder={t('procurement.filters.searchPlaceholder')}
-              className="input pl-9"
+              className="input ps-9"
             />
           </div>
-          <select aria-label="Status" value={statusFilter} onChange={e => { setStatus(e.target.value)}}
+          <select aria-label={t('wmsprocure.proc.status')} value={statusFilter} onChange={e => { setStatus(e.target.value)}}
             className="input w-auto min-w-[9rem]">
             <option value="All">{t('procurement.filters.allStatuses')}</option>
-            {STATUSES.map(s => <option key={s}>{s}</option>)}
+            {STATUSES.map(s => <option key={s} value={s}>{tv(t, 'wmsprocure.poStatus', s)}</option>)}
           </select>
-          <select aria-label="Vendor" value={vendorFilter} onChange={e => { setVendor(e.target.value)}}
+          <select aria-label={t('wmsprocure.proc.vendor')} value={vendorFilter} onChange={e => { setVendor(e.target.value)}}
             className="input w-auto min-w-[9rem]">
-            {vendors.map(v => <option key={v}>{v === 'All' ? t('procurement.filters.allVendors') : v}</option>)}
+            {vendors.map(v => <option key={v} value={v}>{v === 'All' ? t('procurement.filters.allVendors') : v}</option>)}
           </select>
-          <select aria-label="Site" value={siteFilter} onChange={e => { setSite(e.target.value)}}
+          <select aria-label={t('wmsprocure.proc.site')} value={siteFilter} onChange={e => { setSite(e.target.value)}}
             className="input w-auto min-w-[9rem]">
-            {sites.map(s => <option key={s}>{s === 'All' ? t('procurement.filters.allSites') : s}</option>)}
+            {sites.map(s => <option key={s} value={s}>{s === 'All' ? t('procurement.filters.allSites') : s}</option>)}
           </select>
-          <DateField className="w-40" ariaLabel="Order date from" placeholder="From date" value={dateFrom} onChange={v => setDateFrom(v)} />
-          <DateField className="w-40" ariaLabel="Order date to" placeholder="To date" value={dateTo} onChange={v => setDateTo(v)} />
+          <DateField className="w-40" ariaLabel={t('wmsprocure.proc.dateFromAria')} placeholder={t('wmsprocure.proc.fromDate')} value={dateFrom} onChange={v => setDateFrom(v)} />
+          <DateField className="w-40" ariaLabel={t('wmsprocure.proc.dateToAria')} placeholder={t('wmsprocure.proc.toDate')} value={dateTo} onChange={v => setDateTo(v)} />
           {(search || statusFilter !== 'All' || vendorFilter !== 'All' || siteFilter !== 'All' || dateFrom || dateTo) && (
             <button onClick={() => { setSearch(''); setStatus('All'); setVendor('All'); setSite('All'); setDateFrom(''); setDateTo('')}}
               className="px-3 py-2 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
               {t('procurement.filters.clear')}
             </button>
           )}
-          <span className="ml-auto self-center text-[var(--text-secondary)] text-sm">{t('procurement.filters.resultsCount', { count: filtered.length })}</span>
+          <span className="ms-auto self-center text-[var(--text-secondary)] text-sm">{t('procurement.filters.resultsCount', { count: filtered.length })}</span>
         </div>
       </div>
 
@@ -951,7 +959,7 @@ export default function Procurement() {
         onRetry={load}
         enableGlobalFilter={false}
         enableExport={false}
-        emptyMessage={orders.length === 0 ? t('procurement.table.emptyTitle') : 'No purchase orders match these filters.'}
+        emptyMessage={orders.length === 0 ? t('procurement.table.emptyTitle') : t('wmsprocure.proc.noMatch')}
         onRowClick={(po) => setViewPO(po)}
         viewKey="procurement-orders"
         toolbarExtras={orders.length === 0 && caps.procure ? (
@@ -976,14 +984,14 @@ export default function Procurement() {
           <div className="flex w-full flex-wrap items-center justify-between gap-3">
             <div className="text-[var(--text-secondary)] text-sm">
               {t('procurement.modal.totalLabel')} <span className="text-green-400 font-bold text-base">{fmtCur(formTotal, formCur)}</span>
-              {formData.items.length > 0 && <span className="text-[var(--text-muted)] ml-2">{t('procurement.modal.itemsCount', { count: formData.items.length })}</span>}
+              {formData.items.length > 0 && <span className="text-[var(--text-muted)] ms-2">{t('procurement.modal.itemsCount', { count: formData.items.length })}</span>}
             </div>
             <div className="flex gap-3">
               <button onClick={() => setShowForm(false)} disabled={saving} className="px-4 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-sm rounded-lg transition-colors disabled:opacity-50">
                 {t('procurement.modal.cancel')}
               </button>
               <button onClick={handleSave} disabled={saving || (editPO && poLocked)}
-                title={editPO && poLocked ? 'Locked, in approval' : undefined}
+                title={editPO && poLocked ? t('wmsprocure.proc.locked') : undefined}
                 className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                 {saving ? t('procurement.modal.saving') : editPO ? t('procurement.modal.saveChanges') : t('procurement.modal.createPo')}
@@ -1014,7 +1022,7 @@ export default function Procurement() {
                     <label className="flex items-start gap-2 text-sm text-[var(--text-secondary)] min-h-[44px]">
                       <input type="checkbox" className="mt-1" checked={!!formData.is_emergency}
                         onChange={e => setFormData(f => ({ ...f, is_emergency: e.target.checked }))} />
-                      <span>Emergency purchase: may be ordered before approval. Another buyer must approve it afterwards, and it is reported until they do.</span>
+                      <span>{t('wmsprocure.proc.emergencyCheckbox')}</span>
                     </label>
                     {formData.is_emergency && (
                       <EmergencyJustificationFields
@@ -1024,7 +1032,7 @@ export default function Procurement() {
                         showErrors={emergencyTouched}
                         errors={validateEmergency(formData.emergency, {
                           currency: currencyForCountry(formData.country?.trim()),
-                          supplier: supplierPick?.supplier_name || formData.vendor_name, country: formData.country?.trim(),
+                          supplier: supplierPick?.supplier_name || formData.vendor_name, country: formData.country?.trim(), t,
                         }).errors}
                       />
                     )}
@@ -1041,7 +1049,7 @@ export default function Procurement() {
                     <label htmlFor="po-field-4" className="text-[var(--text-secondary)] text-xs mb-1 block">{t('procurement.modal.priority')}</label>
                     <select id="po-field-4" value={formData.priority} onChange={e => setFormData(f => ({ ...f, priority: e.target.value }))}
                       className="input">
-                      {PRIORITIES.map(p => <option key={p}>{p}</option>)}
+                      {PRIORITIES.map(p => <option key={p} value={p}>{tv(t, 'wmsprocure.priority', p)}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1056,7 +1064,7 @@ export default function Procurement() {
                         isEmergency: !!editPO?.is_emergency,
                         hasLines: true,
                         ownPo: !!editPO && !!user?.id && editPO.created_by === user.id,
-                      }).map(s => <option key={s}>{s}</option>)}
+                      }).map(s => <option key={s} value={s}>{tv(t, 'wmsprocure.poStatus', s)}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1111,7 +1119,7 @@ export default function Procurement() {
                         enableExport={false}
                         enableSorting={false}
                         pageSizeOptions={[25]}
-                        emptyMessage="No line items yet."
+                        emptyMessage={t('wmsprocure.proc.noLineItems')}
                       />
                     </div>
                   )}
@@ -1119,7 +1127,7 @@ export default function Procurement() {
                   {/* Add item row: pick from the Material Master so the line can be received into stock */}
                   <div className="mb-2">
                     <MaterialPicker id="po-material" value={materialPick} onPick={setMaterialPick} country={formData.country || activeCountry} />
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1">Material Master items become receivable PO lines. Brand and size free text stays on the PO only.</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1">{t('wmsprocure.proc.materialHelp')}</p>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
                     <input disabled={!!materialPick} value={materialPick ? materialPick.item_code : itemRow.brand} onChange={e => setItemRow(r => ({ ...r, brand: e.target.value }))}
@@ -1146,7 +1154,7 @@ export default function Procurement() {
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-[var(--text-secondary)] flex items-center gap-2">
                           {t('procurement.modal.tax')}
-                          <input type="number" min="0" max="100" aria-label="Tax percent" value={taxPct} onChange={e => setTaxPct(parseFloat(e.target.value) || 0)}
+                          <input type="number" min="0" max="100" aria-label={t('wmsprocure.proc.taxPercent')} value={taxPct} onChange={e => setTaxPct(parseFloat(e.target.value) || 0)}
                             className="w-14 px-2 py-0.5 bg-[var(--surface-3)] border border-[var(--border-bright)] rounded text-[var(--text-primary)] text-xs focus:outline-none" />
                           %
                         </span>
@@ -1178,10 +1186,10 @@ export default function Procurement() {
         open={!!viewPO}
         onClose={() => setViewPO(null)}
         size="lg"
-        closeLabel="Close purchase order"
+        closeLabel={t('wmsprocure.proc.closePo')}
         title={viewPO ? (
           <span className="flex items-center gap-2 flex-wrap">
-            {viewPO.po_number}
+            <span dir="ltr">{viewPO.po_number}</span>
             <StatusBadge status={viewPO.status} />
           </span>
         ) : null}
@@ -1193,7 +1201,7 @@ export default function Procurement() {
                 {viewPO.is_emergency && (
                   <div className="rounded-lg border border-amber-700/60 p-3 space-y-2">
                     <p className="text-xs font-medium uppercase tracking-wide text-amber-300">
-                      Emergency purchase{viewPO.emergency_approved_at ? `, approved after the fact by ${viewPO.emergency_approved_by || 'N/A'}` : ', waiting for after-the-fact approval'}
+                      {viewPO.emergency_approved_at ? t('wmsprocure.proc.emergencyApprovedBy', { name: viewPO.emergency_approved_by || t('wmsprocure.proc.na') }) : t('wmsprocure.proc.emergencyWaiting')}
                     </p>
                     <EmergencyJustificationView po={viewPO} />
                   </div>
@@ -1221,7 +1229,7 @@ export default function Procurement() {
                               isCurrent ? 'text-green-400 font-semibold' :
                               isPast    ? 'text-green-400' :
                                           'text-[var(--text-dim)]'
-                            }`}>{s}</span>
+                            }`}>{tv(t, 'wmsprocure.poStatus', s)}</span>
                           </div>
                           {idx < STATUS_TIMELINE.length - 1 && (
                             <div className={`h-px flex-1 mx-1 ${isPast ? 'bg-green-600' : 'bg-[var(--surface-3)]'}`} />
@@ -1248,14 +1256,14 @@ export default function Procurement() {
                         {next.map(ns => (
                           <button key={ns} onClick={() => updateStatus(viewPO, ns)}
                             disabled={poLocked}
-                            title={poLocked ? 'Locked, in approval' : undefined}
+                            title={poLocked ? t('wmsprocure.proc.locked') : undefined}
                             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                               ns === 'Cancelled'  ? 'border-red-700 text-red-400 hover:bg-red-900/30' :
                               ns === 'Delivered'  ? 'border-teal-700 text-teal-400 hover:bg-teal-900/30' :
                               ns === 'Approved'   ? 'border-green-700 text-green-400 hover:bg-green-900/30' :
                                                     'border-blue-700 text-blue-400 hover:bg-blue-900/30'
                             }`}>
-                            {ns}
+                            {tv(t, 'wmsprocure.poStatus', ns)}
                           </button>
                         ))}
                       </div>
@@ -1269,7 +1277,7 @@ export default function Procurement() {
                     [t('procurement.drawer.fields.orderDate'),      fmtDate(viewPO.order_date)],
                     [t('procurement.drawer.fields.expDelivery'),    fmtDate(viewPO.expected_delivery)],
                     [t('procurement.drawer.fields.actualDelivery'), fmtDate(viewPO.actual_delivery)],
-                    [t('procurement.drawer.fields.priority'),        viewPO.priority],
+                    [t('procurement.drawer.fields.priority'),        tv(t, 'wmsprocure.priority', viewPO.priority)],
                     [t('procurement.drawer.fields.site'),            viewPO.site],
                     [t('procurement.drawer.fields.country'),         viewPO.country],
                     [t('procurement.drawer.fields.budgetCode'),     viewPO.budget_code],
@@ -1312,7 +1320,7 @@ export default function Procurement() {
                               <div className="flex items-center gap-2">
                                 <input type="number" min="0" max={it.quantity} defaultValue={received}
                                   disabled={poLocked}
-                                  title={poLocked ? 'Locked, in approval' : undefined}
+                                  title={poLocked ? t('wmsprocure.proc.locked') : undefined}
                                   className="w-20 px-2 py-1 bg-[var(--surface-3)] border border-[var(--border-bright)] rounded text-[var(--text-primary)] text-xs focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                                   onBlur={e => updateItemReceivedQty(viewPO.id, idx, e.target.value)} />
                                 <span className="text-[var(--text-muted)] text-xs">{t('procurement.drawer.markReceivedQty')}</span>
@@ -1327,23 +1335,23 @@ export default function Procurement() {
 
                 {/* Receivable lines (purchase_order_lines) */}
                 <div>
-                  <p className="text-[var(--text-secondary)] text-xs mb-2 uppercase tracking-wide font-medium">Receivable lines</p>
+                  <p className="text-[var(--text-secondary)] text-xs mb-2 uppercase tracking-wide font-medium">{t('wmsprocure.proc.receivableLines')}</p>
                   {poLines === null ? (
-                    <p className="text-xs text-[var(--text-muted)]">Loading lines</p>
+                    <p className="text-xs text-[var(--text-muted)]">{t('wmsprocure.proc.loadingLines')}</p>
                   ) : poLines.length === 0 ? (
-                    <p className="text-xs text-amber-300">No Material Master lines on this PO, so goods cannot be received into stock against it.</p>
+                    <p className="text-xs text-amber-300">{t('wmsprocure.proc.noReceivable')}</p>
                   ) : (
                     <ul className="space-y-1 text-sm">
                       {poLines.map((l) => (
                         <li key={l.id} className="flex justify-between gap-2 border-b border-[var(--border-dim)] py-1">
-                          <span><span className="font-mono text-xs">{l.item_code || 'N/A'}</span> {l.item_name || l.description}</span>
-                          <span className="tabular-nums text-[var(--text-secondary)]">{Number(l.qty_accepted || 0)} of {Number(l.qty_ordered)} received, {outstandingQty(l)} outstanding</span>
+                          <span><span className="font-mono text-xs" dir="ltr">{l.item_code || t('wmsprocure.proc.na')}</span> {l.item_name || l.description}</span>
+                          <span className="tabular-nums text-[var(--text-secondary)]">{t('wmsprocure.proc.lineProgress', { received: Number(l.qty_accepted || 0), ordered: Number(l.qty_ordered), outstanding: outstandingQty(l) })}</span>
                         </li>
                       ))}
                     </ul>
                   )}
                   {poLines && poLines.length > 0 && ['Approved', 'Ordered', 'Partial Delivery'].includes(viewPO.status) && (
-                    <p className="text-xs text-[var(--text-muted)] mt-2">Receive these on Goods Receipt, Receive against a purchase order. That posts the stock movement.</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-2">{t('wmsprocure.proc.receiveHint')}</p>
                   )}
                 </div>
 
@@ -1386,13 +1394,13 @@ export default function Procurement() {
                     supplier: viewPO.vendor_name,
                     item_count: (viewPO.items || []).length,
                   }}
-                  title="Purchase Approval"
+                  title={t('wmsprocure.proc.purchaseApproval')}
                   onStateChange={handleWfStateChange}
                 />
 
                 {poLocked && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
-                    <Lock size={12} /> Locked, in approval
+                    <Lock size={12} /> {t('wmsprocure.proc.locked')}
                   </div>
                 )}
 
@@ -1412,13 +1420,13 @@ export default function Procurement() {
                     site: viewPO.site ?? null,
                     po_no: viewPO.po_number ?? null,
                   }}
-                  title="Goods Receipt (GRN)"
+                  title={t('wmsprocure.proc.grnApproval')}
                   onStateChange={handleGrnStateChange}
                 />
 
                 {(grnState.isActive || grnState.isLocked) && (
                   <div className="flex items-center gap-1.5 text-xs text-[var(--accent)]">
-                    <Package size={12} /> Goods receipt in approval
+                    <Package size={12} /> {t('wmsprocure.proc.grnInApproval')}
                   </div>
                 )}
 
@@ -1426,7 +1434,7 @@ export default function Procurement() {
                 <div className="flex gap-3 pt-2">
                   {caps.procure && <button onClick={() => { if (poLocked) return; const po = viewPO; setViewPO(null); openEdit(po) }}
                     disabled={poLocked}
-                    title={poLocked ? 'Locked, in approval' : undefined}
+                    title={poLocked ? t('wmsprocure.proc.locked') : undefined}
                     className="btn-primary flex-1 disabled:opacity-40 disabled:cursor-not-allowed">
                     <Edit2 size={15} />{t('procurement.drawer.editPo')}
                   </button>}

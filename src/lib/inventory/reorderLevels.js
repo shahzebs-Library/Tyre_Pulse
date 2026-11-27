@@ -14,8 +14,10 @@
  * cannot be measured is null, never 0. Nothing here writes anything: a person
  * applies a suggestion from the register.
  *
- * Pure functions, no I/O.
+ * Pure functions, no I/O. Text is English unless the caller passes `t`
+ * (see src/lib/wmsText.js).
  */
+import { textFn } from '../wmsText'
 
 /** Lead time used when Material Master holds none (0 of 23,274 items carry one today). */
 export const DEFAULT_LEAD_DAYS = 30
@@ -50,7 +52,8 @@ export function leadTimeFor(r, defaultDays = DEFAULT_LEAD_DAYS) {
  *   current:{critical:number|null,min:number|null,reorderQty:number|null}, differs:boolean,
  *   explanation:string }}
  */
-export function suggestReorderLevels(r, usage, { defaultLeadDays = DEFAULT_LEAD_DAYS } = {}) {
+export function suggestReorderLevels(r, usage, { defaultLeadDays = DEFAULT_LEAD_DAYS, t } = {}) {
+  const tx = textFn(t)
   const current = {
     critical: num(r?.critical_level),
     min: num(r?.min_level),
@@ -61,13 +64,13 @@ export function suggestReorderLevels(r, usage, { defaultLeadDays = DEFAULT_LEAD_
     critical: null, min: null, reorderQty: null, current, differs: false, explanation,
   })
 
-  if (!usage) return none('no_code', 'No item code, so usage cannot be measured.')
+  if (!usage) return none('no_code', tx('wmsmsgprocure.reorder.noCode'))
   if (usage.scope === 'country') {
-    return none('country_only', 'This site has not issued the item in the last 12 months; only other sites in the country have. No site rate to size levels from.')
+    return none('country_only', tx('wmsmsgprocure.reorder.countryOnly'))
   }
   const rate = num(usage.avgPerMonth)
   if (usage.scope !== 'site' || rate === null || rate <= 0) {
-    return none('no_usage', 'No issues of this item in the last 12 months.')
+    return none('no_usage', tx('wmsmsgprocure.reorder.noUsage'))
   }
 
   const { days, source } = leadTimeFor(r, defaultLeadDays)
@@ -76,12 +79,8 @@ export function suggestReorderLevels(r, usage, { defaultLeadDays = DEFAULT_LEAD_
   const reorderQty = Math.max(1, up(rate * COVER_MONTHS))
   const differs = current.critical !== critical || current.min !== min || current.reorderQty !== reorderQty
 
-  const leadText = source === 'material_master'
-    ? `${days}-day lead time from Material Master`
-    : `${days}-day default lead time (none set in Material Master)`
-  const explanation = `This site used ${rate} a month over the last 12 months. `
-    + `Critical ${critical} covers the ${leadText}; min ${min} adds half a month of safety stock; `
-    + `reorder ${reorderQty} covers two months.`
+  const leadText = tx(source === 'material_master' ? 'wmsmsgprocure.reorder.leadMaster' : 'wmsmsgprocure.reorder.leadDefault', { days })
+  const explanation = tx('wmsmsgprocure.reorder.explanation', { rate, critical, lead: leadText, min, reorder: reorderQty })
 
   return { ok: true, reason: null, avgPerMonth: rate, leadDays: days, leadSource: source, critical, min, reorderQty, current, differs, explanation }
 }

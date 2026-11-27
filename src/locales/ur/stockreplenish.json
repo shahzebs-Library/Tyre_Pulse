@@ -1,0 +1,111 @@
+{
+  "title": "اسٹاک کی دوبارہ فراہمی",
+  "subtitle": "خریداری انٹیلیجنس - {count} SKUs زیر نگرانی{syncedSuffix}",
+  "syncedSuffix": " · ہم آہنگی {time}",
+  "leadTime": {
+    "daysSuffix": "دن",
+    "editTooltip": "لیڈ ٹائم میں ترمیم کریں",
+    "leadLabel": "لیڈ: {days} دن"
+  },
+  "refreshTooltip": "تازہ کریں",
+  "retry": "دوبارہ کوشش کریں",
+  "kpi": {
+    "needsReorder": "دوبارہ آرڈر درکار",
+    "needsReorderSub": "آئٹمز جن کا اسٹاک {days} دن سے کم ہے",
+    "reorderValue": "دوبارہ آرڈر کی مالیت",
+    "reorderValueSub": "تجویز کردہ آرڈرز",
+    "avgDaysRemaining": "اوسط باقی دن",
+    "avgDaysRemainingSub": "فلیٹ اوسط",
+    "criticalStockouts": "اسٹاک بالکل ختم",
+    "criticalStockoutsSub": "اسٹاک میں صفر مقدار",
+    "overstocked": "ضرورت سے زیادہ اسٹاک",
+    "overstockedSub": "180 دن سے زیادہ کے آئٹمز"
+  },
+  "tabs": {
+    "matrix": "دوبارہ فراہمی میٹرکس",
+    "consumption": "کھپت کا تجزیہ",
+    "orderGenerator": "آرڈر جنریٹر"
+  },
+  "urgency": {
+    "Critical": "انتہائی اہم",
+    "Low": "کم",
+    "Normal": "معمول",
+    "Overstocked": "زیادہ اسٹاک"
+  },
+  "matrix": {
+    "searchPlaceholder": "برانڈ، سائز، سائٹ تلاش کریں...",
+    "clear": "صاف کریں",
+    "itemsCount": "{count} آئٹمز",
+    "emptyTitle": "کوئی اسٹاک ڈیٹا نہیں ملا",
+    "emptyDesc": "دوبارہ فراہمی کی تجاویز دیکھنے کے لیے اسٹاک ریکارڈز شامل کریں",
+    "columns": {
+      "brand": "برانڈ",
+      "size": "سائز",
+      "site": "سائٹ",
+      "inStock": "اسٹاک میں",
+      "onOrder": "آرڈر پر",
+      "dailyUsage": "روزانہ استعمال",
+      "daysLeft": "باقی دن",
+      "suggestQty": "تجویز کردہ مقدار",
+      "estCost": "تخمینی لاگت",
+      "status": "حالت",
+      "action": "کارروائی"
+    },
+    "orderBtn": "آرڈر",
+    "addToOrderTooltip": "آرڈر میں شامل کریں",
+    "legend": "علامات:"
+  },
+  "consumption": {
+    "seasonalNote": "زیادہ موسمی اتار چڑھاؤ پایا گیا (±{pct}%)۔ دوبارہ فراہمی کی مقدار اسی کے مطابق رکھیں۔",
+    "barChartTitle": "ٹاپ 5 ٹائر سائز کے لحاظ سے ماہانہ کھپت (پچھلے 6 ماہ)",
+    "barChartEmpty": "پچھلے 90 دن میں ٹائر اجرا کا کوئی ریکارڈ نہیں",
+    "trendChartTitle": "سائز کے لحاظ سے کھپت کا رجحان",
+    "trendChartEmpty": "سائز کا کوئی ڈیٹا دستیاب نہیں",
+    "matrixTitle": "سائز × سائٹ کھپت میٹرکس (پچھلے 30 دن)",
+    "matrixEmpty": "پچھلے 30 دن میں اجرا کا کوئی ریکارڈ نہیں",
+    "sizeColumn": "سائز",
+    "totalColumn": "کل"
+  },
+  "order": {
+    "totalPoValue": "PO کی کل مالیت",
+    "lineItemsCount": "{count} لائن آئٹمز",
+    "totalUnits": "کل یونٹس",
+    "tyresAcrossLines": "تمام لائنوں میں ٹائر",
+    "sitesCovered": "شامل سائٹس",
+    "uniqueSites": "منفرد سائٹس",
+    "linesTitle": "خریداری آرڈر کی لائنیں",
+    "addLine": "لائن شامل کریں",
+    "emptyTitle": "ابھی کوئی آرڈر لائن نہیں",
+    "emptyDesc": "دوبارہ فراہمی میٹرکس میں \"آرڈر\" پر کلک کریں یا خود لائنیں شامل کریں",
+    "goToMatrix": "دوبارہ فراہمی میٹرکس پر جائیں ←",
+    "columns": {
+      "brand": "برانڈ",
+      "size": "سائز",
+      "site": "سائٹ",
+      "qty": "مقدار",
+      "unitCost": "فی یونٹ لاگت",
+      "total": "کل",
+      "supplier": "سپلائر"
+    },
+    "brandPlaceholder": "برانڈ",
+    "sizePlaceholder": "سائز",
+    "sitePlaceholder": "سائٹ",
+    "supplierPlaceholder": "سپلائر کا نام",
+    "lineCount": "{count} لائنیں",
+    "unitsTotal": "کل {count} یونٹس",
+    "totalPoValueLabel": "PO کی کل مالیت:",
+    "errors": {
+      "noLines": "PO بنانے سے پہلے کم از کم ایک آرڈر لائن شامل کریں۔",
+      "noSupplier": "PO کا وینڈر مقرر کرنے کے لیے کم از کم ایک لائن پر سپلائر کا نام درج کریں۔",
+      "createFailed": "خریداری آرڈر نہیں بن سکا۔"
+    },
+    "createSuccess": "خریداری آرڈر {poNumber} ڈرافٹ کے طور پر بن گیا۔ اسے خریداری میں منظم کریں۔",
+    "openProcurement": "خریداری کھولیں",
+    "creatingPo": "PO بن رہا ہے...",
+    "createPo": "خریداری آرڈر بنائیں",
+    "exportExcel": "PO کو Excel میں ایکسپورٹ کریں",
+    "exportPdf": "PO کو PDF میں ایکسپورٹ کریں",
+    "clearAllLines": "تمام لائنیں صاف کریں",
+    "manageInProcurement": "مکمل POs خریداری میں منظم کریں ←"
+  }
+}

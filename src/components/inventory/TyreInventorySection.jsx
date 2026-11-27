@@ -71,8 +71,8 @@ export default function TyreInventorySection({ scope, can, onNavigate }) {
           empty={t('inventory.tyres.conflictsEmpty')} what={t('inventory.objects.tyre_custody_conflicts')} noun={t('inventory.tyres.conflictNoun')}
           onRowClick={openConflict}
           columns={[
-            { key: 'serial_no', header: t('inventory.common.serial'), cell: (r) => <span className="inv-mono">{r.serial_no || 'N/A'}</span> },
-            { key: 'conflict_type', header: t('inventory.tyres.conflict'), cell: (r) => (r.conflict_type || 'N/A').replace(/_/g, ' ') },
+            { key: 'serial_no', header: t('inventory.common.serial'), cell: (r) => <span className="inv-mono">{r.serial_no || t('wmsfloor.common.na')}</span> },
+            { key: 'conflict_type', header: t('inventory.tyres.conflict'), cell: (r) => (r.conflict_type || t('wmsfloor.common.na')).replace(/_/g, ' ') },
             { key: 'status', header: t('inventory.common.status'), cell: (r) => <StatusPill value={r.status || 'open'} tone="bad" /> },
             { key: 'detected_at', header: t('inventory.tyres.detected'), cell: (r) => fmtDateTime(r.detected_at || r.created_at) },
           ]} />
@@ -108,8 +108,8 @@ export default function TyreInventorySection({ scope, can, onNavigate }) {
           columns={[
             { key: 'serial_no', header: t('inventory.common.serial'), cell: (r) => <span className="inv-mono">{r.serial_no}</span> },
             { key: 'custody_state', header: t('inventory.tyres.state'), cell: (r) => <StatusPill value={r.custody_state} tone={CUSTODY_TONE[r.custody_state]} label={t(`inventory.custody.${r.custody_state}`)} /> },
-            { key: 'brand', header: t('inventory.tyres.brandSize'), cell: (r) => [r.brand, r.size].filter(Boolean).join(' ') || <span className="cc-na">N/A</span> },
-            { key: 'where', header: t('inventory.tyres.where'), cell: (r) => (r.asset_no ? `${r.asset_no}${r.position ? ` ${r.position}` : ''}` : r.location_code || r.site || <span className="cc-na">N/A</span>) },
+            { key: 'brand', header: t('inventory.tyres.brandSize'), cell: (r) => [r.brand, r.size].filter(Boolean).join(' ') || <span className="cc-na">{t('wmsfloor.common.na')}</span> },
+            { key: 'where', header: t('inventory.tyres.where'), cell: (r) => (r.asset_no ? `${r.asset_no}${r.position ? ` ${r.position}` : ''}` : r.location_code || r.site || <span className="cc-na">{t('wmsfloor.common.na')}</span>) },
             ...(showValue ? [{ key: 'purchase_cost', header: t('inventory.tyres.purchaseCost'), numeric: true, cell: (r) => formatMoney(r.purchase_cost, r.currency) }] : []),
           ]} />
       </SectionCard>
@@ -121,7 +121,7 @@ export default function TyreInventorySection({ scope, can, onNavigate }) {
             <Note tone="warn">{t('inventory.tyres.noAutoFix')}</Note>
             {conflictEvidence(conflict).length ? (
               <dl className="inv-dl">
-                {conflictEvidence(conflict).map((e, i) => (<Fragment key={i}><dt>{e.label}</dt><dd>{e.value || 'N/A'}</dd></Fragment>))}
+                {conflictEvidence(conflict).map((e, i) => (<Fragment key={i}><dt>{e.label}</dt><dd>{e.value || t('wmsfloor.common.na')}</dd></Fragment>))}
               </dl>
             ) : <div className="cc-empty">{t('inventory.tyres.noEvidence')}</div>}
             <Link className="cc-btn-ghost" to={`/tyre-passport/${encodeURIComponent(conflict.serial_no || '')}`}>

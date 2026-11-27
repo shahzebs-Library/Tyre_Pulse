@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { X, CheckCircle2, AlertTriangle, XCircle, CircleDot } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { vibrate } from '../../hooks/useWakeLock'
 import { CHECKLIST_LABELS } from './checklistLabels'
+import TyreConditionGlyph from '../tyre/TyreConditionGlyph'
+import { conditionKind, CONDITION_KIND, kindHex, currentTheme } from '../../lib/tyreLayoutSpec'
 
 /**
  * Bottom sheet for recording ONE wheel on the daily checklist: condition and
@@ -15,12 +17,11 @@ import { CHECKLIST_LABELS } from './checklistLabels'
  * colours stay semantic, and each carries an icon and its word, so colour is
  * never the only signal.
  */
-const CONDITIONS = [
-  { cond: 'Good', Icon: CheckCircle2, activeBg: '#f0fdf4', activeBorder: '#22c55e', activeText: '#166534', key: 'good' },
-  { cond: 'Wear', Icon: AlertTriangle, activeBg: '#fefce8', activeBorder: '#eab308', activeText: '#854d0e', key: 'wear' },
-  { cond: 'Damage', Icon: XCircle, activeBg: '#fef2f2', activeBorder: '#ef4444', activeText: '#991b1b', key: 'damage' },
-  { cond: 'Puncture', Icon: CircleDot, activeBg: '#fff1f2', activeBorder: '#dc2626', activeText: '#7f1d1d', key: 'puncture' },
-]
+// The words the web form stores (unchanged vocabulary, plus Flat and Missing,
+// which the field app already records, so web and phone offer the same six). Colour, picture and label come from the shared
+// tyre map (conditions.kinds), so a tyre man who cannot read still knows each
+// button: green tick, amber worn tread, red nail, red flat tyre, red warning.
+const CONDITIONS = ['Good', 'Wear', 'Damage', 'Puncture', 'Flat', 'Missing']
 
 export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, lang, onUpdate, onNext, onPrev, onClose }) {
   const { t } = useLanguage()
@@ -38,7 +39,7 @@ export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCoun
 
   function handleConditionSelect(cond) {
     onUpdate('condition', cond)
-    if (cond === 'Puncture' || cond === 'Damage') vibrate([100, 50, 100, 50, 200]) // double buzz for critical
+    if (cond === 'Puncture' || cond === 'Damage' || cond === 'Flat') vibrate([100, 50, 100, 50, 200]) // double buzz for critical
     else vibrate(40) // light tap for good/wear
   }
 
@@ -102,24 +103,34 @@ export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCoun
           <p className="text-[11px] font-bold uppercase tracking-widest mb-2.5 text-[var(--text-muted)]" id={`${titleId}-cond`}>
             {L.condition}
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4" role="group" aria-labelledby={`${titleId}-cond`}>
-            {CONDITIONS.map(({ cond, Icon, activeBg, activeBorder, activeText, key }) => {
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4" role="group" aria-labelledby={`${titleId}-cond`}>
+            {CONDITIONS.map((cond) => {
               const on = pos.condition === cond
+              const kind = conditionKind(cond)
+              // Selected: filled with the deep (light palette) colour and white
+              // ink, at least 4.5:1 in both themes. Not selected: the card
+              // surface with the coloured picture and a coloured border.
+              const deep = kindHex(kind, 'light')
+              const band = kindHex(kind, currentTheme())
+              const label = t(`common.tyreCondition.${kind}`) || CONDITION_KIND[kind]?.label || cond
               return (
                 <button
                   key={cond}
                   type="button"
                   aria-pressed={on}
+                  aria-label={label}
+                  data-kind={kind}
                   onClick={() => handleConditionSelect(cond)}
-                  className="py-3 min-h-[56px] rounded-2xl flex flex-col items-center gap-1.5 transition-all active:scale-95"
+                  className="py-2.5 min-h-[72px] rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95"
                   style={{
-                    background: on ? activeBg : 'var(--surface-2)',
-                    border: `2px solid ${on ? activeBorder : 'var(--border-subtle)'}`,
-                    color: on ? activeText : 'var(--text-secondary)',
+                    background: on ? deep : 'var(--surface-2)',
+                    border: `${on ? 3 : 2}px solid ${on ? 'var(--text-primary)' : band}`,
+                    color: on ? '#ffffff' : 'var(--text-primary)',
+                    boxShadow: on ? '0 4px 12px rgba(0,0,0,0.25)' : 'none',
                   }}
                 >
-                  <Icon size={20} aria-hidden />
-                  <span className="text-[11px] font-bold">{L[key]}</span>
+                  <TyreConditionGlyph kind={kind} size={30} color={on ? '#ffffff' : band} strokeWidth={2.6} />
+                  <span className="text-xs font-extrabold">{label}</span>
                 </button>
               )
             })}

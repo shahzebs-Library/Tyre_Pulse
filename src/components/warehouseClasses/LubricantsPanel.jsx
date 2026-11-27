@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react'
 import { Droplets, Truck, ClipboardList } from 'lucide-react'
 import { Kpi, KitTable } from '../commandCenter/kit'
 import Modal from '../ui/Modal'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { useInvQuery, ErrorNote, Note, SectionCard, Field, SearchBox, fmtDate, fmtDateTime, alignNumeric } from '../inventory/InvUi'
 import { newIdempotencyKey } from '../../lib/api/inventory'
 import { loadLubricantStock, listLubricantConsumption, listDispenses, dispenseLubricant, setLubricantGrade } from '../../lib/api/warehouseAssets'
@@ -23,9 +24,11 @@ import { monthsAgoStart } from '../../lib/inventory/warehouseAssets'
 import { formatMoney, formatQty } from '../../lib/inventory/inventoryMoney'
 import { toUserMessage } from '../../lib/inventory/errorText'
 
-const PERIODS = [{ v: 3, l: 'Last 3 months' }, { v: 6, l: 'Last 6 months' }, { v: 12, l: 'Last 12 months' }]
+const PERIODS = [3, 6, 12]
 
 export default function LubricantsPanel({ scope, can = () => false }) {
+  const { t } = useLanguage()
+  const na = t('wmsparts.common.na')
   const [months, setMonths] = useState(6)
   const [term, setTerm] = useState('')
   const [dispenseFor, setDispenseFor] = useState(null)
@@ -54,32 +57,29 @@ export default function LubricantsPanel({ scope, can = () => false }) {
   return (
     <div className="inv-hub" style={{ gap: 14 }}>
       <div className="inv-kpis">
-        <Kpi icon={Droplets} tone="t-blue" loading={stock.loading && !stock.data} value={stock.data ? stock.data.items.length : null} label="Lubricant items" />
-        <Kpi icon={ClipboardList} tone="t-amber" loading={stock.loading && !stock.data} value={stock.data ? graded : null} label="With a grade recorded" />
-        <Kpi icon={Truck} tone="t-green" loading={usage.loading && !usage.data} display={notSetUp ? 'Not set up' : undefined}
-          value={notSetUp ? null : byAsset.length} label="Assets that received lubricant" />
+        <Kpi icon={Droplets} tone="t-blue" loading={stock.loading && !stock.data} value={stock.data ? stock.data.items.length : null} label={t('wmsparts.lub.kpi.items')} />
+        <Kpi icon={ClipboardList} tone="t-amber" loading={stock.loading && !stock.data} value={stock.data ? graded : null} label={t('wmsparts.lub.kpi.graded')} />
+        <Kpi icon={Truck} tone="t-green" loading={usage.loading && !usage.data} display={notSetUp ? t('wmsparts.lub.notSetUp') : undefined}
+          value={notSetUp ? null : byAsset.length} label={t('wmsparts.lub.kpi.assets')} />
       </div>
 
       {notSetUp && (
-        <Note tone="warn" title="Dispensing to an asset is not set up yet">
-          Lubricant grade, dispensing with asset and job card, and the consumption report need migration 20261124133000
-          (not applied). Stock below is read from the register as it is today.
-        </Note>
+        <Note tone="warn" title={t('wmsparts.lub.notSetUpTitle')}>{t('wmsparts.lub.notSetUpBody')}</Note>
       )}
 
-      <SectionCard title="Lubricant stock" sub="Quantities are in the unit each line is stocked in. A missing unit is shown as Not recorded.">
+      <SectionCard title={t('wmsparts.lub.stockTitle')} sub={t('wmsparts.lub.stockSub')}>
         <div className="inv-scroll">
-          <KitTable compact loading={stock.loading && !stock.data} rows={lines} empty="No lubricant is in stock for this scope."
+          <KitTable compact loading={stock.loading && !stock.data} rows={lines} empty={t('wmsparts.lub.stockEmpty')}
             columns={alignNumeric([
-              { key: 'code', header: 'Item', cell: (r) => `${r.item?.item_code || 'No code'}: ${r.item?.item_name || ''}` },
-              { key: 'grade', header: 'Grade', cell: (r) => r.item?.lubricant_grade || <span className="cc-na">Not recorded</span> },
-              { key: 'site', header: 'Site' },
-              { key: 'uom', header: 'Unit', cell: (r) => r.uom || r.item?.base_uom || r.item?.uom || <span className="cc-na">Not recorded</span> },
-              { key: 'qty_on_hand', header: 'On hand', numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
+              { key: 'code', header: t('wmsparts.common.item'), cell: (r) => `${r.item?.item_code || t('wmsparts.common.noCode')}: ${r.item?.item_name || ''}` },
+              { key: 'grade', header: t('wmsparts.lub.grade'), cell: (r) => r.item?.lubricant_grade || <span className="cc-na">{t('wmsparts.common.notRecorded')}</span> },
+              { key: 'site', header: t('wmsparts.common.site') },
+              { key: 'uom', header: t('wmsparts.lub.unit'), cell: (r) => r.uom || r.item?.base_uom || r.item?.uom || <span className="cc-na">{t('wmsparts.common.notRecorded')}</span> },
+              { key: 'qty_on_hand', header: t('wmsparts.common.onHand'), numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
               { key: 'act', header: '', sortable: false, cell: (r) => (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {canDispense && <button type="button" className="cc-btn-ghost" onClick={() => setDispenseFor(r)}>Dispense</button>}
-                  {canGrade && <button type="button" className="cc-btn-ghost" onClick={() => setGradeFor(r.item)}>Grade</button>}
+                  {canDispense && <button type="button" className="cc-btn-ghost" onClick={() => setDispenseFor(r)}>{t('wmsparts.lub.dispense')}</button>}
+                  {canGrade && <button type="button" className="cc-btn-ghost" onClick={() => setGradeFor(r.item)}>{t('wmsparts.lub.grade')}</button>}
                 </div>
               ) },
             ])} />
@@ -87,43 +87,43 @@ export default function LubricantsPanel({ scope, can = () => false }) {
       </SectionCard>
 
       {!notSetUp && (
-        <SectionCard title="Consumption per asset" sub="In-app dispenses and ERP oil issues. Values per currency; lines with no cost are counted as unvalued."
+        <SectionCard title={t('wmsparts.lub.consTitle')} sub={t('wmsparts.lub.consSub')}
           action={(
-            <select className="cc-select" aria-label="Period" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
-              {PERIODS.map((p) => <option key={p.v} value={p.v}>{p.l}</option>)}
+            <select className="cc-select" aria-label={t('wmsparts.lub.period')} value={months} onChange={(e) => setMonths(Number(e.target.value))}>
+              {PERIODS.map((m) => <option key={m} value={m}>{t('wmsparts.lub.lastMonths', { n: m })}</option>)}
             </select>
           )}>
           {usage.error && <ErrorNote error={usage.error} onRetry={usage.retry} />}
-          {usage.data?.truncated && <Note tone="warn">Only part of the period was read. Choose a site or a shorter period.</Note>}
-          <SearchBox value={term} onChange={setTerm} placeholder="Asset number" label="Search assets" />
+          {usage.data?.truncated && <Note tone="warn">{t('wmsparts.lub.consTruncated')}</Note>}
+          <SearchBox value={term} onChange={setTerm} placeholder={t('wmsparts.common.assetNumber')} label={t('wmsparts.lub.searchAssets')} />
           <div className="inv-scroll" style={{ marginTop: 8 }}>
-            <KitTable compact loading={usage.loading && !usage.data} rows={shownAssets} empty="No lubricant was issued to an asset in this period."
+            <KitTable compact loading={usage.loading && !usage.data} rows={shownAssets} empty={t('wmsparts.lub.consEmpty')}
               columns={alignNumeric([
-                { key: 'asset_no', header: 'Asset' },
-                { key: 'app', header: 'Dispensed in app', cell: (r) => qtyByUnitText(r.app.qty) },
-                { key: 'erp', header: 'ERP oil issues', cell: (r) => qtyByUnitText(r.erp.qty) },
-                ...(showValue ? [{ key: 'value', header: 'Known value', numeric: true, cell: (r) => (Object.keys(r.value).length
-                  ? Object.entries(r.value).map(([c, v]) => formatMoney(v, c)).join(' | ') : 'N/A') }] : []),
-                { key: 'unvaluedLines', header: 'Unvalued lines', numeric: true, cell: (r) => r.unvaluedLines },
-                { key: 'lastMonth', header: 'Latest month', cell: (r) => (r.lastMonth ? String(r.lastMonth).slice(0, 7) : 'N/A') },
+                { key: 'asset_no', header: t('wmsparts.common.asset') },
+                { key: 'app', header: t('wmsparts.lub.inApp'), cell: (r) => qtyByUnitText(r.app.qty) },
+                { key: 'erp', header: t('wmsparts.lub.erpOil'), cell: (r) => qtyByUnitText(r.erp.qty) },
+                ...(showValue ? [{ key: 'value', header: t('wmsparts.lub.knownValue'), numeric: true, cell: (r) => (Object.keys(r.value).length
+                  ? Object.entries(r.value).map(([c, v]) => formatMoney(v, c)).join(' | ') : na) }] : []),
+                { key: 'unvaluedLines', header: t('wmsparts.lub.unvalued'), numeric: true, cell: (r) => r.unvaluedLines },
+                { key: 'lastMonth', header: t('wmsparts.lub.latestMonth'), cell: (r) => (r.lastMonth ? String(r.lastMonth).slice(0, 7) : na) },
               ])} />
           </div>
         </SectionCard>
       )}
 
       {!notSetUp && (
-        <SectionCard title="Recent dispenses" sub="Newest first.">
+        <SectionCard title={t('wmsparts.lub.recentTitle')} sub={t('wmsparts.lub.recentSub')}>
           {recent.error && <ErrorNote error={recent.error} onRetry={recent.retry} />}
           <div className="inv-scroll">
-            <KitTable compact loading={recent.loading && !recent.data} rows={recent.data?.rows || []} empty="Nothing dispensed in the app yet."
+            <KitTable compact loading={recent.loading && !recent.data} rows={recent.data?.rows || []} empty={t('wmsparts.lub.recentEmpty')}
               columns={alignNumeric([
-                { key: 'dispensed_at', header: 'When', cell: (r) => fmtDateTime(r.dispensed_at) },
-                { key: 'asset_no', header: 'Asset' },
-                { key: 'job_card_no', header: 'Job card', cell: (r) => r.job_card_no || 'None' },
-                { key: 'item', header: 'Item', cell: (r) => itemById.get(r.item_id)?.item_code || 'N/A' },
-                { key: 'qty', header: 'Quantity', numeric: true, cell: (r) => `${formatQty(r.qty)}${r.uom ? ` ${r.uom}` : ''}` },
-                { key: 'meter', header: 'Meter', cell: (r) => (r.meter_reading === null || r.meter_reading === undefined ? '' : `${formatQty(r.meter_reading)} ${r.meter_type || ''}`) },
-                { key: 'site', header: 'Site' },
+                { key: 'dispensed_at', header: t('wmsparts.common.when'), cell: (r) => fmtDateTime(r.dispensed_at) },
+                { key: 'asset_no', header: t('wmsparts.common.asset') },
+                { key: 'job_card_no', header: t('wmsparts.common.jobCard'), cell: (r) => r.job_card_no || t('wmsparts.common.none') },
+                { key: 'item', header: t('wmsparts.common.item'), cell: (r) => itemById.get(r.item_id)?.item_code || na },
+                { key: 'qty', header: t('wmsparts.common.quantity'), numeric: true, cell: (r) => `${formatQty(r.qty)}${r.uom ? ` ${r.uom}` : ''}` },
+                { key: 'meter', header: t('wmsparts.lub.meter'), cell: (r) => (r.meter_reading === null || r.meter_reading === undefined ? '' : `${formatQty(r.meter_reading)} ${r.meter_type === 'hours' ? t('wmsparts.lub.hours') : r.meter_type || ''}`) },
+                { key: 'site', header: t('wmsparts.common.site') },
               ])} />
           </div>
         </SectionCard>
@@ -132,12 +132,13 @@ export default function LubricantsPanel({ scope, can = () => false }) {
       {dispenseFor && <DispenseModal line={dispenseFor} onClose={() => setDispenseFor(null)}
         onDone={() => { setDispenseFor(null); stock.retry(); usage.retry(); recent.retry() }} />}
       {gradeFor && <GradeModal item={gradeFor} onClose={() => setGradeFor(null)} onDone={() => { setGradeFor(null); stock.retry() }} />}
-      <p className="cc-card-sub">Data from {fmtDate(fromMonth)}.</p>
+      <p className="cc-card-sub">{t('wmsparts.lub.dataFrom', { date: fmtDate(fromMonth) })}</p>
     </div>
   )
 }
 
 function DispenseModal({ line, onClose, onDone }) {
+  const { t } = useLanguage()
   const [form, setForm] = useState({ qty: '', asset_no: '', job_card_no: '', meter_reading: '', meter_type: 'km', note: '' })
   // One key per request: an identical retry after a network error reuses it, so
   // the dispense is never posted twice. A changed form, or a refusal for lack of
@@ -151,10 +152,10 @@ function DispenseModal({ line, onClose, onDone }) {
   // under a new key could post a second dispense.
   const [held, setHeld] = useState(false)
   const set = (k) => (e) => { if (held) return; setKey(newIdempotencyKey()); setForm((f) => ({ ...f, [k]: e.target.value })) }
-  const unit = line.uom || line.item?.base_uom || line.item?.uom || 'units as stocked'
+  const unit = line.uom || line.item?.base_uom || line.item?.uom || t('wmsparts.lub.unitsAsStocked')
 
   async function submit() {
-    const v = validateDispense(line, form)
+    const v = validateDispense(line, form, t)
     if (v.error) { setError(v.error); return }
     setBusy(true); setError(null)
     try {
@@ -164,44 +165,44 @@ function DispenseModal({ line, onClose, onDone }) {
         meter_reading: form.meter_reading === '' ? null : Number(form.meter_reading),
         meter_type: form.meter_reading === '' ? null : form.meter_type, note: form.note.trim() || null,
       }, key)
-      if (r?.status === 'refused_shortage') { setKey(newIdempotencyKey()); setError('Not enough free stock on this line.'); return }
+      if (r?.status === 'refused_shortage') { setKey(newIdempotencyKey()); setError(t('wmsparts.lub.shortage')); return }
       onDone()
     } catch (err) {
       setHeld(true)
-      setError(`${toUserMessage(err, 'The dispense could not be saved.')} Press Dispense again to retry the same request; the form is held so it is never posted twice.`)
+      setError(`${toUserMessage(err, t('wmsparts.lub.dispenseFailed'))} ${t('wmsparts.lub.retryHeld')}`)
     } finally { setBusy(false) }
   }
 
   return (
-    <Modal className="cc inv-panel" open onClose={() => !busy && onClose()} size="md" title="Dispense lubricant"
-      subtitle={`${line.item?.item_code || 'No code'}: ${line.item?.item_name || ''} (${formatQty(line.qty_on_hand)} on hand at ${line.site})`}
+    <Modal className="cc inv-panel" open onClose={() => !busy && onClose()} size="md" title={t('wmsparts.lub.dispenseTitle')}
+      subtitle={`${line.item?.item_code || t('wmsparts.common.noCode')}: ${line.item?.item_name || ''} (${t('wmsparts.lub.onHandAt', { qty: formatQty(line.qty_on_hand), site: line.site })})`}
       footer={(
         <div className="inv-actions">
-          <button type="button" className="cc-btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="button" className="cc-btn" onClick={submit} disabled={busy}>{busy ? 'Saving...' : 'Dispense'}</button>
+          <button type="button" className="cc-btn-ghost" onClick={onClose} disabled={busy}>{t('wmsparts.common.cancel')}</button>
+          <button type="button" className="cc-btn" onClick={submit} disabled={busy}>{busy ? t('wmsparts.common.saving') : t('wmsparts.lub.dispense')}</button>
         </div>
       )}>
       <div className="inv-form">
         {error && <p className="inv-err" role="alert">{error}</p>}
-        <Field label={`Quantity (${unit})`} id="ld-qty">
+        <Field label={t('wmsparts.lub.qtyUnit', { unit })} id="ld-qty">
           <input id="ld-qty" className="cc-input" type="number" min="0" step="any" value={form.qty} onChange={set('qty')} />
         </Field>
-        <Field label="Asset number" id="ld-asset">
+        <Field label={t('wmsparts.common.assetNumber')} id="ld-asset">
           <input id="ld-asset" className="cc-input" value={form.asset_no} onChange={set('asset_no')} maxLength={60} />
         </Field>
-        <Field label="Job card (must be this asset's)" id="ld-jc" full>
+        <Field label={t('wmsparts.lub.jobCardOwn')} id="ld-jc" full>
           <input id="ld-jc" className="cc-input" value={form.job_card_no} onChange={set('job_card_no')} maxLength={80} />
         </Field>
-        <Field label="Meter reading (optional)" id="ld-meter">
+        <Field label={t('wmsparts.lub.meterOptional')} id="ld-meter">
           <input id="ld-meter" className="cc-input" type="number" min="0" step="any" value={form.meter_reading} onChange={set('meter_reading')} />
         </Field>
-        <Field label="Reading in" id="ld-mtype">
+        <Field label={t('wmsparts.lub.readingIn')} id="ld-mtype">
           <select id="ld-mtype" className="cc-select" value={form.meter_type} onChange={set('meter_type')}>
             <option value="km">km</option>
-            <option value="hours">hours</option>
+            <option value="hours">{t('wmsparts.lub.hours')}</option>
           </select>
         </Field>
-        <Field label="Note" id="ld-note" full>
+        <Field label={t('wmsparts.common.note')} id="ld-note" full>
           <input id="ld-note" className="cc-input" value={form.note} onChange={set('note')} maxLength={400} />
         </Field>
       </div>
@@ -210,6 +211,7 @@ function DispenseModal({ line, onClose, onDone }) {
 }
 
 function GradeModal({ item, onClose, onDone }) {
+  const { t } = useLanguage()
   const [grade, setGrade] = useState(item.lubricant_grade || '')
   const [uom, setUom] = useState(item.base_uom || '')
   const [busy, setBusy] = useState(false)
@@ -221,33 +223,33 @@ function GradeModal({ item, onClose, onDone }) {
       await setLubricantGrade({ item_id: item.id, lubricant_grade: grade.trim() || null, base_uom: uom || null })
       onDone()
     } catch (err) {
-      setError(toUserMessage(err, 'The grade could not be saved.'))
+      setError(toUserMessage(err, t('wmsparts.lub.gradeFailed')))
     } finally { setBusy(false) }
   }
 
   return (
-    <Modal className="cc inv-panel" open onClose={() => !busy && onClose()} size="sm" title="Lubricant grade"
+    <Modal className="cc inv-panel" open onClose={() => !busy && onClose()} size="sm" title={t('wmsparts.lub.gradeTitle')}
       subtitle={`${item.item_code}: ${item.item_name || ''}`}
       footer={(
         <div className="inv-actions">
-          <button type="button" className="cc-btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="button" className="cc-btn" onClick={submit} disabled={busy}>{busy ? 'Saving...' : 'Save'}</button>
+          <button type="button" className="cc-btn-ghost" onClick={onClose} disabled={busy}>{t('wmsparts.common.cancel')}</button>
+          <button type="button" className="cc-btn" onClick={submit} disabled={busy}>{busy ? t('wmsparts.common.saving') : t('wmsparts.common.save')}</button>
         </div>
       )}>
       <div className="inv-form">
         {error && <p className="inv-err" role="alert">{error}</p>}
-        <Field label="Grade (for example SAE 15W-40)" id="lg-grade" full>
+        <Field label={t('wmsparts.lub.gradeLabel')} id="lg-grade" full>
           <input id="lg-grade" className="cc-input" value={grade} onChange={(e) => setGrade(e.target.value)} maxLength={60} />
         </Field>
-        <Field label="Stock unit" id="lg-uom" full>
+        <Field label={t('wmsparts.lub.stockUnit')} id="lg-uom" full>
           <select id="lg-uom" className="cc-select" value={uom} onChange={(e) => setUom(e.target.value)}>
-            <option value="">Not recorded</option>
-            <option value="L">Litre (L)</option>
-            <option value="ML">Millilitre (ML)</option>
-            <option value="KG">Kilogram (KG)</option>
-            <option value="PAIL">Pail</option>
-            <option value="DRUM">Drum</option>
-            <option value="EA">Each</option>
+            <option value="">{t('wmsparts.common.notRecorded')}</option>
+            <option value="L">{t('wmsparts.lub.uom.L')}</option>
+            <option value="ML">{t('wmsparts.lub.uom.ML')}</option>
+            <option value="KG">{t('wmsparts.lub.uom.KG')}</option>
+            <option value="PAIL">{t('wmsparts.lub.uom.PAIL')}</option>
+            <option value="DRUM">{t('wmsparts.lub.uom.DRUM')}</option>
+            <option value="EA">{t('wmsparts.lub.uom.EA')}</option>
           </select>
         </Field>
       </div>

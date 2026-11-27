@@ -29,8 +29,13 @@ describe('TyreBoard', () => {
     expect(container.querySelectorAll('.tb-card')).toHaveLength(4)
     expect(screen.getByText('LHF')).toBeTruthy()
     expect(screen.getByText('12.5')).toBeTruthy()
-    expect(screen.getByText('Damaged')).toBeTruthy()
-    expect(screen.getByText('Worn')).toBeTruthy()
+    expect(screen.getByText('Damaged', { selector: '.tb-cond' })).toBeTruthy()
+    expect(screen.getByText('Worn', { selector: '.tb-cond' })).toBeTruthy()
+    // Each card carries its condition picture, the same as the legend.
+    const kinds = [...container.querySelectorAll('.tb-card i.tb-dot')].map((d) => d.getAttribute('data-kind'))
+    expect(new Set(kinds)).toEqual(new Set(['good', 'damaged', 'worn', 'none']))
+    const legend = [...container.querySelectorAll('.tb-legend i.tb-dot')].map((d) => d.getAttribute('data-kind'))
+    expect(legend).toEqual(['good', 'worn', 'puncture', 'flat', 'damaged', 'missing', 'none'])
     // RR has no reading at all
     expect(screen.getByText('Not recorded', { selector: '.tb-muted' })).toBeTruthy()
     expect(screen.getByText(/4 tyres, 3 recorded/)).toBeTruthy()

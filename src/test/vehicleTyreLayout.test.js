@@ -17,6 +17,7 @@ import {
   LAYOUT_SLOTS, LAYOUT_KEYS, NO_TYRE_EQUIPMENT,
 } from '../lib/vehicleTyreLayout'
 import { canonicalToSlotId, slotDisplayCode } from '../lib/tyreBay'
+import { LAYOUT_GEOMETRY } from '../lib/tyreLayoutSpec'
 
 // The five vehicle_type spellings that carry assets in the live register.
 const LIVE_PUMP_FAMILY = [
@@ -164,33 +165,17 @@ describe('layout integrity', () => {
     }
   })
 
-  // The diagram file holds the drawing coordinates; this module holds the slot
-  // ids. A layout drawn with wheels the position list does not carry renders
-  // unlabelled wheels, so the two are pinned to each other by source scan
-  // (importing the component would drag React and framer-motion into a pure test).
-  it('the diagram component draws exactly these layouts and slots', () => {
+  // The diagram, the PDF and the phone all draw from the shared tyre map
+  // (docs/document-specs/tyre-layouts.json), so a layout's wheels and its
+  // position list are one list by construction. This pins that the diagram
+  // component reads that map rather than keeping a private copy of it.
+  it('the diagram component draws the shared tyre map, not a private copy', () => {
     const src = fs.readFileSync(
-      path.join(process.cwd(), 'src/components/VehicleTyreDiagram.jsx'), 'utf8').replace(/\r\n/g, '\n')
-    const body = src.slice(src.indexOf('const LAYOUTS = {'))
-    expect(body).toBeTruthy()
-
-    const drawn = {}
-    let current = null
-    for (const line of body.split('\n')) {
-      const key = line.match(/^ {2}'?([A-Za-z][A-Za-z0-9 x-]*)'?: \{$/)
-      if (key) { current = key[1]; drawn[current] = []; continue }
-      const tyre = line.match(/^\s*\{ id: '([A-Za-z0-9]+)'/)
-      if (tyre && current) drawn[current].push(tyre[1])
-      if (line.startsWith('};')) break
-    }
-
-    // The scan must actually have found something, or this test passes vacuously.
-    // Axle variants (e.g. 'Concrete pump 4-axle') are derived from a base layout after
-    // the literal map, so the scan cannot see them; pumpAxles.test.js covers them.
-    const literalKeys = LAYOUT_KEYS.filter((k) => !/ \d-axle$/.test(k))
-    expect(Object.keys(drawn).length).toBe(literalKeys.length)
-    for (const key of literalKeys) {
-      expect(drawn[key], `diagram is missing the ${key} layout`).toEqual([...LAYOUT_SLOTS[key]])
+      path.join(process.cwd(), 'src/components/VehicleTyreDiagram.jsx'), 'utf8')
+    expect(src).toMatch(/LAYOUT_GEOMETRY/)
+    expect(src).not.toMatch(/\{ id: 'F1L',\s+x:/)
+    for (const key of LAYOUT_KEYS) {
+      expect(LAYOUT_GEOMETRY[key].tyres.map((t) => t.id), key).toEqual([...LAYOUT_SLOTS[key]])
     }
   })
 

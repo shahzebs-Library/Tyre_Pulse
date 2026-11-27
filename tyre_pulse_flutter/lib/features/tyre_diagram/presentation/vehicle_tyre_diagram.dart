@@ -29,9 +29,11 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_matcher.da
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_position_struct.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_slot.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_body_painter.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_glyph.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_labels.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_pending.dart';
+import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_risk_colors.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_wheel_painter.dart';
 
 /// The interactive tyre diagram for one vehicle.
@@ -337,6 +339,13 @@ class VehicleTyreDiagram extends StatelessWidget {
     );
   }
 
+  Map<String, Object?>? _entryByStoredCode(String layoutKey, String slotId) {
+    for (final MapEntry<String, Map<String, Object?>> e in tyreData.entries) {
+      if (slotForStoredPosition(layoutKey, e.key) == slotId) return e.value;
+    }
+    return null;
+  }
+
   _ResolvedWheel _resolveWheel(
     DiagramLayout layout,
     MatchedTyreSlot tyre,
@@ -345,8 +354,11 @@ class VehicleTyreDiagram extends StatelessWidget {
     // Section 7.4's double lookup: an older record may still be stored
     // under the layout's internal id even when the caller's position list
     // carries the canonical code (or vice versa).
-    final Map<String, Object?>? entry =
-        tyreData[tyre.positionId] ?? tyreData[tyre.id];
+    // A record keyed by its position code (LHCO, RHR2-O) or a confirmed
+    // pump spelling (LHRCO) is read too, through the shared tyre map.
+    final Map<String, Object?>? entry = tyreData[tyre.positionId] ??
+        tyreData[tyre.id] ??
+        _entryByStoredCode(layout.key, tyre.id);
     // An unchecked seeded Good value is not a result. Keep the condition
     // nullable so paint, the selected summary and screen-reader semantics all
     // agree that the wheel is not measured until there is deliberate evidence.
@@ -925,23 +937,8 @@ TpStatus _captureTone(_ResolvedWheel wheel) =>
 /// outshouted the one red wheel that actually needs attention. "Not
 /// measured" still cannot be mistaken for a clean result: it keeps its own
 /// minus icon, its dashed leader, and its own words on the card.
-TpStatusColors _captureColors(TpPalette palette, TpStatus tone) {
-  if (tone != TpStatus.unknown) return palette.forStatus(tone);
-  return TpStatusColors(
-    base: palette.borderStrong,
-    soft: palette.surfaceAlt,
-    onBase: palette.textSecondary,
-    onSoft: palette.textSecondary,
-  );
-}
-
-IconData _captureStatusIcon(TpStatus tone) => switch (tone) {
-      TpStatus.ok => Icons.check_rounded,
-      TpStatus.critical => Icons.priority_high_rounded,
-      TpStatus.warning => Icons.priority_high_rounded,
-      TpStatus.unknown => Icons.remove_rounded,
-      TpStatus.info || TpStatus.neutral => Icons.circle,
-    };
+TpStatusColors _captureColors(TpPalette palette, TpStatus tone) =>
+    tyreRiskColors(palette, tone);
 
 /// The dashed leader from a card to the vehicle, ending in a small
 /// status-coloured chevron at the vehicle end. Decoration only - the card is
@@ -1242,16 +1239,17 @@ class _FigmaTyreStatusCard extends StatelessWidget {
                         children: <Widget>[
                           DecoratedBox(
                             decoration: BoxDecoration(
-                              color: colors.base,
+                              color: tyreRiskBaseColor(tone, Brightness.light),
                               shape: BoxShape.circle,
                             ),
-                            child: SizedBox(
-                              width: 15,
-                              height: 15,
-                              child: Icon(
-                                _captureStatusIcon(tone),
-                                color: colors.onBase,
-                                size: 11,
+                            child: Padding(
+                              padding: const EdgeInsets.all(2),
+                              child: TyreConditionGlyph(
+                                condition:
+                                    wheel.isRecorded ? wheel.condition : null,
+                                size: 16,
+                                color: Colors.white,
+                                strokeWidth: 3,
                               ),
                             ),
                           ),
@@ -1444,6 +1442,8 @@ class _ResolvedWheel {
         isSelected: isSelected,
         isOutstanding: isOutstanding,
         isRecorded: isRecorded,
+        conditionKind:
+            condition == null ? null : tyreConditionKindKey(condition),
       );
 }
 
@@ -1489,10 +1489,7 @@ class _SelectedTyreSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final TpStatusColors colors = palette.forStatus(wheel.status);
-    final bool isImmediateAttention =
-        wheel.condition == TyreCondition.puncture ||
-            wheel.condition == TyreCondition.flat;
+    final TpStatusColors colors = tyreRiskColors(palette, wheel.status);
     final String conditionLabel = wheel.condition == null
         ? l10n.tyreDiagramListNotRecorded
         : tyreConditionLabel(l10n, wheel.condition!);
@@ -1522,12 +1519,10 @@ class _SelectedTyreSummary extends StatelessWidget {
           ),
           child: Row(
             children: <Widget>[
-              Icon(
-                isImmediateAttention
-                    ? Icons.report_problem_outlined
-                    : Icons.tire_repair_outlined,
+              TyreConditionGlyph(
+                condition: wheel.condition,
+                size: TpSizing.iconMd + 8,
                 color: colors.onSoft,
-                size: TpSizing.iconMd,
               ),
               const SizedBox(width: TpSpace.sm),
               Expanded(
@@ -1609,22 +1604,45 @@ class _ConditionLegend extends StatelessWidget {
         ],
       );
     }
+    final TpPalette palette = TpPalette.of(context);
+    // One picture per condition: the same glyph sits on the wheel, the
+    // picker button and the printed report (shared tyre map).
+    Widget item(TyreCondition? condition, String label) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: tyreConditionSelectedFill(condition),
+                shape: BoxShape.circle,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(3),
+                child: TyreConditionGlyph(
+                  condition: condition,
+                  size: 16,
+                  color: Colors.white,
+                  strokeWidth: 3,
+                ),
+              ),
+            ),
+            const SizedBox(width: TpSpace.xs),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: palette.text,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ],
+        );
     return Wrap(
       alignment: WrapAlignment.center,
-      spacing: TpSpace.xs,
+      spacing: TpSpace.md,
       runSpacing: TpSpace.xs,
       children: <Widget>[
         for (final TyreCondition condition in _kOrder)
-          TpStatusChip(
-            status: tyreConditionStatus(condition),
-            label: tyreConditionLabel(l10n, condition),
-            icon: switch (condition) {
-              TyreCondition.puncture => Icons.report_problem_outlined,
-              TyreCondition.flat => Icons.warning_amber_rounded,
-              _ => null,
-            },
-            isCompact: true,
-          ),
+          item(condition, tyreConditionLabel(l10n, condition)),
+        item(null, l10n.tyreConditionNotChecked),
       ],
     );
   }

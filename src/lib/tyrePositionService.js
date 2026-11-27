@@ -39,9 +39,15 @@
  */
 import { parsePosition, canonicalCode, legacyPositionCode } from './tyrePositions'
 import {
-  LAYOUT_SLOTS, resolveLayoutKeyStrict, isTyrelessEquipment, layoutForAsset,
+  LAYOUT_SLOTS, resolveLayoutKeyStrict, isTyrelessEquipment, layoutForAsset, AXLE_VARIANTS,
 } from './vehicleTyreLayout'
 import { positionsFromConfig } from './vehicleDiagram'
+import { slotForStoredPosition, erpSpecSlots } from './tyreLayoutSpec'
+
+// The wheel codes ERP matching runs on. They are mirrored in SQL
+// (tyre_layout_for / tyre_position_resolve), so they leave out the shared map's
+// display-only overrides and change only together with a migration.
+const ERP_SCOPE = { scope: 'erp' }
 
 /**
  * The version of the wheel-matching rules this client runs. The database reports its own
@@ -49,7 +55,20 @@ import { positionsFromConfig } from './vehicleDiagram'
  * are the same: a client and a database on different rules can disagree about which wheel a
  * job card touched. CHANGE BOTH TOGETHER (pinned by observationErpEvidence.api.test.js).
  */
-export const ERP_RULES_VERSION = 'position-service-3'
+export const ERP_RULES_VERSION = 'position-service-4'
+
+/**
+ * Database rules versions this client can work with. The web may ship before migration
+ * 20261126181000 is applied, so it keeps working against a database still on version 3:
+ * there the shared tyre map's pump codes are NOT read (everything behaves as before), on 4
+ * they are. Any other version is refused (getErpDecisionAvailability).
+ */
+export const ERP_RULES_VERSIONS_SUPPORTED = Object.freeze(['position-service-3', 'position-service-4'])
+
+/** True when [rulesVersion] reads the shared tyre map's ERP codes (version 4 and later). */
+export function readsTyreMapCodes(rulesVersion) {
+  return rulesVersion == null || rulesVersion !== 'position-service-3'
+}
 
 export const POSITION_STATUS = Object.freeze({
   RESOLVED: 'resolved', AMBIGUOUS: 'ambiguous', UNKNOWN: 'unknown', INCONSISTENT: 'inconsistent',
@@ -111,7 +130,9 @@ const unresolvedLayout = (reason, extra = {}) => ({
  * @param {string} [a.asOf]         the date of the record being read (YYYY-MM-DD)
  */
 export function resolveLayout(a = {}) {
-  return withMappings(resolveLayoutBase(a), a.positionMappings)
+  const layout = withMappings(resolveLayoutBase(a), a.positionMappings)
+  // The database rules version the comparison must follow (null = this client's own).
+  return a.rulesVersion ? { ...layout, rulesVersion: a.rulesVersion } : layout
 }
 
 function withMappings(layout, rows) {
@@ -183,12 +204,10 @@ function resolveLayoutBase(a) {
   return {
     status: POSITION_STATUS.RESOLVED, reason: 'builtin_layout', key, source: 'builtin', basis: 'current',
     version: null,
-    wheels: buildWheels(slots.map((slot) => ({ slot, label: legacyPositionCode(key, slot) }))),
+    wheels: buildWheels(slots.map((slot) => ({ slot, label: legacyPositionCode(key, slot, ERP_SCOPE) }))),
   }
 }
 
-// Mirrors vehicleTyreLayout's AXLE_VARIANTS for an explicitly supplied count.
-const AXLE_VARIANTS = { 'Concrete pump': { 4: 'Concrete pump 4-axle' } }
 
 function customLayout(raw, customKey) {
   if (!raw || typeof raw !== 'object') return null
@@ -224,6 +243,15 @@ function readCode(layout, token, kind) {
   if (mapped) {
     const wheel = layout.wheels.find((w) => w.slot === mapped.slot)
     if (wheel) return out(POSITION_STATUS.RESOLVED, 'verified_mapping', wheel)
+  }
+  // The shared tyre map's own code or recorded alias for a wheel of this built-in
+  // layout (the concrete pump's LHRCO / LHR1-I and its legacy LHCO / LHR2-O ...).
+  // Comparison only. Two wheels named by the same spelling stay pending.
+  if (layout.source === 'builtin' && readsTyreMapCodes(layout.rulesVersion)) {
+    const named = erpSpecSlots(layout.key, token)
+      .map((s) => layout.wheels.find((w) => w.slot === s)).filter(Boolean)
+    if (named.length === 1) return out(POSITION_STATUS.RESOLVED, 'tyre_map_code', named[0])
+    if (named.length > 1) return out(POSITION_STATUS.AMBIGUOUS, 'tyre_map_code_ambiguous')
   }
   if (DUAL_REAR_RE.test(up(token))) return out(POSITION_STATUS.AMBIGUOUS, 'erp_spelling_not_verified')
   if (kind === 'erp' && PUMP_LAYOUT_KEYS.has(layout.key) && REAR_CODE_RE.test(up(token))) {
@@ -391,11 +419,17 @@ export function slotCode(layoutKey, slot) {
 export function slotForPosition(layoutKey, positionCode) {
   const slots = LAYOUT_SLOTS[layoutKey]
   if (!slots || !positionCode) return null
-  // Display has never renamed the ERP dual-rear spelling (LHRCO): it stays as stored.
+  // The shared tyre map first: the slot itself, the code every surface shows
+  // for it, or a spelling the fleet owner confirmed for that wheel (the
+  // concrete pump's LHRCO / LHCO / LHR1-I family). This is display placement
+  // only; ERP matching (resolveWheel) is unchanged and still mirrors the SQL.
+  const mapped = slotForStoredPosition(layoutKey, positionCode)
+  if (mapped) return mapped
+  // Otherwise the ERP dual-rear spelling (LHRCO) is not placed: it stays as stored.
   if (DUAL_REAR_RE.test(up(positionCode))) return null
   const layout = {
     status: POSITION_STATUS.RESOLVED, key: layoutKey, source: 'builtin',
-    wheels: buildWheels(slots.map((slot) => ({ slot, label: legacyPositionCode(layoutKey, slot) }))),
+    wheels: buildWheels(slots.map((slot) => ({ slot, label: legacyPositionCode(layoutKey, slot, ERP_SCOPE) }))),
   }
   const r = resolveWheel(layout, positionCode, { kind: 'any' })
   // Display keeps its older, narrower rule: an exact slot or an exact code.

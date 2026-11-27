@@ -19,19 +19,22 @@ import 'package:tyre_pulse/app/router/tp_back.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/documents/document_share.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/handover/data/handover_remote_repository.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_approval.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_damage_marker.dart';
+import 'package:tyre_pulse/features/handover/domain/handover_paper.dart';
 import 'package:tyre_pulse/features/handover/domain/handover_record.dart';
+import 'package:tyre_pulse/features/handover/domain/handover_signing.dart';
 import 'package:tyre_pulse/features/handover/handover_providers.dart';
 import 'package:tyre_pulse/features/handover/presentation/handover_copy.dart';
-import 'package:tyre_pulse/features/handover/presentation/handover_pdf.dart';
 import 'package:tyre_pulse/features/handover/presentation/handover_ui.dart';
 import 'package:tyre_pulse/features/handover/presentation/widgets/handover_photo_grid.dart';
 import 'package:tyre_pulse/features/handover/presentation/widgets/handover_signature_pad.dart';
+import 'package:tyre_pulse/features/handover/presentation/widgets/handover_signing_panel.dart';
 
 enum _DecisionBusy { approving, rejecting }
 
@@ -222,10 +225,25 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
     final AppLocalizations l10n = AppLocalizations.of(context);
     setState(() => _sharing = true);
     try {
-      final HandoverShareResult result =
-          await shareHandoverPdf(context: context, record: record);
+      // The Vehicle Handover Authorization paper, built from the same spec
+      // the web prints (docs/document-specs/handover-authorization.json).
+      final Set<String> photoRefs = <String>{
+        ...record.photos,
+        for (final HandoverDamageMarker m in record.damages)
+          if ((m.photoUrl ?? '').isNotEmpty) m.photoUrl!,
+      };
+      bool failed = false;
+      try {
+        await shareHandoverAuthorizationPdf(
+          record.row,
+          photoCount: photoRefs.length,
+          damageRows: handoverPaperDamageRows(record.damages),
+        );
+      } on Object {
+        failed = true;
+      }
       if (!mounted) return;
-      if (result == HandoverShareResult.failed) {
+      if (failed) {
         await showHandoverInfoDialog(
           context,
           title: l10n.handoverDetailTitle,
@@ -300,6 +318,7 @@ class _HandoverDetailScreenState extends ConsumerState<HandoverDetailScreen> {
       note: _note,
       busy: _busy,
       onSignatureChanged: (String? s) => setState(() => _signature = s),
+      onSigned: _load,
     );
   }
 }
@@ -313,8 +332,10 @@ class _DetailBody extends StatelessWidget {
     required this.note,
     required this.busy,
     required this.onSignatureChanged,
+    required this.onSigned,
   });
 
+  final Future<void> Function() onSigned;
   final HandoverRecord record;
   final bool canDecide;
   final String? signerName;
@@ -337,6 +358,32 @@ class _DetailBody extends StatelessWidget {
         _SummaryCard(record: record),
         const SizedBox(height: TpSpace.lg),
         _MetaCard(record: record),
+        if (isHandoverSentBack(record)) ...<Widget>[
+          const SizedBox(height: TpSpace.sm),
+          TpCard(
+            background: TpPalette.of(context).forStatus(TpStatus.critical).soft,
+            borderColor:
+                TpPalette.of(context).forStatus(TpStatus.critical).base,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  l10n.handoverAuthSentBack,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                if ((record.reviewNote ?? '').trim().isNotEmpty) ...<Widget>[
+                  const SizedBox(height: TpSpace.xs),
+                  Text(
+                    l10n.handoverReviewNoteLabel,
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  Text(record.reviewNote!.trim()),
+                ],
+              ],
+            ),
+          ),
+        ],
         if (record.damages.isNotEmpty) ...<Widget>[
           const SizedBox(height: TpSpace.lg),
           Text(
@@ -369,18 +416,29 @@ class _DetailBody extends StatelessWidget {
           TpCard(child: Text(record.notes!.trim())),
         ],
         const SizedBox(height: TpSpace.lg),
-        Text(
-          l10n.handoverSignatureLabel,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: TpSpace.sm),
-        HandoverSignaturePreview(
-          value: record.signatureUrl,
-          fallback: Text(
-            l10n.handoverSignatureMissing,
-            style: Theme.of(context).textTheme.bodySmall,
+        if (record.hasAuthorizationColumns &&
+            !(record.signatureUrl != null &&
+                record.fromSignature == null &&
+                record.toSignature == null))
+          HandoverSigningPanel(record: record, onSigned: onSigned)
+        else ...<Widget>[
+          Text(
+            record.signatureUrl == null
+                ? l10n.handoverSignatureLabel
+                : l10n.handoverAuthLegacySignature,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-        ),
+          const SizedBox(height: TpSpace.sm),
+          HandoverSignaturePreview(
+            value: record.signatureUrl,
+            fallback: Text(
+              record.hasAuthorizationColumns
+                  ? l10n.handoverSignatureMissing
+                  : l10n.handoverAuthNotAvailable,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ],
         const SizedBox(height: TpSpace.lg),
         Text(
           l10n.handoverSignoffTitle,
@@ -388,27 +446,6 @@ class _DetailBody extends StatelessWidget {
         ),
         const SizedBox(height: TpSpace.sm),
         _SignoffLadder(record: record),
-        if ((record.reviewNote ?? '').trim().isNotEmpty &&
-            record.approvalStatus == 'rejected') ...<Widget>[
-          const SizedBox(height: TpSpace.sm),
-          TpCard(
-            background: TpPalette.of(context).forStatus(TpStatus.critical).soft,
-            borderColor:
-                TpPalette.of(context).forStatus(TpStatus.critical).base,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  l10n.handoverReviewNoteLabel,
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: TpSpace.xs),
-                Text(record.reviewNote!.trim()),
-              ],
-            ),
-          ),
-        ],
         if (canDecide) ...<Widget>[
           const SizedBox(height: TpSpace.lg),
           _DecisionForm(

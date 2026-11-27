@@ -119,6 +119,15 @@ export const PRIVACY_PROCESSORS = Object.freeze([
     hosts: ['open-meteo.com'],
   },
   {
+    id: 'openstreetmap',
+    name: 'OpenStreetMap',
+    role: 'Map of where a vehicle handover took place',
+    when: 'feature',
+    data: 'Only when you press "Open in map" on a handover: the handover coordinates go to openstreetmap.org in the link, and your browser connects to it, so it also sees your IP address. No names or fleet records are sent.',
+    why: 'To show the handover location on a map.',
+    hosts: ['openstreetmap.org'],
+  },
+  {
     id: 'google_fonts',
     name: 'Google Fonts',
     role: 'A typeface on the sign-in page',

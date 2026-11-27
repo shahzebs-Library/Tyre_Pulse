@@ -78,3 +78,22 @@ export function settledValue(entry) {
   if (entry.ok) return entry.value
   throw entry.reason
 }
+
+/**
+ * Await independent requests TOGETHER, then report them as a sequential chain
+ * would: resolve to the values in input order, or reject with the error of the
+ * EARLIEST failing entry (never whichever failed first in time). Every entry
+ * settles before this returns, so nothing keeps running behind the caller.
+ *
+ * Use for two or three reads that do not depend on each other and used to be
+ * awaited one after another - each await was a full ~400 ms round trip.
+ *
+ * @param {Array<Promise<any>|(() => any)>} tasks promises, or thunks started at once
+ * @returns {Promise<any[]>}
+ */
+export async function allInOrder(tasks) {
+  const list = (Array.isArray(tasks) ? tasks : []).map((t) =>
+    Promise.resolve().then(() => (typeof t === 'function' ? t() : t)))
+  const settled = await Promise.allSettled(list)
+  return settled.map((s) => { if (s.status === 'rejected') throw s.reason; return s.value })
+}

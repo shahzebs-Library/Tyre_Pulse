@@ -68,7 +68,7 @@ describe('MaterialMasterSection catalogue', () => {
     api.loadMaterialCatalogDetail.mockResolvedValue({ variants: [], aliases: [], balances: null, openingLines: [] })
     ui()
     expect(await screen.findByText(/could not be read \(posted stock\)/)).toBeTruthy()
-    expect(screen.getAllByText('On hand N/A').length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('On hand N/A')).length).toBeGreaterThan(0)
   })
 
   it('offers Retry when the list fails', async () => {

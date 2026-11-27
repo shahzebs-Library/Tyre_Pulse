@@ -16,7 +16,7 @@
  */
 import { supabase, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
-import { configEntry, whenSystemConfigLoaded } from './systemConfig'
+import { configEntry, whenSystemConfigLoaded, rememberSavedConfig } from './systemConfig'
 
 /** system_config key that both this service and get_report_snapshot read. */
 export const LOGO_CONFIG_KEY = 'company_logo'
@@ -35,6 +35,18 @@ export function isValidHexColor(v) {
  */
 export async function getDiagramBg() {
   try {
+    // Same session-wide cache as the company logo: every inspection and
+    // checklist PDF asks for this colour, and each uncached ask was a full
+    // round trip to the database region.
+    if (!configEntry(DIAGRAM_BG_CONFIG_KEY)) {
+      const pending = whenSystemConfigLoaded()
+      if (pending) await pending
+    }
+    const cached = configEntry(DIAGRAM_BG_CONFIG_KEY)
+    if (cached) {
+      const v = cached.value_text ?? cached.value ?? ''
+      return isValidHexColor(v) ? v.trim() : ''
+    }
     const { data, error } = await supabase
       .from('system_config')
       .select('value_text, value')
@@ -65,6 +77,7 @@ export async function setDiagramBg(hex) {
       { onConflict: 'key', ignoreDuplicates: false },
     )
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  rememberSavedConfig(DIAGRAM_BG_CONFIG_KEY, value, value)
   return { ok: true }
 }
 
@@ -146,5 +159,6 @@ export async function setCompanyLogo(url) {
       { onConflict: 'key', ignoreDuplicates: false },
     )
   if (error) throw new ServiceError(toUserMessage(error), error.code, error)
+  rememberSavedConfig(LOGO_CONFIG_KEY, value, value)
   return { ok: true }
 }

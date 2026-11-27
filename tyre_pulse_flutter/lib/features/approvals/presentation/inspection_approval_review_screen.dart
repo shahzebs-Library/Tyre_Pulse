@@ -915,7 +915,7 @@ String? _multiViewAxleHint({
 }
 
 bool _isImmediateTyreFinding(TyreEntryPair pair) {
-  final TyreCondition condition = normaliseCondition(
+  final TyreCondition? condition = normaliseCondition(
     pair.entry['condition']?.toString(),
   );
   return condition == TyreCondition.flat || condition == TyreCondition.puncture;
@@ -972,7 +972,7 @@ class _ImmediateTyreFindings extends StatelessWidget {
           if (_isImmediateTyreFinding(pair))
             Builder(
               builder: (BuildContext context) {
-                final TyreCondition condition = normaliseCondition(
+                final TyreCondition? condition = normaliseCondition(
                   pair.entry['condition']?.toString(),
                 );
                 final String code =

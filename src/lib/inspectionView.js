@@ -19,46 +19,19 @@ import {
   vehicleTypeIsKnown, slotDisplayCode as slotCode, displayPositionCode,
   inspectionTypeHint,
 } from './tyreBay'
-import { severePositions, isSevereCondition } from './inspectionTyreFlags'
+import { severePositions } from './inspectionTyreFlags'
 import { layoutForAsset } from './vehicleTyreLayout'
-
-/** Condition word -> risk band. The vocabulary the WEB form writes. */
-export const COND_TO_RISK = {
-  Good: 'good', Wear: 'warning', Damage: 'critical', Puncture: 'critical', None: 'none',
-}
+import { COND_TO_RISK, conditionRisk, RISK_LABEL } from './tyreLayoutSpec'
 
 /**
- * Risk band for a recorded condition, whichever surface recorded it.
- *
- * COND_TO_RISK is an EXACT match on the web form's four words, but the field
- * app writes a different set - Good / Worn / Flat / Damaged / Puncture - and
- * every word it does not share fell through to 'none', which the legend prints
- * as "No Data". Counted live: 326 Worn and 60 Flat readings, every one drawn as
- * a grey wheel nobody had looked at, when in fact an inspector had reported a
- * fault on it. ('Damaged' escaped only because the diagram separately rescued
- * it through damagedPositions.)
- *
- * So the exact map is tried first - it stays the definition for the words it
- * owns - and anything else is resolved by stem. An unrecognised word still
- * returns 'none': inventing a band for a condition nobody has defined would be
- * worse than admitting we cannot read it.
+ * Condition word -> risk band, and band -> label. Both come from the shared
+ * tyre map (docs/document-specs/tyre-layouts.json), so the screen, the PDF and
+ * the phone colour a wheel by the same rule: Flat / Damaged / Burst / Puncture
+ * red, Worn / Wear amber, Good green, and any word nobody defined "No Data",
+ * never Good. 'none' is "no data", not "no risk".
  */
-export function riskForCondition(condition) {
-  const s = condition == null ? '' : String(condition).trim()
-  if (!s) return 'none'
-  if (COND_TO_RISK[s]) return COND_TO_RISK[s]
-  // Wear is tested before the fault stems so "worn" is a warning, not a
-  // critical - the same order, and the same reason, as conditionCounts.
-  if (/wear|worn/i.test(s)) return 'warning'
-  if (isSevereCondition(s)) return 'critical'
-  if (/good|\bok\b/i.test(s)) return 'good'
-  return 'none'
-}
-
-/** Risk band -> label. 'none' is "no data", not "no risk". */
-export const RISK_LABEL = {
-  good: 'Good', warning: 'Warning', critical: 'Critical', none: 'No Data',
-}
+export { COND_TO_RISK, RISK_LABEL }
+export const riskForCondition = conditionRisk
 
 /** A reading is present only when it is a real positive number. */
 function reading(v) {

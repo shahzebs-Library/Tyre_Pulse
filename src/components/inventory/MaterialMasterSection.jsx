@@ -39,7 +39,8 @@ import { KitTable, Pager } from '../commandCenter/kit'
 import { useInvQuery, ErrorNote, NotSetUp, Note, SectionCard, StatusPill, fmtDateTime } from './InvUi'
 
 const DETAIL_TABS = ['availability', 'references', 'compatibility', 'photos', 'history', 'corrections', 'documents']
-const na = (v) => (v === null || v === undefined || v === '' ? 'N/A' : v)
+// `t` (when given) translates the N/A shown for an empty value.
+const na = (v, t) => (v === null || v === undefined || v === '' ? (t ? t('wmsfloor.common.na') : 'N/A') : v)
 const n = (v) => Number(v || 0).toLocaleString('en-US')
 
 function CopyButton({ value, label, t }) {
@@ -67,7 +68,7 @@ const fromCatalog = (m) => ({
 const notStated = (v, t) => (v === null || v === undefined || v === '' ? t('inventory.mm.cat.notStated') : v)
 
 function PartTypeBadge({ type, t }) {
-  if (type === null || type === undefined) return <span className="cc-na">N/A</span>
+  if (type === null || type === undefined) return <span className="cc-na">{t('wmsfloor.common.na')}</span>
   return <StatusPill value={type} tone={partTypeTone(type)} label={t(`inventory.mm.cat.type.${type}`)} />
 }
 
@@ -90,8 +91,8 @@ function Chips({ r, t }) {
 function StockSummary({ r, t }) {
   return (
     <span className="inv-mm-chips">
-      <span className="inv-chip">{r.posted ? t('inventory.mm.cat.stock.summaryPosted', { n: n(r.posted.onHand) }) : t('inventory.mm.cat.stock.summaryPosted', { n: 'N/A' })}</span>
-      {r.pending === null ? <span className="inv-chip">{t('inventory.mm.cat.stock.summaryPending', { n: 'N/A' })}</span>
+      <span className="inv-chip">{r.posted ? t('inventory.mm.cat.stock.summaryPosted', { n: n(r.posted.onHand) }) : t('inventory.mm.cat.stock.summaryPosted', { n: t('wmsfloor.common.na') })}</span>
+      {r.pending === null ? <span className="inv-chip">{t('inventory.mm.cat.stock.summaryPending', { n: t('wmsfloor.common.na') })}</span>
         : r.pending.qty > 0 ? <span className="inv-chip inv-chip-accent">{t('inventory.mm.cat.stock.summaryPending', { n: n(r.pending.qty) })}</span> : null}
     </span>
   )
@@ -103,7 +104,7 @@ function ItemCard({ r, selected, onSelect, t }) {
       <span className="inv-mm-thumb" aria-hidden="true"><Package size={26} /></span>
       <span className="inv-mm-card-body">
         <span className="inv-mm-card-title">
-          <b>{na(r.description)}</b>
+          <b>{na(r.description, t)}</b>
           <StatusPill value={r.status} tone={r.status === 'active' ? 'good' : r.status === 'proposed' ? 'warn' : 'muted'}
             label={t(`inventory.mm.status.${r.status}`)} />
         </span>
@@ -142,7 +143,7 @@ function Facts({ r, cat, t }) {
       {rows.map(([k, v, copy, ltr]) => (
         <div key={k} className="inv-dl-row">
           <dt>{k}</dt>
-          <dd><span className={copy ? 'inv-mono' : undefined} dir={copy || ltr ? 'ltr' : undefined}>{na(v)}</span>{copy && <CopyButton value={v} label={k} t={t} />}</dd>
+          <dd><span className={copy ? 'inv-mono' : undefined} dir={copy || ltr ? 'ltr' : undefined}>{na(v, t)}</span>{copy && <CopyButton value={v} label={k} t={t} />}</dd>
         </div>
       ))}
     </dl>
@@ -274,7 +275,7 @@ function ReferencesTab({ r, t }) {
       {refs.length ? (
         <div className="inv-scroll">
           <KitTable compact rows={refs} columns={[
-            { key: 'manufacturer', header: t('inventory.mm.f.manufacturer'), cell: (x) => na(x.manufacturer) },
+            { key: 'manufacturer', header: t('inventory.mm.f.manufacturer'), cell: (x) => na(x.manufacturer, t) },
             { key: 'partNumber', header: t('inventory.mm.f.partNumber'), cell: (x) => <><span className="inv-mono" dir="ltr">{x.partNumber}</span> <CopyButton value={x.partNumber} label={t('inventory.mm.f.partNumber')} t={t} /></> },
             { key: 'verified', header: t('inventory.pi.common.status'), cell: (x) => (x.verified
               ? <span className="inv-verified"><CheckCircle2 size={14} aria-hidden="true" /> {t('inventory.mm.verified')}</span>
@@ -368,10 +369,10 @@ function Detail({ base, scope, userId, t }) {
       <div className="inv-mm-head">
         <span className="inv-mm-photo" aria-hidden="true"><Package size={40} /></span>
         <div style={{ minWidth: 0 }}>
-          <h2>{na(r.description)}</h2>
+          <h2>{na(r.description, t)}</h2>
           <div className="inv-mm-sku-line">
             <span className="cc-card-sub">{t('inventory.mm.f.companySku')}</span>
-            <span className="inv-mono" dir="ltr">{r.company_sku || 'N/A'}</span>
+            <span className="inv-mono" dir="ltr">{r.company_sku || t('wmsfloor.common.na')}</span>
             <CopyButton value={r.company_sku} label={t('inventory.mm.f.companySku')} t={t} />
             <StatusPill value={r.status} tone={r.status === 'active' ? 'good' : 'warn'} label={t(`inventory.mm.status.${r.status}`)} />
           </div>

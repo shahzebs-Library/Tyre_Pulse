@@ -1,4 +1,5 @@
 import { brandOf } from './partsExpense'
+import { textFn } from './wmsText'
 
 // Item descriptions are suggestions, never evidence of a quantity in a store.
 export const STOCK_KINDS = ['tyre', 'rim', 'accessory']
@@ -44,31 +45,34 @@ export function packSizeFrom(description) {
  * always says where the unit came from, and the user can change it.
  * Units are limited to what the stock ledger accepts (PCS SET PAIR BOX KG L);
  * quantities are whole numbers, so tins and tubes are counted per piece.
+ * Pass `t` to get the reason in the user's language (English otherwise).
  * @returns {{unit:string, basis:'recorded'|'learned'|'rule', reason:string, pack:string}}
  */
-export function suggestStockUnit({ name = '', kind = null, unit = '', learnedUnit = '' } = {}) {
+export function suggestStockUnit({ name = '', kind = null, unit = '', learnedUnit = '', t } = {}) {
+  const tx = textFn(t)
+  const r = (key, vars) => tx(`wmsmsgprocure.stock.unit.${key}`, vars)
   const pack = packSizeFrom(name)
   const recorded = stockUnit(unit)
-  if (recorded) return { unit: recorded, basis: 'recorded', reason: 'Unit recorded on this item.', pack }
+  if (recorded) return { unit: recorded, basis: 'recorded', reason: r('recorded'), pack }
   const learned = stockUnit(learnedUnit)
-  if (learned) return { unit: learned, basis: 'learned', reason: 'Same unit as this item already in stock.', pack }
+  if (learned) return { unit: learned, basis: 'learned', reason: r('learned'), pack }
   const d = String(name || '').toLowerCase()
   const k = kind || stockKind(name)
-  if (/\bpairs?\b/.test(d)) return { unit: 'PAIR', basis: 'rule', reason: 'The description says pair.', pack }
-  if (/\b(box|boxes|pkt|packet|pack|carton|ctn)\b/.test(d)) return { unit: 'BOX', basis: 'rule', reason: 'Supplied in boxes or packets.', pack }
-  if (/\b(kit|set)\b/.test(d)) return { unit: 'SET', basis: 'rule', reason: 'Supplied as a kit or set.', pack }
-  if (k === 'tyre') return { unit: 'PCS', basis: 'rule', reason: 'Tyres are counted one by one.', pack }
-  if (k === 'rim') return { unit: 'PCS', basis: 'rule', reason: 'Rims are counted one by one.', pack }
+  if (/\bpairs?\b/.test(d)) return { unit: 'PAIR', basis: 'rule', reason: r('pair'), pack }
+  if (/\b(box|boxes|pkt|packet|pack|carton|ctn)\b/.test(d)) return { unit: 'BOX', basis: 'rule', reason: r('box'), pack }
+  if (/\b(kit|set)\b/.test(d)) return { unit: 'SET', basis: 'rule', reason: r('set'), pack }
+  if (k === 'tyre') return { unit: 'PCS', basis: 'rule', reason: r('tyre'), pack }
+  if (k === 'rim') return { unit: 'PCS', basis: 'rule', reason: r('rim'), pack }
   if (/\b(glue|cement|sealer|paste|soap|solution)\b/.test(d)) {
-    if (pack) return { unit: 'PCS', basis: 'rule', reason: `Counted per tin or tube (${pack} each).`, pack }
-    if (/\b(paste|soap)\b/.test(d)) return { unit: 'KG', basis: 'rule', reason: 'Bulk paste is weighed. Check the pack.', pack }
-    return { unit: 'PCS', basis: 'rule', reason: 'Counted per tin or tube. Pack size not stated, check it.', pack }
+    if (pack) return { unit: 'PCS', basis: 'rule', reason: r('perTin', { pack }), pack }
+    if (/\b(paste|soap)\b/.test(d)) return { unit: 'KG', basis: 'rule', reason: r('paste'), pack }
+    return { unit: 'PCS', basis: 'rule', reason: r('tinNoPack'), pack }
   }
   if (/\bbalancing weight\b/.test(d)) {
-    if (/\bkgs?\b/.test(d) && !/\d+\s*g\b/.test(d)) return { unit: 'KG', basis: 'rule', reason: 'Loose weights are weighed.', pack }
-    return { unit: 'PCS', basis: 'rule', reason: 'Weights are counted one by one.', pack }
+    if (/\bkgs?\b/.test(d) && !/\d+\s*g\b/.test(d)) return { unit: 'KG', basis: 'rule', reason: r('looseWeights'), pack }
+    return { unit: 'PCS', basis: 'rule', reason: r('weights'), pack }
   }
-  return { unit: 'PCS', basis: 'rule', reason: 'Counted one by one.', pack }
+  return { unit: 'PCS', basis: 'rule', reason: r('oneByOne'), pack }
 }
 
 export function tyreSizeFrom(description) {
@@ -99,9 +103,9 @@ export function mergeStockSuggestions(local, remote) {
   })
 }
 
-export function stockDraft(option) {
+export function stockDraft(option, t) {
   const meta = stockItem(option.stock)
-  const guess = suggestStockUnit({ name: option.name, kind: option.kind, unit: option.unit, learnedUnit: option.learned_unit })
+  const guess = suggestStockUnit({ name: option.name, kind: option.kind, unit: option.unit, learnedUnit: option.learned_unit, t })
   return {
     ...option, brand: option.brand || brandOf(option.name) || '', rowKey: option.key || crypto.randomUUID(),
     stock_id: option.stock?.id || null,
@@ -119,22 +123,24 @@ export function stockDraft(option) {
   }
 }
 
-export function entryErrors(lines, { site, country, mode, reference, confirmed = true }) {
+export function entryErrors(lines, { site, country, mode, reference, confirmed = true, t }) {
+  const tx = textFn(t)
+  const e = (key, vars) => tx(`wmsmsgprocure.stock.err.${key}`, vars)
   const errors = []
-  if (!country || country === 'All') errors.push('Choose one country in the workspace header.')
-  if (!site.trim()) errors.push('Choose a site / store.')
-  if (!lines.length) errors.push('Add at least one item.')
-  if (lines.length > 100) errors.push('Save no more than 100 items at once.')
-  if (mode === 'receipt' && !reference.trim()) errors.push('Enter one receipt or delivery reference.')
-  if (!confirmed) errors.push('Confirm the item details and physical quantities.')
+  if (!country || country === 'All') errors.push(e('chooseCountry'))
+  if (!site.trim()) errors.push(e('chooseSite'))
+  if (!lines.length) errors.push(e('addItem'))
+  if (lines.length > 100) errors.push(e('max100'))
+  if (mode === 'receipt' && !reference.trim()) errors.push(e('reference'))
+  if (!confirmed) errors.push(e('confirm'))
   const keys = new Set()
   for (const row of lines) {
     const n = row.quantity === '' ? NaN : Number(row.quantity)
-    if (!Number.isSafeInteger(n) || n < (mode === 'receipt' ? 1 : 0) || n > 2147483647) errors.push(`${row.name}: enter a whole ${mode === 'receipt' ? 'positive receipt quantity' : 'count of zero or more'}.`)
-    if (!row.unit) errors.push(`${row.name}: confirm the unit of measure.`)
-    if (!STOCK_KINDS.includes(row.kind)) errors.push(`${row.name}: choose tyre, rim or tyre/rim accessory.`)
+    if (!Number.isSafeInteger(n) || n < (mode === 'receipt' ? 1 : 0) || n > 2147483647) errors.push(e(mode === 'receipt' ? 'qtyReceipt' : 'qtyCount', { name: row.name }))
+    if (!row.unit) errors.push(e('unit', { name: row.name }))
+    if (!STOCK_KINDS.includes(row.kind)) errors.push(e('kind', { name: row.name }))
     const key = row.stock_id || `${row.key}|${row.condition}|${row.bin.trim().toUpperCase()}`
-    if (keys.has(key)) errors.push(`${row.name}: this item and location are already in the count.`)
+    if (keys.has(key)) errors.push(e('duplicate', { name: row.name }))
     keys.add(key)
   }
   return [...new Set(errors)]

@@ -85,7 +85,19 @@ export async function createExpense(values = {}) {
     description: clampText(values.description, 8000),
     country: values.country ?? null,
   }
-  return unwrap(await supabase.from('driver_expenses').insert(payload).select(COLS).single())
+  const created = unwrap(await supabase.from('driver_expenses').insert(payload).select(COLS).single())
+  // Since migration 20261126170000 the server records every new claim as
+  // pending; any other status is a review and goes through the stamped RPC.
+  if (created && status !== 'pending' && created.status !== status) {
+    try {
+      return await reviewExpense(created.id, status, values.review_reason || 'Status set when the claim was recorded', created.updated_at)
+    } catch (e) {
+      // The claim exists; never let a refused review look like a failed save
+      // (a retry would duplicate it). Report it as recorded but still pending.
+      return { ...created, review_error: e?.message || 'The review was not recorded.' }
+    }
+  }
+  return created
 }
 
 /** Patch a claim. Strips immutable columns; clamps and coerces provided fields. */
@@ -107,9 +119,40 @@ export async function updateExpense(id, patch = {}) {
   if ('description' in clean) clean.description = clampText(clean.description, 8000)
   if ('amount' in clean) clean.amount = numOrNull(clean.amount)
   if ('expense_date' in clean) clean.expense_date = clean.expense_date || null
-  if ('status' in clean && !EXPENSE_STATUSES.includes(clean.status)) delete clean.status
+  const nextStatus = EXPENSE_STATUSES.includes(clean.status) ? clean.status : null
+  const reviewReason = clean.review_reason
+  delete clean.status
+  delete clean.review_reason
 
-  return unwrap(await supabase.from('driver_expenses').update(clean).eq('id', id).select(COLS).single())
+  let row = Object.keys(clean).length
+    ? unwrap(await supabase.from('driver_expenses').update(clean).eq('id', id).select(COLS).single())
+    : await getExpense(id)
+  if (nextStatus && row && row.status !== nextStatus) {
+    row = await reviewExpense(id, nextStatus, reviewReason || 'Status updated', row.updated_at)
+  }
+  return row
+}
+
+function isMissingFunction(error) {
+  const code = String(error?.code || error?.cause?.code || '')
+  return code === '42883' || code === 'PGRST202'
+}
+
+/**
+ * Approve, reject or mark reimbursed. The server stamps the reviewer and time
+ * and refuses a review of your own claim. Before the migration is applied the
+ * RPC does not exist, so the legacy direct status update is used instead.
+ */
+export async function reviewExpense(id, status, reason, expectedUpdatedAt) {
+  if (!EXPENSE_STATUSES.includes(status) || status === 'pending') throw new Error('Choose a review decision.')
+  // expectedUpdatedAt is the claim's updated_at exactly as read (string, full
+  // precision): the server refuses the review if the claim changed since.
+  let token = expectedUpdatedAt
+  if (!token) token = (await getExpense(id))?.updated_at
+  const { data, error } = await supabase.rpc('review_driver_expense', { p_id: id, p_status: status, p_reason: reason, p_expected_updated_at: token || null })
+  if (!error) return data
+  if (!isMissingFunction(error)) throw toServiceError(error)
+  return unwrap(await supabase.from('driver_expenses').update({ status }).eq('id', id).select(COLS).single())
 }
 
 export async function deleteExpense(id) {

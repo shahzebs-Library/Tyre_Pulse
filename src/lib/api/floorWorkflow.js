@@ -116,7 +116,7 @@ export async function finishPutaway(transferId, key) {
  * work-order reservation lines (shown, not pickable), each placed at its
  * location / bin. `{ status, jobCard, workOrder, lines, truncated }`.
  */
-export async function loadPickList(jobCard, { country } = {}) {
+export async function loadPickList(jobCard, { country, t } = {}) {
   const variants = jobCardVariants(jobCard)
   if (!variants.length) return { status: 'ok', jobCard: '', workOrder: null, lines: [], truncated: false }
   try {
@@ -145,7 +145,7 @@ export async function loadPickList(jobCard, { country } = {}) {
     const stockIds = [...reservations.map((r) => r.stock_id), ...holds.map((h) => h.stock_id)]
     const balances = await readByIds(VIEWS.balances, BALANCE_COLS, 'id', stockIds)
     const locs = await listLocations({ country })
-    const lines = buildPickList({ reservations, holds, balances, locations: locs.rows || [] })
+    const lines = buildPickList({ reservations, holds, balances, locations: locs.rows || [], t })
     return {
       status: 'ok', jobCard: variants[0], workOrder, lines,
       truncated: reservations.length >= JOB_CARD_ROW_LIMIT || !!locs.truncated,
@@ -165,7 +165,7 @@ export function confirmPick(args, key) {
 const MOVE_COLS = 'id, movement_type, item_id, item_code, site, country, location_id, location_code, qty_change, source_doc_type, source_doc_id, reason, reference_no, actor_id, created_by, posted_at, created_at, stock_id'
 
 /** Issue / return movements recorded against a job card, with the handover read back. */
-export async function loadHandover(jobCard) {
+export async function loadHandover(jobCard, { t } = {}) {
   const variants = jobCardVariants(jobCard)
   if (!variants.length) return { status: 'ok', jobCard: '', rows: [], items: [], issuedCount: 0, missingReceiver: 0, truncated: false }
   try {
@@ -174,7 +174,7 @@ export async function loadHandover(jobCard) {
       .order('posted_at', { ascending: true }).order('id', { ascending: true }).limit(JOB_CARD_ROW_LIMIT)
     if (error) return { ...fail(error), rows: [], items: [] }
     const people = await listAssignablePeople().catch(() => [])
-    const summary = summariseHandover(data || [], people)
+    const summary = summariseHandover(data || [], people, t)
     return { status: 'ok', jobCard: variants[0], ...summary, truncated: (data || []).length >= JOB_CARD_ROW_LIMIT }
   } catch (err) {
     return { ...fail(err), rows: [], items: [] }

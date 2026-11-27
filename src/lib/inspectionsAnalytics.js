@@ -13,6 +13,7 @@
  * are reused, never copied.
  */
 import { riskForCondition } from './inspectionView'
+import { layoutForAssetPrefix } from './tyreLayoutSpec'
 
 // ── Record types ──────────────────────────────────────────────────────────────
 export const INSPECTION_TYPES = ['Routine', 'Pressure', 'Visual', 'Full', 'Pre-Trip']
@@ -148,10 +149,10 @@ export function registerKpis(rows) {
 
 // ── Vehicle-type inference ────────────────────────────────────────────────────
 /** Vehicle type from the asset-code prefix (TM -> Tri-mixer ...). null when unknown. */
+// The asset-class prefixes are the shared tyre map's (CP, LP, MB included, and
+// a hyphenated code such as PL-090 read the same as PL090).
 export function inferVehicleTypeFromAsset(assetNo) {
-  const prefix = ((assetNo || '').match(/^[A-Za-z]+/) || [''])[0].toUpperCase().substring(0, 2)
-  const map = { TM: 'Tri-mixer', MP: 'Concrete pump', WL: 'Wheel loader', SL: 'Skid loader', PL: 'Pickup', BH: 'Bus' }
-  return map[prefix] || null
+  return layoutForAssetPrefix(assetNo)
 }
 
 // ── Checklist readings ────────────────────────────────────────────────────────
@@ -233,9 +234,10 @@ export function checklistProgress(positions) {
 export function checklistConditionTally(positions) {
   const list = positions || []
   return {
-    good: list.filter((p) => p.condition === 'Good').length,
-    wear: list.filter((p) => p.condition === 'Wear').length,
-    critical: list.filter((p) => p.condition === 'Damage' || p.condition === 'Puncture').length,
+    // The shared rule, so Flat counts as critical and "Good, no damage" as good.
+    good: list.filter((p) => p.condition && riskForCondition(p.condition) === 'good').length,
+    wear: list.filter((p) => p.condition && riskForCondition(p.condition) === 'warning').length,
+    critical: list.filter((p) => p.condition && riskForCondition(p.condition) === 'critical').length,
   }
 }
 

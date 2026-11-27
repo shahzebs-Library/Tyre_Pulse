@@ -6,6 +6,7 @@
 import { supabase } from '../supabase'
 import { ServiceError, unwrap, fetchAllPages, fetchAllRpcPages, isNotProvisioned } from './_client'
 import { toUserMessage } from '../safeError'
+import { allInOrder } from '../concurrency'
 import { MODULE_FIELDS, MODULE_TABLES, normaliseToken } from '../import/synonyms'
 import { naturalKey } from '../import/validate'
 import { queryClient } from '../queryClient'
@@ -431,14 +432,16 @@ export async function runPostImportAutomation(batchId, module, opts = {}) {
   const limits = { ...AUTOMATION_LIMITS, ...(opts.limits || {}) }
   try {
     if (module !== 'tyre') return { alerts: 0, actions: 0, skipped: 0 }
-    const batch = await getBatch(batchId)
+    // The batch header, its rows and the signed-in user are independent reads:
+    // send them together (one round trip instead of three).
+    const [batch, rows, user] = await allInOrder([
+      () => getBatch(batchId), () => getBatchRows(batchId, 5000), () => currentUser(),
+    ])
     const scopeCountry = batch?.country ?? opts.country ?? null
-    const rows = await getBatchRows(batchId, 5000)
     // Only act on rows that actually became live records.
     const live = rows
       .filter((r) => r.target_record_id != null && r.dup_status !== 'duplicate')
       .map((r) => r.transformed_data || {})
-    const user = await currentUser()
 
     // ── Alerts: critical risk or low tread ───────────────────────────────────
     const alertCand = []

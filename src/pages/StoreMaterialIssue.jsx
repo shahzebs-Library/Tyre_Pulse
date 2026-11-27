@@ -41,6 +41,7 @@ import EnterpriseTable from '../components/ui/EnterpriseTable'
 import DateField from '../components/ui/DateField'
 import { useSettings } from '../contexts/SettingsContext'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   listSlipsFromConsumption, getSlipLines, getIssueSummary, getMaterialIssueCoverage,
   materialIssuesProvisioned, listMaterialIssues, createMaterialIssue,
@@ -51,9 +52,9 @@ import { slipStockOptions, pickSlipStockLine } from '../lib/inventory/stockFlowR
 import { listMaterials } from '../lib/api/materialMaster'
 import {
   summarizeIssues, filterSlips, slipFilterOptions, monthlyIssueTrend,
-  docTypeLabel, isReturn, DOC_TYPE_KEYS,
+  isReturn, DOC_TYPE_KEYS,
   SLIP_EXPORT_COLUMNS, slipExportRows, LINE_EXPORT_COLUMNS, lineExportRows,
-  validateDraftIssue, draftLineValue, issueStatusLabel, slipPostingSummary,
+  validateDraftIssue, draftLineValue, slipPostingSummary,
 } from '../lib/materialIssue'
 import { currencyForCountry, MIXED_CURRENCY } from '../lib/governedCost'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
@@ -68,10 +69,10 @@ import {
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
 const TABS = [
-  { key: 'register', label: 'Issue register', icon: ClipboardList },
-  { key: 'returns', label: 'Returns (MRT)', icon: Undo2 },
-  { key: 'raise', label: 'Raise an issue', icon: PackageOpen },
-  { key: 'analytics', label: 'Analytics', icon: TrendingUp },
+  { key: 'register', icon: ClipboardList },
+  { key: 'returns', icon: Undo2 },
+  { key: 'raise', icon: PackageOpen },
+  { key: 'analytics', icon: TrendingUp },
 ]
 
 // The app's shared `.input` control style (same as every other register).
@@ -97,21 +98,94 @@ function monthsAgo(n) {
   return isoDay(d)
 }
 
-/** Money with its currency, or "N/A". Never a dash, never an unlabelled number. */
-function money(v, currency) {
-  if (v == null || !Number.isFinite(Number(v))) return 'N/A'
-  if (!currency || currency === MIXED_CURRENCY) return 'Mixed currencies'
-  return formatCurrency(Number(v), currency, 0)
+/**
+ * Display formatters bound to the active language. Money with its currency, or
+ * the translated "N/A". Never a dash, never an unlabelled number.
+ */
+function makeFmt(t) {
+  const na = t('wmsissue.common.na')
+  return {
+    money(v, currency) {
+      if (v == null || !Number.isFinite(Number(v))) return na
+      if (!currency || currency === MIXED_CURRENCY) return t('wmsissue.common.mixedCurrencies')
+      return formatCurrency(Number(v), currency, 0)
+    },
+    nOr: (v, digits = 0) => (
+      Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined, {
+        minimumFractionDigits: digits, maximumFractionDigits: digits,
+      }) : na
+    ),
+    pctOr: (v) => (Number.isFinite(Number(v)) ? `${(Number(v) * 100).toFixed(1)}%` : na),
+    txt: (v) => {
+      const s = String(v ?? '').trim()
+      return s === '' ? na : s
+    },
+  }
 }
-const nOr = (v, digits = 0) => (
-  Number.isFinite(Number(v)) ? Number(v).toLocaleString(undefined, {
-    minimumFractionDigits: digits, maximumFractionDigits: digits,
-  }) : 'N/A'
-)
-const pctOr = (v) => (Number.isFinite(Number(v)) ? `${(Number(v) * 100).toFixed(1)}%` : 'N/A')
-const txt = (v) => {
-  const s = String(v ?? '').trim()
-  return s === '' ? 'N/A' : s
+function useFmt() {
+  const { t } = useLanguage()
+  return useMemo(() => makeFmt(t), [t])
+}
+
+// Display labels for values the material issue engine returns in English.
+// The tokens themselves (MIS, MRT, draft...) are never translated.
+const DOC_LABEL_KEY = { 'Material issue': 'MIS', 'Material return': 'MRT' }
+const STATUS_LABEL_KEY = { Draft: 'draft', Issued: 'issued', Cancelled: 'cancelled', Unknown: 'unknown' }
+const CATEGORY_NAME_KEY = { Tyres: 'tyres', Spares: 'spares', 'Oil and lubricants': 'oil' }
+const DOC_SHARE_KEY = { 'Issues (MIS)': 'mis', 'Returns (MRT)': 'mrt', 'Unreadable number': 'unknown' }
+const CHECK_ERROR_KEY = {
+  'Pick a country. Item codes are not unique across countries, so a slip must name one.': 'country',
+  'Pick the job card this slip is issued against.': 'jobCard',
+  'Pick a document type.': 'docType',
+  'Add at least one item.': 'noItems',
+  'enter a quantity greater than zero.': 'qty',
+  'a unit cost cannot be negative. Use the return document type to credit a job.': 'negativeCost',
+  'pick the item from the material master.': 'pickItem',
+  'choose the stock line it comes from.': 'pickStock',
+}
+
+function docLabel(t, key) {
+  return key === 'MIS' || key === 'MRT' ? t(`wmsissue.doc.${key}`) : t('wmsissue.doc.unreadable')
+}
+
+/** Translate one validateDraftIssue message; an unknown message is shown as is. */
+function checkErrorText(t, e) {
+  const m = /^Line (\d+): (.*)$/.exec(String(e))
+  if (m) {
+    const k = CHECK_ERROR_KEY[m[2]]
+    return k ? t('wmsissue.raise.lineError', { line: m[1], message: t(`wmsissue.raise.errors.${k}`) }) : e
+  }
+  const k = CHECK_ERROR_KEY[e]
+  return k ? t(`wmsissue.raise.errors.${k}`) : e
+}
+
+/** Title and detail for an inv_issue_slip answer; mirrors slipPostingSummary. */
+function postingText(t, res) {
+  if (!res) return { title: t('wmsissue.post.notMovedTitle'), detail: t('wmsissue.post.noAnswer') }
+  if (res.ok) {
+    const posted = Number(res.posted) || 0
+    const already = Number(res.already) || 0
+    if (posted === 0 && already > 0) {
+      return { title: t('wmsissue.post.alreadyTitle'), detail: t('wmsissue.post.alreadyDetail', { count: already }) }
+    }
+    return {
+      title: t('wmsissue.post.updatedTitle'),
+      detail: already
+        ? t('wmsissue.post.updatedDetailAlready', { posted, already })
+        : t('wmsissue.post.updatedDetail', { posted }),
+    }
+  }
+  if (res.reason === 'not_available') {
+    return { title: t('wmsissue.post.docOnlyTitle'), detail: t('wmsissue.post.docOnlyDetail') }
+  }
+  const message = String(res.message ?? '').trim()
+  if (res.reason === 'shortage') {
+    return {
+      title: t('wmsissue.post.savedNotMovedTitle'),
+      detail: t('wmsissue.post.shortageDetail', { message: message || t('wmsissue.post.notEnough') }),
+    }
+  }
+  return { title: t('wmsissue.post.savedNotMovedTitle'), detail: message || t('wmsissue.post.refused') }
 }
 
 /** Chart options shared by every chart here, so they read the same. */
@@ -124,7 +198,9 @@ function baseOption(extra = {}) {
   }
 }
 
-function EmptyChart({ label = 'Nothing to chart for this window.' }) {
+function EmptyChart({ label }) {
+  const { t } = useLanguage()
+  if (label == null) label = t('wmsissue.common.nothingToChart')
   return (
     <div className="h-full flex items-center justify-center text-center px-4">
       <p className="text-xs text-[var(--text-muted)]">{label}</p>
@@ -146,7 +222,7 @@ function Notice({ tone = 'info', icon: Icon = Info, title, children, action }) {
     // a `flex-row` class here could never win; the direction goes in `style`,
     // which Card spreads last.
     <Card tone={cardTone} className="items-start gap-[var(--space-3)]" style={{ flexDirection: 'row' }}>
-      <Icon size={18} className={`${ink} mt-0.5 shrink-0`} />
+      <Icon size={18} className={`${ink} mt-0.5 shrink-0`} aria-hidden="true" />
       <div className="flex-1 min-w-0">
         {title && <p className={`${head} font-medium`}>{title}</p>}
         <div className="text-[var(--text-muted)] text-sm mt-1 space-y-1">{children}</div>
@@ -157,6 +233,8 @@ function Notice({ tone = 'info', icon: Icon = Info, title, children, action }) {
 }
 
 export default function StoreMaterialIssue() {
+  const { t } = useLanguage()
+  const { nOr, txt } = useFmt()
   const { activeCountry } = useSettings()
   const { profile, isSuperAdmin, hasCapability } = useAuth()
   // Mirrors the server: material_issues is writable by an elevated role OR a
@@ -213,9 +291,11 @@ export default function StoreMaterialIssue() {
     getMaterialIssueCoverage({ country: activeCountry }).then(result => {
       if (current) setCoverage(result)
     }).catch(err => {
-      if (current) setCoverageError(toUserMessage(err, 'Could not read uploaded MIS history.'))
+      if (current) setCoverageError(toUserMessage(err, t('wmsissue.history.loadError')))
     })
     return () => { current = false }
+    // t is read only for the error fallback; a language switch must not re-read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCountry, coverageRefresh])
   function choosePeriod(value) {
     setHistoryPeriod(value)
@@ -250,11 +330,13 @@ export default function StoreMaterialIssue() {
       setServerSummary(s.ok ? s.data : null)
     } catch (err) {
       if (request !== registerRequest.current) return
-      setError(toUserMessage(err, 'Could not load the material issue register.'))
+      setError(toUserMessage(err, t('wmsissue.page.loadError')))
       setSlips([])
     } finally {
       if (request === registerRequest.current) setLoading(false)
     }
+    // t is read only for the error fallback; a language switch must not re-read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCountry, from, to, filters.site, filters.store, querySearch])
 
   useEffect(() => { load(); return () => { registerRequest.current += 1 } }, [load])
@@ -301,7 +383,7 @@ export default function StoreMaterialIssue() {
     } catch (err) {
       // An unreadable slip must not read as "No item lines are recorded".
       setExpandedLines([])
-      setExpandError(toUserMessage(err, 'Could not read the lines of this slip.'))
+      setExpandError(toUserMessage(err, t('wmsissue.slip.linesError')))
     } finally {
       setExpandLoading(false)
     }
@@ -340,8 +422,8 @@ export default function StoreMaterialIssue() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Store - Material Issue (MIS)"
-        subtitle="Every slip the store raised against a job card, plus returns"
+        title={t('wmsissue.page.title')}
+        subtitle={t('wmsissue.page.subtitle')}
         icon={Receipt}
         onRefresh={load}
         refreshing={loading}
@@ -352,29 +434,29 @@ export default function StoreMaterialIssue() {
         <Notice
           tone="error"
           icon={AlertTriangle}
-          title="Something went wrong."
-          action={<button onClick={load} className={btnCls}><RefreshCw size={13} /> Retry</button>}
+          title={t('wmsissue.common.somethingWrong')}
+          action={<button onClick={load} className={btnCls}><RefreshCw size={13} aria-hidden="true" /> {t('wmsissue.common.retry')}</button>}
         >
           <p>{error}</p>
         </Notice>
       )}
 
       <Card className="gap-[var(--space-3)]">
-        <CardHeader icon={FileSpreadsheet} title="Uploaded MIS history"
-          description="Browse imported issue records by their document year, regardless of when the file was uploaded." />
+        <CardHeader icon={FileSpreadsheet} title={t('wmsissue.history.title')}
+          description={t('wmsissue.history.description')} />
         {coverageError ? <p role="alert" className="text-sm text-[var(--text-secondary)]">{coverageError}{' '}
-          <button className={btnCls} onClick={() => setCoverageRefresh(n => n + 1)}>Retry history</button></p>
-          : coverage === null ? <p role="status" className="text-sm text-[var(--text-muted)]">Checking available history...</p>
+          <button className={btnCls} onClick={() => setCoverageRefresh(n => n + 1)}>{t('wmsissue.history.retry')}</button></p>
+          : coverage === null ? <p role="status" className="text-sm text-[var(--text-muted)]">{t('wmsissue.history.checking')}</p>
             : <p className="text-sm text-[var(--text-secondary)]">{coverage.first
-              ? `Imported issue dates: ${coverage.first} to ${coverage.last}. Choose a year below to view older uploads.`
-              : 'No imported issue records are available in your current country and access scope.'}</p>}
+              ? t('wmsissue.history.range', { first: coverage.first, last: coverage.last })
+              : t('wmsissue.history.none')}</p>}
         <label className="text-xs text-[var(--text-muted)] space-y-1 max-w-xs">
-          <span>History period</span>
+          <span>{t('wmsissue.history.period')}</span>
           <select className={inputCls} value={historyPeriod} onChange={e => choosePeriod(e.target.value)}>
-            <option value="month">This month</option>
-            <option value="recent">Last 12 months</option>
-            {historyYears.map(year => <option key={year} value={year}>{year} · Uploaded issue records</option>)}
-            <option value="custom">Custom dates</option>
+            <option value="month">{t('wmsissue.history.thisMonth')}</option>
+            <option value="recent">{t('wmsissue.history.last12')}</option>
+            {historyYears.map(year => <option key={year} value={year}>{t('wmsissue.history.yearOption', { year })}</option>)}
+            <option value="custom">{t('wmsissue.history.custom')}</option>
           </select>
         </label>
       </Card>
@@ -386,82 +468,77 @@ export default function StoreMaterialIssue() {
         <CardHeader
           className="!mb-0"
           icon={CalendarRange}
-          title="Window and filters"
-          description={`Country scope follows the app scope: ${txt(activeCountry)}`}
+          title={t('wmsissue.filters.title')}
+          description={t('wmsissue.filters.description', { country: txt(activeCountry) })}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>From</span>
-            <DateField ariaLabel="From" value={from} onChange={(v) => { setHistoryPeriod('custom'); setFrom(v) }} />
+            <span>{t('wmsissue.filters.from')}</span>
+            <DateField ariaLabel={t('wmsissue.filters.from')} value={from} onChange={(v) => { setHistoryPeriod('custom'); setFrom(v) }} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>To</span>
-            <DateField ariaLabel="To" value={to} onChange={(v) => { setHistoryPeriod('custom'); setTo(v) }} />
+            <span>{t('wmsissue.filters.to')}</span>
+            <DateField ariaLabel={t('wmsissue.filters.to')} value={to} onChange={(v) => { setHistoryPeriod('custom'); setTo(v) }} />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Document</span>
+            <span>{t('wmsissue.filters.document')}</span>
             <select value={filters.docType} onChange={(e) => setFilter('docType', e.target.value)} className={inputCls}>
-              <option value="All">All documents</option>
-              {DOC_TYPE_KEYS.map((k) => <option key={k} value={k}>{docTypeLabel(k)}</option>)}
-              <option value="UNKNOWN">Unreadable number</option>
+              <option value="All">{t('wmsissue.filters.allDocuments')}</option>
+              {DOC_TYPE_KEYS.map((k) => <option key={k} value={k}>{docLabel(t, k)}</option>)}
+              <option value="UNKNOWN">{t('wmsissue.doc.unreadable')}</option>
             </select>
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Site</span>
+            <span>{t('wmsissue.filters.site')}</span>
             <select value={filters.site} onChange={(e) => setFilter('site', e.target.value)} className={inputCls}>
-              <option value="All">All sites</option>
+              <option value="All">{t('wmsissue.filters.allSites')}</option>
               {options.sites.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Store</span>
+            <span>{t('wmsissue.filters.store')}</span>
             <select value={filters.store} onChange={(e) => setFilter('store', e.target.value)} className={inputCls}>
-              <option value="All">All stores</option>
+              <option value="All">{t('wmsissue.filters.allStores')}</option>
               {options.stores.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Search</span>
+            <span>{t('wmsissue.filters.search')}</span>
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
               <input
                 value={filters.search}
                 onChange={(e) => setFilter('search', e.target.value)}
-                className={`${inputCls} pl-9`}
-                placeholder="Slip, job card, asset..."
+                className={`${inputCls} ps-9`}
+                placeholder={t('wmsissue.filters.searchPlaceholder')}
               />
             </div>
           </label>
         </div>
         {hasFilters && (
-          <button onClick={clearFilters} className={`${btnCls} self-start`}><X size={13} /> Clear filters</button>
+          <button onClick={clearFilters} className={`${btnCls} self-start`}><X size={13} aria-hidden="true" /> {t('wmsissue.common.clearFilters')}</button>
         )}
       </Card>
 
       {truncated && (
-        <Notice tone="warn" icon={AlertTriangle} title="This is a capped view.">
+        <Notice tone="warn" icon={AlertTriangle} title={t('wmsissue.notices.cappedTitle')}>
           <p>
-            The window holds more lines than one read returns, so this page is showing
-            the most recent {nOr(DEFAULT_LINE_MAX)} of them. Narrow the dates, the site
-            or the store to see a complete register.
+            {t('wmsissue.notices.cappedBody', { max: nOr(DEFAULT_LINE_MAX) })}
             {serverSummary?.slips != null && (
-              <> The server counts {nOr(serverSummary.slips)} slips in this window.</>
+              <> {t('wmsissue.notices.cappedServer', { count: nOr(serverSummary.slips) })}</>
             )}
           </p>
         </Notice>
       )}
 
       {unslipped > 0 && (
-        <Notice tone="warn" icon={AlertTriangle} title="Some lines carry no slip number.">
-          <p>
-            {nOr(unslipped)} expense lines in this window have no slip number, so they
-            belong to no document and are not counted in this register.
-          </p>
+        <Notice tone="warn" icon={AlertTriangle} title={t('wmsissue.notices.unslippedTitle')}>
+          <p>{t('wmsissue.notices.unslippedBody', { count: nOr(unslipped) })}</p>
         </Notice>
       )}
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-[var(--input-border)]">
+      <div className="flex flex-wrap gap-1 border-b border-[var(--input-border)]" role="tablist" aria-label={t('wmsissue.tabs.label')}>
         {TABS.map((tb) => {
           const Icon = tb.icon
           const on = tab === tb.key
@@ -476,7 +553,7 @@ export default function StoreMaterialIssue() {
               }`}
               aria-current={on ? 'page' : undefined}
             >
-              <Icon size={15} /> {tb.label}
+              <Icon size={15} aria-hidden="true" /> {t(`wmsissue.tabs.${tb.key}`)}
             </button>
           )
         })}
@@ -534,24 +611,26 @@ export default function StoreMaterialIssue() {
  * countries. There is deliberately no combined total.                 *
  * ------------------------------------------------------------------ */
 function CountryMoney({ summary }) {
+  const { t } = useLanguage()
+  const { money, nOr, txt } = useFmt()
   const columns = useMemo(() => [
-    { id: 'country', header: 'Country', accessorFn: (c) => txt(c.country), cell: ({ row }) => <span className="text-[var(--text-primary)]">{txt(row.original.country)}</span> },
-    { id: 'slips', header: 'Slips', accessorFn: (c) => c.slips, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.slips) },
-    { id: 'lines', header: 'Lines', accessorFn: (c) => c.lines, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lines) },
+    { id: 'country', header: t('wmsissue.country.country'), accessorFn: (c) => txt(c.country), cell: ({ row }) => <span className="text-[var(--text-primary)]">{txt(row.original.country)}</span> },
+    { id: 'slips', header: t('wmsissue.country.slips'), accessorFn: (c) => c.slips, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.slips) },
+    { id: 'lines', header: t('wmsissue.country.lines'), accessorFn: (c) => c.lines, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lines) },
     {
-      id: 'value', header: 'Value (as booked)', accessorFn: (c) => c.bookedValue ?? -1, meta: { align: 'right' },
+      id: 'value', header: t('wmsissue.country.valueBooked'), accessorFn: (c) => c.bookedValue ?? -1, meta: { align: 'right' },
       cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{money(row.original.bookedValue, row.original.currency)}</span>,
     },
-    { id: 'mis', header: 'Issues', accessorFn: (c) => c.mis?.slips ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.mis?.slips) },
-    { id: 'mrt', header: 'Returns', accessorFn: (c) => c.mrt?.slips ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.mrt?.slips) },
-  ], [])
+    { id: 'mis', header: t('wmsissue.country.issues'), accessorFn: (c) => c.mis?.slips ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.mis?.slips) },
+    { id: 'mrt', header: t('wmsissue.country.returns'), accessorFn: (c) => c.mrt?.slips ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.mrt?.slips) },
+  ], [t, money, nOr, txt])
   if (summary.byCountry.length <= 1) return null
   return (
     <Card>
       <CardHeader
         icon={Layers}
-        title="Value by country"
-        description="Each country reports in its own currency. These are never added together."
+        title={t('wmsissue.country.title')}
+        description={t('wmsissue.country.description')}
       />
       <EnterpriseTable
         columns={columns}
@@ -560,13 +639,14 @@ function CountryMoney({ summary }) {
         enableGlobalFilter={false}
         enableColumnFilters={false}
         enableExport={false}
-        emptyMessage="No country has slips in this window."
+        emptyMessage={t('wmsissue.country.empty')}
       />
     </Card>
   )
 }
 
 function DocBadge({ slip }) {
+  const { t } = useLanguage()
   return (
     <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${
       !slip.docTypeKnown
@@ -575,7 +655,7 @@ function DocBadge({ slip }) {
           ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
           : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
     }`}>
-      {slip.docTypeKnown ? docTypeLabel(slip.docType) : 'Unreadable number'}
+      {slip.docTypeKnown ? docLabel(t, slip.docType) : t('wmsissue.doc.unreadable')}
     </span>
   )
 }
@@ -588,59 +668,61 @@ function RegisterTab({
   expanded, expandedLines, expandLoading, expandError, toggleExpand,
   onExcel, onPdf, onLinesExcel,
 }) {
+  const { t } = useLanguage()
+  const { money, nOr, pctOr, txt } = useFmt()
   const booked = headlineValue(summary, singleCurrency)
-  const valueLabel = singleCurrency ? money(booked, singleCurrency) : 'Per country'
+  const valueLabel = singleCurrency ? money(booked, singleCurrency) : t('wmsissue.common.perCountry')
   const openSlip = useMemo(() => filtered.find((s) => s.key === expanded) || null, [filtered, expanded])
 
   const columns = useMemo(() => [
     {
       id: 'open', header: '', enableSorting: false, size: 36, meta: { export: false },
       cell: ({ row }) => (expanded === row.original.key
-        ? <ChevronDown size={14} className="text-[var(--text-muted)]" />
-        : <ChevronRight size={14} className="text-[var(--text-muted)]" />),
+        ? <ChevronDown size={14} className="text-[var(--text-muted)]" aria-hidden="true" />
+        : <ChevronRight size={14} className="text-[var(--text-muted)] rtl-flip" aria-hidden="true" />),
     },
-    { id: 'slip', header: 'Slip No', accessorFn: (s) => txt(s.issueNumber), cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{txt(row.original.issueNumber)}</span> },
-    { id: 'doc', header: 'Document', accessorFn: (s) => (s.docTypeKnown ? docTypeLabel(s.docType) : 'Unreadable number'), cell: ({ row }) => <DocBadge slip={row.original} /> },
-    { id: 'date', header: 'Date', accessorFn: (s) => s.date || '', cell: ({ row }) => txt(row.original.date) },
+    { id: 'slip', header: t('wmsissue.cols.slipNo'), accessorFn: (s) => txt(s.issueNumber), cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]" dir="ltr">{txt(row.original.issueNumber)}</span> },
+    { id: 'doc', header: t('wmsissue.cols.document'), accessorFn: (s) => (s.docTypeKnown ? docLabel(t, s.docType) : t('wmsissue.doc.unreadable')), cell: ({ row }) => <DocBadge slip={row.original} /> },
+    { id: 'date', header: t('wmsissue.cols.date'), accessorFn: (s) => s.date || '', cell: ({ row }) => txt(row.original.date) },
     {
-      id: 'job', header: 'Job card', accessorFn: (s) => txt(s.workOrderNo),
+      id: 'job', header: t('wmsissue.cols.jobCard'), accessorFn: (s) => txt(s.workOrderNo),
       cell: ({ row }) => (
         <span className="font-mono text-xs text-[var(--text-secondary)]">
-          {txt(row.original.workOrderNo)}
-          {row.original.workOrderCount > 1 && <span className="ml-1 text-amber-300">(+{row.original.workOrderCount - 1})</span>}
+          <span dir="ltr">{txt(row.original.workOrderNo)}</span>
+          {row.original.workOrderCount > 1 && <span className="ms-1 text-amber-300" dir="ltr">(+{row.original.workOrderCount - 1})</span>}
         </span>
       ),
     },
-    { id: 'asset', header: 'Asset', accessorFn: (s) => txt(s.assetCode) },
-    { id: 'store', header: 'Store', accessorFn: (s) => txt(s.storeCode) },
-    { id: 'lines', header: 'Lines', accessorFn: (s) => s.lineCount ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lineCount) },
+    { id: 'asset', header: t('wmsissue.cols.asset'), accessorFn: (s) => txt(s.assetCode) },
+    { id: 'store', header: t('wmsissue.cols.store'), accessorFn: (s) => txt(s.storeCode) },
+    { id: 'lines', header: t('wmsissue.cols.lines'), accessorFn: (s) => s.lineCount ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lineCount) },
     {
-      id: 'value', header: 'Value', accessorFn: (s) => s.bookedValue ?? -1, meta: { align: 'right' },
+      id: 'value', header: t('wmsissue.cols.value'), accessorFn: (s) => s.bookedValue ?? -1, meta: { align: 'right' },
       cell: ({ row }) => (
         <span className={`font-medium ${row.original.returnSignAnomaly ? 'text-amber-300' : 'text-[var(--text-primary)]'}`}>
           {money(row.original.bookedValue, row.original.currency)}
         </span>
       ),
     },
-  ], [expanded])
+  ], [expanded, t, money, nOr, txt])
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <StatTile label="Slips" value={loading ? '-' : nOr(summary.slips)} icon={Receipt}
-          sub={`${nOr(summary.docTypeSplit.MIS)} issues, ${nOr(summary.docTypeSplit.MRT)} returns`} />
-        <StatTile label="Lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList}
-          sub={summary.avgLinesPerSlip == null ? 'Not measurable' : `${nOr(summary.avgLinesPerSlip, 1)} per slip`} />
-        <StatTile label="Value (as booked)" value={loading ? '-' : valueLabel} icon={Store}
-          sub={singleCurrency ? 'In this country currency' : 'Shown per country below'} />
-        <StatTile label="Linked to a job card" value={loading ? '-' : pctOr(summary.linkageRate)} icon={Link2}
-          sub={summary.linkageRate == null ? 'No slips to measure' : `${nOr(summary.linkedSlips)} of ${nOr(summary.slips)}`} />
+        <StatTile label={t('wmsissue.register.slips')} value={loading ? '-' : nOr(summary.slips)} icon={Receipt}
+          sub={t('wmsissue.register.slipsSub', { issues: nOr(summary.docTypeSplit.MIS), returns: nOr(summary.docTypeSplit.MRT) })} />
+        <StatTile label={t('wmsissue.register.lines')} value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList}
+          sub={summary.avgLinesPerSlip == null ? t('wmsissue.register.notMeasurable') : t('wmsissue.register.perSlip', { count: nOr(summary.avgLinesPerSlip, 1) })} />
+        <StatTile label={t('wmsissue.register.valueBooked')} value={loading ? '-' : valueLabel} icon={Store}
+          sub={singleCurrency ? t('wmsissue.register.inCountryCurrency') : t('wmsissue.register.shownPerCountry')} />
+        <StatTile label={t('wmsissue.register.linked')} value={loading ? '-' : pctOr(summary.linkageRate)} icon={Link2}
+          sub={summary.linkageRate == null ? t('wmsissue.register.noSlipsToMeasure') : t('wmsissue.register.linkedOf', { linked: nOr(summary.linkedSlips), total: nOr(summary.slips) })} />
         <StatTile
-          label="Returns booked as a charge"
+          label={t('wmsissue.register.returnsCharged')}
           value={loading ? '-' : nOr(summary.returnSignAnomalies)}
           icon={AlertTriangle}
           tone={summary.returnSignAnomalies > 0 ? 'warn' : 'neutral'}
-          sub={summary.returnSignAnomalies > 0 ? 'See the Returns tab' : 'None in this window'}
+          sub={summary.returnSignAnomalies > 0 ? t('wmsissue.register.seeReturns') : t('wmsissue.register.noneInWindow')}
         />
       </div>
 
@@ -651,15 +733,15 @@ function RegisterTab({
             the right slot; a wider control group would need its own row. */}
         <CardHeader
           icon={ClipboardList}
-          title="Issue register"
-          description={`${nOr(filtered.length)} of ${nOr(slips.length)} shown. Select a slip to see its items.`}
+          title={t('wmsissue.register.title')}
+          description={t('wmsissue.register.shown', { shown: nOr(filtered.length), total: nOr(slips.length) })}
           actions={
             <>
               <button onClick={onExcel} disabled={filtered.length === 0} className={btnCls}>
-                <FileSpreadsheet size={14} /> Excel
+                <FileSpreadsheet size={14} aria-hidden="true" /> {t('wmsissue.common.excel')}
               </button>
               <button onClick={onPdf} disabled={filtered.length === 0} className={btnCls}>
-                <FileText size={14} /> PDF
+                <FileText size={14} aria-hidden="true" /> {t('wmsissue.common.pdf')}
               </button>
             </>
           }
@@ -679,7 +761,7 @@ function RegisterTab({
           initialPageSize={50}
           pageSizeOptions={[25, 50, 100]}
           onRowClick={toggleExpand}
-          emptyMessage={slips.length === 0 ? 'No material issue slips in this window.' : 'No slips match the filters.'}
+          emptyMessage={slips.length === 0 ? t('wmsissue.register.empty') : t('wmsissue.register.noMatch')}
         />
       </Card>
 
@@ -698,30 +780,32 @@ function RegisterTab({
 }
 
 function SlipLines({ slip, lines, linesLoading, linesError, onClose, onLinesExcel }) {
+  const { t } = useLanguage()
+  const { money, nOr, txt } = useFmt()
   const rows = useMemo(() => slipLineRows(lines, slip.currency), [lines, slip.currency])
   const columns = useMemo(() => [
-    { id: 'code', header: 'Item code', accessorFn: (l) => txt(l.item_code), cell: ({ row }) => <span className="font-mono">{txt(row.original.item_code)}</span> },
-    { id: 'desc', header: 'Description', accessorFn: (l) => txt(l.item_description) },
-    { id: 'uom', header: 'Unit', accessorFn: (l) => txt(l.uom) },
-    { id: 'source', header: 'Import source', accessorFn: (l) => txt(l.source_system) },
-    { id: 'sourceRow', header: 'Source row', accessorFn: (l) => txt(l.source_row) },
-    { id: 'qty', header: 'Qty', accessorFn: (l) => Number(l.qty) || 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.qty, 2) },
+    { id: 'code', header: t('wmsissue.cols.itemCode'), accessorFn: (l) => txt(l.item_code), cell: ({ row }) => <span className="font-mono" dir="ltr">{txt(row.original.item_code)}</span> },
+    { id: 'desc', header: t('wmsissue.cols.description'), accessorFn: (l) => txt(l.item_description) },
+    { id: 'uom', header: t('wmsissue.cols.unit'), accessorFn: (l) => txt(l.uom) },
+    { id: 'source', header: t('wmsissue.cols.importSource'), accessorFn: (l) => txt(l.source_system) },
+    { id: 'sourceRow', header: t('wmsissue.cols.sourceRow'), accessorFn: (l) => txt(l.source_row) },
+    { id: 'qty', header: t('wmsissue.cols.qty'), accessorFn: (l) => Number(l.qty) || 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.qty, 2) },
     {
-      id: 'unit', header: 'Unit cost', accessorFn: (l) => l.unit_cost ?? -1, meta: { align: 'right' },
-      cell: ({ row }) => (row.original.unit_cost == null ? 'N/A' : money(row.original.unit_cost, row.original.currency)),
+      id: 'unit', header: t('wmsissue.cols.unitCost'), accessorFn: (l) => l.unit_cost ?? -1, meta: { align: 'right' },
+      cell: ({ row }) => (row.original.unit_cost == null ? t('wmsissue.common.na') : money(row.original.unit_cost, row.original.currency)),
     },
     {
-      id: 'value', header: 'Value', accessorFn: (l) => l.line_cost ?? -1, meta: { align: 'right' },
+      id: 'value', header: t('wmsissue.cols.value'), accessorFn: (l) => l.line_cost ?? -1, meta: { align: 'right' },
       cell: ({ row }) => <span className="text-[var(--text-primary)]">{money(row.original.line_cost, row.original.currency)}</span>,
     },
-  ], [])
+  ], [t, money, nOr, txt])
 
   return (
     <Card>
       <CardHeader
         icon={Hash}
-        title={`Slip ${txt(slip.issueNumber)}`}
-        description={linesLoading ? 'Loading the items on this slip...' : `${nOr(rows.length)} item${rows.length === 1 ? '' : 's'} issued`}
+        title={t('wmsissue.slip.title', { number: txt(slip.issueNumber) })}
+        description={linesLoading ? t('wmsissue.slip.loading') : t(rows.length === 1 ? 'wmsissue.slip.itemsOne' : 'wmsissue.slip.items', { count: nOr(rows.length) })}
         actions={
           <>
             <button
@@ -729,9 +813,9 @@ function SlipLines({ slip, lines, linesLoading, linesError, onClose, onLinesExce
               disabled={rows.length === 0}
               onClick={() => onLinesExcel(lines, `Material Issue ${slip.issueNumber}`)}
             >
-              <FileSpreadsheet size={13} /> Items
+              <FileSpreadsheet size={13} aria-hidden="true" /> {t('wmsissue.slip.itemsExport')}
             </button>
-            <button className={btnCls} onClick={onClose} aria-label="Close slip items"><X size={13} /> Close</button>
+            <button className={btnCls} onClick={onClose} aria-label={t('wmsissue.slip.closeAria')}><X size={13} aria-hidden="true" /> {t('wmsissue.common.close')}</button>
           </>
         }
       />
@@ -739,10 +823,7 @@ function SlipLines({ slip, lines, linesLoading, linesError, onClose, onLinesExce
         <p role="alert" className="text-[11px] text-red-400 mb-2">{linesError}</p>
       )}
       {slip.returnSignAnomaly && (
-        <p className="text-[11px] text-amber-300 mb-2">
-          This is a return, and it is booked as a charge. Nothing has been changed
-          here; the figure above is exactly what the ledger holds.
-        </p>
+        <p className="text-[11px] text-amber-300 mb-2">{t('wmsissue.slip.returnCharged')}</p>
       )}
       <EnterpriseTable
         columns={columns}
@@ -751,8 +832,8 @@ function SlipLines({ slip, lines, linesLoading, linesError, onClose, onLinesExce
         loading={linesLoading}
         enableColumnFilters={false}
         enableExport={false}
-        searchPlaceholder="Search items on this slip..."
-        emptyMessage={linesError ? 'The item lines could not be read.' : 'No item lines are recorded on this slip.'}
+        searchPlaceholder={t('wmsissue.slip.searchPlaceholder')}
+        emptyMessage={linesError ? t('wmsissue.slip.linesUnreadable') : t('wmsissue.slip.noLines')}
       />
     </Card>
   )
@@ -762,72 +843,67 @@ function SlipLines({ slip, lines, linesLoading, linesError, onClose, onLinesExce
  * Tab 2 - returns, and the integrity finding                          *
  * ------------------------------------------------------------------ */
 function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf }) {
+  const { t } = useLanguage()
+  const { money, nOr, txt } = useFmt()
   const anomalies = summary.returnSignAnomalies
+  const flagText = useCallback((s) => (returnFlag(s).anomaly ? t('wmsissue.returns.flagCharged') : t('wmsissue.returns.flagCredited')), [t])
   const columns = useMemo(() => [
-    { id: 'slip', header: 'Slip No', accessorFn: (s) => txt(s.issueNumber), cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{txt(row.original.issueNumber)}</span> },
-    { id: 'date', header: 'Date', accessorFn: (s) => s.date || '', cell: ({ row }) => txt(row.original.date) },
-    { id: 'job', header: 'Job card', accessorFn: (s) => txt(s.workOrderNo), cell: ({ row }) => <span className="font-mono text-xs">{txt(row.original.workOrderNo)}</span> },
-    { id: 'asset', header: 'Asset', accessorFn: (s) => txt(s.assetCode) },
-    { id: 'store', header: 'Store', accessorFn: (s) => txt(s.storeCode) },
-    { id: 'lines', header: 'Lines', accessorFn: (s) => s.lineCount ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lineCount) },
+    { id: 'slip', header: t('wmsissue.cols.slipNo'), accessorFn: (s) => txt(s.issueNumber), cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]" dir="ltr">{txt(row.original.issueNumber)}</span> },
+    { id: 'date', header: t('wmsissue.cols.date'), accessorFn: (s) => s.date || '', cell: ({ row }) => txt(row.original.date) },
+    { id: 'job', header: t('wmsissue.cols.jobCard'), accessorFn: (s) => txt(s.workOrderNo), cell: ({ row }) => <span className="font-mono text-xs" dir="ltr">{txt(row.original.workOrderNo)}</span> },
+    { id: 'asset', header: t('wmsissue.cols.asset'), accessorFn: (s) => txt(s.assetCode) },
+    { id: 'store', header: t('wmsissue.cols.store'), accessorFn: (s) => txt(s.storeCode) },
+    { id: 'lines', header: t('wmsissue.cols.lines'), accessorFn: (s) => s.lineCount ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lineCount) },
     {
-      id: 'booked', header: 'As booked', accessorFn: (s) => s.bookedValue ?? -1, meta: { align: 'right' },
+      id: 'booked', header: t('wmsissue.cols.asBooked'), accessorFn: (s) => s.bookedValue ?? -1, meta: { align: 'right' },
       cell: ({ row }) => <span className="font-medium text-[var(--text-primary)]">{money(row.original.bookedValue, row.original.currency)}</span>,
     },
     {
-      id: 'credited', header: 'If credited', accessorFn: (s) => s.creditedValue ?? -1, meta: { align: 'right' },
+      id: 'credited', header: t('wmsissue.cols.ifCredited'), accessorFn: (s) => s.creditedValue ?? -1, meta: { align: 'right' },
       cell: ({ row }) => <span className="text-amber-300">{money(row.original.creditedValue, row.original.currency)}</span>,
     },
     {
-      id: 'flag', header: 'Flag', accessorFn: (s) => returnFlag(s).label,
+      id: 'flag', header: t('wmsissue.cols.flag'), accessorFn: (s) => flagText(s),
       cell: ({ row }) => {
         const f = returnFlag(row.original)
-        return <span className={`text-[11px] ${f.anomaly ? 'text-amber-300' : 'text-[var(--text-muted)]'}`}>{f.label}</span>
+        return <span className={`text-[11px] ${f.anomaly ? 'text-amber-300' : 'text-[var(--text-muted)]'}`}>{flagText(row.original)}</span>
       },
     },
-  ], [])
+  ], [t, money, nOr, txt, flagText])
 
   return (
     <div className="space-y-4">
       <Notice
         tone={anomalies > 0 ? 'warn' : 'info'}
         icon={anomalies > 0 ? AlertTriangle : Info}
-        title="A return currently adds cost to a job card instead of crediting it."
+        title={t('wmsissue.returns.noticeTitle')}
       >
+        <p>{t('wmsissue.returns.noticeBody1')}</p>
         <p>
-          MRT is a material RETURN: the store taking parts back off a job. Every return
-          line in this data is booked as a positive amount, which means the job card is
-          charged for parts that came back to the shelf.
-        </p>
-        <p>
-          <strong className="text-[var(--text-secondary)]">Nothing has been changed.</strong>{' '}
-          The value column below is exactly what the ledger holds, so this page agrees
-          with Expenses and CPK. The credited column shows what the same returns would
-          come to if a return credited the job. Which of those is correct for the books
-          is an owner decision about money, not a display setting, so it is reported
-          here rather than applied.
+          <strong className="text-[var(--text-secondary)]">{t('wmsissue.returns.nothingChanged')}</strong>{' '}
+          {t('wmsissue.returns.noticeBody2')}
         </p>
       </Notice>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatTile label="Return slips" value={loading ? '-' : nOr(summary.slips)} icon={Undo2} />
-        <StatTile label="Return lines" value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList} />
+        <StatTile label={t('wmsissue.returns.slips')} value={loading ? '-' : nOr(summary.slips)} icon={Undo2} />
+        <StatTile label={t('wmsissue.returns.lines')} value={loading ? '-' : nOr(summary.lines)} icon={ClipboardList} />
         <StatTile
-          label="Value as booked"
+          label={t('wmsissue.returns.valueBooked')}
           value={loading ? '-' : (singleCurrency
             ? money(headlineValue(summary, singleCurrency), singleCurrency)
-            : 'Per country')}
+            : t('wmsissue.common.perCountry'))}
           icon={Store}
-          sub="What the ledger holds today"
+          sub={t('wmsissue.returns.valueBookedSub')}
         />
         <StatTile
-          label="Value if credited"
+          label={t('wmsissue.returns.valueCredited')}
           value={loading ? '-' : (singleCurrency
             ? money(headlineValue(summary, singleCurrency, 'creditedValue'), singleCurrency)
-            : 'Per country')}
+            : t('wmsissue.common.perCountry'))}
           icon={Undo2}
           tone="warn"
-          sub="Not applied anywhere"
+          sub={t('wmsissue.returns.valueCreditedSub')}
         />
       </div>
 
@@ -836,15 +912,15 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
       <Card>
         <CardHeader
           icon={Undo2}
-          title="Return register"
-          description={`${nOr(returns.length)} shown`}
+          title={t('wmsissue.returns.title')}
+          description={t('wmsissue.common.shown', { count: nOr(returns.length) })}
           actions={
             <>
               <button onClick={onExcel} disabled={returns.length === 0} className={btnCls}>
-                <FileSpreadsheet size={14} /> Excel
+                <FileSpreadsheet size={14} aria-hidden="true" /> {t('wmsissue.common.excel')}
               </button>
               <button onClick={onPdf} disabled={returns.length === 0} className={btnCls}>
-                <FileText size={14} /> PDF
+                <FileText size={14} aria-hidden="true" /> {t('wmsissue.common.pdf')}
               </button>
             </>
           }
@@ -859,7 +935,7 @@ function ReturnsTab({ loading, returns, summary, singleCurrency, onExcel, onPdf 
           enableColumnFilters={false}
           enableExport={false}
           initialPageSize={25}
-          emptyMessage="No material returns in this window."
+          emptyMessage={t('wmsissue.returns.empty')}
         />
       </Card>
     </div>
@@ -877,6 +953,8 @@ const EMPTY_LINE = {
 }
 
 function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, profileName, onSaved }) {
+  const { t } = useLanguage()
+  const { money, nOr, txt } = useFmt()
   const [provisioned, setProvisioned] = useState(null) // null = checking
   // null = not known yet; true once inv_issue_slip exists (WP5). Until then a slip
   // is a document only and the page says so.
@@ -929,12 +1007,14 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
           const res = await listMaterialIssues({ country: activeCountry, limit: 50 })
           if (alive) { setRecent(res.rows); setRecentError('') }
         } catch (err) {
-          if (alive) { setRecent([]); setRecentError(toUserMessage(err, 'Could not load the slips raised in this app.')) }
+          if (alive) { setRecent([]); setRecentError(toUserMessage(err, t('wmsissue.raise.recentError'))) }
         }
       }
       setChecking(false)
     })()
     return () => { alive = false }
+    // t is read only for the error fallback; a language switch must not re-read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCountry])
 
   // Job card picker - debounced so a keystroke is not a query.
@@ -947,10 +1027,11 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
       } catch (err) {
         // A failed lookup must not read as "No job card matches that".
         setJobs([])
-        setJobsError(toUserMessage(err, 'Could not load job cards.'))
+        setJobsError(toUserMessage(err, t('wmsissue.raise.jobsError')))
       }
     }, 300)
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobSearch, header.country, activeCountry])
 
   const setLine = (i, patch) => setLines((ls) => ls.map((l, k) => (k === i ? { ...l, ...patch } : l)))
@@ -977,10 +1058,10 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
       } catch (err) {
         // A failed lookup must not read as "No item in the master matches that".
         setItems([])
-        setItemsError(toUserMessage(err, 'Could not search the item master.'))
+        setItemsError(toUserMessage(err, t('wmsissue.raise.itemsError')))
       }
     }, 300)
-  }, [header.country])
+  }, [header.country, t])
 
   useEffect(() => () => { if (itemTimer.current) clearTimeout(itemTimer.current) }, [])
   const addLine = () => setLines((ls) => [...ls, { ...EMPTY_LINE }])
@@ -1017,7 +1098,7 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
         })
         .catch((err) => {
           if (!alive) return
-          setStockFor((m) => ({ ...m, [i]: { loading: false, rows: [], error: toUserMessage(err, 'Could not read the stock lines for this item.') } }))
+          setStockFor((m) => ({ ...m, [i]: { loading: false, rows: [], error: toUserMessage(err, t('wmsissue.raise.stockError')) } }))
         })
     })
     return () => { alive = false }
@@ -1030,7 +1111,7 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
     try {
       const res = await postMaterialIssueSlip(slipId)
       if (res.reason === 'not_available') setPostingOn(false)
-      setPostResult({ ...slipPostingSummary(res), slipId, ok: res.ok })
+      setPostResult({ ...slipPostingSummary(res), ...postingText(t, res), slipId, ok: res.ok })
       return res
     } finally {
       setPosting(false)
@@ -1057,11 +1138,11 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
       )
       if (!res.ok) {
         setSaveError(res.reason === 'not_provisioned'
-          ? 'Raising a slip is not enabled on this database yet.'
-          : 'Could not save that slip.')
+          ? t('wmsissue.raise.notEnabledTitle')
+          : t('wmsissue.raise.saveError'))
         return
       }
-      setSaved(res.issue_number || 'Saved')
+      setSaved(res.issue_number || t('wmsissue.raise.savedFallback'))
       setPostResult(null)
       // Saving and posting are two calls; a refused posting leaves a saved slip
       // that can be posted again once corrected (the post is idempotent).
@@ -1076,10 +1157,10 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
         setRecentError('')
       } catch (err) {
         // The slip IS saved; only the refresh of the list below failed.
-        setRecentError(toUserMessage(err, 'Could not load the slips raised in this app.'))
+        setRecentError(toUserMessage(err, t('wmsissue.raise.recentError')))
       }
     } catch (err) {
-      setSaveError(toUserMessage(err, 'Could not save that slip.'))
+      setSaveError(toUserMessage(err, t('wmsissue.raise.saveError')))
     } finally {
       setSaving(false)
     }
@@ -1090,29 +1171,25 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
       // Row direction in `style`: Card is flex-col and Tailwind's .flex-col is
       // emitted after .flex-row, so a class could not win here.
       <Card className="items-center gap-[var(--space-2)] text-[var(--text-muted)] text-sm" style={{ flexDirection: 'row' }}>
-        <Loader2 size={15} className="animate-spin" /> Checking whether slips can be raised here...
+        <Loader2 size={15} className="animate-spin" aria-hidden="true" /> {t('wmsissue.raise.checking')}
       </Card>
     )
   }
 
   if (!provisioned) {
     return (
-      <Notice tone="warn" icon={Ban} title="Raising a slip is not enabled on this database yet.">
-        <p>
-          The material issue tables have not been created here, so a slip cannot be
-          saved. The Issue register and Returns tabs still work in full: they read the
-          slips the store has already raised, from the expense lines themselves.
-        </p>
-        <p>Apply the V609 material issue migration, then reload this page.</p>
+      <Notice tone="warn" icon={Ban} title={t('wmsissue.raise.notEnabledTitle')}>
+        <p>{t('wmsissue.raise.notEnabledBody')}</p>
+        <p>{t('wmsissue.raise.notEnabledAction')}</p>
       </Notice>
     )
   }
 
   if (!canWrite) {
     return (
-      <Notice tone="info" icon={Ban} title="You can read the register but not raise a slip.">
-        <p>Raising a material issue needs Admin, Manager or Director, or the stock edit permission{postingOn === true ? ' or the stock issue permission' : ''}.</p>
-        <p>To take stock off the shelf against a job card, use Stock, Receiving, Issue stock.</p>
+      <Notice tone="info" icon={Ban} title={t('wmsissue.raise.readOnlyTitle')}>
+        <p>{postingOn === true ? t('wmsissue.raise.readOnlyRolesIssue') : t('wmsissue.raise.readOnlyRoles')}</p>
+        <p>{t('wmsissue.raise.readOnlyHint')}</p>
       </Notice>
     )
   }
@@ -1120,8 +1197,8 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
   return (
     <div className="space-y-4">
       {saved && (
-        <Notice tone="info" icon={Check} title="Slip saved.">
-          <p>Slip <span className="font-mono">{txt(saved)}</span> has been recorded.</p>
+        <Notice tone="info" icon={Check} title={t('wmsissue.raise.savedTitle')}>
+          <p>{t('wmsissue.raise.savedPrefix')} <span className="font-mono" dir="ltr">{txt(saved)}</span> {t('wmsissue.raise.savedSuffix')}</p>
         </Notice>
       )}
       {postResult && (
@@ -1131,7 +1208,7 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
           title={postResult.title}
           action={!postResult.ok && postResult.slipId && postingOn === true ? (
             <button type="button" className={btnCls} disabled={posting} onClick={() => postSlip(postResult.slipId)}>
-              {posting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Post again
+              {posting ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Check size={13} aria-hidden="true" />} {t('wmsissue.raise.postAgain')}
             </button>
           ) : null}
         >
@@ -1139,7 +1216,7 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
         </Notice>
       )}
       {saveError && (
-        <Notice tone="error" icon={AlertTriangle} title="Could not save that slip.">
+        <Notice tone="error" icon={AlertTriangle} title={t('wmsissue.raise.saveError')}>
           <p>{saveError}</p>
         </Notice>
       )}
@@ -1149,63 +1226,61 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
           controls are native <select>, so nothing here wants cropping. */}
       <Card>
         <CardHeader
-          title="Slip details"
-          description={postingOn === true
-            ? 'Saving posts the slip to stock: an issue (MIS) takes the items off the chosen stock lines, a return (MRT) puts them back against the same job card.'
-            : 'Records the slip only: it does not take stock off the shelf. Issue stock in Stock, Receiving.'}
+          title={t('wmsissue.raise.detailsTitle')}
+          description={postingOn === true ? t('wmsissue.raise.detailsPosting') : t('wmsissue.raise.detailsDocument')}
         />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Document type</span>
+            <span>{t('wmsissue.raise.docType')}</span>
             <select
               value={header.doc_type}
               onChange={(e) => setHeader((h) => ({ ...h, doc_type: e.target.value }))}
               className={inputCls}
             >
-              {DOC_TYPE_KEYS.map((k) => <option key={k} value={k}>{docTypeLabel(k)}</option>)}
+              {DOC_TYPE_KEYS.map((k) => <option key={k} value={k}>{docLabel(t, k)}</option>)}
             </select>
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Country</span>
+            <span>{t('wmsissue.raise.country')}</span>
             <select
               value={header.country}
               onChange={(e) => setHeader((h) => ({ ...h, country: e.target.value }))}
               className={inputCls}
             >
-              <option value="">Pick a country</option>
+              <option value="">{t('wmsissue.raise.pickCountry')}</option>
               {['KSA', 'UAE', 'Egypt'].map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Store</span>
+            <span>{t('wmsissue.raise.store')}</span>
             <input
               value={header.store_code}
               onChange={(e) => setHeader((h) => ({ ...h, store_code: e.target.value }))}
               className={inputCls}
-              placeholder="Store code"
+              placeholder={t('wmsissue.raise.storePlaceholder')}
             />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Issued to</span>
+            <span>{t('wmsissue.raise.issuedTo')}</span>
             <input
               value={header.issued_to}
               onChange={(e) => setHeader((h) => ({ ...h, issued_to: e.target.value }))}
               className={inputCls}
-              placeholder="Who collected it"
+              placeholder={t('wmsissue.raise.issuedToPlaceholder')}
             />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1 lg:col-span-2">
-            <span>Job card</span>
+            <span>{t('wmsissue.raise.jobCard')}</span>
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <Search size={14} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
               <input
                 value={header.work_order_no || jobSearch}
                 onChange={(e) => {
                   setJobSearch(e.target.value)
                   setHeader((h) => ({ ...h, work_order_no: '' }))
                 }}
-                className={`${inputCls} pl-9`}
-                placeholder="Search a job card number or asset..."
+                className={`${inputCls} ps-9`}
+                placeholder={t('wmsissue.raise.jobSearchPlaceholder')}
               />
             </div>
             {!header.work_order_no && jobSearch && jobs.length > 0 && (
@@ -1223,9 +1298,9 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
                       }))
                       setJobSearch('')
                     }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]"
+                    className="w-full text-start px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]"
                   >
-                    <span className="font-mono">{txt(j.work_order_no)}</span>
+                    <span className="font-mono" dir="ltr">{txt(j.work_order_no)}</span>
                     <span className="text-[var(--text-muted)]"> - {txt(j.asset_no)} - {txt(j.site)}</span>
                   </button>
                 ))}
@@ -1235,13 +1310,11 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
               <p role="alert" className="text-[11px] text-red-400 mt-1">{jobsError}</p>
             )}
             {!header.work_order_no && jobSearch && !jobsError && jobs.length === 0 && (
-              <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                No job card matches that in the loaded set.
-              </p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1">{t('wmsissue.raise.noJobMatch')}</p>
             )}
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Asset</span>
+            <span>{t('wmsissue.raise.asset')}</span>
             <input
               value={header.asset_no}
               onChange={(e) => setHeader((h) => ({ ...h, asset_no: e.target.value }))}
@@ -1249,7 +1322,7 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
             />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1">
-            <span>Site</span>
+            <span>{t('wmsissue.raise.site')}</span>
             <input
               value={header.site}
               onChange={(e) => setHeader((h) => ({ ...h, site: e.target.value }))}
@@ -1257,12 +1330,12 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
             />
           </label>
           <label className="text-xs text-[var(--text-muted)] space-y-1 lg:col-span-4">
-            <span>Notes</span>
+            <span>{t('wmsissue.raise.notes')}</span>
             <input
               value={header.notes}
               onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))}
               className={inputCls}
-              placeholder="Optional"
+              placeholder={t('wmsissue.raise.optional')}
             />
           </label>
         </div>
@@ -1272,12 +1345,12 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
         <CardHeader
           className="!mb-0"
           icon={Layers}
-          title="Items"
-          actions={<button onClick={addLine} className={btnCls}><Plus size={13} /> Add item</button>}
+          title={t('wmsissue.raise.itemsTitle')}
+          actions={<button onClick={addLine} className={btnCls}><Plus size={13} aria-hidden="true" /> {t('wmsissue.raise.addItem')}</button>}
         />
 
         {!header.country && (
-          <p className="text-xs text-[var(--text-muted)]">Pick a country to search the item master.</p>
+          <p className="text-xs text-[var(--text-muted)]">{t('wmsissue.raise.pickCountryFirst')}</p>
         )}
 
         <div className="space-y-3">
@@ -1287,12 +1360,13 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
               <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start">
                 <div className="sm:col-span-4 space-y-1">
                   <div className="relative">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                    <Search size={13} className="absolute start-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" aria-hidden="true" />
                     <input
                       value={l.item_code || l.query || ''}
                       onChange={(e) => searchItems(i, e.target.value)}
-                      className={`${inputCls} pl-9`}
-                      placeholder="Item code or name"
+                      className={`${inputCls} ps-9`}
+                      aria-label={t('wmsissue.raise.itemAria', { n: i + 1 })}
+                      placeholder={t('wmsissue.raise.itemPlaceholder')}
                       disabled={!header.country}
                     />
                   </div>
@@ -1303,9 +1377,7 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
                           {itemsError}
                         </p>
                       ) : items.length === 0 ? (
-                        <p className="px-3 py-2 text-[11px] text-[var(--text-muted)]">
-                          No item in the master matches that.
-                        </p>
+                        <p className="px-3 py-2 text-[11px] text-[var(--text-muted)]">{t('wmsissue.raise.noItemMatch')}</p>
                       ) : items.map((m) => (
                         <button
                           key={m.id || m.item_code}
@@ -1321,9 +1393,9 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
                             })
                             setItemsFor(null)
                           }}
-                          className="w-full text-left px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]"
+                          className="w-full text-start px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-raised)] hover:text-[var(--text-primary)]"
                         >
-                          <span className="font-mono">{txt(m.item_code)}</span>
+                          <span className="font-mono" dir="ltr">{txt(m.item_code)}</span>
                           <span className="text-[var(--text-muted)]"> - {txt(m.item_name)}</span>
                         </button>
                       ))}
@@ -1336,25 +1408,25 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
                     const st = stockFor[i] || { loading: true, rows: [], error: '' }
                     const opts = slipStockOptions(st.rows, { site: header.site, itemCode: l.item_code })
                     if (st.error) return <p role="alert" className="text-[11px] text-red-400">{st.error}</p>
-                    if (st.loading && opts.length === 0) return <p className="text-[11px] text-[var(--text-muted)]">Reading stock lines...</p>
+                    if (st.loading && opts.length === 0) return <p className="text-[11px] text-[var(--text-muted)]">{t('wmsissue.raise.readingStock')}</p>
                     if (opts.length === 0) {
                       return (
                         <p className="text-[11px] text-amber-300">
-                          No stock line for this item{header.site ? ` at ${header.site}` : ''}. Pick the site, or receive the item first.
+                          {header.site ? t('wmsissue.raise.noStockLineAt', { site: header.site }) : t('wmsissue.raise.noStockLine')}
                         </p>
                       )
                     }
                     return (
                       <select
-                        aria-label={`Stock line for item ${i + 1}`}
+                        aria-label={t('wmsissue.raise.stockLineAria', { n: i + 1 })}
                         value={l.stock_id || ''}
                         onChange={(e) => setLine(i, { stock_id: e.target.value })}
                         className={inputCls}
                       >
-                        <option value="">Choose the stock line</option>
+                        <option value="">{t('wmsissue.raise.chooseStockLine')}</option>
                         {opts.map((o) => (
                           <option key={o.id} value={o.id}>
-                            {txt(o.location_code)} - {txt(o.condition)} - {o.available == null ? 'N/A' : nOr(o.available)} free
+                            {t('wmsissue.raise.stockLineOption', { location: txt(o.location_code), condition: txt(o.condition), free: o.available == null ? t('wmsissue.common.na') : nOr(o.available) })}
                           </option>
                         ))}
                       </select>
@@ -1365,31 +1437,34 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
                   className={`${inputCls} sm:col-span-2`}
                   value={l.qty}
                   onChange={(e) => setLine(i, { qty: e.target.value })}
-                  placeholder="Qty"
+                  aria-label={t('wmsissue.raise.qtyAria', { n: i + 1 })}
+                  placeholder={t('wmsissue.raise.qty')}
                   inputMode="decimal"
                 />
                 <input
                   className={`${inputCls} sm:col-span-2`}
                   value={l.uom}
                   onChange={(e) => setLine(i, { uom: e.target.value })}
-                  placeholder="UOM"
+                  aria-label={t('wmsissue.raise.uomAria', { n: i + 1 })}
+                  placeholder={t('wmsissue.raise.uom')}
                 />
                 <input
                   className={`${inputCls} sm:col-span-2`}
                   value={l.unit_cost}
                   onChange={(e) => setLine(i, { unit_cost: e.target.value })}
-                  placeholder="Unit cost"
+                  aria-label={t('wmsissue.raise.unitCostAria', { n: i + 1 })}
+                  placeholder={t('wmsissue.raise.unitCost')}
                   inputMode="decimal"
                 />
-                <div className="sm:col-span-1 text-sm text-[var(--text-primary)] py-2 text-right">
-                  {v == null ? <span className="text-[var(--text-muted)] text-xs">Unpriced</span> : money(v, currency)}
+                <div className="sm:col-span-1 text-sm text-[var(--text-primary)] py-2 text-end">
+                  {v == null ? <span className="text-[var(--text-muted)] text-xs">{t('wmsissue.raise.unpriced')}</span> : money(v, currency)}
                 </div>
                 <button
                   onClick={() => removeLine(i)}
                   className="sm:col-span-1 inline-flex items-center justify-center py-2 text-[var(--text-muted)] hover:text-red-400"
-                  aria-label={`Remove item ${i + 1}`}
+                  aria-label={t('wmsissue.raise.removeAria', { n: i + 1 })}
                 >
-                  <Trash2 size={15} />
+                  <Trash2 size={15} aria-hidden="true" />
                 </button>
               </div>
             )
@@ -1398,30 +1473,29 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
 
         <div className="flex items-center gap-3 flex-wrap border-t border-[var(--input-border)] pt-3">
           <div className="text-sm">
-            <span className="text-[var(--text-muted)] text-xs">Slip total </span>
+            <span className="text-[var(--text-muted)] text-xs">{t('wmsissue.raise.slipTotal')} </span>
             <span className="font-bold text-[var(--text-primary)]">
-              {check.total == null ? 'Not available' : money(check.total, currency)}
+              {check.total == null ? t('wmsissue.raise.notAvailable') : money(check.total, currency)}
             </span>
             {check.unpricedLines > 0 && (
-              <span className="text-[11px] text-[var(--text-muted)] ml-2">
-                {nOr(check.unpricedLines)} item{check.unpricedLines === 1 ? '' : 's'} unpriced,
-                so there is no complete total. Priced so far: {money(check.pricedTotal, currency)}.
+              <span className="text-[11px] text-[var(--text-muted)] ms-2">
+                {t('wmsissue.raise.unpricedNote', { count: nOr(check.unpricedLines), priced: money(check.pricedTotal, currency) })}
               </span>
             )}
           </div>
           <button
             onClick={save}
             disabled={!check.ok || saving}
-            className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-[var(--accent)] text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="ms-auto inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-[var(--accent)] text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-            Save slip
+            {saving ? <Loader2 size={15} className="animate-spin" aria-hidden="true" /> : <Check size={15} aria-hidden="true" />}
+            {t('wmsissue.raise.saveSlip')}
           </button>
         </div>
 
         {!check.ok && (
           <ul className="text-[11px] text-amber-300 space-y-0.5 list-disc list-inside">
-            {check.errors.map((e) => <li key={e}>{e}</li>)}
+            {check.errors.map((e) => <li key={e}>{checkErrorText(t, e)}</li>)}
           </ul>
         )}
       </Card>
@@ -1429,8 +1503,8 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
       <Card>
         <CardHeader
           icon={Hash}
-          title="Slips raised in this app"
-          description={`${nOr(recent.length)} shown`}
+          title={t('wmsissue.raise.recentTitle')}
+          description={t('wmsissue.common.shown', { count: nOr(recent.length) })}
         />
         {recentError && (
           <p role="alert" className="text-[11px] text-red-400 mb-2">{recentError}</p>
@@ -1443,15 +1517,21 @@ function RaiseTab({ canWrite: canWriteBase, canIssue = false, activeCountry, pro
 
 /** Slips raised in this app (V609), through the shared table. */
 function RecentSlips({ recent }) {
+  const { t } = useLanguage()
+  const { txt } = useFmt()
   const rows = useMemo(() => recentSlipRows(recent), [recent])
-  const columns = useMemo(() => [
-    { id: 'slip', header: 'Slip No', accessorFn: (r) => txt(r.issueNumber), cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]">{txt(row.original.issueNumber)}</span> },
-    { id: 'doc', header: 'Document', accessorKey: 'docType' },
-    { id: 'job', header: 'Job card', accessorFn: (r) => txt(r.workOrderNo), cell: ({ row }) => <span className="font-mono text-xs">{txt(row.original.workOrderNo)}</span> },
-    { id: 'asset', header: 'Asset', accessorFn: (r) => txt(r.assetNo) },
-    { id: 'issued', header: 'Issued', accessorFn: (r) => r.issuedDay || '', cell: ({ row }) => txt(row.original.issuedDay) },
-    { id: 'status', header: 'Status', accessorKey: 'status' },
-  ], [])
+  const columns = useMemo(() => {
+    const docText = (label) => (DOC_LABEL_KEY[label] ? t(`wmsissue.doc.${DOC_LABEL_KEY[label]}`) : label)
+    const statusText = (label) => (STATUS_LABEL_KEY[label] ? t(`wmsissue.status.${STATUS_LABEL_KEY[label]}`) : label)
+    return [
+      { id: 'slip', header: t('wmsissue.cols.slipNo'), accessorFn: (r) => txt(r.issueNumber), cell: ({ row }) => <span className="font-mono text-xs text-[var(--text-primary)]" dir="ltr">{txt(row.original.issueNumber)}</span> },
+      { id: 'doc', header: t('wmsissue.cols.document'), accessorFn: (r) => docText(r.docType) },
+      { id: 'job', header: t('wmsissue.cols.jobCard'), accessorFn: (r) => txt(r.workOrderNo), cell: ({ row }) => <span className="font-mono text-xs" dir="ltr">{txt(row.original.workOrderNo)}</span> },
+      { id: 'asset', header: t('wmsissue.cols.asset'), accessorFn: (r) => txt(r.assetNo) },
+      { id: 'issued', header: t('wmsissue.cols.issued'), accessorFn: (r) => r.issuedDay || '', cell: ({ row }) => txt(row.original.issuedDay) },
+      { id: 'status', header: t('wmsissue.cols.status'), accessorFn: (r) => statusText(r.status) },
+    ]
+  }, [t, txt])
   return (
     <EnterpriseTable
       columns={columns}
@@ -1459,8 +1539,8 @@ function RecentSlips({ recent }) {
       getRowId={(r) => String(r.id)}
       enableColumnFilters={false}
       enableExport={false}
-      searchPlaceholder="Search slips raised here..."
-      emptyMessage="No slips have been raised in this app yet. The historical register on the Issue register tab is unaffected by this."
+      searchPlaceholder={t('wmsissue.raise.recentSearch')}
+      emptyMessage={t('wmsissue.raise.recentEmpty')}
     />
   )
 }
@@ -1469,6 +1549,8 @@ function RecentSlips({ recent }) {
  * Tab 4 - analytics                                                   *
  * ------------------------------------------------------------------ */
 function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onPdf }) {
+  const { t } = useLanguage()
+  const { money, nOr, txt } = useFmt()
   const trend = useMemo(() => monthlyIssueTrend(filtered), [filtered])
   const country = summary.byCountry[0]
   // A mixed scope shows the category split for ONE country's currency (the same
@@ -1484,25 +1566,25 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
   const topItems = useMemo(() => topItemRows(country?.topItems), [country])
   const itemColumns = useMemo(() => [
     {
-      id: 'item', header: 'Item', accessorFn: (it) => `${txt(it.key)} ${it.description || ''}`,
+      id: 'item', header: t('wmsissue.cols.item'), accessorFn: (it) => `${txt(it.key)} ${it.description || ''}`,
       cell: ({ row }) => (
         <span>
-          <span className="font-mono text-[var(--text-primary)]">{txt(row.original.key)}</span>
+          <span className="font-mono text-[var(--text-primary)]" dir="ltr">{txt(row.original.key)}</span>
           {row.original.description && <span className="text-[var(--text-muted)]"> - {row.original.description}</span>}
         </span>
       ),
     },
-    { id: 'lines', header: 'Lines', accessorFn: (it) => it.lines ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lines) },
-    { id: 'qty', header: 'Qty', accessorFn: (it) => Number(it.qty) || 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.qty, 2) },
+    { id: 'lines', header: t('wmsissue.cols.lines'), accessorFn: (it) => it.lines ?? 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.lines) },
+    { id: 'qty', header: t('wmsissue.cols.qty'), accessorFn: (it) => Number(it.qty) || 0, meta: { align: 'right' }, cell: ({ row }) => nOr(row.original.qty, 2) },
     {
-      id: 'value', header: 'Value', accessorFn: (it) => it.value ?? -1, meta: { align: 'right' },
+      id: 'value', header: t('wmsissue.cols.value'), accessorFn: (it) => it.value ?? -1, meta: { align: 'right' },
       cell: ({ row }) => <span className="text-[var(--text-primary)]">{money(row.original.value, country?.currency)}</span>,
     },
-  ], [country])
+  ], [country, t, money, nOr, txt])
 
   const trendOption = useMemo(() => {
-    const months = trend.map((t) => t.month)
-    const hasMoney = trend.some((t) => t.value != null)
+    const months = trend.map((p) => p.month)
+    const hasMoney = trend.some((p) => p.value != null)
     return baseOption({
       legend: { textStyle: { color: 'var(--text-muted)' }, top: 0 },
       xAxis: { type: 'category', data: months, axisLabel: { color: 'var(--text-muted)' } },
@@ -1512,18 +1594,18 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
       ],
       series: [
         {
-          name: 'Slips', type: 'bar', data: trend.map((t) => t.slips),
+          name: t('wmsissue.analytics.slips'), type: 'bar', data: trend.map((p) => p.slips),
           itemStyle: { color: withAlpha(colorAt(0), 0.85) },
         },
         ...(hasMoney ? [{
-          name: `Value (${singleCurrency || 'per country'})`,
+          name: t('wmsissue.analytics.valueSeries', { currency: singleCurrency || t('wmsissue.analytics.perCountryLower') }),
           type: 'line', yAxisIndex: 1, smooth: true,
-          data: trend.map((t) => t.value),
+          data: trend.map((p) => p.value),
           itemStyle: { color: colorAt(1) }, lineStyle: { color: colorAt(1), width: 2 },
         }] : []),
       ],
     })
-  }, [trend, singleCurrency])
+  }, [trend, singleCurrency, t])
 
   const storeOption = useMemo(() => baseOption({
     xAxis: { type: 'value', axisLabel: { color: 'var(--text-muted)' }, splitLine: { lineStyle: { color: 'var(--panel-2)' } } },
@@ -1540,7 +1622,7 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
   }), [topStores])
 
   const bucketOption = useMemo(() => {
-    const data = categories.data
+    const data = categories.data.map((d) => ({ ...d, name: CATEGORY_NAME_KEY[d.name] ? t(`wmsissue.analytics.cat.${CATEGORY_NAME_KEY[d.name]}`) : d.name }))
     return {
       tooltip: { trigger: 'item' },
       legend: { bottom: 0, textStyle: { color: 'var(--text-muted)' } },
@@ -1551,10 +1633,10 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
         color: categorical(Math.max(1, data.length)),
       }],
     }
-  }, [categories])
+  }, [categories, t])
 
   const docOption = useMemo(() => {
-    const data = docTypeShare(summary.docTypeSplit)
+    const data = docTypeShare(summary.docTypeSplit).map((d) => ({ ...d, name: DOC_SHARE_KEY[d.name] ? t(`wmsissue.analytics.share.${DOC_SHARE_KEY[d.name]}`) : d.name }))
     return {
       tooltip: { trigger: 'item' },
       legend: { bottom: 0, textStyle: { color: 'var(--text-muted)' } },
@@ -1564,38 +1646,33 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
         color: categorical(Math.max(1, data.length)),
       }],
     }
-  }, [summary.docTypeSplit])
+  }, [summary.docTypeSplit, t])
 
   const bucketsUnavailable = categories.unavailable
 
   return (
     <div className="space-y-4">
       {summary.mixedCurrency && (
-        <Notice tone="warn" icon={AlertTriangle} title="This scope spans more than one currency.">
-          <p>
-            Slip and line counts are still real quantities, so they are charted. Money is
-            not: a month that mixes SAR, AED and EGP has no single value, so it is left
-            blank on the trend rather than shown as a total that means nothing. Pick one
-            country in the app scope to see the money.
-          </p>
+        <Notice tone="warn" icon={AlertTriangle} title={t('wmsissue.analytics.mixedTitle')}>
+          <p>{t('wmsissue.analytics.mixedBody')}</p>
         </Notice>
       )}
 
       <div className="flex items-center gap-2 justify-end">
         <button onClick={onExcel} disabled={filtered.length === 0} className={btnCls}>
-          <FileSpreadsheet size={14} /> Excel
+          <FileSpreadsheet size={14} aria-hidden="true" /> {t('wmsissue.common.excel')}
         </button>
         <button onClick={onPdf} disabled={filtered.length === 0} className={btnCls}>
-          <FileText size={14} /> PDF
+          <FileText size={14} aria-hidden="true" /> {t('wmsissue.common.pdf')}
         </button>
       </div>
 
       <Card>
-        <CardHeader icon={TrendingUp} title="Issues per month" />
+        <CardHeader icon={TrendingUp} title={t('wmsissue.analytics.perMonth')} />
         <div className="h-[280px]">
-          {loading ? <EmptyChart label="Loading..." />
+          {loading ? <EmptyChart label={t('wmsissue.common.loading')} />
             : trend.length === 0 ? <EmptyChart />
-              : <EChart option={trendOption} className="h-full" ariaLabel="Issues per month" />}
+              : <EChart option={trendOption} className="h-full" ariaLabel={t('wmsissue.analytics.perMonth')} />}
         </div>
       </Card>
 
@@ -1603,44 +1680,44 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
         <Card>
           <CardHeader
             icon={BarChart3}
-            title="Value by store"
+            title={t('wmsissue.analytics.byStore')}
             description={summary.byCountry.length > 1
-              ? `${txt(country?.country)} only, to keep one currency`
+              ? t('wmsissue.analytics.oneCountry', { country: txt(country?.country) })
               : undefined}
           />
           <div className="h-[260px]">
             {topStores.length === 0
-              ? <EmptyChart label="No store is recorded on these slips." />
-              : <EChart option={storeOption} className="h-full" ariaLabel="Value by store" />}
+              ? <EmptyChart label={t('wmsissue.analytics.noStore')} />
+              : <EChart option={storeOption} className="h-full" ariaLabel={t('wmsissue.analytics.byStore')} />}
           </div>
         </Card>
 
         <Card>
           <CardHeader
             icon={PieChart}
-            title="By category"
-            description={shareCurrency ? `${txt(country?.country)} only, to keep one currency` : 'Tyre, spare and oil split'}
+            title={t('wmsissue.analytics.byCategory')}
+            description={shareCurrency ? t('wmsissue.analytics.oneCountry', { country: txt(country?.country) }) : t('wmsissue.analytics.categorySplit')}
           />
           <div className="h-[260px]">
             {bucketsUnavailable
-              ? <EmptyChart label="No category split is recorded on these lines." />
-              : <EChart option={bucketOption} className="h-full" ariaLabel="Value by category" />}
+              ? <EmptyChart label={t('wmsissue.analytics.noCategory')} />
+              : <EChart option={bucketOption} className="h-full" ariaLabel={t('wmsissue.analytics.byCategoryAria')} />}
           </div>
         </Card>
 
         <Card>
-          <CardHeader icon={PieChart} title="Issues against returns" />
+          <CardHeader icon={PieChart} title={t('wmsissue.analytics.issuesVsReturns')} />
           <div className="h-[260px]">
             {summary.slips === 0
               ? <EmptyChart />
-              : <EChart option={docOption} className="h-full" ariaLabel="Issues against returns" />}
+              : <EChart option={docOption} className="h-full" ariaLabel={t('wmsissue.analytics.issuesVsReturns')} />}
           </div>
         </Card>
 
         <Card>
-          <CardHeader icon={Layers} title="Most issued items" />
+          <CardHeader icon={Layers} title={t('wmsissue.analytics.topItems')} />
           {topItems.length === 0 ? (
-            <div className="h-[260px]"><EmptyChart label="No item codes on these slips." /></div>
+            <div className="h-[260px]"><EmptyChart label={t('wmsissue.analytics.noItems')} /></div>
           ) : (
             <EnterpriseTable
               columns={itemColumns}
@@ -1651,7 +1728,7 @@ function AnalyticsTab({ loading, filtered, summary, singleCurrency, onExcel, onP
               enableExport={false}
               virtual
               maxHeight={260}
-              emptyMessage="No item codes on these slips."
+              emptyMessage={t('wmsissue.analytics.noItems')}
             />
           )}
         </Card>

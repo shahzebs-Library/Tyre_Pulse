@@ -69,7 +69,10 @@ Map<String, TyreFitment> fitmentsByInspectionSlot({
   for (final TyreFitment fitment in ordered) {
     final String? code = fitment.positionCode;
     if (code == null) continue;
-    final String? slot = slotByCode[keyOf(code)];
+    // The shown code first, then a spelling the shared tyre map confirms for
+    // that wheel (the concrete pump's LHCO / LHR1-O records).
+    final String? slot =
+        slotByCode[keyOf(code)] ?? slotForStoredPosition(layoutKey, code);
     if (slot != null) result[slot] = fitment;
   }
   return Map<String, TyreFitment>.unmodifiable(result);

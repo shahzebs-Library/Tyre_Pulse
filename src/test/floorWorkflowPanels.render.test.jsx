@@ -24,9 +24,9 @@ const scope = { country: 'KSA', site: 'all' }
 beforeEach(() => { Object.values(api).forEach((f) => f.mockReset()) })
 
 describe('floor workflow panels', () => {
-  it('put-away hides itself behind the transfer permission', () => {
+  it('put-away hides itself behind the transfer permission', async () => {
     wrap(<PutawayPanel scope={scope} can={(c) => c !== 'transfer'} />)
-    expect(screen.getByText(/needs the inventory transfer permission/i)).toBeTruthy()
+    expect(await screen.findByText(/needs the inventory transfer permission/i)).toBeTruthy()
     expect(api.listPutawayCandidates).not.toHaveBeenCalled()
   })
 
@@ -43,7 +43,7 @@ describe('floor workflow panels', () => {
     api.finishPutaway.mockResolvedValue({ status: 'completed' })
     wrap(<PutawayPanel scope={scope} can={yes} />)
     fireEvent.click(await screen.findByText('TYR-1'))
-    fireEvent.change(screen.getByLabelText('Bin or shelf'), { target: { value: 'b1' } })
+    fireEvent.change(await screen.findByLabelText('Bin or shelf'), { target: { value: 'b1' } })
     fireEvent.click(screen.getByRole('button', { name: /Put away$/ }))
     await waitFor(() => expect(api.finishPutaway).toHaveBeenCalledWith('t1', expect.any(String)))
     expect(api.startPutaway.mock.calls[0][0]).toMatchObject({ targetId: 'b1', qty: 5 })
@@ -57,7 +57,7 @@ describe('floor workflow panels', () => {
     })
     api.confirmPick.mockResolvedValue({ movement_id: 'm1' })
     wrap(<PickingPanel scope={scope} can={yes} />)
-    fireEvent.change(screen.getByLabelText('Job card number'), { target: { value: 'JC1' } })
+    fireEvent.change(await screen.findByLabelText('Job card number'), { target: { value: 'JC1' } })
     fireEvent.click(screen.getByRole('button', { name: /Build pick list/ }))
     fireEvent.change(await screen.findByLabelText(/Handed to/), { target: { value: 'Tech One' } })
     fireEvent.click(screen.getByRole('button', { name: /Confirm pick/ }))
@@ -72,7 +72,7 @@ describe('floor workflow panels', () => {
       lines: [{ key: 'r:r1', source: 'reservation', reservationId: 'r1', stockId: 'st1', itemCode: 'A', site: 'NHC', locationPath: 'B01', qty: 2 }],
     })
     wrap(<PickingPanel scope={scope} can={(c) => c !== 'issue'} />)
-    fireEvent.change(screen.getByLabelText('Job card number'), { target: { value: 'JC1' } })
+    fireEvent.change(await screen.findByLabelText('Job card number'), { target: { value: 'JC1' } })
     fireEvent.click(screen.getByRole('button', { name: /Build pick list/ }))
     expect(await screen.findByText(/needs the inventory issue permission/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Confirm pick/ })).toBeNull()
@@ -88,7 +88,7 @@ describe('floor workflow panels', () => {
       items: [{ itemCode: 'A', issued: 3, returned: 0, net: 3 }],
     })
     wrap(<HandoverPanel scope={scope} can={yes} />)
-    fireEvent.change(screen.getByLabelText('Job card number'), { target: { value: 'JC1' } })
+    fireEvent.change(await screen.findByLabelText('Job card number'), { target: { value: 'JC1' } })
     fireEvent.click(screen.getByRole('button', { name: /Show handover/ }))
     expect(await screen.findByText('Tech One')).toBeTruthy()
     expect(screen.getByText(/do not name who received/)).toBeTruthy()

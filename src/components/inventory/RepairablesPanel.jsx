@@ -17,13 +17,19 @@ import { loadStockWithLocations } from '../../lib/api/warehouseAssets'
 import { repairableRows, summarizeRepairables, repairLocationCoverage, REPAIR_STATES } from '../../lib/inventory/warehouseAssets'
 import { formatMoney, formatQty, formatTotals } from '../../lib/inventory/inventoryMoney'
 import UnitEventsSection from '../warehouseClasses/UnitEventsSection'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const ICONS = { at_vendor: Truck, awaiting_repair: Wrench, under_warranty: ShieldCheck, quarantine: ShieldAlert, damaged: AlertOctagon, scrap_pending: Trash2 }
 const TONES = { at_vendor: 't-blue', awaiting_repair: 't-orange', under_warranty: 't-purple', quarantine: 't-amber', damaged: 't-red', scrap_pending: 't-red' }
 const PILL = { at_vendor: 'info', awaiting_repair: 'warn', under_warranty: 'info', quarantine: 'warn', damaged: 'bad', scrap_pending: 'bad' }
-const LOC_LABEL = { supplier_custody: 'Vendor custody', repairable: 'Repairable', warranty: 'Warranty', quarantine: 'Quarantine', damaged: 'Damaged', scrap: 'Scrap' }
+const LOC_TYPES = ['supplier_custody', 'repairable', 'warranty', 'quarantine', 'damaged', 'scrap']
 
 export default function RepairablesPanel({ scope, can, onNavigate }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`wmsfloor.repair.${k}`, v)
+  const NA = t('wmsfloor.common.na')
+  const stateLabel = (k) => (REPAIR_STATES[k] ? t(`wmsfloor.repair.state.${k}`) : k)
+  const locLabel = (k) => (LOC_TYPES.includes(k) ? t(`wmsfloor.repair.loc.${k}`) : k)
   const q = useInvQuery(() => loadStockWithLocations(scope), [scope.country, scope.site])
   const [state, setState] = useState('all')
   const rows = useMemo(() => repairableRows(q.data?.valuation, q.data?.locations), [q.data])
@@ -34,61 +40,59 @@ export default function RepairablesPanel({ scope, can, onNavigate }) {
   const showValue = can('view_value')
 
   if (q.error) return <ErrorNote error={q.error} onRetry={q.retry} />
-  if (q.data?.status === 'not_provisioned') return <NotSetUp what="Stock valuation" />
+  if (q.data?.status === 'not_provisioned') return <NotSetUp what={p('what')} />
 
   const missing = coverage.filter((c) => !c.present)
 
   return (
     <div className="inv-hub" style={{ gap: 14 }}>
-      {q.data?.truncated && <Note tone="warn">Only part of the stock was read. Choose a site to see all of it.</Note>}
+      {q.data?.truncated && <Note tone="warn">{p('truncated')}</Note>}
       <div className="inv-kpis">
         {Object.keys(REPAIR_STATES).map((k) => (
           <Kpi key={k} icon={ICONS[k]} tone={TONES[k]} loading={loading} value={q.data ? sum.byState[k].rows : null}
-            label={REPAIR_STATES[k]} onClick={() => setState(state === k ? 'all' : k)} />
+            label={stateLabel(k)} onClick={() => setState(state === k ? 'all' : k)} />
         ))}
       </div>
 
       {missing.length > 0 && (
-        <Note tone="info" title="Some repair locations are not set up">
-          A part is tracked as out for repair when it sits in a location of that type. Missing for this scope:{' '}
-          {missing.map((m) => LOC_LABEL[m.type]).join(', ')}. Add them under Locations; a vendor-custody location per repair
-          vendor lets you see what each vendor holds.{' '}
-          {onNavigate && <button type="button" className="cc-btn-ghost" onClick={() => onNavigate('locations')}>Open Locations</button>}
+        <Note tone="info" title={p('missingTitle')}>
+          {p('missingBody', { list: missing.map((m) => locLabel(m.type)).join(', ') })}{' '}
+          {onNavigate && <button type="button" className="cc-btn-ghost" onClick={() => onNavigate('locations')}>{p('openLocations')}</button>}
         </Note>
       )}
 
-      <SectionCard title={state === 'all' ? 'Parts out of normal use' : REPAIR_STATES[state]}
+      <SectionCard title={state === 'all' ? p('title') : stateLabel(state)}
         sub={showValue
-          ? `Known value ${formatTotals(sum.totals)}. Unvalued quantity ${formatQty(sum.unvaluedQty)} (cost unknown, not zero).`
-          : `Unvalued quantity ${formatQty(sum.unvaluedQty)}. Values need the view-value permission.`}
+          ? p('subValue', { value: formatTotals(sum.totals), qty: formatQty(sum.unvaluedQty) })
+          : p('subNoValue', { qty: formatQty(sum.unvaluedQty) })}
         action={(
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {state !== 'all' && <button type="button" className="cc-btn-ghost" onClick={() => setState('all')}>Show all states</button>}
-            {onNavigate && can('transfer') && <button type="button" className="cc-btn" onClick={() => onNavigate('movements')}>Send to vendor (transfer)</button>}
+            {state !== 'all' && <button type="button" className="cc-btn-ghost" onClick={() => setState('all')}>{p('showAll')}</button>}
+            {onNavigate && can('transfer') && <button type="button" className="cc-btn" onClick={() => onNavigate('movements')}>{p('sendToVendor')}</button>}
           </div>
         )}>
         <div className="inv-scroll">
-          <KitTable compact loading={loading} rows={shown} empty="No parts are out for repair, held, damaged or marked scrap."
+          <KitTable compact loading={loading} rows={shown} empty={p('empty')}
             columns={alignNumeric([
-              { key: 'item_code', header: 'Item code', cell: (r) => r.item_code || <span className="cc-na">No code</span> },
-              { key: 'description', header: 'Description', cell: (r) => r.description || 'N/A' },
-              { key: 'site', header: 'Site' },
-              { key: 'location_code', header: 'Location', cell: (r) => r.location_code ? `${r.location_code}${r.location_type ? ` (${LOC_LABEL[r.location_type] || r.location_type})` : ''}` : 'N/A' },
-              { key: 'condition', header: 'Condition' },
-              { key: 'state', header: 'State', cell: (r) => <StatusPill value={r.state} tone={PILL[r.state]} label={REPAIR_STATES[r.state]} /> },
-              { key: 'qty_on_hand', header: 'On hand', numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
-              { key: 'unvalued_qty', header: 'Unvalued qty', numeric: true, cell: (r) => formatQty(r.unvalued_qty) },
-              ...(showValue ? [{ key: 'valued_amount', header: 'Known value', numeric: true, cell: (r) => (r.valued_amount === null ? 'N/A' : formatMoney(r.valued_amount, r.currency)) }] : []),
+              { key: 'item_code', header: p('colItemCode'), cell: (r) => r.item_code || <span className="cc-na">{p('noCode')}</span> },
+              { key: 'description', header: p('colDescription'), cell: (r) => r.description || NA },
+              { key: 'site', header: p('colSite') },
+              { key: 'location_code', header: p('colLocation'), cell: (r) => r.location_code ? `${r.location_code}${r.location_type ? ` (${locLabel(r.location_type)})` : ''}` : NA },
+              { key: 'condition', header: p('colCondition') },
+              { key: 'state', header: p('colState'), cell: (r) => <StatusPill value={r.state} tone={PILL[r.state]} label={stateLabel(r.state)} /> },
+              { key: 'qty_on_hand', header: p('colOnHand'), numeric: true, cell: (r) => formatQty(r.qty_on_hand) },
+              { key: 'unvalued_qty', header: p('colUnvalued'), numeric: true, cell: (r) => formatQty(r.unvalued_qty) },
+              ...(showValue ? [{ key: 'valued_amount', header: p('colKnownValue'), numeric: true, cell: (r) => (r.valued_amount === null ? NA : formatMoney(r.valued_amount, r.currency)) }] : []),
             ])} />
         </div>
       </SectionCard>
 
-      <SectionCard title="How a repair is tracked" sub="Each step is an existing stock movement, so the ledger keeps the history.">
+      <SectionCard title={p('howTitle')} sub={p('howSub')}>
         <ul className="inv-tree">
-          <li className="inv-tree-row"><span className="inv-tree-name">Removed part comes in: receive it with condition Damaged or Quarantine (Receiving).</span></li>
-          <li className="inv-tree-row"><span className="inv-tree-name">Out to the vendor: transfer it to that vendor&apos;s custody location (Movements).</span></li>
-          <li className="inv-tree-row"><span className="inv-tree-name">Back from the vendor: receive the transfer into a normal bin.</span></li>
-          <li className="inv-tree-row"><span className="inv-tree-name">Cannot be repaired: propose scrap with a reason; it posts only after approval (Warranty and scrap).</span></li>
+          <li className="inv-tree-row"><span className="inv-tree-name">{p('step1')}</span></li>
+          <li className="inv-tree-row"><span className="inv-tree-name">{p('step2')}</span></li>
+          <li className="inv-tree-row"><span className="inv-tree-name">{p('step3')}</span></li>
+          <li className="inv-tree-row"><span className="inv-tree-name">{p('step4')}</span></li>
         </ul>
       </SectionCard>
 

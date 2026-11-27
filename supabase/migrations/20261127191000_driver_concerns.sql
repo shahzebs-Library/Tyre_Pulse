@@ -289,9 +289,11 @@ begin
   if public.app_can_see_country(p_country) is false or public.app_can_see_site(p_site) is false then
     return 0;
   end if;
-  if r in ('manager','director','admin')
+  if r in ('manager','admin')
      or private.dc_has_handler_row(array['manager'], p_country, p_site) then
     v := 3;
+  elsif r = 'director' and not p_sensitive then
+    v := 3; -- a director handles non-sensitive cases only (sensitive = HR Officer, Manager, Admin)
   elsif p_sensitive then
     if r = 'hr_officer' or private.dc_has_handler_row(array['hr'], p_country, p_site) then v := 2; end if;
     return v; -- pool roles never act on a sensitive case
@@ -634,7 +636,9 @@ begin
 
   if coalesce(p_on_behalf, false) then
     select * into v_row from public.drivers where id = p_driver_id and organisation_id = v_org;
-    if not found or private.dc_my_rank(v_sensitive, v_row.country, v_row.site) = 0 and public.app_role() <> 'hr_officer' then
+    if not found
+       or not private.dc_visible(v_org, v_row.id, v_sensitive, v_row.country, v_row.site, p_subject_user)
+       or private.dc_my_rank(v_sensitive, v_row.country, v_row.site) = 0 and public.app_role() <> 'hr_officer' then
       raise exception using errcode = '42501', message = 'You cannot log a concern for this driver';
     end if;
     v_driver := v_row.id;

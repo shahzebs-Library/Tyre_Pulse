@@ -9205,5 +9205,295 @@
   "handoverAuthSiteFromRegister": "Taken from the fleet register for this vehicle.",
   "signatureSignAgain": "The signature is too short to be read. Please sign again with your full signature.",
   "driverChargeLinkUnverified": "Link to source not confirmed by record",
-  "driverChargeAppealClosedDeducted": "Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder."
+  "driverChargeAppealClosedDeducted": "Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.",
+  "profileSyncQueueTitle": "Sync queue",
+  "@profileSyncQueueTitle": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueStatPending": "Pending",
+  "@syncQueueStatPending": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueStatAttention": "Needs attention",
+  "@syncQueueStatAttention": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueStatSent": "Sent",
+  "@syncQueueStatSent": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueStatSentCaption": "Still on this device",
+  "@syncQueueStatSentCaption": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueLastAttempt": "Last sync attempt: {time}",
+  "@syncQueueLastAttempt": {
+    "description": "Profile sync queue / drafts screens.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueNoAttempt": "No sync attempt recorded on this device yet",
+  "@syncQueueNoAttempt": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueRunning": "A sync is running now",
+  "@syncQueueRunning": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueSyncNow": "Sync now",
+  "@syncQueueSyncNow": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueOfflineReason": "You are offline. Your work is safe on this phone and will be sent when you are back online.",
+  "@syncQueueOfflineReason": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueNothingToSend": "Nothing is waiting to be sent.",
+  "@syncQueueNothingToSend": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueRequested": "Sync requested. This list updates as items are sent.",
+  "@syncQueueRequested": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueRequestFailed": "Could not start a sync. Try again.",
+  "@syncQueueRequestFailed": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueEmptyTitle": "Everything is synced",
+  "@syncQueueEmptyTitle": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueEmptyMessage": "Nothing from this device is waiting to be sent.",
+  "@syncQueueEmptyMessage": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueLoadFailedTitle": "Could not read the sync queue",
+  "@syncQueueLoadFailedTitle": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueLoadFailedMessage": "Your queued work is still on this phone. Try again.",
+  "@syncQueueLoadFailedMessage": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueSectionItems": "Queued items",
+  "@syncQueueSectionItems": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeInspection": "Inspection {asset}",
+  "@syncTypeInspection": {
+    "description": "Sync queue item name for a submitted inspection; asset is the asset number.",
+    "placeholders": {
+      "asset": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueItemQueued": "Queued {time}",
+  "@syncQueueItemQueued": {
+    "description": "Profile sync queue / drafts screens.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueAttempts": "{count, plural, =0{Not tried yet} =1{1 attempt} other{{count} attempts}}",
+  "@syncQueueAttempts": {
+    "description": "Profile sync queue / drafts screens.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncQueueNextAttempt": "Next try {time}",
+  "@syncQueueNextAttempt": {
+    "description": "Profile sync queue / drafts screens.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueStateWaiting": "Waiting to send",
+  "@syncQueueStateWaiting": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueStateSending": "Sending now",
+  "@syncQueueStateSending": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueStateRetrying": "Will try again",
+  "@syncQueueStateRetrying": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueStateOnHold": "On hold",
+  "@syncQueueStateOnHold": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueStateNeedsAttention": "Needs attention",
+  "@syncQueueStateNeedsAttention": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueStateSent": "Sent",
+  "@syncQueueStateSent": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueRetry": "Retry",
+  "@syncQueueRetry": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueRetried": "Put back in the queue.",
+  "@syncQueueRetried": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueRetryNotNeeded": "This item is no longer waiting for a retry.",
+  "@syncQueueRetryNotNeeded": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueRetryFailed": "Could not retry this item. Try again.",
+  "@syncQueueRetryFailed": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueErrorFallback": "This item could not be sent.",
+  "@syncQueueErrorFallback": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeTyreChange": "Tyre change",
+  "@syncTypeTyreChange": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeWorkOrder": "Work order",
+  "@syncTypeWorkOrder": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeRca": "Root cause analysis",
+  "@syncTypeRca": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeReportIssue": "Reported issue",
+  "@syncTypeReportIssue": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeStockAdjust": "Stock count",
+  "@syncTypeStockAdjust": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeWorkOrderStatus": "Work order status",
+  "@syncTypeWorkOrderStatus": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeCorrectiveActionStatus": "Corrective action status",
+  "@syncTypeCorrectiveActionStatus": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeChecklistSubmission": "Checklist",
+  "@syncTypeChecklistSubmission": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeChecklistAssignmentStatus": "Checklist assignment",
+  "@syncTypeChecklistAssignmentStatus": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeOdometerLog": "Odometer reading",
+  "@syncTypeOdometerLog": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeEngineHoursLog": "Engine hours reading",
+  "@syncTypeEngineHoursLog": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeReportAccident": "Accident report",
+  "@syncTypeReportAccident": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeWashRecord": "Vehicle wash",
+  "@syncTypeWashRecord": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeWorkshopEvent": "Workshop activity",
+  "@syncTypeWorkshopEvent": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeInventoryCountLine": "Inventory count line",
+  "@syncTypeInventoryCountLine": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncTypeUnknown": "Unrecognised entry",
+  "@syncTypeUnknown": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftsTitle": "Drafts",
+  "@profileDraftsTitle": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftsEmptyTitle": "No drafts",
+  "@profileDraftsEmptyTitle": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftsEmptyMessage": "Unfinished checklists and inspections you start on this phone appear here.",
+  "@profileDraftsEmptyMessage": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftsLoadFailedTitle": "Could not read your drafts",
+  "@profileDraftsLoadFailedTitle": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftsLoadFailedMessage": "Your drafts are still on this phone. Try again.",
+  "@profileDraftsLoadFailedMessage": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftKindChecklist": "Checklist",
+  "@profileDraftKindChecklist": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftKindInspection": "Inspection",
+  "@profileDraftKindInspection": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftEdited": "Last edited {time}",
+  "@profileDraftEdited": {
+    "description": "Profile sync queue / drafts screens.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "profileDraftNoAsset": "No asset picked yet",
+  "@profileDraftNoAsset": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftResume": "Resume",
+  "@profileDraftResume": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftDiscard": "Discard",
+  "@profileDraftDiscard": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftDiscardTitle": "Discard this draft?",
+  "@profileDraftDiscardTitle": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftDiscardMessage": "Everything recorded in this draft, including its photos and signatures, is removed from this phone. This cannot be undone.",
+  "@profileDraftDiscardMessage": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftDiscarded": "Draft discarded.",
+  "@profileDraftDiscarded": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "profileDraftDiscardFailed": "Could not discard the draft. Try again.",
+  "@profileDraftDiscardFailed": {
+    "description": "Profile sync queue / drafts screens."
+  },
+  "syncQueueInspectionRetried": "Tried to send your inspections again. The status below is up to date.",
+  "@syncQueueInspectionRetried": {
+    "description": "After Retry on a submitted inspection flushed the inspection queue."
+  }
 }

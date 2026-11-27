@@ -3715,5 +3715,112 @@
   "handoverAuthSiteFromRegister": "مأخوذ من سجل الأسطول لهذه المركبة.",
   "signatureSignAgain": "التوقيع قصير جداً ولا يمكن قراءته. يرجى التوقيع مرة أخرى بتوقيعك الكامل.",
   "driverChargeLinkUnverified": "الربط بالسجل المصدر غير مؤكد من السجل",
-  "driverChargeAppealClosedDeducted": "بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي."
+  "driverChargeAppealClosedDeducted": "بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي.",
+  "profileSyncQueueTitle": "قائمة المزامنة",
+  "syncQueueStatPending": "قيد الانتظار",
+  "syncQueueStatAttention": "تحتاج إلى متابعة",
+  "syncQueueStatSent": "تم الإرسال",
+  "syncQueueStatSentCaption": "لا يزال على هذا الجهاز",
+  "syncQueueLastAttempt": "آخر محاولة مزامنة: {time}",
+  "@syncQueueLastAttempt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueNoAttempt": "لم تُسجَّل أي محاولة مزامنة على هذا الجهاز بعد",
+  "syncQueueRunning": "تجري المزامنة الآن",
+  "syncQueueSyncNow": "زامن الآن",
+  "syncQueueOfflineReason": "أنت غير متصل. عملك محفوظ على هذا الهاتف وسيُرسل عند عودة الاتصال.",
+  "syncQueueNothingToSend": "لا يوجد شيء بانتظار الإرسال.",
+  "syncQueueRequested": "تم طلب المزامنة. تتحدّث هذه القائمة مع إرسال العناصر.",
+  "syncQueueRequestFailed": "تعذّر بدء المزامنة. حاول مرة أخرى.",
+  "syncQueueEmptyTitle": "تمت مزامنة كل شيء",
+  "syncQueueEmptyMessage": "لا يوجد شيء من هذا الجهاز بانتظار الإرسال.",
+  "syncQueueLoadFailedTitle": "تعذّرت قراءة قائمة المزامنة",
+  "syncQueueLoadFailedMessage": "عملك المنتظر لا يزال على هذا الهاتف. حاول مرة أخرى.",
+  "syncQueueSectionItems": "العناصر في القائمة",
+  "syncTypeInspection": "فحص {asset}",
+  "@syncTypeInspection": {
+    "placeholders": {
+      "asset": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueItemQueued": "أُضيف إلى القائمة {time}",
+  "@syncQueueItemQueued": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueAttempts": "{count, plural, =0{لم تتم المحاولة بعد} =1{محاولة واحدة} =2{محاولتان} few{{count} محاولات} many{{count} محاولة} other{{count} محاولة}}",
+  "@syncQueueAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncQueueNextAttempt": "المحاولة التالية {time}",
+  "@syncQueueNextAttempt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueStateWaiting": "بانتظار الإرسال",
+  "syncQueueStateSending": "يُرسل الآن",
+  "syncQueueStateRetrying": "ستتم إعادة المحاولة",
+  "syncQueueStateOnHold": "معلّق",
+  "syncQueueStateNeedsAttention": "تحتاج إلى متابعة",
+  "syncQueueStateSent": "تم الإرسال",
+  "syncQueueRetry": "إعادة المحاولة",
+  "syncQueueRetried": "أُعيد إلى القائمة.",
+  "syncQueueRetryNotNeeded": "لم يعد هذا العنصر بانتظار إعادة المحاولة.",
+  "syncQueueRetryFailed": "تعذّرت إعادة محاولة هذا العنصر. حاول مرة أخرى.",
+  "syncQueueErrorFallback": "تعذّر إرسال هذا العنصر.",
+  "syncTypeTyreChange": "تغيير إطار",
+  "syncTypeWorkOrder": "أمر عمل",
+  "syncTypeRca": "تحليل السبب الجذري",
+  "syncTypeReportIssue": "مشكلة مُبلَّغ عنها",
+  "syncTypeStockAdjust": "جرد المخزون",
+  "syncTypeWorkOrderStatus": "حالة أمر العمل",
+  "syncTypeCorrectiveActionStatus": "حالة الإجراء التصحيحي",
+  "syncTypeChecklistSubmission": "قائمة تحقق",
+  "syncTypeChecklistAssignmentStatus": "تكليف قائمة التحقق",
+  "syncTypeOdometerLog": "قراءة العدّاد",
+  "syncTypeEngineHoursLog": "قراءة ساعات المحرك",
+  "syncTypeReportAccident": "تقرير حادث",
+  "syncTypeWashRecord": "غسيل مركبة",
+  "syncTypeWorkshopEvent": "نشاط الورشة",
+  "syncTypeInventoryCountLine": "بند جرد المخزون",
+  "syncTypeUnknown": "إدخال غير معروف",
+  "profileDraftsTitle": "المسودات",
+  "profileDraftsEmptyTitle": "لا توجد مسودات",
+  "profileDraftsEmptyMessage": "تظهر هنا قوائم التحقق والفحوصات غير المكتملة التي تبدؤها على هذا الهاتف.",
+  "profileDraftsLoadFailedTitle": "تعذّرت قراءة مسوداتك",
+  "profileDraftsLoadFailedMessage": "مسوداتك لا تزال على هذا الهاتف. حاول مرة أخرى.",
+  "profileDraftKindChecklist": "قائمة تحقق",
+  "profileDraftKindInspection": "فحص",
+  "profileDraftEdited": "آخر تعديل {time}",
+  "@profileDraftEdited": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "profileDraftNoAsset": "لم يتم اختيار أصل بعد",
+  "profileDraftResume": "متابعة",
+  "profileDraftDiscard": "تجاهل",
+  "profileDraftDiscardTitle": "هل تريد تجاهل هذه المسودة؟",
+  "profileDraftDiscardMessage": "سيُحذف كل ما سُجِّل في هذه المسودة من هذا الهاتف، بما في ذلك الصور والتواقيع. لا يمكن التراجع عن ذلك.",
+  "profileDraftDiscarded": "تم تجاهل المسودة.",
+  "profileDraftDiscardFailed": "تعذّر تجاهل المسودة. حاول مرة أخرى.",
+  "syncQueueInspectionRetried": "تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة."
 }

@@ -591,4 +591,68 @@ void main() {
       );
     });
   });
+
+  group('sync queue screen reads', () {
+    test('retryFailedCommand resets only that failed row', () async {
+      await seedCommand(db, id: 'cmd-1');
+      await seedCommand(db, id: 'cmd-2');
+      for (final String id in <String>['cmd-1', 'cmd-2']) {
+        for (int i = 0; i < QueueRetryPolicy.maxRetries; i++) {
+          await db.queueDao.markAttemptFailed(
+            id,
+            now: testNow,
+            message: 'no answer',
+          );
+        }
+      }
+
+      final DateTime later = testNow.add(const Duration(hours: 1));
+      expect(await db.queueDao.retryFailedCommand('cmd-1', now: later), isTrue);
+
+      final PendingCommand? one = await db.queueDao.commandById('cmd-1');
+      expect(one!.status, CommandStatus.pending);
+      expect(one.retryCount, 0);
+      expect(one.lastError, isNull);
+      final PendingCommand? two = await db.queueDao.commandById('cmd-2');
+      expect(two!.status, CommandStatus.failed);
+    });
+
+    test('retryFailedCommand leaves a row that is not failed alone', () async {
+      await seedCommand(db, id: 'cmd-1');
+      expect(
+        await db.queueDao.retryFailedCommand('cmd-1', now: testNow),
+        isFalse,
+      );
+      expect(
+        (await db.queueDao.commandById('cmd-1'))!.status,
+        CommandStatus.pending,
+      );
+    });
+
+    test('watchQueuedCommands lists one workspace, synced rows included',
+        () async {
+      await seedCommand(db, id: 'cmd-1');
+      await seedCommand(db, id: 'cmd-2');
+      await seedCommand(db, id: 'cmd-b', workspaceId: workspaceB);
+      await db.queueDao.markSynced('cmd-2', testNow);
+
+      final List<PendingCommand> rows =
+          await db.queueDao.watchQueuedCommands(workspaceId: workspaceA).first;
+      expect(
+        rows.map((PendingCommand r) => r.id).toSet(),
+        <String>{'cmd-1', 'cmd-2'},
+      );
+    });
+
+    test('watchSyncRunMetadata reports the last run marker', () async {
+      expect(await db.queueDao.watchSyncRunMetadata().first, isEmpty);
+      await db.queueDao.acquireSyncLock(holder: 'h', now: testNow);
+      await db.queueDao.releaseSyncLock(now: testNow);
+      final rows = await db.queueDao.watchSyncRunMetadata().first;
+      expect(
+        rows.map((r) => r.key),
+        <String>[SyncMetadataKeys.syncLastRunAt],
+      );
+    });
+  });
 }

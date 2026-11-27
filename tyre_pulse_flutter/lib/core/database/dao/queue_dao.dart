@@ -300,6 +300,61 @@ class QueueDao extends DatabaseAccessor<AppDatabase> with _$QueueDaoMixin {
     );
   }
 
+  /// The per-item "Retry" on the sync queue screen: puts ONE `failed` row
+  /// back in the queue with its counter reset, exactly as [retryFailed] does
+  /// for every failed row at once.
+  ///
+  /// Only a row still `failed` is touched, so a stale tap on a row that has
+  /// since been retried, sent or pruned changes nothing. Returns whether a
+  /// row was reset.
+  Future<bool> retryFailedCommand(String id, {required DateTime now}) async {
+    final int changed = await (update(pendingCommands)
+          ..where(
+            (t) => t.id.equals(id) & t.status.equals(CommandStatus.failed),
+          ))
+        .write(
+      PendingCommandsCompanion(
+        status: const Value<String>(CommandStatus.pending),
+        retryCount: const Value<int>(0),
+        nextRetryAt: Value<DateTime>(now),
+        lastError: const Value<String?>(null),
+      ),
+    );
+    return changed > 0;
+  }
+
+  /// Every row still in the queue table for [workspaceId], newest first, as
+  /// a live list - `synced` rows included, because they stay on the device
+  /// until their photos are verified and a sync run prunes them.
+  ///
+  /// Read-only. A read failure surfaces as a stream error, never as an empty
+  /// list (an empty list would read as "everything is synced").
+  Stream<List<PendingCommand>> watchQueuedCommands({String? workspaceId}) {
+    return (select(pendingCommands)
+          ..where((t) {
+            if (workspaceId == null) return const Constant<bool>(true);
+            return t.workspaceId.equals(workspaceId);
+          })
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.createdAt),
+            (t) => OrderingTerm.desc(t.id),
+          ]))
+        .watch();
+  }
+
+  /// The sync lock and the last-run marker, live. Read-only: what the sync
+  /// queue screen needs to say "a sync is running" and "last sync attempt".
+  Stream<List<SyncMetadataEntry>> watchSyncRunMetadata() {
+    return (select(syncMetadata)
+          ..where(
+            (t) => t.key.isIn(<String>[
+              SyncMetadataKeys.syncLastRunAt,
+              SyncMetadataKeys.syncLockAcquiredAt,
+            ]),
+          ))
+        .watch();
+  }
+
   /// Returns to the queue a claim that a crashed sync run abandoned.
   ///
   /// Without this a crash mid-flight strands the row in `processing` forever

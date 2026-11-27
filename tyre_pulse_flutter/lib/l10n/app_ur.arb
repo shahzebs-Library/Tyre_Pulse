@@ -3715,5 +3715,112 @@
   "handoverAuthSiteFromRegister": "اس گاڑی کے لیے فلیٹ رجسٹر سے لیا گیا۔",
   "signatureSignAgain": "دستخط بہت چھوٹا ہے اور پڑھا نہیں جا سکتا۔ براہ کرم اپنے پورے دستخط کے ساتھ دوبارہ دستخط کریں۔",
   "driverChargeLinkUnverified": "ماخذ سے تعلق ریکارڈ سے تصدیق شدہ نہیں",
-  "driverChargeAppealClosedDeducted": "کٹوتیاں شروع ہو چکی ہیں، اس لیے اب یہاں اس واجب الادا کے خلاف اپیل نہیں ہو سکتی۔ مینیجر یا فنانس باقی رقم معاف کر سکتے ہیں۔"
+  "driverChargeAppealClosedDeducted": "کٹوتیاں شروع ہو چکی ہیں، اس لیے اب یہاں اس واجب الادا کے خلاف اپیل نہیں ہو سکتی۔ مینیجر یا فنانس باقی رقم معاف کر سکتے ہیں۔",
+  "profileSyncQueueTitle": "سنک قطار",
+  "syncQueueStatPending": "زیرِ التوا",
+  "syncQueueStatAttention": "توجہ درکار",
+  "syncQueueStatSent": "بھیج دیا گیا",
+  "syncQueueStatSentCaption": "ابھی اس ڈیوائس پر",
+  "syncQueueLastAttempt": "آخری سنک کوشش: {time}",
+  "@syncQueueLastAttempt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueNoAttempt": "اس ڈیوائس پر ابھی تک کوئی سنک کوشش ریکارڈ نہیں ہوئی",
+  "syncQueueRunning": "سنک ابھی چل رہا ہے",
+  "syncQueueSyncNow": "ابھی سنک کریں",
+  "syncQueueOfflineReason": "آپ آف لائن ہیں۔ آپ کا کام اس فون پر محفوظ ہے اور آن لائن ہوتے ہی بھیج دیا جائے گا۔",
+  "syncQueueNothingToSend": "بھیجنے کے لیے کچھ زیرِ التوا نہیں ہے۔",
+  "syncQueueRequested": "سنک کی درخواست کر دی گئی۔ اشیاء بھیجے جانے کے ساتھ یہ فہرست اپ ڈیٹ ہوتی رہے گی۔",
+  "syncQueueRequestFailed": "سنک شروع نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
+  "syncQueueEmptyTitle": "سب کچھ سنک ہو چکا ہے",
+  "syncQueueEmptyMessage": "اس ڈیوائس سے کچھ بھی بھیجے جانے کا منتظر نہیں ہے۔",
+  "syncQueueLoadFailedTitle": "سنک قطار پڑھی نہیں جا سکی",
+  "syncQueueLoadFailedMessage": "آپ کا قطار میں موجود کام ابھی اس فون پر ہے۔ دوبارہ کوشش کریں۔",
+  "syncQueueSectionItems": "قطار میں موجود اشیاء",
+  "syncTypeInspection": "معائنہ {asset}",
+  "@syncTypeInspection": {
+    "placeholders": {
+      "asset": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueItemQueued": "قطار میں شامل {time}",
+  "@syncQueueItemQueued": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueAttempts": "{count, plural, =0{ابھی کوشش نہیں ہوئی} =1{1 کوشش} other{{count} کوششیں}}",
+  "@syncQueueAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncQueueNextAttempt": "اگلی کوشش {time}",
+  "@syncQueueNextAttempt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "syncQueueStateWaiting": "بھیجے جانے کا منتظر",
+  "syncQueueStateSending": "ابھی بھیجا جا رہا ہے",
+  "syncQueueStateRetrying": "دوبارہ کوشش کی جائے گی",
+  "syncQueueStateOnHold": "روکا گیا",
+  "syncQueueStateNeedsAttention": "توجہ درکار",
+  "syncQueueStateSent": "بھیج دیا گیا",
+  "syncQueueRetry": "دوبارہ کوشش",
+  "syncQueueRetried": "دوبارہ قطار میں ڈال دیا گیا۔",
+  "syncQueueRetryNotNeeded": "یہ چیز اب دوبارہ کوشش کی منتظر نہیں ہے۔",
+  "syncQueueRetryFailed": "اس چیز کی دوبارہ کوشش نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
+  "syncQueueErrorFallback": "یہ چیز بھیجی نہیں جا سکی۔",
+  "syncTypeTyreChange": "ٹائر کی تبدیلی",
+  "syncTypeWorkOrder": "ورک آرڈر",
+  "syncTypeRca": "بنیادی وجہ کا تجزیہ",
+  "syncTypeReportIssue": "رپورٹ کردہ مسئلہ",
+  "syncTypeStockAdjust": "اسٹاک گنتی",
+  "syncTypeWorkOrderStatus": "ورک آرڈر کی حالت",
+  "syncTypeCorrectiveActionStatus": "اصلاحی اقدام کی حالت",
+  "syncTypeChecklistSubmission": "چیک لسٹ",
+  "syncTypeChecklistAssignmentStatus": "چیک لسٹ تفویض",
+  "syncTypeOdometerLog": "اوڈومیٹر ریڈنگ",
+  "syncTypeEngineHoursLog": "انجن گھنٹوں کی ریڈنگ",
+  "syncTypeReportAccident": "حادثے کی رپورٹ",
+  "syncTypeWashRecord": "گاڑی کی دھلائی",
+  "syncTypeWorkshopEvent": "ورکشاپ سرگرمی",
+  "syncTypeInventoryCountLine": "انوینٹری گنتی کی لائن",
+  "syncTypeUnknown": "نامعلوم اندراج",
+  "profileDraftsTitle": "مسودے",
+  "profileDraftsEmptyTitle": "کوئی مسودہ نہیں",
+  "profileDraftsEmptyMessage": "اس فون پر شروع کی گئی نامکمل چیک لسٹیں اور معائنے یہاں نظر آتے ہیں۔",
+  "profileDraftsLoadFailedTitle": "آپ کے مسودے پڑھے نہیں جا سکے",
+  "profileDraftsLoadFailedMessage": "آپ کے مسودے ابھی اس فون پر ہیں۔ دوبارہ کوشش کریں۔",
+  "profileDraftKindChecklist": "چیک لسٹ",
+  "profileDraftKindInspection": "معائنہ",
+  "profileDraftEdited": "آخری ترمیم {time}",
+  "@profileDraftEdited": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "profileDraftNoAsset": "ابھی کوئی اثاثہ منتخب نہیں ہوا",
+  "profileDraftResume": "دوبارہ شروع کریں",
+  "profileDraftDiscard": "ختم کریں",
+  "profileDraftDiscardTitle": "کیا یہ مسودہ ختم کرنا ہے؟",
+  "profileDraftDiscardMessage": "اس مسودے میں درج سب کچھ، بشمول تصاویر اور دستخط، اس فون سے ہٹا دیا جائے گا۔ اسے واپس نہیں کیا جا سکتا۔",
+  "profileDraftDiscarded": "مسودہ ختم کر دیا گیا۔",
+  "profileDraftDiscardFailed": "مسودہ ختم نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
+  "syncQueueInspectionRetried": "آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔"
 }

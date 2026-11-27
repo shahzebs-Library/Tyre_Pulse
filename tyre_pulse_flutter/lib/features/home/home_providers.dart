@@ -28,11 +28,14 @@ import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/home/data/home_repository.dart';
 import 'package:tyre_pulse/features/home/domain/home_work.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_submission_queue_reads.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
+import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 
 /// The number Home's sync indicator shows: every queued command not yet
 /// marked `synced` for the active workspace, [QueueDao.pendingCount]'s own
-/// documentation. That documentation records why this counts more than the
+/// documentation, plus this person's submitted inspections not yet
+/// delivered (`InspectionSubmissionQueue`). That documentation records why this counts more than the
 /// literal `pending` status: counting only `pending` made every badge read 0
 /// the moment an item failed, silently hiding exactly the items a person most
 /// needs to see.
@@ -46,7 +49,19 @@ final FutureProvider<int> homePendingSyncCountProvider = FutureProvider<int>((
   final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
   if (workspace == null) return 0;
   final AppDatabase db = ref.watch(appDatabaseProvider);
-  return db.queueDao.pendingCount(workspaceId: workspaceIdFor(workspace));
+  // Submitted inspections wait in their own file queue, not
+  // `pending_commands`; both are "pending sync" to the person holding the
+  // phone. An unreadable inspection queue throws (the tile shows `-`) rather
+  // than quietly leaving those inspections out. Re-read on Home's own
+  // refresh cadence (pull, resume, becoming visible).
+  final List<int> counts = await Future.wait(<Future<int>>[
+    db.queueDao.pendingCount(workspaceId: workspaceIdFor(workspace)),
+    readUserInspectionSubmissions(
+      ref.watch(inspectionSubmissionQueueProvider),
+      userId: workspace.userId,
+    ).then(pendingInspectionCount),
+  ]);
+  return counts[0] + counts[1];
 });
 
 /// Home's server reads (exact approvals count, recent inspected assets).

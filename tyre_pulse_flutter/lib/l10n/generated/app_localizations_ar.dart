@@ -9387,4 +9387,232 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي.';
+
+  @override
+  String get profileSyncQueueTitle => 'قائمة المزامنة';
+
+  @override
+  String get syncQueueStatPending => 'قيد الانتظار';
+
+  @override
+  String get syncQueueStatAttention => 'تحتاج إلى متابعة';
+
+  @override
+  String get syncQueueStatSent => 'تم الإرسال';
+
+  @override
+  String get syncQueueStatSentCaption => 'لا يزال على هذا الجهاز';
+
+  @override
+  String syncQueueLastAttempt(String time) {
+    return 'آخر محاولة مزامنة: $time';
+  }
+
+  @override
+  String get syncQueueNoAttempt =>
+      'لم تُسجَّل أي محاولة مزامنة على هذا الجهاز بعد';
+
+  @override
+  String get syncQueueRunning => 'تجري المزامنة الآن';
+
+  @override
+  String get syncQueueSyncNow => 'زامن الآن';
+
+  @override
+  String get syncQueueOfflineReason =>
+      'أنت غير متصل. عملك محفوظ على هذا الهاتف وسيُرسل عند عودة الاتصال.';
+
+  @override
+  String get syncQueueNothingToSend => 'لا يوجد شيء بانتظار الإرسال.';
+
+  @override
+  String get syncQueueRequested =>
+      'تم طلب المزامنة. تتحدّث هذه القائمة مع إرسال العناصر.';
+
+  @override
+  String get syncQueueRequestFailed => 'تعذّر بدء المزامنة. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueEmptyTitle => 'تمت مزامنة كل شيء';
+
+  @override
+  String get syncQueueEmptyMessage =>
+      'لا يوجد شيء من هذا الجهاز بانتظار الإرسال.';
+
+  @override
+  String get syncQueueLoadFailedTitle => 'تعذّرت قراءة قائمة المزامنة';
+
+  @override
+  String get syncQueueLoadFailedMessage =>
+      'عملك المنتظر لا يزال على هذا الهاتف. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueSectionItems => 'العناصر في القائمة';
+
+  @override
+  String syncTypeInspection(String asset) {
+    return 'فحص $asset';
+  }
+
+  @override
+  String syncQueueItemQueued(String time) {
+    return 'أُضيف إلى القائمة $time';
+  }
+
+  @override
+  String syncQueueAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count محاولة',
+      many: '$count محاولة',
+      few: '$count محاولات',
+      two: 'محاولتان',
+      one: 'محاولة واحدة',
+      zero: 'لم تتم المحاولة بعد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncQueueNextAttempt(String time) {
+    return 'المحاولة التالية $time';
+  }
+
+  @override
+  String get syncQueueStateWaiting => 'بانتظار الإرسال';
+
+  @override
+  String get syncQueueStateSending => 'يُرسل الآن';
+
+  @override
+  String get syncQueueStateRetrying => 'ستتم إعادة المحاولة';
+
+  @override
+  String get syncQueueStateOnHold => 'معلّق';
+
+  @override
+  String get syncQueueStateNeedsAttention => 'تحتاج إلى متابعة';
+
+  @override
+  String get syncQueueStateSent => 'تم الإرسال';
+
+  @override
+  String get syncQueueRetry => 'إعادة المحاولة';
+
+  @override
+  String get syncQueueRetried => 'أُعيد إلى القائمة.';
+
+  @override
+  String get syncQueueRetryNotNeeded =>
+      'لم يعد هذا العنصر بانتظار إعادة المحاولة.';
+
+  @override
+  String get syncQueueRetryFailed =>
+      'تعذّرت إعادة محاولة هذا العنصر. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueErrorFallback => 'تعذّر إرسال هذا العنصر.';
+
+  @override
+  String get syncTypeTyreChange => 'تغيير إطار';
+
+  @override
+  String get syncTypeWorkOrder => 'أمر عمل';
+
+  @override
+  String get syncTypeRca => 'تحليل السبب الجذري';
+
+  @override
+  String get syncTypeReportIssue => 'مشكلة مُبلَّغ عنها';
+
+  @override
+  String get syncTypeStockAdjust => 'جرد المخزون';
+
+  @override
+  String get syncTypeWorkOrderStatus => 'حالة أمر العمل';
+
+  @override
+  String get syncTypeCorrectiveActionStatus => 'حالة الإجراء التصحيحي';
+
+  @override
+  String get syncTypeChecklistSubmission => 'قائمة تحقق';
+
+  @override
+  String get syncTypeChecklistAssignmentStatus => 'تكليف قائمة التحقق';
+
+  @override
+  String get syncTypeOdometerLog => 'قراءة العدّاد';
+
+  @override
+  String get syncTypeEngineHoursLog => 'قراءة ساعات المحرك';
+
+  @override
+  String get syncTypeReportAccident => 'تقرير حادث';
+
+  @override
+  String get syncTypeWashRecord => 'غسيل مركبة';
+
+  @override
+  String get syncTypeWorkshopEvent => 'نشاط الورشة';
+
+  @override
+  String get syncTypeInventoryCountLine => 'بند جرد المخزون';
+
+  @override
+  String get syncTypeUnknown => 'إدخال غير معروف';
+
+  @override
+  String get profileDraftsTitle => 'المسودات';
+
+  @override
+  String get profileDraftsEmptyTitle => 'لا توجد مسودات';
+
+  @override
+  String get profileDraftsEmptyMessage =>
+      'تظهر هنا قوائم التحقق والفحوصات غير المكتملة التي تبدؤها على هذا الهاتف.';
+
+  @override
+  String get profileDraftsLoadFailedTitle => 'تعذّرت قراءة مسوداتك';
+
+  @override
+  String get profileDraftsLoadFailedMessage =>
+      'مسوداتك لا تزال على هذا الهاتف. حاول مرة أخرى.';
+
+  @override
+  String get profileDraftKindChecklist => 'قائمة تحقق';
+
+  @override
+  String get profileDraftKindInspection => 'فحص';
+
+  @override
+  String profileDraftEdited(String time) {
+    return 'آخر تعديل $time';
+  }
+
+  @override
+  String get profileDraftNoAsset => 'لم يتم اختيار أصل بعد';
+
+  @override
+  String get profileDraftResume => 'متابعة';
+
+  @override
+  String get profileDraftDiscard => 'تجاهل';
+
+  @override
+  String get profileDraftDiscardTitle => 'هل تريد تجاهل هذه المسودة؟';
+
+  @override
+  String get profileDraftDiscardMessage =>
+      'سيُحذف كل ما سُجِّل في هذه المسودة من هذا الهاتف، بما في ذلك الصور والتواقيع. لا يمكن التراجع عن ذلك.';
+
+  @override
+  String get profileDraftDiscarded => 'تم تجاهل المسودة.';
+
+  @override
+  String get profileDraftDiscardFailed => 'تعذّر تجاهل المسودة. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueInspectionRetried =>
+      'تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة.';
 }

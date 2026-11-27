@@ -9408,4 +9408,231 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'کٹوتیاں شروع ہو چکی ہیں، اس لیے اب یہاں اس واجب الادا کے خلاف اپیل نہیں ہو سکتی۔ مینیجر یا فنانس باقی رقم معاف کر سکتے ہیں۔';
+
+  @override
+  String get profileSyncQueueTitle => 'سنک قطار';
+
+  @override
+  String get syncQueueStatPending => 'زیرِ التوا';
+
+  @override
+  String get syncQueueStatAttention => 'توجہ درکار';
+
+  @override
+  String get syncQueueStatSent => 'بھیج دیا گیا';
+
+  @override
+  String get syncQueueStatSentCaption => 'ابھی اس ڈیوائس پر';
+
+  @override
+  String syncQueueLastAttempt(String time) {
+    return 'آخری سنک کوشش: $time';
+  }
+
+  @override
+  String get syncQueueNoAttempt =>
+      'اس ڈیوائس پر ابھی تک کوئی سنک کوشش ریکارڈ نہیں ہوئی';
+
+  @override
+  String get syncQueueRunning => 'سنک ابھی چل رہا ہے';
+
+  @override
+  String get syncQueueSyncNow => 'ابھی سنک کریں';
+
+  @override
+  String get syncQueueOfflineReason =>
+      'آپ آف لائن ہیں۔ آپ کا کام اس فون پر محفوظ ہے اور آن لائن ہوتے ہی بھیج دیا جائے گا۔';
+
+  @override
+  String get syncQueueNothingToSend => 'بھیجنے کے لیے کچھ زیرِ التوا نہیں ہے۔';
+
+  @override
+  String get syncQueueRequested =>
+      'سنک کی درخواست کر دی گئی۔ اشیاء بھیجے جانے کے ساتھ یہ فہرست اپ ڈیٹ ہوتی رہے گی۔';
+
+  @override
+  String get syncQueueRequestFailed =>
+      'سنک شروع نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueEmptyTitle => 'سب کچھ سنک ہو چکا ہے';
+
+  @override
+  String get syncQueueEmptyMessage =>
+      'اس ڈیوائس سے کچھ بھی بھیجے جانے کا منتظر نہیں ہے۔';
+
+  @override
+  String get syncQueueLoadFailedTitle => 'سنک قطار پڑھی نہیں جا سکی';
+
+  @override
+  String get syncQueueLoadFailedMessage =>
+      'آپ کا قطار میں موجود کام ابھی اس فون پر ہے۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueSectionItems => 'قطار میں موجود اشیاء';
+
+  @override
+  String syncTypeInspection(String asset) {
+    return 'معائنہ $asset';
+  }
+
+  @override
+  String syncQueueItemQueued(String time) {
+    return 'قطار میں شامل $time';
+  }
+
+  @override
+  String syncQueueAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count کوششیں',
+      one: '1 کوشش',
+      zero: 'ابھی کوشش نہیں ہوئی',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncQueueNextAttempt(String time) {
+    return 'اگلی کوشش $time';
+  }
+
+  @override
+  String get syncQueueStateWaiting => 'بھیجے جانے کا منتظر';
+
+  @override
+  String get syncQueueStateSending => 'ابھی بھیجا جا رہا ہے';
+
+  @override
+  String get syncQueueStateRetrying => 'دوبارہ کوشش کی جائے گی';
+
+  @override
+  String get syncQueueStateOnHold => 'روکا گیا';
+
+  @override
+  String get syncQueueStateNeedsAttention => 'توجہ درکار';
+
+  @override
+  String get syncQueueStateSent => 'بھیج دیا گیا';
+
+  @override
+  String get syncQueueRetry => 'دوبارہ کوشش';
+
+  @override
+  String get syncQueueRetried => 'دوبارہ قطار میں ڈال دیا گیا۔';
+
+  @override
+  String get syncQueueRetryNotNeeded =>
+      'یہ چیز اب دوبارہ کوشش کی منتظر نہیں ہے۔';
+
+  @override
+  String get syncQueueRetryFailed =>
+      'اس چیز کی دوبارہ کوشش نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueErrorFallback => 'یہ چیز بھیجی نہیں جا سکی۔';
+
+  @override
+  String get syncTypeTyreChange => 'ٹائر کی تبدیلی';
+
+  @override
+  String get syncTypeWorkOrder => 'ورک آرڈر';
+
+  @override
+  String get syncTypeRca => 'بنیادی وجہ کا تجزیہ';
+
+  @override
+  String get syncTypeReportIssue => 'رپورٹ کردہ مسئلہ';
+
+  @override
+  String get syncTypeStockAdjust => 'اسٹاک گنتی';
+
+  @override
+  String get syncTypeWorkOrderStatus => 'ورک آرڈر کی حالت';
+
+  @override
+  String get syncTypeCorrectiveActionStatus => 'اصلاحی اقدام کی حالت';
+
+  @override
+  String get syncTypeChecklistSubmission => 'چیک لسٹ';
+
+  @override
+  String get syncTypeChecklistAssignmentStatus => 'چیک لسٹ تفویض';
+
+  @override
+  String get syncTypeOdometerLog => 'اوڈومیٹر ریڈنگ';
+
+  @override
+  String get syncTypeEngineHoursLog => 'انجن گھنٹوں کی ریڈنگ';
+
+  @override
+  String get syncTypeReportAccident => 'حادثے کی رپورٹ';
+
+  @override
+  String get syncTypeWashRecord => 'گاڑی کی دھلائی';
+
+  @override
+  String get syncTypeWorkshopEvent => 'ورکشاپ سرگرمی';
+
+  @override
+  String get syncTypeInventoryCountLine => 'انوینٹری گنتی کی لائن';
+
+  @override
+  String get syncTypeUnknown => 'نامعلوم اندراج';
+
+  @override
+  String get profileDraftsTitle => 'مسودے';
+
+  @override
+  String get profileDraftsEmptyTitle => 'کوئی مسودہ نہیں';
+
+  @override
+  String get profileDraftsEmptyMessage =>
+      'اس فون پر شروع کی گئی نامکمل چیک لسٹیں اور معائنے یہاں نظر آتے ہیں۔';
+
+  @override
+  String get profileDraftsLoadFailedTitle => 'آپ کے مسودے پڑھے نہیں جا سکے';
+
+  @override
+  String get profileDraftsLoadFailedMessage =>
+      'آپ کے مسودے ابھی اس فون پر ہیں۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get profileDraftKindChecklist => 'چیک لسٹ';
+
+  @override
+  String get profileDraftKindInspection => 'معائنہ';
+
+  @override
+  String profileDraftEdited(String time) {
+    return 'آخری ترمیم $time';
+  }
+
+  @override
+  String get profileDraftNoAsset => 'ابھی کوئی اثاثہ منتخب نہیں ہوا';
+
+  @override
+  String get profileDraftResume => 'دوبارہ شروع کریں';
+
+  @override
+  String get profileDraftDiscard => 'ختم کریں';
+
+  @override
+  String get profileDraftDiscardTitle => 'کیا یہ مسودہ ختم کرنا ہے؟';
+
+  @override
+  String get profileDraftDiscardMessage =>
+      'اس مسودے میں درج سب کچھ، بشمول تصاویر اور دستخط، اس فون سے ہٹا دیا جائے گا۔ اسے واپس نہیں کیا جا سکتا۔';
+
+  @override
+  String get profileDraftDiscarded => 'مسودہ ختم کر دیا گیا۔';
+
+  @override
+  String get profileDraftDiscardFailed =>
+      'مسودہ ختم نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueInspectionRetried =>
+      'آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔';
 }

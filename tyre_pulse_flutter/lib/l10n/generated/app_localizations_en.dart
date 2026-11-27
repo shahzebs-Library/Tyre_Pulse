@@ -9389,4 +9389,229 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.';
+
+  @override
+  String get profileSyncQueueTitle => 'Sync queue';
+
+  @override
+  String get syncQueueStatPending => 'Pending';
+
+  @override
+  String get syncQueueStatAttention => 'Needs attention';
+
+  @override
+  String get syncQueueStatSent => 'Sent';
+
+  @override
+  String get syncQueueStatSentCaption => 'Still on this device';
+
+  @override
+  String syncQueueLastAttempt(String time) {
+    return 'Last sync attempt: $time';
+  }
+
+  @override
+  String get syncQueueNoAttempt =>
+      'No sync attempt recorded on this device yet';
+
+  @override
+  String get syncQueueRunning => 'A sync is running now';
+
+  @override
+  String get syncQueueSyncNow => 'Sync now';
+
+  @override
+  String get syncQueueOfflineReason =>
+      'You are offline. Your work is safe on this phone and will be sent when you are back online.';
+
+  @override
+  String get syncQueueNothingToSend => 'Nothing is waiting to be sent.';
+
+  @override
+  String get syncQueueRequested =>
+      'Sync requested. This list updates as items are sent.';
+
+  @override
+  String get syncQueueRequestFailed => 'Could not start a sync. Try again.';
+
+  @override
+  String get syncQueueEmptyTitle => 'Everything is synced';
+
+  @override
+  String get syncQueueEmptyMessage =>
+      'Nothing from this device is waiting to be sent.';
+
+  @override
+  String get syncQueueLoadFailedTitle => 'Could not read the sync queue';
+
+  @override
+  String get syncQueueLoadFailedMessage =>
+      'Your queued work is still on this phone. Try again.';
+
+  @override
+  String get syncQueueSectionItems => 'Queued items';
+
+  @override
+  String syncTypeInspection(String asset) {
+    return 'Inspection $asset';
+  }
+
+  @override
+  String syncQueueItemQueued(String time) {
+    return 'Queued $time';
+  }
+
+  @override
+  String syncQueueAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count attempts',
+      one: '1 attempt',
+      zero: 'Not tried yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncQueueNextAttempt(String time) {
+    return 'Next try $time';
+  }
+
+  @override
+  String get syncQueueStateWaiting => 'Waiting to send';
+
+  @override
+  String get syncQueueStateSending => 'Sending now';
+
+  @override
+  String get syncQueueStateRetrying => 'Will try again';
+
+  @override
+  String get syncQueueStateOnHold => 'On hold';
+
+  @override
+  String get syncQueueStateNeedsAttention => 'Needs attention';
+
+  @override
+  String get syncQueueStateSent => 'Sent';
+
+  @override
+  String get syncQueueRetry => 'Retry';
+
+  @override
+  String get syncQueueRetried => 'Put back in the queue.';
+
+  @override
+  String get syncQueueRetryNotNeeded =>
+      'This item is no longer waiting for a retry.';
+
+  @override
+  String get syncQueueRetryFailed => 'Could not retry this item. Try again.';
+
+  @override
+  String get syncQueueErrorFallback => 'This item could not be sent.';
+
+  @override
+  String get syncTypeTyreChange => 'Tyre change';
+
+  @override
+  String get syncTypeWorkOrder => 'Work order';
+
+  @override
+  String get syncTypeRca => 'Root cause analysis';
+
+  @override
+  String get syncTypeReportIssue => 'Reported issue';
+
+  @override
+  String get syncTypeStockAdjust => 'Stock count';
+
+  @override
+  String get syncTypeWorkOrderStatus => 'Work order status';
+
+  @override
+  String get syncTypeCorrectiveActionStatus => 'Corrective action status';
+
+  @override
+  String get syncTypeChecklistSubmission => 'Checklist';
+
+  @override
+  String get syncTypeChecklistAssignmentStatus => 'Checklist assignment';
+
+  @override
+  String get syncTypeOdometerLog => 'Odometer reading';
+
+  @override
+  String get syncTypeEngineHoursLog => 'Engine hours reading';
+
+  @override
+  String get syncTypeReportAccident => 'Accident report';
+
+  @override
+  String get syncTypeWashRecord => 'Vehicle wash';
+
+  @override
+  String get syncTypeWorkshopEvent => 'Workshop activity';
+
+  @override
+  String get syncTypeInventoryCountLine => 'Inventory count line';
+
+  @override
+  String get syncTypeUnknown => 'Unrecognised entry';
+
+  @override
+  String get profileDraftsTitle => 'Drafts';
+
+  @override
+  String get profileDraftsEmptyTitle => 'No drafts';
+
+  @override
+  String get profileDraftsEmptyMessage =>
+      'Unfinished checklists and inspections you start on this phone appear here.';
+
+  @override
+  String get profileDraftsLoadFailedTitle => 'Could not read your drafts';
+
+  @override
+  String get profileDraftsLoadFailedMessage =>
+      'Your drafts are still on this phone. Try again.';
+
+  @override
+  String get profileDraftKindChecklist => 'Checklist';
+
+  @override
+  String get profileDraftKindInspection => 'Inspection';
+
+  @override
+  String profileDraftEdited(String time) {
+    return 'Last edited $time';
+  }
+
+  @override
+  String get profileDraftNoAsset => 'No asset picked yet';
+
+  @override
+  String get profileDraftResume => 'Resume';
+
+  @override
+  String get profileDraftDiscard => 'Discard';
+
+  @override
+  String get profileDraftDiscardTitle => 'Discard this draft?';
+
+  @override
+  String get profileDraftDiscardMessage =>
+      'Everything recorded in this draft, including its photos and signatures, is removed from this phone. This cannot be undone.';
+
+  @override
+  String get profileDraftDiscarded => 'Draft discarded.';
+
+  @override
+  String get profileDraftDiscardFailed =>
+      'Could not discard the draft. Try again.';
+
+  @override
+  String get syncQueueInspectionRetried =>
+      'Tried to send your inspections again. The status below is up to date.';
 }

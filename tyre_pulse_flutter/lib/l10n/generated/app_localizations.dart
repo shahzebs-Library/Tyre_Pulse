@@ -16385,6 +16385,396 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.'**
   String get driverChargeAppealClosedDeducted;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync queue'**
+  String get profileSyncQueueTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get syncQueueStatPending;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get syncQueueStatAttention;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get syncQueueStatSent;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Still on this device'**
+  String get syncQueueStatSentCaption;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Last sync attempt: {time}'**
+  String syncQueueLastAttempt(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'No sync attempt recorded on this device yet'**
+  String get syncQueueNoAttempt;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'A sync is running now'**
+  String get syncQueueRunning;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get syncQueueSyncNow;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'You are offline. Your work is safe on this phone and will be sent when you are back online.'**
+  String get syncQueueOfflineReason;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is waiting to be sent.'**
+  String get syncQueueNothingToSend;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync requested. This list updates as items are sent.'**
+  String get syncQueueRequested;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start a sync. Try again.'**
+  String get syncQueueRequestFailed;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything is synced'**
+  String get syncQueueEmptyTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing from this device is waiting to be sent.'**
+  String get syncQueueEmptyMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the sync queue'**
+  String get syncQueueLoadFailedTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Your queued work is still on this phone. Try again.'**
+  String get syncQueueLoadFailedMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued items'**
+  String get syncQueueSectionItems;
+
+  /// Sync queue item name for a submitted inspection; asset is the asset number.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection {asset}'**
+  String syncTypeInspection(String asset);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued {time}'**
+  String syncQueueItemQueued(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Not tried yet} =1{1 attempt} other{{count} attempts}}'**
+  String syncQueueAttempts(int count);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Next try {time}'**
+  String syncQueueNextAttempt(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to send'**
+  String get syncQueueStateWaiting;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending now'**
+  String get syncQueueStateSending;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Will try again'**
+  String get syncQueueStateRetrying;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'On hold'**
+  String get syncQueueStateOnHold;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get syncQueueStateNeedsAttention;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get syncQueueStateSent;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get syncQueueRetry;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Put back in the queue.'**
+  String get syncQueueRetried;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'This item is no longer waiting for a retry.'**
+  String get syncQueueRetryNotNeeded;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not retry this item. Try again.'**
+  String get syncQueueRetryFailed;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'This item could not be sent.'**
+  String get syncQueueErrorFallback;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre change'**
+  String get syncTypeTyreChange;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Work order'**
+  String get syncTypeWorkOrder;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Root cause analysis'**
+  String get syncTypeRca;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported issue'**
+  String get syncTypeReportIssue;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock count'**
+  String get syncTypeStockAdjust;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Work order status'**
+  String get syncTypeWorkOrderStatus;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrective action status'**
+  String get syncTypeCorrectiveActionStatus;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get syncTypeChecklistSubmission;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist assignment'**
+  String get syncTypeChecklistAssignmentStatus;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer reading'**
+  String get syncTypeOdometerLog;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine hours reading'**
+  String get syncTypeEngineHoursLog;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident report'**
+  String get syncTypeReportAccident;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle wash'**
+  String get syncTypeWashRecord;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop activity'**
+  String get syncTypeWorkshopEvent;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Inventory count line'**
+  String get syncTypeInventoryCountLine;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrecognised entry'**
+  String get syncTypeUnknown;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Drafts'**
+  String get profileDraftsTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'No drafts'**
+  String get profileDraftsEmptyTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfinished checklists and inspections you start on this phone appear here.'**
+  String get profileDraftsEmptyMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read your drafts'**
+  String get profileDraftsLoadFailedTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Your drafts are still on this phone. Try again.'**
+  String get profileDraftsLoadFailedMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get profileDraftKindChecklist;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection'**
+  String get profileDraftKindInspection;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Last edited {time}'**
+  String profileDraftEdited(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'No asset picked yet'**
+  String get profileDraftNoAsset;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get profileDraftResume;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get profileDraftDiscard;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard this draft?'**
+  String get profileDraftDiscardTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything recorded in this draft, including its photos and signatures, is removed from this phone. This cannot be undone.'**
+  String get profileDraftDiscardMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft discarded.'**
+  String get profileDraftDiscarded;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not discard the draft. Try again.'**
+  String get profileDraftDiscardFailed;
+
+  /// After Retry on a submitted inspection flushed the inspection queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Tried to send your inspections again. The status below is up to date.'**
+  String get syncQueueInspectionRetried;
 }
 
 class _AppLocalizationsDelegate

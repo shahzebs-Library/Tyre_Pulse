@@ -40,8 +40,11 @@ import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/problem_report/presentation/report_problem_screen.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
+import 'package:tyre_pulse/features/profile/presentation/profile_drafts_screen.dart';
 import 'package:tyre_pulse/features/profile/presentation/profile_screen.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_screen.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
+import 'package:tyre_pulse/features/profile/sync_queue_providers.dart';
 
 import '../../../core/auth/auth_test_support.dart';
 
@@ -168,6 +171,21 @@ Future<_Pumped> _pumpSignedIn(
         signatureRepository ?? _FakeSignatureRepository(stored: savedSignature),
       ),
       allowedModulesProvider.overrideWithValue(modules),
+      // The two screens Profile opens. Overridden so a tap test never
+      // touches the offline database, connectivity or Workmanager.
+      syncQueueEntriesProvider.overrideWith(
+        (Ref ref) =>
+            Stream<List<SyncQueueEntry>>.value(const <SyncQueueEntry>[]),
+      ),
+      syncRunStateProvider.overrideWith(
+        (Ref ref) => Stream<SyncRunState>.value(const SyncRunState()),
+      ),
+      syncQueueOnlineProvider.overrideWith(
+        (Ref ref) => Stream<bool>.value(true),
+      ),
+      profileDraftEntriesProvider.overrideWith(
+        (Ref ref) async => const <ProfileDraftEntry>[],
+      ),
       myWorkSnapshotProvider.overrideWith(
         (Ref ref) =>
             assigned?.call() ??
@@ -946,5 +964,64 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  group('pending work opens its own screen', () {
+    Future<void> tapAndExpect(
+      WidgetTester tester,
+      Key target,
+      Type screen,
+    ) async {
+      // Tall enough that every row is on screen without scrolling.
+      tester.view.physicalSize = const Size(800, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pumpSignedIn(tester);
+      await tester.ensureVisible(find.byKey(target));
+      await tester.pump();
+      await tester.tap(find.byKey(target));
+      await tester.pumpAndSettle();
+      expect(find.byType(screen), findsOneWidget);
+    }
+
+    testWidgets('the Pending drafts tile opens Drafts', (
+      WidgetTester tester,
+    ) async {
+      await tapAndExpect(
+        tester,
+        ProfileScreenKeys.draftsTile,
+        ProfileDraftsScreen,
+      );
+    });
+
+    testWidgets('the Pending sync tile opens the sync queue', (
+      WidgetTester tester,
+    ) async {
+      await tapAndExpect(
+        tester,
+        ProfileScreenKeys.pendingSyncTile,
+        SyncQueueScreen,
+      );
+    });
+
+    testWidgets('the Pending sync row opens the sync queue', (
+      WidgetTester tester,
+    ) async {
+      await tapAndExpect(
+        tester,
+        ProfileScreenKeys.pendingSyncRow,
+        SyncQueueScreen,
+      );
+    });
+
+    testWidgets('the Offline drafts row opens Drafts', (
+      WidgetTester tester,
+    ) async {
+      await tapAndExpect(
+        tester,
+        ProfileScreenKeys.offlineDraftsRow,
+        ProfileDraftsScreen,
+      );
+    });
   });
 }

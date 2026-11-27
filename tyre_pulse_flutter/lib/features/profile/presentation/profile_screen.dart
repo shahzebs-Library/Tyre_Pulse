@@ -148,6 +148,8 @@ import 'package:tyre_pulse/features/notifications/presentation/notifications_cop
 import 'package:tyre_pulse/features/problem_report/presentation/report_problem_screen.dart';
 import 'package:tyre_pulse/features/profile/data/account_deletion_repository.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
+import 'package:tyre_pulse/features/profile/presentation/profile_drafts_screen.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_screen.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 import 'package:tyre_pulse/features/qr_login/presentation/qr_login_screen.dart';
 
@@ -162,6 +164,7 @@ abstract final class ProfileScreenKeys {
   static const Key languageRow = Key('profile.language');
   static const Key themeRow = Key('profile.theme');
   static const Key pendingSyncRow = Key('profile.pendingSync');
+  static const Key pendingSyncTile = Key('profile.pendingSyncTile');
   static const Key appVersionRow = Key('profile.appVersion');
   static const Key signOut = Key('profile.signOut');
   static const Key unsyncedFooter = Key('profile.unsyncedFooter');
@@ -502,6 +505,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ? () => context.push(const TasksRoute().location)
                           : () => context.push(const CalendarRoute().location),
                       profileStale: authState.profileStale,
+                      onOpenDrafts: () => unawaited(openProfileDrafts(context)),
+                      onOpenSyncQueue: () => unawaited(openSyncQueue(context)),
                     ),
                     const SizedBox(height: TpSpace.lg),
                     _ProfileGroups(
@@ -524,6 +529,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           _chooseChecklistLanguage(checklistLanguage),
                         ),
                         onOpenSignature: () => unawaited(_openSavedSignature()),
+                        onOpenSyncQueue: () =>
+                            unawaited(openSyncQueue(context)),
+                        onOpenDrafts: () =>
+                            unawaited(openProfileDrafts(context)),
                         onReportProblem: () => unawaited(
                           openReportProblem(
                             context,
@@ -844,6 +853,8 @@ class _ProfileStatusStrip extends StatelessWidget {
     required this.profileStale,
     this.assigned,
     this.onOpenAssigned,
+    this.onOpenDrafts,
+    this.onOpenSyncQueue,
   });
 
   final AsyncValue<int> drafts;
@@ -855,6 +866,12 @@ class _ProfileStatusStrip extends StatelessWidget {
   /// in which case the notifications count keeps its place.
   final AsyncValue<MyWorkSnapshot>? assigned;
   final VoidCallback? onOpenAssigned;
+
+  /// Opens the drafts list (the "Pending drafts" tile).
+  final VoidCallback? onOpenDrafts;
+
+  /// Opens the sync queue (the "Pending sync" tile).
+  final VoidCallback? onOpenSyncQueue;
 
   @override
   Widget build(BuildContext context) {
@@ -910,29 +927,38 @@ class _ProfileStatusStrip extends StatelessWidget {
                   ),
                 ],
                 Expanded(
-                  child: _ProfileStatusItem(
-                    key: ProfileScreenKeys.draftsTile,
-                    icon: Icons.description_outlined,
-                    value: _countText(drafts),
-                    label: l10n.clMockPendingDrafts,
-                    tone: (drafts.asData?.value ?? 0) > 0
-                        ? palette.warning
-                        : palette.info,
-                    stacked: stacked,
+                  child: InkWell(
+                    onTap: onOpenDrafts,
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                    child: _ProfileStatusItem(
+                      key: ProfileScreenKeys.draftsTile,
+                      icon: Icons.description_outlined,
+                      value: _countText(drafts),
+                      label: l10n.clMockPendingDrafts,
+                      tone: (drafts.asData?.value ?? 0) > 0
+                          ? palette.warning
+                          : palette.info,
+                      stacked: stacked,
+                    ),
                   ),
                 ),
                 VerticalDivider(width: 1, thickness: 1, color: palette.border),
                 Expanded(
-                  child: _ProfileStatusItem(
-                    icon: Icons.cloud_upload_outlined,
-                    value: _countText(pendingSync),
-                    label: l10n.homeSyncStatLabel,
-                    tone: pending == null
-                        ? palette.neutral
-                        : pending > 0
-                            ? palette.warning
-                            : palette.ok,
-                    stacked: stacked,
+                  child: InkWell(
+                    onTap: onOpenSyncQueue,
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                    child: _ProfileStatusItem(
+                      key: ProfileScreenKeys.pendingSyncTile,
+                      icon: Icons.cloud_upload_outlined,
+                      value: _countText(pendingSync),
+                      label: l10n.homeSyncStatLabel,
+                      tone: pending == null
+                          ? palette.neutral
+                          : pending > 0
+                              ? palette.warning
+                              : palette.ok,
+                      stacked: stacked,
+                    ),
                   ),
                 ),
                 // The bell in the app bar already carries the unread count; the
@@ -1154,6 +1180,8 @@ class _SettingsColumn extends StatelessWidget {
     required this.onChooseTheme,
     required this.onChooseChecklistLanguage,
     required this.onOpenSignature,
+    required this.onOpenSyncQueue,
+    required this.onOpenDrafts,
     required this.onReportProblem,
     required this.onSignInOnComputer,
   });
@@ -1175,6 +1203,12 @@ class _SettingsColumn extends StatelessWidget {
   final VoidCallback onChooseTheme;
   final VoidCallback onChooseChecklistLanguage;
   final VoidCallback onOpenSignature;
+
+  /// Opens the sync queue (the "Pending sync" row).
+  final VoidCallback onOpenSyncQueue;
+
+  /// Opens the drafts list (the "Offline drafts" row).
+  final VoidCallback onOpenDrafts;
   final VoidCallback onReportProblem;
 
   /// Opens "Sign in on a computer" (scan the web sign-in QR). Offered to
@@ -1329,6 +1363,7 @@ class _SettingsColumn extends StatelessWidget {
                   : pending == 0
                       ? palette.ok.base
                       : palette.warning.base,
+              onTap: onOpenSyncQueue,
             ),
             _SettingsRow(
               key: ProfileScreenKeys.offlineDraftsRow,
@@ -1343,6 +1378,7 @@ class _SettingsColumn extends StatelessWidget {
                   : draftCount > 0
                       ? palette.warning.base
                       : null,
+              onTap: onOpenDrafts,
             ),
           ],
         ),

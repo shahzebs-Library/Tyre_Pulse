@@ -312,11 +312,22 @@ class ConnectivitySyncTrigger {
     _wasOffline = !isOnline;
   }
 
-  Future<void> _triggerOneOffSync() {
-    return Workmanager().registerOneOffTask(
-      backgroundSyncOneOffTaskName,
-      backgroundSyncOneOffTaskName,
-      constraints: Constraints(networkType: NetworkType.connected),
-    );
-  }
+  Future<void> _triggerOneOffSync() => requestImmediateSync();
+}
+
+/// Asks for one sync pass now, through the SAME one-off Workmanager task the
+/// connectivity trigger uses - so a "Sync now" control adds no second
+/// execution path and no second engine. The pass itself still takes the
+/// queue's single sync lock (`QueueDao.acquireSyncLock`), so a request made
+/// while a periodic run is already in flight does no harm: the second run
+/// finds the lock held and stops.
+///
+/// Throws whatever the plugin throws when the task cannot be registered; the
+/// caller reports that to the person rather than pretending a sync started.
+Future<void> requestImmediateSync() {
+  return Workmanager().registerOneOffTask(
+    backgroundSyncOneOffTaskName,
+    backgroundSyncOneOffTaskName,
+    constraints: Constraints(networkType: NetworkType.connected),
+  );
 }

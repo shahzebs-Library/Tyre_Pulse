@@ -40,6 +40,7 @@ final class WorkshopCheckItem {
     this.km,
     this.engineHours,
     this.signature,
+    this.meterHeld = const <String>[],
     this.decisionNote,
     this.decidedByName,
   });
@@ -85,6 +86,13 @@ final class WorkshopCheckItem {
       engineHours:
           row['engine_hours'] is num ? row['engine_hours'] as num : null,
       signature: row['signature'] as String?,
+      meterHeld: <String>[
+        if (row['meter_held'] is Map)
+          for (final String k in const <String>['km', 'hours'])
+            if ((row['meter_held'] as Map)[k] is String &&
+                ((row['meter_held'] as Map)[k] as String).isNotEmpty)
+              (row['meter_held'] as Map)[k] as String,
+      ],
       decisionNote: row['decision_note'] as String?,
       decidedByName: names[row['decided_by']],
     );
@@ -106,11 +114,20 @@ final class WorkshopCheckItem {
   final List<String> afterPhotos;
   final num? km;
   final num? engineHours;
+  /// Null in the list (the image is fetched when the item is opened, see
+  /// [WorkshopCheckSignatureSource]).
   final String? signature;
+
+  /// Server reasons for meter readings held for review instead of logged.
+  final List<String> meterHeld;
   final String? decisionNote;
   final String? decidedByName;
 
   bool get isExtra => kind == 'extra';
+
+  /// One task finished while other tasks of the job are still open: it can
+  /// be returned but not passed yet.
+  bool get isPartial => kind == 'partial';
 }
 
 /// The server's answer to a decision.
@@ -135,14 +152,21 @@ abstract interface class WorkshopJobCheckService {
   });
 }
 
-const String _cols = 'id,job_id,task_id,asset_no,site,kind,work_done,'
-    'quick_picks,parts_used,before_photos,after_photos,km,engine_hours,'
-    'signature,completed_at,status,decision_note,decided_at,decided_by,'
-    'submitted_by,work_orders(work_order_no,status)';
+/// Reads one completion's signature on demand. The list query leaves the
+/// signature image out (up to ~400 KB each); the detail screen asks for it.
+abstract interface class WorkshopCheckSignatureSource {
+  Future<String?> signature(String completionId);
+}
+
+/// No `signature` here on purpose; see [WorkshopCheckSignatureSource].
+const String kWorkshopCheckListCols = 'id,job_id,task_id,asset_no,site,kind,'
+    'work_done,quick_picks,parts_used,before_photos,after_photos,km,'
+    'engine_hours,meter_held,completed_at,status,decision_note,decided_at,'
+    'decided_by,submitted_by,work_orders(work_order_no,status)';
 
 final class SupabaseWorkshopJobCheckService
     with SupabaseGateway
-    implements WorkshopJobCheckService {
+    implements WorkshopJobCheckService, WorkshopCheckSignatureSource {
   SupabaseWorkshopJobCheckService(this._client);
 
   final SupabaseClient _client;
@@ -156,7 +180,7 @@ final class SupabaseWorkshopJobCheckService
         await guard<List<Map<String, dynamic>>>(
       () => _client
           .from(kWorkOrderCompletionsTable)
-          .select(_cols)
+          .select(kWorkshopCheckListCols)
           .eq('status', status)
           .order(
             queue == WorkshopCheckQueue.toCheck ? 'completed_at' : 'decided_at',
@@ -194,6 +218,19 @@ final class SupabaseWorkshopJobCheckService
       for (final Map<String, dynamic> r in rows)
         WorkshopCheckItem.fromRow(r, names: names),
     ];
+  }
+
+  @override
+  Future<String?> signature(String completionId) async {
+    final Map<String, dynamic>? row = await guard<Map<String, dynamic>?>(
+      () => _client
+          .from(kWorkOrderCompletionsTable)
+          .select('signature')
+          .eq('id', completionId)
+          .maybeSingle(),
+    );
+    final Object? sig = row?['signature'];
+    return sig is String && sig.isNotEmpty ? sig : null;
   }
 
   @override

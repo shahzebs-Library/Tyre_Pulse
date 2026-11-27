@@ -14,8 +14,10 @@ export const COMPLETION_QUEUES = Object.freeze({ toCheck: 'submitted', returned:
 
 const COLS =
   'id,job_id,task_id,asset_no,site,kind,work_done,quick_picks,parts_used,' +
-  'before_photos,after_photos,km,engine_hours,signature,completed_at,status,' +
+  'before_photos,after_photos,km,engine_hours,meter_held,completed_at,status,' +
   'decision_note,decided_at,decided_by,submitted_by,work_orders(work_order_no,status)'
+// The signature image (up to ~400 KB each) is not part of the list; it is
+// fetched for one completion when it is opened (getCompletionSignature).
 
 /** True when the table is not there yet (migration not applied). */
 function isMissing(error) {
@@ -56,6 +58,18 @@ export async function listJobCompletions(status = COMPLETION_QUEUES.toCheck) {
       decided_by_name: names[r.decided_by] || null,
     })),
   }
+}
+
+/** The signature of one completion, read when the supervisor opens it. */
+export async function getCompletionSignature(completionId) {
+  if (!completionId) return null
+  const { data, error } = await supabase
+    .from('work_order_completions')
+    .select('signature')
+    .eq('id', completionId)
+    .maybeSingle()
+  if (error) throw error
+  return typeof data?.signature === 'string' ? data.signature : null
 }
 
 function newKey() {

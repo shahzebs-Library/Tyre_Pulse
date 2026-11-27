@@ -32,5 +32,8 @@
   "returnedBecause": "Returned because:",
   "decideError": "This could not be saved. Try again.",
   "open": "Open",
-  "close": "Close"
+  "close": "Close",
+  "partial": "Other tasks still open",
+  "partialHint": "This task is done, but other tasks of the job are still open. It can be passed when they are finished.",
+  "meterHeld": "Meter reading held for review:"
 }

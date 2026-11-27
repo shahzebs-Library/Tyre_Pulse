@@ -7,7 +7,7 @@ declare
   c_sup uuid := '27ad28d7-f04e-43b1-955a-596bc351f1f3';
   c_sup2 uuid := '35e1995d-7e07-458b-846a-0a6b8d6ee927';
   c_dmo uuid := '5640bf61-801c-4fb8-8654-21c99c921c14';
-  v_job uuid; v_job2 uuid; v_job3 uuid;
+  v_job uuid; v_job2 uuid; v_job3 uuid; v_job4 uuid; v_taskA uuid; v_cid4 uuid;
   v_out text[] := '{}';
   v_r jsonb; v_t text; v_n int; v_cid uuid; v_cid3 uuid;
   v_sig text := 'data:image/png;base64,' || repeat('A', 60);
@@ -22,6 +22,14 @@ begin
   values ('ZZ-JC-VERIFY-2', 'TM514', 'Completed', 'Repair', 'KSA', 'NHC', c_org) returning id into v_job2;
   insert into public.work_orders (work_order_no, asset_no, status, work_type, country, site, organisation_id)
   values ('ZZ-JC-VERIFY-3', 'TM515', 'In Progress', 'Repair', 'KSA', 'NHC', c_org) returning id into v_job3;
+  insert into public.work_orders (work_order_no, asset_no, status, work_type, country, site, organisation_id)
+  values ('ZZ-JC-VERIFY-4', 'TM514', 'In Progress', 'Repair', 'KSA', 'NHC', c_org) returning id into v_job4;
+  insert into public.wo_tasks (organisation_id, country, site, job_id, seq, title, status, assignee_user_id)
+  values (c_org, 'KSA', 'NHC', v_job4, 1, 'ZZ task A', 'in_progress', c_mech) returning id into v_taskA;
+  insert into public.wo_tasks (organisation_id, country, site, job_id, seq, title, status, assignee_user_id)
+  values (c_org, 'KSA', 'NHC', v_job4, 2, 'ZZ task B', 'pending', c_mech2);
+  insert into public.wo_assignments (organisation_id, country, site, job_id, user_id, role, active, assigned_at)
+  values (c_org, 'KSA', 'NHC', v_job4, c_mech, 'primary', true, now() - interval '1 day');
   insert into public.wo_assignments (organisation_id, country, site, job_id, user_id, role, active, assigned_at)
   values (c_org, 'KSA', 'NHC', v_job, c_mech, 'primary', true, now() - interval '1 day'),
          (c_org, 'KSA', 'NHC', v_job, c_mech2, 'helper', true, now() - interval '1 day'),
@@ -74,6 +82,13 @@ begin
   v_out := v_out || ('12 hours rows: ' || v_n);
   select count(*) into v_n from public.notifications where entity_id = v_job and title = 'Job ready to check';
   v_out := v_out || ('13 supervisors notified: ' || v_n);
+  select count(*) into v_n from public.notifications n join public.profiles p on p.id = n.user_id
+   where n.entity_id = v_job and n.title = 'Job ready to check'
+     and p.role = any (public._job_completion_return_desk_roles());
+  v_out := v_out || ('13b data desk among them: ' || v_n);
+  select jsonb_array_length(evidence_objects)::text || ' ' || coalesce(evidence_objects->0->>'object_id', 'null') into v_t
+    from public.work_order_completions where client_uuid = 'jobdone_zzverify01';
+  v_out := v_out || ('13c evidence fingerprints: ' || v_t);
 
   -- 2. never-assigned helper
   perform set_config('request.jwt.claims', json_build_object('sub', c_helper, 'role', 'authenticated')::text, true);
@@ -101,6 +116,49 @@ begin
   v_out := v_out || ('18 supervisor sees: ' || v_n);
   v_r := public.decide_job_completion(v_cid, 'return', '', 'dec_zz_1');
   v_out := v_out || ('19 return without note: ' || v_r::text);
+  reset role;
+  -- technician tries to overwrite the photo after submit (storage policy)
+  perform set_config('request.jwt.claims', json_build_object('sub', c_mech, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  with u as (update storage.objects set metadata = '{"eTag":"swap"}'::jsonb
+              where bucket_id = 'tyre-photos' and name = 'modules/workshop/82072ee6/zz_verify_1.jpg' returning 1)
+  select count(*) into v_n from u;
+  v_out := v_out || ('19a technician overwrite after submit, rows changed: ' || v_n);
+  begin
+    delete from storage.objects where bucket_id = 'tyre-photos' and name = 'modules/workshop/82072ee6/zz_verify_1.jpg';
+    get diagnostics v_n = row_count;
+    v_out := v_out || ('19b technician delete, rows: ' || v_n);
+  exception when others then
+    v_out := v_out || ('19b technician delete: ' || sqlstate || ' ' || left(sqlerrm, 80));
+  end;
+  reset role;
+  -- the object is changed behind the app (service role)
+  update storage.objects set metadata = '{"eTag":"swap"}'::jsonb
+   where bucket_id = 'tyre-photos' and name = 'modules/workshop/82072ee6/zz_verify_1.jpg';
+  perform set_config('request.jwt.claims', json_build_object('sub', c_sup, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_r := public.decide_job_completion(v_cid, 'pass', null, 'dec_zz_1b');
+  v_out := v_out || ('19c pass after the photo changed: ' || v_r::text);
+  reset role;
+  update public.work_order_completions c
+     set evidence_objects = (select jsonb_agg(public._job_completion_photo_print(e->>'ref'))
+                               from jsonb_array_elements(c.evidence_objects) e)
+   where c.job_id = v_job and c.status = 'submitted';
+  -- data desk cannot decide (RPC) nor write qc directly
+  perform set_config('request.jwt.claims', json_build_object('sub', c_dmo, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_r := public.decide_job_completion(v_cid, 'pass', null, 'dec_zz_dmo');
+  v_out := v_out || ('19d data desk decides: ' || v_r::text);
+  begin
+    update public.work_orders set qc_status = 'passed', status = 'Completed' where id = v_job;
+    get diagnostics v_n = row_count;
+    v_out := v_out || ('19e data desk direct pass: NOT BLOCKED rows=' || v_n);
+  exception when others then
+    v_out := v_out || ('19e data desk direct pass: ' || sqlstate || ' ' || left(sqlerrm, 90));
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', json_build_object('sub', c_sup, 'role', 'authenticated')::text, true);
+  set local role authenticated;
   v_r := public.decide_job_completion(v_cid, 'pass', null, 'dec_zz_2');
   v_out := v_out || ('20 pass: ' || v_r::text);
   v_r := public.decide_job_completion(v_cid, 'return', 'Again', 'dec_zz_3');
@@ -152,6 +210,36 @@ begin
   v_out := v_out || ('34 DMO sees returned queue: ' || v_n || ' note=' || coalesce(v_t, 'null'));
   select count(*) into v_n from public.work_order_completions where status <> 'returned';
   v_out := v_out || ('35 DMO sees non-returned: ' || v_n);
+  reset role;
+
+  -- resubmit after the return: back to QI, qc cleared
+  perform set_config('request.jwt.claims', json_build_object('sub', c_mech, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_r := public.submit_job_completion(v_payload || jsonb_build_object('client_uuid', 'jobdone_zzverify08', 'job_id', v_job3, 'km', null, 'engine_hours', null));
+  v_out := v_out || ('35a resubmit job3: ' || v_r::text);
+  reset role;
+  select status || ' / qc=' || coalesce(qc_status, 'null') into v_t from public.work_orders where id = v_job3;
+  v_out := v_out || ('35b job3 after resubmit: ' || v_t);
+
+  -- job 4: one of two tasks done -> partial, job stays, nobody asked; km held
+  perform set_config('request.jwt.claims', json_build_object('sub', c_mech, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_r := public.submit_job_completion(v_payload || jsonb_build_object('client_uuid', 'jobdone_zzverify09', 'job_id', v_job4,
+           'task_id', v_taskA, 'km', 5000000, 'engine_hours', null));
+  v_out := v_out || ('35c task A done, B open: ' || v_r::text);
+  reset role;
+  select c.kind || ' / job=' || w.status || ' / held=' || coalesce(c.meter_held::text, 'null'), c.id into v_t, v_cid4
+    from public.work_order_completions c join public.work_orders w on w.id = c.job_id
+   where c.client_uuid = 'jobdone_zzverify09';
+  v_out := v_out || ('35d job4: ' || v_t);
+  select count(*) into v_n from public.odometer_logs where client_uuid = 'jobdone_zzverify09_km';
+  v_out := v_out || ('35e held km written to odometer_logs: ' || v_n);
+  select count(*) into v_n from public.notifications where entity_id = v_job4 and title = 'Job ready to check';
+  v_out := v_out || ('35f supervisors asked for job4: ' || v_n);
+  perform set_config('request.jwt.claims', json_build_object('sub', c_sup, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_r := public.decide_job_completion(v_cid4, 'pass', null, 'dec_zz_6');
+  v_out := v_out || ('35g pass with task B open: ' || v_r::text);
   reset role;
 
   -- 6. anon

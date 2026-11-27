@@ -1357,7 +1357,7 @@ class _JobCard extends StatelessWidget {
             <String>[
               if (job.assetNo != null) job.assetNo!,
               if (job.site != null) job.site!,
-              if (job.priority != null) job.priority!,
+              if (job.priority != null) copy.priority(job.priority!),
               if (job.targetCompletion != null)
                 '${copy('due')} ${job.targetCompletion!.split('T').first}',
             ].join(' | '),

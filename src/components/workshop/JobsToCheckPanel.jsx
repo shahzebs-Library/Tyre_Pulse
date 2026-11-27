@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { Card, CardState, Tabs } from '../commandCenter/kit'
-import { COMPLETION_QUEUES, decideJobCompletion, listJobCompletions } from '../../lib/api/jobCompletions'
+import { COMPLETION_QUEUES, decideJobCompletion, getCompletionSignature, listJobCompletions } from '../../lib/api/jobCompletions'
 import { resolveStorageUrlMap } from '../../lib/storageRefs'
 import { safeImageSrc } from '../../lib/safeUrl'
 import { toUserMessage } from '../../lib/safeError'
@@ -34,6 +34,7 @@ export default function JobsToCheckPanel({ onDecided }) {
   const [provisioned, setProvisioned] = useState(true)
   const [openId, setOpenId] = useState(null)
   const [urls, setUrls] = useState({})
+  const [signatures, setSignatures] = useState({})
   const [busy, setBusy] = useState(false)
   const [returning, setReturning] = useState(null)
   const [note, setNote] = useState('')
@@ -67,6 +68,17 @@ export default function JobsToCheckPanel({ onDecided }) {
     resolveStorageUrlMap(refs).then((m) => { if (alive) setUrls((u) => ({ ...u, ...m })) }).catch(() => {})
     return () => { alive = false }
   }, [open])
+
+  // The signature is not in the list query; read it when a completion opens.
+  const openKey = open?.id || null
+  useEffect(() => {
+    if (!openKey || signatures[openKey] !== undefined) return
+    let alive = true
+    getCompletionSignature(openKey)
+      .then((sig) => { if (alive) setSignatures((m) => ({ ...m, [openKey]: sig })) })
+      .catch(() => { if (alive) setSignatures((m) => ({ ...m, [openKey]: null })) })
+    return () => { alive = false }
+  }, [openKey, signatures])
 
   const decide = async (row, decision, reason) => {
     if (busy) return
@@ -125,6 +137,11 @@ export default function JobsToCheckPanel({ onDecided }) {
             {rows.map((r) => {
               const isOpen = r.id === openId
               const waiting = r.status === 'submitted' && r.kind !== 'extra'
+              const partial = r.kind === 'partial'
+              const sig = signatures[r.id]
+              const held = r.meter_held && typeof r.meter_held === 'object'
+                ? [r.meter_held.km, r.meter_held.hours].filter((x) => typeof x === 'string' && x)
+                : []
               return (
                 <li key={r.id} className="cc-card" style={{ padding: 12 }}>
                   <button type="button" className="cc-link cc-link-btn" aria-expanded={isOpen} onClick={() => setOpenId(isOpen ? null : r.id)} style={{ width: '100%', textAlign: 'start' }}>
@@ -133,6 +150,7 @@ export default function JobsToCheckPanel({ onDecided }) {
                       {[r.asset_no, r.site, r.technician_name, when(r.completed_at)].filter(Boolean).join(' | ')}
                     </span>{' '}
                     {r.kind === 'extra' && <span className="cc-count">{L('extra')}</span>}
+                    {partial && <span className="cc-count">{L('partial')}</span>}
                   </button>
                   <div className="cc-muted" style={{ marginTop: 4 }}>
                     {r.status === 'returned' && r.decision_note ? `${L('returnedBecause')} ${r.decision_note}` : r.work_done}
@@ -149,11 +167,15 @@ export default function JobsToCheckPanel({ onDecided }) {
                       {(r.km != null || r.engine_hours != null) && (
                         <div><b>{L('meters')}</b><div>{[r.km != null && `${L('km')}: ${num(r.km)}`, r.engine_hours != null && `${L('hours')}: ${num(r.engine_hours)}`].filter(Boolean).join('   ')}</div></div>
                       )}
+                      {held.length > 0 && (
+                        <p className="wl-strip-note is-err" role="note">{L('meterHeld')} {held.join(' ')}</p>
+                      )}
                       {r.before_photos?.length > 0 && <div><b>{L('before')}</b>{photos(r.before_photos)}</div>}
                       <div><b>{L('after')}</b>{photos(r.after_photos)}</div>
-                      {safeImageSrc(r.signature || '') && (
-                        <div><b>{L('signature')}</b><div><img src={safeImageSrc(r.signature)} alt="" style={{ maxHeight: 80, background: '#fff', borderRadius: 8 }} /></div></div>
+                      {safeImageSrc(sig || '') && (
+                        <div><b>{L('signature')}</b><div><img src={safeImageSrc(sig)} alt="" style={{ maxHeight: 80, background: '#fff', borderRadius: 8 }} /></div></div>
                       )}
+                      {waiting && partial && <p className="cc-muted">{L('partialHint')}</p>}
                       {waiting && (returning === r.id ? (
                         <div style={{ display: 'grid', gap: 6 }}>
                           <label htmlFor={`jc-note-${r.id}`}><b>{L('returnReason')}</b></label>
@@ -165,7 +187,7 @@ export default function JobsToCheckPanel({ onDecided }) {
                         </div>
                       ) : (
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button type="button" className="cc-btn" disabled={busy} onClick={() => decide(r, 'pass')}>{L('pass')}</button>
+                          {!partial && <button type="button" className="cc-btn" disabled={busy} onClick={() => decide(r, 'pass')}>{L('pass')}</button>}
                           <button type="button" className="cc-btn ghost" disabled={busy} onClick={() => { setReturning(r.id); setNote('') }}>{L('return')}</button>
                         </div>
                       ))}

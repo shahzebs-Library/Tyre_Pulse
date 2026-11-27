@@ -251,6 +251,12 @@ class _ItemCard extends StatelessWidget {
                   label: copy('jc_extra'),
                   isCompact: true,
                 )
+              else if (item.isPartial && !returned)
+                TpStatusChip(
+                  status: TpStatus.neutral,
+                  label: copy('jc_partial'),
+                  isCompact: true,
+                )
               else if (returned)
                 TpStatusChip(
                   status: TpStatus.warning,
@@ -304,6 +310,28 @@ class WorkshopJobCheckDetailScreen extends ConsumerStatefulWidget {
 class _WorkshopJobCheckDetailScreenState
     extends ConsumerState<WorkshopJobCheckDetailScreen> {
   bool _busy = false;
+  String? _signature;
+
+  @override
+  void initState() {
+    super.initState();
+    _signature = widget.item.signature;
+    if (_signature == null) unawaited(_loadSignature());
+  }
+
+  /// The list leaves the signature image out; read it for this item only.
+  Future<void> _loadSignature() async {
+    final WorkshopJobCheckService service =
+        ref.read(workshopJobCheckServiceProvider);
+    if (service is! WorkshopCheckSignatureSource) return;
+    try {
+      final String? sig = await (service as WorkshopCheckSignatureSource)
+          .signature(widget.item.id);
+      if (mounted) setState(() => _signature = sig);
+    } on Object {
+      // The rest of the evidence still shows; the box stays empty.
+    }
+  }
 
   Future<void> _decide(String decision, {String? note}) async {
     if (_busy) return;
@@ -370,6 +398,8 @@ class _WorkshopJobCheckDetailScreenState
         subtitle: item.assetNo,
       ),
       // The decision stays in reach while the evidence scrolls.
+      // A partial completion can be returned but not passed (other tasks of
+      // the job are still open; the server refuses a pass too).
       bottomNavigationBar: waiting && !item.isExtra
           ? SafeArea(
               child: Padding(
@@ -390,17 +420,19 @@ class _WorkshopJobCheckDetailScreenState
                         onPressed: _busy ? null : () => unawaited(_askReturn()),
                       ),
                     ),
-                    const SizedBox(width: TpSpace.sm),
-                    Expanded(
-                      child: TpButton.primary(
-                        key: WorkshopJobsToCheckKeys.pass,
-                        label: copy('jc_pass'),
-                        icon: Icons.check_circle_outline,
-                        isBusy: _busy,
-                        isFullWidth: true,
-                        onPressed: () => unawaited(_decide('pass')),
+                    if (!item.isPartial) ...<Widget>[
+                      const SizedBox(width: TpSpace.sm),
+                      Expanded(
+                        child: TpButton.primary(
+                          key: WorkshopJobsToCheckKeys.pass,
+                          label: copy('jc_pass'),
+                          icon: Icons.check_circle_outline,
+                          isBusy: _busy,
+                          isFullWidth: true,
+                          onPressed: () => unawaited(_decide('pass')),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -425,6 +457,11 @@ class _WorkshopJobCheckDetailScreenState
               style: text.bodyMedium,
             ),
           ),
+          if (waiting && item.isPartial)
+            _Section(
+              title: copy('jc_partial'),
+              child: Text(copy('jc_partialHint'), style: text.bodyMedium),
+            ),
           if (item.status == 'returned' && item.decisionNote != null)
             _Section(
               title: copy('jc_returnReason'),
@@ -491,6 +528,14 @@ class _WorkshopJobCheckDetailScreenState
                     style: text.bodyMedium,
                   ),
           ),
+          if (item.meterHeld.isNotEmpty)
+            _Section(
+              title: copy('jc_meterHeld'),
+              child: Text(
+                item.meterHeld.join(' '),
+                style: text.bodyMedium?.copyWith(color: palette.warning.base),
+              ),
+            ),
           if (item.beforePhotos.isNotEmpty)
             _Section(
               title: copy('c_before'),
@@ -502,7 +547,7 @@ class _WorkshopJobCheckDetailScreenState
           ),
           _Section(
             title: copy('jc_signature'),
-            child: _Signature(dataUrl: item.signature),
+            child: _Signature(dataUrl: _signature),
           ),
         ],
       ),

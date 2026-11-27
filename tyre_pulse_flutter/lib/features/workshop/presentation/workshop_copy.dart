@@ -29,6 +29,15 @@ final class WorkshopCopy {
   static const Map<String, Map<String, String>> _fallbacks =
       <String, Map<String, String>>{
     'en': <String, String>{
+      'jc_partial': 'Other tasks still open',
+      'jc_partialHint':
+          'This task is done, but other tasks of the job are still open. It can be passed when they are finished.',
+      'jc_meterHeld': 'Meter reading held for review',
+      'prio_low': 'Low',
+      'prio_medium': 'Medium',
+      'prio_high': 'High',
+      'prio_critical': 'Critical',
+      'prio_urgent': 'Urgent',
       'completeTitle': 'Finish job',
       'c_required': 'Required',
       'c_whatDone': 'What was done',
@@ -83,6 +92,15 @@ final class WorkshopCopy {
           'You are offline. Showing your jobs as last loaded. New taps are saved on this phone and sync when you are back online.',
     },
     'ar': <String, String>{
+      'jc_partial': 'مهام أخرى ما زالت مفتوحة',
+      'jc_partialHint':
+          'تم إنجاز هذه المهمة، لكن مهام أخرى في هذا العمل ما زالت مفتوحة. يمكن اعتماده بعد إنهائها.',
+      'jc_meterHeld': 'قراءة العداد محجوزة للمراجعة',
+      'prio_low': 'منخفضة',
+      'prio_medium': 'متوسطة',
+      'prio_high': 'عالية',
+      'prio_critical': 'حرجة',
+      'prio_urgent': 'عاجلة',
       'completeTitle': 'إنهاء العمل',
       'c_required': 'مطلوب',
       'c_whatDone': 'ما الذي تم إنجازه',
@@ -137,6 +155,15 @@ final class WorkshopCopy {
           'أنت غير متصل. تظهر مهامك كما تم تحميلها آخر مرة. تُحفظ الإجراءات الجديدة على هذا الهاتف وتُزامن عند عودة الاتصال.',
     },
     'ur': <String, String>{
+      'jc_partial': 'دوسرے کام ابھی کھلے ہیں',
+      'jc_partialHint':
+          'یہ کام مکمل ہو گیا ہے، لیکن اس جاب کے دوسرے کام ابھی کھلے ہیں۔ ان کے مکمل ہونے پر اسے پاس کیا جا سکتا ہے۔',
+      'jc_meterHeld': 'میٹر ریڈنگ جائزے کے لیے روکی گئی',
+      'prio_low': 'کم',
+      'prio_medium': 'درمیانی',
+      'prio_high': 'زیادہ',
+      'prio_critical': 'انتہائی اہم',
+      'prio_urgent': 'فوری',
       'completeTitle': 'کام مکمل کریں',
       'c_required': 'لازمی',
       'c_whatDone': 'کیا کام کیا گیا',
@@ -191,6 +218,14 @@ final class WorkshopCopy {
           'آپ آف لائن ہیں۔ آپ کے کام آخری بار لوڈ ہونے کے مطابق دکھائے جا رہے ہیں۔ نئے اندراج اس فون پر محفوظ ہوتے ہیں اور کنکشن بحال ہونے پر سنک ہو جاتے ہیں۔',
     },
   };
+
+  /// A work order priority in the reader's language; an unknown value is
+  /// shown as stored.
+  String priority(String raw) {
+    final String key = 'prio_${raw.trim().toLowerCase()}';
+    final String label = call(key);
+    return label == key ? raw : label;
+  }
 
   String call(String key) =>
       _values[key] ??

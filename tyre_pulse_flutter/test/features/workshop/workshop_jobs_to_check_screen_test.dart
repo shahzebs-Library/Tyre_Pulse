@@ -69,7 +69,50 @@ final class _FakeChecks implements WorkshopJobCheckService {
   }
 }
 
-Future<void> _pump(WidgetTester tester, _FakeChecks checks) async {
+/// One partial completion with no signature in the list; the signature is
+/// read on open through [WorkshopCheckSignatureSource].
+final class _PartialChecks
+    implements WorkshopJobCheckService, WorkshopCheckSignatureSource {
+  final List<String> signatureReads = <String>[];
+
+  static final WorkshopCheckItem partial = WorkshopCheckItem(
+    id: 'c-9',
+    jobId: 'wo-9',
+    status: 'submitted',
+    kind: 'partial',
+    workDone: 'Changed the front left tyre',
+    completedAt: DateTime(2026, 11, 27, 10, 5),
+    workOrderNo: 'GCKR/JC/1010/1126',
+    assetNo: 'TM514',
+    afterPhotos: const <String>[
+      'tp-storage://tyre-photos/modules/workshop/a/d.jpg',
+    ],
+    km: 5000000,
+    meterHeld: const <String>['Odometer looks wrong.'],
+  );
+
+  @override
+  Future<List<WorkshopCheckItem>> list(WorkshopCheckQueue queue) async =>
+      queue == WorkshopCheckQueue.toCheck
+          ? <WorkshopCheckItem>[partial]
+          : const <WorkshopCheckItem>[];
+
+  @override
+  Future<String?> signature(String completionId) async {
+    signatureReads.add(completionId);
+    return 'data:image/png;base64,iVBORw0KGgo=';
+  }
+
+  @override
+  Future<WorkshopCheckDecision> decide({
+    required String completionId,
+    required String decision,
+    String? note,
+  }) async =>
+      const WorkshopCheckDecision(ok: true);
+}
+
+Future<void> _pump(WidgetTester tester, WorkshopJobCheckService checks) async {
   await tester.binding.setSurfaceSize(const Size(390, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
@@ -168,6 +211,37 @@ void main() {
     await tester.tap(find.byKey(WorkshopJobsToCheckKeys.item('c-2')));
     await tester.pumpAndSettle();
     expect(find.byKey(WorkshopJobsToCheckKeys.pass), findsNothing);
+  });
+
+  testWidgets(
+      'a partial completion can be returned but not passed; signature read on open',
+      (WidgetTester tester) async {
+    final _PartialChecks checks = _PartialChecks();
+    await _pump(tester, checks);
+    expect(find.text('Other tasks still open'), findsOneWidget);
+    expect(checks.signatureReads, isEmpty);
+    await tester.tap(find.byKey(WorkshopJobsToCheckKeys.item('c-9')));
+    await tester.pumpAndSettle();
+    expect(checks.signatureReads, <String>['c-9']);
+    expect(find.byKey(WorkshopJobsToCheckKeys.pass), findsNothing);
+    expect(find.byKey(WorkshopJobsToCheckKeys.returnJob), findsOneWidget);
+    expect(find.text('Meter reading held for review'), findsOneWidget);
+    expect(find.text('Odometer looks wrong.'), findsOneWidget);
+  });
+
+  test('the list query leaves the signature out and reads held meters', () {
+    expect(kWorkshopCheckListCols.contains('signature'), isFalse);
+    final WorkshopCheckItem item = WorkshopCheckItem.fromRow(<String, dynamic>{
+      'id': 'c-1',
+      'job_id': 'wo-1',
+      'status': 'submitted',
+      'kind': 'partial',
+      'work_done': 'x',
+      'meter_held': <String, dynamic>{'km': 'held km', 'hours': ''},
+    });
+    expect(item.isPartial, isTrue);
+    expect(item.meterHeld, <String>['held km']);
+    expect(item.signature, isNull);
   });
 
   test('decision answer parsing is defensive', () {

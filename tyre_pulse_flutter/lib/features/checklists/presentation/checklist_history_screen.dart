@@ -218,7 +218,10 @@ class _ChecklistHistoryScreenState
             const SizedBox(height: TpSpace.lg),
           ],
           if (completed.isNotEmpty) ...<Widget>[
-            _SectionHeader(label: l10n.checklistHistoryCompletedSection),
+            _SectionHeader(
+              label: '${l10n.checklistHistoryCompletedSection} '
+                  '(${_stateFilter == null && _search.trim().isEmpty ? (_history.completedTotal ?? _history.completed.length) : completed.length})',
+            ),
             for (final ChecklistHistoryRow row in completed)
               _CompletedRow(row: row),
           ],

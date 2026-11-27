@@ -6,14 +6,9 @@
 /// changes. Every figure comes from `sync_queue_providers.dart`; see that
 /// file's library comment for what is read and what the two actions reuse.
 ///
-/// # Why the list is re-read while a requested sync runs
-///
-/// "Sync now" asks the background Workmanager task to run, and that task
-/// writes through its OWN database connection in its own isolate. A Drift
-/// watch query only re-emits for writes through the same connection, so the
-/// screen re-reads the queue every few seconds for a short while after a
-/// request (and whenever the app returns to the foreground) instead of
-/// showing a list that silently stopped updating.
+/// The two actions live in `sync_queue_actions.dart`, shared with the quick
+/// sync sheet (`sync_queue_sheet.dart`), which is what Profile and Home open
+/// first; this screen is the sheet's "See all".
 library;
 
 import 'dart:async';
@@ -26,6 +21,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_actions.dart';
 import 'package:tyre_pulse/features/profile/sync_queue_providers.dart';
 
 /// Opens the sync queue screen.
@@ -88,7 +84,8 @@ String syncQueueTypeLabel(AppLocalizations l10n, CommandType? type) {
   };
 }
 
-IconData _typeIcon(CommandType? type) {
+/// The icon for a queued command type.
+IconData syncQueueTypeIcon(CommandType? type) {
   return switch (type) {
     null => Icons.help_outline_rounded,
     CommandType.tyreChange => Icons.tire_repair_outlined,
@@ -112,7 +109,8 @@ IconData _typeIcon(CommandType? type) {
   };
 }
 
-String _stateLabel(AppLocalizations l10n, SyncQueueItemState state) {
+/// The plain-English label of a queue state.
+String syncQueueStateLabel(AppLocalizations l10n, SyncQueueItemState state) {
   return switch (state) {
     SyncQueueItemState.waiting => l10n.syncQueueStateWaiting,
     SyncQueueItemState.sending => l10n.syncQueueStateSending,
@@ -123,7 +121,8 @@ String _stateLabel(AppLocalizations l10n, SyncQueueItemState state) {
   };
 }
 
-TpStatus _stateTone(SyncQueueItemState state) {
+/// The status tone of a queue state.
+TpStatus syncQueueStateTone(SyncQueueItemState state) {
   return switch (state) {
     SyncQueueItemState.waiting => TpStatus.info,
     SyncQueueItemState.sending => TpStatus.info,
@@ -133,6 +132,12 @@ TpStatus _stateTone(SyncQueueItemState state) {
     SyncQueueItemState.sent => TpStatus.ok,
   };
 }
+
+/// The icon of a queue row: a tyre for a submitted inspection, otherwise the
+/// command's own icon.
+IconData syncQueueEntryIcon(SyncQueueEntry entry) => entry.isInspection
+    ? Icons.tire_repair_outlined
+    : syncQueueTypeIcon(entry.commandType);
 
 String _formatTime(BuildContext context, DateTime at) {
   final String locale = Localizations.localeOf(context).toLanguageTag();
@@ -147,15 +152,7 @@ class SyncQueueScreen extends ConsumerStatefulWidget {
 }
 
 class _SyncQueueScreenState extends ConsumerState<SyncQueueScreen>
-    with WidgetsBindingObserver {
-  static const Duration _pollEvery = Duration(seconds: 5);
-  static const Duration _pollFor = Duration(minutes: 2);
-
-  bool _requesting = false;
-  final Set<String> _retrying = <String>{};
-  Timer? _poll;
-  DateTime? _pollUntil;
-
+    with WidgetsBindingObserver, SyncQueueActionsMixin<SyncQueueScreen> {
   @override
   void initState() {
     super.initState();
@@ -165,7 +162,6 @@ class _SyncQueueScreenState extends ConsumerState<SyncQueueScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _poll?.cancel();
     super.dispose();
   }
 
@@ -174,106 +170,13 @@ class _SyncQueueScreenState extends ConsumerState<SyncQueueScreen>
     if (state == AppLifecycleState.resumed) _refresh();
   }
 
-  void _refresh() {
-    ref
-      ..invalidate(syncQueueEntriesProvider)
-      ..invalidate(syncRunStateProvider);
-  }
+  void _refresh() => refreshSyncQueue();
 
-  void _startPolling() {
-    _pollUntil = DateTime.now().add(_pollFor);
-    _poll?.cancel();
-    _poll = Timer.periodic(_pollEvery, (Timer timer) {
-      if (!mounted || DateTime.now().isAfter(_pollUntil!)) {
-        timer.cancel();
-        return;
-      }
-      _refresh();
-    });
-  }
-
-  void _showMessage(String message) {
+  @override
+  void showSyncMessage(String message) {
     ScaffoldMessenger.maybeOf(context)
       ?..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  /// Whether [entry] still needs sending (waiting, retrying, failed...).
-  static bool _unsent(SyncQueueEntry entry) =>
-      entry.state.isPending || entry.state == SyncQueueItemState.needsAttention;
-
-  /// Sync now covers both queues: queued commands go to the background sync
-  /// task ([syncNowRequestProvider]); submitted inspections are flushed
-  /// through [InspectionSyncEngine.flushQueue], their queue's own entry
-  /// point ([syncQueueInspectionFlushProvider]).
-  Future<void> _syncNow(List<SyncQueueEntry> items) async {
-    if (_requesting) return;
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    final bool commands = items.any((e) => !e.isInspection && _unsent(e));
-    final bool inspections = items.any((e) => e.isInspection && _unsent(e));
-    setState(() => _requesting = true);
-    bool failed = false;
-    try {
-      if (commands) {
-        try {
-          await ref.read(syncNowRequestProvider)();
-        } on Object {
-          failed = true;
-        }
-      }
-      if (inspections) {
-        try {
-          await ref.read(syncQueueInspectionFlushProvider)();
-        } on Object {
-          failed = true;
-        }
-      }
-      if (!mounted) return;
-      _refresh();
-      if (commands && !failed) _startPolling();
-      _showMessage(
-        failed ? l10n.syncQueueRequestFailed : l10n.syncQueueRequested,
-      );
-    } finally {
-      if (mounted) setState(() => _requesting = false);
-    }
-  }
-
-  Future<void> _retry(SyncQueueEntry entry) async {
-    if (_retrying.contains(entry.id)) return;
-    final AppLocalizations l10n = AppLocalizations.of(context);
-    setState(() => _retrying.add(entry.id));
-    try {
-      if (entry.isInspection) {
-        // The inspection queue has no per-item reset: every flush tries each
-        // unsent submission again, so Retry is a flush.
-        await ref.read(syncQueueInspectionFlushProvider)();
-        if (!mounted) return;
-        _refresh();
-        _showMessage(l10n.syncQueueInspectionRetried);
-        return;
-      }
-      final bool reset = await ref.read(syncQueueRetryProvider)(entry.id);
-      if (!mounted) return;
-      _refresh();
-      _showMessage(
-        reset ? l10n.syncQueueRetried : l10n.syncQueueRetryNotNeeded,
-      );
-      // Send it now if the device is online; the next periodic run picks it
-      // up otherwise.
-      if (reset && ref.read(syncQueueOnlineProvider).asData?.value == true) {
-        try {
-          await ref.read(syncNowRequestProvider)();
-          if (mounted) _startPolling();
-        } on Object {
-          // The row is back in the queue; the next run sends it.
-        }
-      }
-    } on Object {
-      if (mounted) _showMessage(l10n.syncQueueRetryFailed);
-    } finally {
-      if (mounted) setState(() => _retrying.remove(entry.id));
-    }
   }
 
   @override
@@ -346,16 +249,13 @@ class _SyncQueueScreenState extends ConsumerState<SyncQueueScreen>
       );
     }
 
-    final bool isOffline = online.asData?.value == false;
-    final bool nothingToSend = pending == 0 && attention == 0;
-    final String? disabledReason = isOffline
-        ? l10n.syncQueueOfflineReason
-        : syncing
-            ? l10n.syncQueueRunning
-            : nothingToSend
-                ? l10n.syncQueueNothingToSend
-                : null;
-    final bool canSync = disabledReason == null && !_requesting;
+    final String? disabledReason = syncNowDisabledReason(
+      l10n,
+      isOffline: online.asData?.value == false,
+      isSyncing: syncing,
+      hasUnsent: pending > 0 || attention > 0,
+    );
+    final bool canSync = disabledReason == null && !isRequestingSync;
 
     return RefreshIndicator(
       onRefresh: () async => _refresh(),
@@ -404,8 +304,8 @@ class _SyncQueueScreenState extends ConsumerState<SyncQueueScreen>
             label: l10n.syncQueueSyncNow,
             icon: Icons.sync_rounded,
             isFullWidth: true,
-            isBusy: _requesting || syncing,
-            onPressed: canSync ? () => unawaited(_syncNow(items)) : null,
+            isBusy: isRequestingSync || syncing,
+            onPressed: canSync ? () => unawaited(syncNow(items)) : null,
           ),
           if (disabledReason != null) ...<Widget>[
             const SizedBox(height: TpSpace.sm),
@@ -427,9 +327,9 @@ class _SyncQueueScreenState extends ConsumerState<SyncQueueScreen>
           for (final SyncQueueEntry entry in items) ...<Widget>[
             _SyncQueueItemCard(
               entry: entry,
-              isRetrying: _retrying.contains(entry.id),
+              isRetrying: isRetryingEntry(entry.id),
               onRetry: entry.state == SyncQueueItemState.needsAttention
-                  ? () => unawaited(_retry(entry))
+                  ? () => unawaited(retryEntry(entry))
                   : null,
             ),
             const SizedBox(height: TpSpace.sm),
@@ -474,9 +374,7 @@ class _SyncQueueItemCard extends StatelessWidget {
           Row(
             children: <Widget>[
               TpIcon(
-                entry.isInspection
-                    ? Icons.tire_repair_outlined
-                    : _typeIcon(entry.commandType),
+                syncQueueEntryIcon(entry),
                 size: 22,
                 color: palette.primary,
               ),
@@ -492,8 +390,8 @@ class _SyncQueueItemCard extends StatelessWidget {
               ),
               const SizedBox(width: TpSpace.sm),
               TpStatusChip(
-                status: _stateTone(entry.state),
-                label: _stateLabel(l10n, entry.state),
+                status: syncQueueStateTone(entry.state),
+                label: syncQueueStateLabel(l10n, entry.state),
                 isCompact: true,
               ),
             ],

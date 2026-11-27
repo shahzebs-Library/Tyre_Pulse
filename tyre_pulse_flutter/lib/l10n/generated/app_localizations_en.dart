@@ -9614,4 +9614,60 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get syncQueueInspectionRetried =>
       'Tried to send your inspections again. The status below is up to date.';
+
+  @override
+  String get syncSheetAllSynced => 'All synced';
+
+  @override
+  String syncSheetLastAttempt(String ago) {
+    return 'last attempt $ago';
+  }
+
+  @override
+  String get syncSheetNoAttempt => 'no sync attempt yet';
+
+  @override
+  String syncSheetWaiting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count waiting',
+      one: '1 waiting',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncSheetNeedsAttention(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count need attention',
+      one: '1 needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sheetSeeAll(int count) {
+    return 'See all ($count)';
+  }
+
+  @override
+  String get timeAgoJustNow => 'just now';
+
+  @override
+  String timeAgoMinutes(int count) {
+    return '$count min ago';
+  }
+
+  @override
+  String timeAgoHours(int count) {
+    return '$count h ago';
+  }
+
+  @override
+  String timeAgoDays(int count) {
+    return '$count d ago';
+  }
 }

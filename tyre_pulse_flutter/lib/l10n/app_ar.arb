@@ -3822,5 +3822,15 @@
   "profileDraftDiscardMessage": "سيُحذف كل ما سُجِّل في هذه المسودة من هذا الهاتف، بما في ذلك الصور والتواقيع. لا يمكن التراجع عن ذلك.",
   "profileDraftDiscarded": "تم تجاهل المسودة.",
   "profileDraftDiscardFailed": "تعذّر تجاهل المسودة. حاول مرة أخرى.",
-  "syncQueueInspectionRetried": "تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة."
+  "syncQueueInspectionRetried": "تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة.",
+  "syncSheetAllSynced": "تمت المزامنة بالكامل",
+  "syncSheetLastAttempt": "آخر محاولة {ago}",
+  "syncSheetNoAttempt": "لا توجد محاولة مزامنة بعد",
+  "syncSheetWaiting": "{count, plural, =1{عنصر واحد بالانتظار} other{{count} بالانتظار}}",
+  "syncSheetNeedsAttention": "{count, plural, =1{عنصر واحد يحتاج إلى متابعة} other{{count} تحتاج إلى متابعة}}",
+  "sheetSeeAll": "عرض الكل ({count})",
+  "timeAgoJustNow": "الآن",
+  "timeAgoMinutes": "منذ {count} دقيقة",
+  "timeAgoHours": "منذ {count} ساعة",
+  "timeAgoDays": "منذ {count} يوم"
 }

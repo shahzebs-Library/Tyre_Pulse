@@ -9495,5 +9495,81 @@
   "syncQueueInspectionRetried": "Tried to send your inspections again. The status below is up to date.",
   "@syncQueueInspectionRetried": {
     "description": "After Retry on a submitted inspection flushed the inspection queue."
+  },
+  "syncSheetAllSynced": "All synced",
+  "@syncSheetAllSynced": {
+    "description": "Quick sync / drafts sheet."
+  },
+  "syncSheetLastAttempt": "last attempt {ago}",
+  "@syncSheetLastAttempt": {
+    "description": "Quick sync / drafts sheet.",
+    "placeholders": {
+      "ago": {
+        "type": "String",
+        "example": "2 min ago"
+      }
+    }
+  },
+  "syncSheetNoAttempt": "no sync attempt yet",
+  "@syncSheetNoAttempt": {
+    "description": "Quick sync / drafts sheet."
+  },
+  "syncSheetWaiting": "{count, plural, =1{1 waiting} other{{count} waiting}}",
+  "@syncSheetWaiting": {
+    "description": "Quick sync / drafts sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "syncSheetNeedsAttention": "{count, plural, =1{1 needs attention} other{{count} need attention}}",
+  "@syncSheetNeedsAttention": {
+    "description": "Quick sync / drafts sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sheetSeeAll": "See all ({count})",
+  "@sheetSeeAll": {
+    "description": "Quick sync / drafts sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "timeAgoJustNow": "just now",
+  "@timeAgoJustNow": {
+    "description": "Quick sync / drafts sheet."
+  },
+  "timeAgoMinutes": "{count} min ago",
+  "@timeAgoMinutes": {
+    "description": "Quick sync / drafts sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "timeAgoHours": "{count} h ago",
+  "@timeAgoHours": {
+    "description": "Quick sync / drafts sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "timeAgoDays": "{count} d ago",
+  "@timeAgoDays": {
+    "description": "Quick sync / drafts sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

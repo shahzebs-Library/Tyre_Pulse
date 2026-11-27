@@ -3822,5 +3822,15 @@
   "profileDraftDiscardMessage": "اس مسودے میں درج سب کچھ، بشمول تصاویر اور دستخط، اس فون سے ہٹا دیا جائے گا۔ اسے واپس نہیں کیا جا سکتا۔",
   "profileDraftDiscarded": "مسودہ ختم کر دیا گیا۔",
   "profileDraftDiscardFailed": "مسودہ ختم نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
-  "syncQueueInspectionRetried": "آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔"
+  "syncQueueInspectionRetried": "آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔",
+  "syncSheetAllSynced": "سب کچھ ہم آہنگ ہو گیا",
+  "syncSheetLastAttempt": "آخری کوشش {ago}",
+  "syncSheetNoAttempt": "ابھی تک ہم آہنگی کی کوئی کوشش نہیں",
+  "syncSheetWaiting": "{count, plural, =1{1 منتظر} other{{count} منتظر}}",
+  "syncSheetNeedsAttention": "{count, plural, =1{1 توجہ طلب} other{{count} توجہ طلب}}",
+  "sheetSeeAll": "سب دیکھیں ({count})",
+  "timeAgoJustNow": "ابھی",
+  "timeAgoMinutes": "{count} منٹ پہلے",
+  "timeAgoHours": "{count} گھنٹے پہلے",
+  "timeAgoDays": "{count} دن پہلے"
 }

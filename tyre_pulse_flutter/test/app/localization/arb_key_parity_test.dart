@@ -699,10 +699,13 @@ void main() {
     // attempt, Sync now and its disabled reasons, item states, retry, one
     // plain-English name per queued command type) and its Drafts screen
     // (list, resume, discard confirmation, empty and error states).
-    test('en, ar and ur each carry exactly 2779 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2779);
-      expect(_translatableKeys(ar).length, 2779);
-      expect(_translatableKeys(ur).length, 2779);
+    // 2779 + 10 = 2789: the quick sync and drafts sheets (one status line,
+    // waiting / needs-attention counts, last attempt, "See all (N)") and the
+    // short relative times they use (just now, min, h, d ago).
+    test('en, ar and ur each carry exactly 2789 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2789);
+      expect(_translatableKeys(ar).length, 2789);
+      expect(_translatableKeys(ur).length, 2789);
     });
   });
 

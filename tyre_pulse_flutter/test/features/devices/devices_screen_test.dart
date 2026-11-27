@@ -80,7 +80,7 @@ void main() {
 
     await tester.tap(find.byKey(DevicesScreenKeys.test(simulatorGaugeId)));
     await tester.pumpAndSettle();
-    expect(find.text('Read 110.5 psi'), findsOneWidget);
+    expect(find.textContaining('110.5 psi'), findsOneWidget);
     expect(find.text('Battery 87%'), findsOneWidget);
 
     await tester.tap(find.byKey(DevicesScreenKeys.forget(simulatorGaugeId)));

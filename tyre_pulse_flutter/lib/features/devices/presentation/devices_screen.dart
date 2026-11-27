@@ -140,7 +140,8 @@ class _DevicesBody extends ConsumerWidget {
           TpSpace.lg,
           TpSpace.lg,
           TpSpace.lg,
-          TpSpace.xxxl * 2,
+          // Clear of the Add device button at the end of the list.
+          TpSpace.xxxl * 4,
         ),
         children: <Widget>[
           ...header,

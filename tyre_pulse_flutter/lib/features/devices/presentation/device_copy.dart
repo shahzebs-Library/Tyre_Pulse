@@ -42,8 +42,9 @@ String printerLanguageLabel(PrinterLanguage language) => switch (language) {
       PrinterLanguage.tspl => 'TSPL (TSC)',
     };
 
+/// Left-to-right isolate so "50 \u00d7 25 mm" keeps its order in Arabic/Urdu.
 String labelSizeLabel(LabelSize size) =>
-    '${size.widthMm} × ${size.heightMm} mm';
+    '\u2066${size.widthMm} \u00d7 ${size.heightMm} mm\u2069';
 
 String deviceFailureMessage(AppLocalizations l10n, Object error) {
   if (error is! DeviceFailure) return l10n.devicesErrorNotConnected;
@@ -72,7 +73,10 @@ String? radioStateMessage(AppLocalizations l10n, RadioState state) =>
 /// "110.5 psi" / "12.4 mm", one decimal, in the reader's locale digits.
 String gaugeValueText(AppLocalizations l10n, GaugeReading reading) {
   final String value = reading.rounded.toStringAsFixed(1);
-  return reading.quantity == GaugeQuantity.pressure
+  // First-strong isolate: "110.5 psi" stays in Latin order inside an
+  // Arabic sentence, "12.4 مم" follows the Arabic unit.
+  final String text = reading.quantity == GaugeQuantity.pressure
       ? l10n.gaugeValuePsi(value)
       : l10n.gaugeValueMm(value);
+  return '\u2068$text\u2069';
 }

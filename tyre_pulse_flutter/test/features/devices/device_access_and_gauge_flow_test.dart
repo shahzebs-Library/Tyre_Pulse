@@ -80,7 +80,12 @@ void main() {
       await tester.tap(find.byKey(GaugeReadKeys.readPressure));
       await tester.pumpAndSettle();
       expect(find.text('Use this reading?'), findsOneWidget);
-      expect(find.text('Sim gauge measured 110.5 psi on LHF1.'), findsOne);
+      expect(
+        find.textContaining(
+          RegExp('Sim gauge measured .*110.5 psi.* on LHF1'),
+        ),
+        findsOne,
+      );
       expect(emitted, isNull, reason: 'nothing is written before confirm');
 
       await tester.tap(find.byKey(GaugeReadKeys.useReading));
@@ -103,7 +108,9 @@ void main() {
       await tester.tap(find.byKey(GaugeReadKeys.readTread));
       await tester.pumpAndSettle();
       expect(
-        find.text('This replaces the value already entered (9.0 mm).'),
+        find.textContaining(
+          RegExp('This replaces the value already entered .*9.0 mm'),
+        ),
         findsOneWidget,
       );
       await tester.tap(find.text('Cancel'));

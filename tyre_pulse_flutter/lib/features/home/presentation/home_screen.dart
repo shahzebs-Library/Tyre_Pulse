@@ -104,12 +104,18 @@ import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/home/home_layout.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
+import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
+import 'package:tyre_pulse/features/inventory/presentation/store_receipt_screen.dart';
 import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_board.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/my_work/presentation/my_work_widgets.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
+import 'package:tyre_pulse/features/stock_count/presentation/store_history_copy.dart';
+import 'package:tyre_pulse/features/stock_count/presentation/store_history_screen.dart';
+import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
 
 /// Real local time in production; overridden for deterministic goldens.
 ///
@@ -263,7 +269,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ..invalidate(tyreAlertsProvider)
       ..invalidate(homePendingSyncCountProvider)
       ..invalidate(homeRecentAssetsProvider)
-      ..invalidate(myWorkSnapshotProvider);
+      ..invalidate(myWorkSnapshotProvider)
+      ..invalidate(stockItemsProvider);
   }
 
   /// Pull-to-refresh: invalidate, then wait for the sources this role is
@@ -275,6 +282,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required bool alerts,
     required bool recent,
     required bool plan,
+    bool store = false,
   }) async {
     _refreshSources();
     Future<void> settle(Future<Object?> future) =>
@@ -287,6 +295,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (alerts) settle(ref.read(tyreAlertsProvider.future)),
       if (recent) settle(ref.read(homeRecentAssetsProvider.future)),
       if (plan) settle(ref.read(myWorkSnapshotProvider.future)),
+      if (store) settle(ref.read(stockItemsProvider.future)),
     ]);
   }
 
@@ -334,6 +343,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final bool canSeeAccidents = ref.watch(
       canAccessModuleProvider(ModuleKey.accidents),
     );
+    // The store is this person's main job when they reach Stock Count but
+    // not field inspection (a Store Keeper). Their Home then leads with the
+    // store tools and store figures instead of hiding them in More. Anyone
+    // who also inspects keeps the field Home unchanged.
+    final bool storeHome = ref.watch(
+          canAccessModuleProvider(ModuleKey.stock),
+        ) &&
+        !canInspect;
+    final AsyncValue<List<StockItem>>? store =
+        storeHome ? ref.watch(stockItemsProvider) : null;
+    final Map<String, DateTime> countedToday = storeHome
+        ? ref.watch(stockCountedTodayProvider)
+        : const <String, DateTime>{};
     final List<HomeSectionSpec> sections = visibleHomeSections(
       _kHomeSections,
       (ModuleKey module) => ref.watch(canAccessModuleProvider(module)),
@@ -389,6 +411,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           alerts: alerts != null,
           recent: recent != null,
           plan: plan != null,
+          store: store != null,
         ),
         child: ListView(
           padding: EdgeInsets.zero,
@@ -526,6 +549,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       pendingSync: pendingSync,
                       alerts: alerts,
                       approvals: approvals,
+                      store: store,
+                      countedToday: countedToday,
+                      now: now,
                       onOpenPlan: canSeeCalendar
                           ? () => context.push(const CalendarRoute().location)
                           : canSeeTasks
@@ -545,6 +571,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     canWash: canWash,
                     canSeeVehicles: canSeeVehicles,
                     canReportIssue: canReportIssue,
+                    canStore: storeHome,
+                    onStockCount: () =>
+                        context.push(const StockCountRoute().location),
+                    onReceiveGoods: () => Navigator.of(context)
+                        .push(StoreReceiptScreen.route())
+                        .then((_) => ref.invalidate(stockItemsProvider)),
+                    onStoreHistory: () =>
+                        Navigator.of(context).push(StoreHistoryScreen.route()),
                     onScanner: () =>
                         context.push(const ScannerRoute().location),
                     onWashing: () => context.go(const WashingRoute().location),
@@ -798,6 +832,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required AsyncValue<List<TyreAlert>>? alerts,
     required AsyncValue<HomePendingApprovals>? approvals,
     required VoidCallback? onOpenPlan,
+    AsyncValue<List<StockItem>>? store,
+    Map<String, DateTime> countedToday = const <String, DateTime>{},
+    DateTime? now,
   }) {
     _SummaryTileData tile<T>({
       required String id,
@@ -847,7 +884,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final bool planHasInspections = plan != null &&
         (snapshot == null ||
             snapshot.attempted.contains(MyWorkSource.inspectionPlans));
+    final DateTime today = now ?? DateTime.now();
+    void openStock() => context.push(const StockCountRoute().location);
+    String stockLabel(String key) =>
+        _catalogLabel(l10n.stockCountCopyCatalog, key);
     return <_SummaryTileData>[
+      // Store figures, from the same register Stock Count lists (one read,
+      // stockItemsProvider), so Home and the screen can never disagree.
+      if (store != null) ...<_SummaryTileData>[
+        tile<List<StockItem>>(
+          id: 'stockItems',
+          icon: Icons.inventory_2_outlined,
+          gem: TpGemSpec.stockCount,
+          tone: palette.info,
+          label: stockLabel('items'),
+          state: store,
+          value: (List<StockItem> v) => '${v.length}',
+          onTap: openStock,
+        ),
+        tile<List<StockItem>>(
+          id: 'stockReorder',
+          icon: Icons.production_quantity_limits_outlined,
+          gem: TpGemSpec.reportIssue,
+          tone: palette.warning,
+          label: stockLabel('reorder'),
+          state: store,
+          value: (List<StockItem> v) =>
+              '${v.where((StockItem i) => i.needsReorder).length}',
+          onTap: openStock,
+        ),
+        tile<List<StockItem>>(
+          id: 'stockNotCounted',
+          icon: Icons.fact_check_outlined,
+          gem: TpGemSpec.inspectionsDue,
+          tone: palette.neutral,
+          label: stockLabel('notToday'),
+          state: store,
+          value: (List<StockItem> v) => '${v.where(
+                (StockItem i) => !stockLineCountedToday(i, today, countedToday),
+              ).length}',
+          onTap: openStock,
+        ),
+      ],
       if (planHasInspections)
         tile<MyWorkSnapshot>(
           id: 'inspections',
@@ -2123,6 +2201,10 @@ class _DashboardQuickActions extends StatelessWidget {
     required this.canSeeVehicles,
     required this.canReportIssue,
     required this.onScanner,
+    this.canStore = false,
+    this.onStockCount,
+    this.onReceiveGoods,
+    this.onStoreHistory,
     required this.onWashing,
     required this.onAsset,
     required this.onReportIssue,
@@ -2134,6 +2216,14 @@ class _DashboardQuickActions extends StatelessWidget {
   final bool canWash;
   final bool canSeeVehicles;
   final bool canReportIssue;
+
+  /// The store tools lead the grid for a person whose job is the store.
+  /// Each is gated on the same `stock` module the More sheet uses; Receive
+  /// goods and Store history are reached from Stock Count under that gate.
+  final bool canStore;
+  final VoidCallback? onStockCount;
+  final VoidCallback? onReceiveGoods;
+  final VoidCallback? onStoreHistory;
   final VoidCallback onScanner;
   final VoidCallback onWashing;
   final VoidCallback onAsset;
@@ -2152,6 +2242,27 @@ class _DashboardQuickActions extends StatelessWidget {
       TpGemSpec gem,
       VoidCallback onTap,
     })>[
+      if (canStore && onStockCount != null)
+        (
+          id: 'stockCount',
+          label: _catalogLabel(l10n.stockCountCopyCatalog, 'title'),
+          gem: TpGemSpec.stockCount,
+          onTap: onStockCount!,
+        ),
+      if (canStore && onReceiveGoods != null)
+        (
+          id: 'receiveGoods',
+          label: InventoryCopy.of(context)('sr_entry'),
+          gem: TpGemSpec.receiveGoods,
+          onTap: onReceiveGoods!,
+        ),
+      if (canStore && onStoreHistory != null)
+        (
+          id: 'storeHistory',
+          label: StoreHistoryCopy.of(context)('historyTitle'),
+          gem: TpGemSpec.storeHistory,
+          onTap: onStoreHistory!,
+        ),
       if (canScan)
         (
           id: 'scanner',

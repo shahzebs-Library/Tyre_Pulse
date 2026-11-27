@@ -211,6 +211,36 @@ void main() {
     });
 
     test(
+        'recheckProfile lets an approved account through, and a failed '
+        're-check keeps the not-active gate instead of an error', () async {
+      final Harness h = Harness();
+      addTearDown(h.dispose);
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(approved: false),
+      );
+      h.auth.emit(const AuthSessionSignal(userId: 'user-1'));
+      expect(h.state.profileStatus, ProfileStatus.loading);
+      await pumpEventQueue(times: 40);
+      expect(deriveSession(h.state).gate, TpShellGate.accessBlocked);
+
+      // Offline re-check: still the not-active screen, never "unavailable".
+      h.profiles.outcomeByUserId['user-1'] = const ProfileFetchFailed(
+        AppError(kind: AppErrorKind.network, message: 'offline'),
+      );
+      await h.controller.recheckProfile();
+      await pumpEventQueue(times: 40);
+      expect(deriveSession(h.state).gate, TpShellGate.accessBlocked);
+
+      // The administrator approved the account meanwhile.
+      h.profiles.outcomeByUserId['user-1'] = ProfileFetchSucceeded(
+        profileWith(),
+      );
+      await h.controller.recheckProfile();
+      await pumpEventQueue(times: 40);
+      expect(deriveSession(h.state).gate, TpShellGate.none);
+    });
+
+    test(
         'a profile fetch failure resolves profileUnavailable, and offers a '
         'working retry', () async {
       final Harness h = Harness();

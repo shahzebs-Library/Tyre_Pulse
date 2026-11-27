@@ -152,6 +152,40 @@ void main() {
     expect(p.values, isNot(contains(12)), reason: 'system qty never sent');
   });
 
+  test('the genuine mark travels in the payload and survives the outbox', () {
+    final PendingCapture c = stockCountCapture(
+      item: _line,
+      count: 12,
+      reason: null,
+      clientUuid: 'c1',
+      userId: 'u1',
+      sessionId: 's1',
+      capturedAt: DateTime.utc(2026),
+      genuine: false,
+      genuineNote: '  copy part ',
+    );
+    final Map<String, Object?> p = c.toPayload();
+    expect(p['genuine'], false);
+    expect(p['genuine_note'], 'copy part');
+    final PendingCapture back = PendingCapture.fromJson(c.toJson());
+    expect(back.genuine, false);
+    expect(back.genuineNote, 'copy part');
+    expect(back.copyWith(serverId: 'x').genuine, false);
+
+    // Not stated: the keys are left out (an older server ignores them).
+    final Map<String, Object?> none = stockCountCapture(
+      item: _line,
+      count: 1,
+      reason: null,
+      clientUuid: 'c2',
+      userId: 'u1',
+      sessionId: 's1',
+      capturedAt: DateTime.utc(2026),
+    ).toPayload();
+    expect(none.containsKey('genuine'), isFalse);
+    expect(none.containsKey('genuine_note'), isFalse);
+  });
+
   test('a line without an ERP item is proposed for review', () {
     final PendingCapture c = stockCountCapture(
       item: const StockItem(id: 's', site: 'NHC', description: 'Seal kit'),

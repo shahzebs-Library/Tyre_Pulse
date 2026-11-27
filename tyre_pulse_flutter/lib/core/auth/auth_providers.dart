@@ -90,6 +90,7 @@ TpShellGateActions buildAuthShellGateActions(
   return TpShellGateActions(
     onSignOut: () => unawaited(notifier().signOut()),
     onRetryProfile: () => unawaited(notifier().retryProfile()),
+    onRecheckAccess: () => notifier().recheckProfile(),
     onRetrySession: () => unawaited(notifier().retrySession()),
     onOpenStore: onOpenStore ?? defaultOpenStoreAction(),
     onVerifyMfa: (String code) async =>

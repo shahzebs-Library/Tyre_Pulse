@@ -12,6 +12,8 @@
 /// that rule.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,6 +42,7 @@ class TpShellGateActions {
   const TpShellGateActions({
     this.onSignOut,
     this.onRetryProfile,
+    this.onRecheckAccess,
     this.onRetrySession,
     this.onOpenStore,
     this.onVerifyMfa,
@@ -50,6 +53,11 @@ class TpShellGateActions {
 
   final VoidCallback? onSignOut;
   final VoidCallback? onRetryProfile;
+
+  /// Re-reads the profile from the not-active gate ("Check again", and on
+  /// resume). Completes when the read has been applied; a failed read leaves
+  /// the gate as it was.
+  final Future<void> Function()? onRecheckAccess;
   final VoidCallback? onRetrySession;
   final VoidCallback? onOpenStore;
 }
@@ -173,13 +181,64 @@ class TpProfileUnavailableScreen extends ConsumerWidget {
 }
 
 /// The account is not approved, or is locked.
-class TpAccessBlockedScreen extends ConsumerWidget {
+///
+/// A self-registered person waits here until an administrator approves them,
+/// so the screen re-checks: "Check again" and every return to the app re-read
+/// the profile through [TpShellGateActions.onRecheckAccess]. Once the profile
+/// says approved, the gate upstream goes away on its own.
+class TpAccessBlockedScreen extends ConsumerStatefulWidget {
   const TpAccessBlockedScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TpAccessBlockedScreen> createState() =>
+      _TpAccessBlockedScreenState();
+}
+
+class _TpAccessBlockedScreenState extends ConsumerState<TpAccessBlockedScreen> {
+  late final AppLifecycleListener _lifecycle;
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(
+      onResume: () => unawaited(_recheck(announce: false)),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  Future<void> _recheck({required bool announce}) async {
+    final Future<void> Function()? recheck =
+        ref.read(shellGateActionsProvider).onRecheckAccess;
+    if (recheck == null || _checking) return;
+    setState(() => _checking = true);
+    try {
+      await recheck();
+    } on Object {
+      // The gate stays as it was; the person can try again.
+    }
+    if (!mounted) return;
+    setState(() => _checking = false);
+    // Still mounted means still not active (an approval removes this screen).
+    if (announce) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).accessBlockedStillWaiting),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final AppLocalizations l10n = AppLocalizations.of(context);
     final TpShellGateActions actions = ref.watch(shellGateActionsProvider);
+    final bool canRecheck = actions.onRecheckAccess != null;
 
     return TpScaffold(
       body: TpStateView(
@@ -187,9 +246,15 @@ class TpAccessBlockedScreen extends ConsumerWidget {
         tone: TpStatus.warning,
         title: l10n.accessBlockedTitle,
         message: l10n.accessBlockedMessage,
-        primaryActionLabel:
-            actions.onSignOut == null ? null : l10n.actionSignOut,
-        onPrimaryAction: actions.onSignOut,
+        primaryActionLabel: canRecheck
+            ? l10n.accessBlockedCheckAgain
+            : (actions.onSignOut == null ? null : l10n.actionSignOut),
+        onPrimaryAction: canRecheck
+            ? (_checking ? null : () => unawaited(_recheck(announce: true)))
+            : actions.onSignOut,
+        secondaryActionLabel:
+            canRecheck && actions.onSignOut != null ? l10n.actionSignOut : null,
+        onSecondaryAction: canRecheck ? actions.onSignOut : null,
       ),
     );
   }

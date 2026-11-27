@@ -695,10 +695,12 @@ void main() {
     // and Urdu font).
     // 2707 + 7 = 2714: the Article 91 fault finding (title, not recorded, four
     // findings) and the block when it was a third party or force majeure.
-    test('en, ar and ur each carry exactly 2714 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2714);
-      expect(_translatableKeys(ar).length, 2714);
-      expect(_translatableKeys(ur).length, 2714);
+    // 2714 + 2 = 2716: the not-active screen's "Check again" button and its
+    // "still not active" reply (accessBlockedCheckAgain / StillWaiting).
+    test('en, ar and ur each carry exactly 2716 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2716);
+      expect(_translatableKeys(ar).length, 2716);
+      expect(_translatableKeys(ur).length, 2716);
     });
   });
 

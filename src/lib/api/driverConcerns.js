@@ -9,13 +9,17 @@ import { CONCERN_LANGS } from '../driverConcerns'
 
 const COLS = [
   'id', 'case_no', 'driver_id', 'category', 'subtype', 'sensitive', 'status', 'level',
-  'country', 'site', 'assigned_to', 'ack_due_at', 'due_at', 'acknowledged_at',
+  'country', 'site', 'ack_due_at', 'due_at', 'acknowledged_at',
   'escalation_count', 'entered_verbally', 'original_lang', 'created_at', 'updated_at',
   'closed_at', 'reopen_deadline', 'outcome_seen_at', 'driver_decision', 'version',
   'duplicate_of', 'linked_to', 'pdf_sha256',
 ].join(',')
 
-/** The inbox (RLS decides what the caller sees). Never throws on "not installed". */
+/**
+ * The inbox (RLS decides what the caller sees). Never throws on "not installed".
+ * Only columns granted to `authenticated` may be listed here: proposals, who
+ * handles a case and signatures are column-revoked and come from getConcern().
+ */
 export async function listConcerns({ limit = 500 } = {}) {
   const { data, error } = await supabase
     .from('driver_concerns')

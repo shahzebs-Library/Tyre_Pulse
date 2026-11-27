@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import 'package:tyre_pulse/features/driver_concerns/data/driver_concern_repository.dart';
 import 'package:tyre_pulse/features/driver_concerns/domain/driver_concern_rules.dart';
 import 'package:tyre_pulse/features/driver_concerns/presentation/driver_concerns_copy.dart';
@@ -39,6 +40,7 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
   bool _busy = false;
   bool _showOriginalOutcome = false;
   String? _signature;
+  bool _driverPresent = false;
   final TextEditingController _reason = TextEditingController();
   final TextEditingController _note = TextEditingController();
   final Map<String, String> _fresh = <String, String>{};
@@ -147,6 +149,7 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
     await _run('sign', <String, Object?>{
       'decision': decision,
       'signature': _signature,
+      if (!(_detail?.isDriver ?? true)) 'driver_present': _driverPresent,
       'text': _reason.text.trim().isEmpty ? null : _reason.text.trim(),
       'lang': c.language,
     });
@@ -221,7 +224,11 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
       );
     }
     final DriverConcern k = d.concern;
-    final Set<String> can = allowedActions(d, DateTime.now());
+    final Set<String> can = allowedActions(
+      d,
+      DateTime.now(),
+      userId: _currentUserId(),
+    );
     final String lang = c.language;
     final String? concernTr =
         _fresh['concern'] ?? d.translationFor('concern', lang)?.text;
@@ -358,6 +365,14 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
                 ),
               if (can.contains('sign'))
                 section(c('signHere'), <Widget>[
+                  if (!d.isDriver)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _driverPresent,
+                      onChanged: (bool? v) =>
+                          setState(() => _driverPresent = v ?? false),
+                      title: Text(c('driverPresent')),
+                    ),
                   InspectionSignaturePad(
                     height: 160,
                     onChanged: (InspectionSignatureCapture? s) =>
@@ -527,6 +542,14 @@ class _ConcernDetailScreenState extends ConsumerState<ConcernDetailScreen> {
         ),
       ),
     );
+  }
+
+  static String? _currentUserId() {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } on Object {
+      return null; // not initialised (tests)
+    }
   }
 
   static TextDirection? _dirOf(String? t) {

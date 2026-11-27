@@ -44,9 +44,18 @@ class _RaiseConcernScreenState extends ConsumerState<RaiseConcernScreen> {
   }
 
   Future<void> _addPhoto(bool camera) async {
-    final String? path =
+    final String? picked =
         await ref.read(concernPhotoPickerProvider)(camera: camera);
-    if (path != null && mounted) setState(() => _photos.add(path));
+    if (picked == null) return;
+    // Keep our own copy until it is uploaded; a cleared cache cannot lose it.
+    String path = picked;
+    try {
+      path = await ref.read(concernPhotoKeeperProvider)(picked);
+    } on Object {
+      // Copy failed: keep the picked path; a missing file later fails the
+      // item visibly (Retry / Discard), never silently.
+    }
+    if (mounted) setState(() => _photos.add(path));
   }
 
   Future<void> _send(DriverConcernsCopy c) async {
@@ -68,8 +77,15 @@ class _RaiseConcernScreenState extends ConsumerState<RaiseConcernScreen> {
       final String? caseNo =
           await ref.read(driverConcernRepositoryProvider).raise(draft);
       if (!mounted) return;
+      final List<ConcernDraft> waiting = caseNo == null
+          ? await ref.read(driverConcernRepositoryProvider).pending()
+          : const <ConcernDraft>[];
+      final bool failed = waiting.any(
+        (ConcernDraft w) => w.clientUuid == draft.clientUuid && w.error != null,
+      );
+      if (!mounted) return;
       final String msg = caseNo == null
-          ? c('savedOffline')
+          ? (failed ? c('failedSend') : c('savedOffline'))
           : c.fill('sent', <String, String>{'case': caseNo});
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       Navigator.of(context).pop(true);

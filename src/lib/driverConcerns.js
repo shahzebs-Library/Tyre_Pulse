@@ -101,7 +101,7 @@ export function canReopen(row, now = new Date()) {
  * What the screen offers. `rank`: 0 none, 1 supervisor pool, 2 incharge / HR,
  * 3 manager. Same guards as driver_concern_command.
  */
-export function allowedActions(row, { rank = 0, isDriver = false, now = new Date() } = {}) {
+export function allowedActions(row, { rank = 0, isDriver = false, userId = null, now = new Date() } = {}) {
   const out = new Set()
   if (!row) return out
   const terminal = isTerminal(row)
@@ -127,11 +127,13 @@ export function allowedActions(row, { rank = 0, isDriver = false, now = new Date
     if (!['proposed', 'outcome_shared'].includes(row.status)) out.add('propose')
     if (!row.sensitive) out.add('reclassify')
   }
-  if (rank >= 3 && row.status === 'proposed') {
+  // The person who proposed a solution never approves it (Admin included).
+  if (rank >= 3 && row.status === 'proposed' && !(userId && row.proposed_by === userId)) {
     out.add('approve')
     out.add('return')
   }
-  if (row.entered_verbally && row.status === 'outcome_shared') {
+  // Proxy (verbal) signing needs the case's level rank, and not the approver.
+  if (row.entered_verbally && row.status === 'outcome_shared' && rank >= needed && !(userId && row.approved_by === userId)) {
     out.add('view_outcome')
     if (row.outcome_seen_at) out.add('sign')
   }

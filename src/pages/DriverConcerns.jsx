@@ -11,6 +11,7 @@ import PageHeader from '../components/ui/PageHeader'
 import EnterpriseTable from '../components/ui/EnterpriseTable'
 import SideDrawer from '../components/ui/SideDrawer'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useAuth } from '../contexts/AuthContext'
 import { toUserMessage } from '../lib/safeError'
 import {
   CATEGORIES, CONCERN_LANGS, LANG_NAMES, LEVELS, STATUSES,
@@ -183,7 +184,8 @@ function ConcernDrawer({ id, t, language, onClose, onChanged }) {
     return () => { live = false }
   }, [c?.photos])
 
-  const actions = useMemo(() => allowedActions(c, { rank: detail?.my_rank || 0, isDriver: detail?.is_driver }), [c, detail])
+  const { user } = useAuth()
+  const actions = useMemo(() => allowedActions(c, { rank: detail?.my_rank || 0, isDriver: detail?.is_driver, userId: user?.id || null }), [c, detail, user?.id])
 
   const run = async (action, payload = {}) => {
     setBusy(true); setMsg(null)

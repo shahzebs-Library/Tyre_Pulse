@@ -134,6 +134,7 @@ final class DriverConcern {
     this.escalationCount = 0,
     this.driverDecision,
     this.signedAt,
+    this.approvedBy,
     this.photos = const <String>[],
   });
 
@@ -160,6 +161,7 @@ final class DriverConcern {
         escalationCount: (j['escalation_count'] as num?)?.toInt() ?? 0,
         driverDecision: j['driver_decision'] as String?,
         signedAt: _date(j['signed_at']),
+        approvedBy: j['approved_by'] as String?,
         photos: (j['photos'] as List<Object?>?)
                 ?.whereType<String>()
                 .toList(growable: false) ??
@@ -188,6 +190,9 @@ final class DriverConcern {
   final int escalationCount;
   final String? driverDecision;
   final DateTime? signedAt;
+
+  /// Present for handlers only (`driver_concern_get` hides it from drivers).
+  final String? approvedBy;
   final List<String> photos;
 
   bool get isTerminal => terminalStatuses.contains(status);
@@ -316,7 +321,7 @@ bool canReopen(DriverConcern c, DateTime now) =>
     !c.reopenDeadline!.isBefore(now);
 
 /// What the detail screen offers. Same guards as `driver_concern_command`.
-Set<String> allowedActions(ConcernDetail d, DateTime now) {
+Set<String> allowedActions(ConcernDetail d, DateTime now, {String? userId}) {
   final DriverConcern c = d.concern;
   final Set<String> out = <String>{};
   if (d.isDriver) {
@@ -342,7 +347,11 @@ Set<String> allowedActions(ConcernDetail d, DateTime now) {
       out.add('propose');
     }
   }
-  if (c.enteredVerbally && c.status == 'outcome_shared') {
+  // Proxy (verbal) signing: the case's level rank, and never the approver.
+  if (c.enteredVerbally &&
+      c.status == 'outcome_shared' &&
+      d.myRank >= needed &&
+      !(userId != null && c.approvedBy == userId)) {
     out.add('view_outcome');
     if (c.outcomeSeenAt != null) out.add('sign');
   }

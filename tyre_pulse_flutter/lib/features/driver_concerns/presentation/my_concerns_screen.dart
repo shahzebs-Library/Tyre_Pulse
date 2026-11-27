@@ -117,11 +117,45 @@ class _MyConcernsScreenState extends ConsumerState<MyConcernsScreen> {
             for (final ConcernDraft d in _pending)
               Card(
                 child: ListTile(
-                  leading: const Icon(Icons.schedule_send_outlined),
+                  leading: Icon(
+                    d.error == null
+                        ? Icons.schedule_send_outlined
+                        : Icons.error_outline,
+                  ),
                   title: Text(
                     '${c('category.${d.category}')} · ${c('subtype.${d.subtype}')}',
                   ),
-                  subtitle: Text(c('pending')),
+                  subtitle: Text(
+                    d.error == null
+                        ? c('pending')
+                        : d.error == 'photo_missing'
+                            ? c('photoMissing')
+                            : '${c('failed')}: ${d.error}',
+                  ),
+                  trailing: Wrap(
+                    children: <Widget>[
+                      IconButton(
+                        tooltip: c('retry'),
+                        icon: const Icon(Icons.refresh),
+                        onPressed: () async {
+                          await ref
+                              .read(driverConcernRepositoryProvider)
+                              .retry(d.clientUuid);
+                          unawaited(_load());
+                        },
+                      ),
+                      IconButton(
+                        tooltip: c('discard'),
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () async {
+                          await ref
+                              .read(driverConcernRepositoryProvider)
+                              .discard(d.clientUuid);
+                          unawaited(_load());
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             if (!_loading &&

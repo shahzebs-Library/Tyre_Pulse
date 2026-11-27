@@ -8,6 +8,13 @@
 /// response cannot create a second case. Every OTHER action (sign, approve,
 /// withdraw...) is online only: a signature or a decision must be recorded
 /// against the case as it is now, never replayed against a case that moved on.
+///
+/// The outbox holds the driver's own words, so it is kept in the platform's
+/// secure storage, not plain preferences. Photos are COPIED into the app's
+/// documents folder when picked, so a cleared camera cache cannot lose them;
+/// a photo that is still missing makes that one item FAILED with a reason
+/// (Retry / Discard), never a silent drop. One failed item never stops the
+/// others from sending.
 library;
 
 import 'dart:async';
@@ -15,7 +22,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/features/driver_concerns/domain/driver_concern_rules.dart';
@@ -55,6 +63,7 @@ final class ConcernDraft {
     List<String>? localPhotos,
     String? clientUuid,
     DateTime? createdAt,
+    this.error,
   })  : localPhotos = localPhotos ?? <String>[],
         clientUuid = clientUuid ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
@@ -69,6 +78,7 @@ final class ConcernDraft {
             .toList(),
         clientUuid: '${j['client_uuid']}',
         createdAt: DateTime.tryParse('${j['created_at']}'),
+        error: j['error'] as String?,
       );
 
   final String category;
@@ -79,6 +89,21 @@ final class ConcernDraft {
   final String clientUuid;
   final DateTime createdAt;
 
+  /// Why the last send failed ('photo_missing', 'refused: ...'); null while
+  /// it is simply waiting for signal.
+  final String? error;
+
+  ConcernDraft withError(String? e) => ConcernDraft(
+        category: category,
+        subtype: subtype,
+        text: text,
+        lang: lang,
+        localPhotos: localPhotos,
+        clientUuid: clientUuid,
+        createdAt: createdAt,
+        error: e,
+      );
+
   Map<String, Object?> toJson() => <String, Object?>{
         'category': category,
         'subtype': subtype,
@@ -87,16 +112,20 @@ final class ConcernDraft {
         'photos': localPhotos,
         'client_uuid': clientUuid,
         'created_at': createdAt.toIso8601String(),
+        'error': error,
       };
 }
 
 /// On-device outbox for concerns raised without signal.
 final class DriverConcernOutbox {
+  DriverConcernOutbox({FlutterSecureStorage? storage})
+      : _storage = storage ?? const FlutterSecureStorage();
+
+  final FlutterSecureStorage _storage;
   static const String _key = 'driver_concerns.outbox.v1';
 
   Future<List<ConcernDraft>> read() async {
-    final SharedPreferences p = await SharedPreferences.getInstance();
-    final String? raw = p.getString(_key);
+    final String? raw = await _storage.read(key: _key);
     if (raw == null || raw.isEmpty) return <ConcernDraft>[];
     try {
       return (jsonDecode(raw) as List<Object?>)
@@ -111,18 +140,21 @@ final class DriverConcernOutbox {
     }
   }
 
-  Future<void> _write(List<ConcernDraft> drafts) async {
-    final SharedPreferences p = await SharedPreferences.getInstance();
-    await p.setString(
-      _key,
-      jsonEncode(drafts.map((ConcernDraft d) => d.toJson()).toList()),
-    );
-  }
+  Future<void> _write(List<ConcernDraft> drafts) => _storage.write(
+        key: _key,
+        value: jsonEncode(drafts.map((ConcernDraft d) => d.toJson()).toList()),
+      );
 
-  Future<void> add(ConcernDraft d) async {
+  Future<void> put(ConcernDraft d) async {
     final List<ConcernDraft> all = await read();
-    if (all.any((ConcernDraft x) => x.clientUuid == d.clientUuid)) return;
-    await _write(<ConcernDraft>[...all, d]);
+    final int i =
+        all.indexWhere((ConcernDraft x) => x.clientUuid == d.clientUuid);
+    if (i >= 0) {
+      all[i] = d;
+    } else {
+      all.add(d);
+    }
+    await _write(all);
   }
 
   Future<void> remove(String clientUuid) async {
@@ -131,6 +163,21 @@ final class DriverConcernOutbox {
       all.where((ConcernDraft x) => x.clientUuid != clientUuid).toList(),
     );
   }
+}
+
+/// Copies a picked photo into the app's documents folder so it survives until
+/// it is uploaded. Returns the new path.
+Future<String> keepConcernPhoto(String pickedPath) async {
+  final Directory docs = await getApplicationDocumentsDirectory();
+  final Directory dir = Directory('${docs.path}/driver_concerns');
+  if (!dir.existsSync()) dir.createSync(recursive: true);
+  final String name =
+      '${DateTime.now().microsecondsSinceEpoch}_${pickedPath.split('/').last}';
+  return (await File(pickedPath).copy('${dir.path}/$name')).path;
+}
+
+final class _PhotoMissing implements Exception {
+  const _PhotoMissing();
 }
 
 abstract interface class DriverConcernRepository {
@@ -143,6 +190,12 @@ abstract interface class DriverConcernRepository {
   /// Sends everything waiting in the outbox; returns how many were sent.
   Future<int> flushOutbox();
   Future<List<ConcernDraft>> pending();
+
+  /// Drop a waiting / failed item from the phone.
+  Future<void> discard(String clientUuid);
+
+  /// Try one item again now.
+  Future<String?> retry(String clientUuid);
 
   Future<void> command(
     String id,
@@ -171,6 +224,15 @@ final class SupabaseDriverConcernRepository implements DriverConcernRepository {
 
   static const String bucket = 'driver-concerns';
 
+  /// Only columns granted to `authenticated`; proposals and handlers are
+  /// column-revoked and come from `driver_concern_get`.
+  static const String listColumns =
+      'id,case_no,driver_id,category,subtype,sensitive,status,level,country,site,'
+      'ack_due_at,due_at,acknowledged_at,escalation_count,entered_verbally,'
+      'original_text,original_lang,outcome_text,outcome_lang,outcome_seen_at,'
+      'driver_decision,signed_at,closed_at,reopen_deadline,reopened_count,photos,'
+      'version,created_at,updated_at';
+
   Future<T> _call<T>(Future<T> Function() run) async {
     try {
       return await run().timeout(const Duration(seconds: 25));
@@ -188,7 +250,7 @@ final class SupabaseDriverConcernRepository implements DriverConcernRepository {
   Future<List<DriverConcern>> list() => _call(() async {
         final List<dynamic> rows = await _client
             .from('driver_concerns')
-            .select()
+            .select(listColumns)
             .order('created_at', ascending: false)
             .limit(200);
         return rows
@@ -229,16 +291,25 @@ final class SupabaseDriverConcernRepository implements DriverConcernRepository {
       }
       for (int i = 0; i < d.localPhotos.length && i < 6; i++) {
         final File f = File(d.localPhotos[i]);
-        if (!f.existsSync()) {
-          continue; // honest: a photo the phone lost is not sent
-        }
+        if (!f.existsSync()) throw const _PhotoMissing();
         final String path = concernPhotoPath(org, uid, d.clientUuid, i);
-        await _client.storage.from(bucket).upload(
-              path,
-              f,
-              fileOptions:
-                  const FileOptions(upsert: true, contentType: 'image/jpeg'),
-            );
+        try {
+          // No overwrite (no UPDATE policy exists). A retry after a lost
+          // response finds the object already there: that is success.
+          await _client.storage.from(bucket).upload(
+                path,
+                f,
+                fileOptions:
+                    const FileOptions(upsert: false, contentType: 'image/jpeg'),
+              );
+        } on StorageException catch (e) {
+          final String m = e.message.toLowerCase();
+          if (!(e.statusCode == '409' ||
+              m.contains('already exists') ||
+              m.contains('duplicate'))) {
+            rethrow;
+          }
+        }
         paths.add(path);
       }
     }
@@ -258,41 +329,55 @@ final class SupabaseDriverConcernRepository implements DriverConcernRepository {
     return '${out['case_no'] ?? ''}';
   }
 
+  /// Sends one draft. Returns the case number, or null when it stays waiting
+  /// (offline) or failed (reason stored on the item).
+  Future<String?> _attempt(ConcernDraft d) async {
+    try {
+      final String caseNo = await _call(() => _send(d));
+      await _outbox.remove(d.clientUuid);
+      return caseNo;
+    } on ConcernOfflineFailure {
+      await _outbox.put(d.withError(null));
+    } on _PhotoMissing {
+      await _outbox.put(d.withError('photo_missing'));
+    } on StorageException catch (e) {
+      await _outbox.put(d.withError('upload: ${e.message}'));
+    } on ConcernRefused catch (e) {
+      await _outbox.put(d.withError('refused: ${e.message}'));
+    }
+    return null;
+  }
+
   @override
   Future<String?> raise(ConcernDraft draft) async {
-    try {
-      return await _call(() => _send(draft));
-    } on ConcernOfflineFailure {
-      await _outbox.add(draft);
-      return null;
-    } on StorageException {
-      await _outbox.add(draft);
-      return null;
-    }
+    // Saved first so nothing is lost if the app dies mid-send.
+    await _outbox.put(draft);
+    return _attempt(draft);
   }
 
   @override
   Future<int> flushOutbox() async {
     int sent = 0;
     for (final ConcernDraft d in await _outbox.read()) {
-      try {
-        await _call(() => _send(d));
-        await _outbox.remove(d.clientUuid);
-        sent++;
-      } on ConcernOfflineFailure {
-        break; // still offline: try the rest next time
-      } on StorageException {
-        break; // photo upload failed: keep it and try again later
-      } on ConcernRefused {
-        // A permanent refusal stays in the outbox so it is never lost silently;
-        // the list shows it as waiting.
-      }
+      // One item never stops the others.
+      if (await _attempt(d) != null) sent++;
     }
     return sent;
   }
 
   @override
   Future<List<ConcernDraft>> pending() => _outbox.read();
+
+  @override
+  Future<void> discard(String clientUuid) => _outbox.remove(clientUuid);
+
+  @override
+  Future<String?> retry(String clientUuid) async {
+    for (final ConcernDraft d in await _outbox.read()) {
+      if (d.clientUuid == clientUuid) return _attempt(d);
+    }
+    return null;
+  }
 
   @override
   Future<void> command(

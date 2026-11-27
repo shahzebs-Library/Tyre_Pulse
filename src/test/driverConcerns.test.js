@@ -93,6 +93,17 @@ describe('allowed actions mirror driver_concern_command', () => {
     expect(allowedActions(r, { rank: 1 }).has('propose')).toBe(false)
     expect(allowedActions(r, { rank: 2 }).has('propose')).toBe(true)
   })
+  it('the proposer never approves their own proposal', () => {
+    const r = { ...base, status: 'proposed', acknowledged_at: h(-1), proposed_by: 'u1' }
+    expect(allowedActions(r, { rank: 3, userId: 'u1' }).has('approve')).toBe(false)
+    expect(allowedActions(r, { rank: 3, userId: 'u2' }).has('approve')).toBe(true)
+  })
+  it('the approver cannot take a proxy signature', () => {
+    const r = { ...base, status: 'outcome_shared', entered_verbally: true, outcome_seen_at: h(-1), approved_by: 'u1', level: 'manager' }
+    expect(allowedActions(r, { rank: 3, userId: 'u1' }).has('sign')).toBe(false)
+    expect(allowedActions(r, { rank: 3, userId: 'u2' }).has('sign')).toBe(true)
+    expect(allowedActions(r, { rank: 1, userId: 'u3' }).has('sign')).toBe(false)
+  })
   it('no reclassify on an already sensitive case; nothing for rank 0', () => {
     expect(allowedActions({ ...base, sensitive: true, level: 'hr' }, { rank: 2 }).has('reclassify')).toBe(false)
     expect(allowedActions(base, { rank: 0 }).size).toBe(0)

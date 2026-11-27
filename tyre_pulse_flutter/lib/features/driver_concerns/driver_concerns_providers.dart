@@ -2,6 +2,8 @@
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tyre_pulse/features/driver_concerns/data/driver_concern_repository.dart'
+    show keepConcernPhoto;
 import 'package:tyre_pulse/features/handover/data/handover_photo_capture.dart';
 
 export 'package:tyre_pulse/features/driver_concerns/data/driver_concern_repository.dart'
@@ -20,3 +22,9 @@ final Provider<ConcernPhotoPicker> concernPhotoPickerProvider =
             camera ? HandoverPhotoSource.camera : HandoverPhotoSource.gallery,
       );
 });
+
+/// Copies a picked photo into the app documents folder (overridable in tests).
+typedef ConcernPhotoKeeper = Future<String> Function(String pickedPath);
+
+final Provider<ConcernPhotoKeeper> concernPhotoKeeperProvider =
+    Provider<ConcernPhotoKeeper>((Ref ref) => keepConcernPhoto);

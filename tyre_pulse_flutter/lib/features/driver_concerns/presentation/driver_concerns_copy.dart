@@ -35,6 +35,12 @@ final class DriverConcernsCopy {
   static const Map<String, Map<String, String>> values =
       <String, Map<String, String>>{
     'en': <String, String>{
+      'photoMissing': 'A photo is missing on this phone. Retry or discard.',
+      'failed': 'Could not send',
+      'discard': 'Discard',
+      'driverPresent': 'The driver is with me and signs in person',
+      'failedSend':
+          'Could not send now. It is saved on this phone; open My concerns to retry.',
       'accept': 'Accept',
       'acknowledge': 'Acknowledge',
       'addPhoto': 'Add photo',
@@ -170,6 +176,12 @@ final class DriverConcernsCopy {
       'youWrote': 'What you wrote',
     },
     'ar': <String, String>{
+      'photoMissing': 'صورة مفقودة على هذا الهاتف. أعد المحاولة أو احذفها.',
+      'failed': 'تعذّر الإرسال',
+      'discard': 'حذف',
+      'driverPresent': 'السائق معي ويوقّع بنفسه',
+      'failedSend':
+          'تعذّر الإرسال الآن. حُفظت على الهاتف؛ افتح شكاواي لإعادة المحاولة.',
       'accept': 'أقبل',
       'acknowledge': 'استلام',
       'addPhoto': 'أضف صورة',
@@ -255,7 +267,7 @@ final class DriverConcernsCopy {
       'status.in_review': 'قيد المراجعة',
       'status.not_accepted': 'لم تُقبل',
       'status.open': 'جديدة',
-      'status.outcome_shared': 'أُرسل الرد للسائق',
+      'status.outcome_shared': 'تم إرسال الرد',
       'status.proposed': 'حل بانتظار المدير',
       'status.withdrawn': 'سُحبت',
       'subtype.accommodation': 'حالة السكن',
@@ -300,6 +312,13 @@ final class DriverConcernsCopy {
       'youWrote': 'ما كتبته',
     },
     'ur': <String, String>{
+      'photoMissing':
+          'اس فون پر ایک تصویر موجود نہیں۔ دوبارہ کوشش کریں یا ہٹا دیں۔',
+      'failed': 'بھیجی نہیں جا سکی',
+      'discard': 'ہٹائیں',
+      'driverPresent': 'ڈرائیور میرے ساتھ ہے اور خود دستخط کرتا ہے',
+      'failedSend':
+          'ابھی بھیجی نہیں جا سکی۔ فون پر محفوظ ہے؛ دوبارہ کوشش کے لیے میری شکایات کھولیں۔',
       'accept': 'قبول',
       'acknowledge': 'وصول کریں',
       'addPhoto': 'تصویر لگائیں',

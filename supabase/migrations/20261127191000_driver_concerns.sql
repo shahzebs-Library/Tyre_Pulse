@@ -52,6 +52,29 @@
 -- category or the driver's words. Sensitive cases notify HR (and managers on
 -- overdue) only.
 --
+-- DEPENDENCY: the 'Fleet Foreman' role (custom_roles row) is seeded by
+-- 20261127171000_fleet_supervisor_driver_management.sql. Nothing here needs that
+-- migration: the pool check compares the role STRING, so without it a foreman
+-- branch simply never matches.
+--
+-- REVIEW FIXES (independent review 2026-11-27, before any apply):
+--   * approve refuses the person who proposed (Admin included).
+--   * drivers never read unapproved proposals, internal notes or who handles
+--     the case: column-level SELECT (no proposed_*, assigned_to, subject_user_id,
+--     approved_by, raised_by, signatures) and a filtered driver_concern_get /
+--     translations policy.
+--   * every rank, Manager / Director / Admin / HR included, obeys org + country
+--     + site scope; only super admin bypasses.
+--   * proxy (verbal) signing records a driver-present attestation and the
+--     handler's name, needs the case's level rank, and the signer cannot be the
+--     approver.
+--   * with no HR Officer, a sensitive case notifies Manager / Admin, never the pool.
+--   * escalation notices dedupe per round (escalation_count, reopened_count).
+--   * translations append versions; only the case's handlers, or the driver for
+--     their own words / the approved answer, may add one.
+--   * the purge queues storage paths in driver_concern_storage_purge (SQL cannot
+--     delete storage.objects; an edge/storage-API sweep must empty that queue).
+--
 -- NO DROP / DELETE STATEMENTS outside function bodies (MCP approval timeout).
 --
 -- VERIFY (after apply)
@@ -201,9 +224,10 @@ create table if not exists public.driver_concern_translations (
   text          text not null check (char_length(text) <= 8000),
   model         text not null,
   model_version text,
+  version       integer not null default 1,
   generated_at  timestamptz not null default now(),
   created_by    uuid default auth.uid(),
-  unique (concern_id, source, source_id, target_lang)
+  unique (concern_id, source, source_id, target_lang, version)
 );
 
 create table if not exists public.driver_concern_reads (
@@ -218,9 +242,23 @@ create table if not exists public.driver_concern_notices (
   concern_id uuid not null references public.driver_concerns(id),
   level      text not null,
   kind       text not null,
+  round      text not null default '0-0',   -- escalation_count || '-' || reopened_count
   sent_at    timestamptz not null default now(),
-  primary key (concern_id, level, kind)
+  primary key (concern_id, level, kind, round)
 );
+
+-- Photos of purged cases, for a storage-API sweep (SQL cannot delete storage.objects).
+create table if not exists public.driver_concern_storage_purge (
+  path      text primary key,
+  queued_at timestamptz not null default now()
+);
+alter table public.driver_concern_storage_purge enable row level security; -- deny-all
+
+-- Text -> uuid without a raw 22P02 reaching the user.
+create or replace function private.dc_uuid(p text)
+returns uuid language sql immutable set search_path = public as $$
+  select case when p ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then p::uuid end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- 2. Who may see / act
@@ -246,6 +284,11 @@ declare r text := public.app_role(); v int := 0;
 begin
   if auth.uid() is null or not public.is_approved_and_unlocked() then return 0; end if;
   if public.is_super_admin() then return 3; end if;
+  if public.app_current_org() is null then return 0; end if;
+  -- Scope applies to EVERY rank (Manager, Director, Admin, HR included).
+  if public.app_can_see_country(p_country) is false or public.app_can_see_site(p_site) is false then
+    return 0;
+  end if;
   if r in ('manager','director','admin')
      or private.dc_has_handler_row(array['manager'], p_country, p_site) then
     v := 3;
@@ -256,11 +299,6 @@ begin
     v := 2;
   elsif r in ('fleet_supervisor','fleet_foreman') or private.dc_has_handler_row(array['supervisor'], p_country, p_site) then
     v := 1;
-  end if;
-  if v > 0 and v < 3 then
-    if public.app_can_see_country(p_country) is false or public.app_can_see_site(p_site) is false then
-      return 0;
-    end if;
   end if;
   return v;
 end $$;
@@ -277,15 +315,14 @@ begin
   if not public.is_approved_and_unlocked() then return false; end if;
   if p_driver = any(public.app_my_driver_ids()) then return true; end if;
   r := public.app_role();
+  if public.app_can_see_country(p_country) is false or public.app_can_see_site(p_site) is false then
+    return false;
+  end if;
   if p_sensitive then
     return r in ('hr_officer','manager','admin')
         or private.dc_has_handler_row(array['hr','manager'], p_country, p_site);
   end if;
-  if r = 'hr_officer' or private.dc_my_rank(false, p_country, p_site) > 0 then
-    return public.app_can_see_country(p_country) is not false
-       and public.app_can_see_site(p_site) is not false;
-  end if;
-  return false;
+  return r = 'hr_officer' or private.dc_my_rank(false, p_country, p_site) > 0;
 end $$;
 
 create or replace function private.dc_is_my_driver(p_driver uuid)
@@ -374,25 +411,59 @@ alter table public.driver_concern_notices enable row level security; -- deny-all
 create policy driver_concerns_read on public.driver_concerns for select to authenticated
   using (private.dc_visible(organisation_id, driver_id, sensitive, country, site, subject_user_id));
 
-create policy driver_concern_events_read on public.driver_concern_events for select to authenticated
-  using (exists (select 1 from public.driver_concerns c
-                  where c.id = concern_id
-                    and private.dc_visible(c.organisation_id, c.driver_id, c.sensitive, c.country, c.site, c.subject_user_id)
-                    and (visible_to_driver or not private.dc_is_my_driver(c.driver_id))));
+-- The child tables cannot subquery driver_concerns directly: its SELECT is
+-- column-limited, and a policy subquery runs with the caller's privileges.
+-- These definer helpers read the row once and answer one question each.
+create or replace function private.dc_can_read_concern(p_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select private.dc_visible(c.organisation_id, c.driver_id, c.sensitive, c.country, c.site, c.subject_user_id)
+                     from public.driver_concerns c where c.id = p_id), false)
+$$;
+create or replace function private.dc_is_my_concern(p_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select c.driver_id = any(public.app_my_driver_ids()) from public.driver_concerns c where c.id = p_id), false)
+$$;
+create or replace function private.dc_concern_in_my_org(p_id uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.driver_concerns c where c.id = p_id and c.organisation_id = public.app_current_org())
+$$;
 
+create policy driver_concern_events_read on public.driver_concern_events for select to authenticated
+  using (private.dc_can_read_concern(concern_id)
+         and (visible_to_driver or not private.dc_is_my_concern(concern_id)));
+
+-- A driver reads translations of their own words and of the APPROVED answer
+-- only; never of a proposal or an internal note.
 create policy driver_concern_translations_read on public.driver_concern_translations for select to authenticated
-  using (exists (select 1 from public.driver_concerns c
-                  where c.id = concern_id
-                    and private.dc_visible(c.organisation_id, c.driver_id, c.sensitive, c.country, c.site, c.subject_user_id)));
+  using (private.dc_can_read_concern(concern_id)
+         and (not private.dc_is_my_concern(concern_id)
+              or source in ('concern','outcome')
+              or (source = 'event' and exists (select 1 from public.driver_concern_events e
+                                                where e.concern_id = driver_concern_translations.concern_id
+                                                  and e.id::text = driver_concern_translations.source_id
+                                                  and e.visible_to_driver))));
 
 create policy driver_concern_reads_read on public.driver_concern_reads for select to authenticated
-  using ((select public.is_super_admin()) or (select public.app_role()) in ('admin','manager','hr_officer'));
+  using (((select public.is_super_admin()) or (select public.app_role()) in ('admin','manager','hr_officer'))
+         and private.dc_concern_in_my_org(concern_id));
 
 revoke all on public.driver_concerns, public.driver_concern_events, public.driver_concern_translations,
-              public.driver_concern_reads, public.driver_concern_notices, public.driver_concern_counters
+              public.driver_concern_reads, public.driver_concern_notices, public.driver_concern_counters,
+              public.driver_concern_storage_purge
   from anon, authenticated;
-grant select on public.driver_concerns, public.driver_concern_events,
+grant select on public.driver_concern_events,
                 public.driver_concern_translations, public.driver_concern_reads to authenticated;
+-- Column-level SELECT: the list columns only. Proposals, who handles the case,
+-- the subject of a complaint and signatures are NEVER readable directly (a
+-- driver reading their own row would otherwise see an unapproved proposal);
+-- handlers read them through driver_concern_get, which filters per caller.
+grant select (id, case_no, driver_id, category, subtype, sensitive, status, level,
+              country, site, ack_due_at, due_at, acknowledged_at, escalation_count,
+              entered_verbally, original_text, original_lang, outcome_text, outcome_lang,
+              outcome_seen_at, driver_decision, signed_at, closed_at, reopen_deadline,
+              reopened_count, photos, version, created_at, updated_at,
+              duplicate_of, linked_to, pdf_sha256)
+  on public.driver_concerns to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 5. Settings, recipients, notifications
@@ -450,6 +521,17 @@ begin
                      and (h.site is null or c.site is null or upper(h.site) = upper(c.site))))
      and (c.country is null or p.country is null or cardinality(p.country) = 0 or c.country = any(p.country))
      and (c.site is null or p.sites is null or 'ALL' = any(p.sites) or '*' = any(p.sites) or upper(c.site) = any(p.sites));
+  -- No HR Officer (or handler) yet: a sensitive case goes to Manager / Admin,
+  -- never to the pool.
+  if p_target = 'hr' and cardinality(v) = 0 then
+    select coalesce(array_agg(distinct p.id), '{}') into v
+      from public.profiles p
+     where p.org_id = c.organisation_id
+       and coalesce(p.approved, true) and not coalesce(p.locked, false)
+       and p.id is distinct from c.subject_user_id
+       and lower(replace(p.role,' ','_')) in ('manager','admin')
+       and (c.country is null or p.country is null or cardinality(p.country) = 0 or c.country = any(p.country));
+  end if;
   return v;
 end $$;
 
@@ -536,7 +618,10 @@ begin
     raise exception using errcode = '42501', message = 'Not allowed';
   end if;
   if p_client_uuid is not null then
-    select id, case_no into v_existing from public.driver_concerns where client_uuid = p_client_uuid;
+    select id, case_no, raised_by into v_existing from public.driver_concerns where client_uuid = p_client_uuid;
+    if found and v_existing.raised_by is distinct from auth.uid() then
+      raise exception using errcode = '22023', message = 'Invalid request';
+    end if;
     if found then return jsonb_build_object('ok', true, 'id', v_existing.id, 'case_no', v_existing.case_no, 'replayed', true); end if;
   end if;
   if not private.dc_valid_subtype(p_category, p_subtype) then
@@ -628,8 +713,18 @@ begin
 
   -- A handler acts for a verbally logged case on the driver's behalf at next contact.
   if p_action in ('view_outcome','sign','withdraw') and not v_mine
-     and not (c.entered_verbally and v_rank > 0) then
+     and not (c.entered_verbally and v_rank >= least(private.dc_level_rank(c.level), 3)) then
     raise exception using errcode = '42501', message = 'Only the driver can do this';
+  end if;
+  -- Proxy (verbal) signing: the driver must be present, the handler is named,
+  -- and the person who approved the answer cannot also take the signature.
+  if p_action = 'sign' and not v_mine then
+    if (p ->> 'driver_present') is distinct from 'true' then
+      raise exception using errcode = '22023', message = 'Confirm the driver is with you and signs in person';
+    end if;
+    if c.approved_by = auth.uid() then
+      raise exception using errcode = '42501', message = 'The person who approved the answer cannot take the signature';
+    end if;
   end if;
   if p_action in ('acknowledge','assign','escalate','propose','reclassify','link','return')
      and v_rank < least(private.dc_level_rank(c.level), 3) then
@@ -651,23 +746,24 @@ begin
     perform private.dc_notify(p_id, 'update', private.dc_recipients(p_id, 'driver'));
 
   when 'assign' then
-    if not exists (select 1 from public.profiles x where x.id = (p ->> 'user_id')::uuid and x.org_id = c.organisation_id)
-       or (p ->> 'user_id')::uuid = c.subject_user_id then
+    if private.dc_uuid(p ->> 'user_id') is null
+       or not exists (select 1 from public.profiles x where x.id = private.dc_uuid(p ->> 'user_id') and x.org_id = c.organisation_id)
+       or private.dc_uuid(p ->> 'user_id') = c.subject_user_id then
       raise exception using errcode = '22023', message = 'Choose a person in your organisation';
     end if;
-    update public.driver_concerns set assigned_to = (p ->> 'user_id')::uuid where id = p_id;
+    update public.driver_concerns set assigned_to = private.dc_uuid(p ->> 'user_id') where id = p_id;
     perform private.dc_log(p_id, 'assigned', c.status, c.status, c.level, null, null, false,
                            jsonb_build_object('assigned_to', p ->> 'user_id'));
-    perform private.dc_notify(p_id, 'update', array[(p ->> 'user_id')::uuid]);
+    perform private.dc_notify(p_id, 'update', array[private.dc_uuid(p ->> 'user_id')]);
 
   when 'note' then
     if v_note is null then raise exception using errcode = '22023', message = 'Write a note'; end if;
     if not v_mine and v_rank = 0 then raise exception using errcode = '42501', message = 'Not allowed'; end if;
     perform private.dc_log(p_id, 'note', c.status, c.status, c.level, v_note, v_lang,
-                           v_mine or coalesce((p ->> 'visible_to_driver')::boolean, false), '{}');
+                           v_mine or (p ->> 'visible_to_driver') = 'true', '{}');
     if v_mine then
       perform private.dc_notify(p_id, 'update', private.dc_recipients(p_id, c.level));
-    elsif coalesce((p ->> 'visible_to_driver')::boolean, false) then
+    elsif (p ->> 'visible_to_driver') = 'true' then
       perform private.dc_notify(p_id, 'update', private.dc_recipients(p_id, 'driver'));
     end if;
 
@@ -698,6 +794,9 @@ begin
 
   when 'approve' then
     if c.status <> 'proposed' then raise exception using errcode = 'PT409', message = 'already_decided'; end if;
+    if c.proposed_by = auth.uid() then
+      raise exception using errcode = '42501', message = 'The person who proposed the solution cannot approve it';
+    end if;
     update public.driver_concerns set status = 'outcome_shared', approved_by = auth.uid(), approved_at = now(),
            outcome_text = coalesce(v_note, proposed_solution), outcome_lang = coalesce(v_lang, proposed_lang),
            outcome_seen_at = null, due_at = null where id = p_id;
@@ -726,7 +825,7 @@ begin
              signed_in_person_by = case when v_mine then null else auth.uid() end,
              closed_at = now(), reopen_deadline = now() + make_interval(days => v_days) where id = p_id;
       perform private.dc_log(p_id, 'signed_accepted', c.status, 'accepted', c.level, v_note, v_lang, true,
-                             jsonb_build_object('in_person', not v_mine));
+                             jsonb_build_object('in_person', not v_mine, 'driver_present', not v_mine, 'handler_name', case when v_mine then null else (select full_name from public.profiles where id = auth.uid()) end));
     else
       v_next := private.dc_next_level(c.level, c.sensitive);
       if v_next is null then
@@ -735,7 +834,7 @@ begin
                signed_in_person_by = case when v_mine then null else auth.uid() end,
                closed_at = now(), reopen_deadline = now() + make_interval(days => v_days) where id = p_id;
         perform private.dc_log(p_id, 'signed_not_accepted', c.status, 'not_accepted', c.level, v_note, v_lang, true,
-                               jsonb_build_object('labour_office_right', true, 'final', true, 'in_person', not v_mine));
+                               jsonb_build_object('labour_office_right', true, 'final', true, 'in_person', not v_mine, 'driver_present', not v_mine, 'handler_name', case when v_mine then null else (select full_name from public.profiles where id = auth.uid()) end));
       else
         update public.driver_concerns set status = 'open', level = v_next, driver_decision = 'not_accepted',
                driver_decision_note = v_note, driver_signature = p ->> 'signature', signed_at = now(),
@@ -744,7 +843,7 @@ begin
                escalation_count = escalation_count + 1 where id = p_id;
         perform private.dc_set_deadlines(p_id, v_next);
         perform private.dc_log(p_id, 'signed_not_accepted', c.status, 'open', v_next, v_note, v_lang, true,
-                               jsonb_build_object('labour_office_right', true, 'escalated_to', v_next, 'in_person', not v_mine));
+                               jsonb_build_object('labour_office_right', true, 'escalated_to', v_next, 'in_person', not v_mine, 'driver_present', not v_mine, 'handler_name', case when v_mine then null else (select full_name from public.profiles where id = auth.uid()) end));
         perform private.dc_notify(p_id, 'new', private.dc_recipients(p_id, v_next));
       end if;
     end if;
@@ -777,7 +876,7 @@ begin
 
   when 'link' then
     if v_rank = 0 then raise exception using errcode = '42501', message = 'Not allowed'; end if;
-    select * into v_target from public.driver_concerns where id = (p ->> 'target_id')::uuid;
+    select * into v_target from public.driver_concerns where id = private.dc_uuid(p ->> 'target_id');
     if not found or v_target.id = c.id or v_target.organisation_id <> c.organisation_id
        or not private.dc_visible(v_target.organisation_id, v_target.driver_id, v_target.sensitive, v_target.country, v_target.site, v_target.subject_user_id) then
       raise exception using errcode = '22023', message = 'Choose another concern you can see';
@@ -845,7 +944,7 @@ $$ select public.driver_concern_command(p_id, 'link', jsonb_build_object('target
 -- ---------------------------------------------------------------------------
 create or replace function public.driver_concern_get(p_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare c public.driver_concerns%rowtype; v_mine boolean;
+declare c public.driver_concerns%rowtype; v_mine boolean; v_hidden text[];
 begin
   select * into c from public.driver_concerns where id = p_id;
   if not found or not private.dc_visible(c.organisation_id, c.driver_id, c.sensitive, c.country, c.site, c.subject_user_id) then
@@ -855,16 +954,30 @@ begin
   if c.sensitive and not v_mine then
     insert into public.driver_concern_reads (concern_id, user_id) values (p_id, auth.uid());
   end if;
+  -- A driver never receives an unapproved proposal, who handles the case, who
+  -- the complaint names, or internal identifiers.
+  v_hidden := case when v_mine then array['subject_user_id','proposed_solution','proposed_lang','proposed_by',
+                     'proposed_at','assigned_to','approved_by','raised_by','logged_on_behalf_by',
+                     'signed_in_person_by','client_uuid','organisation_id']
+                   else array[]::text[] end;
   return jsonb_build_object(
-    'concern', to_jsonb(c) - case when v_mine then array['subject_user_id','proposed_solution','proposed_lang','assigned_to'] else array[]::text[] end,
+    'concern', to_jsonb(c) - v_hidden,
     'driver_name', (select d.driver_name from public.drivers d where d.id = c.driver_id),
     'my_rank', case when v_mine then 0 else private.dc_my_rank(c.sensitive, c.country, c.site) end,
     'is_driver', v_mine,
-    'events', coalesce((select jsonb_agg(to_jsonb(e) - 'prev_hash' order by e.seq)
+    'events', coalesce((select jsonb_agg(to_jsonb(e) - 'prev_hash' - case when v_mine then 'actor' else '' end order by e.seq)
                           from public.driver_concern_events e
                          where e.concern_id = p_id and (e.visible_to_driver or not v_mine)), '[]'::jsonb),
-    'translations', coalesce((select jsonb_agg(to_jsonb(t)) from public.driver_concern_translations t
-                               where t.concern_id = p_id), '[]'::jsonb),
+    -- Latest version per (source, source_id, language); drivers only see their
+    -- own words, the approved answer and notes they may see.
+    'translations', coalesce((select jsonb_agg(to_jsonb(t) order by t.source, t.target_lang)
+                                from (select distinct on (t.source, t.source_id, t.target_lang) t.*
+                                        from public.driver_concern_translations t
+                                       where t.concern_id = p_id
+                                         and (not v_mine or t.source in ('concern','outcome')
+                                              or (t.source = 'event' and exists (select 1 from public.driver_concern_events e
+                                                    where e.concern_id = p_id and e.id::text = t.source_id and e.visible_to_driver)))
+                                       order by t.source, t.source_id, t.target_lang, t.version desc) t), '[]'::jsonb),
     'chain_ok', (select coalesce(bool_and(x.ok), true) from (
                    select e.prev_hash is not distinct from lag(e.hash) over (order by e.seq) as ok
                      from public.driver_concern_events e where e.concern_id = p_id) x));
@@ -874,22 +987,41 @@ create or replace function public.driver_concern_add_translation(
   p_id uuid, p_source text, p_source_id text, p_target_lang text, p_text text,
   p_model text, p_model_version text default null, p_detected_lang text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare c public.driver_concerns%rowtype;
+declare c public.driver_concerns%rowtype; v_mine boolean; v_rank int; v_ver int;
 begin
   select * into c from public.driver_concerns where id = p_id;
   if not found or not private.dc_visible(c.organisation_id, c.driver_id, c.sensitive, c.country, c.site, c.subject_user_id) then
     raise exception using errcode = '42501', message = 'Concern not found';
   end if;
-  insert into public.driver_concern_translations (concern_id, source, source_id, target_lang, text, model, model_version)
-  values (p_id, p_source, coalesce(p_source_id, ''), p_target_lang, p_text, p_model, p_model_version)
-  on conflict (concern_id, source, source_id, target_lang)
-  do update set text = excluded.text, model = excluded.model, model_version = excluded.model_version, generated_at = now();
-  -- The model-detected original language fills a blank only; never overwrites.
+  if p_source not in ('concern','event','proposal','outcome')
+     or p_target_lang not in ('en','ar','ur','hi','bn','ps','ne','tl')
+     or coalesce(btrim(p_text), '') = '' or coalesce(btrim(p_model), '') = '' then
+    raise exception using errcode = '22023', message = 'Invalid translation';
+  end if;
+  v_mine := private.dc_is_my_driver(c.driver_id);
+  v_rank := case when v_mine then 0 else private.dc_my_rank(c.sensitive, c.country, c.site) end;
+  -- Handlers of the case may add any; the driver only their own words or the
+  -- approved answer. Nobody else.
+  if not (v_rank > 0 or (v_mine and p_source in ('concern','outcome'))) then
+    raise exception using errcode = '42501', message = 'Not allowed';
+  end if;
+  if p_source = 'outcome' and c.outcome_text is null then
+    raise exception using errcode = '22023', message = 'Invalid translation';
+  end if;
+  if p_source = 'event' and not exists (select 1 from public.driver_concern_events e
+                                         where e.concern_id = p_id and e.id::text = p_source_id) then
+    raise exception using errcode = '22023', message = 'Invalid translation';
+  end if;
+  -- Never overwrite: append the next version.
+  select coalesce(max(version), 0) + 1 into v_ver from public.driver_concern_translations
+   where concern_id = p_id and source = p_source and source_id = coalesce(p_source_id, '') and target_lang = p_target_lang;
+  insert into public.driver_concern_translations (concern_id, source, source_id, target_lang, text, model, model_version, version)
+  values (p_id, p_source, coalesce(p_source_id, ''), p_target_lang, p_text, p_model, p_model_version, v_ver);
   if p_source = 'concern' and c.original_lang is null
      and p_detected_lang in ('en','ar','ur','hi','bn','ps','ne','tl') then
     update public.driver_concerns set original_lang = p_detected_lang where id = p_id;
   end if;
-  return jsonb_build_object('ok', true);
+  return jsonb_build_object('ok', true, 'version', v_ver);
 end $$;
 
 create or replace function public.driver_concern_set_pdf(p_id uuid, p_sha256 text, p_path text default null)
@@ -897,8 +1029,16 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare c public.driver_concerns%rowtype;
 begin
   select * into c from public.driver_concerns where id = p_id for update;
-  if not found or private.dc_my_rank(c.sensitive, c.country, c.site) = 0 then
+  if not found
+     or c.organisation_id is distinct from public.app_current_org() and not public.is_super_admin()
+     or not private.dc_visible(c.organisation_id, c.driver_id, c.sensitive, c.country, c.site, c.subject_user_id)
+     or private.dc_is_my_driver(c.driver_id)
+     or private.dc_my_rank(c.sensitive, c.country, c.site) = 0 then
     raise exception using errcode = '42501', message = 'Not allowed';
+  end if;
+  if coalesce(lower(p_sha256), '') !~ '^[0-9a-f]{64}$'
+     or (p_path is not null and split_part(p_path, '/', 1) <> c.organisation_id::text) then
+    raise exception using errcode = '22023', message = 'Invalid request';
   end if;
   if c.status not in ('accepted','not_accepted','withdrawn','closed') then
     raise exception using errcode = 'PT409', message = 'not_closed';
@@ -926,7 +1066,7 @@ begin
                    or (acknowledged_at is null and ack_due_at is not null and ack_due_at < now()))
             for update skip locked loop
     if r.status = 'proposed' then
-      insert into public.driver_concern_notices (concern_id, level, kind) values (r.id, 'manager', 'approval_overdue')
+      insert into public.driver_concern_notices (concern_id, level, kind, round) values (r.id, 'manager', 'approval_overdue', r.escalation_count || '-' || r.reopened_count)
       on conflict do nothing;
       if found then
         perform private.dc_notify(r.id, 'overdue', private.dc_recipients(r.id, 'manager'));
@@ -936,7 +1076,7 @@ begin
     end if;
     v_next := private.dc_next_level(r.level, r.sensitive);
     if v_next is null then
-      insert into public.driver_concern_notices (concern_id, level, kind) values (r.id, r.level, 'top_overdue')
+      insert into public.driver_concern_notices (concern_id, level, kind, round) values (r.id, r.level, 'top_overdue', r.escalation_count || '-' || r.reopened_count)
       on conflict do nothing;
       if found then
         perform private.dc_notify(r.id, 'overdue', private.dc_recipients(r.id, r.level));
@@ -944,7 +1084,7 @@ begin
       end if;
       continue;
     end if;
-    insert into public.driver_concern_notices (concern_id, level, kind) values (r.id, v_next, 'auto_escalated')
+    insert into public.driver_concern_notices (concern_id, level, kind, round) values (r.id, v_next, 'auto_escalated', r.escalation_count || '-' || r.reopened_count)
     on conflict do nothing;
     continue when not found;
     update public.driver_concerns set level = v_next, status = 'open', assigned_to = null,
@@ -975,6 +1115,12 @@ begin
      and c.closed_at is not null
      and c.closed_at < now() - make_interval(years => s.retention_years);
   if p_dry_run then return jsonb_build_object('ok', true, 'dry_run', true, 'would_purge', cardinality(v_ids)); end if;
+  -- Queue the photos for a storage-API sweep (SQL cannot delete storage.objects).
+  insert into public.driver_concern_storage_purge (path)
+  select jsonb_array_elements_text(c.photos) from public.driver_concerns c where c.id = any(v_ids)
+  union
+  select c.pdf_path from public.driver_concerns c where c.id = any(v_ids) and c.pdf_path is not null
+  on conflict do nothing;
   perform set_config('dc.purge', 'on', true);
   delete from public.driver_concern_reads where concern_id = any(v_ids);
   delete from public.driver_concern_translations where concern_id = any(v_ids);
@@ -1039,7 +1185,11 @@ begin
     'private.dc_visible(uuid,uuid,boolean,text,text,uuid)',
     'private.dc_is_my_driver(uuid)',
     'private.dc_storage_access(text,boolean)',
-    'private.dc_valid_subtype(text,text)'
+    'private.dc_valid_subtype(text,text)',
+    'private.dc_uuid(text)',
+    'private.dc_can_read_concern(uuid)',
+    'private.dc_is_my_concern(uuid)',
+    'private.dc_concern_in_my_org(uuid)'
   ] loop
     execute format('grant execute on function %s to authenticated, service_role', f);
     execute format('revoke execute on function %s from public', f);

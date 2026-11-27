@@ -84,7 +84,7 @@ test('provider rejection, missing receipt and network failures never report succ
   assert.equal((await handler(configured, async () => { throw new Error('network'); })(request(input))).status, 500);
 });
 
-const pageSource = ts.transpileModule(readFileSync(new URL('../app/contact/page.tsx', import.meta.url), 'utf8'), {
+const pageSource = ts.transpileModule(readFileSync(new URL('../components/ContactForm.tsx', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 const fallbackModule = { exports: {} };
@@ -100,8 +100,6 @@ function contactForm(fetch, whatsappNumber = null) {
       return [initial, value => { states[index] = value; }];
     } };
     if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
-    if (name === '@/components/PageFrame') return { PageFrame: 'main' };
-    if (name === '@/components/PageTop') return { PageTop: 'header' };
     if (name === '@/lib/site') return { WHATSAPP_URL: null, WHATSAPP_NUMBER: whatsappNumber, CONTACT_EMAIL: 'info@tyrepulse.app' };
     if (name === '@/lib/contactFallback') return fallbackModule.exports;
     if (name === '@/lib/track') return { track: () => {} };
@@ -114,7 +112,7 @@ function contactForm(fetch, whatsappNumber = null) {
     const children = element?.props?.children;
     return (Array.isArray(children) ? children : [children]).filter(Boolean).map(findForm).find(Boolean);
   }
-  return { submit: findForm(compiledModule.exports.default()).props.onSubmit, states };
+  return { submit: findForm(compiledModule.exports.ContactForm({})).props.onSubmit, states };
 }
 
 test('contact form resets the captured form after React clears currentTarget', async () => {
@@ -126,7 +124,7 @@ test('contact form resets the captured form after React clears currentTarget', a
   });
   await form.submit(event);
   assert.equal(resets, 1);
-  assert.deepEqual(form.states, ['Accepted', 'ok', false, [], null]);
+  assert.deepEqual(form.states, ['Thank you. We have your request and will reply to your work email.', 'ok', false, [], null]);
 });
 
 test('contact form preserves input and exits sending state on network failure', async () => {

@@ -48,6 +48,41 @@ export const DETAILS_ANCHOR = "details";
 export const menuHref = (href: string) => (href.includes("#") ? href : `${href}#${DETAILS_ANCHOR}`);
 
 /**
+ * Arabic pages, keyed by the English page they translate. A link on an Arabic page goes to the
+ * Arabic page when one exists and to the English page otherwise; the language switch and the
+ * hreflang alternates read the same map, so they can never disagree.
+ */
+export const AR_PAGES: Readonly<Record<string, string>> = {
+  "/": "/ar",
+  "/platform": "/ar/platform",
+  "/pricing": "/ar/pricing",
+  "/security": "/ar/security",
+  "/contact": "/ar/contact",
+  "/solutions": "/ar/solutions",
+  "/industries": "/ar/industries",
+};
+
+const EN_PAGES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(AR_PAGES).map(([en, ar]) => [ar, en]));
+
+/** The Arabic counterpart of an English link (hash kept), or the English link when none exists. */
+export function arHref(href: string): string {
+  const [path, hash] = href.split("#");
+  const ar = AR_PAGES[path || "/"];
+  return ar ? (hash ? `${ar}#${hash}` : ar) : href;
+}
+
+/** The page in the other language for the language switch: always a real page. */
+export function otherLanguagePath(pathname: string): { href: string; lang: "en" | "ar" } {
+  if (pathname === "/ar" || pathname.startsWith("/ar/")) return { href: EN_PAGES[pathname] ?? "/", lang: "en" };
+  return { href: AR_PAGES[pathname] ?? "/ar", lang: "ar" };
+}
+
+/** The English path a page translates (itself for an English page). */
+export function englishPathOf(path: string): string {
+  return EN_PAGES[path] ?? path;
+}
+
+/**
  * Every page route the site serves, in one list. The sitemap is checked against
  * this in test/site-map.test.mjs, so a page cannot be added to a menu without
  * also being listed for crawlers (or the other way round).
@@ -58,5 +93,5 @@ export const ALL_ROUTES: readonly string[] = [
   "/solutions",
   ...SOLUTION_PAGES.map((p) => p.href),
   ...RESOURCE_PAGES.map((p) => p.href),
-  "/ar",
+  ...Object.values(AR_PAGES),
 ];

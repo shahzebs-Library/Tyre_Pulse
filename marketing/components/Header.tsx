@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { BadgeDollarSign, BarChart3, Box, Building2, ChevronDown, CircleDot, ClipboardCheck, FileSpreadsheet, HelpCircle, Info, LayoutGrid, Mail, PlayCircle, ShieldCheck, Truck, Wrench } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { APP_URL } from "@/lib/site";
-import { MENU_GROUPS, menuHref } from "@/lib/nav";
+import { MENU_GROUPS, arHref, menuHref, otherLanguagePath } from "@/lib/nav";
 import { A11yStyles } from "./A11yStyles";
 import { Logo } from "./Logo";
 
@@ -17,16 +17,20 @@ const ICONS: Record<string, typeof Truck> = {
   "/platform/inventory": Box, "/platform/tyre-lifecycle": CircleDot, "/platform/reports": BarChart3, "/faq": HelpCircle, "/about": Info, "/solutions/tyre-management": CircleDot, "/solutions/ready-mix-fleet": Truck, "/solutions/spreadsheets-to-platform": FileSpreadsheet, "/industries": Building2, "/pricing": BadgeDollarSign, "/platform#tours": PlayCircle, "/security": ShieldCheck, "/contact": Mail,
 };
 
-/** Header copy per locale. The Arabic page links to the English pages, which are the only other locale. */
+/** Header copy per locale. On Arabic pages every link goes to the Arabic page when one exists. */
 const COPY = {
   en: { home: "Tyre Pulse home", main: "Main", login: "Log in", demo: "Book a demo", open: "Open menu", close: "Close menu", site: "Site" },
-  ar: { home: "الصفحة الرئيسية لتاير بالس", main: "القائمة الرئيسية", login: "تسجيل الدخول", demo: "احجز عرضاً", open: "فتح القائمة", close: "إغلاق القائمة", site: "الموقع" },
+  ar: { home: "Tyre Pulse، الصفحة الرئيسية", main: "القائمة الرئيسية", login: "تسجيل الدخول", demo: "احجز عرضاً", open: "فتح القائمة", close: "إغلاق القائمة", site: "الموقع" },
 } as const;
 
 export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
   const ar = locale === "ar";
   const c = COPY[locale];
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
+  // An Arabic page links to the Arabic version of a page when it exists, else to the English one.
+  const loc = (href: string) => (ar ? arHref(href) : href);
+  const other = otherLanguagePath(pathname);
+  const demoHref = loc("/contact");
   const [menu, setMenu] = useState<string | null>(null);
   const [mobile, setMobile] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -107,7 +111,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
     <header className={`topbar${scrolled ? " is-scrolled" : ""}`} ref={barRef}>
       <A11yStyles />
       <div className="site-shell topbar-inner">
-        <Link className="topbar-logo" href="/" aria-label={c.home}><Logo /></Link>
+        <Link className="topbar-logo" href={loc("/")} aria-label={c.home}><Logo /></Link>
         <nav className="topnav" aria-label={c.main}>
           {MENUS.map((m) => (
             <div
@@ -123,7 +127,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
                 type="button"
                 aria-expanded={menu === m.id}
                 aria-controls={`menu-${m.id}`}
-                className={m.items.some((it) => it.href === pathname) ? "is-current" : undefined}
+                className={m.items.some((it) => loc(it.href) === pathname) ? "is-current" : undefined}
                 onClick={() => setMenu(menu === m.id ? null : m.id)}
               >
                 {ar ? m.labelAr : m.label} <ChevronDown size={14} aria-hidden="true" />
@@ -134,7 +138,7 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
                     {m.items.map((it) => {
                       const Icon = ICONS[it.href] ?? LayoutGrid;
                       return (
-                        <Link key={it.href} href={menuHref(it.href)} prefetch={false} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>
+                        <Link key={it.href} href={menuHref(loc(it.href))} prefetch={false} onClick={closeAll} aria-current={pathname === loc(it.href) ? "page" : undefined}>
                           <i className="dd-ic" aria-hidden="true"><Icon size={18} /></i>
                           <span className="dd-t"><b>{ar ? it.labelAr : it.label}</b><span>{ar ? it.textAr : it.text}</span></span>
                         </Link>
@@ -148,12 +152,12 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
         </nav>
         <div className="topbar-actions">
           <span className="lang">
-            {pathname === "/ar"
-              ? <><Link href="/" lang="en">EN</Link><span aria-hidden="true">|</span><span aria-current="true" lang="ar">العربية</span></>
-              : <><span aria-current="true">EN</span><span aria-hidden="true">|</span><Link href="/ar" lang="ar">العربية</Link></>}
+            {ar
+              ? <><Link href={other.href} lang="en" hrefLang="en">EN</Link><span aria-hidden="true">|</span><span aria-current="true" lang="ar">العربية</span></>
+              : <><span aria-current="true">EN</span><span aria-hidden="true">|</span><Link href={other.href} lang="ar" hrefLang="ar">العربية</Link></>}
           </span>
           <a className="topbar-login" href={APP_URL}>{c.login}</a>
-          <Link className="btn btn-primary btn-sm" href="/contact">{c.demo}</Link>
+          <Link className="btn btn-primary btn-sm" href={demoHref} data-source="header">{c.demo}</Link>
           <button
             ref={toggleRef}
             className="mobile-menu"
@@ -173,15 +177,15 @@ export function Header({ locale = "en" }: { locale?: "en" | "ar" }) {
             {MENUS.map((m, gi) => (
               <div key={m.id} className="mobile-group" style={{ "--rv-delay": `${gi * 60}ms` } as React.CSSProperties}>
                 <span className="mobile-group-h">{ar ? m.labelAr : m.label}</span>
-                {m.items.map((it) => <Link key={it.href} href={menuHref(it.href)} prefetch={false} onClick={closeAll} aria-current={pathname === it.href ? "page" : undefined}>{ar ? it.labelAr : it.label}</Link>)}
+                {m.items.map((it) => <Link key={it.href} href={menuHref(loc(it.href))} prefetch={false} onClick={closeAll} aria-current={pathname === loc(it.href) ? "page" : undefined}>{ar ? it.labelAr : it.label}</Link>)}
               </div>
             ))}
             <div className="mobile-group" style={{ "--rv-delay": `${MENUS.length * 60}ms` } as React.CSSProperties}>
-              <Link className="btn btn-primary mobile-demo" href="/contact" onClick={closeAll}>{c.demo}</Link>
+              <Link className="btn btn-primary mobile-demo" href={demoHref} onClick={closeAll} data-source="mobile_menu">{c.demo}</Link>
               <a href={APP_URL}>{c.login}</a>
               {ar
-                ? <Link href="/" lang="en" onClick={closeAll}>English</Link>
-                : <Link href="/ar" lang="ar" onClick={closeAll}>العربية</Link>}
+                ? <Link href={other.href} lang="en" hrefLang="en" onClick={closeAll}>English</Link>
+                : <Link href={other.href} lang="ar" hrefLang="ar" onClick={closeAll}>العربية</Link>}
             </div>
           </div>
         </nav>

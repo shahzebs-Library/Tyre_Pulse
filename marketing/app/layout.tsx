@@ -16,6 +16,7 @@ import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { LocaleSync } from "@/components/LocaleSync";
 import { MotionRoot } from "@/components/motion/MotionRoot";
 import { ViewTransitions } from "@/components/motion/ViewTransitions";
+import { Analytics } from "@/components/Analytics";
 import { BRAND_COLOR, JsonLd, SITE_URL, alternatesFor, siteSchemaGraph } from "./schema";
 import { OG_IMAGES } from "@/lib/site";
 
@@ -83,6 +84,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <WhatsAppButton />
         <MotionRoot />
         <ViewTransitions />
+        <Analytics />
       </body>
     </html>
   );

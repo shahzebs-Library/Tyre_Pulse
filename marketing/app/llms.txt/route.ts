@@ -39,6 +39,12 @@ Tyre Pulse runs in production in one ready-mix concrete operation. For construct
 - [About](${SITE_URL}/about): What Tyre Pulse is, who it is for and where it runs today.
 - [Contact](${SITE_URL}/contact): Request a tailored demo. The form asks for fleet size, country and industry so the walkthrough matches the operation.
 - [Arabic home](${SITE_URL}/ar): The Arabic language version of the home page, presented right to left.
+- [Arabic platform](${SITE_URL}/ar/platform): The platform overview in Arabic.
+- [Arabic pricing](${SITE_URL}/ar/pricing): How pricing works, in Arabic, with a quote request form.
+- [Arabic security](${SITE_URL}/ar/security): Security and data protection, in Arabic.
+- [Arabic contact](${SITE_URL}/ar/contact): The demo request form, in Arabic.
+- [Arabic solutions](${SITE_URL}/ar/solutions): Use cases, in Arabic.
+- [Arabic industries](${SITE_URL}/ar/industries): Industries, in Arabic.
 
 ## Apps and access
 

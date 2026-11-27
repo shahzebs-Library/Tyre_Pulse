@@ -52,6 +52,7 @@ import { taskRollup, jobTaskSummary, qcOutcome } from '../lib/workshopTasks'
 import { Card, CardState, Kpi, Tabs } from '../components/commandCenter/kit'
 import WorkshopTvShareButton from '../components/workshop/WorkshopTvShareButton'
 import WorkshopNewJobModal from '../components/workshop/WorkshopNewJobModal'
+import JobsToCheckPanel from '../components/workshop/JobsToCheckPanel'
 import {
   KANBAN_COLUMNS, JobCard, DelayPanel, SmartAssignModal, TaskModal, TechDrawer,
 } from '../components/workshop/WorkshopLiveParts'
@@ -947,6 +948,9 @@ export default function WorkshopLive() {
               <Link to="/workshop-settings">Alert thresholds</Link>
             </div>
           </Card>
+
+          {/* Jobs finished on the phone, waiting for a supervisor (same RPC as the app) */}
+          <JobsToCheckPanel onDecided={scheduleReload} />
 
           {/* Delay and root cause (lost hours and their cost) */}
           <Card

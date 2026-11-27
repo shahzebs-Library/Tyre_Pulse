@@ -18,10 +18,10 @@ import {
   CheckCircle2, Wrench, AlertCircle, FileText, CircleSlash, MapPin, Activity, Layers,
   Bookmark, Columns, Download, ChevronDown, MoreHorizontal, Upload, BarChart3,
   CalendarClock, ShieldCheck, Gauge, ChevronRight, Eye, Copy, Circle,
-  Bus, Car, Construction, Container, Factory, ListChecks, Siren, ArrowUpDown, Info, Camera,
+  Bus, Car, Construction, Container, Factory, ListChecks, Siren, ArrowUpDown, Info, Camera, ScanLine,
 } from 'lucide-react'
 import { vehicleKind } from '../lib/vehiclePhoto'
-import { VerifyOnSiteModal, VerificationBadge, VerificationProgressTile, PendingVerificationsPanel, PossibleTransfersPanel } from '../components/fleetVerification'
+import { VerifyOnSiteModal, VerificationBadge, PendingVerificationsPanel, PossibleTransfersPanel } from '../components/fleetVerification'
 import { canVerify } from '../lib/fleetVerification'
 import { countVerification } from '../lib/api/fleetVerification'
 import useAnchoredPopover from '../components/ui/useAnchoredPopover'
@@ -1154,11 +1154,12 @@ function FleetRegister() {
           label={t('fleetmaster.reg.kpi.critHigh')}
           onClick={() => applyPriority('1-3')}
           title={t('fleetmaster.reg.kpi.critHighHint')} />
+        <Kpi icon={ScanLine} tone="t-green"
+          display={verifyCounts.loading ? '...' : verifyCounts.counts ? `\u2066${fmtInt(verifyCounts.counts.verified)} / ${fmtInt(verifyCounts.counts.total)}\u2069` : t('fleetmaster.reg.na')}
+          label={t('fleetVerification.progress.title')}
+          title={verifyCounts.notSetUp ? t('fleetVerification.notSetUp') : verifyCounts.counts ? t('fleetVerification.progress.pending', { n: verifyCounts.counts.pending }) : undefined} />
       </div>
 
-      <div className="mb-4" style={{ maxWidth: 360 }}>
-        <VerificationProgressTile counts={verifyCounts.counts} loading={verifyCounts.loading} notSetUp={verifyCounts.notSetUp} />
-      </div>
       {!summaryPending && (debouncedSearch || siteFilter || typeFilter) && (
         <p className="fm-note">
           {t(summary.total === 1 ? 'fleetmaster.reg.scopeOne' : 'fleetmaster.reg.scopeMany', { count: summary.total.toLocaleString() })}

@@ -50,7 +50,8 @@ export default function VerifyOnSiteModal({ open, onClose, vehicle, onDone }) {
 
   if (!vehicle) return null
   const list = (keys, ns) => keys.map((k) => t(`fleetVerification.${ns}.${k}`)).join(', ')
-  const onFile = (v) => t('fleetVerification.modal.onFile', { value: v || t('fleetVerification.modal.blank') })
+  // Codes read left to right even on an Arabic screen (U+2066/U+2069 isolate them).
+  const onFile = (v) => t('fleetVerification.modal.onFile', { value: v ? `\u2066${v}\u2069` : t('fleetVerification.modal.blank') })
 
   async function save() {
     setError(null)
@@ -123,16 +124,16 @@ export default function VerifyOnSiteModal({ open, onClose, vehicle, onDone }) {
             <>
               <label className="block text-sm">
                 {t('fleetVerification.modal.assetCode')}
-                <input className="input mt-1 w-full" value={assetNo} onChange={(e) => setAssetNo(e.target.value)} autoCapitalize="characters" />
+                <input className="input mt-1 w-full" dir="ltr" value={assetNo} onChange={(e) => setAssetNo(e.target.value)} autoCapitalize="characters" />
               </label>
               <label className="block text-sm">
                 {t('fleetVerification.modal.plate')}
-                <input className="input mt-1 w-full" value={plate} onChange={(e) => setPlate(e.target.value)} autoCapitalize="characters" />
+                <input className="input mt-1 w-full" dir="ltr" value={plate} onChange={(e) => setPlate(e.target.value)} autoCapitalize="characters" />
                 <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{onFile(vehicle.registration_no)}</span>
               </label>
               <label className="block text-sm">
                 {t('fleetVerification.modal.chassis')}
-                <input className="input mt-1 w-full" value={chassis} onChange={(e) => setChassis(e.target.value)} autoCapitalize="characters" />
+                <input className="input mt-1 w-full" dir="ltr" value={chassis} onChange={(e) => setChassis(e.target.value)} autoCapitalize="characters" />
                 <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{onFile(vehicle.chassis_no)}</span>
               </label>
             </>

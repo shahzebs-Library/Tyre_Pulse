@@ -228,7 +228,9 @@ class _FleetVerificationScreenState
     String onFile(String? v) => copy.fill(
           'onFile',
           <String, String>{
-            'value': (v == null || v.trim().isEmpty) ? copy('blank') : v,
+            'value': (v == null || v.trim().isEmpty)
+                ? copy('blank')
+                : '\u2066$v\u2069',
           },
         );
 
@@ -425,6 +427,7 @@ class _FleetVerificationScreenState
             Expanded(
               child: TpInput(
                 key: key,
+                textDirection: TextDirection.ltr,
                 label: label,
                 controller: c,
                 helperText: helper,

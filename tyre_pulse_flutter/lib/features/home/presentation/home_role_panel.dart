@@ -48,7 +48,6 @@ String _groupThousands(num value) {
 final class _RoleBigData {
   const _RoleBigData({
     required this.id,
-    required this.icon,
     required this.title,
     required this.onTap,
     this.subtitle,
@@ -57,7 +56,6 @@ final class _RoleBigData {
   });
 
   final String id;
-  final IconData icon;
   final String title;
   final String? subtitle;
 
@@ -72,7 +70,6 @@ final class _RoleBigData {
 final class _RoleRowData {
   const _RoleRowData({
     required this.id,
-    required this.icon,
     required this.title,
     required this.onTap,
     this.value,
@@ -81,7 +78,6 @@ final class _RoleRowData {
   });
 
   final String id;
-  final IconData icon;
   final String title;
   final String? value;
   final String? note;
@@ -111,7 +107,6 @@ class _RoleHomePanel extends ConsumerWidget {
     // ---- shared row builders -------------------------------------------
     _RoleRowData countRow<T>({
       required String id,
-      required IconData icon,
       required String title,
       required AsyncValue<T> state,
       required String Function(T) text,
@@ -121,7 +116,6 @@ class _RoleHomePanel extends ConsumerWidget {
       final ({String value, String? note}) s = _countState(l10n, state, text);
       return _RoleRowData(
         id: id,
-        icon: icon,
         title: title,
         value: s.value,
         note: s.note,
@@ -133,7 +127,6 @@ class _RoleHomePanel extends ConsumerWidget {
     _RoleRowData? offRoad() => can(ModuleKey.vehicles)
         ? countRow<int>(
             id: 'offRoad',
-            icon: Icons.car_crash_outlined,
             title: c('offRoad'),
             state: ref.watch(homeOffRoadCountProvider),
             text: (int v) => '$v',
@@ -143,7 +136,6 @@ class _RoleHomePanel extends ConsumerWidget {
     _RoleRowData? openAccidents() => can(ModuleKey.accidents)
         ? countRow<int>(
             id: 'openAccidents',
-            icon: Icons.report_problem_outlined,
             title: c('openAccidents'),
             state: ref.watch(homeOpenAccidentsCountProvider),
             text: (int v) => '$v',
@@ -153,7 +145,6 @@ class _RoleHomePanel extends ConsumerWidget {
     _RoleRowData? maintenanceDue() => can(ModuleKey.pm)
         ? countRow<int>(
             id: 'maintenanceDue',
-            icon: Icons.build_circle_outlined,
             title: c('maintenanceOverdue'),
             state: ref.watch(homeMaintenanceOverdueCountProvider),
             text: (int v) => '$v',
@@ -167,7 +158,6 @@ class _RoleHomePanel extends ConsumerWidget {
         can(ModuleKey.alerts)
             ? countRow<List<TyreAlert>>(
                 id: id,
-                icon: Icons.tire_repair_outlined,
                 title: title ?? c('tyresAttention'),
                 state: ref.watch(tyreAlertsProvider),
                 text: alertsText,
@@ -214,7 +204,6 @@ class _RoleHomePanel extends ConsumerWidget {
               ref.watch(homeMeterTodayProvider);
           return _RoleBigData(
             id: 'meterToday',
-            icon: Icons.speed,
             title: c('meterTitle'),
             subtitle: switch (m) {
               AsyncData<HomeMeterToday?>(:final value) => meterSubtitle(value),
@@ -229,7 +218,6 @@ class _RoleHomePanel extends ConsumerWidget {
               ref.watch(homeMyVehicleProvider).asData?.value?.assetNo;
           return _RoleBigData(
             id: 'reportProblem',
-            icon: Icons.report_problem_outlined,
             title: c('problemTitle'),
             subtitle: c('problemHint'),
             onTap: () => context.push(
@@ -242,7 +230,6 @@ class _RoleHomePanel extends ConsumerWidget {
           if (rows.isEmpty) return null;
           return _RoleBigData(
             id: 'exceptions',
-            icon: Icons.warning_amber_rounded,
             title: c('exceptionsTitle'),
             onTap: null,
             children: rows,
@@ -256,7 +243,6 @@ class _RoleHomePanel extends ConsumerWidget {
           );
           return _RoleBigData(
             id: 'handoverSignoff',
-            icon: Icons.assignment_turned_in_outlined,
             title: c('handoverTitle'),
             subtitle: s.note,
             value: s.value,
@@ -267,7 +253,6 @@ class _RoleHomePanel extends ConsumerWidget {
           final _RoleRowData? open = openAccidents();
           return _RoleBigData(
             id: 'reportAccident',
-            icon: Icons.car_crash_outlined,
             title: c('reportAccident'),
             onTap: () => context.push(const AccidentReportRoute().location),
             children: <_RoleRowData>[if (open != null) open],
@@ -286,7 +271,6 @@ class _RoleHomePanel extends ConsumerWidget {
           final bool failed = insp.hasError || lists.hasError;
           return _RoleBigData(
             id: 'approvalsWaiting',
-            icon: Icons.how_to_reg_outlined,
             title: c('approvalsTitle'),
             value: a != null && b != null ? '${a + b}' : '-',
             subtitle: a != null && b != null
@@ -304,7 +288,6 @@ class _RoleHomePanel extends ConsumerWidget {
           if (!can(ModuleKey.reportIssue)) return null;
           return _RoleBigData(
             id: 'reportIssue',
-            icon: Icons.report_problem_outlined,
             title: c('issueTitle'),
             subtitle: c('issueHint'),
             onTap: () => context.push(const ReportIssueRoute().location),
@@ -313,7 +296,6 @@ class _RoleHomePanel extends ConsumerWidget {
           if (!can(ModuleKey.inspect)) return null;
           return _RoleBigData(
             id: 'newInspection',
-            icon: Icons.add_task_rounded,
             title: l10n.inspectionNewInspection,
             onTap: () => context.go(const NewInspectionRoute().location),
           );
@@ -326,7 +308,6 @@ class _RoleHomePanel extends ConsumerWidget {
           final String? site = d.site?.trim();
           return _RoleBigData(
             id: 'resumeDraft',
-            icon: Icons.edit_outlined,
             title: l10n.homeResumeInspection,
             subtitle: _joinParts(<String?>[
               asset,
@@ -346,7 +327,6 @@ class _RoleHomePanel extends ConsumerWidget {
           final HomeTeamNow? v = t.asData?.value;
           return _RoleBigData(
             id: 'teamNow',
-            icon: Icons.groups_outlined,
             title: c('teamTitle'),
             subtitle: v == null
                 ? (t.hasError
@@ -371,7 +351,6 @@ class _RoleHomePanel extends ConsumerWidget {
           );
           return _RoleBigData(
             id: 'assignJobs',
-            icon: Icons.assignment_ind_outlined,
             title: c('assignTitle'),
             value: s.value,
             subtitle: s.note ?? c('assignGap'),
@@ -395,7 +374,6 @@ class _RoleHomePanel extends ConsumerWidget {
           );
           return _RoleBigData(
             id: 'myJobs',
-            icon: Icons.home_repair_service_outlined,
             title: c('myJobsTitle'),
             value: s.value,
             subtitle: s.note ??
@@ -414,7 +392,6 @@ class _RoleHomePanel extends ConsumerWidget {
           );
           return _RoleBigData(
             id: 'plantChecks',
-            icon: Icons.fact_check_outlined,
             title: c('plantTitle'),
             value: s.value,
             subtitle: s.note ??
@@ -435,7 +412,6 @@ class _RoleHomePanel extends ConsumerWidget {
           final String? id = daily.first.template.id;
           return _RoleBigData(
             id: 'workshopDaily',
-            icon: Icons.checklist,
             title: c('dailyTitle'),
             subtitle: c('dueToday'),
             onTap: () => id == null
@@ -448,7 +424,6 @@ class _RoleHomePanel extends ConsumerWidget {
           if (!can(ModuleKey.serial)) return null;
           return _RoleBigData(
             id: 'serialSearch',
-            icon: Icons.confirmation_number_outlined,
             title: l10n.serialSearchTitle,
             onTap: () => context.push(const SerialSearchRoute().location),
           );
@@ -461,7 +436,6 @@ class _RoleHomePanel extends ConsumerWidget {
           );
           return _RoleBigData(
             id: 'approvalsToSign',
-            icon: Icons.done_all,
             title: c('signTitle'),
             value: s.value,
             subtitle: s.note ?? c('signHint').replaceAll('%count%', s.value),
@@ -476,7 +450,6 @@ class _RoleHomePanel extends ConsumerWidget {
           );
           return _RoleBigData(
             id: 'tyresDue',
-            icon: Icons.tire_repair_outlined,
             title: c('tyresDueTitle'),
             value: s.value,
             subtitle: s.note,
@@ -489,14 +462,12 @@ class _RoleHomePanel extends ConsumerWidget {
     List<_RoleRowData> row(HomeRow r) {
       _RoleRowData simple(
         String id,
-        IconData icon,
         String title,
         VoidCallback onTap, {
         bool danger = false,
       }) =>
           _RoleRowData(
             id: id,
-            icon: icon,
             title: title,
             onTap: onTap,
             danger: danger,
@@ -511,7 +482,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             _RoleRowData(
               id: 'myVehicle',
-              icon: Icons.local_shipping_outlined,
               title: c('myVehicle'),
               value: s.value,
               note: s.note ?? (car == null ? c('noVehicle') : car.site),
@@ -550,7 +520,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             _RoleRowData(
               id: 'wash',
-              icon: Icons.local_car_wash,
               title: c('wash'),
               note: note,
               onTap: () => context.go(const WashingRoute().location),
@@ -561,7 +530,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             simple(
               'reportAccident',
-              Icons.car_crash_outlined,
               c('reportAccident'),
               () => context.push(const AccidentReportRoute().location),
               danger: true,
@@ -576,7 +544,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             countRow<List<ChecklistTemplateRecord>>(
               id: 'dailyChecklist',
-              icon: Icons.checklist,
               title: c('dailyChecklist'),
               state: d,
               text: (List<ChecklistTemplateRecord> v) => '${v.length}',
@@ -587,7 +554,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             _RoleRowData(
               id: 'myCharges',
-              icon: Icons.receipt_long_outlined,
               title: c('charges'),
               note: c('chargesHint'),
               onTap: () => showModalBottomSheet<void>(
@@ -606,7 +572,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             simple(
               'dailySummary',
-              Icons.summarize_outlined,
               c('summary'),
               () => context.push(const ReportsRoute().location),
             ),
@@ -643,7 +608,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             simple(
               'workshopStatus',
-              Icons.car_repair_outlined,
               _tileMeta(l10n, 'workshopStatus').label,
               () => context.push(const WorkshopStatusRoute().location),
             ),
@@ -655,9 +619,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             countRow<MyWorkSnapshot>(
               id: inspections ? 'dueToday' : 'todaysPlan',
-              icon: inspections
-                  ? Icons.assignment_outlined
-                  : Icons.event_available_outlined,
               title: inspections ? c('inspectionsDue') : c('plan'),
               state: ref.watch(myWorkSnapshotProvider),
               text: (MyWorkSnapshot v) => inspections
@@ -670,7 +631,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             countRow<int>(
               id: 'sync',
-              icon: Icons.sync_rounded,
               title: c('sync'),
               state: ref.watch(homePendingSyncCountProvider),
               text: (int v) => '$v',
@@ -682,7 +642,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             simple(
               'repairRequest',
-              Icons.build_outlined,
               c('repair'),
               () => context.push(const RepairRequestRoute().location),
             ),
@@ -692,7 +651,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             simple(
               'meter',
-              Icons.speed,
               c('meter'),
               () => context.go(const MeterLogRoute().location),
             ),
@@ -702,7 +660,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             countRow<int>(
               id: 'checklistsToSign',
-              icon: Icons.fact_check_outlined,
               title: c('checklistsToSign'),
               state: ref.watch(homeChecklistsToSignCountProvider),
               text: (int v) => '$v',
@@ -717,7 +674,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             countRow<HomeTeamNow>(
               id: parts ? 'waitingParts' : 'blocked',
-              icon: parts ? Icons.inventory_2_outlined : Icons.timer_outlined,
               title: parts ? c('waitingParts') : c('blocked'),
               state: ref.watch(homeTeamNowProvider),
               text: (HomeTeamNow v) =>
@@ -730,7 +686,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             simple(
               'requestParts',
-              Icons.inventory_2_outlined,
               c('requestParts'),
               () => context.push(const WorkshopRoute().location),
             ),
@@ -740,7 +695,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             simple(
               'reportProblem',
-              Icons.report_problem_outlined,
               c('problemTitle'),
               () => context.push(const ReportIssueRoute().location),
             ),
@@ -752,7 +706,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             countRow<List<HomeRecentAsset>>(
               id: 'recentInspections',
-              icon: Icons.manage_search_rounded,
               title: c('recent'),
               state: ref.watch(homeRecentAssetsProvider),
               text: (List<HomeRecentAsset> v) => '${v.length}',
@@ -764,7 +717,6 @@ class _RoleHomePanel extends ConsumerWidget {
           return <_RoleRowData>[
             countRow<List<StockItem>>(
               id: 'stockReorder',
-              icon: Icons.production_quantity_limits_outlined,
               title: c('reorder'),
               state: ref.watch(stockItemsProvider),
               text: (List<StockItem> v) =>
@@ -787,153 +739,375 @@ class _RoleHomePanel extends ConsumerWidget {
         if (_moduleForTile(id) case final ModuleKey m when can(m)) id,
     ];
 
+    // The approved Home hierarchy: the primary call to action, the command
+    // card, "Today's work" rows on gem tiles, then the quick-action grid.
+    final List<Widget> children = <Widget>[];
+    for (int i = 0; i < bigs.length; i++) {
+      final _RoleBigData b = bigs[i];
+      if (i > 0) children.add(const SizedBox(height: 12));
+      if (b.onTap == null) {
+        // A card of counts (Today's exceptions): a section header over rows.
+        children
+          ..add(_HomeSectionHeader(title: b.title))
+          ..add(const SizedBox(height: 10));
+      } else if (i == 0) {
+        children.add(_RolePrimaryAction(data: b));
+      } else {
+        children.add(_RoleCommandCard(data: b));
+      }
+      if (b.children.isNotEmpty) {
+        children
+          ..add(const SizedBox(height: 10))
+          ..add(_RoleRowCard(rows: b.children));
+      }
+    }
+    if (rows.isNotEmpty) {
+      children
+        ..add(const SizedBox(height: 26))
+        ..add(_HomeSectionHeader(title: l10n.homeTodaysWork))
+        ..add(const SizedBox(height: 10))
+        ..add(_RoleRowCard(rows: rows));
+    }
+    final List<
+        ({
+          String id,
+          String label,
+          TpGemSpec gem,
+          TpGemTone? tone,
+          VoidCallback onTap,
+        })> actions = <({
+      String id,
+      String label,
+      TpGemSpec gem,
+      TpGemTone? tone,
+      VoidCallback onTap,
+    })>[
+      for (final String id in chips)
+        (
+          id: id,
+          label: _tileMeta(l10n, id).label,
+          gem: _roleGem(id).spec,
+          tone: _roleGem(id).tone,
+          onTap: () => _openHomeTile(context, id),
+        ),
+      if (plan.showMore)
+        (
+          id: 'more',
+          label: l10n.homeMoreAction,
+          gem: TpGemSpec.more,
+          tone: null,
+          onTap: onMore,
+        ),
+    ];
+    if (actions.isNotEmpty) {
+      children
+        ..add(const SizedBox(height: 26))
+        ..add(_HomeSectionHeader(title: l10n.homeQuickActions))
+        ..add(const SizedBox(height: 12))
+        ..add(
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              // Three per row on a phone, two when narrow, like the original
+              // quick actions. The column width is fixed so a short list (a
+              // lone More) stays a tile instead of stretching edge to edge.
+              final int perRow = constraints.maxWidth >= 280 ? 3 : 2;
+              double widthFor(int index) =>
+                  (constraints.maxWidth - (perRow - 1) * 10) / perRow;
+
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  for (int i = 0; i < actions.length; i++)
+                    SizedBox(
+                      width: widthFor(i),
+                      child: _DashboardActionCard(
+                        key: HomeScreenKeys.roleChip(actions[i].id),
+                        label: actions[i].label,
+                        gem: actions[i].gem,
+                        gemTone: actions[i].tone,
+                        onTap: actions[i].onTap,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        );
+    }
     return Column(
       key: HomeScreenKeys.rolePanel,
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        for (int i = 0; i < bigs.length; i++) ...<Widget>[
-          if (i > 0) const SizedBox(height: 12),
-          _RoleBigTile(data: bigs[i], primary: i == 0),
-        ],
-        if (rows.isNotEmpty) ...<Widget>[
-          if (bigs.isNotEmpty) const SizedBox(height: 16),
-          _RoleRowCard(rows: rows),
-        ],
-        if (chips.isNotEmpty || plan.showMore) ...<Widget>[
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              for (final String id in chips)
-                _RoleChip(
-                  id: id,
-                  icon: _tileMeta(l10n, id).icon,
-                  label: _tileMeta(l10n, id).label,
-                  onTap: () => _openHomeTile(context, id),
-                ),
-              if (plan.showMore)
-                _RoleChip(
-                  id: 'more',
-                  icon: Icons.apps_rounded,
-                  label: c('more'),
-                  onTap: onMore,
-                ),
-            ],
-          ),
-        ],
-      ],
+      children: children,
     );
   }
 }
 
-/// A big tile: the first is filled with the brand colour, the second is a
-/// surface card. Grows with the text (no fixed height) so 2x text fits.
-class _RoleBigTile extends StatelessWidget {
-  const _RoleBigTile({required this.data, required this.primary});
+/// The approved gem (glyph and meaning colour, [TpGemSpec]) for every role
+/// tile, row and quick action, by id. Red is kept for tyre problems and
+/// accidents only, as [TpGemTone] requires.
+({TpGemSpec spec, TpGemTone? tone}) _roleGem(String id) => switch (id) {
+      // Big tiles.
+      'meterToday' || 'meter' => (spec: TpGemSpec.pressure, tone: null),
+      'reportProblem' || 'reportIssue' || 'repairRequest' => (
+          spec: TpGemSpec.reportIssue,
+          tone: null
+        ),
+      'handoverSignoff' => (spec: TpGemSpec.approvals, tone: null),
+      'reportAccident' || 'openAccidents' => (
+          spec: TpGemSpec.reportAccident,
+          tone: null
+        ),
+      'approvalsWaiting' || 'approvalsToSign' || 'checklistsToSign' => (
+          spec: TpGemSpec.approvals,
+          tone: null
+        ),
+      'resumeDraft' => (spec: TpGemSpec.inspectionsDue, tone: null),
+      'teamNow' => (spec: TpGemSpec.inspectionsDue, tone: TpGemTone.green),
+      'assignJobs' => (spec: TpGemSpec.approvals, tone: TpGemTone.blue),
+      'myJobs' => (spec: TpGemSpec.inspectionsDue, tone: null),
+      'plantChecks' || 'workshopDaily' || 'dailyChecklist' => (
+          spec: TpGemSpec.inspectionsDue,
+          tone: TpGemTone.green
+        ),
+      'serialSearch' || 'serial' => (spec: TpGemSpec.tyre, tone: null),
+      'tyresDue' || 'tyres' || 'alerts' => (
+          spec: TpGemSpec.tyresNeedAttention,
+          tone: null
+        ),
+      // Rows.
+      'offRoad' => (spec: TpGemSpec.asset, tone: TpGemTone.amber),
+      'maintenanceDue' => (spec: TpGemSpec.reportIssue, tone: null),
+      'myVehicle' || 'vehicles' => (spec: TpGemSpec.asset, tone: null),
+      'wash' || 'washing' => (spec: TpGemSpec.washing, tone: null),
+      'myCharges' => (spec: TpGemSpec.reportIssue, tone: TpGemTone.slate),
+      'dailySummary' => (
+          spec: TpGemSpec.inspectionsDue,
+          tone: TpGemTone.violet
+        ),
+      'workshopStatus' => (spec: TpGemSpec.asset, tone: TpGemTone.teal),
+      'todaysPlan' || 'dueToday' || 'recentInspections' => (
+          spec: TpGemSpec.inspectionsDue,
+          tone: null
+        ),
+      'sync' => (spec: TpGemSpec.pendingSync, tone: null),
+      'waitingParts' || 'requestParts' => (
+          spec: TpGemSpec.stockCount,
+          tone: TpGemTone.amber
+        ),
+      'blocked' => (spec: TpGemSpec.reportIssue, tone: null),
+      'reportProblemRow' => (spec: TpGemSpec.reportIssue, tone: null),
+      'stockReorder' => (spec: TpGemSpec.stockCount, tone: TpGemTone.amber),
+      // Quick actions.
+      'scanner' => (spec: TpGemSpec.scan, tone: null),
+      'stock' => (spec: TpGemSpec.stockCount, tone: null),
+      'records' || 'tyreChange' => (spec: TpGemSpec.tyre, tone: null),
+      _ => (spec: TpGemSpec.more, tone: null),
+    };
+
+/// The first big tile: the approved full-width "New inspection" call to
+/// action (green, white disc), extended with an optional line under the
+/// label and a count.
+class _RolePrimaryAction extends StatelessWidget {
+  const _RolePrimaryAction({required this.data});
 
   final _RoleBigData data;
-  final bool primary;
 
   @override
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
-    final Color fg = primary ? palette.onPrimary : palette.text;
-    final Color muted =
-        primary ? palette.onPrimary.withValues(alpha: 0.86) : palette.textMuted;
     final TextTheme text = Theme.of(context).textTheme;
-    final Widget header = Padding(
-      padding: const EdgeInsetsDirectional.fromSTEB(16, 14, 14, 14),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: primary ? palette.onPrimary : palette.primarySoft,
-              shape: BoxShape.circle,
-            ),
-            child: TpIcon(data.icon, color: palette.primary, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  data.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.titleMedium?.copyWith(
-                    color: fg,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (data.subtitle != null && data.subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    data.subtitle!,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodySmall?.copyWith(color: muted),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (data.value != null) ...<Widget>[
-            const SizedBox(width: 10),
-            Text(
-              data.value!,
-              style: text.headlineSmall?.copyWith(
-                color: fg,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-          if (data.onTap != null)
-            Icon(Icons.chevron_right_rounded, color: muted),
-        ],
-      ),
-    );
-    return Material(
-      key: HomeScreenKeys.roleBig(data.id),
-      color: primary ? palette.primary : palette.surface,
-      shape: RoundedRectangleBorder(
+    final ({TpGemSpec spec, TpGemTone? tone}) gem = _roleGem(data.id);
+    final String? subtitle =
+        data.subtitle == null || data.subtitle!.isEmpty ? null : data.subtitle;
+    return Semantics(
+      button: true,
+      label: <String>[
+        data.title,
+        if (subtitle != null) subtitle,
+        if (data.value != null) data.value!,
+      ].join(', '),
+      excludeSemantics: true,
+      child: Material(
+        key: HomeScreenKeys.roleBig(data.id),
         borderRadius: BorderRadius.circular(TpRadius.md),
-        side: primary ? BorderSide.none : BorderSide(color: palette.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: data.onTap == null ? 64 : 88,
-            ),
-            child: data.onTap == null
-                ? Semantics(header: true, child: header)
-                : InkWell(onTap: data.onTap, child: header),
-          ),
-          if (data.children.isNotEmpty)
-            ColoredBox(
-              color: palette.surface,
-              child: Column(
+        clipBehavior: Clip.antiAlias,
+        color: palette.primary,
+        child: InkWell(
+          onTap: data.onTap,
+          splashColor: palette.onPrimary.withValues(alpha: 0.12),
+          highlightColor: palette.onPrimary.withValues(alpha: 0.06),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 68),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              child: Row(
+                mainAxisAlignment: subtitle == null && data.value == null
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
                 children: <Widget>[
-                  for (int i = 0; i < data.children.length; i++) ...<Widget>[
-                    if (i > 0) Divider(height: 1, color: palette.border),
-                    _RoleRow(data: data.children[i]),
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: palette.onPrimary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: data.id == 'newInspection'
+                        ? Icon(
+                            Icons.add_rounded,
+                            color: palette.primary,
+                            size: 26,
+                          )
+                        : Center(
+                            child: TpAssetIcon(
+                              gem.spec.glyph,
+                              size: 22,
+                              color: palette.primary,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(width: 14),
+                  Flexible(
+                    fit: subtitle == null && data.value == null
+                        ? FlexFit.loose
+                        : FlexFit.tight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          data.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleLarge?.copyWith(
+                            color: palette.onPrimary,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        if (subtitle != null)
+                          Text(
+                            subtitle,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodyMedium?.copyWith(
+                              color: palette.onPrimary.withValues(alpha: 0.9),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (data.value != null) ...<Widget>[
+                    const SizedBox(width: 10),
+                    Text(
+                      data.value!,
+                      style: text.headlineSmall?.copyWith(
+                        color: palette.onPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ],
                 ],
               ),
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
 }
 
+/// The second big tile: the approved command card (the accident shortcut's
+/// shape) with the gem's meaning colour on its border and disc.
+class _RoleCommandCard extends StatelessWidget {
+  const _RoleCommandCard({required this.data});
+
+  final _RoleBigData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final ({TpGemSpec spec, TpGemTone? tone}) gem = _roleGem(data.id);
+    final TpGemTone tone = gem.tone ?? gem.spec.tone;
+    final Color accent = tone.end;
+    final String? subtitle =
+        data.subtitle == null || data.subtitle!.isEmpty ? null : data.subtitle;
+    return Material(
+      key: HomeScreenKeys.roleBig(data.id),
+      color: palette.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        side: BorderSide(color: accent.withValues(alpha: 0.28)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: data.onTap,
+        splashColor: accent.withValues(alpha: 0.12),
+        highlightColor: accent.withValues(alpha: 0.06),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 72),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(12, 12, 10, 12),
+            child: Row(
+              children: <Widget>[
+                TpGem.spec(gem.spec, tone: gem.tone, size: TpGemSize.md),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        data.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.titleSmall?.copyWith(
+                          color: palette.text,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (subtitle != null)
+                        Text(
+                          subtitle,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: accent,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (data.value != null) ...<Widget>[
+                  const SizedBox(width: 8),
+                  Text(
+                    data.value!,
+                    style: text.headlineSmall?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+                Icon(
+                  // Mirrors itself under RTL (matchTextDirection).
+                  Icons.chevron_right_rounded,
+                  color: palette.textMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The rows, in the approved "Today's work" card (rounded, bordered,
+/// dividers between rows).
 class _RoleRowCard extends StatelessWidget {
   const _RoleRowCard({required this.rows});
 
@@ -945,14 +1119,19 @@ class _RoleRowCard extends StatelessWidget {
     return Material(
       color: palette.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(TpRadius.md),
+        borderRadius: BorderRadius.circular(TpRadius.lg),
         side: BorderSide(color: palette.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: <Widget>[
           for (int i = 0; i < rows.length; i++) ...<Widget>[
-            if (i > 0) Divider(height: 1, color: palette.border),
+            if (i > 0)
+              Divider(
+                height: 1,
+                indent: 72,
+                color: palette.border,
+              ),
             _RoleRow(data: rows[i]),
           ],
         ],
@@ -961,7 +1140,8 @@ class _RoleRowCard extends StatelessWidget {
   }
 }
 
-/// One compact row: at least 72dp tall, the whole row one tap target.
+/// One compact row on a gem tile: at least 72dp, the whole row one tap
+/// target, the count in the gem's meaning colour (the summary tiles' rule).
 class _RoleRow extends StatelessWidget {
   const _RoleRow({required this.data});
 
@@ -971,117 +1151,75 @@ class _RoleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
-    final TpStatusColors tone = data.danger ? palette.critical : palette.info;
-    return InkWell(
-      key: HomeScreenKeys.roleRow(data.id),
-      onTap: data.onTap,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 72),
-        child: Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(14, 10, 10, 10),
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: tone.soft,
-                  shape: BoxShape.circle,
-                ),
-                child: TpIcon(data.icon, color: tone.base, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      data.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.titleSmall?.copyWith(
-                        color: data.danger ? tone.base : palette.text,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (data.note != null && data.note!.isNotEmpty)
+    final ({TpGemSpec spec, TpGemTone? tone}) gem =
+        _roleGem(data.id == 'reportProblem' ? 'reportProblemRow' : data.id);
+    final bool unknown = data.value == '-';
+    final TpGemTone tone =
+        unknown ? TpGemTone.slate : (gem.tone ?? gem.spec.tone);
+    final String? note = data.note;
+    return Semantics(
+      button: true,
+      label: <String>[
+        data.title,
+        if (data.value != null) data.value!,
+        if (note != null) note,
+      ].join(', '),
+      excludeSemantics: true,
+      child: InkWell(
+        key: HomeScreenKeys.roleRow(data.id),
+        onTap: data.onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 72),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(12, 10, 8, 10),
+            child: Row(
+              children: <Widget>[
+                TpGem.spec(gem.spec, tone: tone, size: TpGemSize.md),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
                       Text(
-                        data.note!,
+                        data.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style:
-                            text.bodySmall?.copyWith(color: palette.textMuted),
+                        style: text.titleSmall?.copyWith(
+                          color: data.danger ? TpGemTone.red.end : palette.text,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                  ],
+                      if (note != null && note.isNotEmpty)
+                        Text(
+                          note,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall
+                              ?.copyWith(color: palette.textMuted),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              if (data.value != null) ...<Widget>[
-                const SizedBox(width: 8),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
-                  child: Text(
-                    data.value!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.titleMedium?.copyWith(
-                      color: palette.text,
-                      fontWeight: FontWeight.w800,
+                if (data.value != null) ...<Widget>[
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 120),
+                    child: Text(
+                      data.value!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleLarge?.copyWith(
+                        color: unknown ? palette.textMuted : tone.end,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
-                ),
-              ],
-              Icon(Icons.chevron_right_rounded, color: palette.textMuted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RoleChip extends StatelessWidget {
-  const _RoleChip({
-    required this.id,
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final String id;
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final TpPalette palette = TpPalette.of(context);
-    return Material(
-      key: HomeScreenKeys.roleChip(id),
-      color: palette.surface,
-      shape: StadiumBorder(side: BorderSide(color: palette.border)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                TpIcon(icon, size: 18, color: palette.primary),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: palette.text,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
+                ],
+                Icon(
+                  // Mirrors itself under RTL (matchTextDirection).
+                  Icons.chevron_right_rounded,
+                  color: palette.textMuted,
                 ),
               ],
             ),

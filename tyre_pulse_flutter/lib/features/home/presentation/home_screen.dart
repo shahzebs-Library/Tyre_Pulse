@@ -2471,6 +2471,7 @@ class _DashboardActionCard extends StatelessWidget {
     required this.label,
     required this.gem,
     required this.onTap,
+    this.gemTone,
     super.key,
   });
 
@@ -2478,6 +2479,10 @@ class _DashboardActionCard extends StatelessWidget {
 
   /// The gem tile's glyph and meaning colour (see [TpGemSpec]).
   final TpGemSpec gem;
+
+  /// Overrides [gem]'s colour when the same glyph means something else
+  /// (the per-role Home uses it, e.g. a teal workshop tile).
+  final TpGemTone? gemTone;
   final VoidCallback onTap;
 
   @override
@@ -2505,7 +2510,7 @@ class _DashboardActionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                TpGem.spec(gem, size: TpGemSize.md),
+                TpGem.spec(gem, tone: gemTone, size: TpGemSize.md),
                 const SizedBox(height: 12),
                 Text(
                   label,

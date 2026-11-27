@@ -318,6 +318,7 @@ function TestTab() {
 const SETTING_FIELDS = [
   ['tpms_low_pct', 'lowPct', 15], ['tpms_critical_pct', 'criticalPct', 25], ['tpms_high_pct', 'highPct', 15],
   ['tpms_low_psi', 'lowPsi', ''], ['tpms_high_psi', 'highPsi', ''], ['tpms_high_temp_c', 'highTemp', 85], ['alert_repeat_hours', 'repeat', 6],
+  ['max_reading_age_days', 'maxAgeDays', 30],
 ]
 
 function SettingsTab({ initial, onSaved }) {

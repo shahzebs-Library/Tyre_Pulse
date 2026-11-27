@@ -1,6 +1,6 @@
 /**
  * Device ingest service - the one seam between the Devices & Integrations
- * page and the device-ingest RPCs (migration 20261127120000_device_ingest).
+ * page and the device-ingest RPCs (migration 20261128100000_device_ingest).
  *
  * Every RPC re-checks Admin / super admin server-side and raises 42501 for
  * anyone else; the page being admin-only is a convenience, not the boundary.

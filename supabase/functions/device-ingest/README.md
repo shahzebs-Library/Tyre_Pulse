@@ -1,6 +1,6 @@
 # device-ingest
 
-Status: authored, not deployed. Needs migration `20261127120000_device_ingest.sql` applied first, then
+Status: authored, not deployed. Needs migration `20261128100000_device_ingest.sql` applied first, then
 `supabase functions deploy device-ingest --no-verify-jwt`.
 
 `POST /functions/v1/device-ingest[?vendor=generic|teltonika|wialon|samsara]`
@@ -42,7 +42,13 @@ A rejected message never blocks a corrected retry.
 
 Response: `{ vendor, accepted, duplicates, quarantined, rejected, results: [{ index, status, error?, reason? }] }`.
 Errors: 400 bad_json / too_many_messages / empty_batch, 401 invalid_key, 405, 413 too_large, 429 rate_limited
-(per key per minute, plus a per-address brake on bad keys), 503 temporarily_unavailable. No internals are returned.
+(per key per minute, counted in MESSAGES not requests, plus a per-address brake on bad keys),
+503 temporarily_unavailable. No internals are returned.
+
+Quarantine rules: a key bound to a device writes only to that device's asset (no asset on the device =
+quarantined `unassigned_device`, the payload asset / VIN / plate is never used as a fallback); a reading
+older than `max_reading_age_days` (default 30, Settings tab) is quarantined `stale_reading`; a reading more
+than 10 minutes in the future is rejected. The body is streamed and reading stops at 512 KB.
 
 ## Vendor adapters (`supabase/functions/_shared/deviceIngest.js`)
 

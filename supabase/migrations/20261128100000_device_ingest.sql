@@ -1,6 +1,23 @@
 -- Device ingest: hardware / telematics devices send readings into Tyre Pulse.
 --
 -- STATUS: AUTHORED, NOT APPLIED. Needs the owner's explicit yes.
+-- File renamed from 20261127120000 so it sorts after the latest applied
+-- version (20261127212012). No top-level DROP statement: every drop runs
+-- inside a DO block behind an existence check, so an MCP apply never stalls
+-- on a destructive-statement confirmation.
+--
+-- Review fixes (2026-11-28):
+--   * a key bound to a device writes ONLY to that device's asset. If the
+--     device has no asset (or is decommissioned / missing) the reading is
+--     quarantined as 'unassigned_device'; the payload's asset / VIN / plate is
+--     never used as a fallback for a bound key.
+--   * the rate limit counts MESSAGES (batch length), not requests.
+--   * a reading older than device_ingest_settings.max_reading_age_days
+--     (default 30) is quarantined as 'stale_reading'; the 10 minute future
+--     bound still rejects. An admin match from the unmatched list may accept a
+--     stale reading on purpose.
+--   * an odometer / engine-hours insert that hits ON CONFLICT DO NOTHING is
+--     recorded in the ledger as 'duplicate', never as accepted with no target.
 --
 -- What this adds (additive only, no existing row is changed):
 --   * device_ingest_keys      one hashed key per device or per integration,
@@ -142,7 +159,7 @@ create table if not exists public.device_ingest_unmatched (
   key_id           uuid,
   message_id       uuid,
   msg_type         text,
-  reason           text not null check (reason in ('unknown_asset','ambiguous_asset')),
+  reason           text not null check (reason in ('unknown_asset','ambiguous_asset','unassigned_device','stale_reading')),
   identifiers      jsonb,
   candidates       jsonb,
   payload          jsonb not null,
@@ -163,6 +180,7 @@ create table if not exists public.device_ingest_settings (
   tpms_high_psi        numeric,
   tpms_high_temp_c     numeric not null default 85,
   alert_repeat_hours   integer not null default 6 check (alert_repeat_hours between 1 and 168),
+  max_reading_age_days integer not null default 30 check (max_reading_age_days between 1 and 365),
   updated_by           uuid,
   updated_at           timestamptz not null default now()
 );
@@ -206,9 +224,17 @@ create table if not exists public.fuel_level_readings (
 create index if not exists fuel_level_readings_asset_idx on public.fuel_level_readings (organisation_id, asset_no, recorded_at desc);
 
 -- rfid: a reader seeing a tag is a new event kind.
-alter table public.rfid_tag_events drop constraint if exists rfid_tag_events_action_check;
-alter table public.rfid_tag_events add constraint rfid_tag_events_action_check check (action in
-  ('registered','assigned','reassigned','unassigned','retired','reactivated','moved','edited','deleted','read'));
+-- Done inside a DO block (no top-level DROP) and only when the constraint
+-- exists, so the apply never pauses for a destructive-statement prompt.
+do $rfid$
+begin
+  if exists (select 1 from pg_constraint
+              where conrelid = 'public.rfid_tag_events'::regclass and conname = 'rfid_tag_events_action_check') then
+    execute 'alter table public.rfid_tag_events drop constraint rfid_tag_events_action_check';
+  end if;
+  execute $c$alter table public.rfid_tag_events add constraint rfid_tag_events_action_check check (action in
+    ('registered','assigned','reassigned','unassigned','retired','reactivated','moved','edited','deleted','read'))$c$;
+end $rfid$;
 
 -- RLS: org wall + admin-only read; no client write policy anywhere (all
 -- writes go through the DEFINER functions below).
@@ -222,7 +248,9 @@ begin
   end loop;
   foreach t in array array['device_ingest_messages','device_ingest_unmatched','device_ingest_settings',
     'tread_depth_readings','fuel_level_readings'] loop
-    execute format('drop policy if exists %I on public.%I', t || '_admin_read', t);
+    if exists (select 1 from pg_policies where schemaname = 'public' and tablename = t and policyname = t || '_admin_read') then
+      execute format('drop policy %I on public.%I', t || '_admin_read', t);
+    end if;
     execute format('create policy %I on public.%I for select to authenticated using (
       organisation_id = (select public.app_current_org()) and (select public.app_is_org_admin()))', t || '_admin_read', t);
     execute format('grant select on public.%I to authenticated', t);
@@ -276,8 +304,33 @@ begin
       from public.vehicle_fleet where id = p_force_vehicle and organisation_id = p_org;
   end if;
 
-  -- 1. key bound to a registered device, or 2. a registered device id / IMEI
-  if v_rows is null then
+  -- 1. key bound to a registered device: that device's asset and nothing
+  --    else. No asset on the device (or device gone) -> 'unassigned'; the
+  --    payload's asset code / VIN / plate is never consulted for a bound key.
+  if v_rows is null and p_device_row is not null then
+    if not exists (select 1 from public.telematics_devices
+                    where id = p_device_row and organisation_id = p_org
+                      and status <> 'decommissioned' and public._device_norm(asset_no) is not null) then
+      return jsonb_build_object('status', 'unassigned');
+    end if;
+    select jsonb_agg(distinct jsonb_build_object('asset_no', vf.asset_no, 'country', vf.country, 'site', vf.site)) into v_rows
+      from public.telematics_devices td
+      join public.vehicle_fleet vf
+        on vf.organisation_id = p_org
+       and public._device_norm(vf.asset_no) = public._device_norm(td.asset_no)
+       and (td.country is null or vf.country is null or lower(vf.country) = lower(td.country))
+     where td.id = p_device_row and td.organisation_id = p_org;
+    v_n := coalesce(jsonb_array_length(v_rows), 0);
+    if v_n = 1 then
+      return jsonb_build_object('status', 'ok') || (v_rows->0);
+    elsif v_n > 1 then
+      return jsonb_build_object('status', 'ambiguous', 'candidates', v_rows);
+    end if;
+    return jsonb_build_object('status', 'unknown');
+  end if;
+
+  -- 2. an unbound key: a registered device id / IMEI in the payload
+  if v_rows is null and v_dev is not null then
     select jsonb_agg(distinct jsonb_build_object('asset_no', vf.asset_no, 'country', vf.country, 'site', vf.site)) into v_rows
       from public.telematics_devices td
       join public.vehicle_fleet vf
@@ -285,8 +338,7 @@ begin
        and public._device_norm(vf.asset_no) = public._device_norm(td.asset_no)
        and (td.country is null or vf.country is null or lower(vf.country) = lower(td.country))
      where td.organisation_id = p_org and td.status <> 'decommissioned' and td.asset_no is not null
-       and ((p_device_row is not null and td.id = p_device_row)
-         or (p_device_row is null and v_dev is not null and public._device_norm(td.device_id) = v_dev));
+       and public._device_norm(td.device_id) = v_dev;
   end if;
 
   -- 3. asset code, 4. VIN / chassis, 5. registration plate
@@ -343,6 +395,9 @@ declare
   v_p numeric; v_t numeric; v_target numeric; v_status text;
   v_sev text;
   v_url text;
+  v_reason text;   -- quarantine reason stored in device_ingest_unmatched.reason
+  v_short text;    -- short reason returned to the caller
+  v_max_age int;
 begin
   if v_type is null or v_type not in ('gps','odometer','engine_hours','tpms','tread','fuel_level','fuel_transaction','dtc','rfid','dashcam') then
     return jsonb_build_object('status', 'rejected', 'error', 'unknown_type');
@@ -366,24 +421,37 @@ begin
     end if;
   end if;
 
-  v_res := public._device_resolve_asset(p_org, v_dev_row, p_msg, p_force_vehicle);
+  -- Too old: a backlog replay or a device with a wrong clock. Kept for review,
+  -- never written straight into the operational tables. An admin match from
+  -- the unmatched list (p_force_vehicle) is a deliberate decision and passes.
+  select coalesce((select max_reading_age_days from public.device_ingest_settings where organisation_id = p_org), 30)
+    into v_max_age;
+  if p_force_vehicle is null and v_at < now() - make_interval(days => v_max_age) then
+    v_reason := 'stale_reading'; v_short := 'stale';
+  else
+    v_res := public._device_resolve_asset(p_org, v_dev_row, p_msg, p_force_vehicle);
+    if v_res->>'status' <> 'ok' then
+      v_short := v_res->>'status';
+      v_reason := case v_short when 'unassigned' then 'unassigned_device' else v_short || '_asset' end;
+    end if;
+  end if;
 
-  if v_res->>'status' <> 'ok' then
+  if v_reason is not null then
     if p_dry then
-      return jsonb_build_object('status', 'quarantined', 'reason', v_res->>'status', 'candidates', v_res->'candidates');
+      return jsonb_build_object('status', 'quarantined', 'reason', v_short, 'candidates', v_res->'candidates');
     end if;
     insert into public.device_ingest_messages (organisation_id, key_id, idem_key, msg_type, status, error, recorded_at)
-    values (p_org, p_key_id, v_idem, v_type, 'quarantined', v_res->>'status' || '_asset', v_at)
+    values (p_org, p_key_id, v_idem, v_type, 'quarantined', v_reason, v_at)
     on conflict (organisation_id, idem_key) do nothing
     returning id into v_msg_id;
     if v_msg_id is null then
       return jsonb_build_object('status', 'duplicate');
     end if;
     insert into public.device_ingest_unmatched (organisation_id, key_id, message_id, msg_type, reason, identifiers, candidates, payload)
-    values (p_org, p_key_id, v_msg_id, v_type, v_res->>'status' || '_asset',
+    values (p_org, p_key_id, v_msg_id, v_type, v_reason,
             jsonb_build_object('device_id', p_msg->>'device_id') || coalesce(p_msg->'asset', '{}'::jsonb),
             v_res->'candidates', p_msg);
-    return jsonb_build_object('status', 'quarantined', 'reason', v_res->>'status');
+    return jsonb_build_object('status', 'quarantined', 'reason', v_short);
   end if;
 
   v_asset := v_res->>'asset_no'; v_country := v_res->>'country'; v_site := v_res->>'site';
@@ -428,6 +496,15 @@ begin
             'device ingest', 'dev:' || v_idem)
     on conflict do nothing
     returning id into v_tid;
+    if v_tid is null then
+      -- the same reading is already stored (client_uuid): record it as a
+      -- duplicate, never as accepted with no target row.
+      if v_msg_id is not null then
+        update public.device_ingest_messages set status = 'duplicate', error = 'reading already recorded'
+         where id = v_msg_id;
+      end if;
+      return jsonb_build_object('status', 'duplicate', 'reason', 'reading_already_recorded');
+    end if;
 
   elsif v_type = 'engine_hours' then
     insert into public.engine_hours_logs (organisation_id, country, asset_no, engine_hours, reading_date, source, site, notes, client_uuid)
@@ -435,6 +512,15 @@ begin
             'device ingest', 'dev:' || v_idem)
     on conflict do nothing
     returning id into v_tid;
+    if v_tid is null then
+      -- the same reading is already stored (client_uuid): record it as a
+      -- duplicate, never as accepted with no target row.
+      if v_msg_id is not null then
+        update public.device_ingest_messages set status = 'duplicate', error = 'reading already recorded'
+         where id = v_msg_id;
+      end if;
+      return jsonb_build_object('status', 'duplicate', 'reason', 'reading_already_recorded');
+    end if;
 
   elsif v_type = 'tpms' then
     select * into v_set from public.device_ingest_settings where organisation_id = p_org;
@@ -582,6 +668,7 @@ declare
   v_r jsonb;
   m jsonb;
   i int := 0;
+  v_n int;
 begin
   select * into k from public.device_ingest_keys where id = p_key_id;
   if not found or not k.active or k.revoked_at is not null or (k.expires_at is not null and k.expires_at <= now()) then
@@ -591,8 +678,10 @@ begin
     return jsonb_build_object('ok', false, 'error', 'bad_batch');
   end if;
 
-  insert into public.device_ingest_usage as u (key_id, minute, count) values (k.id, v_minute, 1)
-  on conflict (key_id, minute) do update set count = u.count + 1
+  -- The limit is messages per minute: a 500-message batch costs 500, not 1.
+  v_n := greatest(jsonb_array_length(p_messages), 1);
+  insert into public.device_ingest_usage as u (key_id, minute, count) values (k.id, v_minute, v_n)
+  on conflict (key_id, minute) do update set count = u.count + excluded.count
   returning count into v_count;
   if v_count > k.rate_per_minute then
     return jsonb_build_object('ok', false, 'error', 'rate_limited', 'limit', k.rate_per_minute);
@@ -767,18 +856,19 @@ returns void language plpgsql security definer set search_path = public as $$
 declare v_org uuid := public._device_ingest_require_admin();
 begin
   insert into public.device_ingest_settings (organisation_id, tpms_low_pct, tpms_critical_pct, tpms_high_pct, tpms_low_psi,
-    tpms_high_psi, tpms_high_temp_c, alert_repeat_hours, updated_by, updated_at)
+    tpms_high_psi, tpms_high_temp_c, alert_repeat_hours, max_reading_age_days, updated_by, updated_at)
   values (v_org,
     least(greatest(coalesce((p_settings->>'tpms_low_pct')::numeric, 15), 1), 60),
     least(greatest(coalesce((p_settings->>'tpms_critical_pct')::numeric, 25), 1), 80),
     least(greatest(coalesce((p_settings->>'tpms_high_pct')::numeric, 15), 1), 80),
     (p_settings->>'tpms_low_psi')::numeric, (p_settings->>'tpms_high_psi')::numeric,
     least(greatest(coalesce((p_settings->>'tpms_high_temp_c')::numeric, 85), 40), 150),
-    least(greatest(coalesce((p_settings->>'alert_repeat_hours')::int, 6), 1), 168), auth.uid(), now())
+    least(greatest(coalesce((p_settings->>'alert_repeat_hours')::int, 6), 1), 168),
+    least(greatest(coalesce((p_settings->>'max_reading_age_days')::int, 30), 1), 365), auth.uid(), now())
   on conflict (organisation_id) do update set
     tpms_low_pct = excluded.tpms_low_pct, tpms_critical_pct = excluded.tpms_critical_pct, tpms_high_pct = excluded.tpms_high_pct,
     tpms_low_psi = excluded.tpms_low_psi, tpms_high_psi = excluded.tpms_high_psi, tpms_high_temp_c = excluded.tpms_high_temp_c,
-    alert_repeat_hours = excluded.alert_repeat_hours, updated_by = excluded.updated_by, updated_at = now();
+    alert_repeat_hours = excluded.alert_repeat_hours, max_reading_age_days = excluded.max_reading_age_days, updated_by = excluded.updated_by, updated_at = now();
 end $$;
 
 -- ---------------------------------------------------------------------------

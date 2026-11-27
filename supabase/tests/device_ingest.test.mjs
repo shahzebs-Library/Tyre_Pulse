@@ -1,11 +1,11 @@
-// Device ingest migration (20261127120000) in PGlite with stub base tables.
+// Device ingest migration (20261128100000) in PGlite with stub base tables.
 // Run: node --test supabase/tests/device_ingest.test.mjs
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { test } from 'node:test'
 import { PGlite } from '@electric-sql/pglite'
 
-const migration = await readFile(new URL('../migrations/20261127120000_device_ingest.sql', import.meta.url), 'utf8')
+const migration = await readFile(new URL('../migrations/20261128100000_device_ingest.sql', import.meta.url), 'utf8')
 const ORG = '00000000-0000-0000-0000-000000000001'
 const OTHER = '00000000-0000-0000-0000-000000000099'
 const ADMIN = '00000000-0000-0000-0000-0000000000a1'
@@ -171,6 +171,55 @@ test('device ingest: admin-only management, idempotent ingest, quarantine, alert
     const n = (await db.query(`SELECT user_id, type FROM notifications`)).rows
     assert.deepEqual(n.map((x) => x.user_id), [ADMIN, ADMIN])
     assert.deepEqual(n.map((x) => x.type).sort(), ['dtc_alert', 'tpms_alert'])
+  })
+
+  await t.test('odometer clash on client_uuid is ledgered as duplicate, not accepted with no target', async () => {
+    await db.exec('RESET ROLE')
+    await db.exec(`INSERT INTO odometer_logs(organisation_id, country, asset_no, odometer_km, client_uuid) VALUES ('${ORG}','KSA','TM514',1,'dev:clash1')`)
+    const r = await submit([{ type: 'odometer', message_id: 'clash1', asset: { asset_no: 'TM514' }, data: { odometer_km: 150200 } }])
+    assert.equal(r.results[0].status, 'duplicate')
+    await db.exec('RESET ROLE')
+    const m = await one(db, `SELECT status, target_id FROM device_ingest_messages WHERE idem_key='clash1'`)
+    assert.equal(m.status, 'duplicate')
+    assert.equal(m.target_id, null)
+  })
+
+  await t.test('a reading older than the age limit is quarantined; the future bound still rejects', async () => {
+    const old = new Date(Date.now() - 31 * 86400e3).toISOString()
+    const r = await submit([{ type: 'gps', message_id: 'old1', recorded_at: old, asset: { asset_no: 'TM514' }, data: { lat: 1, lon: 1 } }])
+    assert.equal(r.results[0].status, 'quarantined')
+    assert.equal(r.results[0].reason, 'stale')
+    const f = await submit([{ type: 'gps', message_id: 'fut1', recorded_at: new Date(Date.now() + 3600e3).toISOString(),
+      asset: { asset_no: 'TM514' }, data: { lat: 1, lon: 1 } }])
+    assert.equal(f.results[0].status, 'rejected')
+    await db.exec('RESET ROLE')
+    assert.equal((await one(db, `SELECT reason FROM device_ingest_unmatched WHERE payload->>'message_id'='old1'`)).reason, 'stale_reading')
+  })
+
+  await t.test('a device-bound key whose device has no asset is quarantined, never falls back to the payload', async () => {
+    await db.exec('RESET ROLE')
+    const dev = await one(db, `INSERT INTO telematics_devices(organisation_id, country, device_id, asset_no) VALUES ('${ORG}','KSA','IMEI-NOASSET',null) RETURNING id`)
+    await as(db, ADMIN)
+    const bk = (await one(db, `SELECT device_ingest_key_create('Bound', array['gps'], $1) k`, [dev.id])).k
+    await as(db, '', 'service_role')
+    const r = (await one(db, `SELECT device_ingest_submit($1, $2::jsonb) r`, [bk.id,
+      JSON.stringify([{ type: 'gps', message_id: 'b1', asset: { asset_no: 'TM514', vin: 'VIN514' }, data: { lat: 1, lon: 1 } }])])).r
+    assert.equal(r.results[0].status, 'quarantined')
+    assert.equal(r.results[0].reason, 'unassigned')
+    await db.exec('RESET ROLE')
+    assert.equal((await one(db, `SELECT count(*)::int n FROM gps_positions WHERE notes='device ingest' AND latitude=1 AND longitude=1`)).n, 0)
+  })
+
+  await t.test('rate limit counts messages, not requests', async () => {
+    await as(db, ADMIN)
+    const rk = (await one(db, `SELECT device_ingest_key_create('Rate', array['gps'], null, 10) k`)).k
+    const batch = Array.from({ length: 11 }, (_, i) => ({ type: 'gps', message_id: `rl${i}`, asset: { asset_no: 'TM514' }, data: { lat: 2, lon: 2 } }))
+    await as(db, '', 'service_role')
+    const r = (await one(db, `SELECT device_ingest_submit($1, $2::jsonb) r`, [rk.id, JSON.stringify(batch)])).r
+    assert.equal(r.ok, false)
+    assert.equal(r.error, 'rate_limited')
+    await db.exec('RESET ROLE')
+    assert.equal((await one(db, `SELECT count::int n FROM device_ingest_usage WHERE key_id=$1`, [rk.id])).n, 11)
   })
 
   await t.test('revoked key refuses everything', async () => {

@@ -1,6 +1,6 @@
 // device-ingest: hardware / telematics devices push readings into Tyre Pulse.
 //
-// STATUS: AUTHORED, NOT DEPLOYED. Needs migration 20261127120000_device_ingest
+// STATUS: AUTHORED, NOT DEPLOYED. Needs migration 20261128100000_device_ingest
 // applied first, then: supabase functions deploy device-ingest --no-verify-jwt
 //
 // Auth: an ingest key minted in Devices & Integrations (device_ingest_keys),
@@ -53,6 +53,35 @@ export function readKey(req: Request): string {
   return auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : ''
 }
 
+/**
+ * Reads the body as a stream and stops as soon as it passes `max` bytes, so
+ * an oversized (or lying Content-Length) request is never buffered whole.
+ * Returns null when the cap is exceeded.
+ */
+export async function readBodyCapped(req: Request, max: number): Promise<string | null> {
+  if (!req.body) return ''
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > max) {
+      await reader.cancel().catch(() => {})
+      return null
+    }
+    chunks.push(value)
+  }
+  const buf = new Uint8Array(total)
+  let off = 0
+  for (const c of chunks) {
+    buf.set(c, off)
+    off += c.byteLength
+  }
+  return new TextDecoder().decode(buf)
+}
+
 // Best-effort brake on key guessing from one address (per isolate).
 const failures = new Map<string, { n: number; at: number }>()
 function tooManyFailures(ip: string): boolean {
@@ -96,9 +125,10 @@ serve(async (req) => {
     return json({ error: 'invalid_key' }, 401)
   }
 
-  // Size cap holds even without (or with a lying) Content-Length.
-  const text = await req.text()
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return json({ error: 'too_large', max_bytes: MAX_BODY_BYTES }, 413)
+  // Size cap holds even without (or with a lying) Content-Length: the body is
+  // streamed and reading stops at the cap.
+  const text = await readBodyCapped(req, MAX_BODY_BYTES)
+  if (text === null) return json({ error: 'too_large', max_bytes: MAX_BODY_BYTES }, 413)
   let body: unknown
   try {
     body = JSON.parse(text)

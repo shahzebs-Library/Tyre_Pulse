@@ -47,7 +47,7 @@
   "status": { "accepted": "Accepted", "duplicate": "Already received", "quarantined": "No asset match", "rejected": "Rejected" },
   "unmatched": {
     "none": "Nothing waiting. Every reading matched an asset.",
-    "reason": { "unknown_asset": "No asset found", "ambiguous_asset": "Matches more than one asset" },
+    "reason": { "unknown_asset": "No asset found", "ambiguous_asset": "Matches more than one asset", "unassigned_device": "The device has no asset assigned", "stale_reading": "Reading is too old" },
     "identifiers": "Sent as",
     "find": "Asset code",
     "search": "Find",
@@ -73,6 +73,7 @@
     "highPsi": "High pressure when no target is sent (psi)",
     "highTemp": "High tyre temperature (C)",
     "repeat": "Repeat an alert after (hours)",
+    "maxAgeDays": "Hold readings older than (days) for review",
     "save": "Save settings",
     "saved": "Settings saved."
   },

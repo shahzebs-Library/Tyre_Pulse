@@ -3006,6 +3006,244 @@ class AppLocalizationsEn extends AppLocalizations {
       'History is too large to load completely. Use the web report.';
 
   @override
+  String get washStepVehicle => 'Vehicle';
+
+  @override
+  String get washStepType => 'Wash type';
+
+  @override
+  String get washStepChecklist => 'Checklist and chemicals';
+
+  @override
+  String get washStepPhotos => 'Photos';
+
+  @override
+  String get washStepReview => 'Review and save';
+
+  @override
+  String get washStepOptional => 'Optional';
+
+  @override
+  String washStepProgress(int done, int total) {
+    return '$done of $total steps done';
+  }
+
+  @override
+  String washLoggedBy(String name, String time) {
+    return 'Logged by $name · today $time';
+  }
+
+  @override
+  String get washLoggedByNote =>
+      'Recorded automatically from your sign-in. It cannot be changed.';
+
+  @override
+  String get washLoggedBySelf => 'you';
+
+  @override
+  String get washMissingVehicle => 'Pick a vehicle';
+
+  @override
+  String get washMissingType => 'Choose a wash type';
+
+  @override
+  String get washMissingEvidence => 'Finish the checklist details';
+
+  @override
+  String washLastWash(String date) {
+    return 'Last wash $date';
+  }
+
+  @override
+  String washDaysSince(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days ago',
+      one: '1 day ago',
+      zero: 'Washed today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washNoHistoryForAsset => 'No wash recorded yet';
+
+  @override
+  String get washDueBadge => 'Due for wash';
+
+  @override
+  String washOverdueBadge(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days overdue',
+      one: '1 day overdue',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washUpToDateBadge => 'Up to date';
+
+  @override
+  String get washHistoryChecking => 'Checking wash history...';
+
+  @override
+  String get washHistoryUnavailable => 'Wash history could not be checked';
+
+  @override
+  String get washTypeExteriorDesc => 'Body wash';
+
+  @override
+  String get washTypeInteriorDesc => 'Cab cleaning';
+
+  @override
+  String get washTypeFullDesc => 'Inside and out';
+
+  @override
+  String get washTypeEngineBayDesc => 'Engine compartment degrease';
+
+  @override
+  String get washTypeUndercarriageDesc => 'Chassis and wheels';
+
+  @override
+  String get washTypeSteamDesc => 'Steam clean';
+
+  @override
+  String get washTypeWaterlessDesc => 'Spray and wipe, no water';
+
+  @override
+  String washChecklistProgress(int done, int total) {
+    return '$done of $total checked';
+  }
+
+  @override
+  String washIssuesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count issues',
+      one: '1 issue',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String washProductsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count products',
+      one: '1 product',
+      zero: 'No products',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washPhotosBefore => 'Before washing';
+
+  @override
+  String get washPhotosAfter => 'After washing';
+
+  @override
+  String washPhotosCount(int count, int max) {
+    return '$count of $max photos';
+  }
+
+  @override
+  String get washPhotosOptional =>
+      'Optional. Before and after photos prove the wash was done.';
+
+  @override
+  String get washReviewTitle => 'Check before saving';
+
+  @override
+  String get washMoreDetails => 'More details (optional)';
+
+  @override
+  String washReviewChecklistValue(int checked, int total, String products) {
+    return '$checked of $total checked · $products';
+  }
+
+  @override
+  String get washSavedTitle => 'Wash saved';
+
+  @override
+  String get washSavedOfflineMessage =>
+      'You are offline. The wash is saved on this phone and uploads automatically when there is a signal.';
+
+  @override
+  String get washSavedOnlineMessage =>
+      'Saved on this phone and uploading now. Check Sync if it does not appear.';
+
+  @override
+  String get washLogAnother => 'Log another wash';
+
+  @override
+  String get washHistoryTitle => 'Wash history';
+
+  @override
+  String get washStatLastSevenDays => 'Last 7 days';
+
+  @override
+  String get washStatThisMonth => 'This month';
+
+  @override
+  String get washStatTopAsset => 'Most washed this month';
+
+  @override
+  String get washStatNone => 'None yet';
+
+  @override
+  String washCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count washes',
+      one: '1 wash',
+      zero: 'No washes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washFilterAllDates => 'All dates';
+
+  @override
+  String get washFilterSevenDays => '7 days';
+
+  @override
+  String get washFilterThirtyDays => '30 days';
+
+  @override
+  String get washFilterPickDates => 'Pick dates';
+
+  @override
+  String get washFilterAllTypes => 'All types';
+
+  @override
+  String get washFilterClear => 'Clear filters';
+
+  @override
+  String get washHistoryNoMatch => 'No washes match these filters';
+
+  @override
+  String washPhotoCountShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos',
+      one: '1 photo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washChangeVehicle => 'Change vehicle';
+
+  @override
   String get workshopCopyCatalog =>
       'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.';
 

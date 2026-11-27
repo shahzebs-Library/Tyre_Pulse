@@ -68,10 +68,16 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+      const passKey = ValueKey<String>('washing.checkResult.pass');
+      expect(find.byKey(passKey), findsNothing);
       await tester.tap(find.byType(ExpansionTile));
       await tester.pumpAndSettle();
-      expect(find.byType(DropdownButtonFormField<String>), findsNWidgets(6));
+      // One row of result chips per checklist item, three chemical choices.
+      expect(find.byKey(passKey), findsNWidgets(5));
+      expect(
+        find.byKey(const ValueKey<String>('washing.chemical.used')),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     });
   }

@@ -5,6 +5,7 @@
 /// is declared per-feature here rather than shared.
 library;
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/app_database_provider.dart';
@@ -30,3 +31,22 @@ final Provider<WashRepository> washRepositoryProvider =
 /// Real by default, matching `meterLogPhotoCaptureProvider`'s own note.
 final Provider<WashPhotoCapture> washPhotoCaptureProvider =
     Provider<WashPhotoCapture>((ref) => WashPhotoCapture());
+
+/// Whether the device reports any network, read once after a wash is saved
+/// so the confirmation can say "uploading now" or "saved offline". Null when
+/// the platform cannot tell (no plugin in tests, unsupported platform) - the
+/// screen then falls back to the neutral "saved on this device" wording.
+/// Overridden in tests.
+final Provider<Future<bool?> Function()> washOnlineCheckProvider =
+    Provider<Future<bool?> Function()>(
+  (Ref ref) => () async {
+    try {
+      final List<ConnectivityResult> results =
+          await Connectivity().checkConnectivity();
+      return results
+          .any((ConnectivityResult r) => r != ConnectivityResult.none);
+    } on Object {
+      return null;
+    }
+  },
+);

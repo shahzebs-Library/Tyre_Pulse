@@ -3015,6 +3015,261 @@ class AppLocalizationsAr extends AppLocalizations {
       'السجل كبير جدًا لتحميله بالكامل. استخدم تقرير الويب.';
 
   @override
+  String get washStepVehicle => 'المركبة';
+
+  @override
+  String get washStepType => 'نوع الغسيل';
+
+  @override
+  String get washStepChecklist => 'قائمة الفحص والمواد الكيميائية';
+
+  @override
+  String get washStepPhotos => 'الصور';
+
+  @override
+  String get washStepReview => 'المراجعة والحفظ';
+
+  @override
+  String get washStepOptional => 'اختياري';
+
+  @override
+  String washStepProgress(int done, int total) {
+    return 'تم إنجاز $done من $total خطوات';
+  }
+
+  @override
+  String washLoggedBy(String name, String time) {
+    return 'سجّله $name · اليوم $time';
+  }
+
+  @override
+  String get washLoggedByNote =>
+      'يُسجَّل تلقائيًا من حساب تسجيل الدخول ولا يمكن تغييره.';
+
+  @override
+  String get washLoggedBySelf => 'أنت';
+
+  @override
+  String get washMissingVehicle => 'اختر مركبة';
+
+  @override
+  String get washMissingType => 'اختر نوع الغسيل';
+
+  @override
+  String get washMissingEvidence => 'أكمل تفاصيل قائمة الفحص';
+
+  @override
+  String washLastWash(String date) {
+    return 'آخر غسيل $date';
+  }
+
+  @override
+  String washDaysSince(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'منذ $count يوم',
+      many: 'منذ $count يومًا',
+      few: 'منذ $count أيام',
+      two: 'منذ يومين',
+      one: 'منذ يوم واحد',
+      zero: 'غُسلت اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washNoHistoryForAsset => 'لا يوجد غسيل مسجل بعد';
+
+  @override
+  String get washDueBadge => 'مستحقة للغسيل';
+
+  @override
+  String washOverdueBadge(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'متأخرة $days يوم',
+      many: 'متأخرة $days يومًا',
+      few: 'متأخرة $days أيام',
+      two: 'متأخرة يومين',
+      one: 'متأخرة يومًا واحدًا',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washUpToDateBadge => 'محدّثة';
+
+  @override
+  String get washHistoryChecking => 'جارٍ التحقق من سجل الغسيل...';
+
+  @override
+  String get washHistoryUnavailable => 'تعذر التحقق من سجل الغسيل';
+
+  @override
+  String get washTypeExteriorDesc => 'غسيل الهيكل الخارجي';
+
+  @override
+  String get washTypeInteriorDesc => 'تنظيف المقصورة';
+
+  @override
+  String get washTypeFullDesc => 'من الداخل والخارج';
+
+  @override
+  String get washTypeEngineBayDesc => 'إزالة الشحوم من حجرة المحرك';
+
+  @override
+  String get washTypeUndercarriageDesc => 'الشاسيه والعجلات';
+
+  @override
+  String get washTypeSteamDesc => 'تنظيف بالبخار';
+
+  @override
+  String get washTypeWaterlessDesc => 'رشّ ومسح بدون ماء';
+
+  @override
+  String washChecklistProgress(int done, int total) {
+    return 'تم فحص $done من $total';
+  }
+
+  @override
+  String washIssuesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مشكلة',
+      many: '$count مشكلة',
+      few: '$count مشكلات',
+      two: 'مشكلتان',
+      one: 'مشكلة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String washProductsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مادة',
+      many: '$count مادة',
+      few: '$count مواد',
+      two: 'مادتان',
+      one: 'مادة واحدة',
+      zero: 'لا توجد مواد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washPhotosBefore => 'قبل الغسيل';
+
+  @override
+  String get washPhotosAfter => 'بعد الغسيل';
+
+  @override
+  String washPhotosCount(int count, int max) {
+    return '$count من $max صور';
+  }
+
+  @override
+  String get washPhotosOptional => 'اختياري. صور قبل وبعد تثبت أن الغسيل تم.';
+
+  @override
+  String get washReviewTitle => 'راجع قبل الحفظ';
+
+  @override
+  String get washMoreDetails => 'تفاصيل إضافية (اختياري)';
+
+  @override
+  String washReviewChecklistValue(int checked, int total, String products) {
+    return 'تم فحص $checked من $total · $products';
+  }
+
+  @override
+  String get washSavedTitle => 'تم حفظ الغسيل';
+
+  @override
+  String get washSavedOfflineMessage =>
+      'أنت غير متصل. تم حفظ الغسيل على هذا الهاتف وسيُرفع تلقائيًا عند توفر الشبكة.';
+
+  @override
+  String get washSavedOnlineMessage =>
+      'تم الحفظ على هذا الهاتف ويجري الرفع الآن. راجع المزامنة إن لم يظهر.';
+
+  @override
+  String get washLogAnother => 'تسجيل غسيل آخر';
+
+  @override
+  String get washHistoryTitle => 'سجل الغسيل';
+
+  @override
+  String get washStatLastSevenDays => 'آخر 7 أيام';
+
+  @override
+  String get washStatThisMonth => 'هذا الشهر';
+
+  @override
+  String get washStatTopAsset => 'الأكثر غسلًا هذا الشهر';
+
+  @override
+  String get washStatNone => 'لا يوجد بعد';
+
+  @override
+  String washCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count غسلة',
+      many: '$count غسلة',
+      few: '$count غسلات',
+      two: 'غسيلان',
+      one: 'غسيل واحد',
+      zero: 'لا غسيل',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washFilterAllDates => 'كل التواريخ';
+
+  @override
+  String get washFilterSevenDays => '7 أيام';
+
+  @override
+  String get washFilterThirtyDays => '30 يومًا';
+
+  @override
+  String get washFilterPickDates => 'اختر التواريخ';
+
+  @override
+  String get washFilterAllTypes => 'كل الأنواع';
+
+  @override
+  String get washFilterClear => 'مسح عوامل التصفية';
+
+  @override
+  String get washHistoryNoMatch => 'لا يوجد غسيل يطابق عوامل التصفية';
+
+  @override
+  String washPhotoCountShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count صورة',
+      many: '$count صورة',
+      few: '$count صور',
+      two: 'صورتان',
+      one: 'صورة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washChangeVehicle => 'تغيير المركبة';
+
+  @override
   String get workshopCopyCatalog =>
       'title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب~photoLabel=صورة (اختياري)~takePhoto=الكاميرا~pickPhoto=المعرض~removePhoto=إزالة الصورة~photoLimit=حتى 3 صور~photoNotAttached=تم التسجيل. تعذّر إرفاق الصورة بدون اتصال.';
 

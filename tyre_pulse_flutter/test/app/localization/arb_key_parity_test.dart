@@ -695,10 +695,16 @@ void main() {
     // and Urdu font).
     // 2707 + 7 = 2714: the Article 91 fault finding (title, not recorded, four
     // findings) and the block when it was a third party or force majeure.
-    test('en, ar and ur each carry exactly 2714 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2714);
-      expect(_translatableKeys(ar).length, 2714);
-      expect(_translatableKeys(ur).length, 2714);
+    // 2714 + 57 = 2771: the vehicle wash redesign (five numbered steps and
+    // their progress line, the single "logged by" line, what is still
+    // missing on the save button, last-wash and due badges on the vehicle
+    // card, a one-line description per wash type, checklist / issue /
+    // product counts, before and after photo slots, the review card, the
+    // saved sheet, and the wash history page's stats and filters).
+    test('en, ar and ur each carry exactly 2771 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2771);
+      expect(_translatableKeys(ar).length, 2771);
+      expect(_translatableKeys(ur).length, 2771);
     });
   });
 

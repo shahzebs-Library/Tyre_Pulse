@@ -3023,6 +3023,244 @@ class AppLocalizationsUr extends AppLocalizations {
       'مکمل تاریخ لوڈ کرنے کے لیے بہت بڑی ہے۔ ویب رپورٹ استعمال کریں۔';
 
   @override
+  String get washStepVehicle => 'گاڑی';
+
+  @override
+  String get washStepType => 'دھلائی کی قسم';
+
+  @override
+  String get washStepChecklist => 'چیک لسٹ اور کیمیکل';
+
+  @override
+  String get washStepPhotos => 'تصاویر';
+
+  @override
+  String get washStepReview => 'جائزہ لیں اور محفوظ کریں';
+
+  @override
+  String get washStepOptional => 'اختیاری';
+
+  @override
+  String washStepProgress(int done, int total) {
+    return '$total میں سے $done مراحل مکمل';
+  }
+
+  @override
+  String washLoggedBy(String name, String time) {
+    return 'درج کنندہ $name · آج $time';
+  }
+
+  @override
+  String get washLoggedByNote =>
+      'یہ آپ کے سائن اِن سے خود بخود درج ہوتا ہے اور تبدیل نہیں ہو سکتا۔';
+
+  @override
+  String get washLoggedBySelf => 'آپ';
+
+  @override
+  String get washMissingVehicle => 'گاڑی منتخب کریں';
+
+  @override
+  String get washMissingType => 'دھلائی کی قسم منتخب کریں';
+
+  @override
+  String get washMissingEvidence => 'چیک لسٹ کی تفصیلات مکمل کریں';
+
+  @override
+  String washLastWash(String date) {
+    return 'آخری دھلائی $date';
+  }
+
+  @override
+  String washDaysSince(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دن پہلے',
+      one: '1 دن پہلے',
+      zero: 'آج دھلی',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washNoHistoryForAsset => 'ابھی تک کوئی دھلائی درج نہیں';
+
+  @override
+  String get washDueBadge => 'دھلائی کا وقت ہو گیا';
+
+  @override
+  String washOverdueBadge(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days دن تاخیر',
+      one: '1 دن تاخیر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washUpToDateBadge => 'بروقت';
+
+  @override
+  String get washHistoryChecking => 'دھلائی کی تاریخ دیکھی جا رہی ہے...';
+
+  @override
+  String get washHistoryUnavailable => 'دھلائی کی تاریخ نہیں دیکھی جا سکی';
+
+  @override
+  String get washTypeExteriorDesc => 'باڈی کی دھلائی';
+
+  @override
+  String get washTypeInteriorDesc => 'کیبن کی صفائی';
+
+  @override
+  String get washTypeFullDesc => 'اندر اور باہر';
+
+  @override
+  String get washTypeEngineBayDesc => 'انجن کے خانے سے چکنائی صاف';
+
+  @override
+  String get washTypeUndercarriageDesc => 'چیسس اور پہیے';
+
+  @override
+  String get washTypeSteamDesc => 'بھاپ سے صفائی';
+
+  @override
+  String get washTypeWaterlessDesc => 'پانی کے بغیر اسپرے اور صفائی';
+
+  @override
+  String washChecklistProgress(int done, int total) {
+    return '$total میں سے $done چیک';
+  }
+
+  @override
+  String washIssuesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مسائل',
+      one: '1 مسئلہ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String washProductsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count پروڈکٹس',
+      one: '1 پروڈکٹ',
+      zero: 'کوئی پروڈکٹ نہیں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washPhotosBefore => 'دھلائی سے پہلے';
+
+  @override
+  String get washPhotosAfter => 'دھلائی کے بعد';
+
+  @override
+  String washPhotosCount(int count, int max) {
+    return '$max میں سے $count تصاویر';
+  }
+
+  @override
+  String get washPhotosOptional =>
+      'اختیاری۔ پہلے اور بعد کی تصاویر دھلائی کا ثبوت ہیں۔';
+
+  @override
+  String get washReviewTitle => 'محفوظ کرنے سے پہلے دیکھ لیں';
+
+  @override
+  String get washMoreDetails => 'مزید تفصیلات (اختیاری)';
+
+  @override
+  String washReviewChecklistValue(int checked, int total, String products) {
+    return '$total میں سے $checked چیک · $products';
+  }
+
+  @override
+  String get washSavedTitle => 'دھلائی محفوظ ہو گئی';
+
+  @override
+  String get washSavedOfflineMessage =>
+      'آپ آف لائن ہیں۔ دھلائی اس فون پر محفوظ ہے اور سگنل آنے پر خود بخود اپ لوڈ ہو جائے گی۔';
+
+  @override
+  String get washSavedOnlineMessage =>
+      'اس فون پر محفوظ ہے اور اب اپ لوڈ ہو رہی ہے۔ اگر نظر نہ آئے تو سنک دیکھیں۔';
+
+  @override
+  String get washLogAnother => 'ایک اور دھلائی درج کریں';
+
+  @override
+  String get washHistoryTitle => 'دھلائی کی تاریخ';
+
+  @override
+  String get washStatLastSevenDays => 'پچھلے 7 دن';
+
+  @override
+  String get washStatThisMonth => 'اس مہینے';
+
+  @override
+  String get washStatTopAsset => 'اس مہینے سب سے زیادہ دھلی';
+
+  @override
+  String get washStatNone => 'ابھی کوئی نہیں';
+
+  @override
+  String washCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دھلائیاں',
+      one: '1 دھلائی',
+      zero: 'کوئی دھلائی نہیں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washFilterAllDates => 'تمام تاریخیں';
+
+  @override
+  String get washFilterSevenDays => '7 دن';
+
+  @override
+  String get washFilterThirtyDays => '30 دن';
+
+  @override
+  String get washFilterPickDates => 'تاریخیں منتخب کریں';
+
+  @override
+  String get washFilterAllTypes => 'تمام اقسام';
+
+  @override
+  String get washFilterClear => 'فلٹر صاف کریں';
+
+  @override
+  String get washHistoryNoMatch => 'ان فلٹرز سے کوئی دھلائی نہیں ملی';
+
+  @override
+  String washPhotoCountShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تصاویر',
+      one: '1 تصویر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washChangeVehicle => 'گاڑی تبدیل کریں';
+
+  @override
   String get workshopCopyCatalog =>
       'title=میرے کام~onDuty=ڈیوٹی پر~offDuty=ڈیوٹی سے باہر~checkIn=حاضری لگائیں~checkOut=چھٹی لگائیں~checkInHint=کام درج کرنے سے پہلے اپنی شفٹ کی حاضری لگائیں۔~myJobs=میرے کام~emptyTitle=کوئی کھلا کام نہیں~emptyMessage=اس وقت آپ کو کوئی کھلا کام تفویض نہیں ہے۔~loadError=آپ کے کام ابھی لوڈ نہیں ہو سکے۔~selectJobTitle=کام منتخب کریں~selectJobMsg=پہلے اپنا ایک کام منتخب کریں۔~checkInFirstTitle=پہلے حاضری لگائیں~selectTaskTitle=مرحلہ منتخب کریں~selectTaskMsg=پہلے وہ مرحلہ منتخب کریں جس پر آپ کام کر رہے ہیں۔~tasks=مراحل~confirmTitle=مرحلہ مکمل کریں؟~confirmMsg=یہ مرحلے کو مکمل درج کر کے معائنے کے لیے بھیج دے گا۔~cancel=منسوخ~noteHint=نوٹ شامل کریں (اختیاری)~record=درج کریں~queued=اس ڈیوائس پر محفوظ ہے۔ یہ خود بخود ہم آہنگ ہو جائے گا۔~saveFailed=سرگرمی اس ڈیوائس پر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~todayTitle=آج میری کارکردگی~productive=پیداواری~blocked=رکا ہوا~unassigned=غیر تفویض~breakTime=وقفہ~completed=مکمل مراحل~due=مقررہ~ok=ٹھیک ہے~a_start_job=کام شروع کریں~a_pause_job=کام روکیں~a_resume_job=کام دوبارہ شروع کریں~a_complete_task=مرحلہ مکمل کریں~a_request_parts=پرزے طلب کریں~a_request_assistance=مدد طلب کریں~a_waiting_approval=منظوری کا انتظار~a_waiting_vehicle=گاڑی کا انتظار~a_waiting_tools=اوزار کا انتظار~a_start_break=وقفہ شروع کریں~a_end_break=وقفہ ختم کریں~a_report_problem=مسئلہ رپورٹ کریں~s_working=کام جاری~s_available=دستیاب~s_waiting_parts=پرزوں کا انتظار~s_waiting_approval=منظوری کا انتظار~s_waiting_tools=اوزار کا انتظار~s_waiting_vehicle=گاڑی کا انتظار~s_on_break=وقفے پر~s_training=تربیت~s_awaiting_inspection=معائنے کا انتظار~s_off_duty=ڈیوٹی سے باہر~s_absent=غیر حاضر~photoLabel=تصویر (اختیاری)~takePhoto=کیمرہ~pickPhoto=گیلری~removePhoto=تصویر ہٹائیں~photoLimit=زیادہ سے زیادہ 3 تصاویر~photoNotAttached=درج ہو گیا۔ کنکشن کے بغیر تصویر منسلک نہیں ہو سکی۔';
 

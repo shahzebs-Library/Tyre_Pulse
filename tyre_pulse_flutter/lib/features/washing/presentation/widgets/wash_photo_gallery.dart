@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/features/washing/data/wash_photo_capture.dart';
 
 class WashPhotoGallery extends StatelessWidget {
@@ -27,8 +28,13 @@ class WashPhotoGallery extends StatelessWidget {
     required this.onAdd,
     required this.onRemove,
     required this.addLabel,
+    this.canAdd = true,
     super.key,
   });
+
+  /// False hides the "Add photo" tile - used when the before and after
+  /// galleries together have reached [WashPhotoCapture.maxPhotos].
+  final bool canAdd;
 
   final List<String> localPaths;
   final bool isCapturing;
@@ -38,7 +44,8 @@ class WashPhotoGallery extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool canAddMore = localPaths.length < WashPhotoCapture.maxPhotos;
+    final bool canAddMore =
+        canAdd && localPaths.length < WashPhotoCapture.maxPhotos;
 
     return Wrap(
       spacing: TpSpace.sm,
@@ -156,7 +163,8 @@ class _AddPhotoTile extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     return SizedBox(
       width: _size,
-      height: _size,
+      // The label grows with the text size (two lines at most).
+      height: tpTextScaledExtent(context, base: _size, textHeight: 32),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: palette.surfaceAlt,
@@ -183,6 +191,8 @@ class _AddPhotoTile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.labelSmall,
                       ),

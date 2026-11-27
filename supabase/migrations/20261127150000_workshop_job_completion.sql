@@ -1,4 +1,5 @@
--- STATUS: AUTHORED, NOT APPLIED. Needs the owner's go-ahead before it is applied.
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; guard patched; data-desk decide refused; bad payload rejected; normal WO update still works; anon exec false.
+--         (was: AUTHORED, NOT APPLIED.) Needs the owner's go-ahead before it is applied.
 --         The VERIFY block at the bottom was run live inside a transaction that
 --         was rolled back (nothing was kept).
 --

@@ -3,7 +3,8 @@
 -- signed and approved vehicle handover moves the vehicle to the receiving
 -- driver on its own.
 --
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's yes.
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; Fleet Supervisor access_d1=supervisor, pool list 101 rows, Driver 42501; 5 bodies in _bak; anon exec false.
+--         (was: AUTHORED, NOT APPLIED.) Apply only on the owner's yes.
 -- RENUMBERED 2026-11-27 from 20261127140000 (that timestamp is already taken by
 -- the applied 20261127140000_workshop_signoff_separation). Apply AFTER
 -- 20261127170000_driver_workspace_notification_entity_uuid: without it every

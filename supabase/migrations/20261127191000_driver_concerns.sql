@@ -1,7 +1,8 @@
 -- Driver Concerns (employee grievance), part 2 of 2: the cases, their record,
 -- the ladder, deadlines, translations, photos and notifications.
 --
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's explicit yes, AFTER
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; Driver raised pay+treatment (DC-2026-0001/2, rolled back); Fleet Supervisor sees 1, sensitive 0; anon exec false.
+--         (was: AUTHORED, NOT APPLIED.) Apply only on the owner's explicit yes, AFTER
 -- 20261127190000_driver_concerns_roles.sql. Verified only as a rolled-back dry
 -- run (a single DO block ending in RAISE EXCEPTION) impersonating a real Driver
 -- and a real Fleet Supervisor.

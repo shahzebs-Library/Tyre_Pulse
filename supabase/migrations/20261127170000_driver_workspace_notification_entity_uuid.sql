@@ -3,7 +3,8 @@
 -- job fail with 42804 because their inbox notification passes the entity id
 -- as TEXT while public.notifications.entity_id is UUID.
 --
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's yes. Apply this
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: 4 private fns patched; 0 text-cast notification ids left.
+--         (was: AUTHORED, NOT APPLIED.) Apply only on the owner's yes. Apply this
 -- BEFORE or together with 20261127171000_fleet_supervisor_driver_management:
 -- without it a supervisor gets access but every fine and charge still fails.
 -- RENUMBERED 2026-11-27 from 20261127141000 (that timestamp is already taken by

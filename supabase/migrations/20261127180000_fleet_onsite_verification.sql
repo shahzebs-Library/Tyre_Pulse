@@ -1,6 +1,7 @@
 -- =============================================================================
 -- Fleet "Verify on site"  (20261127180000)
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's explicit yes.
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; blank chassis auto_applied, diff plate pending, self-decide 42501, manager approve ok, again PT409, Reporter sees 0.
+--         (was: AUTHORED, NOT APPLIED.) Apply only on the owner's explicit yes.
 -- =============================================================================
 --
 -- What it does

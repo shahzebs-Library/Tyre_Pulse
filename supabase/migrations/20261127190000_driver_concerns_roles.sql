@@ -1,6 +1,7 @@
 -- Driver Concerns (employee grievance), part 1 of 2: who handles a concern.
 --
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's explicit yes, and
+-- STATUS: APPLIED LIVE 2026-11-28 on owner OK (apply all five). Result: byte-exact; HR Officer role 1, settings 1 row, 4 module rows, RLS on.
+--         (was: AUTHORED, NOT APPLIED.) Apply only on the owner's explicit yes, and
 -- BEFORE 20261127191000_driver_concerns.sql (that file reads every object here).
 --
 -- WHAT THIS ADDS

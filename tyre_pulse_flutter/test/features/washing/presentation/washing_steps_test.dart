@@ -15,9 +15,11 @@ import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
+import 'package:tyre_pulse/features/washing/domain/wash_areas.dart';
 import 'package:tyre_pulse/features/washing/presentation/wash_history_screen.dart';
 import 'package:tyre_pulse/features/washing/presentation/washing_screen.dart';
-import 'package:tyre_pulse/features/washing/presentation/widgets/wash_type_grid.dart';
+import 'package:tyre_pulse/features/washing/presentation/widgets/wash_area_grid.dart';
+import 'package:tyre_pulse/features/washing/presentation/widgets/wash_vehicle_views.dart';
 import 'package:tyre_pulse/features/washing/washing_providers.dart';
 
 const WorkspaceContext _workspace = WorkspaceContext(
@@ -64,6 +66,10 @@ final class _Repo implements WashRepository {
 }
 
 class _Fleet implements VehicleFleetSource {
+  _Fleet([this.vehicleType = 'TR-MIXER']);
+
+  final String vehicleType;
+
   @override
   Future<Map<String, dynamic>?> fetchByAssetNo({
     required String assetNo,
@@ -73,7 +79,7 @@ class _Fleet implements VehicleFleetSource {
       <String, dynamic>{
         'id': 'v1',
         'asset_no': assetNo,
-        'vehicle_type': 'TR-MIXER',
+        'vehicle_type': vehicleType,
         'site': 'DIRIYAH-G1',
       };
 
@@ -95,6 +101,7 @@ Future<void> _pump(
   bool dark = false,
   double textScale = 1,
   bool? online = false,
+  String vehicleType = 'TR-MIXER',
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -106,7 +113,7 @@ Future<void> _pump(
         washRepositoryProvider.overrideWithValue(repo),
         washOnlineCheckProvider.overrideWithValue(() async => online),
         vehicleFleetRepositoryProvider.overrideWithValue(
-          VehicleFleetRepository(_Fleet()),
+          VehicleFleetRepository(_Fleet(vehicleType)),
         ),
       ],
       child: MaterialApp(
@@ -140,6 +147,9 @@ Future<void> _enterAsset(WidgetTester tester, String asset) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _tapArea(WidgetTester tester, WashArea area) =>
+    _tapKey(tester, WashAreaGrid.tileKey(area));
+
 String _saveLabel(WidgetTester tester) {
   final TpButton button =
       tester.widget<TpButton>(find.byKey(WashingScreenKeys.save));
@@ -147,7 +157,7 @@ String _saveLabel(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets('shows five numbered steps and who is logging it once',
+  testWidgets('shows four numbered steps and who is logging it once',
       (WidgetTester tester) async {
     await _pump(
       tester,
@@ -156,14 +166,13 @@ void main() {
       size: const Size(420, 4000),
     );
 
-    expect(find.text('0 of 5 steps done'), findsOneWidget);
+    expect(find.text('0 of 4 steps done'), findsOneWidget);
     expect(find.textContaining('Logged by Ahmed Saleh'), findsOneWidget);
     expect(find.textContaining('Ahmed Saleh'), findsOneWidget);
     expect(find.textContaining('Entered by'), findsNothing);
     for (final String title in <String>[
       'Vehicle',
-      'Wash type',
-      'Checklist and chemicals',
+      'What was washed',
       'Photos',
       'Review and save',
     ]) {
@@ -183,49 +192,118 @@ void main() {
     expect(repo.submitted, isEmpty);
 
     await _enterAsset(tester, 'TM514');
-    expect(_saveLabel(tester), 'Choose a wash type');
+    expect(_saveLabel(tester), 'Pick what was washed');
 
-    await tester.scrollUntilVisible(
-      find.byKey(WashTypeGrid.tileKey('Full')),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.byKey(WashTypeGrid.tileKey('Full')));
-    await tester.pumpAndSettle();
+    await _tapArea(tester, WashArea.exterior);
+    await _tapArea(tester, WashArea.cabin);
     expect(_saveLabel(tester), 'Save Wash');
-    expect(find.text('Inside and out'), findsOneWidget);
+    expect(find.text('Recorded as Full'), findsOneWidget);
+
+    // Tapping again un-picks; nothing left means not ready again.
+    await _tapArea(tester, WashArea.exterior);
+    await _tapArea(tester, WashArea.cabin);
+    expect(_saveLabel(tester), 'Pick what was washed');
+    expect(repo.submitted, isEmpty);
   });
 
-  testWidgets('saves the same record and confirms offline',
+  testWidgets('saves areas and sides inside wash_details',
       (WidgetTester tester) async {
     final _Repo repo = _Repo();
     await _pump(tester, const WashingScreen(route: WashingRoute()), repo: repo);
 
     await _enterAsset(tester, 'TM514');
-    await tester.scrollUntilVisible(
-      find.byKey(WashTypeGrid.tileKey('Exterior')),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.byKey(WashTypeGrid.tileKey('Exterior')));
-    await tester.pumpAndSettle();
+    await _tapArea(tester, WashArea.engineBay);
+    await _tapArea(tester, WashArea.drumHopper);
+    await _tapKey(tester, WashVehicleViews.viewKey(WashView.left));
+    await _tapKey(tester, WashVehicleViews.viewKey(WashView.rear));
     await tester.tap(find.byKey(WashingScreenKeys.save));
     await tester.pumpAndSettle();
 
     final SubmitWashInput input = repo.submitted.single;
     expect(input.assetNo, 'TM514');
-    expect(input.washType, 'Exterior');
+    expect(input.washType, 'Engine Bay');
     expect(input.site, 'DIRIYAH-G1');
     expect(input.vehicleType, 'TR-MIXER');
     expect(input.washedBy, 'Ahmed Saleh');
     expect(input.status, kWashDefaultStatus);
     expect(input.photoLocalPaths, isEmpty);
-    expect(input.washDetails?['chemical_status'], 'not_recorded');
+    final Map<String, dynamic> details = input.washDetails!;
+    expect(details['version'], 1);
+    expect(details['chemical_status'], 'not_recorded');
+    expect(details['chemicals'], isEmpty);
+    expect(details['checklist'], isA<List<dynamic>>());
+    expect(details['areas'], <String>['engine_bay', 'drum_hopper']);
+    expect(details['views'], <String>['left', 'rear']);
 
     expect(find.byKey(WashingScreenKeys.savedSheet), findsOneWidget);
     expect(find.text('Wash saved'), findsOneWidget);
     expect(find.textContaining('You are offline'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('waterless switch records a Waterless wash',
+      (WidgetTester tester) async {
+    final _Repo repo = _Repo();
+    await _pump(tester, const WashingScreen(route: WashingRoute()), repo: repo);
+    await _enterAsset(tester, 'TM514');
+    await _tapArea(tester, WashArea.exterior);
+    await _tapKey(tester, WashingScreenKeys.waterless);
+    await tester.tap(find.byKey(WashingScreenKeys.save));
+    await tester.pumpAndSettle();
+    expect(repo.submitted.single.washType, 'Waterless');
+  });
+
+  testWidgets('a mixer shows its real five-view picture and drum tile',
+      (WidgetTester tester) async {
+    await _pump(
+      tester,
+      const WashingScreen(route: WashingRoute()),
+      repo: _Repo(),
+    );
+    await _enterAsset(tester, 'TM514');
+    expect(
+      find.byKey(WashVehicleViews.pictureKey(WashPictureKind.multiView)),
+      findsOneWidget,
+    );
+    expect(find.byKey(WashAreaGrid.tileKey(WashArea.drumHopper)), findsOne);
+    await _tapKey(tester, WashVehicleViews.allSides);
+    expect(find.text('5 of 5 sides'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an unknown vehicle class falls back without a drum tile',
+      (WidgetTester tester) async {
+    await _pump(
+      tester,
+      const WashingScreen(route: WashingRoute()),
+      repo: _Repo(),
+      vehicleType: 'SPECIAL RIG',
+    );
+    await _enterAsset(tester, 'ZZ900');
+    expect(
+      find.byKey(WashVehicleViews.pictureKey(WashPictureKind.fallback)),
+      findsOneWidget,
+    );
+    expect(
+      find.text('No picture for this vehicle type yet. Mark the sides below.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(WashAreaGrid.tileKey(WashArea.drumHopper)), findsNothing);
+    expect(find.byKey(WashAreaGrid.tileKey(WashArea.engineBay)), findsOne);
+    // Sides can still be marked as plain chips.
+    await _tapKey(tester, WashVehicleViews.viewKey(WashView.front));
+    expect(find.text('1 of 5 sides'), findsOneWidget);
+  });
+
+  testWidgets('review shows the wash costs nothing',
+      (WidgetTester tester) async {
+    await _pump(
+      tester,
+      const WashingScreen(route: WashingRoute()),
+      repo: _Repo(),
+      size: const Size(420, 4000),
+    );
+    expect(find.text('No charge · washed in-house'), findsOneWidget);
   });
 
   testWidgets('vehicle card shows last wash and overdue from history',
@@ -285,15 +363,8 @@ void main() {
       repo: _Repo(),
       size: const Size(420, 4000),
     );
-    expect(find.text('0 of 5 checked'), findsNWidgets(2));
-    final Finder header = find.byType(ExpansionTile).first;
-    await tester.scrollUntilVisible(
-      header,
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(header);
-    await tester.pumpAndSettle();
+    expect(find.text('0 of 5 checked'), findsOneWidget);
+    await _tapKey(tester, WashingScreenKeys.checklistSection);
     final Finder pass = find.byKey(
       const ValueKey<String>('washing.checkResult.pass'),
     );

@@ -9627,4 +9627,109 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.';
+
+  @override
+  String get washStepAreas => 'What was washed';
+
+  @override
+  String get washAreasHint =>
+      'Tap the sides on the picture and the parts you washed.';
+
+  @override
+  String get washMissingAreas => 'Pick what was washed';
+
+  @override
+  String get washAreaExterior => 'Exterior body';
+
+  @override
+  String get washAreaExteriorDesc => 'Body, glass and lights';
+
+  @override
+  String get washAreaEngineBay => 'Engine bay';
+
+  @override
+  String get washAreaEngineBayDesc => 'Engine wash and degrease';
+
+  @override
+  String get washAreaUndercarriage => 'Undercarriage';
+
+  @override
+  String get washAreaUndercarriageDesc => 'Chassis and underbody';
+
+  @override
+  String get washAreaCabin => 'Cabin interior';
+
+  @override
+  String get washAreaCabinDesc => 'Seats, floor and dashboard';
+
+  @override
+  String get washAreaTyresRims => 'Tyres and rims';
+
+  @override
+  String get washAreaTyresRimsDesc => 'Tyres, rims and wheel arches';
+
+  @override
+  String get washAreaDrumHopper => 'Mixer drum and hopper';
+
+  @override
+  String get washAreaDrumHopperDesc => 'Drum shell, hopper and chute';
+
+  @override
+  String get washAreaSteam => 'Steam degrease';
+
+  @override
+  String get washAreaSteamDesc => 'Hot steam on grease and oil';
+
+  @override
+  String get washViewsTitle => 'Sides washed';
+
+  @override
+  String get washViewFront => 'Front';
+
+  @override
+  String get washViewLeft => 'Left';
+
+  @override
+  String get washViewRear => 'Rear';
+
+  @override
+  String get washViewRight => 'Right';
+
+  @override
+  String get washViewTop => 'Top';
+
+  @override
+  String get washViewsAll => 'All sides';
+
+  @override
+  String washViewsCount(int count, int total) {
+    return '$count of $total sides';
+  }
+
+  @override
+  String get washVehiclePictureNone =>
+      'No picture for this vehicle type yet. Mark the sides below.';
+
+  @override
+  String get washVehiclePicturePending => 'Pick a vehicle to see its picture.';
+
+  @override
+  String get washWaterless => 'Waterless wash (no water used)';
+
+  @override
+  String get washCostLabel => 'Cost';
+
+  @override
+  String get washCostNoCharge => 'No charge · washed in-house';
+
+  @override
+  String get washAreasLabel => 'Washed areas';
+
+  @override
+  String washRecordedAsType(String type) {
+    return 'Recorded as $type';
+  }
+
+  @override
+  String get washAreaSelected => 'Selected';
 }

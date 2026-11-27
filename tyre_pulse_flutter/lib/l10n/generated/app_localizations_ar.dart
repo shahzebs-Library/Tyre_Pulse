@@ -9642,4 +9642,109 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي.';
+
+  @override
+  String get washStepAreas => 'ما الذي تم غسله';
+
+  @override
+  String get washAreasHint =>
+      'اضغط على جوانب المركبة في الصورة والأجزاء التي غسلتها.';
+
+  @override
+  String get washMissingAreas => 'اختر ما تم غسله';
+
+  @override
+  String get washAreaExterior => 'الهيكل الخارجي';
+
+  @override
+  String get washAreaExteriorDesc => 'الهيكل والزجاج والأضواء';
+
+  @override
+  String get washAreaEngineBay => 'حجرة المحرك';
+
+  @override
+  String get washAreaEngineBayDesc => 'غسل المحرك وإزالة الشحوم';
+
+  @override
+  String get washAreaUndercarriage => 'أسفل المركبة';
+
+  @override
+  String get washAreaUndercarriageDesc => 'الشاسيه والجزء السفلي';
+
+  @override
+  String get washAreaCabin => 'داخل المقصورة';
+
+  @override
+  String get washAreaCabinDesc => 'المقاعد والأرضية ولوحة القيادة';
+
+  @override
+  String get washAreaTyresRims => 'الإطارات والجنوط';
+
+  @override
+  String get washAreaTyresRimsDesc => 'الإطارات والجنوط وأقواس العجلات';
+
+  @override
+  String get washAreaDrumHopper => 'حلة الخلاطة والقمع';
+
+  @override
+  String get washAreaDrumHopperDesc => 'جسم الحلة والقمع والمزلق';
+
+  @override
+  String get washAreaSteam => 'إزالة الشحوم بالبخار';
+
+  @override
+  String get washAreaSteamDesc => 'بخار ساخن على الشحوم والزيوت';
+
+  @override
+  String get washViewsTitle => 'الجوانب المغسولة';
+
+  @override
+  String get washViewFront => 'الأمام';
+
+  @override
+  String get washViewLeft => 'اليسار';
+
+  @override
+  String get washViewRear => 'الخلف';
+
+  @override
+  String get washViewRight => 'اليمين';
+
+  @override
+  String get washViewTop => 'الأعلى';
+
+  @override
+  String get washViewsAll => 'كل الجوانب';
+
+  @override
+  String washViewsCount(int count, int total) {
+    return '$count من $total جوانب';
+  }
+
+  @override
+  String get washVehiclePictureNone =>
+      'لا توجد صورة لهذا النوع من المركبات بعد. حدّد الجوانب أدناه.';
+
+  @override
+  String get washVehiclePicturePending => 'اختر مركبة لعرض صورتها.';
+
+  @override
+  String get washWaterless => 'غسيل بدون ماء';
+
+  @override
+  String get washCostLabel => 'التكلفة';
+
+  @override
+  String get washCostNoCharge => 'بدون تكلفة · غسيل داخلي';
+
+  @override
+  String get washAreasLabel => 'المناطق المغسولة';
+
+  @override
+  String washRecordedAsType(String type) {
+    return 'يُسجَّل كـ $type';
+  }
+
+  @override
+  String get washAreaSelected => 'محدد';
 }

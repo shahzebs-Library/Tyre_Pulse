@@ -32,15 +32,25 @@
 /// comment in the reference states these were "removed per field
 /// feedback", and this screen carries no input controls for them either.
 ///
-/// # Five numbered steps, one sticky save button
+/// # Four numbered steps built around the vehicle's own picture
 ///
-/// The form reads top to bottom as 1 Vehicle, 2 Wash type, 3 Checklist and
-/// chemicals, 4 Photos (before and after), 5 Review and save, with a progress
-/// line above. Photos are still OPTIONAL and the rules are unchanged: an
-/// asset and a wash type are required, chemical names and issue notes must
-/// be filled when used. The save button sits pinned at the bottom and names
-/// what is still missing ("Pick a vehicle") - tapping it then scrolls to that
-/// step instead of failing after the fact.
+/// The form reads 1 Vehicle (scan or search), 2 What was washed (the
+/// selected vehicle's real picture with its five sides to tap, then drawn
+/// tiles for exterior body, engine bay, undercarriage, cabin, tyres and
+/// rims, mixer drum and hopper - mixers and pumps only - and steam
+/// degrease), 3 Photos (before and after), 4 Review and save. An asset and
+/// at least one washed area are required; the checklist and chemicals sit
+/// folded inside the review step and keep their own rules (chemical names
+/// and issue notes must be filled when used). The save button sits pinned at
+/// the bottom and names what is still missing - tapping it then scrolls to
+/// that step instead of failing after the fact.
+///
+/// The driver no longer picks a `wash_type`: it is derived from the marked
+/// areas by `washTypeForAreas` (still one of the CHECK values, so history and
+/// the web keep working), and the areas and sides are stored inside the
+/// existing `wash_details` jsonb as `areas` and `views` (see
+/// `domain/wash_areas.dart`). Washing is done in-house at no charge, so the
+/// review shows the cost as "No charge" and nothing here treats it as a cost.
 ///
 /// Before and after photos are two galleries on screen but are saved as the
 /// one ordered `photos` list the record has always had (before first, then
@@ -67,21 +77,23 @@ import 'package:tyre_pulse/features/scanning/presentation/asset_camera_scanner_d
 import 'package:tyre_pulse/features/washing/data/wash_photo_capture.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
+import 'package:tyre_pulse/features/washing/domain/wash_areas.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_details.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_insights.dart';
 import 'package:tyre_pulse/features/washing/presentation/wash_history_screen.dart';
+import 'package:tyre_pulse/features/washing/presentation/widgets/wash_area_grid.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_details_form.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_photo_gallery.dart';
-import 'package:tyre_pulse/features/washing/presentation/widgets/wash_type_grid.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_ui.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_vehicle_status.dart';
+import 'package:tyre_pulse/features/washing/presentation/widgets/wash_vehicle_views.dart';
 import 'package:tyre_pulse/features/washing/washing_providers.dart';
 import 'package:uuid/uuid.dart';
 
 const Duration _kLookupDebounce = Duration(milliseconds: 350);
 
 /// The steps of the wash form, in screen order.
-enum _WashStep { vehicle, type, checklist, photos, review }
+enum _WashStep { vehicle, areas, photos, review }
 
 class WashingScreen extends ConsumerStatefulWidget {
   const WashingScreen({required this.route, super.key});
@@ -116,7 +128,9 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   Timer? _lookupDebounce;
   VehicleAsset? _master;
   String? _vehicleType;
-  String? _washType;
+  final Set<WashArea> _areas = <WashArea>{};
+  final Set<WashView> _views = <WashView>{};
+  bool _waterless = false;
   String _status = kWashDefaultStatus;
   Map<String, dynamic> _washDetails = emptyWashDetails();
   final List<String> _beforePaths = <String>[];
@@ -236,7 +250,12 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     if (resolvedType != null &&
         resolvedType.isNotEmpty &&
         (_vehicleType == null || _vehicleType!.trim().isEmpty)) {
-      setState(() => _vehicleType = resolvedType);
+      setState(() {
+        _vehicleType = resolvedType;
+        if (!vehicleHasDrumOrHopper(resolvedType)) {
+          _areas.remove(WashArea.drumHopper);
+        }
+      });
     }
 
     final String? masterSite = resolved.site?.trim();
@@ -277,14 +296,30 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
   /// The first thing still stopping a save, or null when the wash can save.
   _WashStep? get _missingStep {
     if (_assetController.text.trim().isEmpty) return _WashStep.vehicle;
-    if (_washType == null) return _WashStep.type;
-    if (!validWashDetails(_washDetails)) return _WashStep.checklist;
+    if (_areas.isEmpty) return _WashStep.areas;
+    if (!validWashDetails(_washDetails)) return _WashStep.review;
     return null;
   }
 
+  /// The `wash_type` that will be stored, derived from the marked areas.
+  String? get _washType => washTypeForAreas(_areas, waterless: _waterless);
+
+  /// The `wash_details` payload: checklist/chemicals plus areas and sides.
+  Map<String, dynamic> get _detailsPayload =>
+      withWashScope(_washDetails, areas: _areas, views: _views);
+
+  void _toggleArea(WashArea area) => setState(() {
+        if (!_areas.remove(area)) _areas.add(area);
+        if (_attention == _WashStep.areas) _attention = null;
+      });
+
+  void _toggleView(WashView view) => setState(() {
+        if (!_views.remove(view)) _views.add(view);
+      });
+
   String _missingLabel(AppLocalizations l10n, _WashStep step) => switch (step) {
         _WashStep.vehicle => l10n.washMissingVehicle,
-        _WashStep.type => l10n.washMissingType,
+        _WashStep.areas => l10n.washMissingAreas,
         _ => l10n.washMissingEvidence,
       };
 
@@ -329,11 +364,9 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
       );
       return;
     }
-    if (_washType == null) {
-      await _showInfoDialog(
-        title: l10n.washTypeRequiredTitle,
-        message: l10n.washTypeRequiredMessage,
-      );
+    final String? washType = _washType;
+    if (washType == null) {
+      _showSnack(l10n.washMissingAreas);
       return;
     }
 
@@ -343,7 +376,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     }
     final _SavedWash saved = _SavedWash(
       assetNo: asset,
-      washType: _washType!,
+      washType: washType,
       photoCount: _photoCount,
       time: _timeLabel(),
     );
@@ -361,7 +394,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
               washedBy: _operatorController.text.trim().isEmpty
                   ? null
                   : _operatorController.text.trim(),
-              washType: _washType,
+              washType: washType,
               status: _status,
               bay: _bayController.text.trim().isEmpty
                   ? null
@@ -371,7 +404,7 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                   ? null
                   : _notesController.text.trim(),
               photoLocalPaths: <String>[..._beforePaths, ..._afterPaths],
-              washDetails: _washDetails,
+              washDetails: _detailsPayload,
             ),
           );
       if (!mounted) return;
@@ -428,7 +461,9 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     setState(() {
       _master = null;
       _vehicleType = null;
-      _washType = null;
+      _areas.clear();
+      _views.clear();
+      _waterless = false;
       _status = kWashDefaultStatus;
       _washDetails = emptyWashDetails();
       _beforePaths.clear();
@@ -496,21 +531,21 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
     final String asset = _assetController.text.trim();
 
     final bool vehicleDone = asset.isNotEmpty;
-    final bool typeDone = _washType != null;
+    final bool areasDone = _areas.isNotEmpty;
     final bool detailsValid = validWashDetails(_washDetails);
     final int checksDone = washChecklistDone(_washDetails);
     final int checksTotal = detailItems(_washDetails, 'checklist').length;
-    final bool checklistDone = detailsValid && checksDone > 0;
     final bool photosDone = _photoCount > 0;
     final _WashStep? missing = _missingStep;
     final bool ready = missing == null;
+    final String? washType = _washType;
     final int stepsDone = <bool>[
       vehicleDone,
-      typeDone,
-      checklistDone,
+      areasDone,
       photosDone,
       ready,
     ].where((bool v) => v).length;
+    final List<WashArea> offeredAreas = washAreasForVehicle(_vehicleType);
 
     final AssetWashInfo? washInfo =
         asset.isEmpty ? null : assetWashInfo(_history, asset);
@@ -623,44 +658,63 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
           ),
           const SizedBox(height: TpSpace.md),
           WashStepCard(
-            key: _stepKeys[_WashStep.type],
+            key: _stepKeys[_WashStep.areas],
             number: 2,
-            title: l10n.washStepType,
-            state: _stateFor(_WashStep.type, typeDone),
-            summary: typeDone
-                ? washTypeName(l10n, _washType!)
-                : (_attention == _WashStep.type ? l10n.washMissingType : null),
-            child: WashTypeGrid(
-              types: kWashTypes,
-              selected: _washType,
-              onSelected: (String value) => setState(() {
-                _washType = value;
-                if (_attention == _WashStep.type) _attention = null;
-              }),
-            ),
-          ),
-          const SizedBox(height: TpSpace.md),
-          WashStepCard(
-            key: _stepKeys[_WashStep.checklist],
-            number: 3,
-            title: l10n.washStepChecklist,
-            optionalLabel: l10n.washStepOptional,
-            state: detailsValid
-                ? (checklistDone ? WashStepState.done : WashStepState.todo)
-                : WashStepState.attention,
-            summary: detailsValid
-                ? l10n.washChecklistProgress(checksDone, checksTotal)
-                : l10n.washMissingEvidence,
-            child: WashDetailsForm(
-              key: ValueKey(_sessionKey),
-              value: _washDetails,
-              onChanged: (v) => setState(() => _washDetails = v),
+            title: l10n.washStepAreas,
+            state: _stateFor(_WashStep.areas, areasDone),
+            summary: areasDone
+                ? l10n.washRecordedAsType(washTypeName(l10n, washType!))
+                : (_attention == _WashStep.areas
+                    ? l10n.washMissingAreas
+                    : null),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  l10n.washAreasHint,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: palette.textSecondary),
+                ),
+                const SizedBox(height: TpSpace.md),
+                WashVehicleViews(
+                  key: WashingScreenKeys.vehicleViews,
+                  master: _master,
+                  assetNo: asset.isEmpty ? null : asset,
+                  vehicleType: _vehicleType,
+                  selected: _views,
+                  onToggle: _toggleView,
+                  onSetAll: (bool all) => setState(() {
+                    _views.clear();
+                    if (all) _views.addAll(WashView.values);
+                  }),
+                ),
+                const SizedBox(height: TpSpace.lg),
+                WashAreaGrid(
+                  areas: offeredAreas,
+                  selected: _areas,
+                  onToggle: _toggleArea,
+                ),
+                const SizedBox(height: TpSpace.sm),
+                Material(
+                  type: MaterialType.transparency,
+                  child: SwitchListTile.adaptive(
+                    key: WashingScreenKeys.waterless,
+                    contentPadding: EdgeInsets.zero,
+                    value: _waterless,
+                    title: Text(l10n.washWaterless),
+                    onChanged: (bool v) => setState(() => _waterless = v),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: TpSpace.md),
           WashStepCard(
             key: _stepKeys[_WashStep.photos],
-            number: 4,
+            number: 3,
             title: l10n.washStepPhotos,
             optionalLabel: l10n.washStepOptional,
             state: photosDone ? WashStepState.done : WashStepState.todo,
@@ -709,9 +763,12 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
           const SizedBox(height: TpSpace.md),
           WashStepCard(
             key: _stepKeys[_WashStep.review],
-            number: 5,
+            number: 4,
             title: l10n.washStepReview,
-            state: ready ? WashStepState.done : WashStepState.todo,
+            state: detailsValid
+                ? (ready ? WashStepState.done : WashStepState.todo)
+                : WashStepState.attention,
+            summary: detailsValid ? null : l10n.washMissingEvidence,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
@@ -733,45 +790,45 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                       ),
                   ],
                 ),
-                Theme(
-                  data: Theme.of(context)
-                      .copyWith(dividerColor: Colors.transparent),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      title: Text(
-                        l10n.washMoreDetails,
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                      childrenPadding:
-                          const EdgeInsets.only(bottom: TpSpace.sm),
-                      children: <Widget>[
-                        TpInput(
-                          label: l10n.washBayLabel,
-                          controller: _bayController,
-                          hint: l10n.washBayHint,
-                        ),
-                        const SizedBox(height: TpSpace.md),
-                        TpInput(
-                          label: l10n.washOdometerLabel,
-                          controller: _odometerController,
-                          hint: l10n.washOdometerHint,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                        ),
-                        const SizedBox(height: TpSpace.md),
-                        TpInput(
-                          label: l10n.washNotesLabel,
-                          controller: _notesController,
-                          hint: l10n.washNotesHint,
-                          maxLines: 3,
-                          textCapitalization: TextCapitalization.sentences,
-                        ),
-                      ],
-                    ),
+                const SizedBox(height: TpSpace.md),
+                Text(
+                  l10n.washStepChecklist,
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                KeyedSubtree(
+                  key: WashingScreenKeys.checklistSection,
+                  child: WashDetailsForm(
+                    key: ValueKey(_sessionKey),
+                    value: _washDetails,
+                    onChanged: (v) => setState(() => _washDetails = v),
                   ),
+                ),
+                _Folded(
+                  title: l10n.washMoreDetails,
+                  children: <Widget>[
+                    TpInput(
+                      label: l10n.washBayLabel,
+                      controller: _bayController,
+                      hint: l10n.washBayHint,
+                    ),
+                    const SizedBox(height: TpSpace.md),
+                    TpInput(
+                      label: l10n.washOdometerLabel,
+                      controller: _odometerController,
+                      hint: l10n.washOdometerHint,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                    const SizedBox(height: TpSpace.md),
+                    TpInput(
+                      label: l10n.washNotesLabel,
+                      controller: _notesController,
+                      hint: l10n.washNotesHint,
+                      maxLines: 3,
+                      textCapitalization: TextCapitalization.sentences,
+                    ),
+                  ],
                 ),
                 _ReviewSummary(
                   key: WashingScreenKeys.review,
@@ -794,13 +851,38 @@ class _WashingScreenState extends ConsumerState<WashingScreen> {
                     ),
                     (
                       Icons.local_car_wash_rounded,
+                      l10n.washAreasLabel,
+                      _areas.isEmpty
+                          ? null
+                          : <String>[
+                              for (final WashArea a in WashArea.values)
+                                if (_areas.contains(a)) washAreaName(l10n, a),
+                            ].join(', '),
+                    ),
+                    (
+                      Icons.threesixty_rounded,
+                      l10n.washViewsTitle,
+                      _views.isEmpty
+                          ? null
+                          : <String>[
+                              for (final WashView v in WashView.values)
+                                if (_views.contains(v)) washViewName(l10n, v),
+                            ].join(', '),
+                    ),
+                    (
+                      Icons.category_outlined,
                       l10n.washTypeLabel,
-                      _washType == null ? null : washTypeName(l10n, _washType!),
+                      washType == null ? null : washTypeName(l10n, washType),
                     ),
                     (
                       Icons.flag_outlined,
                       l10n.washStatusLabel,
                       _statusLabel(l10n, _status),
+                    ),
+                    (
+                      Icons.payments_outlined,
+                      l10n.washCostLabel,
+                      l10n.washCostNoCharge,
                     ),
                     (
                       Icons.fact_check_outlined,
@@ -882,6 +964,12 @@ abstract final class WashingScreenKeys {
   static const ValueKey<String> afterPhotos =
       ValueKey<String>('washing.afterPhotos');
   static const ValueKey<String> review = ValueKey<String>('washing.review');
+  static const ValueKey<String> vehicleViews =
+      ValueKey<String>('washing.vehicleViews');
+  static const ValueKey<String> waterless =
+      ValueKey<String>('washing.waterless');
+  static const ValueKey<String> checklistSection =
+      ValueKey<String>('washing.checklistSection');
   static const ValueKey<String> savedSheet =
       ValueKey<String>('washing.savedSheet');
 }
@@ -1063,6 +1151,31 @@ class _PhotoSlot extends StatelessWidget {
           addLabel: l10n.washAddPhoto,
         ),
       ],
+    );
+  }
+}
+
+/// A folded section inside the review step (more details).
+class _Folded extends StatelessWidget {
+  const _Folded({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme text = Theme.of(context).textTheme;
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: Text(title, style: text.labelLarge),
+          childrenPadding: const EdgeInsets.only(bottom: TpSpace.sm),
+          children: children,
+        ),
+      ),
     );
   }
 }

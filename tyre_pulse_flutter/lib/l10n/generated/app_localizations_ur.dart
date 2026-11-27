@@ -9646,4 +9646,110 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'کٹوتیاں شروع ہو چکی ہیں، اس لیے اب یہاں اس واجب الادا کے خلاف اپیل نہیں ہو سکتی۔ مینیجر یا فنانس باقی رقم معاف کر سکتے ہیں۔';
+
+  @override
+  String get washStepAreas => 'کیا دھویا گیا';
+
+  @override
+  String get washAreasHint =>
+      'تصویر پر گاڑی کی سمتیں اور وہ حصے چنیں جو آپ نے دھوئے۔';
+
+  @override
+  String get washMissingAreas => 'منتخب کریں کیا دھویا گیا';
+
+  @override
+  String get washAreaExterior => 'بیرونی باڈی';
+
+  @override
+  String get washAreaExteriorDesc => 'باڈی، شیشے اور لائٹس';
+
+  @override
+  String get washAreaEngineBay => 'انجن کا حصہ';
+
+  @override
+  String get washAreaEngineBayDesc => 'انجن کی دھلائی اور چکنائی صاف';
+
+  @override
+  String get washAreaUndercarriage => 'گاڑی کا نچلا حصہ';
+
+  @override
+  String get washAreaUndercarriageDesc => 'چیسس اور نیچے کی باڈی';
+
+  @override
+  String get washAreaCabin => 'کیبن کا اندرونی حصہ';
+
+  @override
+  String get washAreaCabinDesc => 'سیٹیں، فرش اور ڈیش بورڈ';
+
+  @override
+  String get washAreaTyresRims => 'ٹائر اور رمز';
+
+  @override
+  String get washAreaTyresRimsDesc => 'ٹائر، رمز اور پہیوں کی محرابیں';
+
+  @override
+  String get washAreaDrumHopper => 'مکسر ڈرم اور ہاپر';
+
+  @override
+  String get washAreaDrumHopperDesc => 'ڈرم کا خول، ہاپر اور چُوٹ';
+
+  @override
+  String get washAreaSteam => 'بھاپ سے چکنائی صاف';
+
+  @override
+  String get washAreaSteamDesc => 'چکنائی اور تیل پر گرم بھاپ';
+
+  @override
+  String get washViewsTitle => 'دھوئی گئی سمتیں';
+
+  @override
+  String get washViewFront => 'آگے';
+
+  @override
+  String get washViewLeft => 'بائیں';
+
+  @override
+  String get washViewRear => 'پیچھے';
+
+  @override
+  String get washViewRight => 'دائیں';
+
+  @override
+  String get washViewTop => 'اوپر';
+
+  @override
+  String get washViewsAll => 'تمام سمتیں';
+
+  @override
+  String washViewsCount(int count, int total) {
+    return '$total میں سے $count سمتیں';
+  }
+
+  @override
+  String get washVehiclePictureNone =>
+      'اس قسم کی گاڑی کی تصویر ابھی نہیں ہے۔ نیچے سمتیں منتخب کریں۔';
+
+  @override
+  String get washVehiclePicturePending =>
+      'تصویر دیکھنے کے لیے گاڑی منتخب کریں۔';
+
+  @override
+  String get washWaterless => 'بغیر پانی کی دھلائی';
+
+  @override
+  String get washCostLabel => 'لاگت';
+
+  @override
+  String get washCostNoCharge => 'کوئی خرچ نہیں · اندرونِ ادارہ دھلائی';
+
+  @override
+  String get washAreasLabel => 'دھوئے گئے حصے';
+
+  @override
+  String washRecordedAsType(String type) {
+    return 'بطور $type درج ہوگا';
+  }
+
+  @override
+  String get washAreaSelected => 'منتخب';
 }

@@ -16727,6 +16727,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.'**
   String get driverChargeAppealClosedDeducted;
+
+  /// No description provided for @washStepAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'What was washed'**
+  String get washStepAreas;
+
+  /// No description provided for @washAreasHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the sides on the picture and the parts you washed.'**
+  String get washAreasHint;
+
+  /// No description provided for @washMissingAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick what was washed'**
+  String get washMissingAreas;
+
+  /// No description provided for @washAreaExterior.
+  ///
+  /// In en, this message translates to:
+  /// **'Exterior body'**
+  String get washAreaExterior;
+
+  /// No description provided for @washAreaExteriorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Body, glass and lights'**
+  String get washAreaExteriorDesc;
+
+  /// No description provided for @washAreaEngineBay.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine bay'**
+  String get washAreaEngineBay;
+
+  /// No description provided for @washAreaEngineBayDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine wash and degrease'**
+  String get washAreaEngineBayDesc;
+
+  /// No description provided for @washAreaUndercarriage.
+  ///
+  /// In en, this message translates to:
+  /// **'Undercarriage'**
+  String get washAreaUndercarriage;
+
+  /// No description provided for @washAreaUndercarriageDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Chassis and underbody'**
+  String get washAreaUndercarriageDesc;
+
+  /// No description provided for @washAreaCabin.
+  ///
+  /// In en, this message translates to:
+  /// **'Cabin interior'**
+  String get washAreaCabin;
+
+  /// No description provided for @washAreaCabinDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Seats, floor and dashboard'**
+  String get washAreaCabinDesc;
+
+  /// No description provided for @washAreaTyresRims.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres and rims'**
+  String get washAreaTyresRims;
+
+  /// No description provided for @washAreaTyresRimsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres, rims and wheel arches'**
+  String get washAreaTyresRimsDesc;
+
+  /// No description provided for @washAreaDrumHopper.
+  ///
+  /// In en, this message translates to:
+  /// **'Mixer drum and hopper'**
+  String get washAreaDrumHopper;
+
+  /// No description provided for @washAreaDrumHopperDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Drum shell, hopper and chute'**
+  String get washAreaDrumHopperDesc;
+
+  /// No description provided for @washAreaSteam.
+  ///
+  /// In en, this message translates to:
+  /// **'Steam degrease'**
+  String get washAreaSteam;
+
+  /// No description provided for @washAreaSteamDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Hot steam on grease and oil'**
+  String get washAreaSteamDesc;
+
+  /// No description provided for @washViewsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sides washed'**
+  String get washViewsTitle;
+
+  /// No description provided for @washViewFront.
+  ///
+  /// In en, this message translates to:
+  /// **'Front'**
+  String get washViewFront;
+
+  /// No description provided for @washViewLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get washViewLeft;
+
+  /// No description provided for @washViewRear.
+  ///
+  /// In en, this message translates to:
+  /// **'Rear'**
+  String get washViewRear;
+
+  /// No description provided for @washViewRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get washViewRight;
+
+  /// No description provided for @washViewTop.
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get washViewTop;
+
+  /// No description provided for @washViewsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All sides'**
+  String get washViewsAll;
+
+  /// No description provided for @washViewsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {total} sides'**
+  String washViewsCount(int count, int total);
+
+  /// No description provided for @washVehiclePictureNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No picture for this vehicle type yet. Mark the sides below.'**
+  String get washVehiclePictureNone;
+
+  /// No description provided for @washVehiclePicturePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a vehicle to see its picture.'**
+  String get washVehiclePicturePending;
+
+  /// No description provided for @washWaterless.
+  ///
+  /// In en, this message translates to:
+  /// **'Waterless wash (no water used)'**
+  String get washWaterless;
+
+  /// No description provided for @washCostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost'**
+  String get washCostLabel;
+
+  /// No description provided for @washCostNoCharge.
+  ///
+  /// In en, this message translates to:
+  /// **'No charge · washed in-house'**
+  String get washCostNoCharge;
+
+  /// No description provided for @washAreasLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Washed areas'**
+  String get washAreasLabel;
+
+  /// No description provided for @washRecordedAsType.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded as {type}'**
+  String washRecordedAsType(String type);
+
+  /// No description provided for @washAreaSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get washAreaSelected;
 }
 
 class _AppLocalizationsDelegate

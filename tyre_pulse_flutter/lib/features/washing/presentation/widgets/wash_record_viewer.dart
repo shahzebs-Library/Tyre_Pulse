@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
+import 'package:tyre_pulse/features/washing/domain/wash_areas.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_details.dart';
+import 'package:tyre_pulse/features/washing/presentation/widgets/wash_area_grid.dart';
+import 'package:tyre_pulse/features/washing/presentation/widgets/wash_vehicle_views.dart';
 
 class WashRecordViewer extends ConsumerWidget {
   const WashRecordViewer({required this.wash, super.key});
@@ -66,6 +69,19 @@ class WashRecordViewer extends ConsumerWidget {
               ].where((s) => s.isNotEmpty).join(' · '),
             ),
           if (wash.notes != null) detail(l.washNotesLabel, wash.notes),
+          detail(
+            l.washAreasLabel,
+            washAreasFromDetails(wash.washDetails)
+                .map((a) => washAreaName(l, a))
+                .join(', '),
+          ),
+          detail(
+            l.washViewsTitle,
+            washViewsFromDetails(wash.washDetails)
+                .map((v) => washViewName(l, v))
+                .join(', '),
+          ),
+          detail(l.washCostLabel, l.washCostNoCharge),
           const SizedBox(height: 16),
           Text(
             l.washPhotosLabel,

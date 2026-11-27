@@ -701,10 +701,16 @@ void main() {
     // card, a one-line description per wash type, checklist / issue /
     // product counts, before and after photo slots, the review card, the
     // saved sheet, and the wash history page's stats and filters).
-    test('en, ar and ur each carry exactly 2771 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2771);
-      expect(_translatableKeys(ar).length, 2771);
-      expect(_translatableKeys(ur).length, 2771);
+    // 2771 + 33 = 2804: the wash screen rebuilt around the vehicle picture
+    // (the "what was washed" step and its hint and missing label, seven
+    // wash-area tiles with a one-line description each, the five sides and
+    // "all sides" with their count, the no-picture and pick-a-vehicle
+    // lines, the waterless switch, the no-charge cost line, the washed
+    // areas label, the derived "recorded as" line and the selected label).
+    test('en, ar and ur each carry exactly 2804 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2804);
+      expect(_translatableKeys(ar).length, 2804);
+      expect(_translatableKeys(ur).length, 2804);
     });
   });
 

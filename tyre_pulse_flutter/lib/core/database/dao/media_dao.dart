@@ -184,6 +184,42 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
     });
   }
 
+  /// Gives a queued photo that was stored with no upload destination (an
+  /// older build queued wash / meter-log photos without a bucket) its
+  /// destination, and makes it eligible for upload again.
+  ///
+  /// Only rows still missing a bucket are touched, so a row can be re-routed
+  /// once and never loops back to a fresh attempt budget.
+  Future<int> routeUnroutedMedia(
+    String id, {
+    required String bucket,
+    required String fileName,
+  }) {
+    return (update(pendingMediaUploads)
+          ..where((t) => t.id.equals(id) & t.bucket.isNull()))
+        .write(
+      PendingMediaUploadsCompanion(
+        bucket: Value<String?>(bucket),
+        fileName: Value<String>(fileName),
+        state: const Value<String>(MediaUploadState.queued),
+        attempts: const Value<int>(0),
+        lastError: const Value<String?>(null),
+      ),
+    );
+  }
+
+  /// Gives up on a queued photo that can never be sent (its local file is
+  /// gone), keeping [messageSafe] as the visible reason.
+  Future<void> abandonMedia(String id, {required String messageSafe}) async {
+    await (update(pendingMediaUploads)..where((t) => t.id.equals(id))).write(
+      PendingMediaUploadsCompanion(
+        state: const Value<String>(MediaUploadState.failed),
+        attempts: const Value<int>(maxUploadAttempts),
+        lastError: Value<String?>(messageSafe),
+      ),
+    );
+  }
+
   /// Whether every photo attached to a command has been confirmed.
   ///
   /// The sync engine must not write the business row without its evidence: the

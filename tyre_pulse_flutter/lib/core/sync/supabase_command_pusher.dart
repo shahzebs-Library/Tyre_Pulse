@@ -155,6 +155,26 @@ const String workshopCompletionMediaBucket = 'tyre-photos';
 /// File-name prefix that marks a queued photo as job completion evidence.
 const String workshopCompletionMediaPrefix = 'jobdone_';
 
+/// Bucket of queued wash and meter-log photos. The web app (`uploadWashPhoto`
+/// in `src/lib/api/washRecords.js`) and the released phone app
+/// (`uploadModulePhoto`) both write these to the private `tyre-photos`
+/// bucket under `modules/<module>/<user>/`, and store `tp-storage://` refs.
+const String moduleMediaBucket = 'tyre-photos';
+
+/// File-name prefix that marks a queued photo as wash evidence
+/// (`modules/wash/<user>/...`).
+const String washMediaPrefix = 'washrec_';
+
+/// File-name prefix that marks a queued photo as an odometer / engine-hours
+/// gauge photo (`modules/meter-log/<user>/...`).
+const String meterLogMediaPrefix = 'meterlog_';
+
+/// Storage module folder per module-photo prefix.
+const Map<String, String> _modulePhotoFolders = <String, String>{
+  washMediaPrefix: 'wash',
+  meterLogMediaPrefix: 'meter-log',
+};
+
 /// Builds the private Storage object path used by queued media uploads.
 ///
 /// Accident evidence follows the production application's canonical
@@ -192,6 +212,22 @@ String storageObjectPath({
     final String ownerSegment =
         owner.length <= 8 ? owner : owner.substring(0, 8);
     return 'modules/workshop/$ownerSegment/$name';
+  }
+  if (bucket == moduleMediaBucket) {
+    for (final MapEntry<String, String> module in _modulePhotoFolders.entries) {
+      if (!name.startsWith(module.key)) continue;
+      // Same namespace the web and the released app use, so web viewers
+      // resolve these refs exactly like their own.
+      final String owner = userId?.trim() ?? '';
+      if (owner.isEmpty) {
+        throw StateError(
+          'Module photos cannot be uploaded without a signed-in owner.',
+        );
+      }
+      final String ownerSegment =
+          owner.length <= 8 ? owner : owner.substring(0, 8);
+      return 'modules/${module.value}/$ownerSegment/$name';
+    }
   }
   if (bucket != 'accident-photos') return name;
 

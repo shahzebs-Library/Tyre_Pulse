@@ -58,7 +58,9 @@ function KpiBlock({ r }) {
     <div style={{ ...CARD, justifyContent: 'space-between' }}>
       <div style={{ ...TITLE, fontSize: 12, color: '#64748b' }}>{r.label}</div>
       <div style={{ fontSize: 'clamp(26px, 4.2vw, 52px)', fontWeight: 800, color: '#0f172a', lineHeight: 1.05, fontVariantNumeric: 'tabular-nums' }}>
-        {fmtInt(r.value)}
+        {Array.isArray(r.perCountry) && r.perCountry.length > 0
+          ? r.perCountry.map((c) => <div key={c.key} style={{ fontSize: '0.5em' }}>{c.currency} {fmtInt(c.value)}</div>)
+          : fmtInt(r.value)}
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6 }}>

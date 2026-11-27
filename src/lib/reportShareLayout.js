@@ -274,7 +274,13 @@ export function resolveBlock(block, snapshot) {
       const bag = s.from === 'ops' ? (snap.ops || {}) : (snap.kpis || {})
       const value = num(bag[s.path])
       const spark = s.from === 'ops' ? [] : arr((snap.trends || {})[s.path])
-      return { kind: 'kpi', value, money: !!s.money, label: b.title || s.label, spark, accent: b.accent, empty: false }
+      // Money with no single currency (all countries): one line per country,
+      // each in its own currency, instead of a misleading 0.
+      const perCountry = s.from !== 'ops' && s.path === 'tyre_spend' && (snap.kpis || {}).tyre_spend == null
+        ? arr((snap.kpis || {}).tyre_spend_by_country).filter((r) => r && r.country)
+          .map((r) => ({ key: r.country, currency: r.currency || r.country, value: num(r.value) }))
+        : []
+      return { kind: 'kpi', value, money: !!s.money, label: b.title || s.label, spark, accent: b.accent, empty: false, perCountry }
     }
     case 'series': {
       const labels = arr(snap.labels)

@@ -34,6 +34,14 @@ final Provider<bool> devicesAccessProvider = Provider<bool>((ref) {
   }
 });
 
+/// Whether "Read from gauge" buttons show on the tyre sheet.
+///
+/// Off for now (owner, 2026-11-27): no gauge is in use yet, so the buttons are
+/// hidden for everyone. Pairing a gauge on the admin-only Devices screen still
+/// works; switch this on once gauges are deployed.
+final Provider<bool> gaugeReadingEnabledProvider =
+    Provider<bool>((ref) => false);
+
 final Provider<PairedDeviceStore> pairedDeviceStoreProvider =
     Provider<PairedDeviceStore>((ref) => PrefsPairedDeviceStore());
 

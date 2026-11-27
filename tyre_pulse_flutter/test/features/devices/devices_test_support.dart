@@ -23,6 +23,9 @@ List<Override> deviceOverrides({
   required RoleId role,
   required MemoryPairedDeviceStore store,
   required SimulatorDeviceAdapter simulator,
+  // The gauge buttons are switched off in the app for now; the flow tests
+  // switch them on to exercise them.
+  bool gaugeReading = true,
 }) =>
     <Override>[
       accessStateProvider.overrideWithValue(accessFor(role)),
@@ -30,6 +33,7 @@ List<Override> deviceOverrides({
       pairedDeviceStoreProvider.overrideWithValue(store),
       simulatorAdapterProvider.overrideWithValue(simulator),
       deviceRadioProvider.overrideWithValue(simulator as DeviceRadio),
+      gaugeReadingEnabledProvider.overrideWithValue(gaugeReading),
     ];
 
 Widget deviceApp({

@@ -286,7 +286,10 @@ class GaugeReadButtons extends StatelessWidget {
     }
     return Consumer(
       builder: (BuildContext context, WidgetRef ref, Widget? _) {
-        if (!ref.watch(devicesAccessProvider)) return const SizedBox.shrink();
+        if (!ref.watch(devicesAccessProvider) ||
+            !ref.watch(gaugeReadingEnabledProvider)) {
+          return const SizedBox.shrink();
+        }
         final AppLocalizations l10n = AppLocalizations.of(context);
         return Padding(
           padding: const EdgeInsets.only(top: TpSpace.sm),

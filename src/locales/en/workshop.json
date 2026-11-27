@@ -49,5 +49,443 @@
       "locked": "Locked, in approval",
       "tooltip": "Export job card"
     }
+  },
+  "live": {
+    "now": "Now",
+    "retry": "Retry",
+    "kpi": {
+      "onDuty": "On Duty",
+      "working": "Working",
+      "available": "Available",
+      "unassigned": "Unassigned",
+      "waitingParts": "Waiting Parts",
+      "waitingApproval": "Waiting Approval",
+      "onBreak": "On Break",
+      "absent": "Absent",
+      "openJobs": "Open Job Cards",
+      "overdueJobs": "Overdue",
+      "vehiclesOffRoad": "Vehicles Off Road",
+      "jobsCompletedToday": "Completed Today",
+      "utilization": "Utilization",
+      "productiveHours": "Productive Hours",
+      "lostHours": "Lost Hours",
+      "overtimeHours": "Overtime Hours"
+    },
+    "headlineSub": {
+      "onDuty": "Now: technicians on shift",
+      "working": "Now: on an active job",
+      "available": "Now: ready to assign",
+      "waitingParts": "Now: blocked on parts",
+      "vehiclesOffRoad": "Now: vehicles off road"
+    },
+    "status": {
+      "working": "Working",
+      "available": "Available",
+      "waitingParts": "Waiting for Parts",
+      "waitingApproval": "Waiting for Approval",
+      "waitingTools": "Waiting for Tools",
+      "waitingVehicle": "Waiting for Vehicle",
+      "onBreak": "On Break",
+      "training": "Training",
+      "awaitingInspection": "Awaiting Inspection",
+      "offDuty": "Off Duty",
+      "absent": "Absent",
+      "overtime": "Overtime"
+    },
+    "tech": {
+      "unknown": "Unknown",
+      "noActiveJob": "No active job",
+      "productive": "Productive",
+      "blocked": "Blocked",
+      "utilisation": "Utilisation",
+      "noShiftTime": "No measurable shift time today",
+      "lastUpdate": "Last update {when}",
+      "taskToConfirm": "Task to confirm",
+      "viewJob": "View job",
+      "foremanAria": "Foreman actions for {name}",
+      "foremanTitle": "Assign, confirm and foreman actions"
+    },
+    "errors": {
+      "rangeLoad": "Could not load the figures for these dates.",
+      "export": "Export failed. Please try again.",
+      "boardLoad": "Could not load the workshop board"
+    },
+    "flash": {
+      "assigned": "Technician assigned.",
+      "reassigned": "Job reassigned.",
+      "status": "Status updated.",
+      "priority": "Priority updated.",
+      "vorOn": "Marked Vehicle Off Road.",
+      "vorOff": "Cleared Vehicle Off Road.",
+      "taskConfirmed": "Task confirmed.",
+      "qcRecorded": "Quality check recorded. A supervisor closes the work order.",
+      "qcPassed": "QC passed. Job completed.",
+      "qcFailed": "QC failed. Job sent back for rework.",
+      "jobCreatedAssigned": "Job created and assigned.",
+      "jobCreated": "Job created.",
+      "taskAdded": "Task added.",
+      "taskUpdated": "Task updated.",
+      "taskStatus": "Task status updated.",
+      "unavailable": "Technician marked unavailable.",
+      "partsEscalated": "Parts escalated.",
+      "approvalEscalated": "Approval escalated.",
+      "training": "Technician sent to training.",
+      "actionRecorded": "Action recorded.",
+      "noteSent": "Note sent to technician.",
+      "dismiss": "Dismiss message"
+    },
+    "head": {
+      "breadcrumb": "Breadcrumb",
+      "crumbParent": "Workshop and Maintenance",
+      "crumbCurrent": "Live Control",
+      "title": "Workshop Live Control",
+      "lead": "Real-time technician productivity, job flow, blocked work and vehicle-off-road status.",
+      "rangeAria": "Dates for the measured figures",
+      "fromDate": "From date",
+      "to": "to",
+      "toDate": "To date",
+      "quickRange": "Quick date range",
+      "customDates": "Custom dates",
+      "siteAria": "Filter by site",
+      "allSites": "All sites",
+      "newJob": "New Job"
+    },
+    "presets": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7": "Last 7 days",
+      "month": "This month"
+    },
+    "filter": {
+      "showingOnly": "Showing only these. Click again to clear.",
+      "clickBoard": "Click to filter the board",
+      "clickJobs": "Click to filter the job cards"
+    },
+    "strip": {
+      "aria": "Job and productivity figures",
+      "nowTitle": "Live: these follow the current moment, not the chosen dates",
+      "rangeTitle": "Measured over the dates chosen in the header",
+      "clickToShow": "{title}. Click to show them on the job board.",
+      "truncated": "{range} holds more activity than one read covers, so these figures are a partial count. Choose fewer dates for a complete figure.",
+      "noActivity": "No technician activity recorded in {range}, so hours and utilisation are not measurable.",
+      "noActivitySite": "No technician activity recorded in {range} at {site}, so hours and utilisation are not measurable.",
+      "items": {
+        "completed": {
+          "label": "Completed",
+          "title": "Job cards completed in the chosen dates (by completion time)"
+        },
+        "utilization": {
+          "label": "Utilisation",
+          "title": "Average productive share of available duty time per technician-day (technician-days with a measurable shift)"
+        },
+        "productiveHours": {
+          "label": "Productive hrs",
+          "title": "Time on an active job in the chosen dates"
+        },
+        "lostHours": {
+          "label": "Lost hrs",
+          "title": "Blocked plus unassigned duty time in the chosen dates"
+        },
+        "overtimeHours": {
+          "label": "Overtime",
+          "title": "Productive or blocked time past the shift end in the chosen dates"
+        }
+      }
+    },
+    "tools": {
+      "searchPlaceholder": "Search technician, job card, asset, plate",
+      "searchAria": "Search technicians and job cards",
+      "clear": "Clear {what}",
+      "and": " and ",
+      "updating": "Updating...",
+      "updated": "Updated {when}",
+      "refresh": "Refresh",
+      "refreshNow": "Refresh now",
+      "excel": "Excel",
+      "pdfAria": "Export technician board to PDF",
+      "pdf": "PDF"
+    },
+    "board": {
+      "title": "Technician Board",
+      "sub": "Live status by technician.",
+      "shown": "{shown} of {total} shown.",
+      "chipsLabel": "Technician status",
+      "empty": "No technicians yet. Give staff a workshop role or a skills profile to see them here.",
+      "noMatch": "No technicians match these filters."
+    },
+    "chips": {
+      "all": "All",
+      "unassigned": "Unassigned",
+      "waiting": "Waiting",
+      "inspection": "Awaiting inspection",
+      "break": "Break or training",
+      "away": "Off duty or absent"
+    },
+    "alerts": {
+      "title": "Live Alerts",
+      "subLoading": "Requires supervisor attention",
+      "sub": "{count} need attention: {critical} critical, {warning} warning, {info} info",
+      "allClear": "All clear. Nothing needs a supervisor right now.",
+      "showRef": "Show the technician or job card"
+    },
+    "alertTitle": {
+      "vorSla": "Vehicle off road beyond SLA",
+      "overtime": "Overtime threshold reached",
+      "overlappingJobs": "Owner of overlapping jobs",
+      "partsPending": "Blocked waiting for parts",
+      "approvalPending": "Approval pending too long",
+      "unassigned": "Technician unassigned",
+      "noActivity": "No activity on active job",
+      "notCheckedIn": "Assigned but not checked in",
+      "overdue": "Job past target time",
+      "jobNoOwner": "Job card has no owner",
+      "qcPending": "Awaiting quality inspection",
+      "generic": "Workshop alert"
+    },
+    "alertLevel": {
+      "critical": "Critical",
+      "warning": "Warning",
+      "info": "Info",
+      "notice": "Notice"
+    },
+    "flow": {
+      "title": "Job Flow",
+      "subLoading": "Open workshop work by stage",
+      "sub": "{count} open job cards by stage.",
+      "other": "{count} with a status outside these stages.",
+      "clickStage": "Click a stage to open it on the board.",
+      "hideBoard": "Hide job board",
+      "showBoard": "Show job board",
+      "empty": "No open job cards. Open work orders appear here as they are raised.",
+      "shareOfOpen": "{pct}% of open",
+      "jobCards": "{count} job cards",
+      "inStage": "in {stage}",
+      "colEmpty": "Empty"
+    },
+    "stages": {
+      "unassigned": {
+        "label": "Unassigned",
+        "hint": "New or awaiting assignment, no owner yet"
+      },
+      "assigned": {
+        "label": "Assigned",
+        "hint": "Owner set, work not started"
+      },
+      "in_progress": {
+        "label": "In progress",
+        "hint": "Status In Progress"
+      },
+      "blocked": {
+        "label": "Blocked",
+        "hint": "Waiting for parts, waiting for approval or on hold"
+      },
+      "qa": {
+        "label": "QA",
+        "hint": "Quality inspection pending"
+      },
+      "ready": {
+        "label": "Ready to close",
+        "hint": "QC passed but the job card is not completed yet"
+      }
+    },
+    "quick": {
+      "workOrders": "All work orders",
+      "partsRequests": "Parts requests",
+      "absence": "Absence and attendance",
+      "analytics": "Workshop analytics",
+      "thresholds": "Alert thresholds"
+    },
+    "delay": {
+      "title": "Delay and root cause",
+      "sub": "Blocked time in {range} by cause, with the responsible team, cost impact and suggested action",
+      "loading": "Loading delay causes for {range}...",
+      "noActivity": "No technician activity recorded in {range}, so there is no blocked time to break down."
+    }
+  },
+  "parts": {
+    "taskStatus": {
+      "pending": "Pending",
+      "inProgress": "In Progress",
+      "blocked": "Blocked",
+      "done": "Done",
+      "qc": "Quality Check"
+    },
+    "reason": {
+      "parts": "Waiting for Parts",
+      "tools": "Waiting for Tools",
+      "approval": "Waiting for Approval",
+      "vehicle": "Waiting for Vehicle",
+      "vendor": "Vendor Delay",
+      "support": "Waiting for Support"
+    },
+    "job": {
+      "job": "Job",
+      "noAsset": "No asset",
+      "tasksDone": "{done} of {total} tasks done",
+      "vor": "VOR",
+      "overdue": "Overdue",
+      "target": "Target",
+      "assignAria": "Assign technician",
+      "assignTo": "Assign to...",
+      "moveAria": "Move status",
+      "moveTo": "Move to...",
+      "priorityAria": "Set priority",
+      "priorityPlaceholder": "Priority...",
+      "clearVor": "Clear VOR",
+      "setVor": "Set VOR",
+      "smartAssignTitle": "Suggest the best technician by skill, availability and workload",
+      "smartAssign": "Smart assign",
+      "tasks": "Tasks",
+      "splitTitle": "Split this job into tasks",
+      "split": "Split",
+      "noTasks": "No tasks yet. Use Split to break this job into tasks.",
+      "assigned": "Assigned",
+      "taskStatusAria": "Set status for {title}",
+      "spent": "{time} spent",
+      "est": "/ {time} est",
+      "overBudget": "over budget",
+      "qcPassTitle": "QC pass: complete the job",
+      "qcPass": "QC Pass",
+      "qcFailTitle": "QC fail: send back for rework",
+      "qcFail": "QC Fail",
+      "open": "Open"
+    },
+    "delay": {
+      "inPeriod": "in {period}",
+      "today": "today",
+      "todayWord": "today",
+      "hoursLost": "Hours lost",
+      "jobsAffected": "Jobs affected",
+      "cols": {
+        "cause": "Cause",
+        "cost": "Cost impact",
+        "dept": "Responsible",
+        "action": "Suggested action",
+        "priority": "Priority"
+      },
+      "none": "No blocked time recorded {when}",
+      "noneHint": "Delay causes appear here as technicians log waiting time.",
+      "title": "Delay and Root Cause",
+      "summary": "Hours lost to blocked time, by cause ({period}): {hours}h across {causes} causes, cost impact {cost}.",
+      "summaryOne": "Hours lost to blocked time, by cause ({period}): {hours}h across {causes} cause, cost impact {cost}.",
+      "chartAria": "Delay hours by cause",
+      "search": "Search causes...",
+      "reportTitle": "Workshop Delay and Root Cause"
+    },
+    "smart": {
+      "available": "Available",
+      "assign": "Assign",
+      "title": "Smart assign: {no}",
+      "ranked": "Ranked by skill match, availability, workload and site.",
+      "jobType": "Job type: {type}.",
+      "noJobType": "No job type set, so skill match is neutral.",
+      "none": "No eligible technicians (all off duty or absent).",
+      "suggested": "Suggested",
+      "all": "All technicians"
+    },
+    "tasks": {
+      "title": "Tasks: {no}",
+      "titlePlaceholder": "Task title (e.g. Remove and inspect steer tyres)",
+      "titleAria": "Task title",
+      "skill": "Skill (optional)",
+      "estPlaceholder": "Est. min",
+      "estAria": "Estimated minutes",
+      "add": "Add",
+      "empty": "No tasks yet. Add the first one above.",
+      "statusAria": "Task status",
+      "assigneeAria": "Task assignee",
+      "unassigned": "Unassigned",
+      "over": "over"
+    },
+    "drawer": {
+      "title": "Foreman actions: {name}",
+      "onJob": "on {job}",
+      "aJob": "a job",
+      "noTrade": "No trade or site on file",
+      "lastActivity": "Last activity {when}",
+      "assignAria": "Assign a job to {name}",
+      "reassignTo": "Reassign to job...",
+      "assignJob": "Assign a job...",
+      "confirmTask": "Confirm completed task",
+      "unavailable": "Mark temporarily unavailable",
+      "unavailableTitle": "Logs a support pause on the technician (counts as blocked time, shown in the delay panel)",
+      "escalateParts": "Escalate parts",
+      "escalatePartsTitle": "Records a parts request and foreman-confirms it",
+      "escalateApproval": "Escalate approval",
+      "escalateApprovalTitle": "Records a waiting-for-approval event and foreman-confirms it",
+      "training": "Send to training",
+      "trainingTitle": "Moves the technician to training (excluded from utilization)",
+      "call": "Call {phone}",
+      "noPhone": "No phone number on file",
+      "openJob": "Open current job",
+      "noteLabel": "Send note to technician",
+      "notePlaceholder": "Message (logged to their activity feed)",
+      "noteAria": "Message to technician",
+      "send": "Send",
+      "noteHint": "Recorded as a note on the technician's activity log (audit trail). Push delivery is not wired.",
+      "workload": "Workload by skill and shift",
+      "activeJobs": "Active jobs",
+      "skills": "Skills",
+      "utilization": "Utilization",
+      "shift": "Shift:",
+      "noShift": "None assigned"
+    }
+  },
+  "newJob": {
+    "dialogAria": "Create a new job",
+    "title": "New Job",
+    "close": "Close",
+    "tabManual": "Manual",
+    "tabPm": "From PM",
+    "asset": "Asset number (required)",
+    "assetPlaceholder": "Scan or type an asset number",
+    "master": "Master: {line}",
+    "workType": "Work type",
+    "priority": "Priority",
+    "description": "Description",
+    "descriptionPlaceholder": "What needs doing?",
+    "estMinutes": "Estimated minutes",
+    "estPlaceholder": "e.g. 90",
+    "target": "Target completion",
+    "site": "Site",
+    "sitePlaceholder": "Auto-filled from asset",
+    "assignTo": "Assign to (optional)",
+    "unassigned": "Unassigned",
+    "pmHint": "Preventive-maintenance programs due within 30 days.",
+    "refresh": "Refresh",
+    "pmLoading": "Loading PM schedule...",
+    "pmEmpty": "Nothing due in the next 30 days.",
+    "pmEmptyHint": "Use the Manual tab to raise any job.",
+    "pmProgram": "PM program",
+    "due": "Due",
+    "daysOverdue": "{n}d overdue",
+    "days": "{n}d",
+    "noAsset": "No asset",
+    "dueOn": "Due {date}",
+    "ready": "Ready to create.",
+    "assetRequired": "An asset number is required.",
+    "cancel": "Cancel",
+    "create": "Create job"
+  },
+  "tv": {
+    "createFailed": "Could not create the share link.",
+    "button": "Share TV board",
+    "title": "Share workshop TV board",
+    "created": "Read-only link created. Copy it now; it opens the live board with no login. Revoke it any time from Report Sharing.",
+    "linkAria": "Share link",
+    "copied": "Copied",
+    "copy": "Copy",
+    "open": "Open board",
+    "done": "Done",
+    "name": "Board name",
+    "namePlaceholder": "Workshop live board",
+    "refresh": "Refresh every (seconds)",
+    "refreshHint": "The board reloads its numbers on this cadence ({min} to {max} seconds).",
+    "password": "Viewer password (optional)",
+    "passwordPlaceholder": "Leave blank for no password",
+    "expires": "Expires on (optional)",
+    "cancel": "Cancel",
+    "creating": "Creating...",
+    "create": "Create link"
   }
 }

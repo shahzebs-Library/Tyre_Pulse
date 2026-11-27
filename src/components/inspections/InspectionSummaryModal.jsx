@@ -11,13 +11,15 @@ import { trackTyreChanges, trackingBySite } from '../../lib/tyreChangeTracking'
 import { loadTyreChangeTracking } from '../../lib/api/tyreChangeTracking'
 import { brandingForPdf } from '../../lib/inspectionChecklistReport'
 import { toUserMessage } from '../../lib/safeError'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 function TotalsStrip({ keys, heads, totals }) {
+  const { t } = useLanguage()
   return (
-    <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 text-xs" aria-label="Totals">
+    <dl className="mt-2 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 text-xs" aria-label={t('inspections.summary.totals')}>
       {keys.map((k, i) => (
         <div key={k} className="rounded-md border border-[var(--border-subtle)] px-2 py-1.5">
-          <dt className="text-[var(--text-muted)]">{i === 0 ? 'Totals' : heads[i]}</dt>
+          <dt className="text-[var(--text-muted)]">{i === 0 ? t('inspections.summary.totals') : heads[i]}</dt>
           <dd className="font-semibold tabular-nums text-[var(--text-primary)]">{i === 0 ? '' : totals[k]}</dd>
         </div>
       ))}
@@ -42,6 +44,8 @@ export default function InspectionSummaryModal({
   defaultRegion = [], defaultSite = [], defaultVehicleType = [], defaultInspector = [],
   regionOf = null, regionOptions = [],
 }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`inspections.summary.${k}`, v)
   const [from, setFrom] = useState(defaultFrom || '')
   const [to, setTo] = useState(defaultTo || '')
   const [site, setSite] = useState(defaultSite)
@@ -115,13 +119,13 @@ export default function InspectionSummaryModal({
 
   /** Human description of everything currently narrowing this summary. */
   const rangeLabel = useMemo(() => {
-    const bits = [`${from || 'Start'} to ${to || 'Today'}`]
+    const bits = [t('inspections.summary.range', { from: from || t('inspections.summary.start'), to: to || t('inspections.summary.today') })]
     for (const [label, values] of activeSelections(activeFilters)) {
       bits.push(`${label}: ${values.join(', ')}`)
     }
     if (country && country !== 'All') bits.push(country)
     return bits.join(' | ')
-  }, [from, to, activeFilters, country])
+  }, [from, to, activeFilters, country, t])
   /**
    * The same description, shortened for a file name. The PDF carries rangeLabel
    * in its header, but an exported SHEET carried only the dates - so a summary
@@ -133,9 +137,9 @@ export default function InspectionSummaryModal({
     [activeFilters],
   )
   const COLS = ['site', 'inspections', 'vehicles', 'good', 'wear', 'damage', 'tyresDue']
-  const HEADS = ['Site', 'Inspections', 'Vehicles', 'Good', 'Wear', 'Damage', 'Tyres due']
+  const HEADS = COLS.map((k) => t(`inspections.summary.cols.${k}`))
   const TCOLS = ['site', 'flagged', 'system', 'user', 'onVehicle', 'replaced', 'removed', 'unknown']
-  const THEADS = ['Site', 'Flagged', 'By system', 'By user', 'Still fitted', 'Replaced', 'Removed only', 'Could not tell']
+  const THEADS = TCOLS.map((k) => t(`inspections.summary.tcols.${k}`))
   const hasTracking = track.ok && tracking.rows.length > 0
 
   async function exportPdf() {
@@ -145,7 +149,7 @@ export default function InspectionSummaryModal({
       const autoTable = await loadAutoTable()
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const brand = await resolvePdfBrand(await brandingForPdf(branding))
-      pdfHeader(doc, 'Inspection and Tyre Change Summary', rangeLabel, company, brand)
+      pdfHeader(doc, p('pdfTitle'), rangeLabel, company, brand)
       autoTable(doc, {
         ...pdfTableTheme(brand.accent),
         startY: 30,
@@ -187,8 +191,8 @@ export default function InspectionSummaryModal({
         doc.setFontSize(9)
         doc.text(
           track.ok
-            ? 'Tyre change flags: none. No tyre is past its expected life, close to it, or recorded as damaged.'
-            : 'Tyre change flags could not be read when this report was built, so no tyre change is shown here.',
+            ? p('pdfNone')
+            : p('pdfUnreadable'),
           14, afterY,
         )
       }
@@ -221,7 +225,7 @@ export default function InspectionSummaryModal({
   const [exportError, setExportError] = useState('')
   const runExport = async (fn) => {
     setExportError('')
-    try { await fn() } catch (e) { setExportError(toUserMessage(e, 'Could not build the export. Try again.')) }
+    try { await fn() } catch (e) { setExportError(toUserMessage(e, p('exportError'))) }
   }
 
   // Column defs for the two tables. The TOTALS row is shown under each table,
@@ -241,7 +245,7 @@ export default function InspectionSummaryModal({
       )
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  })), [])
+  })), [t])
   const trackingColumns = useMemo(() => TCOLS.map((k, i) => ({
     accessorKey: k,
     header: THEADS[i],
@@ -251,58 +255,58 @@ export default function InspectionSummaryModal({
       return <span className={`tabular-nums ${warn ? 'font-semibold' : ''}`} style={warn ? { color: '#b91c1c' } : undefined}>{getValue()}</span>
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  })), [])
+  })), [t])
 
   return (
     <SharedModal
       open
       onClose={onClose}
-      title="Inspection and tyre change summary"
+      title={p('title')}
       subtitle={rangeLabel}
       size="xl"
       headerExtra={(
         <div className="flex gap-2">
           <button type="button" disabled={busy || !summary.rows.length} onClick={() => runExport(exportExcel)}
             className="btn-secondary min-h-[40px] px-3 text-xs inline-flex items-center gap-1.5 disabled:opacity-40">
-            <Download size={13} aria-hidden /> Excel
+            <Download size={13} aria-hidden /> {p('excel')}
           </button>
           <button type="button" disabled={busy || !summary.rows.length} onClick={() => runExport(exportPdf)}
             className="btn-primary min-h-[40px] px-3 text-xs inline-flex items-center gap-1.5 disabled:opacity-40">
-            <FileText size={13} aria-hidden /> {busy ? 'Working...' : 'Download PDF'}
+            <FileText size={13} aria-hidden /> {busy ? p('working') : p('downloadPdf')}
           </button>
         </div>
       )}
     >
       <div className="flex flex-wrap items-end gap-3 mb-4">
-        <label className="text-[11px] text-[var(--text-secondary)]">From
+        <label className="text-[11px] text-[var(--text-secondary)]">{p('from')}
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} max={to || undefined}
             className="input mt-1 block text-xs" />
         </label>
-        <label className="text-[11px] text-[var(--text-secondary)]">To
+        <label className="text-[11px] text-[var(--text-secondary)]">{p('to')}
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} min={from || undefined}
             className="input mt-1 block text-xs" />
         </label>
         {/* The SAME filters as the register, multi-select, and pre-filled from
             whatever the reader had narrowed to before pressing Share. */}
         {regionOptions.length > 0 && (
-          <div className="text-[11px] text-[var(--text-secondary)]">Region
-            <MultiSelectFilter className="mt-1 w-44" label="Region" allLabel="All regions"
+          <div className="text-[11px] text-[var(--text-secondary)]">{p('region')}
+            <MultiSelectFilter className="mt-1 w-44" label={p('region')} allLabel={p('allRegions')}
               options={regionOptions} value={region} onChange={setRegion} />
           </div>
         )}
-        <div className="text-[11px] text-[var(--text-secondary)]">Site
-          <MultiSelectFilter className="mt-1 w-48" label="Site" allLabel="All sites"
+        <div className="text-[11px] text-[var(--text-secondary)]">{p('site')}
+          <MultiSelectFilter className="mt-1 w-48" label={p('site')} allLabel={p('allSites')}
             options={sites} value={site} onChange={setSite} />
         </div>
         {vehicleTypes.length > 1 && (
-          <div className="text-[11px] text-[var(--text-secondary)]">Vehicle type
-            <MultiSelectFilter className="mt-1 w-48" label="Vehicle type" allLabel="All vehicle types"
+          <div className="text-[11px] text-[var(--text-secondary)]">{p('vehicleType')}
+            <MultiSelectFilter className="mt-1 w-48" label={p('vehicleType')} allLabel={p('allVehicleTypes')}
               options={vehicleTypes} value={vehicleType} onChange={setVehicleType} />
           </div>
         )}
         {inspectors.length > 0 && (
-          <div className="text-[11px] text-[var(--text-secondary)]">Inspector
-            <MultiSelectFilter className="mt-1 w-48" label="Inspector" allLabel="All inspectors"
+          <div className="text-[11px] text-[var(--text-secondary)]">{p('inspector')}
+            <MultiSelectFilter className="mt-1 w-48" label={p('inspector')} allLabel={p('allInspectors')}
               options={inspectors} value={inspector} onChange={setInspector} />
           </div>
         )}
@@ -313,39 +317,38 @@ export default function InspectionSummaryModal({
       {/* Headline for what this summary covers, so the reader does not have to
           trust the table to know how much it is built from. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <StatTile label="Inspections covered" value={covered.length} sub={anyFilter ? 'Matching these filters' : 'Every loaded inspection'} />
-        <StatTile label="Sites" value={summary.rows.length} />
-        <StatTile label="Vehicles" value={summary.rows.length ? summary.totals.vehicles : 'N/A'} />
-        <StatTile label="Tyres due" value={summary.rows.length ? summary.totals.tyresDue : 'N/A'} tone={summary.totals.tyresDue > 0 ? 'crit' : 'neutral'} />
+        <StatTile label={p('tiles.covered')} value={covered.length} sub={anyFilter ? p('tiles.matching') : p('tiles.everyLoaded')} />
+        <StatTile label={p('tiles.sites')} value={summary.rows.length} />
+        <StatTile label={p('tiles.vehicles')} value={summary.rows.length ? summary.totals.vehicles : p('na')} />
+        <StatTile label={p('tiles.tyresDue')} value={summary.rows.length ? summary.totals.tyresDue : p('na')} tone={summary.totals.tyresDue > 0 ? 'crit' : 'neutral'} />
       </div>
 
-      <h3 className="text-sm font-semibold mb-2 text-[var(--text-primary)]">Inspections by site</h3>
+      <h3 className="text-sm font-semibold mb-2 text-[var(--text-primary)]">{p('bySite')}</h3>
       <EnterpriseTable
         columns={summaryColumns}
         data={summary.rows}
         getRowId={(r) => String(r.site)}
         enableColumnFilters={false}
         enableExport={false}
-        searchPlaceholder="Search sites"
+        searchPlaceholder={p('searchSites')}
         initialPageSize={25}
-        emptyMessage={anyFilter ? 'No inspections match these filters.' : 'No inspections in this range.'}
+        emptyMessage={anyFilter ? p('emptyFiltered') : p('emptyRange')}
       />
       {summary.rows.length > 0 && <TotalsStrip keys={COLS} heads={HEADS} totals={summary.totals} />}
       <p className="text-[11px] mt-3 text-[var(--text-dim)]">
-        Tyres due counts flagged tyres (past life or due soon) on the vehicles inspected in this range.
+        {p('tyresDueNote')}
       </p>
 
       {/* Tyre change flags, per site, tracked to replacement. */}
       <div className="mt-5 pt-4 border-t border-[var(--border-subtle)]">
-        <h3 className="text-sm font-semibold mb-1 text-[var(--text-primary)]">Tyre change flags by site</h3>
+        <h3 className="text-sm font-semibold mb-1 text-[var(--text-primary)]">{p('flagsBySite')}</h3>
         <p className="text-[11px] mb-2 text-[var(--text-secondary)]">
-          Every flagged tyre and what happened to it. Raised by the system means past its expected
-          life or due soon; raised by a user means damage or a puncture recorded on an inspection.
+          {p('flagsHint')}
         </p>
         {!track.ok && !track.loading ? (
           /* "We could not look" is never printed as a row of zeros. */
           <p role="alert" className="text-xs py-4 text-[var(--text-secondary)]">
-            Tyre change flags could not be read, so they are not in this summary.
+            {p('flagsUnreadable')}
             {track.reason ? ` ${track.reason}` : ''}
           </p>
         ) : (
@@ -356,19 +359,14 @@ export default function InspectionSummaryModal({
             loading={track.loading}
             enableColumnFilters={false}
             enableExport={false}
-            searchPlaceholder="Search sites"
+            searchPlaceholder={p('searchSites')}
             initialPageSize={25}
-            emptyMessage={`No tyre is currently flagged for change${(site || []).length ? ` at ${site.join(', ')}` : ''}.`}
+            emptyMessage={(site || []).length ? p('noFlagsAt', { sites: site.join(', ') }) : p('noFlags')}
           />
         )}
         {hasTracking && <TotalsStrip keys={TCOLS} heads={THEADS} totals={tracking.totals} />}
         <p className="text-[11px] mt-3 text-[var(--text-dim)]">
-          Replaced is worked out from the tyre consumption you upload: a different tyre fitted on the
-          same vehicle at the same wheel after the flag. "Removed only" means the tyre came off and
-          nothing has been fitted back. "Could not tell" means the position or the fitment record is
-          missing, which is not the same as saying the tyre is still fitted. These figures follow the
-          site filter but not the dates, because a flag is a state today rather than an event in the
-          date range.
+          {p('flagsNote')}
         </p>
       </div>
     </SharedModal>

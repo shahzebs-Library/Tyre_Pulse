@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { LanguageProvider } from '../contexts/LanguageContext'
 
 vi.mock('../lib/supabase', () => {
   const channel = { on: () => channel, subscribe: () => channel }
@@ -30,7 +31,7 @@ const liveBoard = () => ({
   presentByUser: {},
 })
 
-const mount = () => render(<MemoryRouter><WorkshopLive /></MemoryRouter>)
+const mount = () => render(<LanguageProvider><MemoryRouter><WorkshopLive /></MemoryRouter></LanguageProvider>)
 
 describe('WorkshopLive date range', () => {
   it('defaults to today, reads nothing extra, and says when nothing was recorded', async () => {

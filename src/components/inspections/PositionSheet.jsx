@@ -86,7 +86,7 @@ export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCoun
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close tyre position"
+              aria-label={t('inspections.formExtra.closePosition')}
               className="w-11 h-11 flex items-center justify-center rounded-full bg-[var(--surface-2)] text-[var(--text-secondary)]"
             >
               <X size={16} />

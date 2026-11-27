@@ -72,9 +72,10 @@ vi.mock('../contexts/SettingsContext', () => ({
     appSettings: { company_name: 'Green Concrete', currency: 'SAR' },
   }),
 }))
-vi.mock('../contexts/LanguageContext', () => ({
-  useLanguage: () => ({ t: (k) => k, isRTL: false }),
-}))
+vi.mock('../contexts/LanguageContext', async () => {
+  const { expenseT } = await import('./expenseT.helpers.js')
+  return { useLanguage: () => ({ t: expenseT, isRTL: false }) }
+})
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ profile: { role: 'Admin' }, isSuperAdmin: false }),
 }))

@@ -6,6 +6,7 @@ import { defectsForAction, generalDefectFor } from '../../lib/inspectionTyreFlag
 import { listActionsForSource, isActionClosed } from '../../lib/api/correctiveActions'
 import { patchInspection } from '../../lib/api/inspections'
 import { toUserMessage } from '../../lib/safeError'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 /**
  * Raise corrective actions from ONE inspection, the one the person pressed the
@@ -19,6 +20,8 @@ import { toUserMessage } from '../../lib/safeError'
  * not also file a vague general task.
  */
 export default function InspectionActionRaiser({ inspection, flagMap, onClose, onDone }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`inspections.raiseDialog.${k}`, v)
   const [existing, setExisting] = useState(null) // null = still loading
   const [loadError, setLoadError] = useState('')
 
@@ -28,7 +31,7 @@ export default function InspectionActionRaiser({ inspection, flagMap, onClose, o
     setExisting(null); setLoadError('')
     listActionsForSource('inspection', inspection.id, { strict: true })
       .then((rows) => { if (live) setExisting(rows || []) })
-      .catch((e) => { if (live) { setExisting([]); setLoadError(toUserMessage(e, 'Could not check actions already raised.')) } })
+      .catch((e) => { if (live) { setExisting([]); setLoadError(toUserMessage(e, p('checkError'))) } })
     return () => { live = false }
   }, [inspection?.id])
 
@@ -58,24 +61,23 @@ export default function InspectionActionRaiser({ inspection, flagMap, onClose, o
 
   if (existing == null) {
     return (
-      <Modal open onClose={onClose} title="Raise corrective actions" size="md">
-        <p className="text-sm text-[var(--text-secondary)]" role="status">Checking actions already raised for {inspection.asset_no || 'this vehicle'}...</p>
+      <Modal open onClose={onClose} title={p('title')} size="md">
+        <p className="text-sm text-[var(--text-secondary)]" role="status">{p('checking', { asset: inspection.asset_no || p('thisVehicle') })}</p>
       </Modal>
     )
   }
 
   if (loadError) {
-    return <Modal open onClose={onClose} title="Raise corrective actions" size="md"><p role="alert">{loadError} Please retry before creating actions.</p></Modal>
+    return <Modal open onClose={onClose} title={p('title')} size="md"><p role="alert">{loadError} {p('retryFirst')}</p></Modal>
   }
 
   if (!defects.length) {
     const open = (existing || []).filter((a) => !isActionClosed(a.status)).length
     return (
-      <Modal open onClose={onClose} title="Raise corrective actions" size="md"
-        footer={<button type="button" className="btn-secondary min-h-[44px]" onClick={onClose}>Close</button>}>
+      <Modal open onClose={onClose} title={p('title')} size="md"
+        footer={<button type="button" className="btn-secondary min-h-[44px]" onClick={onClose}>{p('close')}</button>}>
         <p className="text-sm text-[var(--text-secondary)]">
-          Every finding on this inspection of {inspection.asset_no || 'this vehicle'} already has an action
-          ({open} still open). <Link className="underline" to="/actions">Open Corrective Actions</Link>
+          {p('allRaised', { asset: inspection.asset_no || p('thisVehicle'), open })} <Link className="underline" to="/actions">{p('openActions')}</Link>
         </p>
       </Modal>
     )

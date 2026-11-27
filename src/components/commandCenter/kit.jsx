@@ -19,11 +19,28 @@ import { EmojiGlyph, RouteEmoji } from '../ui/NavEmoji'
 import { vehiclePhoto, vehicleKind } from '../../lib/vehiclePhoto'
 import './commandCenter.css'
 
+// Kit strings live in the core `dashboard` namespace. Some page tests stub t()
+// to echo the key, so a key that comes back unresolved falls back to English.
+const KIT_EN = {
+  'dashboard.commandCenter.kit.loadError': 'Could not load this section.',
+  'dashboard.commandCenter.kit.viewAll': 'View all',
+  'dashboard.commandCenter.kit.tryAgain': 'Try again',
+  'dashboard.commandCenter.kit.trend30': 'Change over the last 30 days',
+  'dashboard.commandCenter.kit.noRecords': 'No records found',
+  'dashboard.commandCenter.na': 'N/A',
+}
+function useKitText() {
+  const { t } = useLanguage()
+  return (k) => { const v = t(k); return v && v !== k ? v : (KIT_EN[k] ?? v) }
+}
+
 export const fmtInt = (n) => (n == null || Number.isNaN(Number(n)) ? 'N/A' : Number(n).toLocaleString('en-US'))
 export const fmtPct = (n) => (n == null || Number.isNaN(Number(n)) ? 'N/A' : `${Math.round(Number(n))}%`)
 
 /** One loader per card, so each card loads, fails and retries on its own. */
 export function useCard(loader, deps) {
+  const t = useKitText()
+  const loadError = t('dashboard.commandCenter.kit.loadError')
   const [state, setState] = useState({ loading: true, data: null, error: null })
   const seq = useRef(0)
   const run = useCallback(() => {
@@ -31,7 +48,7 @@ export function useCard(loader, deps) {
     setState((s) => ({ ...s, loading: true, error: null }))
     Promise.resolve().then(loader).then(
       (data) => { if (id === seq.current) setState({ loading: false, data, error: null }) },
-      (e) => { if (id === seq.current) setState({ loading: false, data: null, error: toUserMessage(e, 'Could not load this section.') }) },
+      (e) => { if (id === seq.current) setState({ loading: false, data: null, error: toUserMessage(e, loadError) }) },
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
@@ -56,17 +73,20 @@ export function Card({ area, title, sub, action, children, className = '', style
   )
 }
 
-export function ViewAll({ to, label = 'View all', onClick }) {
+export function ViewAll({ to, label: labelProp, onClick }) {
+  const t = useKitText()
+  const label = labelProp ?? t('dashboard.commandCenter.kit.viewAll')
   if (onClick) return <button type="button" className="cc-link cc-link-btn" onClick={onClick}>{label} <ArrowRight size={13} aria-hidden="true" /></button>
   return <Link className="cc-link" to={to}>{label} <ArrowRight size={13} aria-hidden="true" /></Link>
 }
 
 export function CardState({ state, empty, lines = 4, children }) {
+  const t = useKitText()
   if (state.loading && !state.data) {
     return <div style={{ display: 'grid', gap: 10 }}>{Array.from({ length: lines }, (_, i) => <div key={i} className="cc-skel" style={{ height: 30 }} />)}</div>
   }
   if (state.error) {
-    return <div className="cc-empty" role="alert"><div>{state.error}<br /><button type="button" className="cc-btn" onClick={state.retry}>Try again</button></div></div>
+    return <div className="cc-empty" role="alert"><div>{state.error}<br /><button type="button" className="cc-btn" onClick={state.retry}>{t('dashboard.commandCenter.kit.tryAgain')}</button></div></div>
   }
   if (empty) return <div className="cc-empty">{empty}</div>
   return children
@@ -84,7 +104,9 @@ export function Tabs({ tabs, value, onChange, label, variant }) {
   )
 }
 
-export function Trend({ value, goodWhenUp = true, title = 'Change over the last 30 days' }) {
+export function Trend({ value, goodWhenUp = true, title: titleProp }) {
+  const t = useKitText()
+  const title = titleProp ?? t('dashboard.commandCenter.kit.trend30')
   if (value == null) return null
   if (value === 0) return <span className="cc-kpi-trend flat" title={title}><ArrowRight size={12} aria-hidden="true" /> 0%</span>
   const up = value > 0
@@ -167,6 +189,7 @@ export function VehicleThumb({ row, src, size = 'md' }) {
 
 /** Donut with a centred total and a legend table of label, count and share. */
 export function Donut({ segments, total, centerLabel, onSelect }) {
+  const t = useKitText()
   const sum = segments.reduce((s, x) => s + (x.count || 0), 0)
   const R = 52; const C = 2 * Math.PI * R
   let off = 0
@@ -190,7 +213,7 @@ export function Donut({ segments, total, centerLabel, onSelect }) {
               <i style={{ background: s.color }} aria-hidden="true" />
               <span className="cc-lt-label">{s.label}</span>
               <b>{fmtInt(s.count)}</b>
-              <span className="cc-lt-pct">{sum ? `${Math.round((s.count / sum) * 100)}%` : 'N/A'}</span>
+              <span className="cc-lt-pct">{sum ? `${Math.round((s.count / sum) * 100)}%` : t('dashboard.commandCenter.na')}</span>
             </button>
           </li>
         ))}
@@ -233,7 +256,8 @@ export function Pager({ page, pageSize, total, onPage, onPageSize, sizes = [10, 
 
 /** Small horizontal bar with a number, for health score and utilisation cells. */
 export function MeterCell({ value, suffix = '', tone }) {
-  if (value == null) return <span className="cc-na">N/A</span>
+  const tr = useKitText()
+  if (value == null) return <span className="cc-na">{tr('dashboard.commandCenter.na')}</span>
   const v = Math.max(0, Math.min(100, Number(value)))
   const t = tone || (v >= 70 ? 'var(--cc-green)' : v >= 40 ? 'var(--cc-amber)' : 'var(--cc-red)')
   return (
@@ -256,7 +280,9 @@ export function MeterCell({ value, suffix = '', tone }) {
  * error/onRetry, loading, manualPagination...); the defaults turn off its own
  * search, filters and export because kit pages provide their own.
  */
-export function KitTable({ columns, rows, empty = 'No records found', compact = false, scroll = false, className = '', ...rest }) {
+export function KitTable({ columns, rows, empty, compact = false, scroll = false, className = '', ...rest }) {
+  const t = useKitText()
+  const na = t('dashboard.commandCenter.na')
   const defs = columns.map((c) => {
     const align = c.align || (c.numeric ? 'right' : undefined)
     return {
@@ -265,7 +291,7 @@ export function KitTable({ columns, rows, empty = 'No records found', compact = 
         ? () => <span className={`cc-th-${align}`}>{c.header}</span>
         : c.header,
       accessorFn: (r) => (c.sortValue ? c.sortValue(r) : r[c.key]),
-      cell: ({ row }) => (c.cell ? c.cell(row.original) : (row.original[c.key] ?? <span className="cc-na">N/A</span>)),
+      cell: ({ row }) => (c.cell ? c.cell(row.original) : (row.original[c.key] ?? <span className="cc-na">{na}</span>)),
       enableSorting: c.sortable !== false,
       meta: { align },
     }
@@ -274,7 +300,7 @@ export function KitTable({ columns, rows, empty = 'No records found', compact = 
     <EnterpriseTable
       columns={defs}
       data={rows}
-      emptyMessage={empty}
+      emptyMessage={empty ?? t('dashboard.commandCenter.kit.noRecords')}
       enableGlobalFilter={false}
       enableColumnFilters={false}
       enableExport={false}

@@ -143,16 +143,16 @@ const isBreakdown = (r) => String(r?.ops_status || '').toLowerCase() === 'breakd
 
 /** Operating state pill: the register status plus today's breakdown flag. */
 function statusPill(r) {
-  if (isActiveRow(r) && isBreakdown(r)) return { tone: 'warn', label: 'Maintenance', Icon: Wrench }
-  if (isActiveRow(r)) return { tone: 'good', label: 'Active', Icon: CheckCircle2 }
-  return { tone: 'muted', label: r?.status || 'Not set', Icon: Circle }
+  if (isActiveRow(r) && isBreakdown(r)) return { tone: 'warn', key: 'maintenance', label: 'Maintenance', Icon: Wrench }
+  if (isActiveRow(r)) return { tone: 'good', key: 'active', label: 'Active', Icon: CheckCircle2 }
+  return { tone: 'muted', key: STATUS_OPTIONS.includes(r?.status) ? r.status : (r?.status ? null : 'notSet'), label: r?.status || 'Not set', Icon: Circle }
 }
 
 /** Policy readiness: specs first, then the tyre-change policy. */
 function policyPill(r) {
-  if (!r?.make || !r?.model) return { tone: 'bad', label: 'Missing Specs', Icon: AlertCircle }
-  if (!r?.expected_km_per_tyre && !r?.min_days_between_changes) return { tone: 'warn', label: 'No Policy', Icon: null }
-  return { tone: 'good', label: 'Compliant', Icon: null }
+  if (!r?.make || !r?.model) return { tone: 'bad', key: 'missingSpecs', label: 'Missing Specs', Icon: AlertCircle }
+  if (!r?.expected_km_per_tyre && !r?.min_days_between_changes) return { tone: 'warn', key: 'noPolicy', label: 'No Policy', Icon: null }
+  return { tone: 'good', key: 'compliant', label: 'Compliant', Icon: null }
 }
 
 /** Maintenance priority badge tone, on the existing cc-pill tones. */
@@ -270,6 +270,7 @@ const FLEET_VIEWS = [
 ]
 
 export default function FleetMaster() {
+  const { t } = useLanguage()
   const [params, setParams] = useSearchParams()
   const view = params.get('tab') === 'analysis' ? 'analysis' : 'register'
   // Both views keep their filters in the address bar under the same names
@@ -277,9 +278,9 @@ export default function FleetMaster() {
   const changeView = (next) => setParams(next === 'analysis' ? { tab: 'analysis' } : {})
   return (
     <div className="space-y-4">
-      <ViewSwitch views={FLEET_VIEWS} value={view} onChange={changeView} label="Asset views" />
+      <ViewSwitch views={FLEET_VIEWS.map((v) => ({ ...v, label: t(`fleetmaster.reg.views.${v.key}`) }))} value={view} onChange={changeView} label={t('fleetmaster.reg.views.aria')} />
       {view === 'analysis' ? (
-        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">Loading...</p>}>
+        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">{t('fleetmaster.reg.loading')}</p>}>
           <AssetAnalysis />
         </Suspense>
       ) : (
@@ -499,11 +500,13 @@ function FleetRegister() {
     } catch (e) {
       if (myReq === reqIdRef.current) {
         setRecords([]); setTotal(0)
-        setLoadError(toUserMessage(e, 'Could not load vehicles.'))
+        setLoadError(toUserMessage(e, t('fleetmaster.reg.err.load')))
       }
     } finally {
       if (myReq === reqIdRef.current) setLoading(false)
     }
+  // t is left out on purpose: a language switch must not refetch the register.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, search, debouncedSearch, siteFilter, statusFilter, typeFilter, flagFilter, prioritySet, activeCountry])
 
   const invalidateRecordRequests = useCallback(() => { reqIdRef.current++ }, [])
@@ -675,7 +678,7 @@ function FleetRegister() {
       loadSites()
       setSaving(false)
     } catch (error) {
-      setFormError(toUserMessage(error, 'Could not save the vehicle.'))
+      setFormError(toUserMessage(error, t('fleetmaster.reg.err.save')))
       setSaving(false)
     }
   }
@@ -818,10 +821,10 @@ function FleetRegister() {
       for (const [k, v] of Object.entries(bulkPolicy)) {
         if (String(v).trim() === '') continue
         const n = Number(v)
-        if (!Number.isFinite(n) || n < 0) { setBulkError('Enter numbers of zero or more.'); return }
+        if (!Number.isFinite(n) || n < 0) { setBulkError(t('fleetmaster.reg.err.numbers')); return }
         patch[k] = n
       }
-      if (!Object.keys(patch).length) { setBulkError('Enter at least one policy value to apply.'); return }
+      if (!Object.keys(patch).length) { setBulkError(t('fleetmaster.reg.err.onePolicy')); return }
     }
     setBulkBusy(true)
     setBulkError('')
@@ -835,7 +838,7 @@ function FleetRegister() {
       setSelected({})
       loadRecords()
     } catch (e) {
-      setBulkError(toUserMessage(e, 'Could not update the selected vehicles.'))
+      setBulkError(toUserMessage(e, t('fleetmaster.reg.err.bulkUpdate')))
     } finally {
       setBulkBusy(false)
     }
@@ -845,7 +848,7 @@ function FleetRegister() {
     exportToExcel(
       withPriority(rows),
       EXPORT_COLS.map(c => c.key),
-      EXPORT_COLS.map(c => c.header),
+      EXPORT_COLS.map(c => t(`fleetmaster.reg.exportCols.${c.key}`)),
       `TyrePulse_FleetMaster${suffix}_${new Date().toISOString().slice(0, 10)}`,
       'Fleet Master'
     )
@@ -855,10 +858,10 @@ function FleetRegister() {
     const text = selectedRows.map(r => r.asset_no).filter(Boolean).join('\n')
     try {
       Promise.resolve(navigator.clipboard?.writeText(text))
-        .then(() => setNotice(`Copied ${fmtInt(selectedRows.length)} asset numbers.`))
-        .catch(() => setNotice('Could not copy to the clipboard in this browser.'))
+        .then(() => setNotice(t('fleetmaster.reg.copied', { count: fmtInt(selectedRows.length) })))
+        .catch(() => setNotice(t('fleetmaster.reg.copyFailed')))
     } catch {
-      setNotice('Could not copy to the clipboard in this browser.')
+      setNotice(t('fleetmaster.reg.copyFailed'))
     }
   }
 
@@ -885,7 +888,7 @@ function FleetRegister() {
       exportToExcel(
         withPriority(rows),
         EXPORT_COLS.map(c => c.key),
-        EXPORT_COLS.map(c => c.header),
+        EXPORT_COLS.map(c => t(`fleetmaster.reg.exportCols.${c.key}`)),
         `TyrePulse_FleetMaster_${new Date().toISOString().slice(0, 10)}`,
         'Fleet Master'
       )
@@ -965,40 +968,40 @@ function FleetRegister() {
   const donut = useMemo(() => {
     if (!summary || summary.maintenance == null || summary.inactive == null) return null
     return [
-      { key: 'active', label: 'Active', count: Math.max(0, summary.active - summary.maintenance), color: 'var(--cc-green)' },
-      { key: 'maintenance', label: 'Maintenance', count: summary.maintenance, color: 'var(--cc-amber)' },
-      { key: 'inactive', label: 'Inactive', count: summary.inactive, color: 'var(--cc-ink-3)' },
+      { key: 'active', label: t('fleetmaster.reg.donut.active'), count: Math.max(0, summary.active - summary.maintenance), color: 'var(--cc-green)' },
+      { key: 'maintenance', label: t('fleetmaster.reg.donut.maintenance'), count: summary.maintenance, color: 'var(--cc-amber)' },
+      { key: 'inactive', label: t('fleetmaster.reg.donut.inactive'), count: summary.inactive, color: 'var(--cc-ink-3)' },
     ]
-  }, [summary])
-  const NA = <span className="cc-na">N/A</span>
+  }, [summary, t])
+  const NA = <span className="cc-na">{t('fleetmaster.reg.na')}</span>
   const fleetColumns = [
     {
       key: 'select',
       header: <input ref={headCheckRef} type="checkbox" aria-label={t('fleetmaster.table.selectAllOnPage')} checked={pageAllSelected} onChange={togglePage} disabled={!records.length} />,
       cell: (r) => (
         <span onClick={e => e.stopPropagation()}>
-          <input type="checkbox" aria-label={`Select ${r.asset_no}`} checked={Boolean(selected[r.id])} onChange={() => toggleRow(r)} />
+          <input type="checkbox" aria-label={t('fleetmaster.reg.selectRow', { asset: r.asset_no })} checked={Boolean(selected[r.id])} onChange={() => toggleRow(r)} />
         </span>
       ),
     },
-    { key: 'asset_no', header: 'Asset No', cell: (r) => <span className="cc-strong">{r.asset_no ?? NA}</span> },
-    show('fleet') && { key: 'fleet_number', header: 'Fleet No', cell: (r) => r.fleet_number || NA },
+    { key: 'asset_no', header: t('fleetmaster.columns.assetNo'), cell: (r) => <span className="cc-strong">{r.asset_no ?? NA}</span> },
+    show('fleet') && { key: 'fleet_number', header: t('fleetmaster.columns.fleetNo'), cell: (r) => r.fleet_number || NA },
     show('vehicle') && {
-      key: 'vehicle', header: 'Vehicle',
+      key: 'vehicle', header: t('fleetmaster.reg.cols.vehicle'),
       cell: (r) => (
         <span className="cc-vehicle">
           <VehicleThumb row={r} size="sm" />
           <span>
             {r.make || r.model
               ? <><span className="cc-strong fm-trunc-name">{[r.make, r.model].filter(Boolean).join(' ')}</span>
-                  <span className="cc-sub fm-trunc-name">{r.make || 'Make not set'} / {r.model || 'Model not set'}</span></>
-              : <span className="cc-na">Make and model not recorded</span>}
+                  <span className="cc-sub fm-trunc-name">{r.make || t('fleetmaster.reg.makeNotSet')} / {r.model || t('fleetmaster.reg.modelNotSet')}</span></>
+              : <span className="cc-na">{t('fleetmaster.reg.makeModelNotRecorded')}</span>}
           </span>
         </span>
       ),
     },
     show('type') && {
-      key: 'vehicle_type', header: 'Type',
+      key: 'vehicle_type', header: t('fleetmaster.columns.type'),
       cell: (r) => {
         const TypeIcon = KIND_ICON[vehicleKind(r)] || Truck
         return r.vehicle_type
@@ -1006,45 +1009,45 @@ function FleetRegister() {
           : NA
       },
     },
-    show('year') && { key: 'year', header: 'Year', cell: (r) => (r.year ?? r.model_year) || NA },
+    show('year') && { key: 'year', header: t('fleetmaster.columns.year'), cell: (r) => (r.year ?? r.model_year) || NA },
     show('site') && {
-      key: 'site', header: 'Site',
+      key: 'site', header: t('fleetmaster.columns.site'),
       cell: (r) => (r.site ? <span className="cc-site" title={r.site}><MapPin size={14} aria-hidden="true" /><span>{r.site}</span></span> : NA),
     },
-    show('operator') && { key: 'operator_name', header: 'Operator', cell: (r) => <span className="fm-trunc">{r.operator_name || NA}</span> },
+    show('operator') && { key: 'operator_name', header: t('fleetmaster.columns.operator'), cell: (r) => <span className="fm-trunc">{r.operator_name || NA}</span> },
     show('status') && {
-      key: 'status', header: 'Status',
-      cell: (r) => { const st = statusPill(r); return <span className={`cc-pill ${st.tone}`} title={r.ops_status_note || undefined}><st.Icon size={12} aria-hidden="true" />{st.label}</span> },
+      key: 'status', header: t('fleetmaster.columns.status'),
+      cell: (r) => { const st = statusPill(r); return <span className={`cc-pill ${st.tone}`} title={r.ops_status_note || undefined}><st.Icon size={12} aria-hidden="true" />{st.key ? t(`fleetmaster.reg.pill.${st.key}`) : st.label}</span> },
     },
     show('priority') && {
       key: 'priority',
       header: (
         <button type="button" className="cc-link-btn fm-sort-btn" onClick={(e) => { e.stopPropagation(); cyclePrioritySort() }}
-          aria-label={`Sort this page by priority${prioritySort ? ` (now ${prioritySort === 'asc' ? 'P1 first' : 'P6 first'})` : ''}`}
-          title="Sorts the vehicles on this page only">
-          Priority <ArrowUpDown size={12} aria-hidden="true" />
+          aria-label={prioritySort ? t(prioritySort === 'asc' ? 'fleetmaster.reg.sortP1' : 'fleetmaster.reg.sortP6') : t('fleetmaster.reg.sortPriority')}
+          title={t('fleetmaster.reg.sortHint')}>
+          {t('fleetmaster.reg.cols.priority')} <ArrowUpDown size={12} aria-hidden="true" />
         </button>
       ),
       cell: (r) => {
         const pr = priorityFor(r)
         const why = pr.basis === 'default'
-          ? 'No vehicle type and no known asset code prefix, so the default applies'
-          : pr.basis === 'code' ? 'No vehicle type recorded; taken from the asset code prefix'
-            : pr.basis === 'override' ? 'Set by hand' : pr.basis === 'stored' ? 'Stored on the vehicle' : 'From the vehicle type'
+          ? t('fleetmaster.reg.basis.default')
+          : pr.basis === 'code' ? t('fleetmaster.reg.basis.code')
+            : pr.basis === 'override' ? t('fleetmaster.reg.basis.override') : pr.basis === 'stored' ? t('fleetmaster.reg.basis.stored') : t('fleetmaster.reg.basis.type')
         return (
           <span title={`${pr.category}. ${pr.response} ${why}.`}>
             <span className={`cc-pill ${PRIORITY_TONE[pr.priority]}`}>{pr.label}</span>
-            {pr.basis === 'default' && <span className="cc-sub">(default)</span>}
+            {pr.basis === 'default' && <span className="cc-sub">{t('fleetmaster.reg.defaultTag')}</span>}
           </span>
         )
       },
     },
     show('policy') && {
-      key: 'policy', header: 'Policy',
-      cell: (r) => { const pol = policyPill(r); return <span className={`cc-pill ${pol.tone}`}>{pol.Icon && <pol.Icon size={12} aria-hidden="true" />}{pol.label}</span> },
+      key: 'policy', header: t('fleetmaster.columns.policy'),
+      cell: (r) => { const pol = policyPill(r); return <span className={`cc-pill ${pol.tone}`}>{pol.Icon && <pol.Icon size={12} aria-hidden="true" />}{t(`fleetmaster.reg.pill.${pol.key}`)}</span> },
     },
     show('service') && {
-      key: 'service', header: 'Last Service',
+      key: 'service', header: t('fleetmaster.reg.cols.service'),
       cell: (r) => {
         const svc = fmtDate(lastService.map[`${r.country || ''}|${r.asset_no}`])
         const km = r.current_km != null && Number.isFinite(Number(r.current_km)) ? `${fmtInt(Math.round(Number(r.current_km)))} km` : null
@@ -1054,20 +1057,20 @@ function FleetRegister() {
               ? <span className="cc-na">...</span>
               : svc
                 ? <span>{svc}</span>
-                : <span className="cc-na" title={lastService.state === 'error' ? 'Service history could not be read' : 'No completed job card on record'}>N/A</span>}
+                : <span className="cc-na" title={lastService.state === 'error' ? t('fleetmaster.reg.serviceError') : t('fleetmaster.reg.noJobCard')}>{t('fleetmaster.reg.na')}</span>}
             {km && <span className="cc-sub">{km}</span>}
           </>
         )
       },
     },
     {
-      key: 'actions', header: 'Actions',
+      key: 'actions', header: t('fleetmaster.reg.cols.actions'),
       cell: (r) => (
         <span className="fm-act-col" onClick={e => e.stopPropagation()}>
-          <Menu label={`Actions for ${r.asset_no}`} triggerClass="cc-icon-btn" width={200} trigger={<MoreHorizontal size={16} aria-hidden="true" />}>
+          <Menu label={t('fleetmaster.reg.actionsFor', { asset: r.asset_no })} triggerClass="cc-icon-btn" width={200} trigger={<MoreHorizontal size={16} aria-hidden="true" />}>
             {(close) => (
               <>
-                <MenuItem icon={Eye} onClick={() => { close(); openVehicle(r) }}>View</MenuItem>
+                <MenuItem icon={Eye} onClick={() => { close(); openVehicle(r) }}>{t('fleetmaster.reg.view')}</MenuItem>
                 <MenuItem icon={ClipboardCheck} onClick={() => { close(); navigate(`/inspections?asset=${encodeURIComponent(r.asset_no)}`) }}>{t('fleetmaster.table.startChecklist')}</MenuItem>
                 {canEdit && <MenuItem icon={Edit2} onClick={() => { close(); openEdit(r) }}>{t('fleetmaster.table.edit')}</MenuItem>}
                 {canDelete && <MenuItem icon={Trash2} danger onClick={() => { close(); confirmDelete(r) }}>{t('fleetmaster.table.delete')}</MenuItem>}
@@ -1083,22 +1086,22 @@ function FleetRegister() {
     ? {
         value: fmtInt(summary.total),
         lines: [
-          'Vehicles across',
-          summary.sites != null ? `${fmtInt(summary.sites)} ${summary.sites === 1 ? 'site' : 'sites'}` : 'N/A sites',
-          summary.countries != null ? `${fmtInt(summary.countries)} ${summary.countries === 1 ? 'country' : 'countries'}` : 'N/A countries',
+          t('fleetmaster.reg.hero.across'),
+          summary.sites != null ? t(summary.sites === 1 ? 'fleetmaster.reg.hero.siteOne' : 'fleetmaster.reg.hero.sites', { count: fmtInt(summary.sites) }) : t('fleetmaster.reg.hero.sitesNa'),
+          summary.countries != null ? t(summary.countries === 1 ? 'fleetmaster.reg.hero.countryOne' : 'fleetmaster.reg.hero.countries', { count: fmtInt(summary.countries) }) : t('fleetmaster.reg.hero.countriesNa'),
         ],
       }
     : undefined
 
   // While the summary is still loading the tile shows a neutral placeholder;
   // N/A is kept for a failed read or a value the summary genuinely lacks.
-  const kpiVal = (v) => (summaryFailed ? 'N/A' : summaryPending ? '...' : v == null ? 'N/A' : fmtInt(v))
+  const kpiVal = (v) => (summaryFailed ? t('fleetmaster.reg.na') : summaryPending ? '...' : v == null ? t('fleetmaster.reg.na') : fmtInt(v))
 
   return (
     <div className="cc fm-page">
       <PageHero
-        title="Fleet Master"
-        lead="Manage your full vehicle registry, ownership, operating status and policy readiness."
+        title={t('fleetmaster.title')}
+        lead={t('fleetmaster.reg.lead')}
         imgLight="/dashboard/hero-light.webp"
         imgDark="/dashboard/hero-dark.webp"
         stat={heroStat}
@@ -1108,81 +1111,81 @@ function FleetRegister() {
       <div className="cc-kpis">
         <Kpi icon={Truck} tone="t-green" display={kpiVal(summary?.total)} label={t('fleetmaster.summary.totalVehicles')}
           trend={summaryPending || summary?.growth?.total == null ? null : Math.round(summary.growth.total)} onClick={clearAll}
-          title="Every vehicle in the register for the current country, search, site and type. Click to clear filters." />
-        <Kpi icon={CheckCircle2} tone="t-green" display={kpiVal(summary?.active)} label="Active Vehicles"
+          title={t('fleetmaster.reg.kpi.totalHint')} />
+        <Kpi icon={CheckCircle2} tone="t-green" display={kpiVal(summary?.active)} label={t('fleetmaster.reg.kpi.active')}
           trend={summaryPending || summary?.growth?.active == null ? null : Math.round(summary.growth.active)} onClick={() => applyStatus('Active')}
-          title="Vehicles whose register status is Active. Click to show them." />
-        <Kpi icon={Wrench} tone="t-amber" display={kpiVal(summary?.maintenance)} label="Under Maintenance"
+          title={t('fleetmaster.reg.kpi.activeHint')} />
+        <Kpi icon={Wrench} tone="t-amber" display={kpiVal(summary?.maintenance)} label={t('fleetmaster.reg.kpi.maintenance')}
           onClick={() => applyFlag('maintenance')}
-          title="Active vehicles whose operating state is Breakdown today (from the monthly asset sheet). Click to show them." />
+          title={t('fleetmaster.reg.kpi.maintenanceHint')} />
         <Kpi icon={AlertCircle} tone="t-red" danger display={kpiVal(summary?.missingSpecs)} label={t('fleetmaster.summary.missingSpecs')}
           onClick={() => applyFlag('missing_specs')}
-          title="Vehicles with no make or no model recorded. Click to show them." />
+          title={t('fleetmaster.reg.kpi.missingHint')} />
         <Kpi icon={FileText} tone="t-blue" display={kpiVal(summary?.noPolicy)} label={t('fleetmaster.summary.noPolicySet')}
           onClick={() => applyFlag('no_policy')}
-          title="Vehicles with no expected km per tyre and no minimum days between tyre changes. Click to show them." />
-        <Kpi icon={CircleSlash} tone="t-purple" display={kpiVal(summary?.inactive)} label="Inactive"
+          title={t('fleetmaster.reg.kpi.noPolicyHint')} />
+        <Kpi icon={CircleSlash} tone="t-purple" display={kpiVal(summary?.inactive)} label={t('fleetmaster.reg.kpi.inactive')}
           onClick={() => applyFlag('inactive')}
-          title="Vehicles whose register status is not Active (Inactive, Retired or Transferred). Click to show them." />
+          title={t('fleetmaster.reg.kpi.inactiveHint')} />
         <Kpi icon={Siren} tone="t-red"
-          display={critHigh.state === 'loading' ? '...' : critHigh.state === 'ready' ? fmtInt(critHigh.count) : 'N/A'}
-          label="Critical & High Assets"
+          display={critHigh.state === 'loading' ? '...' : critHigh.state === 'ready' ? fmtInt(critHigh.count) : t('fleetmaster.reg.na')}
+          label={t('fleetmaster.reg.kpi.critHigh')}
           onClick={() => applyPriority('1-3')}
-          title="Maintenance priority P1 to P3 (wheel loaders, plants and chillers, pumps and booms) under the current country, search, site and type. Click to show them." />
+          title={t('fleetmaster.reg.kpi.critHighHint')} />
       </div>
       {!summaryPending && (debouncedSearch || siteFilter || typeFilter) && (
         <p className="fm-note">
-          These figures cover the {summary.total.toLocaleString()} vehicle{summary.total === 1 ? '' : 's'} matching your search, site and type filters. The status and quick filters are held out, so each tile stays comparable against the total.
+          {t(summary.total === 1 ? 'fleetmaster.reg.scopeOne' : 'fleetmaster.reg.scopeMany', { count: summary.total.toLocaleString() })}
         </p>
       )}
       {summaryCapped && (
         <p className="fm-note warn">
-          Capped view: summary counts are based on the first 20,000 vehicles. Narrow the filters for exact totals.
+          {t('fleetmaster.reg.capped')}
         </p>
       )}
 
       {/* Filter bar */}
-      <section className="cc-card fm-filterbar" aria-label="Filters">
+      <section className="cc-card fm-filterbar" aria-label={t('fleetmaster.reg.filtersAria')}>
         <div className="cc-search">
           <Search size={16} aria-hidden="true" />
           <input
-            aria-label="Search vehicles"
+            aria-label={t('fleetmaster.reg.searchAria')}
             placeholder={t('fleetmaster.filters.searchPlaceholder')}
             value={search}
             onChange={e => setFilters({ search: e.target.value, page: '1' })}
           />
         </div>
-        <SelectField icon={MapPin} label="Site" value={siteFilter} onChange={e => setFilters({ site: e.target.value, page: '1' })}>
+        <SelectField icon={MapPin} label={t('fleetmaster.columns.site')} value={siteFilter} onChange={e => setFilters({ site: e.target.value, page: '1' })}>
           <option value="">{t('fleetmaster.filters.allSites')}</option>
           {sites.map(s => <option key={s} value={s}>{s}</option>)}
         </SelectField>
-        <SelectField icon={Activity} label="Status" value={statusFilter} onChange={e => setFilters({ status: e.target.value, page: '1' })}>
+        <SelectField icon={Activity} label={t('fleetmaster.columns.status')} value={statusFilter} onChange={e => setFilters({ status: e.target.value, page: '1' })}>
           <option value="">{t('fleetmaster.filters.allStatuses')}</option>
-          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{t(`fleetmaster.reg.pill.${s}`)}</option>)}
         </SelectField>
-        <SelectField icon={Layers} label="Vehicle type" value={typeFilter} onChange={e => setFilters({ type: e.target.value, page: '1' })}>
-          <option value="">All Types</option>
+        <SelectField icon={Layers} label={t('fleetmaster.reg.vehicleType')} value={typeFilter} onChange={e => setFilters({ type: e.target.value, page: '1' })}>
+          <option value="">{t('fleetmaster.reg.allTypes')}</option>
           {typeFilter && !types.includes(typeFilter) && <option value={typeFilter}>{typeFilter}</option>}
           {types.map(s => <option key={s} value={s}>{s}</option>)}
         </SelectField>
-        <SelectField icon={Siren} label="Maintenance priority" value={priorityFilter} onChange={e => applyPriority(e.target.value)}>
-          <option value="">All Priorities</option>
+        <SelectField icon={Siren} label={t('fleetmaster.reg.maintPriority')} value={priorityFilter} onChange={e => applyPriority(e.target.value)}>
+          <option value="">{t('fleetmaster.reg.allPriorities')}</option>
           {PRIORITY_FILTER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </SelectField>
-        <Menu label="Saved views" role="dialog" width={280} trigger={<><Bookmark size={15} aria-hidden="true" /> Saved Views <ChevronDown size={14} aria-hidden="true" /></>}>
+        <Menu label={t('fleetmaster.reg.savedViews')} role="dialog" width={280} trigger={<><Bookmark size={15} aria-hidden="true" /> {t('fleetmaster.reg.savedViews')} <ChevronDown size={14} aria-hidden="true" /></>}>
           {(close) => (
             <div className="fm-views">
-              {views.length === 0 && <p className="fm-pop-empty">No saved views yet. Set the filters you want, name them and save.</p>}
+              {views.length === 0 && <p className="fm-pop-empty">{t('fleetmaster.reg.noViews')}</p>}
               {views.map(v => (
                 <div key={v.name} className="fm-view-row">
                   <button type="button" className="fm-pop-item" onClick={() => applyView(v, close)}><Bookmark size={14} aria-hidden="true" /><span>{v.name}</span></button>
-                  <button type="button" className="cc-icon-btn" aria-label={`Delete saved view ${v.name}`} onClick={() => deleteView(v.name)}><Trash2 size={13} /></button>
+                  <button type="button" className="cc-icon-btn" aria-label={t('fleetmaster.reg.deleteView', { name: v.name })} onClick={() => deleteView(v.name)}><Trash2 size={13} /></button>
                 </div>
               ))}
               <form className="fm-view-save" onSubmit={(e) => { e.preventDefault(); saveView(close) }}>
-                <label className="fm-sr" htmlFor="fm-view-name">View name</label>
-                <input id="fm-view-name" className="fm-input" placeholder="Name this view" value={viewName} maxLength={40} onChange={e => setViewName(e.target.value)} />
-                <button type="submit" className="cc-btn-primary" disabled={!viewName.trim()}>Save</button>
+                <label className="fm-sr" htmlFor="fm-view-name">{t('fleetmaster.reg.viewName')}</label>
+                <input id="fm-view-name" className="fm-input" placeholder={t('fleetmaster.reg.viewNamePlaceholder')} value={viewName} maxLength={40} onChange={e => setViewName(e.target.value)} />
+                <button type="submit" className="cc-btn-primary" disabled={!viewName.trim()}>{t('fleetmaster.reg.save')}</button>
               </form>
             </div>
           )}
@@ -1190,16 +1193,16 @@ function FleetRegister() {
         {(flagFilter || anyFilter) && (
           <div className="fm-chips">
             {priorityFilter && (
-              <button type="button" className="fm-chip" onClick={() => applyPriority('')} aria-label="Remove priority filter">
+              <button type="button" className="fm-chip" onClick={() => applyPriority('')} aria-label={t('fleetmaster.reg.removePriority')}>
                 {PRIORITY_FILTER_OPTIONS.find(o => o.value === priorityFilter)?.label} <X size={12} aria-hidden="true" />
               </button>
             )}
             {flagFilter && (
-              <button type="button" className="fm-chip" onClick={() => setFilters({ flag: '', page: '1' })} aria-label={`Remove filter ${FLAG_LABELS[flagFilter]}`}>
-                {FLAG_LABELS[flagFilter]} <X size={12} aria-hidden="true" />
+              <button type="button" className="fm-chip" onClick={() => setFilters({ flag: '', page: '1' })} aria-label={t('fleetmaster.reg.removeFilter', { name: t(`fleetmaster.reg.flags.${flagFilter}`) })}>
+                {t(`fleetmaster.reg.flags.${flagFilter}`)} <X size={12} aria-hidden="true" />
               </button>
             )}
-            {anyFilter && <button type="button" className="cc-link cc-link-btn" onClick={clearAll}>Clear all filters</button>}
+            {anyFilter && <button type="button" className="cc-link cc-link-btn" onClick={clearAll}>{t('fleetmaster.reg.clearAll')}</button>}
           </div>
         )}
       </section>
@@ -1207,70 +1210,70 @@ function FleetRegister() {
       {notice && (
         <div className="fm-banner" role="status">
           <span>{notice}</span>
-          <button type="button" className="cc-icon-btn" aria-label="Dismiss" onClick={() => setNotice('')}><X size={14} /></button>
+          <button type="button" className="cc-icon-btn" aria-label={t('fleetmaster.reg.dismiss')} onClick={() => setNotice('')}><X size={14} /></button>
         </div>
       )}
       {loadError && (
         <div className="fm-banner bad" role="alert">
           <span><AlertTriangle size={15} aria-hidden="true" /> {loadError}</span>
-          <button type="button" className="cc-btn" onClick={() => loadRecords()}>Try again</button>
+          <button type="button" className="cc-btn" onClick={() => loadRecords()}>{t('fleetmaster.reg.tryAgain')}</button>
         </div>
       )}
 
       <div className="fm-main">
         {/* Registry */}
-        <section className="cc-card fm-registry" aria-label="Vehicle registry">
+        <section className="cc-card fm-registry" aria-label={t('fleetmaster.reg.registryAria')}>
           <div className="cc-card-head fm-reg-head">
             <div>
-              <h2 className="cc-card-title">Vehicle Registry ({fmtInt(total)})</h2>
-              <p className="cc-card-sub">Complete fleet registry with operating status, service history and policy readiness.</p>
+              <h2 className="cc-card-title">{t('fleetmaster.reg.registryTitle', { count: fmtInt(total) })}</h2>
+              <p className="cc-card-sub">{t('fleetmaster.reg.registrySub')}</p>
             </div>
             <div className="fm-reg-actions">
-              <Menu label="Show or hide columns" trigger={<><Columns size={15} aria-hidden="true" /> Columns</>}>
+              <Menu label={t('fleetmaster.reg.columnsAria')} trigger={<><Columns size={15} aria-hidden="true" /> {t('fleetmaster.reg.columns')}</>}>
                 {TABLE_COLUMNS.map(c => (
                   <button key={c.key} type="button" role="menuitemcheckbox" aria-checked={show(c.key)} className="fm-pop-item" onClick={() => toggleCol(c.key)}>
-                    <span className={`fm-check ${show(c.key) ? 'on' : ''}`} aria-hidden="true" /><span>{c.label}</span>
+                    <span className={`fm-check ${show(c.key) ? 'on' : ''}`} aria-hidden="true" /><span>{t(`fleetmaster.reg.cols.${c.key}`)}</span>
                   </button>
                 ))}
               </Menu>
-              <button type="button" className="cc-btn-ghost" onClick={handleExport}><Download size={15} aria-hidden="true" /> Export</button>
+              <button type="button" className="cc-btn-ghost" onClick={handleExport}><Download size={15} aria-hidden="true" /> {t('fleetmaster.reg.export')}</button>
               <button type="button" className="cc-btn-primary" onClick={openAdd} disabled={!canAdd} title={canAdd ? undefined : access.reason('create')}><Plus size={15} aria-hidden="true" /> {t('fleetmaster.actions.addVehicle')}</button>
             </div>
           </div>
 
           {/* Bulk bar */}
-          <div className="cc-bulk" role="toolbar" aria-label="Bulk actions">
-            <span className="cc-bulk-count">{fmtInt(selectedIds.length)} selected</span>
-            <Menu label="Bulk actions" disabled={none} trigger={<><ListChecks size={15} aria-hidden="true" /> Bulk Actions <ChevronDown size={14} aria-hidden="true" /></>}>
+          <div className="cc-bulk" role="toolbar" aria-label={t('fleetmaster.reg.bulkActions')}>
+            <span className="cc-bulk-count">{t('fleetmaster.reg.selected', { count: fmtInt(selectedIds.length) })}</span>
+            <Menu label={t('fleetmaster.reg.bulkActions')} disabled={none} trigger={<><ListChecks size={15} aria-hidden="true" /> {t('fleetmaster.reg.bulkActions')} <ChevronDown size={14} aria-hidden="true" /></>}>
               {(close) => (
                 <>
-                  <MenuItem icon={Download} onClick={() => { exportRows(selectedRows, '_Selected'); close() }}>Export selected</MenuItem>
-                  {isAdmin && <MenuItem icon={Trash2} danger onClick={() => { openBulkDelete(); close() }}>Delete selected</MenuItem>}
-                  <MenuItem icon={X} onClick={() => { setSelected({}); close() }}>Clear selection</MenuItem>
+                  <MenuItem icon={Download} onClick={() => { exportRows(selectedRows, '_Selected'); close() }}>{t('fleetmaster.reg.exportSelected')}</MenuItem>
+                  {isAdmin && <MenuItem icon={Trash2} danger onClick={() => { openBulkDelete(); close() }}>{t('fleetmaster.reg.deleteSelected')}</MenuItem>}
+                  <MenuItem icon={X} onClick={() => { setSelected({}); close() }}>{t('fleetmaster.reg.clearSelection')}</MenuItem>
                 </>
               )}
             </Menu>
             <button type="button" className="cc-btn-ghost" disabled={none || !canEdit} onClick={() => openBulk('policy')}
-              title={canEdit ? 'Set the tyre-change policy on every selected vehicle' : access.reason('edit')}>
-              <ShieldCheck size={15} aria-hidden="true" /> Assign Policy
+              title={canEdit ? t('fleetmaster.reg.assignPolicyHint') : access.reason('edit')}>
+              <ShieldCheck size={15} aria-hidden="true" /> {t('fleetmaster.reg.assignPolicy')}
             </button>
             <button type="button" className="cc-btn-ghost" disabled={none || !isAdmin}
               onClick={() => navigate('/pm-programs', { state: { assetNos: selectedRows.map(r => r.asset_no) } })}
-              title={isAdmin ? 'Open Preventive Maintenance to schedule a service plan' : 'Preventive Maintenance plans are managed by administrators'}>
-              <CalendarClock size={15} aria-hidden="true" /> Schedule Service
+              title={isAdmin ? t('fleetmaster.reg.scheduleHint') : t('fleetmaster.reg.scheduleAdminOnly')}>
+              <CalendarClock size={15} aria-hidden="true" /> {t('fleetmaster.reg.scheduleService')}
             </button>
             <button type="button" className="cc-btn-ghost" disabled={none || !canEdit} onClick={() => openBulk('status')}
-              title={canEdit ? 'Change the register status of every selected vehicle' : access.reason('edit')}>
-              <Activity size={15} aria-hidden="true" /> Change Status
+              title={canEdit ? t('fleetmaster.reg.changeStatusHint') : access.reason('edit')}>
+              <Activity size={15} aria-hidden="true" /> {t('fleetmaster.reg.changeStatus')}
             </button>
-            <Menu label="More actions" disabled={none} triggerClass="cc-icon-btn" trigger={<MoreHorizontal size={16} aria-hidden="true" />}>
+            <Menu label={t('fleetmaster.reg.moreActions')} disabled={none} triggerClass="cc-icon-btn" trigger={<MoreHorizontal size={16} aria-hidden="true" />}>
               {(close) => (
                 <>
-                  <MenuItem icon={Copy} onClick={() => { copyAssetNumbers(); close() }}>Copy asset numbers</MenuItem>
-                  <MenuItem icon={Eye} disabled={selectedRows.length !== 1} title={selectedRows.length === 1 ? undefined : 'Select exactly one vehicle'}
-                    onClick={() => { openVehicle(selectedRows[0]); close() }}>Open vehicle</MenuItem>
-                  <MenuItem icon={ClipboardCheck} disabled={selectedRows.length !== 1} title={selectedRows.length === 1 ? undefined : 'Select exactly one vehicle'}
-                    onClick={() => { navigate(`/inspections?asset=${encodeURIComponent(selectedRows[0].asset_no)}`); close() }}>Start tyre checklist</MenuItem>
+                  <MenuItem icon={Copy} onClick={() => { copyAssetNumbers(); close() }}>{t('fleetmaster.reg.copyAssets')}</MenuItem>
+                  <MenuItem icon={Eye} disabled={selectedRows.length !== 1} title={selectedRows.length === 1 ? undefined : t('fleetmaster.reg.selectOne')}
+                    onClick={() => { openVehicle(selectedRows[0]); close() }}>{t('fleetmaster.reg.openVehicle')}</MenuItem>
+                  <MenuItem icon={ClipboardCheck} disabled={selectedRows.length !== 1} title={selectedRows.length === 1 ? undefined : t('fleetmaster.reg.selectOne')}
+                    onClick={() => { navigate(`/inspections?asset=${encodeURIComponent(selectedRows[0].asset_no)}`); close() }}>{t('fleetmaster.table.startChecklist')}</MenuItem>
                 </>
               )}
             </Menu>
@@ -1294,8 +1297,8 @@ function FleetRegister() {
               rows={shownRecords}
               empty={(
                 <span>
-                  {loadError ? 'The register could not be loaded.' : t('fleetmaster.table.noVehicles')}
-                  {anyFilter && !loadError && <><br /><button type="button" className="cc-btn" onClick={(e) => { e.stopPropagation(); clearAll() }}>Clear filters</button></>}
+                  {loadError ? t('fleetmaster.reg.loadFailed') : t('fleetmaster.table.noVehicles')}
+                  {anyFilter && !loadError && <><br /><button type="button" className="cc-btn" onClick={(e) => { e.stopPropagation(); clearAll() }}>{t('fleetmaster.reg.clearFilters')}</button></>}
                 </span>
               )}
               columns={fleetColumns}
@@ -1309,13 +1312,13 @@ function FleetRegister() {
             onPage={setPage}
             onPageSize={size => setFilters({ size: String(size), page: '1' })}
             sizes={PAGE_SIZE_OPTIONS}
-            noun="vehicles"
+            noun={t('fleetmaster.reg.noun')}
           />
         </section>
 
         {/* Right rail */}
-        <aside className="fm-rail" aria-label="Fleet summary">
-          <Card title="Fleet Overview" action={<ViewAll to="/fleet-utilization" />}>
+        <aside className="fm-rail" aria-label={t('fleetmaster.reg.railAria')}>
+          <Card title={t('fleetmaster.reg.overview')} action={<ViewAll to="/fleet-utilization" />}>
             {summaryPending
               ? <div className="cc-skel" style={{ height: 150 }} />
               : donut
@@ -1324,7 +1327,7 @@ function FleetRegister() {
                     <Donut
                       segments={donut}
                       total={summary.total}
-                      centerLabel="Vehicles"
+                      centerLabel={t('fleetmaster.reg.vehicles')}
                       onSelect={(s) => {
                         if (s.key === 'active') applyStatus('Active')
                         else applyFlag(s.key)
@@ -1332,66 +1335,66 @@ function FleetRegister() {
                     />
                     <button type="button" className="fm-extra" onClick={() => applyFlag('missing_specs')}>
                       <i aria-hidden="true" />
-                      <span>Missing specs</span>
+                      <span>{t('fleetmaster.reg.flags.missing_specs')}</span>
                       <b>{fmtInt(summary.missingSpecs)}</b>
                       <span className="cc-lt-pct">{fmtPct(pct(summary.missingSpecs))}</span>
                     </button>
-                    <p className="fm-foot">Active, Maintenance and Inactive add up to the fleet. Missing specs overlaps them.</p>
+                    <p className="fm-foot">{t('fleetmaster.reg.donutFoot')}</p>
                   </>
                 )
-                : <div className="cc-empty">The fleet overview could not be loaded.</div>}
+                : <div className="cc-empty">{t('fleetmaster.reg.overviewFailed')}</div>}
           </Card>
 
-          <Card title="Smart Insights">
+          <Card title={t('fleetmaster.reg.insights.title')}>
             <div className="fm-insights">
               <Insight icon={AlertTriangle} tone="t-red" onClick={() => applyFlag('missing_specs')}
                 num={summaryPending ? null : fmtInt(summary.missingSpecs)}
-                text={`${summary?.missingSpecs === 1 ? 'vehicle' : 'vehicles'} missing specs`}
-                fallback="Vehicles missing specs: N/A"
-                sub="Add make and model so reports can group them" />
+                text={t(summary?.missingSpecs === 1 ? 'fleetmaster.reg.insights.missingOne' : 'fleetmaster.reg.insights.missingMany')}
+                fallback={t('fleetmaster.reg.insights.missingNa')}
+                sub={t('fleetmaster.reg.insights.missingSub')} />
               <Insight icon={Wrench} tone="t-amber" onClick={() => applyFlag('maintenance')}
                 num={summaryPending || summary.maintenance == null ? null : fmtInt(summary.maintenance)}
-                text="under maintenance"
-                fallback="Under maintenance: N/A"
-                sub="Active vehicles broken down today" />
+                text={t('fleetmaster.reg.insights.maint')}
+                fallback={t('fleetmaster.reg.insights.maintNa')}
+                sub={t('fleetmaster.reg.insights.maintSub')} />
               <Insight icon={FileText} tone="t-blue" onClick={() => applyFlag('no_policy')}
                 num={summaryPending ? null : fmtInt(summary.noPolicy)}
-                text={`${summary?.noPolicy === 1 ? 'vehicle' : 'vehicles'} without policy`}
-                fallback="Vehicles without policy: N/A"
-                sub={!summaryPending && summary.noPolicy === 0 ? 'Every vehicle has a tyre-change policy' : 'No expected km per tyre or minimum days set'} />
+                text={t(summary?.noPolicy === 1 ? 'fleetmaster.reg.insights.noPolicyOne' : 'fleetmaster.reg.insights.noPolicyMany')}
+                fallback={t('fleetmaster.reg.insights.noPolicyNa')}
+                sub={!summaryPending && summary.noPolicy === 0 ? t('fleetmaster.reg.insights.allPolicy') : t('fleetmaster.reg.insights.noPolicySub')} />
               <Insight icon={CalendarClock} tone="t-green" to={isAdmin ? '/pm-programs' : '/maintenance-calendar'}
                 num={pmDue.state === 'ready' && pmDue.data?.dueSoon != null ? fmtInt(pmDue.data.dueSoon) : null}
-                text={`${pmDue.data?.dueSoon === 1 ? 'service' : 'services'} due in 7 days`}
-                fallback="Services due in 7 days: N/A"
+                text={t(pmDue.data?.dueSoon === 1 ? 'fleetmaster.reg.insights.serviceOne' : 'fleetmaster.reg.insights.serviceMany')}
+                fallback={t('fleetmaster.reg.insights.serviceNa')}
                 sub={pmDue.state === 'ready' && pmDue.data?.overdue != null
-                  ? `${fmtInt(pmDue.data.overdue)} already overdue`
-                  : pmDue.state === 'loading' ? 'Checking service plans...' : 'Service plans could not be read'} />
+                  ? t('fleetmaster.reg.insights.overdue', { count: fmtInt(pmDue.data.overdue) })
+                  : pmDue.state === 'loading' ? t('fleetmaster.reg.insights.checkingPlans') : t('fleetmaster.reg.insights.plansError')} />
               <Insight icon={Gauge} tone="t-purple" to="/fleet-utilization"
                 num={util.state === 'ready' && util.data?.avg != null ? fmtPct(util.data.avg) : null}
                 text={tx('fleetmaster.insights.utilFleetWide', 'average utilisation, fleet-wide')}
-                fallback="Fleet utilisation: N/A"
+                fallback={t('fleetmaster.reg.insights.utilNa')}
                 sub={util.state === 'ready' && util.data?.avg != null
                   ? tx('fleetmaster.insights.utilFleetWideSub', 'All {count} vehicles with telematics. Search, site and type filters do not apply', { count: fmtInt(util.data.assets) })
-                  : util.state === 'loading' ? 'Checking telematics...' : 'No telematics utilisation on record'} />
+                  : util.state === 'loading' ? t('fleetmaster.reg.insights.checkingTelematics') : t('fleetmaster.reg.insights.noTelematics')} />
             </div>
           </Card>
 
-          <Card title="Priority Matrix">
+          <Card title={t('fleetmaster.reg.matrix.title')}>
             <details className="fm-prio-help">
-              <summary><Info size={14} aria-hidden="true" /> How maintenance priority is set</summary>
-              <p className="fm-foot">Taken from the vehicle type. When the type is blank, from the asset code prefix. Anything else is P6 and shows (default).</p>
+              <summary><Info size={14} aria-hidden="true" /> {t('fleetmaster.reg.matrix.how')}</summary>
+              <p className="fm-foot">{t('fleetmaster.reg.matrix.howText')}</p>
               <ol className="fm-prio-list">
                 {PRIORITY_MATRIX.map(m => (
                   <li key={m.priority}>
-                    <button type="button" className="cc-link-btn" onClick={() => applyPriority(String(m.priority))} aria-label={`Show P${m.priority} vehicles`}>
+                    <button type="button" className="cc-link-btn" onClick={() => applyPriority(String(m.priority))} aria-label={t('fleetmaster.reg.matrix.show', { priority: m.priority })}>
                       <span className={`cc-pill ${PRIORITY_TONE[m.priority]}`}>P{m.priority} {m.criticality}</span>
                     </button>
                     <b>{m.category}</b>
-                    <small>{m.impact} {m.response} PM frequency: {m.pmFrequency}.</small>
+                    <small>{m.impact} {m.response} {t('fleetmaster.reg.matrix.pmFrequency', { value: m.pmFrequency })}</small>
                   </li>
                 ))}
               </ol>
-              <p className="fm-prio-crit-title">Criticality</p>
+              <p className="fm-prio-crit-title">{t('fleetmaster.reg.matrix.criticality')}</p>
               <ul className="fm-prio-list">
                 {CRITICALITY_CRITERIA.map(c => (
                   <li key={c.criticality}><b>{c.criticality}</b><small>{c.meaning} {c.action}</small></li>
@@ -1400,12 +1403,12 @@ function FleetRegister() {
             </details>
           </Card>
 
-          <Card title="Quick Actions">
+          <Card title={t('fleetmaster.reg.quick.title')}>
             <div className="cc-quick">
-              <button type="button" onClick={openAdd} disabled={!canAdd} title={canAdd ? undefined : access.reason('create')}><Plus size={20} aria-hidden="true" />Add Vehicle</button>
-              <Link to="/data-intake"><Upload size={20} aria-hidden="true" />Import Fleet</Link>
-              <button type="button" onClick={handleExport}><FileText size={20} aria-hidden="true" />Export List</button>
-              <Link to="/reports"><BarChart3 size={20} aria-hidden="true" />View Reports</Link>
+              <button type="button" onClick={openAdd} disabled={!canAdd} title={canAdd ? undefined : access.reason('create')}><Plus size={20} aria-hidden="true" />{t('fleetmaster.actions.addVehicle')}</button>
+              <Link to="/data-intake"><Upload size={20} aria-hidden="true" />{t('fleetmaster.reg.quick.import')}</Link>
+              <button type="button" onClick={handleExport}><FileText size={20} aria-hidden="true" />{t('fleetmaster.reg.quick.export')}</button>
+              <Link to="/reports"><BarChart3 size={20} aria-hidden="true" />{t('fleetmaster.reg.quick.reports')}</Link>
             </div>
           </Card>
         </aside>
@@ -1454,7 +1457,7 @@ function FleetRegister() {
                 <div>
                   <label className="label" htmlFor="fm-f-status">{t('fleetmaster.form.status')}</label>
                   <select id="fm-f-status" className="input" value={form.status} onChange={F('status')}>
-                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {STATUS_OPTIONS.map(s => <option key={s} value={s}>{t(`fleetmaster.reg.pill.${s}`)}</option>)}
                   </select>
                 </div>
               </div>
@@ -1553,16 +1556,16 @@ function FleetRegister() {
 
       {/* ── Bulk status / policy ─────────────────────────────────────────── */}
       {bulkDialog && (
-        <Modal title={bulkDialog === 'status' ? 'Change status' : 'Assign policy'} onClose={() => { setBulkDialog(null); setBulkError('') }} busy={bulkBusy}>
+        <Modal title={bulkDialog === 'status' ? t('fleetmaster.reg.bulk.statusTitle') : t('fleetmaster.reg.bulk.policyTitle')} onClose={() => { setBulkDialog(null); setBulkError('') }} busy={bulkBusy}>
           <form onSubmit={(e) => { e.preventDefault(); applyBulk() }} className="space-y-4">
             <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Applies to {fmtInt(selectedIds.length)} selected {selectedIds.length === 1 ? 'vehicle' : 'vehicles'}. Only vehicles your access allows will change.
+              {t(selectedIds.length === 1 ? 'fleetmaster.reg.bulk.appliesOne' : 'fleetmaster.reg.bulk.appliesMany', { count: fmtInt(selectedIds.length) })}
             </p>
             {bulkDialog === 'status' ? (
               <div>
-                <label className="label" htmlFor="fm-bulk-status">New status</label>
+                <label className="label" htmlFor="fm-bulk-status">{t('fleetmaster.reg.bulk.newStatus')}</label>
                 <select id="fm-bulk-status" className="input" value={bulkStatus} onChange={e => setBulkStatus(e.target.value)}>
-                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  {STATUS_OPTIONS.map(s => <option key={s} value={s}>{t(`fleetmaster.reg.pill.${s}`)}</option>)}
                 </select>
               </div>
             ) : (
@@ -1575,7 +1578,7 @@ function FleetRegister() {
                   <div key={k}>
                     <label className="label" htmlFor={`fm-bulk-${k}`}>{label}</label>
                     <input id={`fm-bulk-${k}`} type="number" min={0} className="input" value={bulkPolicy[k]}
-                      onChange={e => setBulkPolicy(p => ({ ...p, [k]: e.target.value }))} placeholder="Leave blank to keep" />
+                      onChange={e => setBulkPolicy(p => ({ ...p, [k]: e.target.value }))} placeholder={t('fleetmaster.reg.bulk.leaveBlank')} />
                   </div>
                 ))}
               </div>
@@ -1583,9 +1586,9 @@ function FleetRegister() {
             {bulkError && <p className="text-sm text-red-300 bg-red-900/30 border border-red-700 rounded-lg p-2.5">{bulkError}</p>}
             <div className="flex gap-3">
               <button type="submit" disabled={bulkBusy} className="btn-primary flex items-center gap-2 disabled:opacity-50">
-                <Save size={15} /> {bulkBusy ? 'Saving...' : 'Apply'}
+                <Save size={15} /> {bulkBusy ? t('fleetmaster.reg.bulk.saving') : t('fleetmaster.reg.bulk.apply')}
               </button>
-              <button type="button" onClick={() => { setBulkDialog(null); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">Cancel</button>
+              <button type="button" onClick={() => { setBulkDialog(null); setBulkError('') }} disabled={bulkBusy} className="btn-secondary">{t('fleetmaster.reg.cancel')}</button>
             </div>
           </form>
         </Modal>

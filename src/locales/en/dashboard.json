@@ -173,5 +173,161 @@
     "sub": "green under fleet avg · red over",
     "empty": "No vehicle cost data in this view yet.",
     "avgNote": "Fleet average: {avg} per vehicle"
+  },
+  "commandCenter": {
+    "na": "N/A",
+    "hero": {
+      "hello": "{greeting},",
+      "title": "Your Fleet. Safer. Smarter. Longer.",
+      "lead": "Real-time tyre, asset and maintenance intelligence across all operations.",
+      "vehiclesAcross": "Vehicles across",
+      "siteOne": "{n} site",
+      "siteMany": "{n} sites",
+      "countryOne": "{n} country",
+      "countryMany": "{n} countries"
+    },
+    "kpi": {
+      "total": "Total Vehicles",
+      "active": "Active Vehicles",
+      "maintenanceDue": "Maintenance Due",
+      "criticalTyres": "Critical Tyre Issues",
+      "missingSpecs": "Missing Specs",
+      "noPolicy": "No Policy Set"
+    },
+    "map": {
+      "title": "Fleet Location",
+      "sub": "Live vehicle distribution by country and site",
+      "country": "Country",
+      "allCountries": "All countries",
+      "empty": "No vehicles registered yet.",
+      "aria": "Vehicles by country: {list}",
+      "pointTitle": "{country}: {total} vehicles, {active} active",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "legendTitle": "Vehicle Status",
+      "active": "Active",
+      "inactive": "Inactive",
+      "maintenanceDue": "Maintenance Due",
+      "critical": "Critical"
+    },
+    "tyre": {
+      "title": "Tyre Health",
+      "viewAll": "View all tyres",
+      "empty": "No fitted tyres with a measurable life yet.",
+      "goodCondition": "Good Condition",
+      "unmeasured": "{n} tyres have no meter reading to judge yet.",
+      "bands": {
+        "good": "Good",
+        "monitor": "Monitor",
+        "replace": "Replace Soon",
+        "critical": "Critical"
+      }
+    },
+    "action": {
+      "title": "Action Center",
+      "filterLabel": "Action filter",
+      "all": "All",
+      "critical": "Critical",
+      "maintenance": "Maintenance",
+      "info": "Info",
+      "empty": "Nothing needs attention here.",
+      "fallbackTitle": "Action"
+    },
+    "time": {
+      "m": "{n}m ago",
+      "h": "{n}h ago",
+      "d": "{n}d ago",
+      "mo": "{n}mo ago"
+    },
+    "work": {
+      "title": "Workshop Activity",
+      "sub": "Live service and maintenance activity",
+      "windowLabel": "Workshop window",
+      "today": "Today",
+      "week": "This Week",
+      "month": "This Month",
+      "emptyToday": "No work orders opened today.",
+      "emptyWeek": "No work orders opened this week.",
+      "emptyMonth": "No work orders opened this month.",
+      "openAll": "Open work orders",
+      "status": {
+        "completed": "Completed",
+        "cancelled": "Cancelled",
+        "waiting": "Waiting",
+        "inProgress": "In Progress",
+        "open": "Open"
+      }
+    },
+    "maint": {
+      "title": "Maintenance Due",
+      "sub": "Assets requiring service, inspection or tyre attention",
+      "empty": "No preventive plans are due or overdue.",
+      "types": {
+        "inspection": "Tyre Inspection",
+        "service": "Scheduled Service",
+        "replacement": "Tyre Replacement",
+        "regroove": "Regrooving",
+        "general": "General Maintenance"
+      }
+    },
+    "compliance": {
+      "title": "Compliance Overview",
+      "insurance": "Insurance Policies",
+      "regulatory": "Regulatory Checks",
+      "safety": "Safety Inspections",
+      "data": "Data Completeness",
+      "inForce": "In force",
+      "compliant": "Compliant",
+      "last30": "Last 30 days",
+      "complete": "Complete",
+      "notMeasured": "Not measured"
+    },
+    "util": {
+      "title": "Fleet Age & Utilization",
+      "period": "Last 6 months",
+      "empty": "No telematics utilisation readings yet.",
+      "avg": "Avg. Fleet Utilization"
+    },
+    "spend": {
+      "title": "Fleet Spend Overview",
+      "period": "This Year",
+      "empty": "No expense data for this scope yet.",
+      "perCountry": "Each country reports in its own currency, so spend is shown per country.",
+      "vsLastYear": "Against the same span last year",
+      "totalLabel": "Total fleet and tyre spend",
+      "chartAria": "Monthly spend by category",
+      "keys": {
+        "tyre": "Tyres",
+        "spare": "Spare Parts",
+        "oil": "Oil & Lubricants"
+      }
+    },
+    "approvals": {
+      "title": "Recent Approvals",
+      "statusLabel": "Approval status",
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "emptyPending": "No pending approvals.",
+      "emptyApproved": "No approved approvals.",
+      "emptyRejected": "No rejected approvals.",
+      "review": "Review",
+      "kinds": {
+        "inspection": "Inspection",
+        "checklist": "Checklist",
+        "accidentClosure": "Accident closure"
+      }
+    },
+    "more": {
+      "title": "Detailed analytics",
+      "sub": "Tyre cost, risk and trend charts, exports and filters"
+    },
+    "kit": {
+      "loadError": "Could not load this section.",
+      "viewAll": "View all",
+      "tryAgain": "Try again",
+      "trend30": "Change over the last 30 days",
+      "noRecords": "No records found"
+    }
   }
 }

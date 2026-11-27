@@ -24,6 +24,7 @@ import {
 } from '../../lib/costVariance'
 import { compareValues, isBlank } from '../../lib/consoleTable'
 import EnterpriseTable from '../ui/EnterpriseTable'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
 const blank = (v) => (isBlank(v) ? undefined : v)
@@ -48,15 +49,9 @@ const EFFECT_ICON = {
   unexplained: AlertTriangle,
 }
 
-const DRIVER_LABEL = {
-  price: 'Price',
-  volume: 'Quantity',
-  new: 'New line',
-  stopped: 'Stopped',
-  mixed: 'Price and quantity',
-  flat: 'No change',
-  unpriced: 'No quantity',
-}
+const DRIVER_KEYS = new Set(['price', 'volume', 'new', 'stopped', 'mixed', 'flat', 'unpriced'])
+const TERM_KEYS = new Set(['volume', 'price', 'newItems', 'stoppedItems', 'notDecomposable', 'rounding', 'unexplained'])
+const GROUP_KEYS = new Set(['volume', 'price', 'mix', 'notDecomposable'])
 
 const DRIVER_TONE = {
   price: 'bg-amber-500/15 text-amber-400',
@@ -68,28 +63,24 @@ const DRIVER_TONE = {
   unpriced: 'bg-slate-500/20 text-[var(--text-dim)]',
 }
 
-const DIM_TABS = [
-  { key: 'by_site', label: 'Site' },
-  { key: 'by_asset', label: 'Asset' },
-  { key: 'by_item', label: 'Item' },
-  { key: 'by_cost_center', label: 'Cost centre' },
-  { key: 'by_asset_type', label: 'Asset type' },
-]
+const DIM_TABS = ['by_site', 'by_asset', 'by_item', 'by_cost_center', 'by_asset_type']
 
 function Money({ value, currency, signed = false }) {
-  if (value == null) return <span className="text-[var(--text-dim)]">N/A</span>
+  const { t } = useLanguage()
+  if (value == null) return <span className="text-[var(--text-dim)]">{t('expense.common.na')}</span>
   const sign = signed && value > 0 ? '+' : ''
   return <span>{sign}{fmtMoney(value, currency)}</span>
 }
 
 /* ---------------------------------------------------------------- states */
 
-function Shell({ children, title = 'Why the cost changed' }) {
+function Shell({ children, title }) {
+  const { t } = useLanguage()
   return (
     <div className="card p-5">
       <div className="flex items-center gap-2 mb-4">
         <Sparkles size={16} className="text-[var(--accent)]" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title || t('expense.variance.title')}</h3>
       </div>
       {children}
     </div>
@@ -97,6 +88,7 @@ function Shell({ children, title = 'Why the cost changed' }) {
 }
 
 function Unavailable({ reason, blended }) {
+  const { t } = useLanguage()
   return (
     <Shell>
       <div className="flex items-start gap-3 rounded-lg bg-[var(--surface-raised)] p-4">
@@ -106,8 +98,8 @@ function Unavailable({ reason, blended }) {
         <div>
           <p className="text-sm text-[var(--text-primary)]">
             {blended
-              ? 'A change cannot be taken apart across more than one currency.'
-              : 'No breakdown to show yet.'}
+              ? t('expense.variance.blended')
+              : t('expense.variance.noBreakdown')}
           </p>
           {reason ? (
             <p className="text-xs text-[var(--text-secondary)] mt-1">{reason}</p>
@@ -126,6 +118,7 @@ function Unavailable({ reason, blended }) {
  * is the reason to trust the rest of the panel.
  */
 function Waterfall({ dec }) {
+  const { t: tr } = useLanguage()
   const { terms, total, closes } = dec.effects
   const cur = dec.currency
   const max = Math.max(...terms.map((t) => Math.abs(t.amount)), 1)
@@ -141,10 +134,10 @@ function Waterfall({ dec }) {
               <div>
                 <div className="flex items-center gap-1.5 mb-1">
                   <Icon size={12} className="text-[var(--text-dim)] shrink-0" />
-                  <span className="text-xs text-[var(--text-primary)]">{t.label}</span>
+                  <span className="text-xs text-[var(--text-primary)]">{TERM_KEYS.has(t.key) ? tr(`expense.variance.term.${t.key}`) : t.label}</span>
                   {t.key === 'unexplained' ? (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
-                      Gap
+                      {tr('expense.variance.gap')}
                     </span>
                   ) : null}
                 </div>
@@ -166,7 +159,7 @@ function Waterfall({ dec }) {
 
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-subtle)]">
         <span className="text-xs font-medium text-[var(--text-secondary)]">
-          Total change
+          {tr('expense.variance.totalChange')}
         </span>
         <span className={`text-sm font-mono font-semibold tabular-nums ${toneFor(total)}`}>
           <Money value={total} currency={cur} signed />
@@ -175,8 +168,7 @@ function Waterfall({ dec }) {
       {!closes ? (
         <p className="text-[11px] text-amber-400 mt-2 flex items-start gap-1.5">
           <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-          The parts do not fully meet the total. The gap above is the amount the
-          item level detail does not account for.
+          {tr('expense.variance.notClose')}
         </p>
       ) : null}
     </div>
@@ -186,6 +178,7 @@ function Waterfall({ dec }) {
 /* --------------------------------------------------- price against volume */
 
 function PriceVolume({ dec }) {
+  const { t } = useLanguage()
   const cur = dec.currency
   const { groups, itemsBoth, itemsNew, itemsStopped } = dec.effects
   const gross = groups.reduce((s, g) => s + Math.abs(g.amount), 0)
@@ -195,21 +188,18 @@ function PriceVolume({ dec }) {
       <div className="grid grid-cols-3 gap-2">
         {groups.filter((g) => g.key !== 'notDecomposable').map((g) => (
           <div key={g.key} className="rounded-lg bg-[var(--surface-raised)] p-3">
-            <p className="text-[11px] text-[var(--text-dim)] mb-1">{g.label}</p>
+            <p className="text-[11px] text-[var(--text-dim)] mb-1">{GROUP_KEYS.has(g.key) ? t(`expense.variance.group.${g.key}`) : g.label}</p>
             <p className={`text-base font-mono font-semibold tabular-nums ${toneFor(g.amount)}`}>
               <Money value={g.amount} currency={cur} signed />
             </p>
             <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
-              {gross > 0 ? `${fmtPct(Math.abs(g.amount) / gross)} of movement` : 'N/A'}
+              {gross > 0 ? t('expense.variance.ofMovement', { pct: fmtPct(Math.abs(g.amount) / gross) }) : t('expense.common.na')}
             </p>
           </div>
         ))}
       </div>
       <p className="text-[11px] text-[var(--text-dim)] mt-2">
-        Price and volume are measured on the {fmtQty(itemsBoth)} item codes bought in
-        both periods. {fmtQty(itemsNew)} started and {fmtQty(itemsStopped)} stopped;
-        those have no pair of prices to compare, so they are counted as mix rather
-        than being given a price change that never happened.
+        {t('expense.variance.pvNote', { both: fmtQty(itemsBoth), started: fmtQty(itemsNew), stopped: fmtQty(itemsStopped) })}
       </p>
     </div>
   )
@@ -218,6 +208,7 @@ function PriceVolume({ dec }) {
 /* ------------------------------------------------------------ drill lists */
 
 function ContributionTable({ dim, currency }) {
+  const { t } = useLanguage()
   const all = useMemo(() => [
     ...dim.rows,
     ...(dim.tail ? [{ ...dim.tail, isRemainder: true }] : []),
@@ -226,13 +217,13 @@ function ContributionTable({ dim, currency }) {
   const max = Math.max(...all.map((r) => Math.abs(r.delta)), 1)
   const columns = useMemo(() => [
     {
-      id: 'label', header: 'Name', accessorFn: (r) => blank(r.label), ...sortable,
+      id: 'label', header: t('expense.variance.col.name'), accessorFn: (r) => blank(r.label), ...sortable,
       cell: ({ row: { original: r } }) => (
         <span className={r.isRemainder ? 'text-[var(--text-dim)] italic' : 'text-[var(--text-primary)]'}>{r.label}</span>
       ),
     },
-    ...[['previous', 'Previous', false], ['current', 'This period', false], ['delta', 'Change', true]].map(([key, header, signed]) => ({
-      id: key, header, accessorFn: (r) => (r[key] == null ? undefined : r[key]), ...sortable,
+    ...[['previous', false], ['current', false], ['delta', true]].map(([key, signed]) => ({
+      id: key, header: t(`expense.variance.col.${key}`), accessorFn: (r) => (r[key] == null ? undefined : r[key]), ...sortable,
       meta: { align: 'right', exportValue: (r) => moneyExport(r[key]) },
       cell: ({ row: { original: r } }) => (
         <span className={`font-mono tabular-nums ${signed ? toneFor(r.delta) : ''}`}>
@@ -241,30 +232,29 @@ function ContributionTable({ dim, currency }) {
       ),
     })),
     {
-      id: 'share', header: 'Share', enableSorting: false, meta: { export: false },
+      id: 'share', header: t('expense.variance.col.share'), enableSorting: false, meta: { export: false },
       cell: ({ row: { original: r } }) => (
         <div className="h-1.5 w-24 rounded-full bg-[var(--surface-raised)] overflow-hidden" aria-hidden="true">
           <div className={`h-full rounded-full ${barFor(r.delta)}`} style={{ width: `${(Math.abs(r.delta) / max) * 100}%` }} />
         </div>
       ),
     },
-  ], [currency, max])
+  ], [currency, max, t])
 
   return (
     <div>
       <EnterpriseTable columns={columns} data={all} getRowId={(r, i) => `${r.label}-${i}`}
-        searchPlaceholder="Search name..." enableColumnFilters={false}
-        exportFileName="Cost change contributions" emptyMessage="Nothing moved on this view." />
+        searchPlaceholder={t('expense.variance.searchName')} enableColumnFilters={false}
+        exportFileName="Cost change contributions" emptyMessage={t('expense.variance.nothingMoved')} />
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-[var(--border-subtle)] text-xs">
-        <span className="font-medium text-[var(--text-secondary)]">Total change</span>
+        <span className="font-medium text-[var(--text-secondary)]">{t('expense.variance.totalChange')}</span>
         <span className={`font-mono font-semibold tabular-nums ${toneFor(dim.total)}`}>
           <Money value={dim.total} currency={currency} signed />
         </span>
       </div>
       {dim.grossIsLowerBound ? (
         <p className="text-[10px] text-[var(--text-dim)] mt-2">
-          The final row nets many members into one figure, so movement within it
-          can cancel out and the real total movement may be larger.
+          {t('expense.variance.lowerBound')}
         </p>
       ) : null}
     </div>
@@ -272,10 +262,14 @@ function ContributionTable({ dim, currency }) {
 }
 
 function ItemTable({ items, currency }) {
+  const { t } = useLanguage()
+  const na = t('expense.common.na')
+  const driverLabel = (d) => (DRIVER_KEYS.has(d) ? t(`expense.variance.driver.${d}`) : d)
+  const range = (a, b) => t('expense.variance.range', { from: a, to: b })
   const columns = useMemo(() => [
     {
-      id: 'label', header: 'Item', accessorFn: (i) => blank(i.label), ...sortable,
-      meta: { exportValue: (i) => `${i.label || 'N/A'} (${i.code || 'N/A'})` },
+      id: 'label', header: t('expense.variance.col.item'), accessorFn: (i) => blank(i.label), ...sortable,
+      meta: { exportValue: (i) => `${i.label || na} (${i.code || na})` },
       cell: ({ row: { original: i } }) => (
         <div className="max-w-[16rem]">
           <div className="text-[var(--text-primary)] truncate" title={i.label}>{i.label}</div>
@@ -284,38 +278,38 @@ function ItemTable({ items, currency }) {
       ),
     },
     {
-      id: 'driver', header: 'Driver', accessorFn: (i) => DRIVER_LABEL[i.driver] || i.driver, ...sortable,
+      id: 'driver', header: t('expense.variance.col.driver'), accessorFn: (i) => driverLabel(i.driver), ...sortable,
       meta: { filterVariant: 'select' },
       cell: ({ row: { original: i } }) => (
         <span className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${DRIVER_TONE[i.driver] || DRIVER_TONE.flat}`}>
-          {DRIVER_LABEL[i.driver] || i.driver}
+          {driverLabel(i.driver)}
         </span>
       ),
     },
     {
-      id: 'qty', header: 'Quantity', accessorFn: (i) => (i.qtyCurrent == null ? undefined : i.qtyCurrent), ...sortable,
-      meta: { align: 'right', exportValue: (i) => `${fmtQty(i.qtyPrevious)} to ${fmtQty(i.qtyCurrent)}` },
+      id: 'qty', header: t('expense.variance.col.qty'), accessorFn: (i) => (i.qtyCurrent == null ? undefined : i.qtyCurrent), ...sortable,
+      meta: { align: 'right', exportValue: (i) => range(fmtQty(i.qtyPrevious), fmtQty(i.qtyCurrent)) },
       cell: ({ row: { original: i } }) => (
-        <span className="font-mono tabular-nums text-[var(--text-secondary)] whitespace-nowrap">{fmtQty(i.qtyPrevious)} to {fmtQty(i.qtyCurrent)}</span>
+        <span className="font-mono tabular-nums text-[var(--text-secondary)] whitespace-nowrap">{range(fmtQty(i.qtyPrevious), fmtQty(i.qtyCurrent))}</span>
       ),
     },
     {
-      id: 'price', header: 'Unit price', accessorFn: (i) => (i.priceCurrent == null ? undefined : i.priceCurrent), ...sortable,
+      id: 'price', header: t('expense.variance.col.price'), accessorFn: (i) => (i.priceCurrent == null ? undefined : i.priceCurrent), ...sortable,
       meta: {
         align: 'right',
-        exportValue: (i) => (i.pricePrevious == null || i.priceCurrent == null ? 'N/A' : `${fmtMoney(i.pricePrevious)} to ${fmtMoney(i.priceCurrent)}`),
+        exportValue: (i) => (i.pricePrevious == null || i.priceCurrent == null ? na : range(fmtMoney(i.pricePrevious), fmtMoney(i.priceCurrent))),
       },
       cell: ({ row: { original: i } }) => (
         <span className="font-mono tabular-nums text-[var(--text-secondary)] whitespace-nowrap">
           {i.pricePrevious == null || i.priceCurrent == null
             // one side is missing, so there is no price change to show
-            ? <span className="text-[var(--text-dim)]">N/A</span>
-            : <>{fmtMoney(i.pricePrevious)} to {fmtMoney(i.priceCurrent)}</>}
+            ? <span className="text-[var(--text-dim)]">{na}</span>
+            : <>{range(fmtMoney(i.pricePrevious), fmtMoney(i.priceCurrent))}</>}
         </span>
       ),
     },
-    ...[['priceEffect', 'Price effect', null], ['volumeEffect', 'Volume effect', null], ['delta', 'Change', currency]].map(([key, header, cur]) => ({
-      id: key, header, accessorFn: (i) => (i[key] == null ? undefined : i[key]), ...sortable,
+    ...[['priceEffect', null], ['volumeEffect', null], ['delta', currency]].map(([key, cur]) => ({
+      id: key, header: t(`expense.variance.col.${key}`), accessorFn: (i) => (i[key] == null ? undefined : i[key]), ...sortable,
       meta: { align: 'right', exportValue: (i) => moneyExport(i[key]) },
       cell: ({ row: { original: i } }) => (
         <span className={`font-mono tabular-nums ${key === 'delta' ? 'font-medium' : ''} ${toneFor(i[key])}`}>
@@ -323,12 +317,13 @@ function ItemTable({ items, currency }) {
         </span>
       ),
     })),
-  ], [currency])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [currency, t])
 
   return (
     <EnterpriseTable columns={columns} data={items} getRowId={(i) => String(i.code)}
-      searchPlaceholder="Search item or code..." exportFileName="Cost change by item"
-      emptyMessage="No item moved in this window." />
+      searchPlaceholder={t('expense.variance.searchItem')} exportFileName="Cost change by item"
+      emptyMessage={t('expense.variance.noItemMoved')} />
   )
 }
 
@@ -344,6 +339,7 @@ function ItemTable({ items, currency }) {
  * @param {string} [props.error]
  */
 export default function CostVariancePanel({ variance, snapshot, loading, error }) {
+  const { t: tr } = useLanguage()
   const [tab, setTab] = useState('by_site')
 
   const dec = useMemo(
@@ -374,8 +370,8 @@ export default function CostVariancePanel({ variance, snapshot, loading, error }
   const cur = dec.currency
   const rising = dec.totals.delta > 0
   const HeadIcon = dec.totals.delta === 0 ? Info : (rising ? TrendingUp : TrendingDown)
-  const tabs = DIM_TABS.filter((t) => dec.byDim[t.key])
-  const activeTab = dec.byDim[tab] ? tab : (tabs[0]?.key || null)
+  const tabs = DIM_TABS.filter((k) => dec.byDim[k])
+  const activeTab = dec.byDim[tab] ? tab : (tabs[0] || null)
 
   return (
     <Shell>
@@ -401,13 +397,13 @@ export default function CostVariancePanel({ variance, snapshot, loading, error }
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div>
           <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-3">
-            What the change is made of
+            {tr('expense.variance.madeOf')}
           </h4>
           <Waterfall dec={dec} />
         </div>
         <div>
           <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-3">
-            Price, volume or mix
+            {tr('expense.variance.priceVolumeMix')}
           </h4>
           <PriceVolume dec={dec} />
         </div>
@@ -417,24 +413,24 @@ export default function CostVariancePanel({ variance, snapshot, loading, error }
       {activeTab ? (
         <div className="mt-6">
           <div className="flex items-center gap-1 mb-3 flex-wrap">
-            {tabs.map((t) => (
+            {tabs.map((k) => (
               <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
+                key={k}
+                onClick={() => setTab(k)}
                 type="button"
-                aria-pressed={activeTab === t.key}
+                aria-pressed={activeTab === k}
                 className={`min-h-[44px] sm:min-h-[32px] px-3 rounded-lg text-[11px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] ${
-                  activeTab === t.key
+                  activeTab === k
                     ? 'bg-[var(--accent)] text-white'
                     : 'bg-[var(--surface-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                 }`}
               >
-                {t.label}
+                {tr(`expense.cpk.dim.${k}`)}
               </button>
             ))}
             {dec.byDim[activeTab]?.fromFallback ? (
               <span className="text-[10px] text-[var(--text-dim)] ml-1">
-                ranked from the overview data
+                {tr('expense.variance.fromFallback')}
               </span>
             ) : null}
           </div>
@@ -445,13 +441,12 @@ export default function CostVariancePanel({ variance, snapshot, loading, error }
       {dec.items.length ? (
         <div className="mt-6">
           <h4 className="text-xs font-semibold text-[var(--text-secondary)] mb-3">
-            The items behind it
+            {tr('expense.variance.itemsBehind')}
           </h4>
           <ItemTable items={dec.items} currency={cur} />
           {dec.itemsTail ? (
             <p className="text-[10px] text-[var(--text-dim)] mt-2">
-              A further {fmtQty(dec.itemsTail.count)} item codes moved, together
-              {' '}{fmtMoney(dec.itemsTail.delta, cur)}.
+              {tr('expense.variance.itemsTail', { n: fmtQty(dec.itemsTail.count), amount: fmtMoney(dec.itemsTail.delta, cur) })}
             </p>
           ) : null}
         </div>

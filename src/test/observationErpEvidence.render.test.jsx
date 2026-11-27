@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 const api = vi.hoisted(() => ({
@@ -16,6 +16,12 @@ const api = vi.hoisted(() => ({
 vi.mock('../lib/api/observationErpEvidence', () => api)
 
 const { default: ObservationErpEvidence } = await import('../components/inspections/ObservationErpEvidence')
+const { LanguageProvider, useLanguage } = await import('../contexts/LanguageContext')
+
+// The inspections namespace loads lazily; warm it once so synchronous queries
+// see the real English strings rather than the humanised placeholder.
+function WarmLocale() { const { t } = useLanguage(); return <span>{t('inspections.erp.refresh')}</span> }
+beforeAll(async () => { render(<LanguageProvider><WarmLocale /></LanguageProvider>); await screen.findByText('Refresh'); cleanup() })
 
 const observation = {
   key: 'o1', rawPosition: 'R1Ro', actionRecord: { id: 'a1', status: 'Open' },

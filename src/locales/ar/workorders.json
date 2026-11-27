@@ -21,12 +21,21 @@
     "byType": "أوامر العمل حسب النوع",
     "statusDistribution": "توزيع الحالات",
     "noWorkOrders": "لا توجد أوامر عمل بعد",
-    "noStatusData": "لا توجد بيانات حالة متاحة"
+    "noStatusData": "لا توجد بيانات حالة متاحة",
+    "count": "العدد"
   },
   "filters": {
     "searchPlaceholder": "ابحث برقم الأمر أو الأصل أو الرقم التسلسلي أو الوصف...",
     "clear": "مسح",
-    "results": "{count} نتيجة"
+    "results": "{count} نتيجة",
+    "searchAria": "البحث في أوامر العمل",
+    "status": "الحالة",
+    "priority": "الأولوية",
+    "type": "النوع",
+    "all": "الكل",
+    "byAria": "تصفية أوامر العمل حسب {field}",
+    "fromDate": "من تاريخ",
+    "toDate": "إلى تاريخ"
   },
   "bulk": {
     "selected": "{count} أمر عمل محدد",
@@ -153,7 +162,10 @@
     "notes": "ملاحظات",
     "customFields": "تفاصيل إضافية مستوردة",
     "edit": "تعديل",
-    "jobCardPdf": "بطاقة العمل PDF"
+    "jobCardPdf": "بطاقة العمل PDF",
+    "closeLabel": "إغلاق أمر العمل",
+    "lockedInApproval": "مقفل، قيد الاعتماد",
+    "approvalTitle": "اعتماد أمر العمل"
   },
   "jobcard": {
     "notRecorded": "غير مسجل",
@@ -218,5 +230,73 @@
       "done": "منجزة",
       "qc": "جاهزة للفحص"
     }
+  },
+  "loadingShort": "جارٍ التحميل...",
+  "retry": "إعادة المحاولة",
+  "views": {
+    "label": "عروض أوامر العمل",
+    "jobs": "بطاقات العمل",
+    "analytics": "تحليلات الورشة"
+  },
+  "rowActions": {
+    "view": "عرض",
+    "viewAria": "عرض أمر العمل {no}",
+    "edit": "تعديل",
+    "editAria": "تعديل أمر العمل {no}",
+    "deleteAria": "حذف أمر العمل {no}",
+    "deleteTitle": "حذف أمر العمل (للمسؤول فقط)",
+    "jobCardAria": "تنزيل بطاقة العمل {no}",
+    "jobCardTitle": "بطاقة العمل بصيغة PDF"
+  },
+  "sort": {
+    "label": "ترتيب أوامر العمل حسب",
+    "option": "الترتيب: {field}",
+    "ascAria": "مرتبة تصاعديا، التبديل إلى تنازلي",
+    "descAria": "مرتبة تنازليا، التبديل إلى تصاعدي",
+    "fields": {
+      "opened": "تاريخ الفتح",
+      "workOrderNo": "رقم أمر العمل",
+      "asset": "الأصل",
+      "type": "النوع",
+      "priority": "الأولوية",
+      "status": "الحالة",
+      "technician": "الفني",
+      "target": "الموعد المستهدف",
+      "totalCost": "التكلفة الإجمالية"
+    }
+  },
+  "statusLabel": {
+    "new": "جديد",
+    "awaitingAssignment": "بانتظار التعيين",
+    "assigned": "معيّن",
+    "inProgress": "قيد التنفيذ",
+    "waitingParts": "بانتظار قطع الغيار",
+    "waitingApproval": "بانتظار الاعتماد",
+    "qualityInspection": "فحص الجودة",
+    "completed": "مكتمل",
+    "overdue": "متأخر",
+    "cancelled": "ملغى",
+    "onHold": "معلّق"
+  },
+  "priorityLabel": {
+    "critical": "حرجة",
+    "high": "عالية",
+    "medium": "متوسطة",
+    "low": "منخفضة"
+  },
+  "workTypeLabel": {
+    "tyreChange": "تغيير إطار",
+    "inspection": "فحص",
+    "repair": "إصلاح",
+    "rotation": "تدوير الإطارات",
+    "balancing": "ترصيص",
+    "alignment": "ضبط الزوايا",
+    "retread": "تجديد الإطار",
+    "punctureRepair": "إصلاح ثقب",
+    "pressureCheck": "فحص الضغط",
+    "emergency": "طارئ",
+    "other": "أخرى",
+    "service": "صيانة دورية",
+    "preventiveMaintenance": "صيانة وقائية"
   }
 }

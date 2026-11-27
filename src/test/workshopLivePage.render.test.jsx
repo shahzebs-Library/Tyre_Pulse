@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { LanguageProvider } from '../contexts/LanguageContext'
 
 vi.mock('../lib/supabase', () => {
   const channel = { on: () => channel, subscribe: () => channel }
@@ -42,7 +43,7 @@ function board() {
   }
 }
 
-const mount = () => render(<MemoryRouter><WorkshopLive /></MemoryRouter>)
+const mount = () => render(<LanguageProvider><MemoryRouter><WorkshopLive /></MemoryRouter></LanguageProvider>)
 
 describe('WorkshopLive page', () => {
   it('renders tiles, technicians, alerts and job flow from the engine', async () => {

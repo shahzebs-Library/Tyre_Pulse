@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { render, screen, waitFor, cleanup } from '@testing-library/react'
 
 const listActionsForSource = vi.fn()
 const canCreateCorrectiveAction = vi.fn().mockResolvedValue(true)
@@ -12,6 +12,12 @@ vi.mock('../lib/api/correctiveActions', () => ({
 }))
 
 import TyreDueBanner from '../components/inspections/TyreDueBanner'
+import { LanguageProvider, useLanguage } from '../contexts/LanguageContext'
+
+// The inspections namespace loads lazily; warm it once so synchronous queries
+// see the real English strings rather than the humanised placeholder.
+function WarmLocale() { const { t } = useLanguage(); return <span>{t('inspections.dueBanner.fixed')}</span> }
+beforeAll(async () => { render(<LanguageProvider><WarmLocale /></LanguageProvider>); await screen.findByText('Fixed'); cleanup() })
 
 const inspection = {
   id: 'insp-1', asset_no: 'TM101', site: 'NHC',

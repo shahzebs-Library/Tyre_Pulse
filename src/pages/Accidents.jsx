@@ -27,6 +27,7 @@ const DOC_SLOTS = [
 ]
 import { motion } from 'framer-motion'
 import PageHeader from '../components/ui/PageHeader'
+import { useLanguage } from '../contexts/LanguageContext'
 import Modal from '../components/ui/Modal'
 import DateField from '../components/ui/DateField'
 import ActionMenu from '../components/ui/ActionMenu'
@@ -102,6 +103,23 @@ export function wizardStepLabel(key) {
 // `step` (a REPORT_WIZARD_STEPS key) prints the step eyebrow above the section
 // title. Several sections can share one step (Incident + Classification are
 // both "Incident details"); only the FIRST section of a step passes `step`.
+// Display keys for the accident vocabularies (stored values never change; only
+// the label the reader sees is translated at render).
+const SEVERITY_I18N = { Minor: 'minor', Moderate: 'moderate', Major: 'major' }
+const STATUS_I18N = {
+  'Reported': 'reported', 'Under Investigation': 'underInvestigation', 'Repair In Progress': 'repairInProgress',
+  'Awaiting Parts': 'awaitingParts', 'Awaiting Approval': 'awaitingApproval', 'Insurance Claim': 'insuranceClaim',
+  'Closed': 'closed',
+}
+const FAULT_I18N = { 'Faulty': 'faulty', 'Non-faulty': 'nonFaulty', 'Under review': 'underReview' }
+const REPAIR_I18N = { Internal: 'internal', External: 'external' }
+const WF_STAGE_I18N = {
+  reported: 'reported', initial_review: 'initialReview', hse_investigation: 'hseInvestigation',
+  workshop_assessment: 'workshopAssessment', insurance_claim: 'insuranceClaim', repair_approval: 'repairApproval',
+  repair_in_progress: 'repairInProgress', final_inspection: 'finalInspection', vehicle_release: 'vehicleRelease',
+  cost_recovery: 'costRecovery', closed: 'closed', cancelled: 'cancelled',
+}
+
 function FormSection({ title, step, children }) {
   const stepLabel = step ? wizardStepLabel(step) : ''
   return (
@@ -602,6 +620,13 @@ export function describeIncident(row) {
 
 export default function Accidents() {
   const reportMeta = useReportMeta('Accident & Claims Tracker')
+  const { t } = useLanguage()
+  const ac = (k, v) => t(`accidentsui.${k}`, v)
+  const sevLabel = (s) => (SEVERITY_I18N[s] ? t(`accidentsui.severity.${SEVERITY_I18N[s]}`) : s)
+  const statusText = (s) => (STATUS_I18N[s] ? t(`accidentsui.status.${STATUS_I18N[s]}`) : s)
+  const faultText = (s) => (FAULT_I18N[s] ? t(`accidentsui.fault.${FAULT_I18N[s]}`) : s)
+  const repairText = (s) => (REPAIR_I18N[s] ? t(`accidentsui.repair.${REPAIR_I18N[s]}`) : s)
+  const wfStageText = (key, fallback) => (WF_STAGE_I18N[key] ? t(`accidentsui.wfStage.${WF_STAGE_I18N[key]}`) : fallback)
   const { profile } = useAuth()
   const { activeCountry, activeCurrency, appSettings } = useSettings()
   const fmtCurrency = useCallback(
@@ -2213,7 +2238,7 @@ export default function Accidents() {
         id: 'select',
         header: () => (
           <input type="checkbox" checked={allPageSelected} onChange={toggleSelectPage}
-            title="Select all shown"
+            title={ac('table.selectAll')}
             className="w-4 h-4 rounded border-[var(--input-border)] bg-[var(--input-bg)] accent-blue-600 cursor-pointer" />
         ),
         cell: ({ row }) => (
@@ -2226,7 +2251,7 @@ export default function Accidents() {
       })
     }
     cols.push(
-      { id: 'incident_date', header: 'Date', accessorFn: r => r.incident_date || '', size: 120, sortingFn: 'alphanumeric',
+      { id: 'incident_date', header: ac('table.date'), accessorFn: r => r.incident_date || '', size: 120, sortingFn: 'alphanumeric',
         // Delayed cases keep a red left accent + red text so a stalled case is
         // spottable from the row edge; the "Delayed Nd" badge lives ONLY in the
         // Status cell now (it used to be duplicated here).
@@ -2242,19 +2267,19 @@ export default function Accidents() {
           )
         },
       },
-      { id: 'asset_no', header: 'Asset', accessorFn: r => r.asset_no || 'N/A', size: 120,
+      { id: 'asset_no', header: ac('table.asset'), accessorFn: r => r.asset_no || 'N/A', size: 120,
         cell: ({ getValue }) => <span className="font-medium text-[var(--text-primary)]">{getValue()}</span>,
       },
-      { id: 'site', header: 'Site', accessorFn: r => r.site || 'N/A', size: 120 },
-      { id: 'severity', header: 'Severity', accessorFn: r => canonSeverity(r.severity), size: 100,
+      { id: 'site', header: ac('table.site'), accessorFn: r => r.site || 'N/A', size: 120 },
+      { id: 'severity', header: ac('table.severity'), accessorFn: r => canonSeverity(r.severity), size: 100,
         cell: ({ getValue }) => {
           const { label, className } = accidentSeverityPill(getValue())
           return label
-            ? <span className={`badge text-xs ${className}`}>{label}</span>
+            ? <span className={`badge text-xs ${className}`}>{sevLabel(label)}</span>
             : <span className="text-[var(--text-muted)] text-xs">N/A</span>
         },
       },
-      { id: 'status', header: 'Status / Stage', accessorFn: r => canonStatus(r.status), size: 170,
+      { id: 'status', header: ac('table.status'), accessorFn: r => canonStatus(r.status), size: 170,
         cell: ({ row }) => {
           const r = row.original
           const stage = r.current_status || r.case_stage
@@ -2262,30 +2287,30 @@ export default function Accidents() {
           const { label: statusLabel, className: statusClass } = accidentStatusPill(r.status)
           return (
             <div className="flex flex-col gap-1 items-start">
-              {statusLabel && <span className={`badge text-xs ${statusClass}`}>{statusLabel}</span>}
+              {statusLabel && <span className={`badge text-xs ${statusClass}`}>{statusText(statusLabel)}</span>}
               {wfStage && (
-                <span className="text-[10px] text-[var(--text-secondary)] flex items-center gap-1" title="Unified workflow stage">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500/70 inline-block" /> {stageLabel(wfStage)}
+                <span className="text-[10px] text-[var(--text-secondary)] flex items-center gap-1" title={ac('table.wfStageTitle')}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500/70 inline-block" /> {wfStageText(wfStage, stageLabel(wfStage))}
                 </span>
               )}
               {r.vor === true && (
                 <span className="badge text-[10px] bg-red-900/50 text-red-300 border border-red-700/50 flex items-center gap-1">
-                  <AlertOctagon size={9} /> Off road
+                  <AlertOctagon size={9} /> {ac('table.offRoad')}
                 </span>
               )}
               {stage && (
-                <span className="text-[11px] text-[var(--text-dim)] truncate max-w-[150px]" title={r.next_step ? `Next: ${r.next_step}` : stage}>
+                <span className="text-[11px] text-[var(--text-dim)] truncate max-w-[150px]" title={r.next_step ? ac('table.next', { step: r.next_step }) : stage}>
                   {stage}
                 </span>
               )}
               {r.closure_status === 'pending_closure' && (
                 <span className="badge text-xs bg-yellow-900/50 text-yellow-300 border border-yellow-700/50 flex items-center gap-1">
-                  <Hourglass size={10} /> Pending Closure
+                  <Hourglass size={10} /> {ac('table.pendingClosure')}
                 </span>
               )}
               {isDelayed(r) && (
                 <span className="badge text-[10px] bg-red-900/50 text-red-300 border border-red-700/50 flex items-center gap-1">
-                  <Clock size={9} /> Delayed {daysSinceUpdate(r)}d
+                  <Clock size={9} /> {ac('table.delayed', { n: daysSinceUpdate(r) })}
                 </span>
               )}
             </div>
@@ -2296,7 +2321,7 @@ export default function Accidents() {
       // (traffic-light coded), incident_date → release_date for CLOSED ones
       // (muted "total duration" tone). Sorts numerically; missing dates render
       // "N/A" and sort last (accessor -1).
-      { id: 'days_open', header: 'Days Open', accessorFn: r => caseAgeDays(r) ?? -1, size: 110,
+      { id: 'days_open', header: ac('table.daysOpen'), accessorFn: r => caseAgeDays(r) ?? -1, size: 110,
         cell: ({ row }) => {
           const r = row.original
           const days = caseAgeDays(r)
@@ -2305,18 +2330,18 @@ export default function Accidents() {
             return (
               <span
                 className={`badge text-[10px] whitespace-nowrap ${DIM_CHIP}`}
-                title="Total case duration: incident date to release date"
+                title={ac('table.totalDuration')}
               >
-                {days}d closed
+                {ac('table.daysClosed', { n: days })}
               </span>
             )
           }
           return (
             <span
               className={`badge text-[10px] whitespace-nowrap flex items-center gap-1 w-fit ${caseAgeBadge(days)}`}
-              title={`Open for ${days} day${days === 1 ? '' : 's'} since the incident date`}
+              title={days === 1 ? ac('table.openForOne') : ac('table.openFor', { n: days })}
             >
-              <Clock size={9} /> {days}d open
+              <Clock size={9} /> {ac('table.daysOpenBadge', { n: days })}
             </span>
           )
         },
@@ -2324,35 +2349,35 @@ export default function Accidents() {
       // Case flags (damage class, fault, GCC liability, Najm/Taqdeer), settlement
       // and inspector are intentionally NOT crammed into the row — they live on
       // the /accidents/:id detail page (Open). Keeping the register lean.
-      { id: 'repair_cost', header: 'Cost', accessorFn: r => r.repair_cost, size: 100, meta: { align: 'right' },
+      { id: 'repair_cost', header: ac('table.cost'), accessorFn: r => r.repair_cost, size: 100, meta: { align: 'right' },
         cell: ({ getValue }) => <span className="whitespace-nowrap">{fmtCurrency(getValue())}</span>,
       },
       {
-        id: 'actions', header: 'Actions', accessorFn: r => r.id, size: 190, enableSorting: false, meta: { export: false },
+        id: 'actions', header: ac('table.actions'), accessorFn: r => r.id, size: 190, enableSorting: false, meta: { export: false },
         cell: ({ row }) => {
           const r = row.original
           return (
             <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-              <button onClick={() => openDetail(r.id)} className="text-[var(--text-muted)] hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> Open</button>
+              <button onClick={() => openDetail(r.id)} className="text-[var(--text-muted)] hover:text-green-400 text-xs transition-colors flex items-center gap-1"><Eye size={12} /> {ac('table.open')}</button>
               <button
                 onClick={() => openEdit(r)}
                 className="text-[var(--text-muted)] hover:text-blue-400 text-xs transition-colors"
               >
-                Edit
+                {ac('table.edit')}
               </button>
               {!isClosed(r) && (
                 <button
                   onClick={() => raiseAction(r)}
                   className="text-[var(--text-muted)] hover:text-orange-400 text-xs transition-colors whitespace-nowrap"
                 >
-                  Raise CA
+                  {ac('table.raiseCa')}
                 </button>
               )}
               <button
                 onClick={() => handleDelete(r.id)}
                 className="text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors"
               >
-                Delete
+                {ac('table.delete')}
               </button>
             </div>
           )
@@ -2360,20 +2385,21 @@ export default function Accidents() {
       },
     )
     return cols
-  }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency, openDetail, openEdit, toggleSelectPage, toggleSelect, raiseAction, handleDelete])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the label helpers only read the current language (t)
+  }, [isAdmin, allPageSelected, selectedIds, activeCountry, fmtCurrency, openDetail, openEdit, toggleSelectPage, toggleSelect, raiseAction, handleDelete, t])
 
   return (
     <div className="space-y-4">
       {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <PageHeader
-          title="Accidents & Incidents"
-          subtitle={loading && records.length === 0 ? 'Loading incidents...' : `${records.length} total incidents`}
+          title={ac('header.title')}
+          subtitle={loading && records.length === 0 ? 'Loading incidents...' : ac('header.total', { count: records.length })}
           icon={AlertOctagon}
         />
         <div className="flex gap-2 flex-wrap">
           <ActionMenu
-            label="Export"
+            label={ac('header.export')}
             icon={Download}
             items={[
               {
@@ -2393,26 +2419,26 @@ export default function Accidents() {
                 onClick: () => exportToPdf(exportRows, exportPdfCols, 'Accident & Claims Tracker', `TyrePulse_Accidents_${new Date().toISOString().slice(0,10)}`, 'landscape', appSettings?.company_name || '', { currency: activeCurrency }),
               },
               {
-                label: 'Claims Summary (PDF)',
+                label: ac('header.claimsSummary'),
                 icon: ShieldCheck,
-                title: `Insurance claims summary: ${claimsRows.length} claim${claimsRows.length === 1 ? '' : 's'}`,
+                title: ac('header.claimsSummaryTitle', { count: claimsRows.length }),
                 onClick: () => exportClaimsSummary('pdf'),
               },
             ]}
           />
           <button
             onClick={() => { setTab('incidents'); setOpenClaims(true) }}
-            title="Filter the register to insurance claims that are still open (shareable link: ?claims=open)"
+            title={ac('header.openClaimsTitle')}
             className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${
               filterOpenClaims
                 ? 'bg-blue-900/40 text-blue-200 border-blue-600'
                 : 'btn-secondary'
             }`}
           >
-            <ShieldAlert size={14} /> Open claims{toggleCounts.claims ? ` (${toggleCounts.claims})` : ''}
+            <ShieldAlert size={14} /> {ac('header.openClaims')}{toggleCounts.claims ? ` (${toggleCounts.claims})` : ''}
           </button>
           <button onClick={openAdd} className="btn-primary flex items-center gap-2 text-sm">
-            <Plus size={16} /> New Incident
+            <Plus size={16} /> {ac('header.newIncident')}
           </button>
         </div>
       </div>
@@ -2429,7 +2455,7 @@ export default function Accidents() {
               : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
-          Incidents
+          {ac('tabs.incidents')}
         </button>
         <button
           onClick={() => setTab('analytics')}
@@ -2439,7 +2465,7 @@ export default function Accidents() {
               : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
-          <BarChart2 size={14} /> Analytics
+          <BarChart2 size={14} /> {ac('tabs.analytics')}
         </button>
         <button
           onClick={() => setTab('builder')}
@@ -2449,7 +2475,7 @@ export default function Accidents() {
               : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
-          <FileText size={14} /> Report Builder
+          <FileText size={14} /> {ac('tabs.builder')}
         </button>
       </div>
 
@@ -2469,9 +2495,9 @@ export default function Accidents() {
               <Hourglass size={18} className="text-yellow-400 flex-shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-semibold text-yellow-200">
-                  {toggleCounts.closure} closure{toggleCounts.closure > 1 ? 's' : ''} awaiting approval
+                  {toggleCounts.closure > 1 ? ac('banner.closuresMany', { n: toggleCounts.closure }) : ac('banner.closuresOne', { n: toggleCounts.closure })}
                 </p>
-                <p className="text-xs text-yellow-500/80">Tap to {onlyPendingClosure ? 'show all incidents' : 'review and approve closures'}</p>
+                <p className="text-xs text-yellow-500/80">{onlyPendingClosure ? ac('banner.tapShowAll') : ac('banner.tapReviewClosures')}</p>
               </div>
               {onlyPendingClosure && <X size={14} className="text-yellow-400" />}
             </button>
@@ -2490,10 +2516,10 @@ export default function Accidents() {
               <Clock size={18} className="text-red-400 flex-shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-semibold text-red-200">
-                  {toggleCounts.delayed} case{toggleCounts.delayed > 1 ? 's' : ''} delayed &gt; {DELAY_THRESHOLD_DAYS} days
+                  {toggleCounts.delayed > 1 ? ac('banner.delayedMany', { n: toggleCounts.delayed, days: DELAY_THRESHOLD_DAYS }) : ac('banner.delayedOne', { n: toggleCounts.delayed, days: DELAY_THRESHOLD_DAYS })}
                 </p>
                 <p className="text-xs text-red-500/80">
-                  Open with no status movement in over {DELAY_THRESHOLD_DAYS} days. Tap to {filterDelayed ? 'show all incidents' : 'review stalled cases'}
+                  {ac('banner.delayedHint', { days: DELAY_THRESHOLD_DAYS })} {filterDelayed ? ac('banner.tapShowAll') : ac('banner.tapReviewStalled')}
                 </p>
               </div>
               {filterDelayed && <X size={14} className="text-red-400" />}
@@ -2513,29 +2539,29 @@ export default function Accidents() {
               // it only means anything across the whole register. Suppressed rather
               // than restated once the rows are narrowed - a rate nobody can reproduce
               // is worse than no rate.
-              { v: registerStats.total, label: 'Total Incidents', cls: 'text-[var(--text-primary)]', sub: (!registerScopeActive && registerStats.fleetSize) ? `${registerStats.per100} / 100 vehicles` : null },
-              { v: registerStats.open, label: 'Open', cls: 'text-orange-400', sub: `${registerStats.total ? Math.round((registerStats.open / registerStats.total) * 100) : 0}% of all` },
-              { v: toggleCounts.delayed, label: `Delayed >${DELAY_THRESHOLD_DAYS}d`, cls: 'text-red-400', sub: registerStats.open ? `${Math.round((toggleCounts.delayed / registerStats.open) * 100)}% of open` : 'none open', onClick: () => setFilterDelayed(v => !v), active: filterDelayed },
-              { v: fmtCurrency(registerStats.cost), label: 'Total Cost (repair+parts)', cls: 'text-green-400', sub: 'gross exposure' },
-              { v: fmtCurrency(registerStats.avgClaim), label: 'Avg Cost / Incident', cls: 'text-emerald-400', sub: 'costed incidents' },
-              { v: `${registerStats.atFaultPct}%`, label: 'At-Fault Rate', cls: 'text-red-400', sub: registerStats.atFaultDenom ? `${registerStats.atFaultCount}/${registerStats.atFaultDenom} tagged` : 'no liability data' },
-              { v: registerStats.insur, label: 'Insurance Claims', cls: 'text-blue-400', sub: registerLeakage > 0 ? `${fmtCurrency(registerLeakage)} unrecovered` : 'all recovered' },
+              { v: registerStats.total, label: 'Total Incidents', lk: 'total', cls: 'text-[var(--text-primary)]', sub: (!registerScopeActive && registerStats.fleetSize) ? ac('kpi.per100', { n: registerStats.per100 }) : null },
+              { v: registerStats.open, label: 'Open', lk: 'open', cls: 'text-orange-400', sub: ac('kpi.pctOfAll', { pct: registerStats.total ? Math.round((registerStats.open / registerStats.total) * 100) : 0 }) },
+              { v: toggleCounts.delayed, label: `Delayed >${DELAY_THRESHOLD_DAYS}d`, lk: 'delayed', cls: 'text-red-400', sub: registerStats.open ? ac('kpi.pctOfOpen', { pct: Math.round((toggleCounts.delayed / registerStats.open) * 100) }) : ac('kpi.noneOpen'), onClick: () => setFilterDelayed(v => !v), active: filterDelayed },
+              { v: fmtCurrency(registerStats.cost), label: 'Total Cost (repair+parts)', lk: 'totalCost', cls: 'text-green-400', sub: ac('kpi.grossExposure') },
+              { v: fmtCurrency(registerStats.avgClaim), label: 'Avg Cost / Incident', lk: 'avgCost', cls: 'text-emerald-400', sub: ac('kpi.costedIncidents') },
+              { v: `${registerStats.atFaultPct}%`, label: 'At-Fault Rate', lk: 'atFault', cls: 'text-red-400', sub: registerStats.atFaultDenom ? ac('kpi.tagged', { count: registerStats.atFaultCount, total: registerStats.atFaultDenom }) : ac('kpi.noLiability') },
+              { v: registerStats.insur, label: 'Insurance Claims', lk: 'claims', cls: 'text-blue-400', sub: registerLeakage > 0 ? ac('kpi.unrecovered', { amount: fmtCurrency(registerLeakage) }) : ac('kpi.allRecovered') },
             ].map((k, i) => (
               <motion.div key={k.label} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}>
                 {k.onClick ? (
                   <button
                     onClick={k.onClick}
                     className={`card text-center w-full transition-colors ${k.active ? 'ring-1 ring-red-500 bg-red-950/20' : 'hover:bg-[var(--input-bg)]'}`}
-                    title="Toggle delayed-only filter"
+                    title={ac('kpi.toggleDelayed')}
                   >
                     <p className={`text-2xl font-bold ${k.cls}`}>{k.v}</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">{k.label}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{k.lk === 'delayed' ? ac('kpi.delayed', { days: DELAY_THRESHOLD_DAYS }) : k.lk ? ac(`kpi.${k.lk}`) : k.label}</p>
                     {k.sub && <p className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{k.sub}</p>}
                   </button>
                 ) : (
                   <div className="card text-center">
                     <p className={`text-2xl font-bold ${k.cls}`}>{k.v}</p>
-                    <p className="text-xs text-[var(--text-muted)] mt-1">{k.label}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">{k.lk === 'delayed' ? ac('kpi.delayed', { days: DELAY_THRESHOLD_DAYS }) : k.lk ? ac(`kpi.${k.lk}`) : k.label}</p>
                     {k.sub && <p className="text-[10px] text-[var(--text-muted)]/70 mt-0.5">{k.sub}</p>}
                   </div>
                 )}
@@ -2563,9 +2589,9 @@ export default function Accidents() {
                   <div className="relative">
                     <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
                     <input
-                      aria-label="Search accidents"
+                      aria-label={ac('filters.searchAria')}
                       className="input pl-8 text-sm w-48"
-                      placeholder="Search asset or description"
+                      placeholder={ac('filters.searchPlaceholder')}
                       value={search}
                       onChange={e => setSearch(e.target.value)}
                     />
@@ -2578,9 +2604,9 @@ export default function Accidents() {
                         ? 'bg-[var(--input-bg)] text-[var(--text-primary)] border-[var(--input-border)]'
                         : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
                     }`}
-                    title="Show or hide the advanced filters"
+                    title={ac('filters.toggleTitle')}
                   >
-                    Filters{activeCount > 0 ? ` (${activeCount})` : ''}
+                    {ac('filters.filters')}{activeCount > 0 ? ` (${activeCount})` : ''}
                     <ChevronDown size={13} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
                   </button>
                   {anyActive && (
@@ -2588,54 +2614,54 @@ export default function Accidents() {
                       onClick={() => { resetRegisterFilters(); setSearch(''); setFilterSite(''); setFilterRepairType(''); setFilterFrom(''); setFilterTo(''); setFilterDelayed(false); setFilterWfStage(''); setFilterVor(false) }}
                       className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
                     >
-                      <X size={12} /> Clear
+                      <X size={12} /> {ac('filters.clear')}
                     </button>
                   )}
                   <span className="text-xs text-[var(--text-muted)] ml-auto self-center whitespace-nowrap">
-                    {filtered.length}{filtered.length !== records.length ? ` of ${records.length}` : ''} shown
+                    {filtered.length !== records.length ? ac('filters.shownOf', { shown: filtered.length, total: records.length }) : ac('filters.shown', { shown: filtered.length })}
                   </span>
                 </div>
 
                 {showFilters && (
                   <div className="flex flex-wrap gap-2 rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)]/40 p-3">
-                    <select aria-label="Filter by site" className="input text-sm w-36" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
-                      <option value="">All Sites</option>
+                    <select aria-label={ac('filters.siteAria')} className="input text-sm w-36" value={filterSite} onChange={e => setFilterSite(e.target.value)}>
+                      <option value="">{ac('filters.allSites')}</option>
                       {sites.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <select aria-label="Filter by severity" className="input text-sm w-36" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
-                      <option value="">All Severities</option>
-                      {SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
+                    <select aria-label={ac('filters.severityAria')} className="input text-sm w-36" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
+                      <option value="">{ac('filters.allSeverities')}</option>
+                      {SEVERITIES.map(s => <option key={s} value={s}>{sevLabel(s)}</option>)}
                     </select>
-                    <select aria-label="Filter by status" className="input text-sm w-44" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                      <option value="">All Statuses</option>
-                      {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                    <select aria-label={ac('filters.statusAria')} className="input text-sm w-44" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                      <option value="">{ac('filters.allStatuses')}</option>
+                      {STATUSES.map(s => <option key={s} value={s}>{statusText(s)}</option>)}
                     </select>
                     {stageOptions.length > 0 && (
-                      <select aria-label="Filter by case stage" className="input text-sm w-44" value={filterStage} onChange={e => setFilterStage(e.target.value)} title="Case stage / current status">
-                        <option value="">All Stages</option>
+                      <select aria-label={ac('filters.stageAria')} className="input text-sm w-44" value={filterStage} onChange={e => setFilterStage(e.target.value)} title={ac('filters.stageTitle')}>
+                        <option value="">{ac('filters.allStages')}</option>
                         {stageOptions.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     )}
-                    <select aria-label="Filter by repair type" className="input text-sm w-36" value={filterRepairType} onChange={e => setFilterRepairType(e.target.value)} title="Repair route">
-                      <option value="">All Repairs</option>
-                      {REPAIR_TYPE_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    <select aria-label={ac('filters.repairAria')} className="input text-sm w-36" value={filterRepairType} onChange={e => setFilterRepairType(e.target.value)} title={ac('filters.repairTitle')}>
+                      <option value="">{ac('filters.allRepairs')}</option>
+                      {REPAIR_TYPE_OPTS.map(s => <option key={s} value={s}>{repairText(s)}</option>)}
                     </select>
-                    <select aria-label="Filter by fault status" className="input text-sm w-40" value={filterFault} onChange={e => setFilterFault(e.target.value)} title="Fault status">
-                      <option value="">All Fault</option>
-                      {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                    <select aria-label={ac('filters.faultAria')} className="input text-sm w-40" value={filterFault} onChange={e => setFilterFault(e.target.value)} title={ac('filters.faultTitle')}>
+                      <option value="">{ac('filters.allFault')}</option>
+                      {FAULT_STATUS_OPTS.map(s => <option key={s} value={s}>{faultText(s)}</option>)}
                     </select>
-                    <select aria-label="Filter by workflow stage" className="input text-sm w-48" value={filterWfStage} onChange={e => setFilterWfStage(e.target.value)} title="Unified workflow stage">
-                      <option value="">All Workflow Stages</option>
-                      {WORKFLOW_STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                    <select aria-label={ac('filters.wfAria')} className="input text-sm w-48" value={filterWfStage} onChange={e => setFilterWfStage(e.target.value)} title={ac('table.wfStageTitle')}>
+                      <option value="">{ac('filters.allWf')}</option>
+                      {WORKFLOW_STAGES.map(s => <option key={s.key} value={s.key}>{wfStageText(s.key, s.label)}</option>)}
                     </select>
-                    <select aria-label="Filter by case age" className="input text-sm w-40" value={filterAge} onChange={e => setFilterAge(e.target.value)} title="How long open cases have been running (days since incident)">
-                      <option value="">Any Days Open</option>
-                      <option value="0-15">Open &le; {CASE_AGE_GREEN_DAYS}d</option>
-                      <option value="16-30">Open {CASE_AGE_GREEN_DAYS + 1}&ndash;{CASE_AGE_AMBER_DAYS}d</option>
-                      <option value="30+">Open &gt; {CASE_AGE_AMBER_DAYS}d</option>
+                    <select aria-label={ac('filters.ageAria')} className="input text-sm w-40" value={filterAge} onChange={e => setFilterAge(e.target.value)} title={ac('filters.ageTitle')}>
+                      <option value="">{ac('filters.anyAge')}</option>
+                      <option value="0-15">{ac('filters.ageUpTo', { n: CASE_AGE_GREEN_DAYS })}</option>
+                      <option value="16-30">{ac('filters.ageBetween', { from: CASE_AGE_GREEN_DAYS + 1, to: CASE_AGE_AMBER_DAYS })}</option>
+                      <option value="30+">{ac('filters.ageOver', { n: CASE_AGE_AMBER_DAYS })}</option>
                     </select>
-                    <DateField className="text-sm w-40" value={filterFrom} onChange={(v) => setFilterFrom(v)} placeholder="From date" ariaLabel="From date" />
-                    <DateField className="text-sm w-40" value={filterTo} onChange={(v) => setFilterTo(v)} placeholder="To date" ariaLabel="To date" />
+                    <DateField className="text-sm w-40" value={filterFrom} onChange={(v) => setFilterFrom(v)} placeholder={ac('filters.fromDate')} ariaLabel={ac('filters.fromDate')} />
+                    <DateField className="text-sm w-40" value={filterTo} onChange={(v) => setFilterTo(v)} placeholder={ac('filters.toDate')} ariaLabel={ac('filters.toDate')} />
                     <button
                       onClick={() => setFilterDelayed(v => !v)}
                       className={`px-3 py-1 rounded-lg text-sm font-medium border transition-colors flex items-center gap-1.5 ${
@@ -2643,9 +2669,9 @@ export default function Accidents() {
                           ? 'bg-red-900/40 text-red-300 border-red-600'
                           : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
                       }`}
-                      title={`Show only cases delayed over ${DELAY_THRESHOLD_DAYS} days`}
+                      title={ac('filters.delayedTitle', { days: DELAY_THRESHOLD_DAYS })}
                     >
-                      <Clock size={13} /> Delayed only
+                      <Clock size={13} /> {ac('filters.delayedOnly')}
                     </button>
                     <button
                       onClick={() => setFilterVor(v => !v)}
@@ -2655,9 +2681,9 @@ export default function Accidents() {
                           ? 'bg-red-900/40 text-red-300 border-red-600'
                           : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
                       }`}
-                      title="Show only vehicles currently off road (VOR)"
+                      title={ac('filters.vorTitle')}
                     >
-                      <AlertOctagon size={13} /> Off road only{toggleCounts.vor ? ` (${toggleCounts.vor})` : ''}
+                      <AlertOctagon size={13} /> {ac('filters.vorOnly')}{toggleCounts.vor ? ` (${toggleCounts.vor})` : ''}
                     </button>
                     <button
                       onClick={() => setOpenClaims(!filterOpenClaims)}
@@ -2667,9 +2693,9 @@ export default function Accidents() {
                           ? 'bg-blue-900/40 text-blue-300 border-blue-600'
                           : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
                       }`}
-                      title="Show only incidents whose insurance claim is still open (not closed / settled / rejected). Linkable as ?claims=open"
+                      title={ac('filters.openClaimsTitle')}
                     >
-                      <ShieldAlert size={13} /> Open claims only{toggleCounts.claims ? ` (${toggleCounts.claims})` : ''}
+                      <ShieldAlert size={13} /> {ac('filters.openClaimsOnly')}{toggleCounts.claims ? ` (${toggleCounts.claims})` : ''}
                     </button>
                   </div>
                 )}
@@ -2680,12 +2706,12 @@ export default function Accidents() {
           {/* Bulk selection bar (Admin only) */}
           {isAdmin && selectedIds.size > 0 && (
             <div className="flex items-center justify-between gap-3 bg-blue-950/30 border border-blue-800/50 rounded-xl px-4 py-2.5">
-              <span className="text-sm text-blue-200">{selectedIds.size} selected</span>
+              <span className="text-sm text-blue-200">{ac('bulk.selected', { n: selectedIds.size })}</span>
               <div className="flex items-center gap-2">
-                <button onClick={() => setSelectedIds(new Set())} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 py-1">Clear</button>
+                <button onClick={() => setSelectedIds(new Set())} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 py-1">{ac('filters.clear')}</button>
                 <button onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
-                  <Trash2 size={14} /> Delete {selectedIds.size}
+                  <Trash2 size={14} /> {ac('bulk.delete', { n: selectedIds.size })}
                 </button>
               </div>
             </div>
@@ -2695,13 +2721,13 @@ export default function Accidents() {
           {truncated && !loading && !error && (
             <div className="flex items-center gap-2 text-xs text-[var(--text-dim)]">
               <AlertTriangle size={13} className="shrink-0" />
-              <span>Capped view: showing the first 100,000 incidents. Narrow the country or filters for the full set.</span>
+              <span>{ac('states.capped')}</span>
             </div>
           )}
 
           {/* Table - EnterpriseTable */}
           {loading ? (
-            <div className="card p-4 space-y-2.5" aria-busy="true" aria-label="Loading incidents">
+            <div className="card p-4 space-y-2.5" aria-busy="true" aria-label={ac('states.loadingAria')}>
               <div className="h-9 bg-[var(--input-bg)] rounded animate-pulse" />
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="h-11 bg-[var(--input-bg)]/60 rounded animate-pulse" style={{ animationDelay: `${i * 60}ms` }} />
@@ -2710,16 +2736,16 @@ export default function Accidents() {
           ) : error ? (
             <div className="card text-center py-12 space-y-3">
               <AlertTriangle size={30} className="mx-auto text-red-400" />
-              <p className="text-[var(--text-primary)] font-semibold">Could not load incidents</p>
+              <p className="text-[var(--text-primary)] font-semibold">{ac('states.loadFailed')}</p>
               <p className="text-sm text-[var(--text-muted)]">{error}</p>
-              <button onClick={() => { setError(''); loadRecords() }} className="btn-secondary text-sm mx-auto">Retry</button>
+              <button onClick={() => { setError(''); loadRecords() }} className="btn-secondary text-sm mx-auto">{ac('states.retry')}</button>
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState
               illustration="module/accident"
               icon={AlertOctagon}
-              title="No incidents found"
-              description="Adjust your filters or log a new incident to start tracking accidents and claims."
+              title={ac('states.emptyTitle')}
+              description={ac('states.emptyDesc')}
             />
           ) : (
             <EnterpriseTable
@@ -2740,7 +2766,7 @@ export default function Accidents() {
               // top of it would be two controls fighting over one table.
               initialPageSize={50}
               pageSizeOptions={[25, 50, 100, 200]}
-              emptyMessage="No incidents found"
+              emptyMessage={ac('states.emptyTitle')}
             />
           )}
         </>
@@ -2756,36 +2782,36 @@ export default function Accidents() {
               <span className={`text-xs ${dlAnalytics.ok ? 'text-green-400' : 'text-red-400'}`}>{dlAnalytics.msg}</span>
             )}
             <ActionMenu
-              label="Export & Share"
+              label={ac('analytics.exportShare')}
               icon={Share2}
               busy={dlAnalytics.busy || dlPptx || schedBusy}
-              busyLabel="Working..."
+              busyLabel={ac('analytics.working')}
               items={[
                 {
-                  label: 'Download PDF',
+                  label: ac('analytics.pdf'),
                   icon: FileText,
                   disabled: records.length === 0,
-                  title: records.length === 0 ? 'No incident data to export' : 'Download these charts and KPIs as a PDF, four charts a page so the legends stay readable',
+                  title: records.length === 0 ? ac('analytics.noDataExport') : ac('analytics.pdfTitle'),
                   onClick: downloadAnalyticsPdf,
                 },
                 {
-                  label: 'Download PowerPoint',
+                  label: ac('analytics.pptx'),
                   icon: Presentation,
                   disabled: records.length === 0,
-                  title: records.length === 0 ? 'No incident data to export' : 'The same report as a PowerPoint deck, one chart per slide',
+                  title: records.length === 0 ? ac('analytics.noDataExport') : ac('analytics.pptxTitle'),
                   onClick: downloadAnalyticsPptx,
                 },
                 {
-                  label: 'Email now',
+                  label: ac('analytics.email'),
                   icon: Mail,
                   disabled: records.length === 0,
-                  title: records.length === 0 ? 'No incident data to email' : 'Email this exact analytics report as a PDF attachment to chosen recipients now',
+                  title: records.length === 0 ? ac('analytics.noDataEmail') : ac('analytics.emailTitle'),
                   onClick: () => setEmailModal({ open: true, to: '', busy: false, msg: '', ok: true }),
                 },
                 {
-                  label: 'Schedule auto-email',
+                  label: ac('analytics.schedule'),
                   icon: CalendarClock,
-                  title: 'Auto-email this analytics dashboard on a schedule (daily, weekly or monthly) to chosen recipients',
+                  title: ac('analytics.scheduleTitle'),
                   onClick: scheduleAnalytics,
                 },
               ]}

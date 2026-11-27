@@ -193,7 +193,11 @@ describe('KPI tiles are computed over the filtered rows, not the raw ones', () =
     must(s, '}, [activeCountry, search, debouncedSearch, siteFilter, typeFilter, records])', 'The effect re-runs when those filters move')
 
     // RULE 2.
-    must(s, 'These figures cover the {summary.total.toLocaleString()} vehicle', 'RULE 2')
+    // The caption text now lives in the locale file; the page must still render it
+    // with the filtered total.
+    must(s, "t(summary.total === 1 ? 'fleetmaster.reg.scopeOne' : 'fleetmaster.reg.scopeMany', { count: summary.total.toLocaleString() })", 'RULE 2')
+    const fmEn = readFileSync(join(PAGES, '..', 'locales', 'en', 'fleetmaster.json'), 'utf8')
+    must(fmEn, 'These figures cover the {count} vehicles matching your search, site and type filters', 'RULE 2')
   })
 
   it('ComplianceDashboard: inspections and the fleet denominator are country-scoped', () => {

@@ -21,12 +21,21 @@
     "byType": "Work Orders by Type",
     "statusDistribution": "Status Distribution",
     "noWorkOrders": "No work orders yet",
-    "noStatusData": "No status data available"
+    "noStatusData": "No status data available",
+    "count": "Count"
   },
   "filters": {
     "searchPlaceholder": "Search WO#, asset, serial, description...",
     "clear": "Clear",
-    "results": "{count} results"
+    "results": "{count} results",
+    "searchAria": "Search work orders",
+    "status": "Status",
+    "priority": "Priority",
+    "type": "Type",
+    "all": "All",
+    "byAria": "Filter work orders by {field}",
+    "fromDate": "From date",
+    "toDate": "To date"
   },
   "bulk": {
     "selected": "{count} work orders selected",
@@ -153,7 +162,10 @@
     "notes": "Notes",
     "customFields": "Additional imported details",
     "edit": "Edit",
-    "jobCardPdf": "Job Card PDF"
+    "jobCardPdf": "Job Card PDF",
+    "closeLabel": "Close work order",
+    "lockedInApproval": "Locked, in approval",
+    "approvalTitle": "Work Order Approval"
   },
   "jobcard": {
     "notRecorded": "Not recorded",
@@ -218,5 +230,73 @@
       "done": "Done",
       "qc": "Ready for check"
     }
+  },
+  "loadingShort": "Loading...",
+  "retry": "Retry",
+  "views": {
+    "label": "Work order views",
+    "jobs": "Job cards",
+    "analytics": "Workshop analytics"
+  },
+  "rowActions": {
+    "view": "View",
+    "viewAria": "View work order {no}",
+    "edit": "Edit",
+    "editAria": "Edit work order {no}",
+    "deleteAria": "Delete work order {no}",
+    "deleteTitle": "Delete work order (Admin only)",
+    "jobCardAria": "Download job card {no}",
+    "jobCardTitle": "Job card PDF"
+  },
+  "sort": {
+    "label": "Sort work orders by",
+    "option": "Sort: {field}",
+    "ascAria": "Sorted ascending, switch to descending",
+    "descAria": "Sorted descending, switch to ascending",
+    "fields": {
+      "opened": "Opened",
+      "workOrderNo": "Work order no.",
+      "asset": "Asset",
+      "type": "Type",
+      "priority": "Priority",
+      "status": "Status",
+      "technician": "Technician",
+      "target": "Target",
+      "totalCost": "Total cost"
+    }
+  },
+  "statusLabel": {
+    "new": "New",
+    "awaitingAssignment": "Awaiting Assignment",
+    "assigned": "Assigned",
+    "inProgress": "In Progress",
+    "waitingParts": "Waiting for Parts",
+    "waitingApproval": "Waiting for Approval",
+    "qualityInspection": "Quality Inspection",
+    "completed": "Completed",
+    "overdue": "Overdue",
+    "cancelled": "Cancelled",
+    "onHold": "On Hold"
+  },
+  "priorityLabel": {
+    "critical": "Critical",
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "workTypeLabel": {
+    "tyreChange": "Tyre Change",
+    "inspection": "Inspection",
+    "repair": "Repair",
+    "rotation": "Rotation",
+    "balancing": "Balancing",
+    "alignment": "Alignment",
+    "retread": "Retread",
+    "punctureRepair": "Puncture Repair",
+    "pressureCheck": "Pressure Check",
+    "emergency": "Emergency",
+    "other": "Other",
+    "service": "Service",
+    "preventiveMaintenance": "Preventive Maintenance"
   }
 }

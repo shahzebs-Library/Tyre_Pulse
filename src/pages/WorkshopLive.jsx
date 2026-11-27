@@ -29,6 +29,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useLanguage } from '../contexts/LanguageContext'
 import {
   RefreshCw, Users, Wrench, AlertTriangle, Package, ShieldAlert,
   Coffee, UserX, X, Gauge, Timer, TrendingUp, CheckCircle2, Car, UserCheck,
@@ -78,42 +79,64 @@ const PILL_TONE = { green: 'good', blue: 'info', amber: 'warn', purple: 'info', 
 
 // ── KPI strip config (values come straight from the engine `kpis`) ─────────────
 
-function buildKpiDefs(kpis) {
+function buildKpiDefs(kpis, L) {
   return [
-    { key: 'onDuty',            label: 'On Duty',        value: kpis.onDuty,            icon: Users,        scope: 'tech', pred: (x) => x.status !== STATUS.OFF_DUTY && x.status !== STATUS.ABSENT },
-    { key: 'working',          label: 'Working',        value: kpis.working,          icon: Wrench,       scope: 'tech', pred: (x) => x.status === STATUS.WORKING },
-    { key: 'available',        label: 'Available',      value: kpis.available,        icon: UserCheck,    scope: 'tech', pred: (x) => x.status === STATUS.AVAILABLE },
-    { key: 'unassigned',       label: 'Unassigned',     value: kpis.unassigned,       icon: User,         scope: 'tech', pred: (x) => x.status === STATUS.AVAILABLE && !x.currentJobId },
-    { key: 'waitingParts',     label: 'Waiting Parts',  value: kpis.waitingParts,     icon: Package,      scope: 'tech', pred: (x) => x.status === STATUS.WAITING_PARTS },
-    { key: 'waitingApproval',  label: 'Waiting Approval', value: kpis.waitingApproval, icon: ShieldAlert, scope: 'tech', pred: (x) => x.status === STATUS.WAITING_APPROVAL },
-    { key: 'onBreak',          label: 'On Break',       value: kpis.onBreak,          icon: Coffee,       scope: 'tech', pred: (x) => x.status === STATUS.ON_BREAK },
-    { key: 'absent',           label: 'Absent',         value: kpis.absent,           icon: UserX,        scope: 'tech', pred: (x) => x.status === STATUS.ABSENT },
-    { key: 'openJobs',         label: 'Open Job Cards', value: kpis.openJobs,         icon: Wrench,       scope: 'job',  jobCol: null },
-    { key: 'overdueJobs',      label: 'Overdue',        value: kpis.overdueJobs,      icon: AlertTriangle, scope: 'job', jobCol: 'Overdue' },
-    { key: 'vehiclesOffRoad',  label: 'Vehicles Off Road', value: kpis.vehiclesOffRoad, icon: Car,        scope: 'job',  jobPred: (j) => j.vor === true },
-    { key: 'jobsCompletedToday', label: 'Completed Today', value: kpis.jobsCompletedToday, icon: CheckCircle2, scope: 'job', jobCol: 'Completed' },
-    { key: 'utilization',      label: 'Utilization',    value: pct(kpis.utilization), icon: Gauge,        scope: null },
-    { key: 'productiveHours',  label: 'Productive Hours', value: kpis.productiveHours, icon: TrendingUp,  scope: null },
-    { key: 'lostHours',        label: 'Lost Hours',     value: kpis.lostHours,        icon: Timer,        scope: null },
-    { key: 'overtimeHours',    label: 'Overtime Hours', value: kpis.overtimeHours,    icon: Zap,          scope: null },
+    { key: 'onDuty',            label: L('kpi.onDuty'),        value: kpis.onDuty,            icon: Users,        scope: 'tech', pred: (x) => x.status !== STATUS.OFF_DUTY && x.status !== STATUS.ABSENT },
+    { key: 'working',          label: L('kpi.working'),        value: kpis.working,          icon: Wrench,       scope: 'tech', pred: (x) => x.status === STATUS.WORKING },
+    { key: 'available',        label: L('kpi.available'),      value: kpis.available,        icon: UserCheck,    scope: 'tech', pred: (x) => x.status === STATUS.AVAILABLE },
+    { key: 'unassigned',       label: L('kpi.unassigned'),     value: kpis.unassigned,       icon: User,         scope: 'tech', pred: (x) => x.status === STATUS.AVAILABLE && !x.currentJobId },
+    { key: 'waitingParts',     label: L('kpi.waitingParts'),  value: kpis.waitingParts,     icon: Package,      scope: 'tech', pred: (x) => x.status === STATUS.WAITING_PARTS },
+    { key: 'waitingApproval',  label: L('kpi.waitingApproval'), value: kpis.waitingApproval, icon: ShieldAlert, scope: 'tech', pred: (x) => x.status === STATUS.WAITING_APPROVAL },
+    { key: 'onBreak',          label: L('kpi.onBreak'),       value: kpis.onBreak,          icon: Coffee,       scope: 'tech', pred: (x) => x.status === STATUS.ON_BREAK },
+    { key: 'absent',           label: L('kpi.absent'),         value: kpis.absent,           icon: UserX,        scope: 'tech', pred: (x) => x.status === STATUS.ABSENT },
+    { key: 'openJobs',         label: L('kpi.openJobs'), value: kpis.openJobs,         icon: Wrench,       scope: 'job',  jobCol: null },
+    { key: 'overdueJobs',      label: L('kpi.overdueJobs'),        value: kpis.overdueJobs,      icon: AlertTriangle, scope: 'job', jobCol: 'Overdue' },
+    { key: 'vehiclesOffRoad',  label: L('kpi.vehiclesOffRoad'), value: kpis.vehiclesOffRoad, icon: Car,        scope: 'job',  jobPred: (j) => j.vor === true },
+    { key: 'jobsCompletedToday', label: L('kpi.jobsCompletedToday'), value: kpis.jobsCompletedToday, icon: CheckCircle2, scope: 'job', jobCol: 'Completed' },
+    { key: 'utilization',      label: L('kpi.utilization'),    value: pct(kpis.utilization), icon: Gauge,        scope: null },
+    { key: 'productiveHours',  label: L('kpi.productiveHours'), value: kpis.productiveHours, icon: TrendingUp,  scope: null },
+    { key: 'lostHours',        label: L('kpi.lostHours'),     value: kpis.lostHours,        icon: Timer,        scope: null },
+    { key: 'overtimeHours',    label: L('kpi.overtimeHours'), value: kpis.overtimeHours,    icon: Zap,          scope: null },
   ]
 }
+// Display keys for engine vocabularies (the engine values never change; only
+// the label the reader sees is translated).
+const STATUS_I18N = {
+  working: 'working', available: 'available', waiting_parts: 'waitingParts', waiting_approval: 'waitingApproval',
+  waiting_tools: 'waitingTools', waiting_vehicle: 'waitingVehicle', on_break: 'onBreak', training: 'training',
+  awaiting_inspection: 'awaitingInspection', off_duty: 'offDuty', absent: 'absent', overtime: 'overtime',
+}
+const ALERT_TITLE_I18N = {
+  'Vehicle off road beyond SLA': 'vorSla', 'Overtime threshold reached': 'overtime',
+  'Owner of overlapping jobs': 'overlappingJobs', 'Blocked waiting for parts': 'partsPending',
+  'Approval pending too long': 'approvalPending', 'Technician unassigned': 'unassigned',
+  'No activity on active job': 'noActivity', 'Assigned but not checked in': 'notCheckedIn',
+  'Job past target time': 'overdue', 'Job card has no owner': 'jobNoOwner',
+  'Awaiting quality inspection': 'qcPending', 'Workshop alert': 'generic',
+}
+const WO_COL_I18N = {
+  'New': 'new', 'Awaiting Assignment': 'awaitingAssignment', 'Assigned': 'assigned',
+  'In Progress': 'inProgress', 'Waiting for Parts': 'waitingParts', 'Waiting for Approval': 'waitingApproval',
+  'Quality Inspection': 'qualityInspection', 'Completed': 'completed', 'Overdue': 'overdue',
+  'Cancelled': 'cancelled', 'On Hold': 'onHold',
+}
+
 // Headline tiles (mockup order) and the secondary strip.
 const HEADLINE = [
-  { key: 'onDuty', tone: 't-green', sub: 'Now: technicians on shift' },
-  { key: 'working', tone: 't-blue', sub: 'Now: on an active job' },
-  { key: 'available', tone: 't-purple', sub: 'Now: ready to assign' },
-  { key: 'waitingParts', tone: 't-amber', sub: 'Now: blocked on parts' },
-  { key: 'vehiclesOffRoad', tone: 't-red', sub: 'Now: vehicles off road' },
+  { key: 'onDuty', tone: 't-green', sub: 'onDuty' },
+  { key: 'working', tone: 't-blue', sub: 'working' },
+  { key: 'available', tone: 't-purple', sub: 'available' },
+  { key: 'waitingParts', tone: 't-amber', sub: 'waitingParts' },
+  { key: 'vehiclesOffRoad', tone: 't-red', sub: 'vehiclesOffRoad' },
 ]
 // "Now" items stay on the current moment; the measured items follow the range.
 const STRIP_NOW = ['openJobs', 'overdueJobs']
 const STRIP_RANGE = [
-  { key: 'completed', label: 'Completed', title: 'Job cards completed in the chosen dates (by completion time)' },
-  { key: 'utilization', label: 'Utilisation', title: 'Average productive share of available duty time per technician-day (technician-days with a measurable shift)' },
-  { key: 'productiveHours', label: 'Productive hrs', title: 'Time on an active job in the chosen dates' },
-  { key: 'lostHours', label: 'Lost hrs', title: 'Blocked plus unassigned duty time in the chosen dates' },
-  { key: 'overtimeHours', label: 'Overtime', title: 'Productive or blocked time past the shift end in the chosen dates' },
+  { key: 'completed' },
+  { key: 'utilization' },
+  { key: 'productiveHours' },
+  { key: 'lostHours' },
+  { key: 'overtimeHours' },
 ]
 function fmtMeasure(key, v) {
   if (v == null) return 'N/A'
@@ -125,7 +148,11 @@ function fmtMeasure(key, v) {
 // ── Technician tile ──────────────────────────────────────────────────────────
 
 function TechTile({ tech, now, highlight, onOpen, onViewJob }) {
-  const meta = STATUS_META[tech.status] || { label: tech.status || 'Unknown', tone: 'grey' }
+  const { t } = useLanguage()
+  const p = (k, v) => t(`workshop.live.${k}`, v)
+  const meta = STATUS_META[tech.status] || { label: tech.status || p('tech.unknown'), tone: 'grey' }
+  const statusLabel = STATUS_I18N[tech.status] ? t(`workshop.live.status.${STATUS_I18N[tech.status]}`) : meta.label
+  const jobLine = tech?.job ? techJobLine(tech) : p('tech.noActiveJob')
   const util = tech.utilization == null ? null : Math.round(tech.utilization * 100)
   const src = tech.avatar ? safeImageSrc(tech.avatar) : null
   return (
@@ -134,25 +161,25 @@ function TechTile({ tech, now, highlight, onOpen, onViewJob }) {
         <span className="wl-avatar" aria-hidden="true">{src ? <img src={src} alt="" /> : initials(tech.name)}</span>
         <div className="wl-tech-id">
           <b title={tech.name}>{tech.name}</b>
-          <span className="wl-tech-job" title={techJobLine(tech)}>{techJobLine(tech)}</span>
+          <span className="wl-tech-job" title={jobLine}>{jobLine}</span>
         </div>
-        <span className={`cc-pill ${PILL_TONE[meta.tone] || 'muted'}`}>{meta.label}</span>
+        <span className={`cc-pill ${PILL_TONE[meta.tone] || 'muted'}`}>{statusLabel}</span>
       </div>
       <dl className="wl-tech-stats">
-        <div><dt>Productive</dt><dd>{fmtMins(tech.productiveMin)}</dd></div>
-        <div><dt>Blocked</dt><dd className={tech.blockedMin > 0 ? 'is-warn' : ''}>{fmtMins(tech.blockedMin)}</dd></div>
-        <div><dt>Utilisation</dt><dd>{util == null ? <span className="cc-na" title="No measurable shift time today">N/A</span> : `${util}%`}</dd></div>
+        <div><dt>{p('tech.productive')}</dt><dd>{fmtMins(tech.productiveMin)}</dd></div>
+        <div><dt>{p('tech.blocked')}</dt><dd className={tech.blockedMin > 0 ? 'is-warn' : ''}>{fmtMins(tech.blockedMin)}</dd></div>
+        <div><dt>{p('tech.utilisation')}</dt><dd>{util == null ? <span className="cc-na" title={p('tech.noShiftTime')}>N/A</span> : `${util}%`}</dd></div>
       </dl>
       <div className="wl-tech-foot">
-        <span className="wl-muted">Last update {relTime(tech.lastActivityAt, now)}</span>
-        {tech.status === STATUS.AWAITING_INSPECTION && <span className="cc-pill warn">Task to confirm</span>}
+        <span className="wl-muted">{p('tech.lastUpdate', { when: relTime(tech.lastActivityAt, now) })}</span>
+        {tech.status === STATUS.AWAITING_INSPECTION && <span className="cc-pill warn">{p('tech.taskToConfirm')}</span>}
         <span className="wl-tech-actions">
           {tech.currentJobId && (
             <button type="button" className="cc-link cc-link-btn" onClick={() => onViewJob(tech.currentJobId)}>
-              View job <ChevronRight size={13} aria-hidden="true" />
+              {p('tech.viewJob')} <ChevronRight size={13} aria-hidden="true" />
             </button>
           )}
-          <button type="button" className="cc-icon-btn" onClick={() => onOpen(tech)} aria-label={`Foreman actions for ${tech.name}`} title="Assign, confirm and foreman actions">
+          <button type="button" className="cc-icon-btn" onClick={() => onOpen(tech)} aria-label={p('tech.foremanAria', { name: tech.name })} title={p('tech.foremanTitle')}>
             <Settings2 size={14} />
           </button>
         </span>
@@ -165,6 +192,8 @@ function TechTile({ tech, now, highlight, onOpen, onViewJob }) {
 
 export default function WorkshopLive() {
   const { activeCountry } = useSettings()
+  const { t } = useLanguage()
+  const p = useCallback((k, v) => t(`workshop.live.${k}`, v), [t])
   // What the database lets this account do to work_orders, asked of the same
   // server function the row policies call. Controls it would refuse are
   // disabled with the reason; any refusal that still happens is shown as one.
@@ -314,10 +343,10 @@ export default function WorkshopLive() {
       .catch((e) => {
         if (!mounted.current || request !== pastLoadId.current) return
         setPast(null)
-        setPastError(toUserMessage(e, 'Could not load the figures for these dates.'))
+        setPastError(toUserMessage(e, p('errors.rangeLoad')))
       })
     return undefined
-  }, [range.from, pastTo, activeCountry, pastNonce])
+  }, [range.from, pastTo, activeCountry, pastNonce, p])
 
   const pastReady = !pastTo || (past && past.from === range.from && past.to === pastTo && past.country === activeCountry)
 
@@ -378,7 +407,7 @@ export default function WorkshopLive() {
     })
   }
 
-  const kpiDefs = useMemo(() => buildKpiDefs(kpis), [kpis])
+  const kpiDefs = useMemo(() => buildKpiDefs(kpis, p), [kpis, p])
 
   // Flat event list (grouped by user in the load) so task time can be scoped by job.
   const allEvents = useMemo(() => Object.values(raw?.eventsByUser || {}).flat(), [raw])
@@ -466,9 +495,9 @@ export default function WorkshopLive() {
         await exportToExcel(rows, BOARD_EXPORT_KEYS, BOARD_EXPORT_HEADERS, name, 'Technicians')
       }
     } catch (e) {
-      setFlash({ type: 'err', msg: toUserMessage(e, 'Export failed. Please try again.') })
+      setFlash({ type: 'err', msg: toUserMessage(e, p('errors.export')) })
     }
-  }, [filteredBoard, nowTs, siteFilter])
+  }, [filteredBoard, nowTs, siteFilter, p])
 
   const openJobsForAssign = useMemo(
     () => (raw?.jobs || []).filter((j) => bySite(j.site)),
@@ -491,41 +520,41 @@ export default function WorkshopLive() {
     }
   }, [scheduleReload])
 
-  const onAssign = (jobId, userId) => mutate(workshop.assignJob({ job_id: jobId, user_id: userId }), 'Technician assigned.')
-  const onReassign = (jobId, from, to) => mutate(workshop.reassignJob({ job_id: jobId, from_user_id: from, to_user_id: to }), 'Job reassigned.')
-  const onStatus = (jobId, status) => mutate(workshop.setJobStatus(jobId, status), 'Status updated.')
-  const onPriority = (jobId, priority) => mutate(workshop.setJobPriority(jobId, priority), 'Priority updated.')
-  const onVor = (jobId, on) => mutate(workshop.setVor(jobId, on), on ? 'Marked Vehicle Off Road.' : 'Cleared Vehicle Off Road.')
-  const onConfirm = (eventId) => mutate(workshop.confirmEvent(eventId), 'Task confirmed.')
+  const onAssign = (jobId, userId) => mutate(workshop.assignJob({ job_id: jobId, user_id: userId }), p('flash.assigned'))
+  const onReassign = (jobId, from, to) => mutate(workshop.reassignJob({ job_id: jobId, from_user_id: from, to_user_id: to }), p('flash.reassigned'))
+  const onStatus = (jobId, status) => mutate(workshop.setJobStatus(jobId, status), p('flash.status'))
+  const onPriority = (jobId, priority) => mutate(workshop.setJobPriority(jobId, priority), p('flash.priority'))
+  const onVor = (jobId, on) => mutate(workshop.setVor(jobId, on), on ? p('flash.vorOn') : p('flash.vorOff'))
+  const onConfirm = (eventId) => mutate(workshop.confirmEvent(eventId), p('flash.taskConfirmed'))
 
   // ── QC sign-off (pure transition from workshopTasks.qcOutcome) ────────────────
   const onQcPass = (job) => {
-    const t = qcOutcome('pass') // { status:'Completed', qc_status:'passed' }
+    const qc = qcOutcome('pass') // { status:'Completed', qc_status:'passed' }
     // A person who may record the quality check but not close a work order (a Tyre Data
     // Collector on a job assigned to them) records the result only; a supervisor closes it.
     if (!woRights.can('close', job)) {
-      mutate(workshop.setQcStatus(job.id, t.qc_status), 'Quality check recorded. A supervisor closes the work order.')
+      mutate(workshop.setQcStatus(job.id, qc.qc_status), p('flash.qcRecorded'))
       return
     }
     mutate(
-      workshop.setQcOutcome(job.id, t),
-      'QC passed. Job completed.',
+      workshop.setQcOutcome(job.id, qc),
+      p('flash.qcPassed'),
     )
   }
   const onQcFail = (job) => {
-    const t = qcOutcome('fail') // { status:'In Progress', qc_status:'failed', rework:true, note }
+    const qc = qcOutcome('fail') // { status:'In Progress', qc_status:'failed', rework:true, note }
     // Record a rework signal against the job (attributed to its owner when known)
     // so first-time-fix analytics stay honest - a QC failure is not a clean fix.
-    const run = workshop.setQcOutcome(job.id, t)
+    const run = workshop.setQcOutcome(job.id, qc)
       .then(() => workshop.recordEvent({
         user_id: job.assigned_owner_id || undefined,
         job_id: job.id,
         asset_no: job.asset_no || undefined,
         event_type: 'report_problem',
         reason_code: 'support',
-        note: t.note,
+        note: qc.note,
       }))
-    mutate(run, 'QC failed. Job sent back for rework.')
+    mutate(run, p('flash.qcFailed'))
   }
 
   // ── New job creation ─────────────────────────────────────────────────────────
@@ -536,7 +565,7 @@ export default function WorkshopLive() {
       }
       return row
     })
-    mutate(run, values.assignee ? 'Job created and assigned.' : 'Job created.')
+    mutate(run, values.assignee ? p('flash.jobCreatedAssigned') : p('flash.jobCreated'))
     setNewJobOpen(false)
   }
 
@@ -564,18 +593,18 @@ export default function WorkshopLive() {
   }, [tasksByJob, refreshTasks])
 
   const onCreateTask = (jobId, values) =>
-    mutate(workshop.createTask(jobId, values).then(() => refreshTasks(jobId)), 'Task added.')
+    mutate(workshop.createTask(jobId, values).then(() => refreshTasks(jobId)), p('flash.taskAdded'))
   const onUpdateTask = (jobId, taskId, patch) =>
-    mutate(workshop.updateTask(taskId, patch).then(() => refreshTasks(jobId)), 'Task updated.')
+    mutate(workshop.updateTask(taskId, patch).then(() => refreshTasks(jobId)), p('flash.taskUpdated'))
   const onSetTaskStatus = (jobId, taskId, status) =>
-    mutate(workshop.setTaskStatus(taskId, status).then(() => refreshTasks(jobId)), 'Task status updated.')
+    mutate(workshop.setTaskStatus(taskId, status).then(() => refreshTasks(jobId)), p('flash.taskStatus'))
 
   // ── Foreman drawer events ────────────────────────────────────────────────────
   const onForemanEvent = (userId, { event_type, reason_code, note, job_id, confirm }) => {
     const label = {
-      pause_job: 'Technician marked unavailable.', request_parts: 'Parts escalated.',
-      waiting_approval: 'Approval escalated.', training: 'Technician sent to training.',
-    }[event_type] || 'Action recorded.'
+      pause_job: p('flash.unavailable'), request_parts: p('flash.partsEscalated'),
+      waiting_approval: p('flash.approvalEscalated'), training: p('flash.training'),
+    }[event_type] || p('flash.actionRecorded')
     const run = workshop.recordEvent({ user_id: userId, event_type, reason_code, note, job_id })
       .then((row) => (confirm && row?.id ? workshop.confirmEvent(row.id) : row))
     mutate(run, label)
@@ -585,7 +614,7 @@ export default function WorkshopLive() {
   const onForemanNotify = (userId, message) =>
     mutate(
       workshop.recordEvent({ user_id: userId, event_type: 'report_problem', note: `Foreman note: ${message}` }),
-      'Note sent to technician.',
+      p('flash.noteSent'),
     )
 
   const openJobById = (jobId) => { setDrawerTech(null); viewJob(jobId) }
@@ -629,16 +658,16 @@ export default function WorkshopLive() {
       {/* Header: breadcrumb, title, lead, date + site + primary action */}
       <header className="wl-head">
         <div className="wl-head-copy">
-          <nav className="wl-crumb" aria-label="Breadcrumb">
-            <Link to="/workshop-management">Workshop and Maintenance</Link>
+          <nav className="wl-crumb" aria-label={p('head.breadcrumb')}>
+            <Link to="/workshop-management">{p('head.crumbParent')}</Link>
             <ChevronRight size={12} aria-hidden="true" />
-            <span aria-current="page">Live Control</span>
+            <span aria-current="page">{p('head.crumbCurrent')}</span>
           </nav>
-          <h1>Workshop Live Control</h1>
-          <p>Real-time technician productivity, job flow, blocked work and vehicle-off-road status.</p>
+          <h1>{p('head.title')}</h1>
+          <p>{p('head.lead')}</p>
         </div>
         <div className="wl-head-actions">
-          <div className="wl-range" role="group" aria-label="Dates for the measured figures">
+          <div className="wl-range" role="group" aria-label={p('head.rangeAria')}>
             <span className="wl-range-icon" aria-hidden="true"><CalendarDays size={14} /></span>
             <label className="wl-range-field">
               <input
@@ -646,10 +675,10 @@ export default function WorkshopLive() {
                 value={range.from}
                 max={range.to}
                 onChange={(e) => pickDate('from', e.target.value)}
-                aria-label="From date"
+                aria-label={p('head.fromDate')}
               />
             </label>
-            <span className="wl-range-sep" aria-hidden="true">to</span>
+            <span className="wl-range-sep" aria-hidden="true">{p('head.to')}</span>
             <label className="wl-range-field">
               <input
                 type="date"
@@ -657,7 +686,7 @@ export default function WorkshopLive() {
                 min={range.from}
                 max={todayKey}
                 onChange={(e) => pickDate('to', e.target.value)}
-                aria-label="To date"
+                aria-label={p('head.toDate')}
               />
             </label>
           </div>
@@ -665,16 +694,16 @@ export default function WorkshopLive() {
             className="cc-select wl-range-pick"
             value={activePreset || 'custom'}
             onChange={(e) => { if (e.target.value !== 'custom') pickPreset(e.target.value) }}
-            aria-label="Quick date range"
+            aria-label={p('head.quickRange')}
           >
-            {RANGE_PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
-            {!activePreset && <option value="custom">Custom dates</option>}
+            {RANGE_PRESETS.map((rp) => <option key={rp.key} value={rp.key}>{p(`presets.${rp.key}`)}</option>)}
+            {!activePreset && <option value="custom">{p('head.customDates')}</option>}
           </select>
-          <select className="cc-select" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label="Filter by site" disabled={siteOptions.length <= 1}>
-            {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? 'All sites' : s}</option>)}
+          <select className="cc-select" value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} aria-label={p('head.siteAria')} disabled={siteOptions.length <= 1}>
+            {siteOptions.map((s) => <option key={s} value={s}>{s === 'All' ? p('head.allSites') : s}</option>)}
           </select>
           <button type="button" className="cc-btn-primary wl-new" onClick={() => setNewJobOpen(true)} disabled={!woRights.can('create')} title={woRights.reason('create') || undefined}>
-            <Plus size={16} aria-hidden="true" /> New Job
+            <Plus size={16} aria-hidden="true" /> {p('head.newJob')}
           </button>
         </div>
       </header>
@@ -683,12 +712,12 @@ export default function WorkshopLive() {
         <div className={`cc-card wl-flash ${flash.type === 'ok' ? 'ok' : 'err'}`} role={flash.type === 'ok' ? 'status' : 'alert'}>
           {flash.type === 'ok' ? <CheckCircle2 size={16} aria-hidden="true" /> : <AlertTriangle size={16} aria-hidden="true" />}
           <span>{flash.msg}</span>
-          <button type="button" className="cc-icon-btn" onClick={() => setFlash(null)} aria-label="Dismiss message"><X size={14} /></button>
+          <button type="button" className="cc-icon-btn" onClick={() => setFlash(null)} aria-label={p('flash.dismiss')}><X size={14} /></button>
         </div>
       )}
 
       {loadFailed ? (
-        <Card title="Could not load the workshop board"><CardState state={pageState} /></Card>
+        <Card title={p('errors.boardLoad')}><CardState state={pageState} /></Card>
       ) : (
         <>
           {/* Headline tiles */}
@@ -704,9 +733,9 @@ export default function WorkshopLive() {
                     value={d.value}
                     loading={firstLoad}
                     danger={h.key === 'vehiclesOffRoad' && d.value > 0}
-                    label={<>{d.label}<span className="wl-kpi-sub">{h.sub}</span></>}
+                    label={<>{d.label}<span className="wl-kpi-sub">{p(`headlineSub.${h.sub}`)}</span></>}
                     onClick={() => toggleFilter(d)}
-                    title={on ? 'Showing only these. Click again to clear.' : 'Click to filter the board'}
+                    title={on ? p('filter.showingOnly') : p('filter.clickBoard')}
                   />
                 </div>
               )
@@ -714,14 +743,14 @@ export default function WorkshopLive() {
           </div>
 
           {/* Secondary strip: "Now" job figures + measured figures for the chosen dates */}
-          <section className="cc-card wl-strip" aria-label="Job and productivity figures">
+          <section className="cc-card wl-strip" aria-label={p('strip.aria')}>
             <div className="wl-strip-group wl-strip-now">
-              <span className="wl-strip-tag" title="Live: these follow the current moment, not the chosen dates">Now</span>
+              <span className="wl-strip-tag" title={p('strip.nowTitle')}>{p('now')}</span>
               {STRIP_NOW.map((k) => {
                 const d = defByKey[k]
                 const on = filter?.key === k
                 return (
-                  <button key={k} type="button" className="wl-strip-item" aria-pressed={on} onClick={() => toggleFilter(d)} title="Click to filter the job cards">
+                  <button key={k} type="button" className="wl-strip-item" aria-pressed={on} onClick={() => toggleFilter(d)} title={p('filter.clickJobs')}>
                     <span>{d.label}</span>
                     <b className={k === 'overdueJobs' && d.value > 0 ? 'is-bad' : ''}>{firstLoad ? '...' : d.value}</b>
                   </button>
@@ -729,7 +758,7 @@ export default function WorkshopLive() {
               })}
             </div>
             <div className="wl-strip-group wl-strip-range">
-              <span className="wl-strip-tag is-range" title="Measured over the dates chosen in the header">{rangeName}</span>
+              <span className="wl-strip-tag is-range" title={p('strip.rangeTitle')}>{rangeName}</span>
               {STRIP_RANGE.map((m) => {
                 const pending = firstLoad || (!measures && !pastError)
                 const value = measures ? measures[m.key] : null
@@ -737,10 +766,11 @@ export default function WorkshopLive() {
                 // Completed opens the board's Completed column, which only holds today's jobs.
                 const clickable = m.key === 'completed' && rangeIsToday
                 const on = clickable && filter?.key === 'jobsCompletedToday'
-                const body = <><span>{m.label}</span><b>{shown}</b></>
+                const mTitle = p(`strip.items.${m.key}.title`)
+                const body = <><span>{p(`strip.items.${m.key}.label`)}</span><b>{shown}</b></>
                 return clickable
-                  ? <button key={m.key} type="button" className="wl-strip-item" aria-pressed={on} onClick={() => toggleFilter(defByKey.jobsCompletedToday)} title={`${m.title}. Click to show them on the job board.`}>{body}</button>
-                  : <div key={m.key} className="wl-strip-item" title={m.title}>{body}</div>
+                  ? <button key={m.key} type="button" className="wl-strip-item" aria-pressed={on} onClick={() => toggleFilter(defByKey.jobsCompletedToday)} title={p('strip.clickToShow', { title: mTitle })}>{body}</button>
+                  : <div key={m.key} className="wl-strip-item" title={mTitle}>{body}</div>
               })}
             </div>
             {(pastError || (measures && !measures.hasActivity) || rangeTruncated) && (
@@ -748,12 +778,12 @@ export default function WorkshopLive() {
                 {pastError ? (
                   <>
                     {pastError}{' '}
-                    <button type="button" className="cc-link cc-link-btn" onClick={() => setPastNonce((n) => n + 1)}>Retry</button>
+                    <button type="button" className="cc-link cc-link-btn" onClick={() => setPastNonce((n) => n + 1)}>{p('retry')}</button>
                   </>
                 ) : rangeTruncated ? (
-                  `${rangeName} holds more activity than one read covers, so these figures are a partial count. Choose fewer dates for a complete figure.`
+                  p('strip.truncated', { range: rangeName })
                 ) : (
-                  `No technician activity recorded in ${rangeName}${siteFilter !== 'All' ? ` at ${siteFilter}` : ''}, so hours and utilisation are not measurable.`
+                  (siteFilter !== 'All' ? p('strip.noActivitySite', { range: rangeName, site: siteFilter }) : p('strip.noActivity', { range: rangeName }))
                 )}
               </p>
             )}
@@ -767,26 +797,26 @@ export default function WorkshopLive() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search technician, job card, asset, plate"
-                aria-label="Search technicians and job cards"
+                placeholder={p('tools.searchPlaceholder')}
+                aria-label={p('tools.searchAria')}
               />
             </label>
             {(filter || stage) && (
               <button type="button" className="cc-btn-ghost" onClick={() => { setFilter(null); setStage(null) }}>
-                <X size={14} aria-hidden="true" /> Clear {[activeLabel, stageLabel].filter(Boolean).join(' and ')}
+                <X size={14} aria-hidden="true" /> {p('tools.clear', { what: [activeLabel, stageLabel].filter(Boolean).join(p('tools.and')) })}
               </button>
             )}
             <span className="wl-tools-right">
               <span className="wl-muted wl-updated" aria-live="polite">
-                {refreshing ? 'Updating...' : updatedAt ? `Updated ${relTime(updatedAt.getTime(), nowTs)}` : ''}
+                {refreshing ? p('tools.updating') : updatedAt ? p('tools.updated', { when: relTime(updatedAt.getTime(), nowTs) }) : ''}
               </span>
-              <button type="button" className="cc-icon-btn" onClick={() => load({ silent: true })} aria-label="Refresh" title="Refresh now">
+              <button type="button" className="cc-icon-btn" onClick={() => load({ silent: true })} aria-label={p('tools.refresh')} title={p('tools.refreshNow')}>
                 <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
               </button>
               <button type="button" className="cc-btn-ghost" onClick={() => exportBoard('excel')} disabled={!filteredBoard.length}>
-                <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+                <FileSpreadsheet size={14} aria-hidden="true" /> {p('tools.excel')}
               </button>
-              <button type="button" className="cc-icon-btn" onClick={() => exportBoard('pdf')} disabled={!filteredBoard.length} aria-label="Export technician board to PDF" title="PDF">
+              <button type="button" className="cc-icon-btn" onClick={() => exportBoard('pdf')} disabled={!filteredBoard.length} aria-label={p('tools.pdfAria')} title={p('tools.pdf')}>
                 <FileText size={14} />
               </button>
               <WorkshopTvShareButton className="wl-tv" />
@@ -796,23 +826,23 @@ export default function WorkshopLive() {
           {/* Technician Board + Live Alerts */}
           <div className="wl-main">
             <Card
-              title="Technician Board"
-              sub={<><span className="wl-now-tag">Now</span> Live status by technician. {firstLoad ? '' : `${filteredBoard.length} of ${board.length} shown.`}</>}
+              title={p('board.title')}
+              sub={<><span className="wl-now-tag">{p('now')}</span> {p('board.sub')} {firstLoad ? '' : p('board.shown', { shown: filteredBoard.length, total: board.length })}</>}
               className="wl-board"
             >
               <Tabs
-                label="Technician status"
+                label={p('board.chipsLabel')}
                 variant="line"
                 value={boardChip}
                 onChange={setBoardChip}
-                tabs={BOARD_CHIPS.map((c) => ({ key: c.key, label: c.label, count: firstLoad ? null : chips[c.key] }))}
+                tabs={BOARD_CHIPS.map((c) => ({ key: c.key, label: p(`chips.${c.key}`), count: firstLoad ? null : chips[c.key] }))}
               />
               <CardState
                 state={pageState}
                 lines={4}
                 empty={emptyBoard
-                  ? 'No technicians yet. Give staff a workshop role or a skills profile to see them here.'
-                  : (filteredBoard.length === 0 ? 'No technicians match these filters.' : null)}
+                  ? p('board.empty')
+                  : (filteredBoard.length === 0 ? p('board.noMatch') : null)}
               >
                 <div className="wl-tech-grid">
                   {filteredBoard.map((tech) => (
@@ -830,24 +860,24 @@ export default function WorkshopLive() {
             </Card>
 
             <Card
-              title={<span className="wl-alert-title"><Bell size={15} aria-hidden="true" /> Live Alerts</span>}
-              sub={<><span className="wl-now-tag">Now</span> {firstLoad ? 'Requires supervisor attention' : `${alerts.length} need attention: ${levels.critical} critical, ${levels.warning} warning, ${levels.info} info`}</>}
+              title={<span className="wl-alert-title"><Bell size={15} aria-hidden="true" /> {p('alerts.title')}</span>}
+              sub={<><span className="wl-now-tag">Now</span> {firstLoad ? p('alerts.subLoading') : p('alerts.sub', { count: alerts.length, critical: levels.critical, warning: levels.warning, info: levels.info })}</>}
               className="wl-alerts"
             >
               <CardState
                 state={pageState}
                 lines={5}
-                empty={alerts.length === 0 ? <span className="wl-clear"><CheckCircle2 size={16} aria-hidden="true" /> All clear. Nothing needs a supervisor right now.</span> : null}
+                empty={alerts.length === 0 ? <span className="wl-clear"><CheckCircle2 size={16} aria-hidden="true" /> {p('alerts.allClear')}</span> : null}
               >
                 <ul className="wl-alert-list">
                   {alertList.map((a) => (
                     <li key={a.key}>
-                      <button type="button" className={`wl-alert lvl-${a.level}`} onClick={() => focusAlert(a.ref)} title="Show the technician or job card">
+                      <button type="button" className={`wl-alert lvl-${a.level}`} onClick={() => focusAlert(a.ref)} title={p('alerts.showRef')}>
                         <span className="wl-alert-body">
-                          <b>{a.title}</b>
+                          <b>{ALERT_TITLE_I18N[a.title] ? p(`alertTitle.${ALERT_TITLE_I18N[a.title]}`) : a.title}</b>
                           <span>{a.detail}</span>
                         </span>
-                        <span className={`cc-pill ${a.pillTone}`}>{a.pillLabel}</span>
+                        <span className={`cc-pill ${a.pillTone}`}>{['critical', 'warning', 'info'].includes(a.level) ? p(`alertLevel.${a.level}`) : p('alertLevel.notice')}</span>
                       </button>
                     </li>
                   ))}
@@ -858,15 +888,15 @@ export default function WorkshopLive() {
 
           {/* Job Flow + full kanban */}
           <Card
-            title="Job Flow"
-            sub={<><span className="wl-now-tag">Now</span> {firstLoad ? 'Open workshop work by stage' : `${flow.open} open job cards by stage${flow.other ? `. ${flow.other} with a status outside these stages.` : '.'} Click a stage to open it on the board.`}</>}
+            title={p('flow.title')}
+            sub={<><span className="wl-now-tag">{p('now')}</span> {firstLoad ? p('flow.subLoading') : `${p('flow.sub', { count: flow.open })}${flow.other ? ` ${p('flow.other', { count: flow.other })}` : ''} ${p('flow.clickStage')}`}</>}
             action={(
               <button type="button" className="cc-btn-ghost" aria-expanded={showKanban} onClick={() => setShowKanban((v) => !v)}>
-                <Kanban size={14} aria-hidden="true" /> {showKanban ? 'Hide job board' : 'Show job board'}
+                <Kanban size={14} aria-hidden="true" /> {showKanban ? p('flow.hideBoard') : p('flow.showBoard')}
               </button>
             )}
           >
-            <CardState state={pageState} lines={2} empty={emptyJobs ? 'No open job cards. Open work orders appear here as they are raised.' : null}>
+            <CardState state={pageState} lines={2} empty={emptyJobs ? p('flow.empty') : null}>
               <div className="wl-flow">
                 {flow.stages.map((s) => (
                   <button
@@ -874,13 +904,13 @@ export default function WorkshopLive() {
                     type="button"
                     className={`wl-stage tone-${s.tone}`}
                     aria-pressed={stage === s.key}
-                    title={s.hint}
+                    title={p(`stages.${s.key}.hint`)}
                     onClick={() => { setStage((cur) => (cur === s.key ? null : s.key)); setShowKanban(true) }}
                   >
-                    <span>{s.label}</span>
+                    <span>{p(`stages.${s.key}.label`)}</span>
                     <b>{s.count}</b>
                     <i aria-hidden="true"><em style={{ width: `${Math.round(s.bar * 100)}%` }} /></i>
-                    <small>{flow.open ? `${Math.round(s.share * 100)}% of open` : 'N/A'}</small>
+                    <small>{flow.open ? p('flow.shareOfOpen', { pct: Math.round(s.share * 100) }) : 'N/A'}</small>
                   </button>
                 ))}
               </div>
@@ -889,17 +919,17 @@ export default function WorkshopLive() {
             {showKanban && !emptyJobs && (
               <div className="wl-kanban-wrap">
                 <div className="wl-kanban-head">
-                  <span className="wl-muted">{filteredJobs.length} job cards{stageLabel ? ` in ${stageLabel}` : ''}{activeLabel ? ` (${activeLabel})` : ''}</span>
+                  <span className="wl-muted">{p('flow.jobCards', { count: filteredJobs.length })}{stageLabel ? ` ${p('flow.inStage', { stage: stageLabel })}` : ''}{activeLabel ? ` (${activeLabel})` : ''}</span>
                 </div>
                 <div className="wl-kanban">
                   {KANBAN_COLUMNS.map((col) => {
                     const items = columns[col.key] || []
                     return (
                       <div key={col.key} className={`wl-col${col.key === 'Overdue' && items.length ? ' is-over' : ''}`}>
-                        <div className="wl-col-head"><span>{col.label}</span><b>{items.length}</b></div>
+                        <div className="wl-col-head"><span>{WO_COL_I18N[col.key] ? t(`workorders.statusLabel.${WO_COL_I18N[col.key]}`) : col.label}</span><b>{items.length}</b></div>
                         <div className="wl-col-body">
                           {items.length === 0 ? (
-                            <div className="wl-col-empty">Empty</div>
+                            <div className="wl-col-empty">{p('flow.colEmpty')}</div>
                           ) : items.map((job) => (
                             <JobCard
                               key={job.id}
@@ -941,11 +971,11 @@ export default function WorkshopLive() {
             )}
 
             <div className="wl-quick">
-              <Link to="/work-orders">All work orders</Link>
-              <Link to="/parts-requests">Parts requests</Link>
-              <Link to="/workshop-absence">Absence and attendance</Link>
-              <Link to="/workshop-analytics">Workshop analytics</Link>
-              <Link to="/workshop-settings">Alert thresholds</Link>
+              <Link to="/work-orders">{p('quick.workOrders')}</Link>
+              <Link to="/parts-requests">{p('quick.partsRequests')}</Link>
+              <Link to="/workshop-absence">{p('quick.absence')}</Link>
+              <Link to="/workshop-analytics">{p('quick.analytics')}</Link>
+              <Link to="/workshop-settings">{p('quick.thresholds')}</Link>
             </div>
           </Card>
 
@@ -954,19 +984,19 @@ export default function WorkshopLive() {
 
           {/* Delay and root cause (lost hours and their cost) */}
           <Card
-            title={<span className="wl-alert-title"><Timer size={15} aria-hidden="true" /> Delay and root cause</span>}
-            sub={`Blocked time in ${rangeName} by cause, with the responsible team, cost impact and suggested action`}
+            title={<span className="wl-alert-title"><Timer size={15} aria-hidden="true" /> {p('delay.title')}</span>}
+            sub={p('delay.sub', { range: rangeName })}
           >
             <CardState state={pageState} lines={3}>
               {pastError ? (
                 <p className="wl-strip-note is-err" role="alert">
                   {pastError}{' '}
-                  <button type="button" className="cc-link cc-link-btn" onClick={() => setPastNonce((n) => n + 1)}>Retry</button>
+                  <button type="button" className="cc-link cc-link-btn" onClick={() => setPastNonce((n) => n + 1)}>{p('retry')}</button>
                 </p>
               ) : !measures ? (
-                <p className="wl-muted" aria-live="polite">Loading delay causes for {rangeName}...</p>
+                <p className="wl-muted" aria-live="polite">{p('delay.loading', { range: rangeName })}</p>
               ) : !measures.hasActivity ? (
-                <p className="wl-muted">No technician activity recorded in {rangeName}, so there is no blocked time to break down.</p>
+                <p className="wl-muted">{p('delay.noActivity', { range: rangeName })}</p>
               ) : (
                 <DelayPanel delays={delays} bare period={rangeIsToday ? null : rangeName} />
               )}
@@ -1017,7 +1047,7 @@ export default function WorkshopLive() {
           events={raw?.eventsByUser?.[drawerTech.userId]}
           jobs={openJobsForAssign}
           onAssign={(j, u) => { onAssign(j, u); setDrawerTech(null) }}
-          onReassign={(j, f, t) => { onReassign(j, f, t); setDrawerTech(null) }}
+          onReassign={(j, f, to) => { onReassign(j, f, to); setDrawerTech(null) }}
           onConfirm={(id) => { onConfirm(id); setDrawerTech(null) }}
         />
       )}

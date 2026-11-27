@@ -28,6 +28,23 @@ import { safeHref } from '../../lib/safeUrl'
 import { normalizeWoStatus, WO_STATUSES, KANBAN_COLUMNS as WO_KANBAN_COLUMNS } from '../../lib/workOrderStatus'
 import { toTs, fmtMins, relTime, delayTotals } from '../../lib/workshopLiveAnalytics'
 import { reportFileName } from '../../lib/exportUtils'
+import { useLanguage } from '../../contexts/LanguageContext'
+
+// Display keys for the vocabularies shown here (stored values never change).
+const STATUS_I18N = {
+  working: 'working', available: 'available', waiting_parts: 'waitingParts', waiting_approval: 'waitingApproval',
+  waiting_tools: 'waitingTools', waiting_vehicle: 'waitingVehicle', on_break: 'onBreak', training: 'training',
+  awaiting_inspection: 'awaitingInspection', off_duty: 'offDuty', absent: 'absent', overtime: 'overtime',
+}
+const WO_STATUS_I18N = {
+  'New': 'new', 'Awaiting Assignment': 'awaitingAssignment', 'Assigned': 'assigned',
+  'In Progress': 'inProgress', 'Waiting for Parts': 'waitingParts', 'Waiting for Approval': 'waitingApproval',
+  'Quality Inspection': 'qualityInspection', 'Completed': 'completed', 'Overdue': 'overdue',
+  'Cancelled': 'cancelled', 'On Hold': 'onHold',
+}
+const PRIORITY_I18N = { Critical: 'critical', High: 'high', Medium: 'medium', Low: 'low', critical: 'critical', high: 'high', medium: 'medium', low: 'low' }
+const TASK_STATUS_I18N = { pending: 'pending', in_progress: 'inProgress', blocked: 'blocked', done: 'done', qc: 'qc' }
+const REASON_I18N = { parts: 'parts', tools: 'tools', approval: 'approval', vehicle: 'vehicle', vendor: 'vendor', support: 'support' }
 
 // ── Small pure helpers ─────────────────────────────────────────────────────────
 
@@ -60,7 +77,9 @@ const TASK_TONE = {
 // ── Status pill ────────────────────────────────────────────────────────────────
 
 export function StatusPill({ status }) {
-  const meta = STATUS_META[status] || { label: status || 'Unknown' }
+  const { t } = useLanguage()
+  const meta = STATUS_META[status] || { label: status || t('workshop.live.tech.unknown') }
+  const label = STATUS_I18N[status] ? t(`workshop.live.status.${STATUS_I18N[status]}`) : meta.label
   const c = statusColor(status)
   return (
     <span
@@ -68,7 +87,7 @@ export function StatusPill({ status }) {
       style={{ background: withAlpha(c, 0.16), color: c, border: `1px solid ${withAlpha(c, 0.4)}` }}
     >
       <span className="w-1.5 h-1.5 rounded-full" style={{ background: c }} />
-      {meta.label}
+      {label}
     </span>
   )
 }
@@ -97,6 +116,11 @@ export function JobCard({
   // canEditJob switch applies to everything and assigning stays enabled.
   jobRights = null,
 }) {
+  const { t } = useLanguage()
+  const wp = (k, v) => t(`workshop.parts.${k}`, v)
+  const woStatusLabel = (s) => (WO_STATUS_I18N[s] ? t(`workorders.statusLabel.${WO_STATUS_I18N[s]}`) : s)
+  const prioLabel = (s) => (PRIORITY_I18N[s] ? t(`workorders.priorityLabel.${PRIORITY_I18N[s]}`) : s)
+  const taskLabel = (s) => (TASK_STATUS_I18N[s] ? wp(`taskStatus.${TASK_STATUS_I18N[s]}`) : TASK_STATUS_LABEL[s])
   const right = (action) => (jobRights ? jobRights[action] !== false : (action === 'assign' ? true : canEditJob))
   const whyNot = (action) => (right(action) ? undefined : (jobRights?.reason?.(action) || editJobReason || undefined))
   const jobLocked = busy || !right('progress')
@@ -125,21 +149,21 @@ export function JobCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="font-semibold text-white text-sm truncate">{job.work_order_no || `WO ${job.id}`}</div>
-          <div className="text-[11px] text-muted truncate">{job.asset_no || 'No asset'}{job.plate_number ? ` | ${job.plate_number}` : ''}</div>
+          <div className="text-[11px] text-muted truncate">{job.asset_no || wp('job.noAsset')}{job.plate_number ? ` | ${job.plate_number}` : ''}</div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {hasTasks && (
             <span
               className="text-[10px] font-semibold px-1.5 py-0.5 rounded inline-flex items-center gap-1"
               style={{ background: withAlpha(TONE_COLOR.blue, 0.16), color: TONE_COLOR.blue }}
-              title={`${taskSummary.done} of ${taskSummary.total} tasks done`}
+              title={wp('job.tasksDone', { done: taskSummary.done, total: taskSummary.total })}
             >
               <ListChecks className="w-3 h-3" />{taskSummary.done}/{taskSummary.total}
             </span>
           )}
           {job.priority && (
             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: withAlpha(prioColor, 0.16), color: prioColor }}>
-              {job.priority}
+              {prioLabel(job.priority)}
             </span>
           )}
         </div>
@@ -148,13 +172,13 @@ export function JobCard({
       <div className="flex items-center gap-2 text-[11px] text-muted flex-wrap">
         {job.vor && (
           <span className="inline-flex items-center gap-1 font-semibold" style={{ color: TONE_COLOR.red }}>
-            <Car className="w-3 h-3" /> VOR
+            <Car className="w-3 h-3" /> {wp('job.vor')}
           </span>
         )}
         {Number.isFinite(tgt) && (
           <span className={overdue ? 'font-semibold' : ''} style={overdue ? { color: TONE_COLOR.red } : undefined}>
             <Clock className="w-3 h-3 inline mr-0.5" />
-            {overdue ? 'Overdue' : 'Target'} {new Date(tgt).toLocaleDateString()}
+            {overdue ? wp('job.overdue') : wp('job.target')} {new Date(tgt).toLocaleDateString()}
           </span>
         )}
         {ownerName && <span className="truncate"><User className="w-3 h-3 inline mr-0.5" />{ownerName}</span>}
@@ -163,7 +187,7 @@ export function JobCard({
       {/* Controls */}
       <div className="grid grid-cols-2 gap-1.5">
         <select
-          aria-label="Assign technician"
+          aria-label={wp('job.assignAria')}
           disabled={assignLocked}
           title={whyNot('assign')}
           value={job.assigned_owner_id || ''}
@@ -177,12 +201,12 @@ export function JobCard({
           className="text-[11px] rounded-lg px-1.5 py-1 border truncate"
           style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
         >
-          <option value="">Assign to...</option>
-          {technicians.map((t) => <option key={t.userId} value={t.userId}>{t.name}</option>)}
+          <option value="">{wp('job.assignTo')}</option>
+          {technicians.map((tc) => <option key={tc.userId} value={tc.userId}>{tc.name}</option>)}
         </select>
 
         <select
-          aria-label="Move status"
+          aria-label={wp('job.moveAria')}
           disabled={jobLocked}
           title={lockTitle}
           value={STATUS_MOVES.includes(canonicalStatus) ? canonicalStatus : ''}
@@ -190,12 +214,12 @@ export function JobCard({
           className="text-[11px] rounded-lg px-1.5 py-1 border truncate"
           style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
         >
-          <option value="">Move to...</option>
-          {STATUS_MOVES.map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="">{wp('job.moveTo')}</option>
+          {STATUS_MOVES.map((s) => <option key={s} value={s}>{woStatusLabel(s)}</option>)}
         </select>
 
         <select
-          aria-label="Set priority"
+          aria-label={wp('job.priorityAria')}
           disabled={editLocked}
           title={whyNot('edit')}
           value={PRIORITY_OPTS.find((p) => normStatus(p) === prio) || ''}
@@ -203,8 +227,8 @@ export function JobCard({
           className="text-[11px] rounded-lg px-1.5 py-1 border truncate"
           style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
         >
-          <option value="">Priority...</option>
-          {PRIORITY_OPTS.map((p) => <option key={p} value={p}>{p}</option>)}
+          <option value="">{wp('job.priorityPlaceholder')}</option>
+          {PRIORITY_OPTS.map((po) => <option key={po} value={po}>{prioLabel(po)}</option>)}
         </select>
 
         <button
@@ -219,7 +243,7 @@ export function JobCard({
             color: job.vor ? TONE_COLOR.red : 'var(--panel-ink)',
           }}
         >
-          {job.vor ? 'Clear VOR' : 'Set VOR'}
+          {job.vor ? wp('job.clearVor') : wp('job.setVor')}
         </button>
       </div>
 
@@ -236,9 +260,9 @@ export function JobCard({
           onClick={() => onSmartAssign(job)}
           className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1 disabled:opacity-40"
           style={{ background: withAlpha(TONE_COLOR.green, 0.12), borderColor: withAlpha(TONE_COLOR.green, 0.4), color: TONE_COLOR.green }}
-          title="Suggest the best technician by skill, availability and workload"
+          title={wp('job.smartAssignTitle')}
         >
-          <Sparkles className="w-3 h-3" /> Smart assign
+          <Sparkles className="w-3 h-3" /> {wp('job.smartAssign')}
         </button>
         <button
           type="button"
@@ -247,7 +271,7 @@ export function JobCard({
           style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
           aria-expanded={expanded}
         >
-          <ListChecks className="w-3 h-3" /> Tasks{hasTasks ? ` (${taskSummary.total})` : ''}
+          <ListChecks className="w-3 h-3" /> {wp('job.tasks')}{hasTasks ? ` (${taskSummary.total})` : ''}
           {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
         <button
@@ -256,9 +280,9 @@ export function JobCard({
           onClick={() => onManageTasks(job)}
           className="text-[11px] rounded-lg px-2 py-1 border font-medium inline-flex items-center gap-1 disabled:opacity-40"
           style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-          title="Split this job into tasks"
+          title={wp('job.splitTitle')}
         >
-          <Plus className="w-3 h-3" /> Split
+          <Plus className="w-3 h-3" /> {wp('job.split')}
         </button>
       </div>
 
@@ -266,11 +290,11 @@ export function JobCard({
         <div className="rounded-lg p-2 flex flex-col gap-1.5" style={{ background: 'var(--surface-2)' }}>
           {(!tasks || tasks.length === 0) ? (
             <div className="text-[11px] text-muted text-center py-2">
-              No tasks yet. Use Split to break this job into tasks.
+              {wp('job.noTasks')}
             </div>
           ) : tasks.map((tk) => {
             const tone = TASK_TONE[tk.status] || TONE_COLOR.grey
-            const assigneeName = tk.assignee ? (techById[tk.assignee]?.name || 'Assigned') : null
+            const assigneeName = tk.assignee ? (techById[tk.assignee]?.name || wp('job.assigned')) : null
             return (
               <div key={tk.id} className="rounded-lg px-2 py-1.5 border" style={{ background: 'var(--surface-1)', borderColor: 'var(--border-dim)' }}>
                 <div className="flex items-center justify-between gap-2">
@@ -279,20 +303,20 @@ export function JobCard({
                     {tk.skill ? <span className="text-muted"> · {tk.skill}</span> : null}
                   </span>
                   <select
-                    aria-label={`Set status for ${tk.title}`}
+                    aria-label={wp('job.taskStatusAria', { title: tk.title })}
                     disabled={busy}
                     value={tk.status}
                     onChange={(e) => onSetTaskStatus(tk.id, e.target.value, job.id)}
                     className="text-[10px] rounded px-1 py-0.5 border shrink-0"
                     style={{ background: 'var(--surface-2)', borderColor: withAlpha(tone, 0.4), color: tone }}
                   >
-                    {TASK_STATUS.map((s) => <option key={s} value={s}>{TASK_STATUS_LABEL[s]}</option>)}
+                    {TASK_STATUS.map((s) => <option key={s} value={s}>{taskLabel(s)}</option>)}
                   </select>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
-                  <span className="tabular-nums">{fmtMins(tk.minutesSpent)} spent</span>
-                  {tk.est_minutes != null && <span className="tabular-nums">/ {fmtMins(tk.est_minutes)} est</span>}
-                  {tk.overBudget && <span style={{ color: TONE_COLOR.red }}>over budget</span>}
+                  <span className="tabular-nums">{wp('job.spent', { time: fmtMins(tk.minutesSpent) })}</span>
+                  {tk.est_minutes != null && <span className="tabular-nums">{wp('job.est', { time: fmtMins(tk.est_minutes) })}</span>}
+                  {tk.overBudget && <span style={{ color: TONE_COLOR.red }}>{wp('job.overBudget')}</span>}
                   {assigneeName && <span className="truncate"><User className="w-2.5 h-2.5 inline mr-0.5" />{assigneeName}</span>}
                 </div>
               </div>
@@ -310,9 +334,9 @@ export function JobCard({
               onClick={() => onQcPass(job)}
               className="text-[11px] rounded-lg px-2.5 py-1 border font-semibold inline-flex items-center gap-1 disabled:opacity-40"
               style={{ background: withAlpha(TONE_COLOR.green, 0.16), borderColor: withAlpha(TONE_COLOR.green, 0.4), color: TONE_COLOR.green }}
-              title={whyNot('qc') || lockTitle || 'QC pass: complete the job'}
+              title={whyNot('qc') || lockTitle || wp('job.qcPassTitle')}
             >
-              <CheckCircle2 className="w-3 h-3" /> QC Pass
+              <CheckCircle2 className="w-3 h-3" /> {wp('job.qcPass')}
             </button>
             <button
               type="button"
@@ -320,14 +344,14 @@ export function JobCard({
               onClick={() => onQcFail(job)}
               className="text-[11px] rounded-lg px-2.5 py-1 border font-semibold inline-flex items-center gap-1 disabled:opacity-40"
               style={{ background: withAlpha(TONE_COLOR.red, 0.16), borderColor: withAlpha(TONE_COLOR.red, 0.4), color: TONE_COLOR.red }}
-              title={whyNot('qc') || lockTitle || 'QC fail: send back for rework'}
+              title={whyNot('qc') || lockTitle || wp('job.qcFailTitle')}
             >
-              <XCircle className="w-3 h-3" /> QC Fail
+              <XCircle className="w-3 h-3" /> {wp('job.qcFail')}
             </button>
           </div>
         ) : <span />}
         <Link to="/work-orders" className="text-[11px] text-muted hover:text-white inline-flex items-center gap-1">
-          Open <ExternalLink className="w-3 h-3" />
+          {wp('job.open')} <ExternalLink className="w-3 h-3" />
         </Link>
       </div>
     </div>
@@ -339,8 +363,11 @@ export function JobCard({
 const PRI_TONE = { high: TONE_COLOR.red, medium: TONE_COLOR.amber, low: TONE_COLOR.grey }
 
 export function DelayPanel({ delays, bare = false, period = null }) {
+  const { t } = useLanguage()
+  const wp = (k, v) => t(`workshop.parts.${k}`, v)
+  const reason = (r) => (REASON_I18N[r] ? wp(`reason.${REASON_I18N[r]}`) : labelReason(r))
   // `period` names the measured window ("1 to 5 Oct 2026"); null means today.
-  const when = period ? `in ${period}` : 'today'
+  const when = period ? wp('delay.inPeriod', { period }) : wp('delay.today')
   const totals = useMemo(() => delayTotals(delays), [delays])
   const option = useMemo(() => {
     const rows = [...delays].reverse() // ECharts hbar renders bottom-up
@@ -350,11 +377,11 @@ export function DelayPanel({ delays, bare = false, period = null }) {
         trigger: 'axis', axisPointer: { type: 'shadow' },
         formatter: (p) => {
           const d = rows[p[0].dataIndex]
-          return `${labelReason(d.reason)}<br/>Hours lost: <b>${d.hoursLost}</b><br/>Jobs affected: <b>${d.affectedJobs}</b>`
+          return `${reason(d.reason)}<br/>${wp('delay.hoursLost')}: <b>${d.hoursLost}</b><br/>${wp('delay.jobsAffected')}: <b>${d.affectedJobs}</b>`
         },
       },
-      xAxis: { type: 'value', name: 'Hours lost', nameTextStyle: { color: '#9ca3af' }, axisLabel: { color: '#9ca3af' }, splitLine: { lineStyle: { color: 'var(--panel-2)' } } },
-      yAxis: { type: 'category', data: rows.map((d) => labelReason(d.reason)), axisLabel: { color: '#64748b' } },
+      xAxis: { type: 'value', name: wp('delay.hoursLost'), nameTextStyle: { color: '#9ca3af' }, axisLabel: { color: '#9ca3af' }, splitLine: { lineStyle: { color: 'var(--panel-2)' } } },
+      yAxis: { type: 'category', data: rows.map((d) => reason(d.reason)), axisLabel: { color: '#64748b' } },
       series: [{
         type: 'bar',
         data: rows.map((d, i) => ({ value: d.hoursLost, itemStyle: { color: colorAt(i), borderRadius: [0, 4, 4, 0] } })),
@@ -362,45 +389,46 @@ export function DelayPanel({ delays, bare = false, period = null }) {
         label: { show: true, position: 'right', color: '#64748b', formatter: (p) => `${p.value}h` },
       }],
     }
-  }, [delays])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- labels follow the language (t)
+  }, [delays, t])
 
   const delayColumns = useMemo(() => [
-    { id: 'cause', header: 'Cause', accessorFn: (d) => labelReason(d.reason), size: 170 },
-    { id: 'hours', header: 'Hours lost', accessorFn: (d) => Number(d.hoursLost) || 0, size: 100, meta: { align: 'right' },
+    { id: 'cause', header: wp('delay.cols.cause'), accessorFn: (d) => reason(d.reason), size: 170 },
+    { id: 'hours', header: wp('delay.hoursLost'), accessorFn: (d) => Number(d.hoursLost) || 0, size: 100, meta: { align: 'right' },
       cell: ({ row }) => <span className="tabular-nums">{row.original.hoursLost}</span> },
-    { id: 'jobs', header: 'Jobs affected', accessorFn: (d) => Number(d.affectedJobs) || 0, size: 110, meta: { align: 'right' },
+    { id: 'jobs', header: wp('delay.jobsAffected'), accessorFn: (d) => Number(d.affectedJobs) || 0, size: 110, meta: { align: 'right' },
       cell: ({ row }) => <span className="tabular-nums">{row.original.affectedJobs ?? 'N/A'}</span> },
-    { id: 'cost', header: 'Cost impact', accessorFn: (d) => (d.costImpact == null ? null : Number(d.costImpact)), size: 120, meta: { align: 'right', exportValue: (d) => (d.costImpact == null ? 'N/A' : Number(d.costImpact)) },
+    { id: 'cost', header: wp('delay.cols.cost'), accessorFn: (d) => (d.costImpact == null ? null : Number(d.costImpact)), size: 120, meta: { align: 'right', exportValue: (d) => (d.costImpact == null ? 'N/A' : Number(d.costImpact)) },
       cell: ({ row }) => <span className="tabular-nums">{row.original.costImpact != null ? Number(row.original.costImpact).toLocaleString() : 'N/A'}</span> },
-    { id: 'dept', header: 'Responsible', accessorFn: (d) => d.responsibleDept || 'N/A', size: 140, meta: { filterVariant: 'select' } },
-    { id: 'action', header: 'Suggested action', accessorFn: (d) => d.suggestedAction || 'N/A', size: 240,
+    { id: 'dept', header: wp('delay.cols.dept'), accessorFn: (d) => d.responsibleDept || 'N/A', size: 140, meta: { filterVariant: 'select' } },
+    { id: 'action', header: wp('delay.cols.action'), accessorFn: (d) => d.suggestedAction || 'N/A', size: 240,
       cell: ({ row }) => <span className="text-muted">{row.original.suggestedAction || 'N/A'}</span> },
-    { id: 'priority', header: 'Priority', accessorFn: (d) => d.priority || 'low', size: 100, meta: { filterVariant: 'select' },
+    { id: 'priority', header: wp('delay.cols.priority'), accessorFn: (d) => d.priority || 'low', size: 100, meta: { filterVariant: 'select' },
       cell: ({ row }) => {
         const p = row.original.priority || 'low'
         const c = PRI_TONE[p] || TONE_COLOR.grey
-        return <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold capitalize" style={{ background: `${c}22`, color: c }}>{p}</span>
+        return <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold capitalize" style={{ background: `${c}22`, color: c }}>{PRIORITY_I18N[p] ? t(`workorders.priorityLabel.${PRIORITY_I18N[p]}`) : p}</span>
       } },
-  ], [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- labels follow the language (t)
+  ], [t])
 
   if (!delays.length) {
     return (
       <div className={bare ? 'p-6 text-center' : 'card p-6 text-center'}>
         <Timer className="w-8 h-8 mx-auto mb-2 opacity-40" aria-hidden="true" />
-        <div className="text-sm text-white font-medium">No blocked time recorded {when}</div>
-        <div className="text-xs text-muted mt-1">Delay causes appear here as technicians log waiting time.</div>
+        <div className="text-sm text-white font-medium">{wp('delay.none', { when })}</div>
+        <div className="text-xs text-muted mt-1">{wp('delay.noneHint')}</div>
       </div>
     )
   }
   return (
     <div className={bare ? '' : 'card p-4'}>
-      {!bare && <h3 className="text-sm font-semibold text-white mb-1">Delay and Root Cause</h3>}
+      {!bare && <h3 className="text-sm font-semibold text-white mb-1">{wp('delay.title')}</h3>}
       <p className="text-[11px] text-muted mb-3">
-        Hours lost to blocked time, by cause ({period || 'today'}): {totals.hours}h across {totals.causes} cause{totals.causes === 1 ? '' : 's'},
-        {' '}cost impact {totals.cost == null ? 'N/A' : totals.cost.toLocaleString()}.
+        {wp(totals.causes === 1 ? 'delay.summaryOne' : 'delay.summary', { period: period || wp('delay.todayWord'), hours: totals.hours, causes: totals.causes, cost: totals.cost == null ? 'N/A' : totals.cost.toLocaleString() })}
       </p>
       <div style={{ height: Math.max(160, delays.length * 42) }}>
-        <EChart option={option} ariaLabel="Delay hours by cause" />
+        <EChart option={option} ariaLabel={wp('delay.chartAria')} />
       </div>
       <div className="mt-3">
         <EnterpriseTable
@@ -408,10 +436,10 @@ export function DelayPanel({ delays, bare = false, period = null }) {
           data={delays}
           getRowId={(d) => String(d.reason)}
           initialPageSize={25}
-          searchPlaceholder="Search causes..."
-          emptyMessage={`No blocked time recorded ${when}`}
+          searchPlaceholder={wp('delay.search')}
+          emptyMessage={wp('delay.none', { when })}
           exportFileName={reportFileName('Workshop Delay Causes', period || 'Today')}
-          reportMeta={{ title: 'Workshop Delay and Root Cause' }}
+          reportMeta={{ title: wp('delay.reportTitle') }}
         />
       </div>
     </div>
@@ -457,6 +485,8 @@ export function SmartAssignModal({ job, board, technicians, skillsByUser, assign
   )
   const top = recs.slice(0, 3)
   const owner = job.assigned_owner_id || null
+  const { t } = useLanguage()
+  const wp = (k, v) => t(`workshop.parts.${k}`, v)
 
   const pick = (userId) => {
     if (owner && String(owner) !== String(userId)) onReassign(job.id, owner, userId)
@@ -478,37 +508,37 @@ export function SmartAssignModal({ job, board, technicians, skillsByUser, assign
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-white truncate">{r.name}</span>
             {suggested && <Sparkles className="w-3 h-3" style={{ color: TONE_COLOR.green }} />}
-            {r.available && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: withAlpha(TONE_COLOR.green, 0.16), color: TONE_COLOR.green }}>Available</span>}
+            {r.available && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: withAlpha(TONE_COLOR.green, 0.16), color: TONE_COLOR.green }}>{wp('smart.available')}</span>}
           </div>
           <div className="text-[11px] text-muted mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
             {r.reasons.slice(0, 4).map((rn, i) => <span key={i}>· {rn}</span>)}
           </div>
         </div>
         <button type="button" disabled={busy} onClick={() => pick(r.userId)} className="btn-primary text-[11px] px-3 py-1.5 shrink-0 disabled:opacity-40">
-          Assign
+          {wp('smart.assign')}
         </button>
       </div>
     )
   }
 
   return (
-    <ModalShell title={`Smart assign · ${job.work_order_no || 'Job'}`} icon={Sparkles} onClose={onClose} busy={busy}>
+    <ModalShell title={wp('smart.title', { no: job.work_order_no || wp('job.job') })} icon={Sparkles} onClose={onClose} busy={busy}>
       <p className="text-[11px] text-muted mb-3">
-        Ranked by skill match, availability, workload and site. {job.work_type ? `Job type: ${job.work_type}.` : 'No job type set - skill match is neutral.'}
+        {wp('smart.ranked')} {job.work_type ? wp('smart.jobType', { type: job.work_type }) : wp('smart.noJobType')}
       </p>
       {recs.length === 0 ? (
-        <div className="text-sm text-muted text-center py-6">No eligible technicians (all off duty or absent).</div>
+        <div className="text-sm text-muted text-center py-6">{wp('smart.none')}</div>
       ) : (
         <div className="flex flex-col gap-3">
           {top.length > 0 && (
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">Suggested</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">{wp('smart.suggested')}</div>
               <div className="flex flex-col gap-2">{top.map((r) => <Row key={r.userId} r={r} suggested />)}</div>
             </div>
           )}
           {recs.length > top.length && (
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">All technicians</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">{wp('smart.all')}</div>
               <div className="flex flex-col gap-2">{recs.slice(3).map((r) => <Row key={r.userId} r={r} />)}</div>
             </div>
           )}
@@ -524,6 +554,9 @@ export function TaskModal({ job, tasks, technicians, busy, onClose, onCreate, on
   const [title, setTitle] = useState('')
   const [skill, setSkill] = useState('')
   const [est, setEst] = useState('')
+  const { t } = useLanguage()
+  const wp = (k, v) => t(`workshop.parts.${k}`, v)
+  const taskLabel = (s) => (TASK_STATUS_I18N[s] ? wp(`taskStatus.${TASK_STATUS_I18N[s]}`) : TASK_STATUS_LABEL[s])
 
   const add = () => {
     if (!title.trim()) return
@@ -532,13 +565,13 @@ export function TaskModal({ job, tasks, technicians, busy, onClose, onCreate, on
   }
 
   return (
-    <ModalShell title={`Tasks · ${job.work_order_no || 'Job'}`} icon={ClipboardList} onClose={onClose} busy={busy}>
+    <ModalShell title={wp('tasks.title', { no: job.work_order_no || wp('job.job') })} icon={ClipboardList} onClose={onClose} busy={busy}>
       <div className="flex flex-col gap-2 mb-4">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Task title (e.g. Remove and inspect steer tyres)"
-          aria-label="Task title"
+          placeholder={wp('tasks.titlePlaceholder')}
+          aria-label={wp('tasks.titleAria')}
           className="text-sm rounded-lg px-3 py-2 border w-full"
           style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
         />
@@ -546,28 +579,28 @@ export function TaskModal({ job, tasks, technicians, busy, onClose, onCreate, on
           <input
             value={skill}
             onChange={(e) => setSkill(e.target.value)}
-            placeholder="Skill (optional)"
-            aria-label="Skill (optional)"
+            placeholder={wp('tasks.skill')}
+            aria-label={wp('tasks.skill')}
             className="text-sm rounded-lg px-3 py-2 border flex-1 min-w-0"
             style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
           />
           <input
             value={est}
             onChange={(e) => setEst(e.target.value.replace(/[^0-9]/g, ''))}
-            placeholder="Est. min"
-            aria-label="Estimated minutes"
+            placeholder={wp('tasks.estPlaceholder')}
+            aria-label={wp('tasks.estAria')}
             inputMode="numeric"
             className="text-sm rounded-lg px-3 py-2 border w-24"
             style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
           />
           <button type="button" disabled={busy || !title.trim()} onClick={add} className="btn-primary text-sm px-3 py-2 shrink-0 disabled:opacity-40">
-            <Plus className="w-4 h-4 inline" /> Add
+            <Plus className="w-4 h-4 inline" /> {wp('tasks.add')}
           </button>
         </div>
       </div>
 
       {(!tasks || tasks.length === 0) ? (
-        <div className="text-sm text-muted text-center py-4">No tasks yet. Add the first one above.</div>
+        <div className="text-sm text-muted text-center py-4">{wp('tasks.empty')}</div>
       ) : (
         <div className="flex flex-col gap-2">
           {tasks.map((tk) => {
@@ -580,27 +613,27 @@ export function TaskModal({ job, tasks, technicians, busy, onClose, onCreate, on
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                   <select
-                    aria-label="Task status"
+                    aria-label={wp('tasks.statusAria')}
                     disabled={busy}
                     value={tk.status}
                     onChange={(e) => onSetStatus(tk.id, e.target.value)}
                     className="text-[11px] rounded-lg px-2 py-1 border"
                     style={{ background: 'var(--surface-1)', borderColor: withAlpha(tone, 0.4), color: tone }}
                   >
-                    {TASK_STATUS.map((s) => <option key={s} value={s}>{TASK_STATUS_LABEL[s]}</option>)}
+                    {TASK_STATUS.map((s) => <option key={s} value={s}>{taskLabel(s)}</option>)}
                   </select>
                   <select
-                    aria-label="Task assignee"
+                    aria-label={wp('tasks.assigneeAria')}
                     disabled={busy}
                     value={tk.assignee || ''}
                     onChange={(e) => onUpdate(tk.id, { assignee_user_id: e.target.value || null })}
                     className="text-[11px] rounded-lg px-2 py-1 border flex-1 min-w-0 truncate"
                     style={{ background: 'var(--surface-1)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
                   >
-                    <option value="">Unassigned</option>
-                    {technicians.map((t) => <option key={t.userId} value={t.userId}>{t.name}</option>)}
+                    <option value="">{wp('tasks.unassigned')}</option>
+                    {technicians.map((tc) => <option key={tc.userId} value={tc.userId}>{tc.name}</option>)}
                   </select>
-                  {tk.overBudget && <span className="text-[10px] shrink-0" style={{ color: TONE_COLOR.red }}>over</span>}
+                  {tk.overBudget && <span className="text-[10px] shrink-0" style={{ color: TONE_COLOR.red }}>{wp('tasks.over')}</span>}
                 </div>
               </div>
             )
@@ -619,6 +652,8 @@ export function TechDrawer({
 }) {
   const [note, setNote] = useState('')
   const [assignTo, setAssignTo] = useState('')
+  const { t } = useLanguage()
+  const wp = (k, v) => t(`workshop.parts.${k}`, v)
   // For an awaiting-inspection tech, surface their latest unconfirmed complete_task.
   const pendingConfirm = useMemo(() => {
     if (tech.status !== STATUS.AWAITING_INSPECTION) return null
@@ -650,21 +685,21 @@ export function TechDrawer({
   )
 
   return (
-    <ModalShell title={`Foreman actions · ${tech.name}`} icon={Settings2} onClose={onClose} busy={busy}>
+    <ModalShell title={wp('drawer.title', { name: tech.name })} icon={Settings2} onClose={onClose} busy={busy}>
       <div className="flex items-center gap-2 mb-3">
         <StatusPill status={tech.status} />
-        {tech.job && <span className="text-[11px] text-muted truncate">on {tech.job.no || 'a job'}</span>}
+        {tech.job && <span className="text-[11px] text-muted truncate">{wp('drawer.onJob', { job: tech.job.no || wp('drawer.aJob') })}</span>}
       </div>
 
       {/* Time split today (from the engine rollup) */}
       <div className="grid grid-cols-3 gap-2 text-center mb-3">
-        <TimeCell label="Productive" value={fmtMins(tech.productiveMin)} color={TONE_COLOR.green} />
-        <TimeCell label="Blocked" value={fmtMins(tech.blockedMin)} color={TONE_COLOR.amber} />
-        <TimeCell label="Unassigned" value={fmtMins(tech.unassignedMin)} color={TONE_COLOR.grey} />
+        <TimeCell label={t('workshop.live.tech.productive')} value={fmtMins(tech.productiveMin)} color={TONE_COLOR.green} />
+        <TimeCell label={t('workshop.live.tech.blocked')} value={fmtMins(tech.blockedMin)} color={TONE_COLOR.amber} />
+        <TimeCell label={wp('tasks.unassigned')} value={fmtMins(tech.unassignedMin)} color={TONE_COLOR.grey} />
       </div>
       <div className="text-[11px] text-muted mb-3">
-        {[tech.employeeId, tech.trade, tech.site].filter(Boolean).join(' | ') || 'No trade or site on file'}
-        {' '}| Last activity {relTime(tech.lastActivityAt, now)}
+        {[tech.employeeId, tech.trade, tech.site].filter(Boolean).join(' | ') || wp('drawer.noTrade')}
+        {' '}| {wp('drawer.lastActivity', { when: relTime(tech.lastActivityAt, now) })}
       </div>
 
       {/* Assign / reassign a job card */}
@@ -676,9 +711,9 @@ export function TechDrawer({
             disabled={busy}
             className="flex-1 min-w-0 text-sm rounded-lg px-2 py-2 border"
             style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
-            aria-label={`Assign a job to ${tech.name}`}
+            aria-label={wp('drawer.assignAria', { name: tech.name })}
           >
-            <option value="">{tech.job ? 'Reassign to job...' : 'Assign a job...'}</option>
+            <option value="">{tech.job ? wp('drawer.reassignTo') : wp('drawer.assignJob')}</option>
             {jobs.map((j) => (
               <option key={j.id} value={j.id}>{j.work_order_no || j.id}{j.asset_no ? ` | ${j.asset_no}` : ''}</option>
             ))}
@@ -696,7 +731,7 @@ export function TechDrawer({
             }}
             className="btn-secondary text-sm px-3 py-2 disabled:opacity-40"
           >
-            Assign
+            {wp('smart.assign')}
           </button>
         </div>
       )}
@@ -708,29 +743,29 @@ export function TechDrawer({
           onClick={() => onConfirm(pendingConfirm.id)}
           className="btn-primary w-full text-sm px-3 py-2 mb-3 disabled:opacity-40"
         >
-          <CheckCircle2 className="w-4 h-4 inline mr-1" /> Confirm completed task
+          <CheckCircle2 className="w-4 h-4 inline mr-1" /> {wp('drawer.confirmTask')}
         </button>
       )}
 
       <div className="flex flex-col gap-2">
         <Action
-          icon={PauseCircle} label="Mark temporarily unavailable" tone={TONE_COLOR.amber}
-          title="Logs a support pause on the technician (counts as blocked time, shown in the delay panel)"
+          icon={PauseCircle} label={wp('drawer.unavailable')} tone={TONE_COLOR.amber}
+          title={wp('drawer.unavailableTitle')}
           onClick={() => onEvent(tech.userId, { event_type: 'pause_job', reason_code: 'support', note: 'Marked unavailable by foreman', job_id: tech.currentJobId || null })}
         />
         <Action
-          icon={Package} label="Escalate parts" tone={TONE_COLOR.blue}
-          title="Records a parts request and foreman-confirms it"
+          icon={Package} label={wp('drawer.escalateParts')} tone={TONE_COLOR.blue}
+          title={wp('drawer.escalatePartsTitle')}
           onClick={() => onEvent(tech.userId, { event_type: 'request_parts', reason_code: 'parts', note: 'Parts escalated by foreman', job_id: tech.currentJobId || null, confirm: true })}
         />
         <Action
-          icon={ShieldAlert} label="Escalate approval" tone={TONE_COLOR.blue}
-          title="Records a waiting-for-approval event and foreman-confirms it"
+          icon={ShieldAlert} label={wp('drawer.escalateApproval')} tone={TONE_COLOR.blue}
+          title={wp('drawer.escalateApprovalTitle')}
           onClick={() => onEvent(tech.userId, { event_type: 'waiting_approval', reason_code: 'approval', note: 'Approval escalated by foreman', job_id: tech.currentJobId || null, confirm: true })}
         />
         <Action
-          icon={GraduationCap} label="Send to training" tone={TONE_COLOR.purple}
-          title="Moves the technician to training (excluded from utilization)"
+          icon={GraduationCap} label={wp('drawer.training')} tone={TONE_COLOR.purple}
+          title={wp('drawer.trainingTitle')}
           onClick={() => onEvent(tech.userId, { event_type: 'training', note: 'Assigned to training by foreman' })}
         />
         {phone ? (
@@ -739,27 +774,27 @@ export function TechDrawer({
             className="w-full text-left rounded-lg px-3 py-2.5 border flex items-center gap-2.5 text-sm font-medium"
             style={{ background: 'var(--surface-2)', borderColor: withAlpha(TONE_COLOR.green, 0.35), color: 'var(--panel-ink)' }}
           >
-            <Phone className="w-4 h-4 shrink-0" style={{ color: TONE_COLOR.green }} /> Call {phone}
+            <Phone className="w-4 h-4 shrink-0" style={{ color: TONE_COLOR.green }} /> {wp('drawer.call', { phone })}
           </a>
         ) : (
           <div className="w-full rounded-lg px-3 py-2.5 border flex items-center gap-2.5 text-sm text-muted" style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}>
-            <Phone className="w-4 h-4 shrink-0" /> No phone number on file
+            <Phone className="w-4 h-4 shrink-0" /> {wp('drawer.noPhone')}
           </div>
         )}
         {tech.currentJobId && (
-          <Action icon={ExternalLink} label="Open current job" tone={TONE_COLOR.grey} onClick={() => onOpenJob(tech.currentJobId)} />
+          <Action icon={ExternalLink} label={wp('drawer.openJob')} tone={TONE_COLOR.grey} onClick={() => onOpenJob(tech.currentJobId)} />
         )}
       </div>
 
       {/* Send note to technician (records an activity annotation, not a push) */}
       <div className="mt-4">
-        <label className="text-[11px] font-semibold text-white flex items-center gap-1.5 mb-1"><Send className="w-3.5 h-3.5" /> Send note to technician</label>
+        <label className="text-[11px] font-semibold text-white flex items-center gap-1.5 mb-1"><Send className="w-3.5 h-3.5" /> {wp('drawer.noteLabel')}</label>
         <div className="flex gap-2">
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Message (logged to their activity feed)"
-            aria-label="Message to technician"
+            placeholder={wp('drawer.notePlaceholder')}
+            aria-label={wp('drawer.noteAria')}
             className="text-sm rounded-lg px-3 py-2 border flex-1 min-w-0"
             style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)', color: 'var(--panel-ink)' }}
           />
@@ -769,21 +804,21 @@ export function TechDrawer({
             onClick={() => { onNotify(tech.userId, note.trim()); setNote('') }}
             className="btn-primary text-sm px-3 py-2 shrink-0 disabled:opacity-40"
           >
-            Send
+            {wp('drawer.send')}
           </button>
         </div>
-        <p className="text-[10px] text-muted mt-1">Recorded as a note on the technician's activity log (audit trail). Push delivery is not wired.</p>
+        <p className="text-[10px] text-muted mt-1">{wp('drawer.noteHint')}</p>
       </div>
 
       {/* Workload by skill + shift */}
       <div className="mt-4 rounded-lg p-3 border" style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}>
-        <div className="text-[11px] font-semibold text-white flex items-center gap-1.5 mb-2"><Layers className="w-3.5 h-3.5" /> Workload by skill and shift</div>
+        <div className="text-[11px] font-semibold text-white flex items-center gap-1.5 mb-2"><Layers className="w-3.5 h-3.5" /> {wp('drawer.workload')}</div>
         <div className="grid grid-cols-3 gap-2 text-center mb-2">
-          <div><div className="text-base font-bold text-white tabular-nums">{activeJobs.length}</div><div className="text-[10px] text-muted">Active jobs</div></div>
-          <div><div className="text-base font-bold text-white tabular-nums">{skills.length}</div><div className="text-[10px] text-muted">Skills</div></div>
-          <div><div className="text-base font-bold text-white tabular-nums">{tech.utilization == null ? 'N/A' : `${Math.round(tech.utilization * 100)}%`}</div><div className="text-[10px] text-muted">Utilization</div></div>
+          <div><div className="text-base font-bold text-white tabular-nums">{activeJobs.length}</div><div className="text-[10px] text-muted">{wp('drawer.activeJobs')}</div></div>
+          <div><div className="text-base font-bold text-white tabular-nums">{skills.length}</div><div className="text-[10px] text-muted">{wp('drawer.skills')}</div></div>
+          <div><div className="text-base font-bold text-white tabular-nums">{tech.utilization == null ? 'N/A' : `${Math.round(tech.utilization * 100)}%`}</div><div className="text-[10px] text-muted">{wp('drawer.utilization')}</div></div>
         </div>
-        <div className="text-[11px] text-muted">Shift: <span className="text-white">{tech.shift || 'None assigned'}</span></div>
+        <div className="text-[11px] text-muted">{wp('drawer.shift')} <span className="text-white">{tech.shift || wp('drawer.noShift')}</span></div>
         {skills.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
             {skills.map((s) => <span key={s} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: withAlpha(TONE_COLOR.blue, 0.14), color: TONE_COLOR.blue }}>{s}</span>)}

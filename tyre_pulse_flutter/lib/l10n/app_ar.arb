@@ -3814,5 +3814,17 @@
   "washRecordIdLabel": "رقم السجل",
   "washCapturedOnDevice": "وقت الالتقاط على الجهاز",
   "washSiteFromVehicle": "مأخوذ من سجل المركبة ولا يمكن تغييره هنا.",
-  "washAuditTitle": "سجل التدقيق"
+  "washAuditTitle": "سجل التدقيق",
+  "washNextDue": "الغسيل التالي مستحق في {date}",
+  "washVerificationLabel": "تحقق المشرف",
+  "washVerificationPending": "بانتظار تحقق المشرف",
+  "washVerificationVerified": "تحقق منه {name} في {time}",
+  "washVerificationNotRequired": "لا يلزم تحقق: سجّله مشرف",
+  "washVerificationUnknown": "غير مفعّل على الخادم بعد",
+  "washVerifyAction": "تحقق من هذا الغسيل",
+  "washVerifyNoteHint": "ملاحظة (اختياري)",
+  "washVerifyDone": "تم التحقق من الغسيل",
+  "washVerifyFailed": "تعذر التحقق من هذا الغسيل. حاول مرة أخرى.",
+  "washVerifyOwnEntry": "أنت من سجّل هذا الغسيل، لذا يجب أن يتحقق منه مشرف آخر.",
+  "washPendingBadge": "بانتظار التحقق"
 }

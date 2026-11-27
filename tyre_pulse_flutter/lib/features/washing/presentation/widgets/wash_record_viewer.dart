@@ -5,6 +5,10 @@
 /// Director only), and corrections are made on the web, where every change
 /// is kept by the `wash_changes_audit` trigger. The screen says so at the
 /// top so nobody looks for an edit button.
+///
+/// The one action offered is a supervisor's verification, through the
+/// `verify_wash_record` RPC (server-stamped, never by the person who logged
+/// the wash). A supervisor's own entry needs no check and says so.
 library;
 
 import 'package:flutter/material.dart';
@@ -13,24 +17,78 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
+import 'package:tyre_pulse/core/workspace/workspace_context.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
+import 'package:tyre_pulse/features/washing/data/wash_repository.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_areas.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_details.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_evidence.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_area_grid.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_vehicle_views.dart';
+import 'package:tyre_pulse/features/washing/washing_providers.dart';
 
-class WashRecordViewer extends ConsumerWidget {
-  const WashRecordViewer({required this.wash, super.key});
+class WashRecordViewer extends ConsumerStatefulWidget {
+  const WashRecordViewer({required this.wash, this.onVerified, super.key});
   final WashRecord wash;
+
+  /// Called after a successful verification so a list can reload.
+  final VoidCallback? onVerified;
 
   static const ValueKey<String> readOnlyNote =
       ValueKey<String>('washing.viewer.readOnly');
   static const ValueKey<String> recordId =
       ValueKey<String>('washing.viewer.recordId');
+  static const ValueKey<String> verification =
+      ValueKey<String>('washing.viewer.verification');
+  static const ValueKey<String> verifyAction =
+      ValueKey<String>('washing.viewer.verify');
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WashRecordViewer> createState() => _WashRecordViewerState();
+}
+
+class _WashRecordViewerState extends ConsumerState<WashRecordViewer> {
+  final TextEditingController _note = TextEditingController();
+  bool _busy = false;
+  bool _verifiedHere = false;
+  String? _error;
+
+  WashRecord get wash => widget.wash;
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    final AppLocalizations l = AppLocalizations.of(context);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(washRepositoryProvider).verifyWash(
+            wash.id,
+            note: _note.text.trim().isEmpty ? null : _note.text.trim(),
+          );
+      if (!mounted) return;
+      setState(() => _verifiedHere = true);
+      widget.onVerified?.call();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(l.washVerifyDone)));
+    } on Object {
+      if (!mounted) return;
+      setState(() => _error = l.washVerifyFailed);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final TpPalette palette = TpPalette.of(context);
     final TextTheme text = Theme.of(context).textTheme;
@@ -122,7 +180,7 @@ class WashRecordViewer extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Container(
-              key: readOnlyNote,
+              key: WashRecordViewer.readOnlyNote,
               padding: const EdgeInsets.all(TpSpace.sm),
               decoration: BoxDecoration(
                 color: palette.info.soft,
@@ -148,7 +206,11 @@ class WashRecordViewer extends ConsumerWidget {
               ),
             ),
             heading(l.washAuditTitle),
-            detail(l.washRecordIdLabel, wash.id, key: recordId),
+            detail(
+              l.washRecordIdLabel,
+              wash.id,
+              key: WashRecordViewer.recordId,
+            ),
             detail(
               l.washAssetLabel,
               <String?>[wash.assetNo, wash.vehicleType]
@@ -183,6 +245,15 @@ class WashRecordViewer extends ConsumerWidget {
             ),
             detail(l.washCostLabel, l.washCostNoCharge),
             detail(l.washStatusLabel, wash.status),
+            if (wash.nextWashDue != null)
+              ListTile(
+                key: const ValueKey<String>('washing.viewer.nextDue'),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.event_repeat_rounded),
+                title: Text(l.washNextDue(wash.nextWashDue!)),
+              ),
+            _verificationBlock(context),
             heading(l.washPhotosLabel),
             if (shots.isEmpty) Text(l.washNotRecorded),
             photoGroup(
@@ -223,6 +294,110 @@ class WashRecordViewer extends ConsumerWidget {
             if (wash.notes != null) detail(l.washNotesLabel, wash.notes),
           ],
         ),
+      ),
+    );
+  }
+
+  static String _stamp(String? iso) {
+    final DateTime? t = DateTime.tryParse(iso ?? '');
+    return t == null ? (iso ?? '') : washStampTime(t);
+  }
+
+  Widget _verificationBlock(BuildContext context) {
+    final AppLocalizations l = AppLocalizations.of(context);
+    final TpPalette palette = TpPalette.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final WorkspaceContext? me = ref.watch(workspaceContextProvider);
+    final String? status = _verifiedHere ? 'verified' : wash.verificationStatus;
+    final String line = switch (status) {
+      'pending' => l.washVerificationPending,
+      'verified' => _verifiedHere
+          ? l.washVerifyDone
+          : l.washVerificationVerified(
+              wash.verifiedByName ?? l.washNotRecorded,
+              _stamp(wash.verifiedAt),
+            ),
+      'not_required' => l.washVerificationNotRequired,
+      _ => l.washVerificationUnknown,
+    };
+    final bool isCreator = me != null && me.userId == wash.createdBy;
+    final bool canVerify = status == 'pending' &&
+        me != null &&
+        !isCreator &&
+        (me.isSuperAdmin ||
+            isWashVerifierRole(me.role.rawValue) ||
+            isWashVerifierRole(me.role.displayName));
+    final Color tone = switch (status) {
+      'pending' => palette.warning.base,
+      'verified' || 'not_required' => palette.ok.base,
+      _ => palette.textMuted,
+    };
+    return Container(
+      key: WashRecordViewer.verification,
+      margin: const EdgeInsets.only(top: TpSpace.sm),
+      padding: const EdgeInsets.all(TpSpace.sm),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(TpRadius.md),
+        border: Border.all(color: tone),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(l.washVerificationLabel, style: text.labelLarge),
+          const SizedBox(height: 2),
+          Text(
+            line,
+            style: text.bodyMedium?.copyWith(
+              color: tone,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (wash.verificationNote != null &&
+              status == 'verified' &&
+              !_verifiedHere)
+            Text(wash.verificationNote!, style: text.bodySmall),
+          if (status == 'pending' && isCreator)
+            Padding(
+              padding: const EdgeInsets.only(top: TpSpace.xs),
+              child: Text(
+                l.washVerifyOwnEntry,
+                style: text.bodySmall?.copyWith(color: palette.textSecondary),
+              ),
+            ),
+          if (canVerify) ...<Widget>[
+            const SizedBox(height: TpSpace.sm),
+            TextField(
+              controller: _note,
+              maxLength: 500,
+              decoration: InputDecoration(
+                labelText: l.washVerifyNoteHint,
+                isDense: true,
+              ),
+            ),
+            if (_error != null)
+              Text(
+                _error!,
+                style: text.bodySmall?.copyWith(color: palette.critical.base),
+              ),
+            const SizedBox(height: TpSpace.xs),
+            FilledButton.icon(
+              key: WashRecordViewer.verifyAction,
+              onPressed: _busy ? null : _verify,
+              icon: _busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.verified_rounded),
+              label: Text(l.washVerifyAction),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

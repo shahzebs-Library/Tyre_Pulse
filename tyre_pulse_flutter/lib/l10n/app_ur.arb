@@ -3814,5 +3814,17 @@
   "washRecordIdLabel": "ریکارڈ آئی ڈی",
   "washCapturedOnDevice": "ڈیوائس پر محفوظ ہونے کا وقت",
   "washSiteFromVehicle": "گاڑی کے ریکارڈ سے لیا گیا ہے۔ یہاں تبدیل نہیں ہو سکتا۔",
-  "washAuditTitle": "آڈٹ ریکارڈ"
+  "washAuditTitle": "آڈٹ ریکارڈ",
+  "washNextDue": "اگلی دھلائی کی تاریخ {date}",
+  "washVerificationLabel": "سپروائزر کی تصدیق",
+  "washVerificationPending": "سپروائزر کی تصدیق کا انتظار",
+  "washVerificationVerified": "{name} نے {time} کو تصدیق کی",
+  "washVerificationNotRequired": "تصدیق کی ضرورت نہیں: سپروائزر نے درج کیا",
+  "washVerificationUnknown": "سرور پر ابھی فعال نہیں",
+  "washVerifyAction": "اس دھلائی کی تصدیق کریں",
+  "washVerifyNoteHint": "نوٹ (اختیاری)",
+  "washVerifyDone": "دھلائی کی تصدیق ہو گئی",
+  "washVerifyFailed": "اس دھلائی کی تصدیق نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
+  "washVerifyOwnEntry": "یہ دھلائی آپ نے درج کی ہے، اس لیے کوئی اور سپروائزر اس کی تصدیق کرے گا۔",
+  "washPendingBadge": "تصدیق باقی"
 }

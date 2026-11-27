@@ -16979,6 +16979,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Audit record'**
   String get washAuditTitle;
+
+  /// No description provided for @washNextDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Next wash due {date}'**
+  String washNextDue(String date);
+
+  /// No description provided for @washVerificationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisor check'**
+  String get washVerificationLabel;
+
+  /// No description provided for @washVerificationPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a supervisor to verify'**
+  String get washVerificationPending;
+
+  /// No description provided for @washVerificationVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified by {name} on {time}'**
+  String washVerificationVerified(String name, String time);
+
+  /// No description provided for @washVerificationNotRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'No check needed: logged by a supervisor'**
+  String get washVerificationNotRequired;
+
+  /// No description provided for @washVerificationUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set up on this server yet'**
+  String get washVerificationUnknown;
+
+  /// No description provided for @washVerifyAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify this wash'**
+  String get washVerifyAction;
+
+  /// No description provided for @washVerifyNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get washVerifyNoteHint;
+
+  /// No description provided for @washVerifyDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash verified'**
+  String get washVerifyDone;
+
+  /// No description provided for @washVerifyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not verify this wash. Try again.'**
+  String get washVerifyFailed;
+
+  /// No description provided for @washVerifyOwnEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'You logged this wash, so another supervisor must verify it.'**
+  String get washVerifyOwnEntry;
+
+  /// No description provided for @washPendingBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'To verify'**
+  String get washPendingBadge;
 }
 
 class _AppLocalizationsDelegate

@@ -83,6 +83,7 @@ import 'package:tyre_pulse/features/washing/domain/wash_areas.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_details.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_evidence.dart';
 import 'package:tyre_pulse/features/washing/domain/wash_insights.dart';
+import 'package:tyre_pulse/features/washing/domain/wash_schedule.dart';
 import 'package:tyre_pulse/features/washing/presentation/wash_history_screen.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_area_grid.dart';
 import 'package:tyre_pulse/features/washing/presentation/widgets/wash_details_form.dart';
@@ -1443,6 +1444,18 @@ class _WashSavedSheet extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (nextWashDue(todayIsoDate())
+                    case final String due) ...<Widget>[
+                  const SizedBox(height: TpSpace.xs),
+                  Text(
+                    l10n.washNextDue(due),
+                    key: const ValueKey<String>('washing.saved.nextDue'),
+                    style: text.bodyMedium?.copyWith(
+                      color: palette.text,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

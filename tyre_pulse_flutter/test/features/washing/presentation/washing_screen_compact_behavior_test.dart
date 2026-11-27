@@ -12,6 +12,12 @@ import 'package:tyre_pulse/features/washing/presentation/washing_screen.dart';
 import 'package:tyre_pulse/features/washing/washing_providers.dart';
 
 final class _WashRepository implements WashRepository {
+  final List<String> verified = <String>[];
+
+  @override
+  Future<void> verifyWash(String washId, {String? note}) async =>
+      verified.add(washId);
+
   @override
   Future<String?> currentUserDisplayName(String userId) async => null;
 

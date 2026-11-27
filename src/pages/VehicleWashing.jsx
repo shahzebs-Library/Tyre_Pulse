@@ -77,6 +77,7 @@ import { enrichWashPeople } from '../lib/api/washRecords'
 import { entryPerson, emptyWashDetails, staffWashActivity } from '../lib/washDetails'
 import WashDetailsForm from '../components/washing/WashDetailsForm'
 import WashRecordViewer from '../components/washing/WashRecordViewer'
+import { nextWashDueOf } from '../lib/washVerification'
 import WashAdvancedFilters from '../components/washing/WashAdvancedFilters'
 import { isMissingRelation } from '../lib/api/_client'
 import { currentMonthToDate } from '../lib/defaultPeriod'
@@ -674,6 +675,16 @@ export default function VehicleWashing() {
       cell: ({ getValue }) => getValue() > 0 ? <span className="inline-flex items-center gap-1"><ImageIcon size={13} className="opacity-70" /> {getValue()}</span> : <span className="text-[var(--text-muted)]">-</span>, meta: { align: 'center' } },
     { id: 'status', header: 'Status', accessorFn: (row) => row.status || '', size: 110,
       cell: ({ row }) => <span className={`inline-block text-[11px] px-2 py-0.5 rounded-full border ${STATUS_TONE[row.original.status] || STATUS_TONE.Cancelled}`}>{row.original.status || 'N/A'}</span> },
+    { id: 'verification', header: 'Check', accessorFn: (row) => row.verification_status || '', size: 110,
+      cell: ({ row }) => row.original.verification_status === 'pending'
+        ? <span className="inline-block text-[11px] px-2 py-0.5 rounded-full border border-amber-500/40 text-amber-500">To verify</span>
+        : row.original.verification_status === 'verified'
+          ? <span className="inline-block text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/40 text-emerald-500">Verified</span>
+          : row.original.verification_status === 'not_required'
+            ? <span className="inline-block text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/40 text-emerald-500">Supervisor entry</span>
+            : <span className="text-[var(--text-muted)]">-</span> },
+    { id: 'next_wash_due', header: 'Next due', accessorFn: (row) => nextWashDueOf(row) || '', size: 120,
+      cell: ({ getValue }) => getValue() ? fmtDate(getValue()) : 'N/A' },
     { id: 'vehicle_pdf', header: 'Report', size: 120, enableSorting: false, enableHiding: false,
       cell: ({ row }) => <button className="btn-secondary text-xs" disabled={pdfBusy || !row.original.asset_no} onClick={(event) => { event.stopPropagation(); exportVehiclePdf(row.original) }} aria-label={`Download PDF for ${row.original.asset_no}`}>PDF + photos</button>, meta: { export: false, pinnable: false } },
     ...(canWrite ? [{ id: 'actions', header: 'Actions', size: 90, enableSorting: false, enableHiding: false,
@@ -1253,7 +1264,7 @@ export default function VehicleWashing() {
         </Card>
       )}
 
-      <WashRecordViewer row={viewRow} onClose={() => setViewRow(null)} />
+      <WashRecordViewer row={viewRow} onClose={() => setViewRow(null)} profile={profile} isSuperAdmin={isSuperAdmin === true} onVerified={() => load()} />
       {/* Edit / correct */}
       <Modal
         open={!!editRow}

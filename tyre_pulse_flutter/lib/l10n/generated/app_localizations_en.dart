@@ -9764,4 +9764,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get washAuditTitle => 'Audit record';
+
+  @override
+  String washNextDue(String date) {
+    return 'Next wash due $date';
+  }
+
+  @override
+  String get washVerificationLabel => 'Supervisor check';
+
+  @override
+  String get washVerificationPending => 'Waiting for a supervisor to verify';
+
+  @override
+  String washVerificationVerified(String name, String time) {
+    return 'Verified by $name on $time';
+  }
+
+  @override
+  String get washVerificationNotRequired =>
+      'No check needed: logged by a supervisor';
+
+  @override
+  String get washVerificationUnknown => 'Not set up on this server yet';
+
+  @override
+  String get washVerifyAction => 'Verify this wash';
+
+  @override
+  String get washVerifyNoteHint => 'Note (optional)';
+
+  @override
+  String get washVerifyDone => 'Wash verified';
+
+  @override
+  String get washVerifyFailed => 'Could not verify this wash. Try again.';
+
+  @override
+  String get washVerifyOwnEntry =>
+      'You logged this wash, so another supervisor must verify it.';
+
+  @override
+  String get washPendingBadge => 'To verify';
 }

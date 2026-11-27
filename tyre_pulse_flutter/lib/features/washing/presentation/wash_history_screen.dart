@@ -338,7 +338,10 @@ class _WashHistoryScreenState extends ConsumerState<WashHistoryScreen> {
           }
           return Padding(
             padding: const EdgeInsets.only(bottom: TpSpace.sm),
-            child: _WashHistoryRow(wash: visible[index - 2]),
+            child: _WashHistoryRow(
+              wash: visible[index - 2],
+              onChanged: () => unawaited(_load()),
+            ),
           );
         },
       ),
@@ -491,9 +494,10 @@ class _StatTile extends StatelessWidget {
 }
 
 class _WashHistoryRow extends StatelessWidget {
-  const _WashHistoryRow({required this.wash});
+  const _WashHistoryRow({required this.wash, this.onChanged});
 
   final WashRecord wash;
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -515,7 +519,7 @@ class _WashHistoryRow extends StatelessWidget {
       padding: const EdgeInsets.all(TpSpace.md),
       onTap: () => Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (_) => WashRecordViewer(wash: wash),
+          builder: (_) => WashRecordViewer(wash: wash, onVerified: onChanged),
         ),
       ),
       child: Row(
@@ -539,6 +543,12 @@ class _WashHistoryRow extends StatelessWidget {
                   children: <Widget>[
                     if (wash.washType != null)
                       WashTypeChip(type: wash.washType!),
+                    if (wash.isPendingVerification)
+                      WashBadge(
+                        label: l10n.washPendingBadge,
+                        icon: Icons.pending_actions_rounded,
+                        colors: palette.warning,
+                      ),
                     if (photos > 0)
                       Row(
                         mainAxisSize: MainAxisSize.min,

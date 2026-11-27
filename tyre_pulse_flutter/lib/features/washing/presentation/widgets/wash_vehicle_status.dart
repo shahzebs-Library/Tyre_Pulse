@@ -128,6 +128,17 @@ class WashVehicleStatus extends StatelessWidget {
                 ),
             ],
           ),
+          if (i.lastWash.nextWashDue != null) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Text(
+              l10n.washNextDue(i.lastWash.nextWashDue!),
+              key: const ValueKey<String>('washing.status.nextDue'),
+              style: text.bodySmall?.copyWith(
+                color: palette.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ],
       );
     }

@@ -9784,4 +9784,47 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get washAuditTitle => 'آڈٹ ریکارڈ';
+
+  @override
+  String washNextDue(String date) {
+    return 'اگلی دھلائی کی تاریخ $date';
+  }
+
+  @override
+  String get washVerificationLabel => 'سپروائزر کی تصدیق';
+
+  @override
+  String get washVerificationPending => 'سپروائزر کی تصدیق کا انتظار';
+
+  @override
+  String washVerificationVerified(String name, String time) {
+    return '$name نے $time کو تصدیق کی';
+  }
+
+  @override
+  String get washVerificationNotRequired =>
+      'تصدیق کی ضرورت نہیں: سپروائزر نے درج کیا';
+
+  @override
+  String get washVerificationUnknown => 'سرور پر ابھی فعال نہیں';
+
+  @override
+  String get washVerifyAction => 'اس دھلائی کی تصدیق کریں';
+
+  @override
+  String get washVerifyNoteHint => 'نوٹ (اختیاری)';
+
+  @override
+  String get washVerifyDone => 'دھلائی کی تصدیق ہو گئی';
+
+  @override
+  String get washVerifyFailed =>
+      'اس دھلائی کی تصدیق نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get washVerifyOwnEntry =>
+      'یہ دھلائی آپ نے درج کی ہے، اس لیے کوئی اور سپروائزر اس کی تصدیق کرے گا۔';
+
+  @override
+  String get washPendingBadge => 'تصدیق باقی';
 }

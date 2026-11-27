@@ -711,10 +711,14 @@ void main() {
     // their missing label, the time and place stamp with its no-GPS text,
     // the read-only note, record id, device capture time, the site-from-
     // vehicle line and the audit record title).
-    test('en, ar and ur each carry exactly 2813 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2813);
-      expect(_translatableKeys(ar).length, 2813);
-      expect(_translatableKeys(ur).length, 2813);
+    // 2813 + 12 = 2825: wash supervisor verification (status lines for
+    // pending / verified by / not needed / not set up, the verify action,
+    // its note, done and failed messages, the own-entry refusal, the "to
+    // verify" badge) and the "next wash due" line.
+    test('en, ar and ur each carry exactly 2825 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2825);
+      expect(_translatableKeys(ar).length, 2825);
+      expect(_translatableKeys(ur).length, 2825);
     });
   });
 

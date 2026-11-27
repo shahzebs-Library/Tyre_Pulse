@@ -9778,4 +9778,45 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get washAuditTitle => 'سجل التدقيق';
+
+  @override
+  String washNextDue(String date) {
+    return 'الغسيل التالي مستحق في $date';
+  }
+
+  @override
+  String get washVerificationLabel => 'تحقق المشرف';
+
+  @override
+  String get washVerificationPending => 'بانتظار تحقق المشرف';
+
+  @override
+  String washVerificationVerified(String name, String time) {
+    return 'تحقق منه $name في $time';
+  }
+
+  @override
+  String get washVerificationNotRequired => 'لا يلزم تحقق: سجّله مشرف';
+
+  @override
+  String get washVerificationUnknown => 'غير مفعّل على الخادم بعد';
+
+  @override
+  String get washVerifyAction => 'تحقق من هذا الغسيل';
+
+  @override
+  String get washVerifyNoteHint => 'ملاحظة (اختياري)';
+
+  @override
+  String get washVerifyDone => 'تم التحقق من الغسيل';
+
+  @override
+  String get washVerifyFailed => 'تعذر التحقق من هذا الغسيل. حاول مرة أخرى.';
+
+  @override
+  String get washVerifyOwnEntry =>
+      'أنت من سجّل هذا الغسيل، لذا يجب أن يتحقق منه مشرف آخر.';
+
+  @override
+  String get washPendingBadge => 'بانتظار التحقق';
 }

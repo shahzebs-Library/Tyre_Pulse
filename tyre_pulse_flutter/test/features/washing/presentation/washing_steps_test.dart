@@ -44,6 +44,12 @@ String _daysAgo(int days) {
 final class _Repo implements WashRepository {
   _Repo({this.history = const <WashRecord>[], this.failHistory = false});
 
+  final List<String> verified = <String>[];
+
+  @override
+  Future<void> verifyWash(String washId, {String? note}) async =>
+      verified.add(washId);
+
   final List<WashRecord> history;
   final bool failHistory;
   final List<SubmitWashInput> submitted = <SubmitWashInput>[];

@@ -1,6 +1,7 @@
 -- Device ingest retention: follow-up to 20261128100000_device_ingest.sql.
 --
--- STATUS: AUTHORED, NOT APPLIED. Apply AFTER 20261128100000. Kept separate
+-- STATUS: APPLIED 2026-11-28 to jhssdmeruxtrlqnwfksc (migration name device_ingest_purge), after
+-- 20261128100000. Kept separate
 -- because the function body contains DELETE statements, which make an MCP
 -- apply pause for a destructive-statement confirmation. The migration only
 -- creates the function; it deletes nothing itself.

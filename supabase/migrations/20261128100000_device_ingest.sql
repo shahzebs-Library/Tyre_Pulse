@@ -1,6 +1,6 @@
 -- Device ingest: hardware / telematics devices send readings into Tyre Pulse.
 --
--- STATUS: AUTHORED, NOT APPLIED. Needs the owner's explicit yes.
+-- STATUS: APPLIED 2026-11-28 to jhssdmeruxtrlqnwfksc (migration name device_ingest), owner approved.
 -- File renamed from 20261127120000 so it sorts after the latest applied
 -- version (20261127212012). No top-level DROP statement: every drop runs
 -- inside a DO block behind an existence check, so an MCP apply never stalls

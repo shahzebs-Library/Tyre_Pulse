@@ -1,12 +1,9 @@
 -- Wash records: supervisor verification + next wash due.
 --
--- STATUS: AUTHORED, NOT YET APPLIED. Owner approved applying it on
---         2026-11-27, but the apply_migration call was refused by the session's
---         permission check, so it is waiting for the owner (or a session with
---         that permission) to apply it as `wash_supervisor_verification`.
---         The Flutter and web clients read these columns with a fallback, so
---         nothing breaks before it lands; the verify button simply has nothing
---         pending to act on and the record shows "Not set up on this server yet".
+-- STATUS: APPLIED LIVE 2026-11-27 (owner OK) as wash_supervisor_verification.
+--         Verified: not_required 264 / pending 11; anon cannot execute
+--         verify_wash_record; rolled-back tests: driver refused, driver direct
+--         update changed nothing, Fleet Supervisor verified a driver's wash.
 --
 -- Owner rules
 --   * Admin, Manager, Director, Fleet Supervisor, Maintenance Supervisor and

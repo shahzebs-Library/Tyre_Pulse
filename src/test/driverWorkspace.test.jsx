@@ -7,6 +7,7 @@ import { validateFineResponse, signatureImage } from '../lib/driverWorkspace'
 const api = vi.hoisted(() => ({ loadDriverWorkspace: vi.fn(), driverWorkspaceCommand: vi.fn(), driverWorkspaceOptions: vi.fn(), loadDriverFineRegister: vi.fn(), runDriverFineReminders: vi.fn(), fineSignature: vi.fn(), evidenceUrl: vi.fn(), uploadFineEvidence: vi.fn() }))
 const reports = vi.hoisted(() => ({ exportDriverFineCasePdf: vi.fn(), exportDriverFineRegisterExcel: vi.fn(), exportDriverFineRegisterPdf: vi.fn() }))
 vi.mock('../lib/api/driverWorkspace', () => api)
+vi.mock('../components/driver/SupervisorTeamPanel', () => ({ default: () => null }))
 vi.mock('../lib/driverFineReports', () => reports)
 vi.mock('../contexts/LanguageContext', () => ({ useLanguage: () => ({ language: 'en', isRTL: false }) }))
 vi.mock('../components/ui/PageHeader', () => ({ default: ({ title }) => <h1>{title}</h1> }))

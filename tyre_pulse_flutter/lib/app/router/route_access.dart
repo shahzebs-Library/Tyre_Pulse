@@ -189,6 +189,9 @@ abstract final class TpRouteGuards {
     TpRouteId.handover: ModuleGuarded(RouteModule.handover),
     TpRouteId.newHandover: ModuleGuarded(RouteModule.handover),
     TpRouteId.handoverDetail: ModuleGuarded(RouteModule.handover),
+    // Fleet Supervisor team. Uses the handover module the role already holds;
+    // the screen also asks the server, which refuses any other role (42501).
+    TpRouteId.myDrivers: ModuleGuarded(RouteModule.handover),
 
     // Checklists.
     TpRouteId.checklists: ModuleGuarded(RouteModule.checklists),

@@ -396,6 +396,11 @@ List<RouteBase> _buildRoutes() => <RouteBase>[
                 (TpRouteParameters _) => const WorkshopStatusRoute(),
               ),
               _route(
+                TpRoutePaths.myDrivers,
+                TpRouteId.myDrivers,
+                (TpRouteParameters _) => const MyDriversRoute(),
+              ),
+              _route(
                 TpRoutePaths.handover,
                 TpRouteId.handover,
                 (TpRouteParameters _) => const HandoverRoute(),

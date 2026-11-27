@@ -219,6 +219,9 @@ abstract final class TpRouteId {
   static const String newHandover = 'newHandover';
   static const String handoverDetail = 'handoverDetail';
 
+  /// Fleet Supervisor: my drivers, their vehicles, charges and fines.
+  static const String myDrivers = 'myDrivers';
+
   static const String accidentDashboard = 'accidentDashboard';
   static const String accidentReport = 'accidentReport';
   static const String accidentDetail = 'accidentDetail';
@@ -301,6 +304,10 @@ abstract final class TpRoutePaths {
   /// Vehicle Handover list. The capture wizard is `/handover/new` and one
   /// record is `/handover/:handoverId`, both nested so Back returns here.
   static const String handover = '/handover';
+
+  /// Fleet Supervisor team. Driver detail and the charge form are pushed
+  /// screens on top of it, so Back returns to the list.
+  static const String myDrivers = '/my-drivers';
 
   static const String accidentDashboard = '/accidents';
   static const String accidentReport = '/accidents/report';
@@ -1053,6 +1060,19 @@ final class NewInspectionRoute extends TpRoute {
         TpRoutePaths.qTyreSerial: tyreSerial?.value,
         TpRoutePaths.qTyrePosition: tyrePosition?.value,
       });
+}
+
+// --- Fleet Supervisor team ----------------------------------------------------
+
+/// The Fleet Supervisor's drivers.
+final class MyDriversRoute extends TpRoute {
+  const MyDriversRoute();
+
+  @override
+  String get routeId => TpRouteId.myDrivers;
+
+  @override
+  String get location => TpRoutePaths.myDrivers;
 }
 
 // --- Handover branch --------------------------------------------------------

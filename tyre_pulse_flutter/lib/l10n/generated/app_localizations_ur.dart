@@ -9713,4 +9713,255 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get accidentTasksRoleNames =>
       'admin=ایڈمن~manager=مینیجر~director=ڈائریکٹر~inspector=انسپکٹر~tyre_man=ٹائر ٹیکنیشن~reporter=رپورٹر~driver=ڈرائیور~mechanic=مکینک~electrician=الیکٹریشن~maintenance_supervisor=مینٹیننس سپروائزر~workshop_supervisor=ورکشاپ سپروائزر~tyre_data_collector=ٹائر ڈیٹا کلیکٹر~pmv_manager=پی ایم وی مینیجر~workshop_area_manager=ورکشاپ ایریا مینیجر~workshop_maintenance_area_manager=ورکشاپ مینٹیننس ایریا مینیجر~fleet_supervisor=فلیٹ سپروائزر~fleet_incharge=فلیٹ انچارج~store_keeper=اسٹور کیپر';
+
+  @override
+  String get devicesTitle => 'آلات';
+
+  @override
+  String get devicesProfileRowValue => 'گیجز، اسکینرز، پرنٹرز';
+
+  @override
+  String get devicesIntro =>
+      'اس فون پر شامل کیے گئے گیجز، ہینڈ ہیلڈ اسکینرز اور لیبل پرنٹرز۔ یہ فہرست صرف آپ دیکھتے ہیں۔';
+
+  @override
+  String get devicesEmptyTitle => 'ابھی کوئی آلہ نہیں';
+
+  @override
+  String get devicesEmptyMessage =>
+      'ٹریڈ یا پریشر گیج، ہینڈ ہیلڈ اسکینر یا لیبل پرنٹر شامل کریں۔';
+
+  @override
+  String get devicesLoadFailed => 'اس فون پر محفوظ آلات پڑھے نہیں جا سکے۔';
+
+  @override
+  String get devicesAdd => 'آلہ شامل کریں';
+
+  @override
+  String get devicesKindTread => 'ٹریڈ گہرائی گیج';
+
+  @override
+  String get devicesKindPressure => 'ٹائر پریشر گیج';
+
+  @override
+  String get devicesKindCombined => 'ٹریڈ اور پریشر گیج';
+
+  @override
+  String get devicesKindScanner => 'بارکوڈ یا RFID ہینڈ ہیلڈ';
+
+  @override
+  String get devicesKindRfid => 'UHF RFID ریڈر';
+
+  @override
+  String get devicesKindPrinter => 'لیبل پرنٹر';
+
+  @override
+  String get devicesTransportBle => 'بلوٹوتھ';
+
+  @override
+  String get devicesTransportHid => 'کی بورڈ موڈ';
+
+  @override
+  String get devicesTransportNetwork => 'نیٹ ورک';
+
+  @override
+  String get devicesTransportSimulator => 'سمیولیٹر (صرف ٹیسٹنگ کے لیے)';
+
+  @override
+  String get devicesBluetoothOff =>
+      'بلوٹوتھ بند ہے۔ بلوٹوتھ آلہ شامل یا استعمال کرنے کے لیے اسے آن کریں۔';
+
+  @override
+  String get devicesPermissionDenied =>
+      'Tyre Pulse کو بلوٹوتھ استعمال کرنے کی اجازت نہیں۔ اجازت دیں، یا فون کی سیٹنگز میں آن کریں۔';
+
+  @override
+  String get devicesBluetoothUnsupported =>
+      'اس فون میں بلوٹوتھ LE نہیں۔ کی بورڈ موڈ اور نیٹ ورک آلات پھر بھی کام کرتے ہیں۔';
+
+  @override
+  String get devicesAllowBluetooth => 'بلوٹوتھ کی اجازت دیں';
+
+  @override
+  String get devicesScanning => 'قریبی آلات تلاش کیے جا رہے ہیں…';
+
+  @override
+  String get devicesScanNone =>
+      'کوئی آلہ نہیں ملا۔ آلہ جگائیں اور فون کے قریب رکھیں۔';
+
+  @override
+  String get devicesScanAgain => 'دوبارہ تلاش کریں';
+
+  @override
+  String get devicesUnnamed => 'بے نام آلہ';
+
+  @override
+  String get devicesChooseKind => 'یہ کون سا آلہ ہے؟';
+
+  @override
+  String get devicesChooseConnection => 'یہ کیسے جڑتا ہے؟';
+
+  @override
+  String get devicesNameLabel => 'آلے کا نام';
+
+  @override
+  String get devicesHostLabel => 'پرنٹر کا IP پتہ';
+
+  @override
+  String get devicesPortLabel => 'پورٹ';
+
+  @override
+  String get devicesLanguageLabel => 'پرنٹر کی زبان';
+
+  @override
+  String get devicesLabelSizeLabel => 'لیبل کا سائز';
+
+  @override
+  String get devicesSave => 'آلہ محفوظ کریں';
+
+  @override
+  String get devicesFieldRequired => 'یہ خانہ بھریں۔';
+
+  @override
+  String get devicesHidHint =>
+      'پہلے فون کی بلوٹوتھ سیٹنگز میں آلے کو کی بورڈ کے طور پر جوڑیں، پھر یہاں محفوظ کریں۔';
+
+  @override
+  String get devicesTest => 'ٹیسٹ';
+
+  @override
+  String get devicesTestRead => 'ایک بار پڑھیں';
+
+  @override
+  String get devicesTestPrint => 'ٹیسٹ لیبل پرنٹ کریں';
+
+  @override
+  String get devicesTestLabelName => 'Tyre Pulse ٹیسٹ لیبل';
+
+  @override
+  String devicesTestReading(String value) {
+    return 'پڑھا گیا: $value';
+  }
+
+  @override
+  String get devicesTestPrinted => 'ٹیسٹ لیبل پرنٹر کو بھیج دیا گیا۔';
+
+  @override
+  String get devicesForget => 'ہٹائیں';
+
+  @override
+  String devicesForgetConfirm(String name) {
+    return '$name ہٹائیں؟ آپ اسے بعد میں دوبارہ شامل کر سکتے ہیں۔';
+  }
+
+  @override
+  String devicesBattery(int level) {
+    return 'بیٹری $level%';
+  }
+
+  @override
+  String get devicesErrorNotConnected =>
+      'آلہ نہیں جڑا۔ دیکھیں کہ یہ آن ہے اور قریب ہے۔';
+
+  @override
+  String get devicesErrorTimeout => 'آلے نے وقت پر جواب نہیں دیا۔';
+
+  @override
+  String get devicesErrorNoReading =>
+      'کوئی ریڈنگ نہیں آئی۔ گیج پر پیمائش لیں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get devicesErrorUnreadable =>
+      'آلے نے ایسا ڈیٹا بھیجا جو یہ ایپ نہیں پڑھ سکتی۔ اس کی سیٹنگز کو بنانے والے کی تفصیلات درکار ہیں۔';
+
+  @override
+  String get devicesErrorNotConfigured => 'اس آلے کی کنکشن سیٹنگز موجود نہیں۔';
+
+  @override
+  String get devicesErrorPrintFailed =>
+      'لیبل پرنٹ نہیں ہو سکا۔ دیکھیں کہ پرنٹر میں کاغذ ہے اور یہ آن ہے۔';
+
+  @override
+  String get devicesErrorUnsupported => 'یہ آلہ یہ کام نہیں کر سکتا۔';
+
+  @override
+  String get devicesErrorVendorSdk =>
+      'اس ریڈر کو بنانے والے کا سافٹ ویئر درکار ہے جو ابھی انسٹال نہیں۔ فی الحال اسے کی بورڈ موڈ میں استعمال کریں۔';
+
+  @override
+  String get gaugeReadPressure => 'گیج سے پریشر پڑھیں';
+
+  @override
+  String get gaugeReadTread => 'گیج سے ٹریڈ پڑھیں';
+
+  @override
+  String get gaugeNoGauge =>
+      'اس ریڈنگ کے لیے کوئی گیج سیٹ نہیں۔ پروفائل > آلات میں شامل کریں۔';
+
+  @override
+  String get gaugePickTitle => 'گیج منتخب کریں';
+
+  @override
+  String gaugeReadingFrom(String device) {
+    return '$device سے پڑھا جا رہا ہے…';
+  }
+
+  @override
+  String get gaugeConfirmTitle => 'یہ ریڈنگ استعمال کریں؟';
+
+  @override
+  String gaugeConfirmBody(String device, String value, String position) {
+    return '$device نے $position پر $value ناپا۔';
+  }
+
+  @override
+  String gaugeConfirmReplace(String old) {
+    return 'یہ پہلے سے درج قدر ($old) کی جگہ لے گا۔';
+  }
+
+  @override
+  String get gaugeUseReading => 'ریڈنگ استعمال کریں';
+
+  @override
+  String get gaugeHidTitle => 'ریڈنگ بھیجیں';
+
+  @override
+  String gaugeHidMessage(String device) {
+    return '$device پر بھیجنے کا بٹن دبائیں۔ قدر نیچے نظر آئے گی۔';
+  }
+
+  @override
+  String get gaugeHidField => 'گیج سے آنے والی قدر';
+
+  @override
+  String gaugeValuePsi(String value) {
+    return '$value psi';
+  }
+
+  @override
+  String gaugeValueMm(String value) {
+    return '$value ملی میٹر';
+  }
+
+  @override
+  String get hidScannerReady =>
+      'ہینڈ ہیلڈ اسکینر تیار ہے: ٹائر یا اثاثہ تلاش کرنے کے لیے ٹریگر دبائیں۔';
+
+  @override
+  String get labelPrint => 'لیبل پرنٹ کریں';
+
+  @override
+  String get labelChoosePrinter => 'لیبل اس پر پرنٹ کریں';
+
+  @override
+  String get labelPrintPdf => 'سسٹم پرنٹر یا PDF';
+
+  @override
+  String labelPrinted(String printer) {
+    return 'لیبل $printer کو بھیج دیا گیا۔';
+  }
+
+  @override
+  String get labelUnicodeNote =>
+      'اس لیبل پر عربی یا اردو متن صرف سسٹم پرنٹر یا PDF کے ذریعے درست پرنٹ ہوتا ہے۔';
 }

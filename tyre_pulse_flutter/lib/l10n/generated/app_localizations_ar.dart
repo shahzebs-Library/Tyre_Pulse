@@ -9691,4 +9691,256 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get accidentTasksRoleNames =>
       'admin=مسؤول~manager=مدير~director=مدير تنفيذي~inspector=مفتّش~tyre_man=فنّي إطارات~reporter=معدّ تقارير~driver=سائق~mechanic=ميكانيكي~electrician=كهربائي~maintenance_supervisor=مشرف الصيانة~workshop_supervisor=مشرف الورشة~tyre_data_collector=جامع بيانات الإطارات~pmv_manager=مدير المعدات والمركبات~workshop_area_manager=مدير منطقة الورشة~workshop_maintenance_area_manager=مدير منطقة صيانة الورشة~fleet_supervisor=مشرف الأسطول~fleet_incharge=مسؤول الأسطول~store_keeper=أمين المستودع';
+
+  @override
+  String get devicesTitle => 'الأجهزة';
+
+  @override
+  String get devicesProfileRowValue => 'المقاييس والماسحات والطابعات';
+
+  @override
+  String get devicesIntro =>
+      'المقاييس والماسحات المحمولة وطابعات الملصقات المضافة على هذا الهاتف. أنت وحدك ترى هذه القائمة.';
+
+  @override
+  String get devicesEmptyTitle => 'لا توجد أجهزة بعد';
+
+  @override
+  String get devicesEmptyMessage =>
+      'أضف مقياس عمق المداس أو الضغط، أو ماسحاً محمولاً، أو طابعة ملصقات.';
+
+  @override
+  String get devicesLoadFailed =>
+      'تعذرت قراءة الأجهزة المحفوظة على هذا الهاتف.';
+
+  @override
+  String get devicesAdd => 'إضافة جهاز';
+
+  @override
+  String get devicesKindTread => 'مقياس عمق المداس';
+
+  @override
+  String get devicesKindPressure => 'مقياس ضغط الإطار';
+
+  @override
+  String get devicesKindCombined => 'مقياس المداس والضغط';
+
+  @override
+  String get devicesKindScanner => 'ماسح باركود أو RFID محمول';
+
+  @override
+  String get devicesKindRfid => 'قارئ RFID بتردد UHF';
+
+  @override
+  String get devicesKindPrinter => 'طابعة ملصقات';
+
+  @override
+  String get devicesTransportBle => 'بلوتوث';
+
+  @override
+  String get devicesTransportHid => 'وضع لوحة المفاتيح';
+
+  @override
+  String get devicesTransportNetwork => 'الشبكة';
+
+  @override
+  String get devicesTransportSimulator => 'محاكي (للاختبار فقط)';
+
+  @override
+  String get devicesBluetoothOff =>
+      'البلوتوث مغلق. شغّله لإضافة جهاز بلوتوث أو استخدامه.';
+
+  @override
+  String get devicesPermissionDenied =>
+      'لا يُسمح لتطبيق Tyre Pulse باستخدام البلوتوث. اسمح بذلك، أو فعّله من إعدادات الهاتف.';
+
+  @override
+  String get devicesBluetoothUnsupported =>
+      'لا يدعم هذا الهاتف البلوتوث منخفض الطاقة. ما زالت أجهزة وضع لوحة المفاتيح والشبكة تعمل.';
+
+  @override
+  String get devicesAllowBluetooth => 'السماح بالبلوتوث';
+
+  @override
+  String get devicesScanning => 'جارٍ البحث عن الأجهزة القريبة…';
+
+  @override
+  String get devicesScanNone =>
+      'لم يُعثر على أجهزة. أيقظ الجهاز وأبقه قريباً من الهاتف.';
+
+  @override
+  String get devicesScanAgain => 'البحث مجدداً';
+
+  @override
+  String get devicesUnnamed => 'جهاز بلا اسم';
+
+  @override
+  String get devicesChooseKind => 'ما نوع هذا الجهاز؟';
+
+  @override
+  String get devicesChooseConnection => 'كيف يتصل؟';
+
+  @override
+  String get devicesNameLabel => 'اسم الجهاز';
+
+  @override
+  String get devicesHostLabel => 'عنوان IP للطابعة';
+
+  @override
+  String get devicesPortLabel => 'المنفذ';
+
+  @override
+  String get devicesLanguageLabel => 'لغة الطابعة';
+
+  @override
+  String get devicesLabelSizeLabel => 'حجم الملصق';
+
+  @override
+  String get devicesSave => 'حفظ الجهاز';
+
+  @override
+  String get devicesFieldRequired => 'املأ هذا الحقل.';
+
+  @override
+  String get devicesHidHint =>
+      'اقرن الجهاز أولاً بالهاتف كلوحة مفاتيح من إعدادات البلوتوث في الهاتف، ثم احفظه هنا.';
+
+  @override
+  String get devicesTest => 'اختبار';
+
+  @override
+  String get devicesTestRead => 'قراءة مرة واحدة';
+
+  @override
+  String get devicesTestPrint => 'طباعة ملصق تجريبي';
+
+  @override
+  String get devicesTestLabelName => 'ملصق اختبار Tyre Pulse';
+
+  @override
+  String devicesTestReading(String value) {
+    return 'تمت القراءة: $value';
+  }
+
+  @override
+  String get devicesTestPrinted => 'أُرسل الملصق التجريبي إلى الطابعة.';
+
+  @override
+  String get devicesForget => 'إزالة';
+
+  @override
+  String devicesForgetConfirm(String name) {
+    return 'هل تريد إزالة $name؟ يمكنك إضافته لاحقاً.';
+  }
+
+  @override
+  String devicesBattery(int level) {
+    return 'البطارية $level%';
+  }
+
+  @override
+  String get devicesErrorNotConnected =>
+      'لم يتصل الجهاز. تأكد من تشغيله وقربه.';
+
+  @override
+  String get devicesErrorTimeout => 'لم يستجب الجهاز في الوقت المحدد.';
+
+  @override
+  String get devicesErrorNoReading =>
+      'لم تصل أي قراءة. خذ القياس على المقياس وحاول مجدداً.';
+
+  @override
+  String get devicesErrorUnreadable =>
+      'أرسل الجهاز بيانات لا يستطيع التطبيق قراءتها. تحتاج إعداداته إلى مواصفات الشركة المصنعة.';
+
+  @override
+  String get devicesErrorNotConfigured => 'تنقص هذا الجهاز إعدادات الاتصال.';
+
+  @override
+  String get devicesErrorPrintFailed =>
+      'تعذرت طباعة الملصق. تأكد من وجود ورق وأن الطابعة تعمل.';
+
+  @override
+  String get devicesErrorUnsupported => 'لا يستطيع هذا الجهاز القيام بذلك.';
+
+  @override
+  String get devicesErrorVendorSdk =>
+      'يحتاج هذا القارئ إلى برنامج الشركة المصنعة، وهو غير مثبت بعد. استخدمه في وضع لوحة المفاتيح حالياً.';
+
+  @override
+  String get gaugeReadPressure => 'قراءة الضغط من المقياس';
+
+  @override
+  String get gaugeReadTread => 'قراءة المداس من المقياس';
+
+  @override
+  String get gaugeNoGauge =>
+      'لا يوجد مقياس مُعد لهذه القراءة. أضف واحداً من الملف الشخصي > الأجهزة.';
+
+  @override
+  String get gaugePickTitle => 'اختر مقياساً';
+
+  @override
+  String gaugeReadingFrom(String device) {
+    return 'جارٍ القراءة من $device…';
+  }
+
+  @override
+  String get gaugeConfirmTitle => 'استخدام هذه القراءة؟';
+
+  @override
+  String gaugeConfirmBody(String device, String value, String position) {
+    return 'قاس $device القيمة $value على $position.';
+  }
+
+  @override
+  String gaugeConfirmReplace(String old) {
+    return 'سيحل هذا محل القيمة المُدخلة مسبقاً ($old).';
+  }
+
+  @override
+  String get gaugeUseReading => 'استخدام القراءة';
+
+  @override
+  String get gaugeHidTitle => 'أرسل القراءة';
+
+  @override
+  String gaugeHidMessage(String device) {
+    return 'اضغط زر الإرسال على $device. ستظهر القيمة أدناه.';
+  }
+
+  @override
+  String get gaugeHidField => 'القيمة من المقياس';
+
+  @override
+  String gaugeValuePsi(String value) {
+    return '$value psi';
+  }
+
+  @override
+  String gaugeValueMm(String value) {
+    return '$value مم';
+  }
+
+  @override
+  String get hidScannerReady =>
+      'الماسح المحمول جاهز: اضغط الزناد للبحث عن إطار أو أصل.';
+
+  @override
+  String get labelPrint => 'طباعة ملصق';
+
+  @override
+  String get labelChoosePrinter => 'طباعة الملصق على';
+
+  @override
+  String get labelPrintPdf => 'طابعة النظام أو PDF';
+
+  @override
+  String labelPrinted(String printer) {
+    return 'أُرسل الملصق إلى $printer.';
+  }
+
+  @override
+  String get labelUnicodeNote =>
+      'النص العربي أو الأردي على هذا الملصق يُطبع بشكل صحيح فقط عبر طابعة النظام أو PDF.';
 }

@@ -702,10 +702,13 @@ void main() {
     // (one catalog key, like the other *CopyCatalog keys).
     // 2782 + 17 = 2799: My accident tasks (screen, Home row, register "Mine").
     // 2799 + 1 = 2800: accidentTasksRoleNames, role names on task rows.
-    test('en, ar and ur each carry exactly 2800 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2800);
-      expect(_translatableKeys(ar).length, 2800);
-      expect(_translatableKeys(ur).length, 2800);
+    // 2800 + 72 = 2872: field hardware (devices*, gauge*, hidScannerReady,
+    // label*) - Settings > Devices, "Read from gauge", the handheld scanner
+    // line and "Print label".
+    test('en, ar and ur each carry exactly 2872 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2872);
+      expect(_translatableKeys(ar).length, 2872);
+      expect(_translatableKeys(ur).length, 2872);
     });
   });
 

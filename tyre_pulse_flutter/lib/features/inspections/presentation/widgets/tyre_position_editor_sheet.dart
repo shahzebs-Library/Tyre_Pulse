@@ -9,6 +9,7 @@
 /// deliberately no local "unsaved changes" state here to lose.
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -18,8 +19,10 @@ import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/devices/gauge_parser.dart';
 import 'package:tyre_pulse/core/storage/private_storage_reference_resolver.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
+import 'package:tyre_pulse/features/devices/presentation/gauge_read_flow.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.dart'
     show PhotoCaptureSource;
 import 'package:tyre_pulse/features/inspections/domain/tyre_position_reading.dart';
@@ -132,6 +135,31 @@ class _TyrePositionEditorSheetState
       if (mounted) setState(() => _serialNotFound = true);
     } finally {
       if (mounted) setState(() => _isLookingUpSerial = false);
+    }
+  }
+
+  /// Fills pressure or tread from a paired gauge. The flow confirms with the
+  /// person before anything changes, and the value then goes through the
+  /// same [_emit] path as typing - the wizard's own validation applies.
+  Future<void> _readFromGauge(GaugeQuantity quantity) async {
+    final TyrePositionReading r = widget.reading;
+    final GaugeReading? reading = await readFromGauge(
+      context,
+      ref,
+      quantity: quantity,
+      positionLabel: widget.positionLabel ?? r.position,
+      currentValue: quantity == GaugeQuantity.pressure
+          ? r.pressurePsi?.toDouble()
+          : r.treadDepthMm?.toDouble(),
+    );
+    if (reading == null || !mounted) return;
+    final double value = reading.rounded;
+    if (quantity == GaugeQuantity.pressure) {
+      _pressureController.text = value.toString();
+      _emit(widget.reading.copyWith(pressurePsi: value));
+    } else {
+      _treadController.text = value.toString();
+      _emit(widget.reading.copyWith(treadDepthMm: value));
     }
   }
 
@@ -311,6 +339,12 @@ class _TyrePositionEditorSheetState
                       ),
                     ),
                   ],
+                ),
+                GaugeReadButtons(
+                  onReadPressure: () =>
+                      unawaited(_readFromGauge(GaugeQuantity.pressure)),
+                  onReadTread: () =>
+                      unawaited(_readFromGauge(GaugeQuantity.tread)),
                 ),
                 const SizedBox(height: TpSpace.lg),
                 TpInput(

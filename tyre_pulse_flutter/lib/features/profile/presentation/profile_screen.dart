@@ -130,6 +130,7 @@ import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/devices/device_providers.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
@@ -140,6 +141,7 @@ import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_app
 import 'package:tyre_pulse/features/auth/presentation/login_security_copy.dart';
 import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
+import 'package:tyre_pulse/features/devices/presentation/devices_screen.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
 import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
@@ -157,6 +159,7 @@ import 'package:tyre_pulse/features/qr_login/presentation/qr_login_screen.dart';
 @visibleForTesting
 abstract final class ProfileScreenKeys {
   static const Key hero = Key('profile.hero');
+  static const Key devicesRow = Key('profile.devices');
   static const Key status = Key('profile.status');
   static const Key access = Key('profile.access');
   static const Key account = Key('profile.account');
@@ -541,6 +544,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                         onSignInOnComputer: () =>
                             unawaited(openQrLogin(context)),
+                        onOpenDevices: ref.watch(devicesAccessProvider)
+                            ? () => unawaited(
+                                  Navigator.of(context)
+                                      .push(DevicesScreen.route()),
+                                )
+                            : null,
                       ),
                       account: _AccountBlock(
                         isSigningOut: _isSigningOut,
@@ -1184,6 +1193,7 @@ class _SettingsColumn extends StatelessWidget {
     required this.onOpenDrafts,
     required this.onReportProblem,
     required this.onSignInOnComputer,
+    this.onOpenDevices,
   });
 
   final WorkspaceProfile profile;
@@ -1214,6 +1224,10 @@ class _SettingsColumn extends StatelessWidget {
   /// Opens "Sign in on a computer" (scan the web sign-in QR). Offered to
   /// every signed-in role: it only ever signs the SAME person in on the web.
   final VoidCallback onSignInOnComputer;
+
+  /// Opens Settings > Devices. Null hides the row: devices are admin-only
+  /// until opened per person from the web Access Manager.
+  final VoidCallback? onOpenDevices;
 
   @override
   Widget build(BuildContext context) {
@@ -1322,6 +1336,15 @@ class _SettingsColumn extends StatelessWidget {
               value: _themeLabel(activeTheme, l10n),
               onTap: onChooseTheme,
             ),
+            if (onOpenDevices != null)
+              _SettingsRow(
+                key: ProfileScreenKeys.devicesRow,
+                icon: Icons.bluetooth_rounded,
+                tone: palette.info,
+                label: l10n.devicesTitle,
+                value: l10n.devicesProfileRowValue,
+                onTap: onOpenDevices,
+              ),
           ],
         ),
         const SizedBox(height: TpSpace.lg),

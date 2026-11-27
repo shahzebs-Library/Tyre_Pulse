@@ -199,6 +199,7 @@ const Map<ModuleKey, Set<RoleId>> expectedDefaults = <ModuleKey, Set<RoleId>>{
   },
   ModuleKey.admin: <RoleId>{},
   ModuleKey.users: <RoleId>{},
+  ModuleKey.devices: <RoleId>{},
 };
 
 /// The eleven modules the TypeScript registry writes as `roles: []`.
@@ -215,16 +216,21 @@ const Set<ModuleKey> expectedAdminOnly = <ModuleKey>{
   ModuleKey.team,
   ModuleKey.admin,
   ModuleKey.users,
+  // Flutter-only, admin-only (owner, 2026-11-27): field hardware.
+  ModuleKey.devices,
 };
 
 void main() {
   group('registry shape', () {
-    test('carries exactly 33 modules, one per ModuleKey', () {
-      // The Expo registry (Workshop Status included) is 32; Vehicle Handover is
-      // the one Flutter-only module, so it is listed in flutterOnlyModules.
-      expect(ModuleRegistry.all, hasLength(33));
-      expect(ModuleKey.values, hasLength(33));
-      expect(flutterOnlyModules, <ModuleKey>{ModuleKey.handover});
+    test('carries exactly 34 modules, one per ModuleKey', () {
+      // The Expo registry (Workshop Status included) is 32; Vehicle Handover
+      // and Devices are the Flutter-only modules in flutterOnlyModules.
+      expect(ModuleRegistry.all, hasLength(34));
+      expect(ModuleKey.values, hasLength(34));
+      expect(
+        flutterOnlyModules,
+        <ModuleKey>{ModuleKey.handover, ModuleKey.devices},
+      );
 
       final Set<ModuleKey> defined =
           ModuleRegistry.all.map((ModuleDef d) => d.key).toSet();
@@ -265,7 +271,7 @@ void main() {
       expect(ModuleRegistry.inGroup(ModuleGroup.fleet), hasLength(5));
       expect(ModuleRegistry.inGroup(ModuleGroup.maintenance), hasLength(9));
       expect(ModuleRegistry.inGroup(ModuleGroup.management), hasLength(6));
-      expect(ModuleRegistry.inGroup(ModuleGroup.admin), hasLength(3));
+      expect(ModuleRegistry.inGroup(ModuleGroup.admin), hasLength(4));
     });
   });
 

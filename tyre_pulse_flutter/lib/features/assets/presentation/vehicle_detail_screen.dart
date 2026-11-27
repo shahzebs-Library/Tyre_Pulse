@@ -61,6 +61,7 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/devices/label_encoder.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
@@ -80,6 +81,7 @@ import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_360_panels.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
+import 'package:tyre_pulse/features/devices/presentation/label_print_action.dart';
 import 'package:tyre_pulse/features/fleet_verification/fleet_verification_providers.dart';
 import 'package:tyre_pulse/features/fleet_verification/presentation/fleet_verification_copy.dart';
 import 'package:tyre_pulse/features/fleet_verification/presentation/fleet_verification_screen.dart';
@@ -279,6 +281,17 @@ class _Vehicle360AppBarActionsState
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
+        if (assetCode != null)
+          LabelPrintButton(
+            label: LabelData(
+              code: assetCode,
+              name: <String?>[asset.make, asset.model, asset.vehicleType]
+                  .whereType<String>()
+                  .where((String v) => v.trim().isNotEmpty)
+                  .join(' '),
+              caption: vehicle360Present(asset.site),
+            ),
+          ),
         IconButton(
           key: VehicleDetailScreenKeys.share,
           tooltip: material.shareButtonLabel,

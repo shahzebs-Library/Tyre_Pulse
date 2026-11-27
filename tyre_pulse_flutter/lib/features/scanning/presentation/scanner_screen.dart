@@ -22,8 +22,10 @@ import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/devices/device_providers.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/devices/presentation/hid_scan_listener.dart';
 import 'package:tyre_pulse/features/qr_login/domain/qr_login.dart';
 import 'package:tyre_pulse/features/qr_login/presentation/qr_login_screen.dart';
 import 'package:tyre_pulse/features/scanning/domain/scan_lookup.dart';
@@ -76,6 +78,13 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
     unawaited(ref.read(scannerControllerProvider.notifier).submit(value));
   }
 
+  /// A handheld scanner's trigger press (keyboard wedge). Same path as typing
+  /// the code and pressing search, so the two can never resolve differently.
+  void _onHardwareScan(String code) {
+    _codeController.text = code;
+    _submitField();
+  }
+
   void _retry(String rawInput) {
     unawaited(ref.read(scannerControllerProvider.notifier).submit(rawInput));
   }
@@ -102,28 +111,42 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
         title: l10n.scannerTitle,
         backFallback: _scannerBackFallback,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(TpSpace.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            const _CameraArea(),
-            const SizedBox(height: TpSpace.xxl),
-            _ManualEntrySection(
-              controller: _codeController,
-              isBusy: state is ScannerResolving,
-              onSubmit: _submitField,
-            ),
-            if (state is ScannerResolved) ...<Widget>[
-              const SizedBox(height: TpSpace.xl),
-              _ResultSection(
-                result: state.result,
-                onOpen: _open,
-                onRetry: _retry,
-                onLookUpAnother: _reset,
+      body: HidScanListener(
+        onScan: _onHardwareScan,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(TpSpace.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (ref.watch(devicesAccessProvider)) ...<Widget>[
+                Row(
+                  key: ScannerScreenKeys.hardwareScannerReady,
+                  children: <Widget>[
+                    const Icon(Icons.qr_code_scanner_rounded, size: 20),
+                    const SizedBox(width: TpSpace.sm),
+                    Expanded(child: Text(l10n.hidScannerReady)),
+                  ],
+                ),
+                const SizedBox(height: TpSpace.md),
+              ],
+              const _CameraArea(),
+              const SizedBox(height: TpSpace.xxl),
+              _ManualEntrySection(
+                controller: _codeController,
+                isBusy: state is ScannerResolving,
+                onSubmit: _submitField,
               ),
+              if (state is ScannerResolved) ...<Widget>[
+                const SizedBox(height: TpSpace.xl),
+                _ResultSection(
+                  result: state.result,
+                  onOpen: _open,
+                  onRetry: _retry,
+                  onLookUpAnother: _reset,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -623,6 +646,8 @@ String? _joinNonBlank(List<String?> parts) {
 
 /// Stable keys used by integration and accessibility tests.
 abstract final class ScannerScreenKeys {
+  static const ValueKey<String> hardwareScannerReady =
+      ValueKey<String>('scanner.hardware-ready');
   static const ValueKey<String> cameraPreview =
       ValueKey<String>('scanner.cameraPreview');
   static const ValueKey<String> cameraStartFailed =

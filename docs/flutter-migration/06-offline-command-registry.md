@@ -302,3 +302,13 @@ already signed - so it is never queued. This mirrors the approvals rule in 7.x:
 detail screen pre-checks `handover_approval.dart` (`canDecide`) only to show the
 sign-off bar; the server is the authority, and a sign-off attempted offline
 fails with the mapped server message rather than being replayed later.
+
+### Field hardware (added 2026-11-27)
+
+`lib/core/devices/` writes nothing to the server and queues nothing. Paired
+devices are stored on the phone per user; a gauge reading is placed into the
+open inspection reading (after the person confirms) and leaves through the
+existing `INSPECTION` command like a typed value. Printing is a direct
+Bluetooth or TCP send to the printer and is not retried later: a failed print
+is reported on screen.
+

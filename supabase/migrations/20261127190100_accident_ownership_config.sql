@@ -205,9 +205,13 @@ $$;
 -- owner_id is a person only when the rule names exactly one, or the role holds
 -- exactly one real person in scope, or the reporter holds the role. Otherwise the
 -- step is owned by the role (owner_id null, owner_role set).
+-- A rule whose role resolves to NOBODY in the case's country/site (e.g. a KSA
+-- case owned by "PMV Manager" when the only PMV Manager is in UAE) does not own
+-- the step: owner_role comes back null and unstaffed_role names the role, so the
+-- step reads unowned and Admin/Manager are told "No one can take step X".
 create or replace function public.accident_resolve_ws_owner(
   p_org uuid, p_ws text, p_country text, p_site text, p_reporter uuid)
-returns table (owner_id uuid, owner_role text, rule_id uuid)
+returns table (owner_id uuid, owner_role text, rule_id uuid, unstaffed_role text)
 language plpgsql stable security definer
 set search_path = public
 as $$
@@ -240,8 +244,14 @@ begin
       owner_id := v_people[1];
     end if;
   end if;
-  owner_role := r.owner_role;
   rule_id := r.id;
+  if owner_id is null and (r.owner_role is null or cardinality(coalesce(v_people, '{}')) = 0) then
+    -- nobody in scope can take it: leave the step unowned, never "assigned"
+    owner_role := null;
+    unstaffed_role := coalesce(r.owner_role, 'named person');
+  else
+    owner_role := r.owner_role;
+  end if;
   return next;
 end;
 $$;

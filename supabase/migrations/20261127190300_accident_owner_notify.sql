@@ -58,6 +58,9 @@ create or replace function public.accident_notify_dedupe_key(
 returns text language sql immutable set search_path = public as $$
   select case when p_event = 'accident.reported'
     then p_event || ':' || coalesce(p_entity, '') || ':' || p_user::text
+    -- once per step, whenever the bootstrap runs again
+    when p_event = 'accident.step_unstaffed'
+    then p_event || ':' || coalesce(p_entity, '') || ':' || p_user::text || ':' || md5(coalesce(p_title, ''))
     else p_event || ':' || coalesce(p_entity, '') || ':' || p_user::text || ':'
          || md5(coalesce(p_title, '')) || ':' || to_char(p_at at time zone 'UTC', 'YYYYMMDDHH24MI')
   end;
@@ -212,6 +215,25 @@ begin
   if v_acc is null then return; end if;
   select * into a from public.accidents where id = v_acc;
   if a.id is null then return; end if;
+  v_ref := coalesce(nullif(a.reference_no, ''), nullif(a.case_no, ''), 'Case');
+
+  -- A step whose owner role has nobody in the case's country/site: tell the
+  -- Admins and Managers who cover the case, once per step. Not a rule event, so
+  -- it does not depend on accident_notify_rules.
+  if ev.event_type = 'accident.step_unstaffed' then
+    v_ws_name := coalesce(public.accident_workstream_name(v_ws), 'a step');
+    v_targets := coalesce((select array_agg(x) from public.accident_people_for(
+                   a.organisation_id, array['Admin','Manager'], '{}', a.country, a.site) x), '{}');
+    v_targets := coalesce((select array_agg(x) from unnest(v_targets) x
+                            where not public._accident_is_test_profile(x)), '{}');
+    perform public._accident_deliver(ev, ev.event_type, a.id, v_targets, 'warning',
+      'No one can take step ' || v_ws_name || ' - ' || v_ref,
+      'No ' || coalesce(ev.payload ->> 'role', 'owner') || ' covers '
+        || concat_ws(' / ', nullif(a.country, ''), nullif(a.site, ''))
+        || '. Set an owner in Accident Workflow > Step Owners & SLA.', true);
+    return;
+  end if;
+
   if not public.accident_notify_configured(a.organisation_id, ev.event_type)
      and ev.event_type <> 'accident.stage_changed' then
     return;
@@ -298,7 +320,8 @@ insert into public.event_consumers (consumer, event_types, enabled, description)
 values ('consume_event_accident_owner_notify',
   array['accident.reported','accident.workstream_assigned','accident.stage_changed',
         'accident.claim_changed','accident.sla_warning','accident.sla_breach',
-        'accident.stalled','accident.closure_requested','accident.closure_decided'],
+        'accident.stalled','accident.closure_requested','accident.closure_decided',
+        'accident.step_unstaffed'],
   true,
   'Accident notifications from the owner''s settings (accident_notify_rules): step owners, roles, named people, the driver. In-app (deduped) + push always; e-mail stays with the older consumers.')
 on conflict (consumer) do update set event_types = excluded.event_types, enabled = true,

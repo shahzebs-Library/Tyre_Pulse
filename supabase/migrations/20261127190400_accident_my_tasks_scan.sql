@@ -39,7 +39,7 @@ returns table (
   country text, severity text, workflow_stage text, workstream_key text,
   workstream_name text, status text, owner_id uuid, owner_role text, owner_name text,
   started_at timestamptz, days_in_step numeric, due_at timestamptz, sla_state text,
-  overdue boolean)
+  overdue boolean, staffed boolean)
 language sql stable security definer set search_path = public as $$
   select w.id, a.id, coalesce(nullif(a.reference_no, ''), a.case_no), a.asset_no, a.site,
          a.country, a.severity, a.workflow_stage, w.workstream_key,
@@ -52,7 +52,11 @@ language sql stable security definer set search_path = public as $$
               when si.state = 'running' and si.warning_at is not null and si.warning_at < now()
                    and si.due_at > now() then 'warning'
               else si.state end,
-         coalesce(si.state = 'breached' or (si.state = 'running' and si.due_at < now()), false)
+         coalesce(si.state = 'breached' or (si.state = 'running' and si.due_at < now()), false),
+         -- someone can actually take it: a named owner, or a role held by at
+         -- least one real person in the case's country/site
+         (w.owner_id is not null or (w.owner_role is not null and exists (
+            select 1 from public.accident_people_for(w.organisation_id, array[w.owner_role], '{}', a.country, a.site))))
     from public.accident_case_workstreams w
     join public.accidents a on a.id = w.accident_id
     left join public.profiles p on p.id = w.owner_id
@@ -72,7 +76,7 @@ returns table (
   country text, severity text, workflow_stage text, workstream_key text,
   workstream_name text, status text, owner_id uuid, owner_role text, owner_name text,
   started_at timestamptz, days_in_step numeric, due_at timestamptz, sla_state text,
-  overdue boolean, assigned_to_me boolean)
+  overdue boolean, staffed boolean, assigned_to_me boolean)
 language plpgsql stable security definer set search_path = public as $$
 declare
   v_me uuid := auth.uid();
@@ -114,12 +118,13 @@ begin
     raise exception 'Not permitted.' using errcode = '42501';
   end if;
   return query
-    select t.owner_id, max(t.owner_name), max(t.owner_role), count(*)::int,
+    -- a role nobody in scope holds counts as "no owner", not as that role
+    select t.owner_id, max(t.owner_name), max(case when t.staffed then t.owner_role end), count(*)::int,
            count(*) filter (where t.overdue)::int, max(t.days_in_step),
-           (t.owner_id is null and max(t.owner_role) is null)
+           (t.owner_id is null and bool_and(not t.staffed))
       from public._accident_open_tasks(public.app_current_org()) t
      where public.app_can_see_country(t.country) and public.app_can_see_site(t.site)
-     group by t.owner_id, case when t.owner_id is null then t.owner_role end
+     group by t.owner_id, case when t.owner_id is null and t.staffed then t.owner_role end
      order by count(*) filter (where t.overdue) desc, count(*) desc;
 end;
 $$;

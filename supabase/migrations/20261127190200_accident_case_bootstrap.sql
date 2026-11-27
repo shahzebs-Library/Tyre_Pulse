@@ -141,6 +141,7 @@ declare
   k text;
   o record;
   v_new integer := 0;
+  v_ins boolean;
 begin
   select * into a from public.accidents where id = p_accident;
   if a.id is null or a.organisation_id is null then return 0; end if;
@@ -161,7 +162,18 @@ begin
       case when o.owner_id is not null or o.owner_role is not null then 'assigned' else 'not_started' end,
       true, o.owner_id, o.owner_role, o.owner_role, 'auto: bootstrap')
     on conflict (accident_id, workstream_key) do nothing;
-    if found then
+    v_ins := found;
+    if o.unstaffed_role is not null and exists (
+         select 1 from public.accident_case_workstreams w
+          where w.accident_id = a.id and w.workstream_key = k
+            and w.owner_id is null and w.owner_role is null
+            and w.status not in ('completed','not_required','cancelled')) then
+      -- Admin/Manager hear once per step (the notice dedupe key has no time part)
+      perform public.emit_domain_event('accident.step_unstaffed', 'accident', a.id::text,
+        jsonb_build_object('accident_id', a.id, 'workstream_key', k, 'role', o.unstaffed_role),
+        a.organisation_id, null);
+    end if;
+    if v_ins then
       v_new := v_new + 1;
     else
       -- an existing step with nobody on it takes the configured owner

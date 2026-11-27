@@ -6,7 +6,7 @@ import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/features/tyres/domain/tyre_fitment.dart';
 
 const String _fitmentColumns = 'id,serial_no,serial_number,tyre_serial,brand,'
-    'size,position,tyre_position,asset_no,status,issue_date';
+    'size,position,tyre_position,asset_no,status,issue_date,km_at_fitment';
 
 abstract interface class TyreFitmentRepository {
   Future<List<TyreFitment>> activeForAsset({

@@ -9387,4 +9387,131 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي.';
+
+  @override
+  String get tyreEditorEyebrow => 'موضع الإطار';
+
+  @override
+  String tyrePosNameWithRole(String side, String axle, String role) {
+    return '$side، $axle، $role';
+  }
+
+  @override
+  String tyrePosNameNoRole(String side, String axle) {
+    return '$side، $axle';
+  }
+
+  @override
+  String get tyrePosSideLeft => 'يسار';
+
+  @override
+  String get tyrePosSideRight => 'يمين';
+
+  @override
+  String tyrePosAxleFront(String number) {
+    return 'المحور الأمامي $number';
+  }
+
+  @override
+  String tyrePosAxleRearNumbered(String number) {
+    return 'المحور الخلفي $number';
+  }
+
+  @override
+  String get tyrePosAxleRear => 'المحور الخلفي';
+
+  @override
+  String get tyrePosAxleCentre => 'المحور الأوسط';
+
+  @override
+  String get tyrePosAxleRearCentre => 'المحور الخلفي الأوسط';
+
+  @override
+  String get tyrePosAxleRearmost => 'المحور الخلفي الأخير';
+
+  @override
+  String get tyrePosRoleInner => 'داخلي';
+
+  @override
+  String get tyrePosRoleOuter => 'خارجي';
+
+  @override
+  String get tyreEditorSectionMeasurements => 'القياسات';
+
+  @override
+  String get tyreEditorSectionTyre => 'الإطار';
+
+  @override
+  String get tyreEditorFittedTitle => 'الإطار المركّب';
+
+  @override
+  String tyreEditorFittedOn(String date) {
+    return 'رُكّب في $date';
+  }
+
+  @override
+  String tyreEditorKmAtFitment(String km) {
+    return '$km كم عند التركيب';
+  }
+
+  @override
+  String tyreEditorKmRun(String km) {
+    return 'قطع $km كم منذ التركيب';
+  }
+
+  @override
+  String get tyreEditorFittedSerialMissing => 'الرقم التسلسلي غير مسجّل';
+
+  @override
+  String get tyreEditorFittedNotLoaded => 'لم يتم تحميل الإطار المركّب';
+
+  @override
+  String get tyreEditorFittedNotLoadedHint =>
+      'تعذّرت قراءة سجل الإطارات. لا يزال بإمكانك تسجيل هذه العجلة.';
+
+  @override
+  String get tyreEditorFittedNone => 'لا يوجد إطار مسجّل لهذا الموضع';
+
+  @override
+  String tyreEditorSerialDiffers(String serial) {
+    return 'يختلف عن الإطار المسجّل ($serial)';
+  }
+
+  @override
+  String get tyreEditorUnitPsi => 'psi';
+
+  @override
+  String get tyreEditorUnitMm => 'مم';
+
+  @override
+  String get tyreEditorNumberInvalid => 'أدخل رقماً.';
+
+  @override
+  String get tyreEditorPressureRange => 'أدخل ضغطاً من 0 إلى 200 psi.';
+
+  @override
+  String get tyreEditorTreadRange => 'أدخل عمق مداس من 0 إلى 30 مم.';
+
+  @override
+  String get tyreEditorPressureUnusual =>
+      'ضغط غير معتاد للإطار. تحقّق من القراءة.';
+
+  @override
+  String get tyreEditorTreadUnusual => 'عمق مداس غير معتاد. تحقّق من القراءة.';
+
+  @override
+  String tyreEditorPreviousReading(String date, String values) {
+    return 'آخر فحص $date: $values';
+  }
+
+  @override
+  String tyreEditorPreviousReadingUndated(String values) {
+    return 'آخر فحص: $values';
+  }
+
+  @override
+  String get tyreEditorConditionSelected => 'محدد';
+
+  @override
+  String get tyreEditorPositionMap => 'الموضع على المركبة';
 }

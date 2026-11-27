@@ -16385,6 +16385,216 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.'**
   String get driverChargeAppealClosedDeducted;
+
+  /// No description provided for @tyreEditorEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre position'**
+  String get tyreEditorEyebrow;
+
+  /// No description provided for @tyrePosNameWithRole.
+  ///
+  /// In en, this message translates to:
+  /// **'{side}, {axle}, {role}'**
+  String tyrePosNameWithRole(String side, String axle, String role);
+
+  /// No description provided for @tyrePosNameNoRole.
+  ///
+  /// In en, this message translates to:
+  /// **'{side}, {axle}'**
+  String tyrePosNameNoRole(String side, String axle);
+
+  /// No description provided for @tyrePosSideLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get tyrePosSideLeft;
+
+  /// No description provided for @tyrePosSideRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get tyrePosSideRight;
+
+  /// No description provided for @tyrePosAxleFront.
+  ///
+  /// In en, this message translates to:
+  /// **'front axle {number}'**
+  String tyrePosAxleFront(String number);
+
+  /// No description provided for @tyrePosAxleRearNumbered.
+  ///
+  /// In en, this message translates to:
+  /// **'rear axle {number}'**
+  String tyrePosAxleRearNumbered(String number);
+
+  /// No description provided for @tyrePosAxleRear.
+  ///
+  /// In en, this message translates to:
+  /// **'rear axle'**
+  String get tyrePosAxleRear;
+
+  /// No description provided for @tyrePosAxleCentre.
+  ///
+  /// In en, this message translates to:
+  /// **'centre axle'**
+  String get tyrePosAxleCentre;
+
+  /// No description provided for @tyrePosAxleRearCentre.
+  ///
+  /// In en, this message translates to:
+  /// **'rear-centre axle'**
+  String get tyrePosAxleRearCentre;
+
+  /// No description provided for @tyrePosAxleRearmost.
+  ///
+  /// In en, this message translates to:
+  /// **'rearmost axle'**
+  String get tyrePosAxleRearmost;
+
+  /// No description provided for @tyrePosRoleInner.
+  ///
+  /// In en, this message translates to:
+  /// **'inner'**
+  String get tyrePosRoleInner;
+
+  /// No description provided for @tyrePosRoleOuter.
+  ///
+  /// In en, this message translates to:
+  /// **'outer'**
+  String get tyrePosRoleOuter;
+
+  /// No description provided for @tyreEditorSectionMeasurements.
+  ///
+  /// In en, this message translates to:
+  /// **'Measurements'**
+  String get tyreEditorSectionMeasurements;
+
+  /// No description provided for @tyreEditorSectionTyre.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre'**
+  String get tyreEditorSectionTyre;
+
+  /// No description provided for @tyreEditorFittedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fitted tyre'**
+  String get tyreEditorFittedTitle;
+
+  /// No description provided for @tyreEditorFittedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Fitted {date}'**
+  String tyreEditorFittedOn(String date);
+
+  /// No description provided for @tyreEditorKmAtFitment.
+  ///
+  /// In en, this message translates to:
+  /// **'{km} km at fitment'**
+  String tyreEditorKmAtFitment(String km);
+
+  /// No description provided for @tyreEditorKmRun.
+  ///
+  /// In en, this message translates to:
+  /// **'{km} km run since fitment'**
+  String tyreEditorKmRun(String km);
+
+  /// No description provided for @tyreEditorFittedSerialMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Serial not recorded'**
+  String get tyreEditorFittedSerialMissing;
+
+  /// No description provided for @tyreEditorFittedNotLoaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Fitted tyre not loaded'**
+  String get tyreEditorFittedNotLoaded;
+
+  /// No description provided for @tyreEditorFittedNotLoadedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The tyre register could not be read. You can still record this wheel.'**
+  String get tyreEditorFittedNotLoadedHint;
+
+  /// No description provided for @tyreEditorFittedNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No tyre on record for this position'**
+  String get tyreEditorFittedNone;
+
+  /// No description provided for @tyreEditorSerialDiffers.
+  ///
+  /// In en, this message translates to:
+  /// **'Different from the tyre on record ({serial})'**
+  String tyreEditorSerialDiffers(String serial);
+
+  /// No description provided for @tyreEditorUnitPsi.
+  ///
+  /// In en, this message translates to:
+  /// **'psi'**
+  String get tyreEditorUnitPsi;
+
+  /// No description provided for @tyreEditorUnitMm.
+  ///
+  /// In en, this message translates to:
+  /// **'mm'**
+  String get tyreEditorUnitMm;
+
+  /// No description provided for @tyreEditorNumberInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number.'**
+  String get tyreEditorNumberInvalid;
+
+  /// No description provided for @tyreEditorPressureRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a pressure from 0 to 200 psi.'**
+  String get tyreEditorPressureRange;
+
+  /// No description provided for @tyreEditorTreadRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a tread depth from 0 to 30 mm.'**
+  String get tyreEditorTreadRange;
+
+  /// No description provided for @tyreEditorPressureUnusual.
+  ///
+  /// In en, this message translates to:
+  /// **'Unusual pressure for a tyre. Check the reading.'**
+  String get tyreEditorPressureUnusual;
+
+  /// No description provided for @tyreEditorTreadUnusual.
+  ///
+  /// In en, this message translates to:
+  /// **'Unusual tread depth. Check the reading.'**
+  String get tyreEditorTreadUnusual;
+
+  /// No description provided for @tyreEditorPreviousReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Last inspection {date}: {values}'**
+  String tyreEditorPreviousReading(String date, String values);
+
+  /// No description provided for @tyreEditorPreviousReadingUndated.
+  ///
+  /// In en, this message translates to:
+  /// **'Last inspection: {values}'**
+  String tyreEditorPreviousReadingUndated(String values);
+
+  /// No description provided for @tyreEditorConditionSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get tyreEditorConditionSelected;
+
+  /// No description provided for @tyreEditorPositionMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Position on the vehicle'**
+  String get tyreEditorPositionMap;
 }
 
 class _AppLocalizationsDelegate

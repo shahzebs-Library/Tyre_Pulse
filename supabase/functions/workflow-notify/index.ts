@@ -217,6 +217,7 @@ function fcmData(p: NotifyPayload): Record<string, string> {
   const put = (k: string, v: unknown) => { if (v !== undefined && v !== null && String(v).trim() !== '') out[k] = String(v) }
   put('type', p.event_type); put('event_type', p.event_type); put('entity_type', entityType)
   put('entity_id', p.entity_id); put('instance_id', p.instance_id); put('channel', p.channel)
+  put('workstream_key', (p as { workstream_key?: string }).workstream_key)
   return out
 }
 

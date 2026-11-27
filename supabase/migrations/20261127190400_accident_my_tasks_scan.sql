@@ -191,7 +191,7 @@ begin
       insert into public.workflow_notifications
         (event_id, organisation_id, instance_id, event_type, payload, recipient_count, status)
       values (-(v_ev * 16 + 3), o.organisation_id, null, 'accident.task_digest',
-        jsonb_build_object('event_type', 'accident.task_digest', 'channel', 'accident',
+        jsonb_build_object('event_type', 'accident.task_digest', 'channel', 'accident', 'entity_type', 'accident_tasks',
           'push', jsonb_build_object('title', v_title, 'body', 'Open My accident tasks to see them.',
                     'data', jsonb_build_object('type', 'accident_tasks')),
           'recipients', v_tokens,

@@ -173,7 +173,8 @@ begin
     values (
       -(p_ev.id * 16 + case when p_rule_event = p_ev.event_type then 1 else 2 end), v_org, null, p_ev.event_type,
       jsonb_build_object('event_type', p_ev.event_type, 'channel', 'accident',
-        'entity_id', p_accident::text,
+        'entity_id', p_accident::text, 'entity_type', 'accident',
+        'workstream_key', p_ev.payload ->> 'workstream_key',
         'push', jsonb_build_object('title', p_title, 'body', p_body,
                   'data', jsonb_build_object('type', 'accident', 'entity_id', p_accident::text,
                                              'workstream_key', p_ev.payload ->> 'workstream_key')),

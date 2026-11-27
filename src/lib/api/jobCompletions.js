@@ -46,7 +46,7 @@ export async function listJobCompletions(status = COMPLETION_QUEUES.toCheck) {
   const ids = [...new Set(rows.flatMap((r) => [r.submitted_by, r.decided_by]).filter(Boolean))]
   let names = {}
   if (ids.length) {
-    const { data: people } = await supabase.from('profiles').select('id,full_name').in('id', ids)
+    const { data: people } = await supabase.from('profiles').select('id,full_name').in('id', ids).limit(200)
     names = Object.fromEntries((people || []).filter((p) => p.full_name).map((p) => [p.id, p.full_name]))
   }
   return {

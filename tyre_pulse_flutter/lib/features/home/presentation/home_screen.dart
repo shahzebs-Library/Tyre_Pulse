@@ -95,6 +95,7 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/auth/auth_providers.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/navigation/list_drilldown.dart';
+import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
@@ -394,9 +395,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // The per-role Home (domain/home_role_plan.dart). A role without a plan,
     // or a failed access read (whose retry lives on the timeline card),
     // keeps the original layout below.
-    final HomeRolePlan? rolePlan = accessFailedEarly
+    // A super admin always gets the full Home, whatever their role.
+    final AccessState access = ref.watch(accessStateProvider);
+    final HomeRolePlan? rolePlan = accessFailedEarly || access.isSuperAdmin
         ? null
-        : homeRolePlanForRole(ref.watch(accessStateProvider).role);
+        : homeRolePlanForRole(access.role);
     final bool storeHome = rolePlan == null &&
         ref.watch(
           canAccessModuleProvider(ModuleKey.stock),
@@ -1204,22 +1207,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 8),
               for (final HomeSectionSpec section in sections)
                 for (final HomeTileSpec tile in section.tiles)
-                  // Only a signer is offered the inspection sign-off queue
-                  // (V606); the rest of the approvals module is unchanged.
-                  if (tile.id != 'inspectionApprovals' ||
-                      ref.read(homeCanSignInspectionApprovalsProvider))
-                    ListTile(
-                      leading: TpIcon(_tileMeta(l10n, tile.id).icon),
-                      title: Text(_tileMeta(l10n, tile.id).label),
-                      trailing: const Icon(
-                        // Mirrors itself under RTL (matchTextDirection).
-                        Icons.chevron_right_rounded,
-                      ),
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        _openHomeTile(context, tile.id);
-                      },
+                  // Anyone with the approvals module may open the inspection
+                  // queue to read it; only a signer (V606) gets the
+                  // approve/return controls inside it.
+                  ListTile(
+                    leading: TpIcon(_tileMeta(l10n, tile.id).icon),
+                    title: Text(_tileMeta(l10n, tile.id).label),
+                    trailing: const Icon(
+                      // Mirrors itself under RTL (matchTextDirection).
+                      Icons.chevron_right_rounded,
                     ),
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      _openHomeTile(context, tile.id);
+                    },
+                  ),
             ],
           ),
         ),

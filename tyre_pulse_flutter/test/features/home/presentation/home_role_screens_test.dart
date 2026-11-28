@@ -446,6 +446,52 @@ void main() {
     expect(find.descendant(of: row, matching: find.text('0')), findsNothing);
   });
 
+  testWidgets('a super admin with the Manager role gets the full Home', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      const AccessState(
+        role: UserRole.known(RoleId.manager),
+        isSuperAdmin: true,
+      ),
+      size: const Size(360, 1400),
+    );
+    expect(find.byKey(HomeScreenKeys.rolePanel), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a non-signer Manager still opens Inspection Approvals in More', (
+    WidgetTester tester,
+  ) async {
+    // A Manager reaches Approvals through the role matrix, but is not a
+    // V606 signer.
+    await _pump(
+      tester,
+      const AccessState(
+        role: UserRole.known(RoleId.manager),
+        roleMatrix: <ModuleKey, bool>{ModuleKey.approvals: true},
+      ),
+      size: const Size(360, 1400),
+    );
+    expect(find.byKey(HomeScreenKeys.rolePanel), findsOneWidget);
+    final Finder more = find.byKey(HomeScreenKeys.roleChip('more'));
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+    final Finder tile = find.widgetWithText(ListTile, 'Inspection Approvals');
+    await tester.scrollUntilVisible(
+      tile,
+      200,
+      scrollable: find.descendant(
+        of: find.byKey(HomeScreenKeys.action('servicesSheet')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(tile, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   // Review screenshots, only when asked.
   final bool shots =
       Platform.environment['TP_HOME_SCREENSHOTS'] == '1' && _textFont() != null;

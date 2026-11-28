@@ -147,6 +147,7 @@ Future<void> _pumpReview(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
+        inspectionApprovalCanSignProvider.overrideWithValue(true),
         inspectionApprovalRepositoryProvider.overrideWithValue(
           _FakeInspectionApprovalRepository(item),
         ),

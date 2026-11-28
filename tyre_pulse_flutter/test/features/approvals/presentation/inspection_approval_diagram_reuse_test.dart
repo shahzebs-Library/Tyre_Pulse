@@ -95,6 +95,7 @@ Future<void> _pumpScreen(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        inspectionApprovalCanSignProvider.overrideWithValue(true),
         inspectionApprovalRepositoryProvider.overrideWithValue(repository),
       ],
       child: MaterialApp(

@@ -162,9 +162,15 @@ final class MyWorkLoadFailure implements Exception {
   String toString() => 'MyWorkLoadFailure($cause)';
 }
 
+/// How long one source may take before it counts as failed. A source that
+/// never answers (a dropped connection with no error) must not hold the
+/// whole snapshot - and every tile reading it - on "loading" forever.
+const Duration kMyWorkSourceTimeout = Duration(seconds: 25);
+
 Future<MyWorkSnapshot> loadMyWork(
   MyWorkGateway gateway, {
   required DateTime now,
+  Duration sourceTimeout = kMyWorkSourceTimeout,
 }) async {
   final Set<MyWorkSource> attempted = <MyWorkSource>{};
   final Set<MyWorkSource> failed = <MyWorkSource>{};
@@ -174,7 +180,7 @@ Future<MyWorkSnapshot> loadMyWork(
     if (fn == null) return null;
     attempted.add(source);
     try {
-      return await fn();
+      return await fn().timeout(sourceTimeout);
     } on Object catch (error) {
       failed.add(source);
       firstError ??= error;

@@ -29,7 +29,8 @@ double _luminance(Color c) {
 double _contrastWithWhite(Color c) => 1.05 / (_luminance(c) + 0.05);
 
 void main() {
-  test('the family is exactly the fifteen approved glyphs', () {
+  test('the family is exactly the approved glyphs (fifteen plus two store)',
+      () {
     expect(TpAssetIconKind.values.map((TpAssetIconKind k) => k.name), <String>[
       'tyre',
       'mixer',
@@ -46,6 +47,8 @@ void main() {
       'home',
       'user',
       'bell',
+      'box',
+      'history',
     ]);
   });
 
@@ -59,7 +62,10 @@ void main() {
       TpIconSize.xl,
     ]) {
       await pumpTp(tester, _row(size));
-      expect(find.byType(SvgPicture), findsNWidgets(15));
+      expect(
+        find.byType(SvgPicture),
+        findsNWidgets(TpAssetIconKind.values.length),
+      );
       expect(
         tester.getSize(find.byType(SvgPicture).first),
         Size(size, size),

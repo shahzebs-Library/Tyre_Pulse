@@ -64,9 +64,18 @@ final class QueuedChecklistSubmission {
 /// A single, already-merged "my checklist history" view: completed
 /// submissions plus whatever of the operator's own work is still queued.
 final class ChecklistHistory {
-  const ChecklistHistory({required this.completed, required this.queued});
+  const ChecklistHistory({
+    required this.completed,
+    required this.queued,
+    this.completedTotal,
+  });
 
   final List<ChecklistHistoryRow> completed;
+
+  /// The exact server-side number of this user's synced submissions, from a
+  /// head count. `null` when it could not be read; may exceed
+  /// [completed]`.length` only if the history load itself was capped.
+  final int? completedTotal;
   final List<QueuedChecklistSubmission> queued;
 
   int get attentionCount =>
@@ -95,12 +104,15 @@ final class DefaultChecklistHistoryRepository
     required QueueDao queueDao,
     required Future<List<ChecklistHistoryRow>> Function(String submittedBy)
         loadCompleted,
+    Future<int?> Function(String submittedBy)? loadCompletedCount,
   })  : _queueDao = queueDao,
-        _loadCompleted = loadCompleted;
+        _loadCompleted = loadCompleted,
+        _loadCompletedCount = loadCompletedCount;
 
   final QueueDao _queueDao;
   final Future<List<ChecklistHistoryRow>> Function(String submittedBy)
       _loadCompleted;
+  final Future<int?> Function(String submittedBy)? _loadCompletedCount;
 
   @override
   Future<ChecklistHistory> load({
@@ -108,11 +120,20 @@ final class DefaultChecklistHistoryRepository
     required String workspaceId,
   }) async {
     List<ChecklistHistoryRow> completed = const <ChecklistHistoryRow>[];
+    int? completedTotal;
     if (userId.isNotEmpty) {
       try {
         completed = await _loadCompleted(userId);
       } on Object {
         completed = const <ChecklistHistoryRow>[];
+      }
+      final Future<int?> Function(String)? countFn = _loadCompletedCount;
+      if (countFn != null) {
+        try {
+          completedTotal = await countFn(userId);
+        } on Object {
+          completedTotal = null;
+        }
       }
     }
 
@@ -139,7 +160,11 @@ final class DefaultChecklistHistoryRepository
       queued = const <QueuedChecklistSubmission>[];
     }
 
-    return ChecklistHistory(completed: completed, queued: queued);
+    return ChecklistHistory(
+      completed: completed,
+      queued: queued,
+      completedTotal: completedTotal,
+    );
   }
 
   QueuedChecklistSubmission? _decode(PendingCommand row) {

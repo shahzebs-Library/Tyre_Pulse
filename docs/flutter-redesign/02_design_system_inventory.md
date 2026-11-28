@@ -53,7 +53,7 @@ left/right value or a row that cannot shrink.
 | `TpScaffold` | `tp_scaffold.dart` | app bar, banner slot, FAB, bottom nav, back intercept | sym | |
 | `TpBottomSheet.show` | `tp_bottom_sheet.dart` | modal sheet with handle, title, safe area, keyboard inset | sym | Static helper, not a widget. |
 | `TpDialog.confirm` | `tp_bottom_sheet.dart` | yes/no dialog, destructive variant, dismissal = false | risk | `actionsPadding: EdgeInsets.fromLTRB` (line 120). Only `confirm` exists: no info, input or choice dialog. |
-| `TpBrandLockup` | `tp_mobile_chrome.dart` | logo mark + wordmark, compact | sym | Loads `assets/login/figma_brand_pulse_mark.png`. |
+| `TpBrandLockup` | `tp_mobile_chrome.dart` | logo mark + wordmark, compact | sym | Loads `TpBrandArt` (`assets/login/tp_wordmark_ink.png` / `tp_wordmark_reverse.png`). |
 | `TpSyncLabel` | `tp_mobile_chrome.dart` | synced / pending label | risk | **Defect:** Row at line 76 overflows at 2x text (no Flexible on the label). |
 | `TpActionRow` | `tp_mobile_chrome.dart` | settings-style row: icon, label, value, trailing, tone, divider | dir | |
 | `TpBottomActionRail` | `tp_mobile_chrome.dart` | two-button bottom rail (secondary + primary, busy) | risk | `EdgeInsets.fromLTRB` (line 216). |

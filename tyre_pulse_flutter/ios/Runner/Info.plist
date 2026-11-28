@@ -30,6 +30,8 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Tyre Pulse connects to Bluetooth tyre gauges and label printers you add under Profile, Devices, to read tread depth and pressure and to print labels.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>TyrePulse needs camera access to photograph tyres, vehicles, and operational evidence.</string>
 	<key>NSFaceIDUsageDescription</key>

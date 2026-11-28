@@ -14,12 +14,14 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
+import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
 
 final inspectionApprovalRepositoryProvider =
     Provider<InspectionApprovalRepository>(
   (ref) => SupabaseInspectionApprovalRepository(
     ref.watch(supabaseClientProvider),
+    companyId: ref.watch(activeCompanyIdProvider),
   ),
 );
 

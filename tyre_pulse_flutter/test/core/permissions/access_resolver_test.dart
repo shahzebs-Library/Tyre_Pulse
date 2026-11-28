@@ -457,8 +457,8 @@ void main() {
   });
 
   group('allowedModulesFor', () {
-    test('an admin reaches all 33 modules', () {
-      expect(allowedModulesFor(state(role: adminRole)), hasLength(33));
+    test('an admin reaches all 34 modules', () {
+      expect(allowedModulesFor(state(role: adminRole)), hasLength(34));
     });
 
     test('a reporter reaches the six the registry gives them', () {

@@ -411,7 +411,7 @@ export default function Inspections() {
       if (result.note) setPdfNote(result.note)
       setPdfRev((n) => n + 1)
     } catch (err) {
-      setPdfError(toUserMessage(err, 'Could not create the inspection PDF. Retry the download.'))
+      setPdfError(toUserMessage(err, t('inspections.page.err.pdf')))
     } finally { setPdfBusyId(null) }
   }, [pdfBusyId, ensureInspectionPdf])
 
@@ -790,7 +790,7 @@ export default function Inspections() {
         setActionNotice({ tone: 'ok', text: `Readings saved for ${form.asset_no || 'this inspection'}.` })
         await load()
       } catch (e) {
-        setSaveError(toUserMessage(e, 'The readings could not be saved.'))
+        setSaveError(toUserMessage(e, t('inspections.page.err.readings')))
       } finally {
         setSaving(false)
       }
@@ -841,10 +841,10 @@ export default function Inspections() {
         await inspectionsApi.insertInspection(payload)
       }
       setForm(null)
-      setActionNotice({ tone: 'ok', text: `${isNew ? 'Inspection added' : 'Inspection updated'}${form.asset_no ? ` for ${form.asset_no}` : ''}.` })
+      setActionNotice({ tone: 'ok', text: form.asset_no ? t(isNew ? 'inspections.page.notice.addedFor' : 'inspections.page.notice.updatedFor', { asset: form.asset_no }) : t(isNew ? 'inspections.page.notice.added' : 'inspections.page.notice.updated') })
       await load()
     } catch (error) {
-      setSaveError(toUserMessage(error, 'Could not save the inspection. Please check the required fields and try again.'))
+      setSaveError(toUserMessage(error, t('inspections.page.err.save')))
     }
     setSaving(false)
   }
@@ -861,7 +861,7 @@ export default function Inspections() {
         ...(row && approval !== undefined ? { approval_status: approval } : {}),
       })
     } catch (e) {
-      setActionNotice({ tone: 'error', text: toUserMessage(e, 'The inspection could not be marked done.') })
+      setActionNotice({ tone: 'error', text: toUserMessage(e, t('inspections.page.err.markDone')) })
     }
     await load()
   }
@@ -870,7 +870,7 @@ export default function Inspections() {
     try {
       await inspectionsApi.deleteInspection(deleteId)
     } catch (e) {
-      setActionNotice({ tone: 'error', text: toUserMessage(e, 'The inspection could not be deleted.') })
+      setActionNotice({ tone: 'error', text: toUserMessage(e, t('inspections.page.err.delete')) })
     }
     setDeleteId(null)
     await load()
@@ -925,7 +925,7 @@ export default function Inspections() {
     })
     if (!items.length || items.length > bulkPdfLimit) return
     try { applyExportPolicy(items, `Inspection PDFs bulk download (${items.length})`) }
-    catch (err) { setPdfError(toUserMessage(err, 'Exports are not available.')); return }
+    catch (err) { setPdfError(toUserMessage(err, t('inspections.page.err.exportsOff'))); return }
     startExportTask(`Inspection PDFs (${items.length})`, async ({ report, isCancelled }) => {
       // The server checks the limit and answers with the records this account may see.
       const gate = await authorizeBulk(REPORT_TYPES.INSPECTION, items.map((i) => i.sourceId), bulkPdfLimit)
@@ -966,7 +966,7 @@ export default function Inspections() {
       setSelectedIds(new Set())
       await load()
     } catch (e) {
-      setBulkError(toUserMessage(e, 'Bulk delete failed. Please try again.'))
+      setBulkError(toUserMessage(e, t('inspections.page.err.bulkDelete')))
     } finally {
       setBulkBusy(false)
     }
@@ -981,11 +981,12 @@ export default function Inspections() {
     const skipped = res?.skipped || 0
     const who = [...new Set(res?.notified || [])]
     const parts = []
-    if (made) parts.push(`${made} action${made === 1 ? '' : 's'} raised for ${row?.asset_no || 'this vehicle'}`)
-    if (who.length) parts.push(`assigned to ${who.join(', ')}`)
-    if (skipped) parts.push(`${skipped} already raised`)
-    if (failed) parts.push(`${failed} could not be saved`)
-    setActionNotice({ tone: failed && !made ? 'error' : failed ? 'warn' : 'ok', text: parts.join(', ') || 'Nothing was raised.' })
+    const assetName = row?.asset_no || t('inspections.page.notice.thisVehicle')
+    if (made) parts.push(made === 1 ? t('inspections.page.notice.raisedOne', { asset: assetName }) : t('inspections.page.notice.raisedMany', { count: made, asset: assetName }))
+    if (who.length) parts.push(t('inspections.page.notice.assignedTo', { names: who.join(', ') }))
+    if (skipped) parts.push(t('inspections.page.notice.alreadyRaised', { count: skipped }))
+    if (failed) parts.push(t('inspections.page.notice.notSaved', { count: failed }))
+    setActionNotice({ tone: failed && !made ? 'error' : failed ? 'warn' : 'ok', text: parts.join(', ') || t('inspections.page.notice.nothingRaised') })
     if (made) await load()
   }
 
@@ -1126,7 +1127,7 @@ export default function Inspections() {
           setClError('Failed to queue offline. Please try again.')
         }
       } else {
-        setClError(toUserMessage(error, 'Save failed. Please try again.'))
+        setClError(toUserMessage(error, t('inspections.page.err.clSave')))
         vibrate(300)
       }
     }
@@ -1166,7 +1167,7 @@ export default function Inspections() {
         doc.save(checklistReportFileName(asset, clSite || clSaved.site, day))
       }
     } catch (err) {
-      setClError(toUserMessage(err, 'Could not create the checklist report. Try again.'))
+      setClError(toUserMessage(err, t('inspections.page.err.clReport')))
     }
   }
 
@@ -1222,7 +1223,7 @@ export default function Inspections() {
       })
       if (error) {
         const serverMsg = await readFunctionError(error)
-        setClError(serverMsg || toUserMessage(error, 'Could not send the approval email. Try again.'))
+        setClError(serverMsg || toUserMessage(error, t('inspections.page.err.approvalEmail')))
         return
       }
       if (data?.error) {
@@ -1283,7 +1284,7 @@ export default function Inspections() {
         title: 'Inspections & Tyre Findings',
         meta: { 'Affected tyres found': tyreRows.length },
       })
-    } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) }
+    } catch (e) { setExportError(toUserMessage(e, t('inspections.page.err.export'))) }
   }
 
   // The mockup workspace replaces the plain header on the register views. The
@@ -1293,7 +1294,7 @@ export default function Inspections() {
     try {
       const data = await inspectionsApi.getInspectionForPage(row.id)
       if (data) { setApproveTarget(data); setShowApproveModal(true) }
-    } catch (e) { setExportError(toUserMessage(e, 'Could not open this inspection for sign-off.')) }
+    } catch (e) { setExportError(toUserMessage(e, t('inspections.page.err.signoff'))) }
   }
   const headerActions = (
           <div className="flex gap-2 flex-wrap">
@@ -1301,7 +1302,7 @@ export default function Inspections() {
               type="button"
               onClick={exportInspectionsExcel}
               disabled={filtered.length === 0}
-              title={filtered.length === 0 ? 'Nothing to export under these filters' : undefined}
+              title={filtered.length === 0 ? t('inspections.page.nothingToExport') : undefined}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[40px] disabled:opacity-50"
             >
               <Download size={14}/> {t('inspections.actions.excel')}
@@ -1310,19 +1311,19 @@ export default function Inspections() {
               onClick={async () => { try { await exportToPdf(
                 filtered,
                 [
-                  {key:'inspection_type',header:'Type'},
-                  {key:'title',header:'Title'},
-                  {key:'site',header:'Site'},
-                  {key:'asset_no',header:'Asset'},
-                  {key:'scheduled_date',header:'Date'},
-                  {key:'status',header:'Status'},
-                  {key:'severity',header:'Severity'},
-                  {key:'inspector',header:'Inspector'},
+                  {key:'inspection_type',header:t('inspections.page.pdf.type')},
+                  {key:'title',header:t('inspections.page.pdf.title')},
+                  {key:'site',header:t('inspections.page.pdf.site')},
+                  {key:'asset_no',header:t('inspections.page.pdf.asset')},
+                  {key:'scheduled_date',header:t('inspections.page.pdf.date')},
+                  {key:'status',header:t('inspections.page.pdf.status')},
+                  {key:'severity',header:t('inspections.page.pdf.severity')},
+                  {key:'inspector',header:t('inspections.page.pdf.inspector')},
                 ],
-                'Inspections & Observations',
+                t('inspections.page.pdf.reportTitle'),
                 'TyrePulse_Inspections',
                 'landscape'
-              ) } catch (e) { setExportError(toUserMessage(e, 'Could not export. Try again.')) } }}
+              ) } catch (e) { setExportError(toUserMessage(e, t('inspections.page.err.export'))) } }}
               type="button"
               disabled={filtered.length === 0}
               className="btn-secondary flex items-center gap-1.5 text-sm px-3 min-h-[40px] disabled:opacity-50"
@@ -1347,13 +1348,13 @@ export default function Inspections() {
         <div role={actionNotice.tone === 'error' ? 'alert' : 'status'} className="card flex items-center justify-between gap-3 text-sm"
           style={{ color: actionNotice.tone === 'error' ? '#ef4444' : actionNotice.tone === 'warn' ? '#b45309' : 'var(--text-primary)' }}>
           <span>{actionNotice.text}</span>
-          <button type="button" onClick={() => setActionNotice(null)} aria-label="Dismiss" className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X size={14} /></button>
+          <button type="button" onClick={() => setActionNotice(null)} aria-label={t('inspections.page.dismiss')} className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X size={14} /></button>
         </div>
       )}
       {exportError && (
         <div role="alert" className="card flex items-center justify-between gap-3 text-sm text-red-500">
           <span>{exportError}</span>
-          <button type="button" onClick={() => setExportError('')} aria-label="Dismiss export error" className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X size={14} /></button>
+          <button type="button" onClick={() => setExportError('')} aria-label={t('inspections.page.dismissExport')} className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center"><X size={14} /></button>
         </div>
       )}
       {showWorkspace ? (
@@ -1393,12 +1394,12 @@ export default function Inspections() {
       {showWorkspace && (
         <div className="flex items-end justify-between gap-3 flex-wrap pt-2">
           <div>
-            <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Full register</h2>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Every inspection, observation and training record, with filters, bulk actions and exports.</p>
+            <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{t('inspections.page.fullRegister')}</h2>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{t('inspections.page.fullRegisterSub')}</p>
           </div>
         </div>
       )}
-      {!isTyreMan && <div role="tablist" aria-label="Register views" className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit max-w-full overflow-x-auto flex-wrap">
+      {!isTyreMan && <div role="tablist" aria-label={t('inspections.page.registerViews')} className="flex gap-1 p-1 bg-[var(--surface-2)] rounded-lg w-fit max-w-full overflow-x-auto flex-wrap">
         {tabConfig.map(({ key, label, icon: Icon, count }) => (
           <button
             key={key}
@@ -1461,7 +1462,7 @@ export default function Inspections() {
           onNewChecklist={resetChecklist}
           onSendForApproval={sendChecklistForApproval}
           onOpenSignaturePad={() => setShowSignaturePad(true)}
-          onPhotoError={(e) => setClError(toUserMessage(e, 'Could not read that photo. Try another one.'))}
+          onPhotoError={(e) => setClError(toUserMessage(e, t('inspections.page.err.photo')))}
         />
       )}
 
@@ -1508,7 +1509,7 @@ export default function Inspections() {
                   </div>
                 )}
               </div>
-              <button type="button" aria-label="Close approval" onClick={() => { setShowApproveModal(false); clearApproveParam() }}
+              <button type="button" aria-label={t('inspections.page.closeApproval')} onClick={() => { setShowApproveModal(false); clearApproveParam() }}
                 style={{ background: 'none', border: 'none', color: 'var(--panel-ink-3)', cursor: 'pointer', minWidth: 44, minHeight: 44 }}>
                 <X size={20} />
               </button>
@@ -1539,7 +1540,7 @@ export default function Inspections() {
             {approveTarget.inspector_signature && (
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-ink-4)', textTransform: 'uppercase', marginBottom: 6 }}>{t('inspections.form.inspectorSignature')}</div>
-                <img src={approveTarget.inspector_signature} alt="Inspector signature"
+                <img src={approveTarget.inspector_signature} alt={t('inspections.page.inspectorSignature')}
                   style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
               </div>
             )}
@@ -1556,17 +1557,17 @@ export default function Inspections() {
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>{t('inspections.approve.approverSignature')}</div>
                 {approveTarget.approver_signature ? (
-                  <img src={approveTarget.approver_signature} alt="Approver signature"
+                  <img src={approveTarget.approver_signature} alt={t('inspections.page.approverSignature')}
                     style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
                 ) : (
                   /* Approved before a signature was required. Stated, never implied. */
-                  <div style={{ fontSize: 12, color: 'var(--panel-ink-3)' }}>No signature was recorded with this approval.</div>
+                  <div style={{ fontSize: 12, color: 'var(--panel-ink-3)' }}>{t('inspections.page.noSignature')}</div>
                 )}
                 <div style={{ fontSize: 11, color: 'var(--panel-ink-3)', marginTop: 6 }}>
                   {approveTarget.approved_at
-                    ? `Signed off on ${formatDate(approveTarget.approved_at)}`
-                    : 'Sign-off date not recorded'}
-                  {approveTarget.approved_by && profile?.id && approveTarget.approved_by === profile.id ? ' by you' : ''}
+                    ? t('inspections.page.approval.signedOn', { date: formatDate(approveTarget.approved_at) })
+                    : t('inspections.page.approval.dateNotRecorded')}
+                  {approveTarget.approved_by && profile?.id && approveTarget.approved_by === profile.id ? ` ${t('inspections.page.approval.byYou')}` : ''}
                 </div>
               </div>
             ) : !canApproveInspection ? (
@@ -1575,16 +1576,14 @@ export default function Inspections() {
                 background: 'var(--panel-2)', border: '1px solid var(--hairline)',
                 fontSize: 12, color: 'var(--panel-ink-3)',
               }}>
-                You can read this inspection, but signing it off is limited to Admin, Manager,
-                Director and Maintenance Supervisor. Ask one of them to sign it, or ask an admin
-                to grant you approve access to Inspections.
+                {t('inspections.page.approval.readOnly')}
               </div>
             ) : (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-ink-4)', textTransform: 'uppercase', marginBottom: 8 }}>{t('inspections.approve.yourSignature')}</div>
               {approverSig ? (
                 <div>
-                  <img src={approverSig} alt="Approver signature"
+                  <img src={approverSig} alt={t('inspections.page.approverSignature')}
                     style={{ maxWidth: 200, border: '1px solid var(--hairline)', borderRadius: 8 }} />
                   {/* WHERE THIS MARK CAME FROM, said out loud. A signature that
                       appeared on its own reads as the app signing for you. */}
@@ -1616,18 +1615,18 @@ export default function Inspections() {
               {/* Read-only, because the server derives the approver from the session.
                   An editable name box here would promise something the write ignores. */}
               <p style={{ fontSize: 11, color: 'var(--panel-ink-4)', marginTop: 8 }}>
-                Signing as <strong style={{ color: 'var(--panel-ink-3)' }}>{profile?.full_name || profile?.username || 'your account'}</strong>.
-                A signature is required to approve. It is stored on the inspection record.
+                {t('inspections.page.approval.signingAs')} <strong style={{ color: 'var(--panel-ink-3)' }}>{profile?.full_name || profile?.username || t('inspections.page.approval.yourAccount')}</strong>.
+                {' '}{t('inspections.page.approval.sigRequired')}
               </p>
               <label style={{ display: 'block', marginTop: 12 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-ink-4)', textTransform: 'uppercase' }}>
-                  Reason (required to return, optional to approve)
+                  {t('inspections.page.approval.reasonLabel')}
                 </span>
                 <textarea
                   value={approveNote}
                   onChange={e => setApproveNote(e.target.value)}
                   rows={2}
-                  placeholder="Why is this being returned, or anything the record should carry"
+                  placeholder={t('inspections.page.returnPlaceholder')}
                   style={{
                     width: '100%', marginTop: 6, padding: '8px 10px', borderRadius: 8,
                     background: 'var(--panel-2)', border: '1px solid var(--hairline)',
@@ -1681,12 +1680,12 @@ export default function Inspections() {
                       load()
                     } catch (err) {
                       if (err?.alreadyDecided) await refreshApproveTarget()
-                      setApproveMsg({ type: 'err', text: toUserMessage(err, 'Could not record the rejection. Nothing was saved.') })
+                      setApproveMsg({ type: 'err', text: toUserMessage(err, t('inspections.page.err.reject')) })
                     }
                     setApproveSubmitting(false)
                   }}
                   disabled={approveSubmitting || !approveNote.trim()}
-                  title={approveNote.trim() ? undefined : 'Give a reason before returning this inspection'}
+                  title={approveNote.trim() ? undefined : t('inspections.page.approval.reasonFirst')}
                   style={{
                     flex: 1, padding: '11px', borderRadius: 10,
                     border: `1.5px solid ${approveNote.trim() ? '#ef4444' : 'var(--hairline)'}`,
@@ -1722,7 +1721,7 @@ export default function Inspections() {
                         .then(() => setPdfRev((n) => n + 1)).catch(() => {})
                     } catch (err) {
                       if (err?.alreadyDecided) await refreshApproveTarget()
-                      setApproveMsg({ type: 'err', text: toUserMessage(err, 'Could not save the approval. The inspection is unchanged.') })
+                      setApproveMsg({ type: 'err', text: toUserMessage(err, t('inspections.page.err.approve')) })
                     }
                     setApproveSubmitting(false)
                   }}
@@ -1798,7 +1797,7 @@ export default function Inspections() {
               </a>
               <button
                 type="button"
-                aria-label="Close PDF preview"
+                aria-label={t('inspections.page.closePdf')}
                 onClick={() => setShowPdfPreview(false)}
                 style={{ background: 'var(--hairline)', border: 'none', borderRadius: 8, color:'var(--panel-ink)', cursor: 'pointer', padding: '6px 10px' }}
               >
@@ -1809,7 +1808,7 @@ export default function Inspections() {
           <iframe
             src={pdfBlobUrl}
             style={{ flex: 1, border: 'none', background: '#fff' }}
-            title="Inspection PDF Preview"
+            title={t('inspections.page.pdfPreview')}
           />
         </div>
       )}
@@ -1827,49 +1826,49 @@ export default function Inspections() {
         const unreadable = !!loadError
         const num = (v) => (unreadable ? null : v)
         const scopeCaption = unreadable
-          ? 'Could not read the inspections, so these figures are not a count.'
+          ? t('inspections.page.scope.unreadable')
           : scopeActive
-            ? `Covers the ${scoped.length} ${scoped.length === 1 ? 'inspection' : 'inspections'} matching your filters, of ${tabFiltered.length} in total.`
+            ? t(scoped.length === 1 ? 'inspections.page.scope.coversOne' : 'inspections.page.scope.coversMany', { count: scoped.length, total: tabFiltered.length })
             : null
         return (
         <>
         {/* Register KPI strip: status and completion over the SAME rows the tiles
             and the table count. N/A while the read has failed, never 0. */}
-        {!showWorkspace && <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-label="Register summary">
-          <RegisterKpi label="Records" value={num(kpis.total)} sub={scopeActive ? 'Matching your filters' : 'In this view'} />
-          <RegisterKpi label="Open" value={num(kpis.open)} sub="Scheduled, in progress or overdue" />
-          <RegisterKpi label="Overdue" value={num(kpis.Overdue)} tone={!unreadable && kpis.Overdue > 0 ? '#b91c1c' : undefined}
-            sub={unreadable || kpis.overdueRate == null ? 'Rate N/A' : `${kpis.overdueRate}% of records`} />
-          <RegisterKpi label="Completed" value={num(kpis.Done)}
-            sub={unreadable || kpis.completionRate == null ? 'Rate N/A' : `${kpis.completionRate}% completion`} />
-          <RegisterKpi label="High or critical" value={num(kpis.highSeverity)} tone={!unreadable && kpis.highSeverity > 0 ? '#b45309' : undefined} sub="By recorded severity" />
-          <RegisterKpi label="Actions raised" value={num(kpis.withAction)} sub="Linked corrective actions" />
+        {!showWorkspace && <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-label={t('inspections.page.registerSummary')}>
+          <RegisterKpi label={t('inspections.page.kpi.records')} value={num(kpis.total)} sub={scopeActive ? t('inspections.page.kpi.matching') : t('inspections.page.kpi.inView')} />
+          <RegisterKpi label={t('inspections.page.kpi.open')} value={num(kpis.open)} sub={t('inspections.page.kpi.openSub')} />
+          <RegisterKpi label={t('inspections.page.kpi.overdue')} value={num(kpis.Overdue)} tone={!unreadable && kpis.Overdue > 0 ? '#b91c1c' : undefined}
+            sub={unreadable || kpis.overdueRate == null ? t('inspections.page.kpi.rateNa') : t('inspections.page.kpi.ofRecords', { pct: kpis.overdueRate })} />
+          <RegisterKpi label={t('inspections.page.kpi.completed')} value={num(kpis.Done)}
+            sub={unreadable || kpis.completionRate == null ? t('inspections.page.kpi.rateNa') : t('inspections.page.kpi.completion', { pct: kpis.completionRate })} />
+          <RegisterKpi label={t('inspections.page.kpi.highCritical')} value={num(kpis.highSeverity)} tone={!unreadable && kpis.highSeverity > 0 ? '#b45309' : undefined} sub={t('inspections.page.kpi.bySeverity')} />
+          <RegisterKpi label={t('inspections.page.kpi.actions')} value={num(kpis.withAction)} sub={t('inspections.page.kpi.actionsSub')} />
         </div>}
         <div className="flex flex-wrap gap-4">
           <OverviewSlide
-            title="Inspections"
+            title={t('inspections.page.slide.inspections')}
             caption={scopeCaption}
             activeFocus={filterFocus}
             onFocus={(k) => setFilter('focus', k)}
             items={[
               // No focus key on these two: "inspections done" IS the unfocused view, and
               // "vehicles inspected" is a distinct count with no row subset behind it.
-              ['Inspections done', num(overview.inspectionsDone)],
-              ['Vehicles inspected', num(overview.vehiclesInspected)],
-              ['Approved', num(overview.approved), false, 'approved'],
-              ['Pending approval', num(overview.pendingApproval), false, 'pending'],
+              [t('inspections.page.slide.done'), num(overview.inspectionsDone)],
+              [t('inspections.page.slide.vehicles'), num(overview.vehiclesInspected)],
+              [t('inspections.page.slide.approved'), num(overview.approved), false, 'approved'],
+              [t('inspections.page.slide.pending'), num(overview.pendingApproval), false, 'pending'],
             ]}
           />
           {flagStatus === 'loading' ? (
             <div className="card flex-1 min-w-[260px]">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Tyre change flags</p>
-              <p className="text-sm text-[var(--text-secondary)]">Checking tyre life...</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">{t('inspections.page.flags.title')}</p>
+              <p className="text-sm text-[var(--text-secondary)]">{t('inspections.page.flags.checking')}</p>
             </div>
           ) : flagStatus === 'error' ? (
             /* "We could not look" - never dressed up as a count of zero. */
             <div className="card flex-1 min-w-[260px]">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Tyre change flags</p>
-              <p className="text-sm text-[var(--text-secondary)]">Could not load tyre life data, so no tyre is flagged here.</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">{t('inspections.page.flags.title')}</p>
+              <p className="text-sm text-[var(--text-secondary)]">{t('inspections.page.flags.loadError')}</p>
               {flagError && <p className="mt-1 text-xs text-[var(--text-dim)]">{flagError}</p>}
               <button
                 type="button"
@@ -1877,15 +1876,15 @@ export default function Inspections() {
                 className="mt-2 px-3 min-h-[40px] py-1.5 rounded-md inline-flex items-center gap-1.5 border border-[var(--border-subtle)] text-xs"
                 style={{ color: 'var(--text-primary)' }}
               >
-                <RefreshCw size={12} aria-hidden /> Retry
+                <RefreshCw size={12} aria-hidden /> {t('inspections.page.flags.retry')}
               </button>
             </div>
           ) : unreadable ? (
             /* The flag feed loaded, but the inspections it is joined to did not, so
                there is no honest set of vehicles to report against. */
             <div className="card flex-1 min-w-[260px]">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Tyre change flags</p>
-              <p className="text-sm text-[var(--text-secondary)]">Could not read the inspections, so no vehicle can be counted here.</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">{t('inspections.page.flags.title')}</p>
+              <p className="text-sm text-[var(--text-secondary)]">{t('inspections.page.flags.unreadable')}</p>
             </div>
           ) : !overview.vehiclesWithTyresDue ? (
             /* We looked, and nothing is flagged HERE. The two reasons for that
@@ -1893,14 +1892,14 @@ export default function Inspections() {
                anywhere in this country, versus none is due on the vehicles
                these inspections cover. */
             <div className="card flex-1 min-w-[260px]">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Tyre change flags</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">{t('inspections.page.flags.title')}</p>
               <p className="text-sm text-[var(--text-secondary)]">
                 {dueAssetCount === 0
-                  ? `No tyre is currently due${activeCountry && activeCountry !== 'All' ? ` in ${activeCountry}` : ''}. Nothing is past its expected life or close to it.`
-                  : `No tyre is due on the vehicles in the ${scopeActive ? 'filtered ' : ''}inspections on screen. ${dueAssetCount} ${dueAssetCount === 1 ? 'vehicle in this country has' : 'vehicles in this country have'} tyres due.`}
+                  ? (activeCountry && activeCountry !== 'All' ? t('inspections.page.flags.noneDueIn', { country: activeCountry }) : t('inspections.page.flags.noneDue'))
+                  : `${t(scopeActive ? 'inspections.page.flags.noneOnScreenFiltered' : 'inspections.page.flags.noneOnScreen')} ${t(dueAssetCount === 1 ? 'inspections.page.flags.countryOne' : 'inspections.page.flags.countryMany', { count: dueAssetCount })}`}
               </p>
               <p className="mt-2 text-xs text-[var(--text-dim)]">
-                Damaged found in these inspections: {overview.damagedFound}
+                {t('inspections.page.flags.damagedFound', { count: overview.damagedFound })}
               </p>
               {dueAssetCount > 0 && (
                 <Link
@@ -1908,14 +1907,14 @@ export default function Inspections() {
                   className="mt-2 inline-flex items-center gap-1 text-xs underline"
                   style={{ color: 'var(--text-primary)' }}
                 >
-                  See those vehicles and whether the tyres were replaced
+                  {t('inspections.page.flags.seeVehicles')}
                   <ExternalLink size={12} />
                 </Link>
               )}
             </div>
           ) : (
             <OverviewSlide
-              title="Tyre change flags"
+              title={t('inspections.page.flags.title')}
               /* These four narrow with the filters, but not in the same UNIT as the
                  filters: they count tyres on the VEHICLES the filtered inspections
                  cover. A tyre is flagged by its life today, so the date range picks
@@ -1929,15 +1928,15 @@ export default function Inspections() {
                  sheets in range - and it counts distinct tyres, not how many times
                  damage was written down, so it is in the same unit as the rest. */
               caption={scopeActive
-                ? `Covers the ${overview.vehiclesInspected} ${overview.vehiclesInspected === 1 ? 'vehicle' : 'vehicles'} in the filtered inspections. Due and past-life read the tyre's life today; damaged is what these inspections recorded. Both count distinct tyres.`
-                : "Covers the vehicles in these inspections. Due and past-life read the tyre's life today; damaged is what these inspections recorded. Both count distinct tyres."}
+                ? t(overview.vehiclesInspected === 1 ? 'inspections.page.flags.captionOne' : 'inspections.page.flags.captionMany', { count: overview.vehiclesInspected })
+                : t('inspections.page.flags.caption')}
               activeFocus={filterFocus}
               onFocus={(k) => setFilter('focus', k)}
               items={[
-                ['Vehicles with tyres due', overview.vehiclesWithTyresDue, true, 'tyres_due'],
-                ['Tyres past life', overview.tyresOverdue, true, 'overdue'],
-                ['Tyres due soon', overview.tyresDueSoon, true, 'due_soon'],
-                ['Damaged found', overview.damagedFound, true, 'damaged'],
+                [t('inspections.page.flags.vehiclesDue'), overview.vehiclesWithTyresDue, true, 'tyres_due'],
+                [t('inspections.page.flags.pastLife'), overview.tyresOverdue, true, 'overdue'],
+                [t('inspections.page.flags.dueSoon'), overview.tyresDueSoon, true, 'due_soon'],
+                [t('inspections.page.flags.damaged'), overview.damagedFound, true, 'damaged'],
               ]}
               /* A count you cannot act on is just a number. This opens the
                  tracked list: which tyre, on which vehicle, and whether the
@@ -1948,7 +1947,7 @@ export default function Inspections() {
                   className="inline-flex items-center gap-1 text-xs underline"
                   style={{ color: 'var(--text-primary)' }}
                 >
-                  See the flagged tyres and whether they were replaced
+                  {t('inspections.page.flags.seeFlagged')}
                   <ExternalLink size={12} />
                 </Link>
               )}
@@ -1960,7 +1959,7 @@ export default function Inspections() {
             className="self-start min-h-[44px] px-3 py-2 rounded-lg border border-[var(--border-subtle)] text-xs font-medium flex items-center gap-1.5"
             style={{ color: 'var(--text-primary)', background: 'var(--surface-2)' }}
           >
-            <Share2 size={13} aria-hidden /> Share summary
+            <Share2 size={13} aria-hidden /> {t('inspections.page.shareSummary')}
           </button>
         </div>
         </>
@@ -2013,7 +2012,7 @@ export default function Inspections() {
           />
         )}
       />
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t('inspections.page.filterByStatus')}>
         {[['all', t('inspections.filters.status.all'), 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-bright)]'],
           ['Overdue', t('inspections.filters.status.overdue'), 'bg-red-900/30 text-red-400 border-red-700/50'],
           ['Scheduled', t('inspections.filters.status.scheduled'), 'bg-blue-900/30 text-blue-400 border-blue-700/50'],
@@ -2049,7 +2048,7 @@ export default function Inspections() {
         return (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <input aria-label="Search inspections" className="input flex-1 min-w-48" placeholder={t('inspections.filters.searchPlaceholder')}
+              <input aria-label={t('inspections.page.searchAria')} className="input flex-1 min-w-48" placeholder={t('inspections.filters.searchPlaceholder')}
                 value={search} onChange={e => setFilter('search', e.target.value)} />
               <button
                 type="button"
@@ -2061,9 +2060,9 @@ export default function Inspections() {
                     ? 'bg-[var(--input-bg)] text-[var(--text-primary)] border-[var(--input-border)]'
                     : 'bg-[var(--input-bg)] text-[var(--text-muted)] border-[var(--input-border)] hover:text-[var(--text-primary)]'
                 }`}
-                title="Show or hide the advanced filters"
+                title={t('inspections.page.filtersToggle')}
               >
-                Filters{advanced > 0 ? ` (${advanced})` : ''}
+                {advanced > 0 ? t('inspections.page.filtersCount', { count: advanced }) : t('inspections.page.filters')}
                 <ChevronDown size={13} aria-hidden className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
               </button>
               {anyActive && (
@@ -2077,11 +2076,11 @@ export default function Inspections() {
                   type="button"
                   className="text-xs min-h-[40px] text-[var(--text-muted)] hover:text-[var(--text-primary)] px-2 flex items-center gap-1"
                 >
-                  <X size={12} aria-hidden /> Clear
+                  <X size={12} aria-hidden /> {t('inspections.page.clear')}
                 </button>
               )}
               <span className="text-xs text-[var(--text-muted)] ml-auto self-center whitespace-nowrap">
-                {filtered.length}{filtered.length !== tabFiltered.length ? ` of ${tabFiltered.length}` : ''} shown
+                {filtered.length !== tabFiltered.length ? t('inspections.page.shownOf', { count: filtered.length, total: tabFiltered.length }) : t('inspections.page.shown', { count: filtered.length })}
               </span>
             </div>
 
@@ -2096,12 +2095,12 @@ export default function Inspections() {
                 role="status"
               >
                 <span style={{ color: 'var(--text-primary)' }}>
-                  Showing <strong>{focusInfo.rows}</strong> {focusInfo.rows === 1 ? 'inspection' : 'inspections'}
+                  {t('inspections.page.focus.showing')} <strong>{focusInfo.rows}</strong> {t(focusInfo.rows === 1 ? 'inspections.page.focus.inspection' : 'inspections.page.focus.inspections')}
                   {focusInfo.units != null && (
-                    <> covering <strong>{focusInfo.units}</strong>{' '}
+                    <> {t('inspections.page.focus.covering')} <strong>{focusInfo.units}</strong>{' '}
                       {focusInfo.measures === 'vehicles'
-                        ? (focusInfo.units === 1 ? 'vehicle' : 'vehicles')
-                        : (focusInfo.units === 1 ? 'tyre' : 'tyres')}</>
+                        ? t(focusInfo.units === 1 ? 'inspections.page.focus.vehicle' : 'inspections.page.focus.vehicles')
+                        : t(focusInfo.units === 1 ? 'inspections.page.focus.tyre' : 'inspections.page.focus.tyres')}</>
                   )}
                   {' '}&middot; {focusInfo.label}
                 </span>
@@ -2111,7 +2110,7 @@ export default function Inspections() {
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-md border"
                   style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-primary)' }}
                 >
-                  <X size={12} /> Show all inspections
+                  <X size={12} /> {t('inspections.page.focus.showAll')}
                 </button>
               </div>
             )}
@@ -2127,14 +2126,14 @@ export default function Inspections() {
                     be read and remembered separately. */}
                 {regions.length > 0 && (
                   <MultiSelectFilter
-                    className="w-44" label="Region" allLabel="All regions"
+                    className="w-44" label={t('inspections.page.region')} allLabel={t('inspections.page.allRegions')}
                     options={regions}
                     value={toList(filterRegion)}
                     onChange={(next) => setFilter('region', fromList(next))}
                   />
                 )}
                 <MultiSelectFilter
-                  className="w-48" label="Site" allLabel={t('inspections.filters.allSites')}
+                  className="w-48" label={t('inspections.page.site')} allLabel={t('inspections.filters.allSites')}
                   options={sites}
                   value={toList(filterSite)}
                   onChange={(next) => setFilter('site', fromList(next))}
@@ -2144,7 +2143,7 @@ export default function Inspections() {
                     single choice is not a filter. */}
                 {vehicleTypes.length > 1 && (
                   <MultiSelectFilter
-                    className="w-48" label="Vehicle type" allLabel="All vehicle types"
+                    className="w-48" label={t('inspections.page.vehicleType')} allLabel={t('inspections.page.allVehicleTypes')}
                     options={vehicleTypes}
                     value={toList(filterVehicleType)}
                     onChange={(next) => setFilter('vehicleType', fromList(next))}
@@ -2152,7 +2151,7 @@ export default function Inspections() {
                 )}
                 {inspectors.length > 0 && (
                   <MultiSelectFilter
-                    className="w-48" label="Inspector" allLabel="All inspectors"
+                    className="w-48" label={t('inspections.page.inspector')} allLabel={t('inspections.page.allInspectors')}
                     options={inspectors}
                     value={toList(filterInspector)}
                     onChange={(next) => setFilter('inspector', fromList(next))}
@@ -2166,8 +2165,8 @@ export default function Inspections() {
                 >
                   {SIGNOFF_FILTERS.map(o => <option key={o.key} value={o.key}>{t(o.labelKey)}</option>)}
                 </select>
-                <DateField className="text-sm w-40" value={filterFrom} onChange={v => setFilter('from', v)} placeholder="From date" ariaLabel="From date" />
-                <DateField className="text-sm w-40" value={filterTo} onChange={v => setFilter('to', v)} placeholder="To date" ariaLabel="To date" min={filterFrom || undefined} />
+                <DateField className="text-sm w-40" value={filterFrom} onChange={v => setFilter('from', v)} placeholder={t('inspections.page.fromDate')} ariaLabel={t('inspections.page.fromDate')} />
+                <DateField className="text-sm w-40" value={filterTo} onChange={v => setFilter('to', v)} placeholder={t('inspections.page.toDate')} ariaLabel={t('inspections.page.toDate')} min={filterFrom || undefined} />
               </div>
             )}
           </div>
@@ -2177,26 +2176,26 @@ export default function Inspections() {
       {/* Bulk selection bar (Admin only) */}
       {selectedIds.size > 0 && (
         <div role="status" className="flex flex-wrap items-center justify-between gap-3 border rounded-xl px-4 py-2.5" style={{ borderColor: 'rgba(37,99,235,0.4)', background: 'rgba(37,99,235,0.08)' }}>
-          <span className="text-sm text-[var(--text-primary)]">{selectedIds.size} selected</span>
+          <span className="text-sm text-[var(--text-primary)]">{t('inspections.page.bulk.selected', { count: selectedIds.size })}</span>
           <div className="flex items-center gap-2">
             {!allPageSelected && (
               <button type="button" onClick={toggleSelectPage} className="text-xs min-h-[36px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1 underline">
-                Select all {filtered.length} filtered
+                {t('inspections.page.bulk.selectAll', { count: filtered.length })}
               </button>
             )}
-            <button type="button" onClick={() => setSelectedIds(new Set())} className="text-xs min-h-[36px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1">Clear</button>
+            <button type="button" onClick={() => setSelectedIds(new Set())} className="text-xs min-h-[36px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1">{t('inspections.page.clear')}</button>
             <button type="button" onClick={downloadSelectedPdfs} disabled={selectedIds.size > bulkPdfLimit}
-              title={selectedIds.size > bulkPdfLimit ? `Select up to ${bulkPdfLimit} records for one download` : 'Download the report of every selected record as one ZIP file'}
+              title={selectedIds.size > bulkPdfLimit ? t('inspections.page.bulk.limitHint', { limit: bulkPdfLimit }) : t('inspections.page.bulk.zipHint')}
               className="btn-secondary flex items-center gap-1.5 px-3 min-h-[36px] py-1.5 text-sm font-medium disabled:opacity-50">
-              <FileArchive size={14} aria-hidden /> Download {selectedIds.size} PDFs
+              <FileArchive size={14} aria-hidden /> {t('inspections.page.bulk.downloadPdfs', { count: selectedIds.size })}
             </button>
             {selectedIds.size > bulkPdfLimit && (
-              <span className="text-xs" style={{ color: '#b45309' }}>Up to {bulkPdfLimit} per download</span>
+              <span className="text-xs" style={{ color: '#b45309' }}>{t('inspections.page.bulk.upTo', { limit: bulkPdfLimit })}</span>
             )}
             {isAdmin && (
               <button type="button" onClick={() => { setBulkError(''); setBulkDeleteOpen(true) }}
                 className="flex items-center gap-1.5 px-3 min-h-[36px] py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors">
-                <Trash2 size={14} /> Delete {selectedIds.size}
+                <Trash2 size={14} /> {t('inspections.page.bulk.delete', { count: selectedIds.size })}
               </button>
             )}
           </div>
@@ -2213,7 +2212,7 @@ export default function Inspections() {
           columns={registerColumns}
           data={filtered}
           getRowId={(r) => String(r.id)}
-          error={loadError ? toUserMessage(loadError, 'Could not load the inspections.') : null}
+          error={loadError ? toUserMessage(loadError, t('inspections.page.err.load')) : null}
           onRetry={load}
           enableGlobalFilter={false}
           enableColumnFilters={false}
@@ -2226,11 +2225,11 @@ export default function Inspections() {
           initialPageSize={50}
           stickyFirstColumn
           emptyMessage={scopeActive || (filterFocus && filterFocus !== 'all')
-            ? 'No records match these filters. Clear the filters to see every record.'
+            ? t('inspections.page.empty.filtered')
             : activeTab === 'observations'
-              ? 'No site observation has been recorded yet. Findings recorded on inspections are listed in the Observations module above.'
+              ? t('inspections.page.empty.observations')
               : activeTab === 'training'
-                ? 'No training record has been added yet.'
+                ? t('inspections.page.empty.training')
                 : t('inspections.states.noRecords')}
         />
       </div>
@@ -2293,20 +2292,20 @@ export default function Inspections() {
           size="sm"
           onClose={() => { if (!bulkBusy) { setBulkDeleteOpen(false); setBulkError('') } }}
           closeOnBackdrop={!bulkBusy}
-          title={`Delete ${selectedIds.size} record${selectedIds.size !== 1 ? 's' : ''}?`}
+          title={selectedIds.size === 1 ? t('inspections.page.bulk.deleteTitleOne') : t('inspections.page.bulk.deleteTitleMany', { count: selectedIds.size })}
           footer={(
             <div className="flex gap-3 w-full">
-              <button type="button" onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary flex-1 min-h-[44px]">Cancel</button>
+              <button type="button" onClick={() => { setBulkDeleteOpen(false); setBulkError('') }} disabled={bulkBusy} className="btn-secondary flex-1 min-h-[44px]">{t('inspections.page.cancel')}</button>
               <button type="button" onClick={confirmBulkDelete} disabled={bulkBusy}
                 className="flex-1 min-h-[44px] flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50">
-                <Trash2 size={14} aria-hidden /> {bulkBusy ? 'Deleting...' : `Delete ${selectedIds.size}`}
+                <Trash2 size={14} aria-hidden /> {bulkBusy ? t('inspections.page.bulk.deleting') : t('inspections.page.bulk.delete', { count: selectedIds.size })}
               </button>
             </div>
           )}
         >
           <div className="flex gap-3">
             <AlertTriangle size={20} className="text-red-500 shrink-0 mt-0.5" aria-hidden />
-            <p className="text-[var(--text-secondary)] text-sm">This permanently removes the selected inspection records. This cannot be undone.</p>
+            <p className="text-[var(--text-secondary)] text-sm">{t('inspections.page.bulk.deleteWarning')}</p>
           </div>
           {bulkError && (
             <p role="alert" className="text-sm mt-4 rounded-lg p-2.5 border" style={{ background: 'rgba(220,38,38,0.08)', borderColor: 'rgba(220,38,38,0.4)', color: '#dc2626' }}>{bulkError}</p>

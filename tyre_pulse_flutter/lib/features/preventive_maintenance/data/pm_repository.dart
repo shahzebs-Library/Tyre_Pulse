@@ -3,6 +3,7 @@ library;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/core/workspace/company_scope.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart'
     show PagedRows, fetchAllPages;
 import 'package:tyre_pulse/features/preventive_maintenance/domain/pm_plan.dart';
@@ -14,21 +15,29 @@ abstract interface class PmRepository {
 }
 
 final class SupabasePmRepository with SupabaseGateway implements PmRepository {
-  SupabasePmRepository(this._client);
+  SupabasePmRepository(this._client, {String? companyId})
+      : _companyId = companyId;
 
   final SupabaseClient _client;
+
+  /// The caller's active company (company_scope): the plan list matches the
+  /// Home "maintenance overdue" count, which is pinned the same way.
+  final String? _companyId;
 
   @override
   Future<List<PmPlan>> listActive({String? country}) {
     return guard<List<PmPlan>>(() async {
-      var query = _client
-          .from(SupabaseTables.pmPrograms)
-          .select(
-            'id,name,asset_no,asset_category,site,status,interval_type,'
-            'interval_value,meter_source,meter_interval,next_due,'
-            'next_due_meter,priority,estimated_cost',
-          )
-          .eq('status', 'active');
+      var query = pinCompany(
+        _client
+            .from(SupabaseTables.pmPrograms)
+            .select(
+              'id,name,asset_no,asset_category,site,status,interval_type,'
+              'interval_value,meter_source,meter_interval,next_due,'
+              'next_due_meter,priority,estimated_cost',
+            )
+            .eq('status', 'active'),
+        _companyId,
+      );
       final String scope = country?.trim() ?? '';
       if (scope.isNotEmpty && scope != 'All') {
         query = query.or('country.eq.$scope,country.is.null');

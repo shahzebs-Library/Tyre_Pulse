@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_theme.dart';
-import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
@@ -13,6 +12,12 @@ import 'package:tyre_pulse/features/washing/presentation/washing_screen.dart';
 import 'package:tyre_pulse/features/washing/washing_providers.dart';
 
 final class _WashRepository implements WashRepository {
+  final List<String> verified = <String>[];
+
+  @override
+  Future<void> verifyWash(String washId, {String? note}) async =>
+      verified.add(washId);
+
   @override
   Future<String?> currentUserDisplayName(String userId) async => null;
 
@@ -54,16 +59,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Log vehicle wash'), findsOneWidget);
-    final Finder saveButton = find.byWidgetPredicate(
-      (Widget widget) => widget is TpButton && widget.label == 'Save Wash',
-    );
-    await tester.scrollUntilVisible(
-      saveButton,
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(saveButton);
+    // The save button is pinned at the bottom; it names what is missing
+    // but still reports an unavailable workspace first.
+    await tester.tap(find.byKey(WashingScreenKeys.save));
     await tester.pump();
 
     expect(

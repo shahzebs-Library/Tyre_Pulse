@@ -58,6 +58,7 @@ String adminModuleLabel(AppLocalizations l10n, ModuleKey key) => switch (key) {
       ModuleKey.admin => l10n.adminModuleAdmin,
       ModuleKey.users => l10n.adminModuleUsers,
       ModuleKey.handover => l10n.handoverNavTitle,
+      ModuleKey.devices => l10n.devicesTitle,
     };
 
 String adminGroupLabel(AppLocalizations l10n, ModuleGroup group) =>

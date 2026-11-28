@@ -139,14 +139,18 @@ QueuedMediaAttachment _photoWithBucket(String fileName) {
   );
 }
 
-SupabaseFailure _uniqueViolationFailure() {
-  return const SupabaseFailure(
-    error: AppError(
+SupabaseFailure _uniqueViolationFailure({
+  String rawMessage = 'duplicate key value violates unique constraint '
+      '"ux_work_orders_client_uuid"',
+}) {
+  return SupabaseFailure(
+    error: const AppError(
       kind: AppErrorKind.conflict,
       message: 'This has already been saved.',
     ),
     cause: SupabaseFailureCause.uniqueViolation,
     code: '23505',
+    rawMessage: rawMessage,
   );
 }
 
@@ -342,6 +346,144 @@ void main() {
     });
   });
 
+  group('a 23505 that is NOT the idempotency key', () {
+    test(
+        'a trigger guard raising 23505 on a RETRY is a real refusal and is '
+        'never deleted as synced', () async {
+      await seedCommand(
+        db,
+        id: 'cmd-1',
+        commandType: 'TYRE_CHANGE',
+        entityType: 'tyre_records',
+        idempotencyKey: 'idem-cmd-1',
+        payloadJson: jsonEncode(<String, Object?>{
+          'asset_no': 'TM514',
+          'position': 'LHF1',
+        }),
+      );
+      await db.queueDao.markAttemptFailed(
+        'cmd-1',
+        now: testNow,
+        message: 'The server could not be reached.',
+      );
+
+      final _FakeCommandPusher pusher = _FakeCommandPusher()
+        ..willThrowFor(
+          'idem-cmd-1',
+          _uniqueViolationFailure(
+            rawMessage:
+                'Position LHF1 on asset TM514 already has an active tyre',
+          ),
+        );
+      final SyncEngine engine = buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      );
+
+      final SyncRunSummary summary = await engine.runOnce(
+        workspaceId: workspaceA,
+        now: testNow.add(const Duration(minutes: 1)),
+      );
+
+      expect(summary.synced, 0);
+      expect(summary.conflicted, 1);
+      final PendingCommand? stored = await db.queueDao.commandById('cmd-1');
+      expect(
+        stored,
+        isNotNull,
+        reason: 'work the server refused must stay visible in the queue',
+      );
+      expect(stored!.lastError, isNotNull);
+    });
+
+    test('a unique business key on a RETRY is not read as a replay', () async {
+      await seedCommand(
+        db,
+        id: 'cmd-1',
+        commandType: 'WORK_ORDER',
+        entityType: 'work_orders',
+        idempotencyKey: 'idem-cmd-1',
+        payloadJson: jsonEncode(<String, Object?>{'work_order_no': 'WO-1'}),
+      );
+      await db.queueDao.markAttemptFailed(
+        'cmd-1',
+        now: testNow,
+        message: 'The server could not be reached.',
+      );
+
+      final _FakeCommandPusher pusher = _FakeCommandPusher()
+        ..willThrowFor(
+          'idem-cmd-1',
+          _uniqueViolationFailure(
+            rawMessage: 'duplicate key value violates unique constraint '
+                '"work_orders_work_order_no_key"',
+          ),
+        );
+      final SyncRunSummary summary = await buildEngine(
+        pusher: pusher,
+        uploader: _FakeMediaUploader(),
+      ).runOnce(
+        workspaceId: workspaceA,
+        now: testNow.add(const Duration(minutes: 1)),
+      );
+
+      expect(summary.synced, 0);
+      expect(await db.queueDao.commandById('cmd-1'), isNotNull);
+    });
+
+    test('isClientUuidReplay recognises every live client_uuid index name', () {
+      for (final String name in <String>[
+        'ux_tyre_records_client_uuid',
+        'tech_activity_events_client_uuid_uidx',
+        'wo_cost_entries_client_uidx',
+        'accidents_client_uuid_key',
+      ]) {
+        expect(
+          isClientUuidReplay(
+            _uniqueViolationFailure(
+              rawMessage:
+                  'duplicate key value violates unique constraint "$name"',
+            ),
+          ),
+          isTrue,
+          reason: name,
+        );
+      }
+      expect(isClientUuidReplay(_networkFailure()), isFalse);
+    });
+  });
+
+  group('generated columns', () {
+    test(
+        'a generated column is stripped before the push, even when an old '
+        'queued row still carries it', () async {
+      await seedCommand(
+        db,
+        id: 'cmd-1',
+        commandType: 'TYRE_CHANGE',
+        entityType: 'tyre_records',
+        idempotencyKey: 'idem-cmd-1',
+        payloadJson: jsonEncode(<String, Object?>{
+          'asset_no': 'TM514',
+          'position': 'LHF1',
+          'issue_date': '2026-11-27',
+          'fitment_date': '2026-11-27',
+        }),
+      );
+      final _FakeCommandPusher pusher = _FakeCommandPusher()
+        ..willReturnFor('idem-cmd-1', <Map<String, Object?>>[
+          <String, Object?>{'id': 'row-1'},
+        ]);
+      await buildEngine(pusher: pusher, uploader: _FakeMediaUploader())
+          .runOnce(workspaceId: workspaceA, now: testNow);
+
+      expect(pusher.calls, hasLength(1));
+      final Map<String, Object?> sent = pusher.calls.single.payload;
+      expect(sent.containsKey('fitment_date'), isFalse);
+      expect(sent['issue_date'], '2026-11-27');
+    });
+  });
+
   group('optimistic status match', () {
     test(
         'an update whose optimistic status match returns no rows is a '
@@ -471,17 +613,10 @@ void main() {
       expect(summary.mediaPending, 1);
       expect(summary.synced, 0);
       expect(summary.failed, 0);
-      // A photo that fails EVERY attempt is retried within this SAME pass,
-      // not just once: `_drainMediaUploads` loops in rounds bounded by
-      // `uploadConcurrency`, and `MediaDao.markUploadAttemptFailed` resets
-      // the row back to `queued` (attempts+1) until `maxUploadAttempts` is
-      // reached, so it is re-claimed by the next round rather than waiting
-      // for a later sync pass. `_maxMediaClaimRounds`'s own doc comment on
-      // `SyncEngine` derives its worst-case bound as exactly
-      // `(queued rows) * maxUploadAttempts` for this reason. One row that
-      // always fails therefore accounts for `maxUploadAttempts` (3) failed
-      // attempts in a single `runOnce` call.
-      expect(summary.photosFailed, maxUploadAttempts);
+      // One try per photo per pass: a failed photo goes back to `queued`
+      // and waits for the next sync instead of spending its whole attempt
+      // budget in this one pass (offline included).
+      expect(summary.photosFailed, 1);
 
       final PendingCommand? stored = await db.queueDao.commandById('cmd-1');
       expect(stored!.status, CommandStatus.pending);
@@ -526,10 +661,8 @@ void main() {
       );
 
       expect(summary.photosUploaded, 1);
-      // See the sibling test above for why one permanently-failing photo
-      // accounts for `maxUploadAttempts` failed attempts within this same
-      // pass, not just one.
-      expect(summary.photosFailed, maxUploadAttempts);
+      // One try per photo per pass (see the sibling test above).
+      expect(summary.photosFailed, 1);
       expect(
         summary.synced,
         1,
@@ -560,19 +693,10 @@ void main() {
 
       final PendingMediaUpload blockedMedia =
           (await db.mediaDao.mediaForCommand('cmd-blocked')).single;
-      // A permanently-failing upload is retried within this SAME pass
-      // (see the comment on the previous test), so by the time
-      // `_drainMediaUploads` stops finding claimable rows it has already
-      // spent all `maxUploadAttempts` on this one - it is exhausted, not
-      // merely queued for a later pass.
-      expect(blockedMedia.attempts, maxUploadAttempts);
-      expect(
-        blockedMedia.state,
-        MediaUploadState.failed,
-        reason: 'maxUploadAttempts was reached within this pass, so the '
-            'row is reported rather than retried into another crash loop '
-            '- see MediaDao.claimNextUploads\' own doc comment',
-      );
+      // A transient (network) failure never spends the attempt budget: the
+      // photo is queued for the next sync with a backoff instead.
+      expect(blockedMedia.attempts, 0);
+      expect(blockedMedia.state, MediaUploadState.queued);
     });
 
     test(

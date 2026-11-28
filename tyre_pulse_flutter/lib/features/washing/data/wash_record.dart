@@ -52,6 +52,12 @@ final class WashRecord {
     this.entryUsername,
     this.washDetails,
     this.capturedAt,
+    this.verificationStatus,
+    this.verifiedBy,
+    this.verifiedAt,
+    this.verificationNote,
+    this.verifiedByName,
+    this.nextWashDueDate,
   });
 
   /// Throws a [FormatException] when the row has no usable `id`, mirroring
@@ -80,6 +86,12 @@ final class WashRecord {
       entryName: _stringOrNull(row['entry_name']),
       entryUsername: _stringOrNull(row['entry_username']),
       capturedAt: _stringOrNull(row['captured_at']),
+      verificationStatus: _stringOrNull(row['verification_status']),
+      verifiedBy: _stringOrNull(row['verified_by']),
+      verifiedAt: _stringOrNull(row['verified_at']),
+      verificationNote: _stringOrNull(row['verification_note']),
+      verifiedByName: _stringOrNull(row['verified_by_name']),
+      nextWashDueDate: _stringOrNull(row['next_wash_due']),
       washDetails: row['wash_details'] is Map<String, dynamic>
           ? row['wash_details'] as Map<String, dynamic>
           : null,
@@ -113,6 +125,64 @@ final class WashRecord {
   final String? entryUsername;
   final String? capturedAt;
   final Map<String, dynamic>? washDetails;
+
+  /// `pending`, `verified` or `not_required` (a supervisor's own entry).
+  /// Null when the database predates supervisor verification.
+  final String? verificationStatus;
+  final String? verifiedBy;
+  final String? verifiedAt;
+  final String? verificationNote;
+
+  /// Display name of [verifiedBy], filled by the repository.
+  final String? verifiedByName;
+
+  /// The stored `next_wash_due` column (wash date plus 7 days).
+  final String? nextWashDueDate;
+
+  /// When this vehicle is next due a wash: the stored column, else the wash
+  /// date plus [kWashIntervalDays] computed here, so it shows even before the
+  /// column exists.
+  String? get nextWashDue {
+    if (nextWashDueDate != null) return nextWashDueDate;
+    final String? d = washDate;
+    if (d == null || d.length < 10) return null;
+    final DateTime? parsed =
+        DateTime.tryParse('${d.substring(0, 10)}T00:00:00Z');
+    if (parsed == null) return null;
+    final DateTime due = parsed.add(const Duration(days: 7));
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${due.year}-${two(due.month)}-${two(due.day)}';
+  }
+
+  bool get isPendingVerification => verificationStatus == 'pending';
+
+  WashRecord copyWith({String? verifiedByName}) => WashRecord(
+        id: id,
+        assetNo: assetNo,
+        vehicleType: vehicleType,
+        washDate: washDate,
+        washTime: washTime,
+        washType: washType,
+        site: site,
+        bay: bay,
+        washedBy: washedBy,
+        odometerKm: odometerKm,
+        status: status,
+        notes: notes,
+        photos: photos,
+        createdAt: createdAt,
+        createdBy: createdBy,
+        entryName: entryName,
+        entryUsername: entryUsername,
+        washDetails: washDetails,
+        capturedAt: capturedAt,
+        verificationStatus: verificationStatus,
+        verifiedBy: verifiedBy,
+        verifiedAt: verifiedAt,
+        verificationNote: verificationNote,
+        verifiedByName: verifiedByName ?? this.verifiedByName,
+        nextWashDueDate: nextWashDueDate,
+      );
 
   @override
   String toString() =>

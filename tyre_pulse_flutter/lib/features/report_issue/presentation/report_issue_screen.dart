@@ -10,7 +10,12 @@ import 'package:tyre_pulse/app/router/back_navigation.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
+import 'package:tyre_pulse/core/database/app_database.dart';
+import 'package:tyre_pulse/core/database/database_constants.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/permissions/module_registry.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/report_issue/data/report_issue_draft_store.dart';
@@ -45,6 +50,10 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
   bool _savingDraft = false;
   bool _restoringDraft = false;
   bool _saving = false;
+
+  /// Set once an issue is queued, so the screen can follow that command and
+  /// say plainly if the server refuses it.
+  DateTime? _submittedAt;
 
   @override
   void initState() {
@@ -122,6 +131,14 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
+                if (_submittedAt != null) ...<Widget>[
+                  _SubmittedSyncStatus(
+                    since: _submittedAt!,
+                    userId: ref.read(workspaceContextProvider)?.userId ?? '',
+                    copy: copy,
+                  ),
+                  const SizedBox(height: TpSpace.lg),
+                ],
                 AnimatedBuilder(
                   animation: Listenable.merge(<Listenable>[_asset, _site]),
                   builder: (BuildContext context, Widget? child) {
@@ -259,7 +276,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
                 SwitchListTile.adaptive(
                   key: const Key('reportIssue.createWorkOrder'),
                   contentPadding: EdgeInsets.zero,
-                  title: Text(copy('createWorkOrder')),
+                  title: Text(copy('requestWorkOrder')),
                   value: _requestWorkOrder,
                   onChanged: (bool value) =>
                       _change(() => _requestWorkOrder = value),
@@ -333,6 +350,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
       return;
     }
     setState(() => _saving = true);
+    final DateTime submittedAt = DateTime.now();
     try {
       await ref.read(tyreDefectReportRepositoryProvider).submitDefectReport(
             workspace: workspace,
@@ -345,7 +363,9 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
               priority: _priority,
               rootCause: _category,
               country: workspace.activeCountry,
-              assignedTo: workspace.fullName,
+              // Not the reporter: a driver reporting a fault is not the one who
+              // fixes it. Triage assigns the action.
+              assignedTo: null,
               dueDate: null,
               photoLocalPaths: List<String>.unmodifiable(_photos),
             ),
@@ -360,23 +380,41 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
         }
       }
       if (!mounted) return;
-      setState(() => _saving = false);
+      setState(() {
+        _saving = false;
+        _submittedAt = submittedAt;
+      });
+      // A driver has no My Work; sending them there is an access refusal.
+      bool canSeeTasks;
+      try {
+        canSeeTasks = ref.read(canAccessModuleProvider(ModuleKey.tasks));
+      } on Object {
+        // Access not resolvable: Home is always reachable, My Work may not be.
+        canSeeTasks = false;
+      }
       await showDialog<void>(
         context: context,
         builder: (BuildContext dialogContext) => AlertDialog(
           title: Text(copy('savedTitle')),
-          content: Text(copy('savedBody')),
+          content: Text(
+            canSeeTasks ? copy('savedBody') : copy('savedBodyNoTasks'),
+          ),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: Text(copy('stay')),
             ),
             FilledButton(
+              key: const Key('reportIssue.afterSave'),
               onPressed: () {
                 Navigator.pop(dialogContext);
-                context.go(const TasksRoute().location);
+                context.go(
+                  canSeeTasks
+                      ? const TasksRoute().location
+                      : const HomeRoute().location,
+                );
               },
-              child: Text(copy('viewTasks')),
+              child: Text(canSeeTasks ? copy('viewTasks') : copy('backHome')),
             ),
           ],
         ),
@@ -394,7 +432,7 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
       '${copy('operation')}: ${copy(_operation)}',
       if (_operation == 'restricted' && _restriction.text.trim().isNotEmpty)
         '${copy('restriction')}: ${_restriction.text.trim()}',
-      if (_requestWorkOrder) copy('createWorkOrder'),
+      if (_requestWorkOrder) copy('requestWorkOrder'),
     ].where((String value) => value.isNotEmpty).toList(growable: false);
     return lines.join('\n');
   }
@@ -511,6 +549,87 @@ class _ReportIssueScreenState extends ConsumerState<ReportIssueScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(value)));
+  }
+}
+
+/// Follows the issue just submitted through the offline queue: waiting,
+/// sent, or refused (with the server's own safe sentence). A refusal must
+/// never look like "saved".
+class _SubmittedSyncStatus extends ConsumerWidget {
+  const _SubmittedSyncStatus({
+    required this.since,
+    required this.userId,
+    required this.copy,
+  });
+
+  final DateTime since;
+  final String userId;
+  final ReportIssueCopy copy;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final List<PendingCommand>? rows =
+        ref.watch(reportIssueQueueProvider).value;
+    if (rows == null) return const SizedBox.shrink();
+    final String wire = CommandType.reportIssue.wireName;
+    final DateTime from = since.subtract(const Duration(seconds: 5));
+    PendingCommand? mine;
+    for (final PendingCommand c in rows) {
+      if (c.commandType == wire &&
+          c.createdBy == userId &&
+          !c.createdAt.isBefore(from)) {
+        mine = c;
+        break; // newest first
+      }
+    }
+    final PendingCommand? command = mine;
+    if (command == null) return const SizedBox.shrink();
+    final bool synced = command.status == CommandStatus.synced;
+    final bool refused = !synced &&
+        (command.status == CommandStatus.failed ||
+            (command.lastError?.trim().isNotEmpty ?? false));
+    final String headline = synced
+        ? copy('syncSent')
+        : (refused ? copy('syncFailed') : copy('syncWaiting'));
+    final TextTheme text = Theme.of(context).textTheme;
+    final TpPalette palette = TpPalette.of(context);
+    final Color color = synced
+        ? palette.ok.base
+        : (refused ? palette.critical.base : palette.textSecondary);
+    final IconData icon = synced
+        ? Icons.cloud_done_outlined
+        : (refused ? Icons.error_outline : Icons.cloud_upload_outlined);
+    return TpCard(
+      key: const Key('reportIssue.syncStatus'),
+      borderColor: refused ? palette.critical.base : null,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, color: color),
+          const SizedBox(width: TpSpace.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  headline,
+                  style: text.titleSmall?.copyWith(color: color),
+                ),
+                if (refused) ...<Widget>[
+                  if (command.lastError?.trim().isNotEmpty ??
+                      false) ...<Widget>[
+                    const SizedBox(height: TpSpace.xs),
+                    Text(command.lastError!.trim(), style: text.bodyMedium),
+                  ],
+                  const SizedBox(height: TpSpace.xs),
+                  Text(copy('syncFailedHint'), style: text.bodySmall),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

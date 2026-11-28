@@ -148,8 +148,10 @@ void main() {
   });
 
   testWidgets(
-      'P1-11 the fitted serial is a hint, never a value the reading does not '
-      'carry', (WidgetTester tester) async {
+      'P1-11 the fitted serial is pre-filled and carried into the reading on '
+      'the first deliberate change, never left behind', (
+    WidgetTester tester,
+  ) async {
     TyrePositionReading reading = TyrePositionReading.seed('F1L');
     await tester.pumpWidget(
       ProviderScope(
@@ -184,7 +186,18 @@ void main() {
     final TextField serial = fields.firstWhere(
       (TextField f) => f.decoration?.hintText == 'FITTED-123',
     );
-    expect(serial.controller!.text, isEmpty);
+    // Pre-filled from the register, but not yet a recorded value: opening
+    // the sheet changes nothing.
+    expect(serial.controller!.text, 'FITTED-123');
     expect(reading.serialNumber, isNull);
+
+    // The first deliberate change to the wheel carries the fitted serial.
+    await tester.tap(find.text('Worn'));
+    await tester.pump();
+    expect(reading.serialNumber, 'FITTED-123');
+    expect(
+      find.byKey(TyrePositionEditorSheetKeys.serialDiffers),
+      findsNothing,
+    );
   });
 }

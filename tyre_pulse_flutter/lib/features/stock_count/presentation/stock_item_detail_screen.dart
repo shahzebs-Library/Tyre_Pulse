@@ -14,8 +14,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/devices/label_encoder.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
+import 'package:tyre_pulse/features/devices/presentation/label_print_action.dart';
 import 'package:tyre_pulse/features/stock_count/data/stock_history_repository.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_movement.dart';
@@ -130,6 +132,13 @@ class _StockItemDetailScreenState extends ConsumerState<StockItemDetailScreen> {
       appBar: TpAppBar(
         title: copy('itemTitle'),
         actions: <Widget>[
+          LabelPrintButton(
+            label: LabelData(
+              code: _item.itemId ?? _item.id,
+              name: _item.description ?? (_item.itemId ?? _item.id),
+              caption: _item.site,
+            ),
+          ),
           IconButton(
             key: const Key('stock.item.history'),
             tooltip: copy('fullHistory'),

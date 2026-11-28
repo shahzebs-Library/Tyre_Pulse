@@ -140,7 +140,7 @@ describe('a paged register still counts the whole filtered set', () => {
       what: 'rows-shown caption',
       // "195 of 407 shown" is about the FILTERS. The pagination bar states the
       // page range separately, and the two must not be collapsed into one.
-      required: '{filtered.length}{filtered.length !== tabFiltered.length ? ` of ${tabFiltered.length}` : \'\'} shown',
+      required: "{filtered.length !== tabFiltered.length ? t('inspections.page.shownOf', { count: filtered.length, total: tabFiltered.length }) : t('inspections.page.shown', { count: filtered.length })}",
     },
     {
       file: 'pages/Inspections.jsx',

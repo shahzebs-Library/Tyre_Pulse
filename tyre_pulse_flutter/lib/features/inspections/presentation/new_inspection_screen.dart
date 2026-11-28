@@ -27,6 +27,7 @@ import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_previous_meters.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_previous_tyre_readings.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart'
     show InspectionSubmitOutcome;
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
@@ -105,6 +106,8 @@ abstract final class NewInspectionScreenKeys {
       Key('inspection.header.selected_continue');
   static const Key pickerClassFilters = Key('inspection.picker.class_filters');
   static const Key pickerTruncated = Key('inspection.picker.truncated');
+  static const Key pickerCollapsedNote =
+      Key('inspection.picker.collapsed_note');
 
   static Key pickerClassChip(String assetClass) =>
       ValueKey<String>('inspection.picker.class.$assetClass');
@@ -1115,6 +1118,7 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
           orElse: () => false,
         );
     final List<VehicleAsset> unique = _uniqueNavigableAssets(asyncFleet);
+    final int registerRows = _navigableRowCount(asyncFleet);
     final List<AssetClassChip> chips = classChips(
       unique.map((VehicleAsset asset) => asset.assetNo),
     );
@@ -1173,6 +1177,16 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
             allLabel: '${l10n.vehiclesAllFilter} (${unique.length})',
             onSelect: (String? value) => setState(() => _classFilter = value),
           ),
+          // "All (1383)" beside a fleet of 1619 reads as missing assets. The
+          // picker lists each asset NUMBER once; say why the counts differ.
+          if (registerRows > unique.length) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Text(
+              l10n.inspectionPickerCollapsedNote(unique.length, registerRows),
+              key: NewInspectionScreenKeys.pickerCollapsedNote,
+              style: text.labelSmall,
+            ),
+          ],
         ],
         const SizedBox(height: TpSpace.md),
         if (isLoading)
@@ -1231,6 +1245,19 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
 /// number. An inspector must never see two identical choices and risk
 /// starting the draft against an arbitrary duplicate, so rows are collapsed
 /// by the normalised asset number while preserving the repository's order.
+/// The loaded fleet rows that carry a usable asset number, before
+/// [_uniqueNavigableAssets] collapses them by number.
+int _navigableRowCount(AsyncValue<VehicleFleetListOutcome> fleet) =>
+    fleet.maybeWhen(
+      data: (VehicleFleetListOutcome outcome) => switch (outcome) {
+        VehicleFleetListLoaded(:final assets) ||
+        VehicleFleetListFromCache(:final assets) =>
+          assets.where((VehicleAsset a) => a.hasNavigableAssetNo).length,
+        VehicleFleetListFailed() => 0,
+      },
+      orElse: () => 0,
+    );
+
 List<VehicleAsset> _uniqueNavigableAssets(
   AsyncValue<VehicleFleetListOutcome> fleet,
 ) {
@@ -1868,6 +1895,22 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
           final TyrePositionReading reading =
               liveState.tyreConditions[position] ??
                   TyrePositionReading.seed(position);
+          final String assetNo = liveState.selectedAssetNo.trim();
+          final String layoutKey = resolveVehicleType(
+            liveState.effectiveLayoutType,
+            assetNo,
+          );
+          // Hint-only: offline or a failed read simply shows no previous
+          // value (the provider never errors).
+          final PreviousTyreReading? previous = assetNo.isEmpty
+              ? null
+              : sheetRef
+                  .watch(
+                    previousTyreReadingsProvider(
+                      (assetNo: assetNo, layoutKey: layoutKey),
+                    ),
+                  )
+                  .value?[position];
           return TyrePositionEditorSheet(
             reading: reading,
             positionLabel: tyrePositionDisplayCode(
@@ -1875,6 +1918,13 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
               position,
               assetNo: liveState.selectedAssetNo,
             ),
+            vehicleType: liveState.effectiveLayoutType,
+            assetNo: assetNo.isEmpty ? null : assetNo,
+            currentOdometerKm: double.tryParse(
+              liveState.odometerText.trim().replaceAll(',', ''),
+            ),
+            previousReading: previous,
+            installedTyreUnavailable: liveState.installedTyresLoadFailed,
             installedTyre: liveState.installedTyres[position],
             isCapturingPhoto: liveState.isCapturingPhoto,
             onChanged: (updated) => sheetRef

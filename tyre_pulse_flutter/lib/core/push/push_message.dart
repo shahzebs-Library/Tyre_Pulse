@@ -47,6 +47,7 @@ final class PushMessage {
         entityType: _field('entity_type'),
         entityId: _field('entity_id'),
         link: _field('link') ?? _field('url'),
+        workstreamKey: _field('workstream_key'),
       );
 
   /// Where a tap on this message goes. A message the mapping does not know

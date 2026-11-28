@@ -4,6 +4,7 @@ import { lifeDisplay } from '../../lib/tyreRunningLife'
 import { defectsForAction, isSevereCondition } from '../../lib/inspectionTyreFlags'
 import { displayPositionCode, inspectionTypeHint } from '../../lib/tyreBay'
 import RaiseActionDialog from './RaiseActionDialog'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { listActionsForSource, isActionClosed, canCreateCorrectiveAction } from '../../lib/api/correctiveActions'
 
 // Immediate flag banner: shown when the vehicle carries tyres at/near end of
@@ -23,6 +24,8 @@ import { listActionsForSource, isActionClosed, canCreateCorrectiveAction } from 
  * the button simply does not appear.
  */
 export default function TyreDueBanner({ entry, damaged = [], inspection = null }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`inspections.dueBanner.${k}`, v)
   const due = entry ? [...(entry.overdue || []), ...(entry.dueSoon || [])] : []
   const [dialogOpen, setDialogOpen] = useState(false)
   const [raised, setRaised] = useState(null)   // { created, skipped, failed } | { error }
@@ -71,18 +74,18 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
   const severe = damaged.filter((d) => isSevereCondition(d.condition))
   const wornOnly = damaged.filter((d) => !isSevereCondition(d.condition))
   const faultLine = severe.length > 0 && wornOnly.length > 0
-    ? 'Damage and worn tyres found on this vehicle'
-    : (severe.length > 0 ? 'Damage found on this vehicle' : 'Worn tyres found on this vehicle')
+    ? p('damageAndWorn')
+    : (severe.length > 0 ? p('damage') : p('worn'))
 
   if (due.length === 0 && damaged.length === 0) return null
   return (
-    <div role="region" aria-label="Tyres due for change on this vehicle" className="rounded-xl border px-4 py-3 mb-4"
+    <div role="region" aria-label={p('aria')} className="rounded-xl border px-4 py-3 mb-4"
       style={{ borderColor: 'rgba(220,38,38,0.35)', background: 'rgba(220,38,38,0.07)' }}>
       <div className="flex items-center gap-2 mb-1">
         <AlertTriangle size={15} aria-hidden style={{ color: '#dc2626', flexShrink: 0 }} />
         <span className="text-sm font-semibold" style={{ color: '#ef4444' }}>
           {due.length > 0
-            ? `${due.length} tyre${due.length === 1 ? '' : 's'} on this vehicle ${due.length === 1 ? 'is' : 'are'} at or near end of life - due for change`
+            ? (due.length === 1 ? p('dueOne') : p('dueMany', { count: due.length }))
             : faultLine}
         </span>
       </div>
@@ -90,10 +93,10 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
         <ul className="text-xs space-y-0.5 text-[var(--text-secondary)]">
           {due.slice(0, 8).map((r, i) => (
             <li key={`${r.serial || 'tyre'}-${r.position || i}`} className="font-mono">
-              {(r.serial || 'N/A')} at {(r.position || 'N/A')}: remaining {lifeDisplay(r.remainingKm, r.remainingHours)}
+              {p('dueRow', { serial: r.serial || p('na'), position: r.position || p('na'), remaining: lifeDisplay(r.remainingKm, r.remainingHours) })}
             </li>
           ))}
-          {due.length > 8 && <li>and {due.length - 8} more</li>}
+          {due.length > 8 && <li>{p('andMore', { count: due.length - 8 })}</li>}
         </ul>
       )}
       {damaged.length > 0 && (
@@ -101,13 +104,13 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
           {/* Named the way the tyre records name it, so this line and the
               diagram above it do not call one wheel two things. */}
           {damaged
-            .map((d) => `${displayPositionCode(inspectionTypeHint(inspection), d.position) || 'N/A'} (${d.condition})`)
+            .map((d) => `${displayPositionCode(inspectionTypeHint(inspection), d.position) || p('na')} (${d.condition})`)
             .join(', ')}
         </p>
       )}
 
       {tracked.length > 0 && (
-        <ul aria-label="Actions already raised" className="mt-3 space-y-1">
+        <ul aria-label={p('trackedAria')} className="mt-3 space-y-1">
           {tracked.map(({ defect, action }) => {
             const closed = isActionClosed(action.status)
             const late = !closed && action.due_date && new Date(action.due_date) < new Date()
@@ -116,11 +119,11 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
                 <span className="font-semibold">{defect.positionLabel}</span>
                 <span className="px-2 py-0.5 rounded-full border border-[var(--border)]"
                   style={closed ? { color: '#16a34a' } : late ? { color: '#ef4444' } : undefined}>
-                  {closed ? (String(action.status).toLowerCase() === 'cancelled' ? 'Cancelled' : 'Fixed') : late ? 'Overdue' : (action.status || 'Open')}
+                  {closed ? (String(action.status).toLowerCase() === 'cancelled' ? p('cancelled') : p('fixed')) : late ? p('overdue') : (action.status || p('open'))}
                 </span>
-                {action.assigned_to && <span>Assigned to {action.assigned_to}</span>}
-                {action.due_date && <span>Fix by {String(action.due_date).slice(0, 10)}</span>}
-                {closed && action.closed_at && <span>Closed {String(action.closed_at).slice(0, 10)}</span>}
+                {action.assigned_to && <span>{p('assignedTo', { name: action.assigned_to })}</span>}
+                {action.due_date && <span>{p('fixBy', { date: String(action.due_date).slice(0, 10) })}</span>}
+                {closed && action.closed_at && <span>{p('closedOn', { date: String(action.closed_at).slice(0, 10) })}</span>}
               </li>
             )
           })}
@@ -129,7 +132,7 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
 
       {canRaise && defects.length > 0 && mayCreate === false && (
         <p className="mt-3 text-xs text-[var(--text-secondary)]">
-          Your role cannot raise corrective actions. Ask a supervisor or manager to raise one for these tyres.
+          {p('noRole')}
         </p>
       )}
 
@@ -140,7 +143,7 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
             className="btn-secondary text-xs flex items-center gap-2 min-h-[44px]"
           >
             <ClipboardList size={13} />
-            {`Raise corrective action (${defects.length})`}
+            {p('raise', { count: defects.length })}
           </button>
           <RaiseActionDialog
             open={dialogOpen} onClose={() => setDialogOpen(false)}
@@ -155,13 +158,13 @@ export default function TyreDueBanner({ entry, damaged = [], inspection = null }
           )}
           {raised && !raised.error && (
             <span role="status" className="text-xs text-[var(--text-secondary)]">
-              {raised.created.length > 0 && `${raised.created.length} action${raised.created.length === 1 ? '' : 's'} raised. `}
-              {raised.skipped > 0 && `${raised.skipped} already raised. `}
-              {raised.notified?.length > 0 && `Sent to ${[...new Set(raised.notified)].join(', ')}. `}
-              {raised.notifyFailed?.length > 0 && `${raised.notifyFailed.length} could not be added to the Action Center. `}
-              {raised.failed.length > 0 && `${raised.failed.length} could not be raised. `}
+              {raised.created.length > 0 && `${raised.created.length === 1 ? p('raisedOne') : p('raisedMany', { count: raised.created.length })} `}
+              {raised.skipped > 0 && `${p('skipped', { count: raised.skipped })} `}
+              {raised.notified?.length > 0 && `${p('sentTo', { names: [...new Set(raised.notified)].join(', ') })} `}
+              {raised.notifyFailed?.length > 0 && `${p('notifyFailed', { count: raised.notifyFailed.length })} `}
+              {raised.failed.length > 0 && `${p('failed', { count: raised.failed.length })} `}
               {raised.created.length === 0 && raised.skipped > 0 && raised.failed.length === 0
-                && 'Nothing new to raise.'}
+                && p('nothingNew')}
             </span>
           )}
       </div>

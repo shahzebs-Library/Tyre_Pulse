@@ -1,21 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { IBM_Plex_Sans_Arabic } from "next/font/google";
 import { ArrowLeft, BarChart3, Box, CircleDot, ClipboardCheck, FileCheck2, Fuel, Settings, ShieldCheck, Truck, Wrench } from "lucide-react";
-import { Footer } from "@/components/Footer";
-import { Header } from "@/components/Header";
 import { CtaBand } from "@/components/CtaBand";
 import { Photo } from "@/components/art/Photos";
 import { FleetCostPanel } from "@/components/mock/Screens";
 import { alternatesFor } from "../schema";
 import { OG_IMAGES } from "@/lib/site";
 import { ArProofStrip } from "./ArProofStrip";
-
-/*
- * 400 for body text and 700 for headings and bold text (heavier CSS weights such as 800 resolve to 700).
- * 500 was dropped: no element rendered on this page asks for weight 500, and its files cost about 55 KB (36 KB of it preloaded on this page).
- */
-const arabic = IBM_Plex_Sans_Arabic({ subsets: ["arabic"], weight: ["400", "700"], variable: "--font-arabic", display: "swap" });
 
 export const metadata: Metadata = {
   title: { absolute: "تاير بالس | إدارة المعدات والآليات والمركبات" },
@@ -52,11 +43,7 @@ const STEPS = [
 ] as const;
 
 export default function ArabicPage() {
-  return <div className={`rtl ar-page ${arabic.variable}`} lang="ar" dir="rtl">
-    {/* Sets <html lang> and <html dir> before first paint; LocaleSync keeps it right after navigation. */}
-    <script dangerouslySetInnerHTML={{ __html: "document.documentElement.lang='ar';document.documentElement.dir='rtl'" }} />
-    <Header locale="ar" />
-    <main id="main-content" tabIndex={-1}>
+  return <>
       <section className="home-hero" aria-label="تاير بالس">
         <div className="site-shell">
           <div className="hc-stage">
@@ -66,10 +53,9 @@ export default function ArabicPage() {
                 <h1 className="hero-h1">تحكم كامل في عمليات أسطولك.</h1>
                 <p className="hero-lead">اربط الأصول والورشة والفرق الميدانية والمستودعات في مساحة عمل تشغيلية واحدة.</p>
                 <div className="hero-cta">
-                  <Link className="btn btn-primary" href="/contact" hrefLang="en">احجز عرضاً <ArrowLeft size={18} aria-hidden="true" /></Link>
-                  <Link className="btn-text" href="/platform" hrefLang="en">تعرّف على المنصة<span className="sr-only">، الصفحة باللغة الإنجليزية</span> <ArrowLeft size={17} aria-hidden="true" /></Link>
+                  <Link className="btn btn-primary" href="/ar/contact" data-source="hero">احجز عرضاً <ArrowLeft size={18} aria-hidden="true" /></Link>
+                  <Link className="btn-text" href="/ar/platform">تعرّف على المنصة <ArrowLeft size={17} aria-hidden="true" /></Link>
                 </div>
-                <p className="ar-en-note">نموذج حجز العرض وصفحات تفاصيل المنصة متاحة حالياً باللغة الإنجليزية.</p>
               </div>
               <div className="hc-visual">
                 <div className="hc-photo"><Photo name="riyadh" position="30% 100%" alt="محمل بعجلات أمام أفق مدينة الرياض ليلاً" sizes="(max-width: 900px) 100vw, 640px" priority /></div>
@@ -121,8 +107,6 @@ export default function ArabicPage() {
           <div className="hc-panel" dir="ltr" lang="en"><FleetCostPanel /></div>
         </div>
       </section>
-    </main>
-    <CtaBand title="شاهد كيف يناسب تاير بالس أسطولك." text="عرض مبني على مواقعك وأصولك وتسلسل الموافقات لديك." button="احجز عرضاً (الصفحة بالإنجليزية)" />
-    <Footer locale="ar" />
-  </div>;
+    <CtaBand title="شاهد كيف يناسب تاير بالس أسطولك." text="عرض مبني على مواقعك وأصولك وتسلسل الموافقات لديك." button="احجز عرضاً" href="/ar/contact" />
+  </>;
 }

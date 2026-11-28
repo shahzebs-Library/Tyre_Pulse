@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ClipboardCheck, CheckCircle2, XCircle, Loader2, AlertTriangle, Check, Clock,
 } from 'lucide-react'
@@ -6,7 +6,8 @@ import SignatureField from '../checklist/SignatureField'
 import SignatureView from '../checklist/SignatureView'
 import { useAuth } from '../../contexts/AuthContext'
 import { toUserMessage } from '../../lib/safeError'
-import { decideHandover } from '../../lib/api/handoverReports'
+import { decideHandover, getMyLinkedDriverId } from '../../lib/api/handoverReports'
+import { handoverPartyReason, handoverPartyNotice } from '../../lib/handoverParty'
 import {
   approvalProgress, statusSummary, stageFor, canActOnStage, canReject,
   closesInOneSign, isFullyClosed, isRejected, STAGE_INCHARGE,
@@ -47,6 +48,13 @@ export default function HandoverSignOffPanel({ handover, onDecided }) {
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState(null)
   const [decided, setDecided] = useState(false)
+  const [linkedDriverId, setLinkedDriverId] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    getMyLinkedDriverId().then((id) => { if (alive) setLinkedDriverId(id) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
 
   if (!handover) return null
 
@@ -57,8 +65,11 @@ export default function HandoverSignOffPanel({ handover, onDecided }) {
   const closed = isFullyClosed(handover)
   const rejected = isRejected(handover)
     || (handover.approval_status === 'draft' && !!String(handover.review_note || '').trim())
-  const mayAct = !decided && canActOnStage(handover, opts)
-  const mayReject = !decided && canReject(handover, opts)
+  // You cannot approve your own work: the creator, whoever collected a driver
+  // signature, and either driver are refused by the server too.
+  const party = handoverPartyReason(handover, { userId: profile?.id, linkedDriverId })
+  const mayAct = !decided && !party && canActOnStage(handover, opts)
+  const mayReject = !decided && !party && canReject(handover, opts)
   const oneSign = closesInOneSign(handover, opts)
   const wouldClose = stage === STAGE_INCHARGE || oneSign
 
@@ -178,7 +189,13 @@ export default function HandoverSignOffPanel({ handover, onDecided }) {
         </div>
       )}
 
-      {!decided && stage && !mayAct && (
+      {!decided && stage && party && (
+        <p className="vh-signoff-note" data-testid="handover-party-notice">
+          <AlertTriangle size={14} aria-hidden="true" /> {handoverPartyNotice(party)}
+        </p>
+      )}
+
+      {!decided && stage && !mayAct && !party && (
         <p className="vh-signoff-note">
           <AlertTriangle size={14} aria-hidden="true" /> {summary.text}. You cannot sign this step.
         </p>

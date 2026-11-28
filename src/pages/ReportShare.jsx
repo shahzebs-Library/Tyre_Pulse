@@ -26,7 +26,7 @@ import {
   Wrench, CalendarClock, ListChecks, Timer, Bell, Gauge,
   ChevronLeft, ChevronRight, RotateCw, Filter, Globe, Building2, Grid, Percent,
 } from 'lucide-react'
-import { getReportSnapshot, getReportTyreMaintenance, REPORT_PAGES } from '../lib/api/reportShares'
+import { getReportSnapshot, getReportSnapshotWithRetry, getReportTyreMaintenance, REPORT_PAGES } from '../lib/api/reportShares'
 import { mustClearShareSnapshot } from '../lib/reportShareAccess'
 import { categorical, colorAt, withAlpha } from '../lib/reportColors'
 import { safeImageSrc } from '../lib/safeUrl'
@@ -153,47 +153,58 @@ function sparkOption(series, idx) {
 function comboOption(labels, spend, accidents) {
   const cSpend = colorAt(0)
   const cAcc = colorAt(3)
+  // No spend series (e.g. several currencies in scope): drop the spend axis and
+  // bars so the chart is not left with an empty, half-labelled axis.
+  const hasSpend = someNonZero(spend)
+  const accAxis = {
+    type: 'value', name: 'Accidents',
+    nameTextStyle: { color: P.muted, fontSize: 12, align: hasSpend ? 'right' : 'left' },
+    axisLabel: { color: P.muted, fontSize: 12 },
+    splitLine: { show: !hasSpend, lineStyle: { color: P.splitLine } }, minInterval: 1,
+  }
+  const accSeries = {
+    name: 'Accidents', type: 'line', yAxisIndex: hasSpend ? 1 : 0, data: accidents,
+    smooth: true, symbol: 'circle', symbolSize: 7,
+    lineStyle: { width: 3, color: cAcc }, itemStyle: { color: cAcc },
+    areaStyle: { color: withAlpha(cAcc, 0.1) },
+  }
   return {
     backgroundColor: 'transparent',
     tooltip: { ...TOOLTIP, trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { top: 0, textStyle: { color: P.subText, fontSize: 14 }, itemGap: 20 },
-    grid: { left: 10, right: 12, top: 44, bottom: 8, containLabel: true },
+    // containLabel does not count the axis name, so leave room for it.
+    grid: { left: 24, right: 24, top: 48, bottom: 8, containLabel: true },
     xAxis: {
       type: 'category', data: labels,
       axisLabel: { color: P.muted, fontSize: 13 },
       axisLine: { lineStyle: { color: P.axisLine } },
       axisTick: { show: false },
     },
-    yAxis: [
-      {
-        type: 'value', name: 'Spend', nameTextStyle: { color: P.muted, fontSize: 12 },
-        axisLabel: { color: P.muted, fontSize: 12, formatter: (v) => fmtCompact(v) },
-        splitLine: { lineStyle: { color: P.splitLine } },
-      },
-      {
-        type: 'value', name: 'Accidents', nameTextStyle: { color: P.muted, fontSize: 12 },
-        axisLabel: { color: P.muted, fontSize: 12 },
-        splitLine: { show: false }, minInterval: 1,
-      },
-    ],
-    series: [
-      {
-        name: 'Tyre Spend', type: 'bar', data: spend, barMaxWidth: 36,
-        itemStyle: { color: cSpend, borderRadius: [5, 5, 0, 0] },
-        markPoint: {
-          symbol: 'pin', symbolSize: 46,
-          data: [{ type: 'max', name: 'Max' }],
-          itemStyle: { color: withAlpha(cSpend, 0.9) },
-          label: { color: '#ffffff', fontSize: 11, formatter: (d) => fmtCompact(d.value) },
-        },
-      },
-      {
-        name: 'Accidents', type: 'line', yAxisIndex: 1, data: accidents,
-        smooth: true, symbol: 'circle', symbolSize: 7,
-        lineStyle: { width: 3, color: cAcc }, itemStyle: { color: cAcc },
-        areaStyle: { color: withAlpha(cAcc, 0.1) },
-      },
-    ],
+    yAxis: hasSpend
+      ? [
+          {
+            type: 'value', name: 'Spend', nameTextStyle: { color: P.muted, fontSize: 12, align: 'left' },
+            axisLabel: { color: P.muted, fontSize: 12, formatter: (v) => fmtCompact(v) },
+            splitLine: { lineStyle: { color: P.splitLine } },
+          },
+          accAxis,
+        ]
+      : [accAxis],
+    series: hasSpend
+      ? [
+          {
+            name: 'Tyre Spend', type: 'bar', data: spend, barMaxWidth: 36,
+            itemStyle: { color: cSpend, borderRadius: [5, 5, 0, 0] },
+            markPoint: {
+              symbol: 'pin', symbolSize: 46,
+              data: [{ type: 'max', name: 'Max' }],
+              itemStyle: { color: withAlpha(cSpend, 0.9) },
+              label: { color: '#ffffff', fontSize: 11, formatter: (d) => fmtCompact(d.value) },
+            },
+          },
+          accSeries,
+        ]
+      : [accSeries],
   }
 }
 
@@ -529,6 +540,51 @@ import EChart from '../components/charts/EChart'
 
 // ── Presentational subcomponents ──────────────────────────────────────────────
 
+// Tyre spend is money and each country reports in its own currency, so on an
+// all-countries board there is no single figure. The server then sends
+// kpis.tyre_spend = null plus one value per country; show those instead of a
+// misleading 0, and never add SAR, AED and EGP together.
+function tyreSpendByCountry(snapshot) {
+  return arr(snapshot?.kpis?.tyre_spend_by_country).filter((r) => r && r.country)
+}
+function tyreSpendIsMixed(snapshot) {
+  return snapshot?.kpis?.tyre_spend == null && tyreSpendByCountry(snapshot).length > 1
+}
+// Money tiles that can arrive per country instead of as one figure: the
+// per-country list and the field holding each country's amount.
+const PER_COUNTRY_MONEY = {
+  tyre_spend: ['tyre_spend_by_country', 'value'],
+  claims_claimed: ['claims_by_country', 'claimed'],
+  claims_recovered: ['claims_by_country', 'recovered'],
+}
+function perCountryLines(tile, kpis) {
+  const spec = PER_COUNTRY_MONEY[tile.key]
+  if (!spec || kpis?.[tile.key] != null) return null
+  const [listKey, field] = spec
+  const rows = arr(kpis?.[listKey]).filter((r) => r && r.country)
+  if (!rows.length) return null
+  return rows.map((r) => ({ key: r.country, text: `${r.currency || r.country} ${GROUP.format(Math.round(Number(r[field]) || 0))}`, label: r.country }))
+}
+// Accident claims are money in the country's own currency. When the claims in
+// scope span more than one currency the server sends no combined trend.
+function claimsTrendIsMixed(snapshot) {
+  const t = snapshot?.trends || {}
+  return t.claims_claimed == null && arr(t.claims_by_country).filter((r) => r && r.country).length > 1
+}
+function claimsSubtitle(snapshot, base) {
+  return claimsTrendIsMixed(snapshot)
+    ? 'Claims are reported per country in its own currency: choose a country to chart them.'
+    : base
+}
+function claimsEmptyText(snapshot) {
+  return claimsTrendIsMixed(snapshot) ? 'Choose a country to chart claims.' : undefined
+}
+function spendSubtitle(snapshot, base) {
+  return tyreSpendIsMixed(snapshot)
+    ? 'Accident count by month. Tyre spend is reported per country in its own currency: choose a country to chart it.'
+    : base
+}
+
 const KPI_TILES = [
   { key: 'fleet', label: 'Fleet Vehicles', icon: Car, kind: 'count', spark: null },
   { key: 'tyres', label: 'Tyres Tracked', icon: CircleDot, kind: 'count', spark: null },
@@ -541,9 +597,10 @@ const KPI_TILES = [
   { key: 'work_orders_open', label: 'Open Work Orders', icon: Activity, kind: 'count', spark: null },
 ]
 
-function KpiTile({ tile, value, series, sparkIdx }) {
+function KpiTile({ tile, value, series, sparkIdx, lines }) {
   const isMoney = tile.kind === 'money'
   const display = isMoney ? fmtInt(value) : fmtInt(value)
+  const multi = Array.isArray(lines) && lines.length > 0
   const Icon = tile.icon
   const hasSpark = Array.isArray(series) && series.length > 1 && someNonZero(series)
   return (
@@ -552,7 +609,13 @@ function KpiTile({ tile, value, series, sparkIdx }) {
         <span className="rs-tile-label">{tile.label}</span>
         {Icon && <Icon size={20} className="rs-tile-icon" aria-hidden="true" />}
       </div>
-      <div className="rs-tile-value">{display}</div>
+      {multi ? (
+        <div className="rs-tile-value rs-tile-multi" style={{ fontSize: 'clamp(15px, 1.35vw, 24px)', lineHeight: 1.3, fontWeight: 700 }}>
+          {lines.map((l) => <div key={l.key} title={l.label}>{l.text}</div>)}
+        </div>
+      ) : (
+        <div className="rs-tile-value">{display}</div>
+      )}
       <div className="rs-tile-foot">
         {isMoney
           ? <span className="rs-tile-cap">{tile.caption || 'value'}</span>
@@ -706,6 +769,7 @@ export default function ReportShare() {
   const { token } = useParams()
 
   const [status, setStatus] = useState('loading') // loading | ok | error | password
+  const [slowLoad, setSlowLoad] = useState(false) // true while the one automatic retry runs
   const [reason, setReason] = useState('invalid')
   const [snapshot, setSnapshot] = useState(null)
   // Extra tyre-failure + maintenance-cost aggregates, fetched from a SEPARATE
@@ -760,13 +824,16 @@ export default function ReportShare() {
   // ── Initial / password-driven load (full state machine; resets page) ─────────
   const load = useCallback(async (pw = null) => {
     if (!token) { setStatus('error'); setReason('invalid'); return false }
-    if (!loadedRef.current) setStatus('loading')
+    if (!loadedRef.current) { setStatus('loading'); setSlowLoad(false) }
     let res
     try {
-      res = await getReportSnapshot(token, pw, filtersRef.current)
+      // A cold first open can exceed the server's time limit; retry once,
+      // with a longer ceiling, while the screen keeps saying "loading".
+      res = await getReportSnapshotWithRetry(token, pw, filtersRef.current, { onRetry: () => setSlowLoad(true) })
     } catch {
       res = { ok: false, reason: 'unavailable' }
     }
+    setSlowLoad(false)
     if (res && res.ok) {
       pwRef.current = pw
       loadedRef.current = true
@@ -955,7 +1022,9 @@ export default function ReportShare() {
       <CenterShell>
         <Loader2 size={40} className="rs-spin" aria-hidden="true" />
         <h1 className="rs-center-title">Loading report</h1>
-        <p className="rs-center-body">Preparing the latest snapshot.</p>
+        <p className="rs-center-body" aria-live="polite">
+          {slowLoad ? 'Still preparing the latest snapshot. This first load can take a little longer.' : 'Preparing the latest snapshot.'}
+        </p>
       </CenterShell>
     )
   }
@@ -1211,7 +1280,7 @@ function ExecutiveSummaryPage({ snapshot }) {
       <ChartCard
         wide
         title="Tyre spend and accidents"
-        subtitle="Monthly tyre spend (bars, left axis) against accident count (line, right axis)"
+        subtitle={spendSubtitle(snapshot, 'Monthly tyre spend (bars, left axis) against accident count (line, right axis)')}
         icon={TrendingUp}
         empty={comboEmpty}
         height="34vh"
@@ -1252,10 +1321,10 @@ function CostClaimsPage({ snapshot }) {
     <div className="rs-page">
       <TileStrip snapshot={snapshot} keys={['tyre_spend', 'claims_claimed', 'claims_recovered', 'accidents']} />
       <div className="rs-page-row">
-        <ChartCard title="Claimed vs recovered" subtitle="Monthly claimed value against recovered value" icon={Activity} empty={claimsEmpty} height="34vh">
+        <ChartCard title="Claimed vs recovered" subtitle={claimsSubtitle(snapshot, 'Monthly claimed value against recovered value')} emptyText={claimsEmptyText(snapshot)} icon={Activity} empty={claimsEmpty} height="34vh">
           <EChart option={claimsOption(labels, claimed, recovered)} ariaLabel="Claims claimed versus recovered" />
         </ChartCard>
-        <ChartCard title="Tyre spend and accidents" subtitle="Monthly tyre spend against accident count" icon={TrendingUp} empty={spendEmpty} height="34vh">
+        <ChartCard title="Tyre spend and accidents" subtitle={spendSubtitle(snapshot, 'Monthly tyre spend against accident count')} icon={TrendingUp} empty={spendEmpty} height="34vh">
           <EChart option={comboOption(labels, spend, accidents)} ariaLabel="Tyre spend and accidents trend" />
         </ChartCard>
       </div>
@@ -1441,6 +1510,7 @@ function KpisPage({ snapshot }) {
           key={tile.key}
           tile={tile}
           value={kpis[tile.key] ?? 0}
+          lines={perCountryLines(tile, kpis)}
           series={tile.spark ? arr(trends[tile.spark]) : null}
           sparkIdx={sparkColor[tile.spark] ?? 0}
         />
@@ -1468,7 +1538,7 @@ function TrendsPage({ snapshot }) {
       <ChartCard
         wide
         title="Tyre spend and accidents"
-        subtitle="Monthly tyre spend (bars, left axis) against accident count (line, right axis)"
+        subtitle={spendSubtitle(snapshot, 'Monthly tyre spend (bars, left axis) against accident count (line, right axis)')}
         icon={TrendingUp}
         empty={comboEmpty}
         height="46vh"
@@ -1479,7 +1549,7 @@ function TrendsPage({ snapshot }) {
       <div className="rs-page-row">
         <ChartCard
           title="Claims: claimed vs recovered"
-          subtitle="Monthly claimed value against recovered value"
+          subtitle={claimsSubtitle(snapshot, 'Monthly claimed value against recovered value')} emptyText={claimsEmptyText(snapshot)}
           icon={Activity}
           empty={claimsEmpty}
           height="30vh"
@@ -1540,6 +1610,7 @@ function TileStrip({ snapshot, keys }) {
           key={tile.key}
           tile={tile}
           value={kpis[tile.key] ?? 0}
+          lines={perCountryLines(tile, kpis)}
           series={tile.spark ? arr(trends[tile.spark]) : null}
           sparkIdx={SPARK_COLOR[tile.spark] ?? 0}
         />
@@ -1581,7 +1652,7 @@ function SpendTrendPage({ snapshot }) {
       <ChartCard
         wide
         title="Tyre spend and accidents"
-        subtitle="Monthly tyre spend (bars, left axis) against accident count (line, right axis)"
+        subtitle={spendSubtitle(snapshot, 'Monthly tyre spend (bars, left axis) against accident count (line, right axis)')}
         icon={TrendingUp}
         empty={comboEmpty}
         height="56vh"
@@ -1648,7 +1719,7 @@ function ClaimsDeskPage({ snapshot }) {
           <EChart option={hbarOption(claimStatus)} ariaLabel="Claims by status" />
         </ChartCard>
       </div>
-      <ChartCard wide title="Claimed vs recovered" subtitle="Monthly claimed value against recovered value" icon={Activity} empty={claimsEmpty} height="34vh">
+      <ChartCard wide title="Claimed vs recovered" subtitle={claimsSubtitle(snapshot, 'Monthly claimed value against recovered value')} emptyText={claimsEmptyText(snapshot)} icon={Activity} empty={claimsEmpty} height="34vh">
         <EChart option={claimsOption(labels, claimed, recovered)} ariaLabel="Claims claimed versus recovered" />
       </ChartCard>
     </div>

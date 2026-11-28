@@ -60,14 +60,17 @@ describe('Flutter Android release pipeline', () => {
     expect(text).toContain('createNotificationChannel')
   })
 
-  it('the Play upload only happens when explicitly requested and only to alpha', () => {
+  it('the Play upload only happens when requested; production needs the typed confirmation', () => {
     const text = read('.github/workflows/flutter-release-play.yml')
     expect(text).toMatch(/upload_to_play:[\s\S]*?default: false/)
+    expect(text).toMatch(/play_track:[\s\S]*?options: \[alpha, production\][\s\S]*?default: alpha/)
+    expect(text).toContain('[ "$PLAY_TRACK" = "production" ] && [ "$CONFIRM" != "PRODUCTION" ]')
     const publish = text.slice(text.indexOf('r0adkll/upload-google-play'))
     const block = text.slice(text.lastIndexOf('- name:', text.indexOf('r0adkll/upload-google-play')))
     expect(block).toContain('if: ${{ inputs.upload_to_play }}')
-    expect(publish).toMatch(/^ {10}track: alpha$/m)
+    expect(publish).toMatch(/^ {10}track: \$\{\{ inputs\.play_track \}\}$/m)
     expect(publish).toMatch(/^ {10}packageName: com\.shahzebrahman\.tyrepulse$/m)
+    expect(text).not.toMatch(/packageName: com\.shahzebrahman\.tyrepulseinspector/)
   })
 })
 

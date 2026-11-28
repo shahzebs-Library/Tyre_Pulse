@@ -141,16 +141,18 @@ span.pd-wheel { cursor: default; }
 /* ---------- Product story ---------- */
 .ps { display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); gap: clamp(28px, 5vw, 80px); align-items: start; }
 .ps-steps { list-style: none; margin: 0; padding: 0; }
-.ps-steps > li { display: grid; align-content: center; gap: 8px; min-height: 56vh; padding: 28px 0; opacity: .62; transition: opacity .4s ease; }
+.ps-steps > li { display: grid; align-content: center; gap: 8px; min-height: 38vh; padding: 20px 0; opacity: .62; transition: opacity .4s ease; }
 .ps-steps > li.is-on { opacity: 1; }
-.ps-steps > li:first-child { min-height: 46vh; align-content: start; padding-top: 8px; }
-.ps-steps > li:last-child { min-height: 48vh; }
+.ps-steps > li:first-child { min-height: 30vh; align-content: start; padding-top: 8px; }
+.ps-steps > li:last-child { min-height: 34vh; }
 .ps-n { font-family: var(--font-display), var(--font-body), sans-serif; font-weight: 800; font-size: 15px; color: #161616; background: var(--brand); width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; }
 .ps-who { font-size: var(--fs-small, .875rem); font-weight: 700; color: var(--on-dark-2, #c9c9c2); }
 .ps-steps h3 { margin: 0; font-family: var(--font-display), var(--font-body), sans-serif; font-weight: 800; font-size: var(--fs-h3, 1.5rem); line-height: 1.16; letter-spacing: -.02em; text-wrap: balance; outline: none; }
 .ps-steps > li > p { margin: 0; max-width: 46ch; color: var(--on-dark-2, #c9c9c2); }
 .ps-inline { display: none; }
-.ps-stage { position: sticky; top: 88px; align-self: start; height: calc(100vh - 120px); max-height: 640px; min-height: 420px; display: grid; align-items: center; }
+/* The rail and the screen sit together at the top of the pinned stage, so the step buttons
+   and the card they control read as one unit instead of the card floating mid-viewport. */
+.ps-stage { position: sticky; top: 96px; align-self: start; display: grid; align-items: start; }
 .ps-stage-pin { display: grid; gap: 16px; }
 .ps-rail { display: flex; gap: 6px; flex-wrap: wrap; }
 .ps-rail button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px 0 6px; border-radius: 999px; border: 1px solid #3a3a3a; background: transparent; color: #d6d6d0; font-size: 12.5px; font-weight: 700; transition: background-color .15s ease, color .15s ease, border-color .15s ease; }

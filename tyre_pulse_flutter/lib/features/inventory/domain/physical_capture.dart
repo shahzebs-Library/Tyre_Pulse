@@ -159,6 +159,8 @@ final class PendingCapture {
     this.locationId,
     this.locationHint,
     this.remarks,
+    this.genuine,
+    this.genuineNote,
     this.photos = const <PendingPhoto>[],
     this.serverId,
     this.tempRef,
@@ -188,6 +190,8 @@ final class PendingCapture {
         locationId: j['location_id'] as String?,
         locationHint: j['location_hint'] as String?,
         remarks: j['remarks'] as String?,
+        genuine: j['genuine'] as bool?,
+        genuineNote: j['genuine_note'] as String?,
         photos: <PendingPhoto>[
           for (final Object? p in (j['photos'] as List?) ?? const <Object?>[])
             if (p is Map) PendingPhoto.fromJson(Map<String, Object?>.from(p)),
@@ -218,6 +222,12 @@ final class PendingCapture {
   final String? locationId;
   final String? locationHint;
   final String? remarks;
+
+  /// The counter's genuine / not genuine mark (null = not stated). Stored in
+  /// `physical_inventory_captures.genuine` (migration 20261127120000); a
+  /// server without that migration ignores the key.
+  final bool? genuine;
+  final String? genuineNote;
   final List<PendingPhoto> photos;
 
   /// Set once the server accepted the capture.
@@ -256,6 +266,8 @@ final class PendingCapture {
         locationId: locationId,
         locationHint: locationHint,
         remarks: remarks,
+        genuine: genuine,
+        genuineNote: genuineNote,
         photos: photos ?? this.photos,
         serverId: serverId ?? this.serverId,
         tempRef: tempRef ?? this.tempRef,
@@ -280,6 +292,9 @@ final class PendingCapture {
         'location_id': locationId,
         'location_hint': locationHint,
         'remarks': remarks,
+        if (genuine != null) 'genuine': genuine,
+        if ((genuineNote ?? '').trim().isNotEmpty)
+          'genuine_note': genuineNote!.trim(),
         'device_id': deviceId,
         'captured_at': capturedAt.toUtc().toIso8601String(),
       };
@@ -303,6 +318,8 @@ final class PendingCapture {
         'location_id': locationId,
         'location_hint': locationHint,
         'remarks': remarks,
+        'genuine': genuine,
+        'genuine_note': genuineNote,
         'photos': <Object?>[for (final PendingPhoto p in photos) p.toJson()],
         'server_id': serverId,
         'temp_ref': tempRef,

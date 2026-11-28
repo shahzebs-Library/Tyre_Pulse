@@ -470,6 +470,14 @@ abstract final class SupabaseRpcs {
   static const String workshopStatusUpdateRecord =
       'workshop_status_update_record';
 
+  /// Workshop intake (20261128090000): add vehicles (p_country, p_source,
+  /// p_rows jsonb, at most 200), confirm (p_ids uuid[], p_note) and return
+  /// with a reason (p_id, p_reason). The server routes, stamps who / when and
+  /// refuses a self-confirm.
+  static const String workshopIntakeUpsertRows = 'workshop_intake_upsert_rows';
+  static const String workshopIntakeConfirm = 'workshop_intake_confirm';
+  static const String workshopIntakeReturn = 'workshop_intake_return';
+
   static const String getReportSnapshotAuthed = 'get_report_snapshot_authed';
   static const String getAccidentAudit = 'get_accident_audit';
 
@@ -514,6 +522,9 @@ abstract final class SupabaseRpcs {
     qrLoginPeek,
     workshopStatusMyPermissions,
     workshopStatusUpdateRecord,
+    workshopIntakeUpsertRows,
+    workshopIntakeConfirm,
+    workshopIntakeReturn,
   };
 
   /// Set-returning RPCs, which are capped at 1000 rows exactly as a table read

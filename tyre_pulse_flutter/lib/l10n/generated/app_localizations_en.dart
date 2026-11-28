@@ -190,6 +190,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your account is waiting for approval or has been locked. Your administrator can put this right.';
 
   @override
+  String get accessBlockedCheckAgain => 'Check again';
+
+  @override
+  String get accessBlockedStillWaiting =>
+      'Your account is still not active. Ask your administrator to approve it.';
+
+  @override
   String get routeNotFoundTitle => 'That screen does not exist';
 
   @override
@@ -2163,6 +2170,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeStatUnavailableCaption => 'Could not check';
 
   @override
+  String get homeRoleCopyCatalog =>
+      'meterTitle=Log today\'s meter~meterNotLogged=Not logged today~meterLogged=Logged %time%~problemTitle=Report a problem or breakdown~problemHint=Tell the workshop what is wrong~exceptionsTitle=Today\'s exceptions~offRoad=Off road~openAccidents=Open accidents~maintenanceOverdue=Maintenance overdue~tyresAttention=Tyres need attention~handoverTitle=Handovers awaiting your sign-off~reportAccident=Report an accident~approvalsTitle=Approvals waiting on you~approvalsSplit=%a% inspections • %b% checklists~issueTitle=Report an issue~issueHint=Something broken or unsafe~teamTitle=Team now~working=Working~waiting=Waiting~free=Free~teamNote=Free means checked in and not working. Absent cannot be counted: no attendance is recorded.~assignTitle=Assign jobs~assignHint=%count% open job cards with nobody assigned~assignGap=Opens the job card list. Assigning from the phone is not built yet.~myJobsTitle=My jobs~myJobsCount=%count% open~myJobsNone=No open jobs~plantTitle=Today\'s plant checks~sheetsDue=%count% sheets due~allDone=All done today~dailyTitle=Workshop Daily~dueToday=Due today~signTitle=Approvals to sign~signHint=%count% awaiting your signature~tyresDueTitle=Tyres due for replacement~myVehicle=My vehicle~noVehicle=No meter logged yet~wash=Record a wash~washDays=Last washed %count% days ago~washToday=Washed today~washNever=No wash recorded~dailyChecklist=Daily checklist~charges=My fines & charges~chargesHint=Fines, charges and your own sign-offs~summary=Daily summary & reports~alerts=Alerts~plan=Today\'s plan~planOpen=%count% open today~repair=Repair request~meter=Meter log~inspectionsDue=Inspections due today~checklistsToSign=Checklists to sign~waitingParts=Waiting for parts~blocked=Blocked over 30 minutes~requestParts=Request parts~recent=Recent inspections~reorder=Stock to reorder~sync=Pending sync~more=More~open=Open';
+
+  @override
   String get homeNoQuickActionsMessage =>
       'Nothing is available to you here yet. Contact your administrator if you need access to a feature.';
 
@@ -2888,7 +2899,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease~myCounts=My counts~transfers=Transfers~needsApproval=A count difference needs approval. Use Count to record what is on the shelf; an approver posts the change.~countNote=Your count is recorded for review. The stock balance changes only when an approver posts the difference.~countRecorded=Count recorded for review.~countSavedOnPhone=Count saved on this phone. It is sent when the connection is back.~countNoPlace=This stock line has no store or country, so the count cannot be recorded.~countNeedsConnection=The first count in this store needs a connection to open a count session.~countRefused=The count was not accepted:';
+      'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease~myCounts=My counts~transfers=Transfers~needsApproval=A count difference needs approval. Use Count to record what is on the shelf; an approver posts the change.~countNote=Your count is recorded for review. The stock balance changes only when an approver posts the difference.~countRecorded=Count recorded for review.~countSavedOnPhone=Count saved on this phone. It is sent when the connection is back.~countNoPlace=This stock line has no store or country, so the count cannot be recorded.~countNeedsConnection=The first count in this store needs a connection to open a count session.~countRefused=The count was not accepted:~matches=Matches~notMatch=Doesn\'t match~matchesRecorded=Recorded: the shelf matches the system.~matchesSavedOnPhone=Saved on this phone: the shelf matches the system. It is sent when the connection is back.~genuineQuestion=Is the part genuine?~genuine=Genuine~notGenuine=Not genuine~genuineNote=Note on the part (optional)~countedToday=Counted today~bin=Bin~code=Code~offlineShowingLast=Offline - showing last loaded data~refreshFailedShowingLast=Could not refresh - showing last loaded data~movementsOffline=Movements cannot load while offline. They show when the connection is back.~refreshing=Refreshing~aftermarket=Aftermarket~unchecked=Unchecked~countedItem=Counted:~undo=Undo~countUndone=Count removed. Nothing was sent.~undoTooLate=Already sent, so it stays for review.~markMatches=Mark as matches';
+
+  @override
+  String get storeItemCopyCatalog =>
+      'title=Store item~addPhoto=Add photo~camera=Take photo~gallery=Choose from photos~noPhoto=No photo yet~photoAdded=Photo added. Everyone in the company can see it.~photoNeedsConnection=Needs a connection. The photo was not saved; try again when online.~photoFailed=The photo could not be added.~photoUnavailable=Could not load photo~companySku=Company SKU~itemCode=ERP code~brand=Brand~noBrand=No brand recorded~category=Category~pendingApproval=Pending approval~verified=Verified~notLinked=Not in the company catalogue yet~notLinkedBody=Part numbers, barcodes and photos are shared through the company catalogue. Propose this item and a reviewer links it.~propose=Propose to catalogue~proposeTitle=Propose to the company catalogue~proposeSent=Sent for review. A reviewer adds it to the catalogue and links this item.~description=Description~whereItIs=Where it is~bin=Bin~noBin=No bin recorded~total=Total~reserved=Reserved~available=Available~onHand=On hand~condition=Condition~partNumbers=Part numbers~noPartNumbers=No part numbers yet~addPartNumber=Add part number~partNumber=Part number~manufacturer=Manufacturer (optional)~partNumberSent=Part number sent for approval. Once approved everyone in the company sees it.~barcodes=Barcodes and other numbers~noBarcodes=No barcodes yet~addBarcode=Add barcode~barcode=Barcode or number~numberType=Type~typeBarcode=Barcode~typeOem=OEM part number~typeAlternative=Other number~scan=Scan~barcodeSent=Sent for approval. It is added once a reviewer approves it.~setBrand=Correct brand~brandSent=Brand change sent for approval.~reason=Reason~reasonRequired=Give a short reason (at least 3 letters).~searchBrand=Search brands~newBrand=Add new brand~newBrandName=New brand name~brandRequired=Pick or type a brand.~partNumberRequired=Type the part number.~valueRequired=Type the number.~descriptionRequired=Type a description.~send=Send~cancel=Cancel~needsConnection=Needs a connection. Nothing was sent; try again when online.~failed=Not sent:~moveBin=Move to another bin~pendingChanges=Waiting for approval~recent=Recent movements~loadFailed=Could not load this item.~brandsFailed=Could not load the brand list. You can still type a new brand.~defaultReason=Added from the store~unit=Unit~levelsReceive=Levels and receive stock';
 
   @override
   String get calendarCopyCatalog =>
@@ -3007,7 +3022,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get workshopCopyCatalog =>
-      'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.';
+      'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.~c_whatDone=What was done~c_parts=Parts used~c_meters=Meter readings~c_km=Odometer (km)~c_hours=Hour meter~c_before=Before photos (optional)~c_after=After photos~c_signature=Your signature~returned=Returned by supervisor~waitingApproval=Waiting for supervisor approval~notAccepted=Not accepted:~c_queued=Saved on this phone. It is sent to the supervisor as soon as there is signal.~c_stateQueued=Queued on this phone~c_stateFailed=Failed, not sent~c_stateSynced=Sent, waiting for supervisor approval~jc_title=Jobs to check~jc_tabToCheck=To check~jc_tabReturned=Returned~jc_emptyToCheck=No finished job is waiting for you.~jc_emptyReturned=No returned job.~jc_loadError=The jobs could not be loaded.~jc_extra=Extra evidence~jc_waiting=Waiting for you~jc_by=Finished by~jc_returnReason=Returned because:~jc_noParts=No parts recorded~jc_noMeters=No meter reading~jc_photoUnavailable=Photo not available~jc_pass=Pass and close~jc_return=Return the job~jc_returnTitle=Why is it returned?~jc_returnHint=Tell them what still needs fixing~jc_returnSend=Return the job~jc_passed=Job passed and closed.~jc_returnedOk=Job returned. The data desk will reassign it.~jc_decideError=This could not be saved. Try again.~jc_signature=Technician\'s signature';
 
   @override
   String get homeTodaysWork => 'Today\'s work';
@@ -9389,4 +9404,1199 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.';
+
+  @override
+  String get profileSyncQueueTitle => 'Sync queue';
+
+  @override
+  String get syncQueueStatPending => 'Pending';
+
+  @override
+  String get syncQueueStatAttention => 'Needs attention';
+
+  @override
+  String get syncQueueStatSent => 'Sent';
+
+  @override
+  String get syncQueueStatSentCaption => 'Still on this device';
+
+  @override
+  String syncQueueLastAttempt(String time) {
+    return 'Last sync attempt: $time';
+  }
+
+  @override
+  String get syncQueueNoAttempt =>
+      'No sync attempt recorded on this device yet';
+
+  @override
+  String get syncQueueRunning => 'A sync is running now';
+
+  @override
+  String get syncQueueSyncNow => 'Sync now';
+
+  @override
+  String get syncQueueOfflineReason =>
+      'You are offline. Your work is safe on this phone and will be sent when you are back online.';
+
+  @override
+  String get syncQueueNothingToSend => 'Nothing is waiting to be sent.';
+
+  @override
+  String get syncQueueRequested =>
+      'Sync requested. This list updates as items are sent.';
+
+  @override
+  String get syncQueueRequestFailed => 'Could not start a sync. Try again.';
+
+  @override
+  String get syncQueueEmptyTitle => 'Everything is synced';
+
+  @override
+  String get syncQueueEmptyMessage =>
+      'Nothing from this device is waiting to be sent.';
+
+  @override
+  String get syncQueueLoadFailedTitle => 'Could not read the sync queue';
+
+  @override
+  String get syncQueueLoadFailedMessage =>
+      'Your queued work is still on this phone. Try again.';
+
+  @override
+  String get syncQueueSectionItems => 'Queued items';
+
+  @override
+  String syncTypeInspection(String asset) {
+    return 'Inspection $asset';
+  }
+
+  @override
+  String syncQueueItemQueued(String time) {
+    return 'Queued $time';
+  }
+
+  @override
+  String syncQueueAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count attempts',
+      one: '1 attempt',
+      zero: 'Not tried yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncQueueNextAttempt(String time) {
+    return 'Next try $time';
+  }
+
+  @override
+  String get syncQueueStateWaiting => 'Waiting to send';
+
+  @override
+  String get syncQueueStateSending => 'Sending now';
+
+  @override
+  String get syncQueueStateRetrying => 'Will try again';
+
+  @override
+  String get syncQueueStateOnHold => 'On hold';
+
+  @override
+  String get syncQueueStateNeedsAttention => 'Needs attention';
+
+  @override
+  String get syncQueueStateSent => 'Sent';
+
+  @override
+  String get syncQueueRetry => 'Retry';
+
+  @override
+  String get syncQueueRetried => 'Put back in the queue.';
+
+  @override
+  String get syncQueueRetryNotNeeded =>
+      'This item is no longer waiting for a retry.';
+
+  @override
+  String get syncQueueRetryFailed => 'Could not retry this item. Try again.';
+
+  @override
+  String get syncQueueErrorFallback => 'This item could not be sent.';
+
+  @override
+  String get syncTypeTyreChange => 'Tyre change';
+
+  @override
+  String get syncTypeWorkOrder => 'Work order';
+
+  @override
+  String get syncTypeRca => 'Root cause analysis';
+
+  @override
+  String get syncTypeReportIssue => 'Reported issue';
+
+  @override
+  String get syncTypeStockAdjust => 'Stock count';
+
+  @override
+  String get syncTypeWorkOrderStatus => 'Work order status';
+
+  @override
+  String get syncTypeCorrectiveActionStatus => 'Corrective action status';
+
+  @override
+  String get syncTypeChecklistSubmission => 'Checklist';
+
+  @override
+  String get syncTypeChecklistAssignmentStatus => 'Checklist assignment';
+
+  @override
+  String get syncTypeOdometerLog => 'Odometer reading';
+
+  @override
+  String get syncTypeEngineHoursLog => 'Engine hours reading';
+
+  @override
+  String get syncTypeReportAccident => 'Accident report';
+
+  @override
+  String get syncTypeWashRecord => 'Vehicle wash';
+
+  @override
+  String get syncTypeWorkshopEvent => 'Workshop activity';
+
+  @override
+  String get syncTypeInventoryCountLine => 'Inventory count line';
+
+  @override
+  String get syncTypeUnknown => 'Unrecognised entry';
+
+  @override
+  String get profileDraftsTitle => 'Drafts';
+
+  @override
+  String get profileDraftsEmptyTitle => 'No drafts';
+
+  @override
+  String get profileDraftsEmptyMessage =>
+      'Unfinished checklists and inspections you start on this phone appear here.';
+
+  @override
+  String get profileDraftsLoadFailedTitle => 'Could not read your drafts';
+
+  @override
+  String get profileDraftsLoadFailedMessage =>
+      'Your drafts are still on this phone. Try again.';
+
+  @override
+  String get profileDraftKindChecklist => 'Checklist';
+
+  @override
+  String get profileDraftKindInspection => 'Inspection';
+
+  @override
+  String profileDraftEdited(String time) {
+    return 'Last edited $time';
+  }
+
+  @override
+  String get profileDraftNoAsset => 'No asset picked yet';
+
+  @override
+  String get profileDraftResume => 'Resume';
+
+  @override
+  String get profileDraftDiscard => 'Discard';
+
+  @override
+  String get profileDraftDiscardTitle => 'Discard this draft?';
+
+  @override
+  String get profileDraftDiscardMessage =>
+      'Everything recorded in this draft, including its photos and signatures, is removed from this phone. This cannot be undone.';
+
+  @override
+  String get profileDraftDiscarded => 'Draft discarded.';
+
+  @override
+  String get profileDraftDiscardFailed =>
+      'Could not discard the draft. Try again.';
+
+  @override
+  String get syncQueueInspectionRetried =>
+      'Tried to send your inspections again. The status below is up to date.';
+
+  @override
+  String get accidentTasksTitle => 'My accident tasks';
+
+  @override
+  String get accidentTasksAssignedToMe => 'Assigned to me';
+
+  @override
+  String get accidentTasksForMyTeam => 'For my team';
+
+  @override
+  String get accidentTasksEmpty => 'Nothing waiting for you on accident cases.';
+
+  @override
+  String get accidentTasksNotOn =>
+      'Accident task tracking is not switched on yet.';
+
+  @override
+  String get accidentTasksLoading => 'Loading your tasks...';
+
+  @override
+  String get accidentTasksOverdue => 'Overdue';
+
+  @override
+  String get accidentTasksDueSoon => 'Due soon';
+
+  @override
+  String get accidentTasksOnTime => 'On time';
+
+  @override
+  String get accidentTasksNoTarget => 'No target';
+
+  @override
+  String accidentTasksCase(String ref) {
+    return 'Case $ref';
+  }
+
+  @override
+  String accidentTasksInStep(String days) {
+    return '$days in this step';
+  }
+
+  @override
+  String accidentTasksDays(String count) {
+    return '$count days';
+  }
+
+  @override
+  String get accidentTasksToday => 'today';
+
+  @override
+  String accidentTasksDue(String time) {
+    return 'Due $time';
+  }
+
+  @override
+  String accidentTasksSummary(String open, String overdue) {
+    return '$open open, $overdue overdue';
+  }
+
+  @override
+  String get accidentRegisterMine => 'Mine';
+
+  @override
+  String get accidentTasksRoleNames =>
+      'admin=Admin~manager=Manager~director=Director~inspector=Inspector~tyre_man=Tyre Technician~reporter=Reporter~driver=Driver~mechanic=Mechanic~electrician=Electrician~maintenance_supervisor=Maintenance Supervisor~workshop_supervisor=Workshop Supervisor~tyre_data_collector=Tyre Data Collector~pmv_manager=PMV Manager~workshop_area_manager=Workshop Area Manager~workshop_maintenance_area_manager=Workshop Maintenance Area Manager~fleet_supervisor=Fleet Supervisor~fleet_incharge=Fleet Incharge~store_keeper=Store Keeper';
+
+  @override
+  String get devicesTitle => 'Devices';
+
+  @override
+  String get devicesProfileRowValue => 'Gauges, scanners, printers';
+
+  @override
+  String get devicesIntro =>
+      'Gauges, handheld scanners and label printers added on this phone. Only you see this list.';
+
+  @override
+  String get devicesEmptyTitle => 'No devices yet';
+
+  @override
+  String get devicesEmptyMessage =>
+      'Add a tread or pressure gauge, a handheld scanner or a label printer.';
+
+  @override
+  String get devicesLoadFailed =>
+      'The saved devices could not be read on this phone.';
+
+  @override
+  String get devicesAdd => 'Add device';
+
+  @override
+  String get devicesKindTread => 'Tread depth gauge';
+
+  @override
+  String get devicesKindPressure => 'Tyre pressure gauge';
+
+  @override
+  String get devicesKindCombined => 'Tread and pressure gauge';
+
+  @override
+  String get devicesKindScanner => 'Barcode or RFID handheld';
+
+  @override
+  String get devicesKindRfid => 'UHF RFID reader';
+
+  @override
+  String get devicesKindPrinter => 'Label printer';
+
+  @override
+  String get devicesTransportBle => 'Bluetooth';
+
+  @override
+  String get devicesTransportHid => 'Keyboard mode';
+
+  @override
+  String get devicesTransportNetwork => 'Network';
+
+  @override
+  String get devicesTransportSimulator => 'Simulator (testing only)';
+
+  @override
+  String get devicesBluetoothOff =>
+      'Bluetooth is off. Turn it on to add or use a Bluetooth device.';
+
+  @override
+  String get devicesPermissionDenied =>
+      'Tyre Pulse is not allowed to use Bluetooth. Allow it, or turn it on in the phone settings.';
+
+  @override
+  String get devicesBluetoothUnsupported =>
+      'This phone has no Bluetooth LE. Keyboard-mode and network devices still work.';
+
+  @override
+  String get devicesAllowBluetooth => 'Allow Bluetooth';
+
+  @override
+  String get devicesScanning => 'Looking for nearby devices…';
+
+  @override
+  String get devicesScanNone =>
+      'No devices found. Wake the device and keep it close to the phone.';
+
+  @override
+  String get devicesScanAgain => 'Scan again';
+
+  @override
+  String get devicesUnnamed => 'Unnamed device';
+
+  @override
+  String get devicesChooseKind => 'What is this device?';
+
+  @override
+  String get devicesChooseConnection => 'How does it connect?';
+
+  @override
+  String get devicesNameLabel => 'Device name';
+
+  @override
+  String get devicesHostLabel => 'Printer IP address';
+
+  @override
+  String get devicesPortLabel => 'Port';
+
+  @override
+  String get devicesLanguageLabel => 'Printer language';
+
+  @override
+  String get devicesLabelSizeLabel => 'Label size';
+
+  @override
+  String get devicesSave => 'Save device';
+
+  @override
+  String get devicesFieldRequired => 'Fill in this field.';
+
+  @override
+  String get devicesHidHint =>
+      'First pair the device with the phone as a keyboard in the phone\'s Bluetooth settings, then save it here.';
+
+  @override
+  String get devicesTest => 'Test';
+
+  @override
+  String get devicesTestRead => 'Read once';
+
+  @override
+  String get devicesTestPrint => 'Print test label';
+
+  @override
+  String get devicesTestLabelName => 'Tyre Pulse test label';
+
+  @override
+  String devicesTestReading(String value) {
+    return 'Read $value';
+  }
+
+  @override
+  String get devicesTestPrinted => 'Test label sent to the printer.';
+
+  @override
+  String get devicesForget => 'Forget';
+
+  @override
+  String devicesForgetConfirm(String name) {
+    return 'Forget $name? You can add it again later.';
+  }
+
+  @override
+  String devicesBattery(int level) {
+    return 'Battery $level%';
+  }
+
+  @override
+  String get devicesErrorNotConnected =>
+      'The device did not connect. Check it is switched on and close by.';
+
+  @override
+  String get devicesErrorTimeout => 'The device did not answer in time.';
+
+  @override
+  String get devicesErrorNoReading =>
+      'No reading arrived. Take the measurement on the gauge and try again.';
+
+  @override
+  String get devicesErrorUnreadable =>
+      'The device sent data this app cannot read. Its settings need the maker\'s specification.';
+
+  @override
+  String get devicesErrorNotConfigured =>
+      'This device is missing its connection settings.';
+
+  @override
+  String get devicesErrorPrintFailed =>
+      'The label could not be printed. Check the printer has paper and is on.';
+
+  @override
+  String get devicesErrorUnsupported => 'This device cannot do that.';
+
+  @override
+  String get devicesErrorVendorSdk =>
+      'This reader needs its maker\'s software, which is not installed yet. Use it in keyboard mode for now.';
+
+  @override
+  String get gaugeReadPressure => 'Read pressure from gauge';
+
+  @override
+  String get gaugeReadTread => 'Read tread from gauge';
+
+  @override
+  String get gaugeNoGauge =>
+      'No gauge is set up for this reading. Add one under Profile > Devices.';
+
+  @override
+  String get gaugePickTitle => 'Choose a gauge';
+
+  @override
+  String gaugeReadingFrom(String device) {
+    return 'Reading from $device…';
+  }
+
+  @override
+  String get gaugeConfirmTitle => 'Use this reading?';
+
+  @override
+  String gaugeConfirmBody(String device, String value, String position) {
+    return '$device measured $value on $position.';
+  }
+
+  @override
+  String gaugeConfirmReplace(String old) {
+    return 'This replaces the value already entered ($old).';
+  }
+
+  @override
+  String get gaugeUseReading => 'Use reading';
+
+  @override
+  String get gaugeHidTitle => 'Send the reading';
+
+  @override
+  String gaugeHidMessage(String device) {
+    return 'Press the send button on $device. The value appears below.';
+  }
+
+  @override
+  String get gaugeHidField => 'Value from the gauge';
+
+  @override
+  String gaugeValuePsi(String value) {
+    return '$value psi';
+  }
+
+  @override
+  String gaugeValueMm(String value) {
+    return '$value mm';
+  }
+
+  @override
+  String get hidScannerReady =>
+      'Handheld scanner ready: press the trigger to look up a tyre or asset.';
+
+  @override
+  String get labelPrint => 'Print label';
+
+  @override
+  String get labelChoosePrinter => 'Print label on';
+
+  @override
+  String get labelPrintPdf => 'System printer or PDF';
+
+  @override
+  String labelPrinted(String printer) {
+    return 'Label sent to $printer.';
+  }
+
+  @override
+  String get labelUnicodeNote =>
+      'Arabic or Urdu text on this label prints correctly only through the system printer or PDF.';
+
+  @override
+  String syncQueuePhotoFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos could not upload',
+      one: 'A photo could not upload',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncQueuePhotoRetry => 'Retry photo';
+
+  @override
+  String get syncQueuePhotoRetried =>
+      'The photo will be tried again on the next sync.';
+
+  @override
+  String get syncQueuePhotoRemove => 'Send without this photo';
+
+  @override
+  String get syncQueuePhotoRemoveTitle => 'Send without this photo?';
+
+  @override
+  String get syncQueuePhotoRemoveMessage =>
+      'This photo is evidence for the record. If you remove it, the record is sent without it and the photo cannot be recovered from the queue. Retake it from the record if you can.';
+
+  @override
+  String get syncQueuePhotoRemoveConfirm => 'Remove photo';
+
+  @override
+  String get syncQueuePhotoRemoved =>
+      'Photo removed. The record will be sent without it.';
+
+  @override
+  String get syncQueuePhotoActionFailed => 'That did not work. Try again.';
+
+  @override
+  String get fleetListOffRoadFilter => 'Off road';
+
+  @override
+  String inspectionPickerCollapsedNote(int assets, int rows) {
+    return '$assets asset numbers from $rows register rows. A number used in more than one country is listed once: choose a country to inspect the right machine.';
+  }
+
+  @override
+  String get workshopIntakeCopyCatalog =>
+      'title=Vehicle intake~subtitle=Add vehicles and confirm the ones sent to you~open=Vehicle intake~waitingBanner=%n% vehicles waiting for you to confirm~waitingBannerOne=1 vehicle waiting for you to confirm~tabWaiting=Waiting for me~tabAdd=Add vehicle~noAccess=You need the Add workshop vehicles or Confirm workshop vehicles permission. Ask your administrator.~loading=Loading vehicles~loadFailed=The vehicles could not be loaded.~emptyTitle=Nothing is waiting for you~emptyMessage=New vehicles routed to you appear here. Pull down to check again.~enteredBy=Entered by %name%~system=System~jobCard=Job card~ownEntry=You entered this one. Another supervisor confirms it.~confirm=Confirm~return=Return~confirmed=Vehicle confirmed.~confirmFailed=The vehicle could not be confirmed.~notRouted=This vehicle is not routed to you.~alreadyConfirmed=Someone already confirmed this vehicle.~refused=You cannot confirm a vehicle you entered.~returnTitle=Return to the person who entered it~reason=Reason~reasonHint=What needs fixing?~reasonShort=Write at least 5 characters.~returned=Vehicle returned.~returnFailed=The vehicle could not be returned.~cancel=Cancel~assetCode=Asset code~assetRequired=Enter the asset code.~site=Workshop site~siteHint=Leave empty to use the vehicle\'s own site~complaint=Complaint~jobCardNo=Job card no (optional)~workType=Work type~priority=Priority~notSet=Not set~send=Send to supervisor~sent=Sent. The supervisor on shift gets a notice.~updatedRow=Updated.~sameRow=Nothing changed.~listedRow=This vehicle is already in the workshop list.~invalidRow=Check the asset code.~releasedRow=This vehicle was already released.~sendFailed=The vehicle could not be sent. Check the signal and try again.~pickCountry=Choose one country first. Vehicles are entered per country.~wt_Repair=Repair~wt_Emergency=Breakdown~wt_Preventive Maintenance=Preventive maintenance~wt_Service=Service~wt_Tyre Change=Tyre change~wt_Inspection=Inspection~wt_Other=Other~pr_Low=Low~pr_Medium=Medium~pr_High=High~pr_Critical=Critical~src_sheet=Shared sheet~src_phone=Phone~src_manual=Typed~src_erp=ERP job card~src_excel_upload=Daily Excel';
+
+  @override
+  String get washStepVehicle => 'Vehicle';
+
+  @override
+  String get washStepType => 'Wash type';
+
+  @override
+  String get washStepChecklist => 'Checklist and chemicals';
+
+  @override
+  String get washStepPhotos => 'Photos';
+
+  @override
+  String get washStepReview => 'Review and save';
+
+  @override
+  String get washStepOptional => 'Optional';
+
+  @override
+  String washStepProgress(int done, int total) {
+    return '$done of $total steps done';
+  }
+
+  @override
+  String washLoggedBy(String name, String time) {
+    return 'Logged by $name · today $time';
+  }
+
+  @override
+  String get washLoggedByNote =>
+      'Recorded automatically from your sign-in. It cannot be changed.';
+
+  @override
+  String get washLoggedBySelf => 'you';
+
+  @override
+  String get washMissingVehicle => 'Pick a vehicle';
+
+  @override
+  String get washMissingType => 'Choose a wash type';
+
+  @override
+  String get washMissingEvidence => 'Finish the checklist details';
+
+  @override
+  String washLastWash(String date) {
+    return 'Last wash $date';
+  }
+
+  @override
+  String washDaysSince(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days ago',
+      one: '1 day ago',
+      zero: 'Washed today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washNoHistoryForAsset => 'No wash recorded yet';
+
+  @override
+  String get washDueBadge => 'Due for wash';
+
+  @override
+  String washOverdueBadge(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days overdue',
+      one: '1 day overdue',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washUpToDateBadge => 'Up to date';
+
+  @override
+  String get washHistoryChecking => 'Checking wash history...';
+
+  @override
+  String get washHistoryUnavailable => 'Wash history could not be checked';
+
+  @override
+  String get washTypeExteriorDesc => 'Body wash';
+
+  @override
+  String get washTypeInteriorDesc => 'Cab cleaning';
+
+  @override
+  String get washTypeFullDesc => 'Inside and out';
+
+  @override
+  String get washTypeEngineBayDesc => 'Engine compartment degrease';
+
+  @override
+  String get washTypeUndercarriageDesc => 'Chassis and wheels';
+
+  @override
+  String get washTypeSteamDesc => 'Steam clean';
+
+  @override
+  String get washTypeWaterlessDesc => 'Spray and wipe, no water';
+
+  @override
+  String washChecklistProgress(int done, int total) {
+    return '$done of $total checked';
+  }
+
+  @override
+  String washIssuesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count issues',
+      one: '1 issue',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String washProductsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count products',
+      one: '1 product',
+      zero: 'No products',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washPhotosBefore => 'Before washing';
+
+  @override
+  String get washPhotosAfter => 'After washing';
+
+  @override
+  String washPhotosCount(int count, int max) {
+    return '$count of $max photos';
+  }
+
+  @override
+  String get washPhotosOptional =>
+      'Optional. Before and after photos prove the wash was done.';
+
+  @override
+  String get washReviewTitle => 'Check before saving';
+
+  @override
+  String get washMoreDetails => 'More details (optional)';
+
+  @override
+  String washReviewChecklistValue(int checked, int total, String products) {
+    return '$checked of $total checked · $products';
+  }
+
+  @override
+  String get washSavedTitle => 'Wash saved';
+
+  @override
+  String get washSavedOfflineMessage =>
+      'You are offline. The wash is saved on this phone and uploads automatically when there is a signal.';
+
+  @override
+  String get washSavedOnlineMessage =>
+      'Saved on this phone and uploading now. Check Sync if it does not appear.';
+
+  @override
+  String get washLogAnother => 'Log another wash';
+
+  @override
+  String get washHistoryTitle => 'Wash history';
+
+  @override
+  String get washStatLastSevenDays => 'Last 7 days';
+
+  @override
+  String get washStatThisMonth => 'This month';
+
+  @override
+  String get washStatTopAsset => 'Most washed this month';
+
+  @override
+  String get washStatNone => 'None yet';
+
+  @override
+  String washCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count washes',
+      one: '1 wash',
+      zero: 'No washes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washFilterAllDates => 'All dates';
+
+  @override
+  String get washFilterSevenDays => '7 days';
+
+  @override
+  String get washFilterThirtyDays => '30 days';
+
+  @override
+  String get washFilterPickDates => 'Pick dates';
+
+  @override
+  String get washFilterAllTypes => 'All types';
+
+  @override
+  String get washFilterClear => 'Clear filters';
+
+  @override
+  String get washHistoryNoMatch => 'No washes match these filters';
+
+  @override
+  String washPhotoCountShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos',
+      one: '1 photo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washChangeVehicle => 'Change vehicle';
+
+  @override
+  String get washStepAreas => 'What was washed';
+
+  @override
+  String get washAreasHint =>
+      'Tap the sides on the picture and the parts you washed.';
+
+  @override
+  String get washMissingAreas => 'Pick what was washed';
+
+  @override
+  String get washAreaExterior => 'Exterior body';
+
+  @override
+  String get washAreaExteriorDesc => 'Body, glass and lights';
+
+  @override
+  String get washAreaEngineBay => 'Engine bay';
+
+  @override
+  String get washAreaEngineBayDesc => 'Engine wash and degrease';
+
+  @override
+  String get washAreaUndercarriage => 'Undercarriage';
+
+  @override
+  String get washAreaUndercarriageDesc => 'Chassis and underbody';
+
+  @override
+  String get washAreaCabin => 'Cabin interior';
+
+  @override
+  String get washAreaCabinDesc => 'Seats, floor and dashboard';
+
+  @override
+  String get washAreaTyresRims => 'Tyres and rims';
+
+  @override
+  String get washAreaTyresRimsDesc => 'Tyres, rims and wheel arches';
+
+  @override
+  String get washAreaDrumHopper => 'Mixer drum and hopper';
+
+  @override
+  String get washAreaDrumHopperDesc => 'Drum shell, hopper and chute';
+
+  @override
+  String get washAreaSteam => 'Steam degrease';
+
+  @override
+  String get washAreaSteamDesc => 'Hot steam on grease and oil';
+
+  @override
+  String get washViewsTitle => 'Sides washed';
+
+  @override
+  String get washViewFront => 'Front';
+
+  @override
+  String get washViewLeft => 'Left';
+
+  @override
+  String get washViewRear => 'Rear';
+
+  @override
+  String get washViewRight => 'Right';
+
+  @override
+  String get washViewTop => 'Top';
+
+  @override
+  String get washViewsAll => 'All sides';
+
+  @override
+  String washViewsCount(int count, int total) {
+    return '$count of $total sides';
+  }
+
+  @override
+  String get washVehiclePictureNone =>
+      'No picture for this vehicle type yet. Mark the sides below.';
+
+  @override
+  String get washVehiclePicturePending => 'Pick a vehicle to see its picture.';
+
+  @override
+  String get washWaterless => 'Waterless wash (no water used)';
+
+  @override
+  String get washCostLabel => 'Cost';
+
+  @override
+  String get washCostNoCharge => 'No charge · washed in-house';
+
+  @override
+  String get washAreasLabel => 'Washed areas';
+
+  @override
+  String washRecordedAsType(String type) {
+    return 'Recorded as $type';
+  }
+
+  @override
+  String get washAreaSelected => 'Selected';
+
+  @override
+  String get washMissingPhotos => 'Take before and after photos';
+
+  @override
+  String get washPhotosRequired =>
+      'At least one before and one after photo, taken with the camera now. Each photo is stamped with its time and location.';
+
+  @override
+  String washPhotoStamp(String time, String place) {
+    return '$time · $place';
+  }
+
+  @override
+  String get washGpsNone => 'No GPS';
+
+  @override
+  String get washReadOnlyNote =>
+      'This record cannot be changed on the phone. Corrections are made on the web by an administrator, and every change is kept in the audit history.';
+
+  @override
+  String get washRecordIdLabel => 'Record ID';
+
+  @override
+  String get washCapturedOnDevice => 'Captured on device';
+
+  @override
+  String get washSiteFromVehicle =>
+      'Taken from the vehicle record. It cannot be changed here.';
+
+  @override
+  String get washAuditTitle => 'Audit record';
+
+  @override
+  String washNextDue(String date) {
+    return 'Next wash due $date';
+  }
+
+  @override
+  String get washVerificationLabel => 'Supervisor check';
+
+  @override
+  String get washVerificationPending => 'Waiting for a supervisor to verify';
+
+  @override
+  String washVerificationVerified(String name, String time) {
+    return 'Verified by $name on $time';
+  }
+
+  @override
+  String get washVerificationNotRequired =>
+      'No check needed: logged by a supervisor';
+
+  @override
+  String get washVerificationUnknown => 'Not set up on this server yet';
+
+  @override
+  String get washVerifyAction => 'Verify this wash';
+
+  @override
+  String get washVerifyNoteHint => 'Note (optional)';
+
+  @override
+  String get washVerifyDone => 'Wash verified';
+
+  @override
+  String get washVerifyFailed => 'Could not verify this wash. Try again.';
+
+  @override
+  String get washVerifyOwnEntry =>
+      'You logged this wash, so another supervisor must verify it.';
+
+  @override
+  String get washPendingBadge => 'To verify';
+
+  @override
+  String get syncSheetAllSynced => 'All synced';
+
+  @override
+  String syncSheetLastAttempt(String ago) {
+    return 'last attempt $ago';
+  }
+
+  @override
+  String get syncSheetNoAttempt => 'no sync attempt yet';
+
+  @override
+  String syncSheetWaiting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count waiting',
+      one: '1 waiting',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncSheetNeedsAttention(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count need attention',
+      one: '1 needs attention',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sheetSeeAll(int count) {
+    return 'See all ($count)';
+  }
+
+  @override
+  String get timeAgoJustNow => 'just now';
+
+  @override
+  String timeAgoMinutes(int count) {
+    return '$count min ago';
+  }
+
+  @override
+  String timeAgoHours(int count) {
+    return '$count h ago';
+  }
+
+  @override
+  String timeAgoDays(int count) {
+    return '$count d ago';
+  }
+
+  @override
+  String get tyreEditorEyebrow => 'Tyre position';
+
+  @override
+  String tyrePosNameWithRole(String side, String axle, String role) {
+    return '$side, $axle, $role';
+  }
+
+  @override
+  String tyrePosNameNoRole(String side, String axle) {
+    return '$side, $axle';
+  }
+
+  @override
+  String get tyrePosSideLeft => 'Left';
+
+  @override
+  String get tyrePosSideRight => 'Right';
+
+  @override
+  String tyrePosAxleFront(String number) {
+    return 'front axle $number';
+  }
+
+  @override
+  String tyrePosAxleRearNumbered(String number) {
+    return 'rear axle $number';
+  }
+
+  @override
+  String get tyrePosAxleRear => 'rear axle';
+
+  @override
+  String get tyrePosAxleCentre => 'centre axle';
+
+  @override
+  String get tyrePosAxleRearCentre => 'rear-centre axle';
+
+  @override
+  String get tyrePosAxleRearmost => 'rearmost axle';
+
+  @override
+  String get tyrePosRoleInner => 'inner';
+
+  @override
+  String get tyrePosRoleOuter => 'outer';
+
+  @override
+  String get tyreEditorSectionMeasurements => 'Measurements';
+
+  @override
+  String get tyreEditorSectionTyre => 'Tyre';
+
+  @override
+  String get tyreEditorFittedTitle => 'Fitted tyre';
+
+  @override
+  String tyreEditorFittedOn(String date) {
+    return 'Fitted $date';
+  }
+
+  @override
+  String tyreEditorKmAtFitment(String km) {
+    return '$km km at fitment';
+  }
+
+  @override
+  String tyreEditorKmRun(String km) {
+    return '$km km run since fitment';
+  }
+
+  @override
+  String get tyreEditorFittedSerialMissing => 'Serial not recorded';
+
+  @override
+  String get tyreEditorFittedNotLoaded => 'Fitted tyre not loaded';
+
+  @override
+  String get tyreEditorFittedNotLoadedHint =>
+      'The tyre register could not be read. You can still record this wheel.';
+
+  @override
+  String get tyreEditorFittedNone => 'No tyre on record for this position';
+
+  @override
+  String tyreEditorSerialDiffers(String serial) {
+    return 'Different from the tyre on record ($serial)';
+  }
+
+  @override
+  String get tyreEditorUnitPsi => 'psi';
+
+  @override
+  String get tyreEditorUnitMm => 'mm';
+
+  @override
+  String get tyreEditorNumberInvalid => 'Enter a number.';
+
+  @override
+  String get tyreEditorPressureRange => 'Enter a pressure from 0 to 200 psi.';
+
+  @override
+  String get tyreEditorTreadRange => 'Enter a tread depth from 0 to 30 mm.';
+
+  @override
+  String get tyreEditorPressureUnusual =>
+      'Unusual pressure for a tyre. Check the reading.';
+
+  @override
+  String get tyreEditorTreadUnusual =>
+      'Unusual tread depth. Check the reading.';
+
+  @override
+  String tyreEditorPreviousReading(String date, String values) {
+    return 'Last inspection $date: $values';
+  }
+
+  @override
+  String tyreEditorPreviousReadingUndated(String values) {
+    return 'Last inspection: $values';
+  }
+
+  @override
+  String get tyreEditorConditionSelected => 'Selected';
+
+  @override
+  String get tyreEditorPositionMap => 'Position on the vehicle';
 }

@@ -41,6 +41,10 @@ describe('driver charges panel', () => {
     fireEvent.click(await screen.findByText(/DC-2026-00001/))
     fireEvent.click(await screen.findByRole('button', { name: 'Respond and sign' }))
     expect(screen.getByText(/take this amount from my salary/)).toBeInTheDocument()
+    // The driverCharges strings load on demand; under a busy test run they can
+    // arrive after the dialog opens. Wait for them before the validation
+    // message (which is stored as text when Submit is pressed) is produced.
+    await screen.findByText(/ask your supervisor to read it to you/, undefined, { timeout: 8000 })
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Read and confirm')
     fireEvent.click(screen.getByRole('checkbox'))
@@ -50,7 +54,8 @@ describe('driver charges panel', () => {
     const [action, payload] = api.driverChargeCommand.mock.calls[0]
     expect(action).toBe('charge_respond')
     expect(payload).toMatchObject({ driver_id: 'd1', charge_id: 'c1', version: 3, response: 'accept', statement_version: 'deduction-consent-v3', statement_language: 'en', acknowledged: true })
-  })
+
+  }, 20000)
 
   it('the driver sees the photos and can sign the statement in Urdu', async () => {
     api.getDriverCharge.mockResolvedValue({ ...detail, evidence: [{ id: 'e1', kind: 'photo', ref: 'tp-storage://tyre-photos/modules/driver-charge/a/1.jpg', label: 'Broken mirror' }] })

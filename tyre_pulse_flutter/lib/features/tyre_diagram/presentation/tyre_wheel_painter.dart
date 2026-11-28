@@ -33,6 +33,7 @@ import 'dart:ui' show PathMetric;
 
 import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
+import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_condition_glyph.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_diagram_geometry.dart';
 import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_risk_colors.dart';
@@ -332,7 +333,7 @@ class TyreWheelPainter extends CustomPainter {
       Paint()..color = const Color(0xFFF8FAFC).withValues(alpha: 0.85),
     );
 
-    // The condition picture on a disc of the band colour, white ink, so the
+    // The condition picture on a disc of the condition's colour, white ink, so the
     // wheel says what is wrong without a word (shared tyre map glyphs).
     // Never smaller than 24 logical px, so the picture inside is >= 16dp.
     final double badge =
@@ -342,11 +343,19 @@ class TyreWheelPainter extends CustomPainter {
       width: badge,
       height: badge,
     );
-    // Deep (light palette) colour in both themes: white ink stays readable.
+    // The condition's own deep colour (owner, 2026-11-27) in both themes, so
+    // white ink stays readable and the badge matches the legend and the
+    // picker: Damaged red, Puncture orange, Flat magenta... The wheel body
+    // and its dot keep the severity band.
     canvas.drawCircle(
       centre,
       badge / 2,
-      Paint()..color = tyreRiskBaseColor(wheel.status, Brightness.light),
+      Paint()
+        ..color = tyreConditionSelectedFill(
+          wheel.isRecorded
+              ? tyreConditionFromKind(wheel.conditionKind ?? 'none')
+              : null,
+        ),
     );
     canvas.drawCircle(
       centre,

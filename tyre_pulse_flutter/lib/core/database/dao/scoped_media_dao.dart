@@ -22,6 +22,7 @@ final class ScopedMediaDao extends MediaDao {
     int limit = uploadConcurrency,
     String? workspaceId,
     String? createdBy,
+    Iterable<String> excludeIds = const <String>[],
   }) async {
     final active = await attachedDatabase.cacheDao.activeWorkspace();
     if (currentUserId() != userId ||
@@ -33,6 +34,26 @@ final class ScopedMediaDao extends MediaDao {
       limit: limit,
       workspaceId: this.workspaceId,
       createdBy: userId,
+      excludeIds: excludeIds,
+    );
+  }
+
+  @override
+  Future<int> requeueFailedMedia({
+    String? workspaceId,
+    String? createdBy,
+    String? commandId,
+    int budget = 1,
+    bool force = false,
+    DateTime? now,
+  }) {
+    return super.requeueFailedMedia(
+      workspaceId: this.workspaceId,
+      createdBy: userId,
+      commandId: commandId,
+      budget: budget,
+      force: force,
+      now: now,
     );
   }
 }

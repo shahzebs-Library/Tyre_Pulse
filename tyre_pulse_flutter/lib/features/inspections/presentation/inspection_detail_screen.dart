@@ -22,6 +22,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_type_display.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_action_repository.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_action_plan.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_payload.dart';
@@ -382,7 +383,7 @@ class _DetailBody extends StatelessWidget {
                   ),
                 ],
               ),
-              Text(view.vehicleType),
+              Text(vehicleTypeDisplay(view.vehicleType) ?? ''),
               const SizedBox(height: TpSpace.sm),
               _InfoRow(icon: Icons.place_outlined, text: view.site),
               _InfoRow(

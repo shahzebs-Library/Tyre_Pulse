@@ -75,7 +75,7 @@ final class AccidentEvidenceCommandPusher implements CommandPusher {
         // first attempt remains a genuine conflict; the same response after
         // an earlier attempt means that attempt landed and its evidence is
         // therefore safe to verify before SyncEngine marks the command synced.
-        if (failure.isIdempotentReplay && resolved.command.retryCount > 0) {
+        if (resolved.command.retryCount > 0 && isClientUuidReplay(failure)) {
           await _mediaDao.markCommandMediaVerified(resolved.command.id);
         }
         rethrow;
@@ -210,6 +210,12 @@ final class AccidentEvidenceCommandPusher implements CommandPusher {
   }
 
   String _validateUploaded(PendingMediaUpload media) {
+    if (media.state == MediaUploadState.queued ||
+        media.state == MediaUploadState.uploading) {
+      // Still on its way (possibly backing off a transient failure): wait
+      // without spending one of the report's retries.
+      throw photoWaitFailure();
+    }
     if (media.state != MediaUploadState.uploaded &&
         media.state != MediaUploadState.verified) {
       throw _evidenceFailure(

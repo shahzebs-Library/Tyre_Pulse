@@ -29,6 +29,7 @@ void main() {
         'asset_no': ' TM514 ',
         'status': ' Active ',
         'issue_date': '2026-08-20',
+        'km_at_fitment': '40250.5',
       });
 
       expect(fitment.id, 'tyre-id');
@@ -38,6 +39,11 @@ void main() {
       expect(fitment.size, '315/80 R22.5');
       expect(fitment.assetNo, 'TM514');
       expect(fitment.issueDate, DateTime(2026, 8, 20));
+      expect(fitment.kmAtFitment, 40250.5);
+      expect(
+        TyreFitment.fromRow(const <String, Object?>{'id': 'x'}).kmAtFitment,
+        isNull,
+      );
     });
 
     test('rejects a row with no stable record id', () {

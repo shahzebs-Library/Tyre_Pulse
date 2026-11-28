@@ -130,6 +130,7 @@ import 'package:tyre_pulse/core/auth/auth_controller.dart';
 import 'package:tyre_pulse/core/auth/auth_dependency_providers.dart';
 import 'package:tyre_pulse/core/auth/auth_state.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/devices/device_providers.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/permissions/roles.dart';
@@ -140,6 +141,7 @@ import 'package:tyre_pulse/features/approvals/presentation/widgets/checklist_app
 import 'package:tyre_pulse/features/auth/presentation/login_security_copy.dart';
 import 'package:tyre_pulse/features/checklists/checklists_providers.dart';
 import 'package:tyre_pulse/features/checklists/domain/checklist_i18n.dart';
+import 'package:tyre_pulse/features/devices/presentation/devices_screen.dart';
 import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
 import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
@@ -148,6 +150,8 @@ import 'package:tyre_pulse/features/notifications/presentation/notifications_cop
 import 'package:tyre_pulse/features/problem_report/presentation/report_problem_screen.dart';
 import 'package:tyre_pulse/features/profile/data/account_deletion_repository.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
+import 'package:tyre_pulse/features/profile/presentation/profile_drafts_sheet.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_sheet.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 import 'package:tyre_pulse/features/qr_login/presentation/qr_login_screen.dart';
 
@@ -155,6 +159,7 @@ import 'package:tyre_pulse/features/qr_login/presentation/qr_login_screen.dart';
 @visibleForTesting
 abstract final class ProfileScreenKeys {
   static const Key hero = Key('profile.hero');
+  static const Key devicesRow = Key('profile.devices');
   static const Key status = Key('profile.status');
   static const Key access = Key('profile.access');
   static const Key account = Key('profile.account');
@@ -162,6 +167,7 @@ abstract final class ProfileScreenKeys {
   static const Key languageRow = Key('profile.language');
   static const Key themeRow = Key('profile.theme');
   static const Key pendingSyncRow = Key('profile.pendingSync');
+  static const Key pendingSyncTile = Key('profile.pendingSyncTile');
   static const Key appVersionRow = Key('profile.appVersion');
   static const Key signOut = Key('profile.signOut');
   static const Key unsyncedFooter = Key('profile.unsyncedFooter');
@@ -501,7 +507,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       onOpenAssigned: canSeeTasks
                           ? () => context.push(const TasksRoute().location)
                           : () => context.push(const CalendarRoute().location),
+                      onRetryAssigned: () =>
+                          ref.invalidate(myWorkSnapshotProvider),
                       profileStale: authState.profileStale,
+                      onOpenDrafts: () =>
+                          unawaited(openProfileDraftsQuick(context, ref)),
+                      onOpenSyncQueue: () =>
+                          unawaited(showSyncQueueSheet(context)),
                     ),
                     const SizedBox(height: TpSpace.lg),
                     _ProfileGroups(
@@ -524,6 +536,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           _chooseChecklistLanguage(checklistLanguage),
                         ),
                         onOpenSignature: () => unawaited(_openSavedSignature()),
+                        onOpenSyncQueue: () =>
+                            unawaited(showSyncQueueSheet(context)),
+                        onOpenDrafts: () =>
+                            unawaited(openProfileDraftsQuick(context, ref)),
                         onReportProblem: () => unawaited(
                           openReportProblem(
                             context,
@@ -532,6 +548,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                         onSignInOnComputer: () =>
                             unawaited(openQrLogin(context)),
+                        onOpenDevices: ref.watch(devicesAccessProvider)
+                            ? () => unawaited(
+                                  Navigator.of(context)
+                                      .push(DevicesScreen.route()),
+                                )
+                            : null,
                       ),
                       account: _AccountBlock(
                         isSigningOut: _isSigningOut,
@@ -836,6 +858,33 @@ String _countText(AsyncValue<int> value) {
 /// that list), queued work still on this device, unread notifications (when
 /// there is no assigned-work tile), and - only when the profile itself is served from the offline cache - an
 /// offline marker. No invented task count or "last sync" clock.
+/// What the "Assigned tasks" tile shows for [work].
+///
+/// Never a permanent dash: a snapshot already read keeps showing while a
+/// refresh runs (Riverpod's reloading state still carries the value), a read
+/// that is genuinely still running shows an ellipsis, and a failed read says
+/// so and becomes tap-to-retry. When a REFRESH fails but an older count is
+/// held, the old number stays but is marked [stale] (and [failed], so the
+/// tile offers retry) instead of silently passing as current. `loadMyWork`
+/// bounds every source with a timeout, so "still running" always ends.
+@visibleForTesting
+({String value, bool failed, bool stale}) profileAssignedTasksCount(
+  AsyncValue<MyWorkSnapshot> work,
+) {
+  final MyWorkSnapshot? snapshot = work.value;
+  if (snapshot != null) {
+    final int n = snapshot.items.where((item) => item.isOpen).length;
+    final bool stale = work.hasError;
+    return (
+      value: snapshot.partial ? '$n+' : '$n',
+      failed: stale,
+      stale: stale,
+    );
+  }
+  if (work.hasError) return (value: '-', failed: true, stale: false);
+  return (value: '…', failed: false, stale: false);
+}
+
 class _ProfileStatusStrip extends StatelessWidget {
   const _ProfileStatusStrip({
     required this.drafts,
@@ -844,6 +893,9 @@ class _ProfileStatusStrip extends StatelessWidget {
     required this.profileStale,
     this.assigned,
     this.onOpenAssigned,
+    this.onRetryAssigned,
+    this.onOpenDrafts,
+    this.onOpenSyncQueue,
   });
 
   final AsyncValue<int> drafts;
@@ -855,6 +907,15 @@ class _ProfileStatusStrip extends StatelessWidget {
   /// in which case the notifications count keeps its place.
   final AsyncValue<MyWorkSnapshot>? assigned;
   final VoidCallback? onOpenAssigned;
+
+  /// Re-reads the snapshot after a failed load (the tile then says so).
+  final VoidCallback? onRetryAssigned;
+
+  /// Opens the drafts list (the "Pending drafts" tile).
+  final VoidCallback? onOpenDrafts;
+
+  /// Opens the sync queue (the "Pending sync" tile).
+  final VoidCallback? onOpenSyncQueue;
 
   @override
   Widget build(BuildContext context) {
@@ -883,21 +944,17 @@ class _ProfileStatusStrip extends StatelessWidget {
                     case final AsyncValue<MyWorkSnapshot> work) ...<Widget>[
                   Expanded(
                     child: InkWell(
-                      onTap: onOpenAssigned,
+                      onTap: profileAssignedTasksCount(work).failed
+                          ? onRetryAssigned
+                          : onOpenAssigned,
                       borderRadius: BorderRadius.circular(TpRadius.md),
                       child: _ProfileStatusItem(
                         key: ProfileScreenKeys.assignedTile,
                         icon: Icons.assignment_outlined,
-                        value: switch (work) {
-                          AsyncData<MyWorkSnapshot>(:final value) => () {
-                              final int n = value.items
-                                  .where((item) => item.isOpen)
-                                  .length;
-                              return value.partial ? '$n+' : '$n';
-                            }(),
-                          _ => '-',
-                        },
-                        label: l10n.profileAssignedTasks,
+                        value: profileAssignedTasksCount(work).value,
+                        label: profileAssignedTasksCount(work).failed
+                            ? '${l10n.profileAssignedTasks} · ${l10n.actionRetry}'
+                            : l10n.profileAssignedTasks,
                         tone: palette.ok,
                         stacked: stacked,
                       ),
@@ -910,29 +967,38 @@ class _ProfileStatusStrip extends StatelessWidget {
                   ),
                 ],
                 Expanded(
-                  child: _ProfileStatusItem(
-                    key: ProfileScreenKeys.draftsTile,
-                    icon: Icons.description_outlined,
-                    value: _countText(drafts),
-                    label: l10n.clMockPendingDrafts,
-                    tone: (drafts.asData?.value ?? 0) > 0
-                        ? palette.warning
-                        : palette.info,
-                    stacked: stacked,
+                  child: InkWell(
+                    onTap: onOpenDrafts,
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                    child: _ProfileStatusItem(
+                      key: ProfileScreenKeys.draftsTile,
+                      icon: Icons.description_outlined,
+                      value: _countText(drafts),
+                      label: l10n.clMockPendingDrafts,
+                      tone: (drafts.asData?.value ?? 0) > 0
+                          ? palette.warning
+                          : palette.info,
+                      stacked: stacked,
+                    ),
                   ),
                 ),
                 VerticalDivider(width: 1, thickness: 1, color: palette.border),
                 Expanded(
-                  child: _ProfileStatusItem(
-                    icon: Icons.cloud_upload_outlined,
-                    value: _countText(pendingSync),
-                    label: l10n.homeSyncStatLabel,
-                    tone: pending == null
-                        ? palette.neutral
-                        : pending > 0
-                            ? palette.warning
-                            : palette.ok,
-                    stacked: stacked,
+                  child: InkWell(
+                    onTap: onOpenSyncQueue,
+                    borderRadius: BorderRadius.circular(TpRadius.md),
+                    child: _ProfileStatusItem(
+                      key: ProfileScreenKeys.pendingSyncTile,
+                      icon: Icons.cloud_upload_outlined,
+                      value: _countText(pendingSync),
+                      label: l10n.homeSyncStatLabel,
+                      tone: pending == null
+                          ? palette.neutral
+                          : pending > 0
+                              ? palette.warning
+                              : palette.ok,
+                      stacked: stacked,
+                    ),
                   ),
                 ),
                 // The bell in the app bar already carries the unread count; the
@@ -1154,8 +1220,11 @@ class _SettingsColumn extends StatelessWidget {
     required this.onChooseTheme,
     required this.onChooseChecklistLanguage,
     required this.onOpenSignature,
+    required this.onOpenSyncQueue,
+    required this.onOpenDrafts,
     required this.onReportProblem,
     required this.onSignInOnComputer,
+    this.onOpenDevices,
   });
 
   final WorkspaceProfile profile;
@@ -1175,11 +1244,21 @@ class _SettingsColumn extends StatelessWidget {
   final VoidCallback onChooseTheme;
   final VoidCallback onChooseChecklistLanguage;
   final VoidCallback onOpenSignature;
+
+  /// Opens the sync queue (the "Pending sync" row).
+  final VoidCallback onOpenSyncQueue;
+
+  /// Opens the drafts list (the "Offline drafts" row).
+  final VoidCallback onOpenDrafts;
   final VoidCallback onReportProblem;
 
   /// Opens "Sign in on a computer" (scan the web sign-in QR). Offered to
   /// every signed-in role: it only ever signs the SAME person in on the web.
   final VoidCallback onSignInOnComputer;
+
+  /// Opens Settings > Devices. Null hides the row: devices are admin-only
+  /// until opened per person from the web Access Manager.
+  final VoidCallback? onOpenDevices;
 
   @override
   Widget build(BuildContext context) {
@@ -1288,6 +1367,15 @@ class _SettingsColumn extends StatelessWidget {
               value: _themeLabel(activeTheme, l10n),
               onTap: onChooseTheme,
             ),
+            if (onOpenDevices != null)
+              _SettingsRow(
+                key: ProfileScreenKeys.devicesRow,
+                icon: Icons.bluetooth_rounded,
+                tone: palette.info,
+                label: l10n.devicesTitle,
+                value: l10n.devicesProfileRowValue,
+                onTap: onOpenDevices,
+              ),
           ],
         ),
         const SizedBox(height: TpSpace.lg),
@@ -1329,6 +1417,7 @@ class _SettingsColumn extends StatelessWidget {
                   : pending == 0
                       ? palette.ok.base
                       : palette.warning.base,
+              onTap: onOpenSyncQueue,
             ),
             _SettingsRow(
               key: ProfileScreenKeys.offlineDraftsRow,
@@ -1343,6 +1432,7 @@ class _SettingsColumn extends StatelessWidget {
                   : draftCount > 0
                       ? palette.warning.base
                       : null,
+              onTap: onOpenDrafts,
             ),
           ],
         ),

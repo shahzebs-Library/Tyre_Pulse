@@ -10,6 +10,7 @@
  */
 import { supabase, toServiceError } from './_client'
 import { resolveWorkshopPermissions, NO_WORKSHOP_PERMISSIONS } from '../workshopStatus/permissions'
+import { resolveIntakePermissions } from '../workshopStatus/intake'
 
 /**
  * @returns {Promise<{ permissions: Readonly<Record<string, boolean>>, error: import('./_client').ServiceError|null }>}
@@ -20,7 +21,11 @@ export async function loadMyWorkshopPermissions() {
     if (error) {
       return { permissions: NO_WORKSHOP_PERMISSIONS, error: toServiceError(error, 'Could not load your workshop permissions.') }
     }
-    return { permissions: resolveWorkshopPermissions({ myPermissions: data }), error: null }
+    // Intake flags (20261128090000) ride on the same answer; both fail closed.
+    return {
+      permissions: Object.freeze({ ...resolveWorkshopPermissions({ myPermissions: data }), ...resolveIntakePermissions(data) }),
+      error: null,
+    }
   } catch (err) {
     return { permissions: NO_WORKSHOP_PERMISSIONS, error: toServiceError(err, 'Could not load your workshop permissions.') }
   }

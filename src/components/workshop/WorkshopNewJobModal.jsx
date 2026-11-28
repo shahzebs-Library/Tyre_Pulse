@@ -17,6 +17,7 @@
  * var(--*) theme. No fabricated data; all option lists are static vocab.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLanguage } from '../../contexts/LanguageContext'
 import {
   Plus, X, Car, Wrench, Clock, User, ClipboardList, AlertTriangle, RefreshCw, CalendarClock,
 } from 'lucide-react'
@@ -33,6 +34,12 @@ const WORK_TYPES = [
 ]
 
 const PRIORITIES = ['Critical', 'High', 'Medium', 'Low']
+const PRIORITY_I18N = { Critical: 'critical', High: 'high', Medium: 'medium', Low: 'low' }
+const WORK_TYPE_I18N = {
+  'Tyre Change': 'tyreChange', 'Inspection': 'inspection', 'Repair': 'repair', 'Rotation': 'rotation',
+  'Balancing': 'balancing', 'Alignment': 'alignment', 'Retread': 'retread', 'Puncture Repair': 'punctureRepair',
+  'Pressure Check': 'pressureCheck', 'Emergency': 'emergency', 'Other': 'other', 'Preventive Maintenance': 'preventiveMaintenance',
+}
 
 const EMPTY = {
   asset_no: '', work_type: 'Repair', priority: 'Medium', description: '',
@@ -60,6 +67,8 @@ function daysUntil(iso) {
 
 export default function WorkshopNewJobModal({ technicians = [], busy = false, onClose, onCreate }) {
   const { activeCountry } = useSettings()
+  const { t } = useLanguage()
+  const nj = (k, v) => t(`workshop.newJob.${k}`, v)
   const [tab, setTab] = useState('manual')       // 'manual' | 'pm'
   const [form, setForm] = useState(EMPTY)
   const [master, setMaster] = useState(null)     // { registration_no, vehicle_type, make, model }
@@ -177,7 +186,7 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.6)' }}
-      role="dialog" aria-modal="true" aria-label="Create a new job"
+      role="dialog" aria-modal="true" aria-label={nj('dialogAria')}
       onClick={onClose}
     >
       <div
@@ -187,9 +196,9 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
       >
         <div className="flex items-center justify-between gap-2 p-4 border-b" style={{ borderColor: 'var(--border-dim)' }}>
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Plus className="w-4 h-4" /> New Job
+            <Plus className="w-4 h-4" /> {nj('title')}
           </h3>
-          <button type="button" onClick={onClose} className="text-muted hover:text-white" aria-label="Close">
+          <button type="button" onClick={onClose} className="text-muted hover:text-white" aria-label={nj('close')}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -197,16 +206,16 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
         {/* Tabs */}
         <div className="flex gap-1 px-4 pt-3">
           {[
-            { key: 'manual', label: 'Manual', icon: ClipboardList },
-            { key: 'pm', label: 'From PM', icon: CalendarClock },
-          ].map((t) => {
-            const Icon = t.icon
-            const active = tab === t.key
+            { key: 'manual', label: nj('tabManual'), icon: ClipboardList },
+            { key: 'pm', label: nj('tabPm'), icon: CalendarClock },
+          ].map((tb) => {
+            const Icon = tb.icon
+            const active = tab === tb.key
             return (
               <button
-                key={t.key}
+                key={tb.key}
                 type="button"
-                onClick={() => setTab(t.key)}
+                onClick={() => setTab(tb.key)}
                 className="text-xs font-semibold px-3 py-1.5 rounded-lg border inline-flex items-center gap-1.5"
                 style={{
                   background: active ? 'var(--surface-2)' : 'transparent',
@@ -215,7 +224,7 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
                 }}
                 aria-pressed={active}
               >
-                <Icon className="w-3.5 h-3.5" /> {t.label}
+                <Icon className="w-3.5 h-3.5" /> {tb.label}
               </button>
             )
           })}
@@ -224,13 +233,13 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
         <div className="p-4 overflow-y-auto flex-1">
           {tab === 'manual' ? (
             <form id="new-job-form" onSubmit={submit} className="flex flex-col gap-3">
-              <Field label="Asset number (required)">
+              <Field label={nj('asset')}>
                 <div className="relative">
                   <Car className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
                   <input
                     value={form.asset_no}
                     onChange={(e) => set({ asset_no: e.target.value })}
-                    placeholder="Scan or type an asset number"
+                    placeholder={nj('assetPlaceholder')}
                     autoFocus
                     className="w-full text-sm rounded-lg pl-8 pr-8 py-2 border"
                     style={inputStyle}
@@ -238,49 +247,49 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
                   {looking && <RefreshCw className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-muted animate-spin" />}
                 </div>
                 {masterLine && (
-                  <span className="mt-1 block text-[11px] text-muted truncate">Master: {masterLine}</span>
+                  <span className="mt-1 block text-[11px] text-muted truncate">{nj('master', { line: masterLine })}</span>
                 )}
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Work type">
+                <Field label={nj('workType')}>
                   <select value={form.work_type} onChange={(e) => set({ work_type: e.target.value })} className="w-full text-sm rounded-lg px-2 py-2 border" style={inputStyle}>
-                    {WORK_TYPES.map((w) => <option key={w} value={w}>{w}</option>)}
+                    {WORK_TYPES.map((w) => <option key={w} value={w}>{WORK_TYPE_I18N[w] ? t(`workorders.workTypeLabel.${WORK_TYPE_I18N[w]}`) : w}</option>)}
                   </select>
                 </Field>
-                <Field label="Priority">
+                <Field label={nj('priority')}>
                   <select value={form.priority} onChange={(e) => set({ priority: e.target.value })} className="w-full text-sm rounded-lg px-2 py-2 border" style={inputStyle}>
-                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
+                    {PRIORITIES.map((pr) => <option key={pr} value={pr}>{t(`workorders.priorityLabel.${PRIORITY_I18N[pr]}`)}</option>)}
                   </select>
                 </Field>
               </div>
 
-              <Field label="Description">
+              <Field label={nj('description')}>
                 <textarea
                   value={form.description}
                   onChange={(e) => set({ description: e.target.value })}
                   rows={2}
-                  placeholder="What needs doing?"
+                  placeholder={nj('descriptionPlaceholder')}
                   className="w-full text-sm rounded-lg px-3 py-2 border resize-none"
                   style={inputStyle}
                 />
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Estimated minutes">
+                <Field label={nj('estMinutes')}>
                   <div className="relative">
                     <Clock className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
                     <input
                       value={form.est_minutes}
                       onChange={(e) => set({ est_minutes: e.target.value.replace(/[^0-9]/g, '') })}
                       inputMode="numeric"
-                      placeholder="e.g. 90"
+                      placeholder={nj('estPlaceholder')}
                       className="w-full text-sm rounded-lg pl-8 pr-2 py-2 border"
                       style={inputStyle}
                     />
                   </div>
                 </Field>
-                <Field label="Target completion">
+                <Field label={nj('target')}>
                   <input
                     type="datetime-local"
                     value={form.target_completion}
@@ -292,21 +301,21 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Site">
+                <Field label={nj('site')}>
                   <input
                     value={form.site}
                     onChange={(e) => { siteTouched.current = true; set({ site: e.target.value }) }}
-                    placeholder="Auto-filled from asset"
+                    placeholder={nj('sitePlaceholder')}
                     className="w-full text-sm rounded-lg px-3 py-2 border"
                     style={inputStyle}
                   />
                 </Field>
-                <Field label="Assign to (optional)">
+                <Field label={nj('assignTo')}>
                   <div className="relative">
                     <User className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
                     <select value={form.assignee} onChange={(e) => set({ assignee: e.target.value })} className="w-full text-sm rounded-lg pl-8 pr-2 py-2 border" style={inputStyle}>
-                      <option value="">Unassigned</option>
-                      {technicians.map((t) => <option key={t.userId} value={t.userId}>{t.name}</option>)}
+                      <option value="">{nj('unassigned')}</option>
+                      {technicians.map((tc) => <option key={tc.userId} value={tc.userId}>{tc.name}</option>)}
                     </select>
                   </div>
                 </Field>
@@ -315,13 +324,13 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
           ) : (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-muted">Preventive-maintenance programs due within 30 days.</span>
+                <span className="text-[11px] text-muted">{nj('pmHint')}</span>
                 <button type="button" onClick={loadPm} disabled={pm.loading} className="text-[11px] text-muted hover:text-white inline-flex items-center gap-1 disabled:opacity-40">
-                  <RefreshCw className={`w-3 h-3 ${pm.loading ? 'animate-spin' : ''}`} /> Refresh
+                  <RefreshCw className={`w-3 h-3 ${pm.loading ? 'animate-spin' : ''}`} /> {nj('refresh')}
                 </button>
               </div>
               {pm.loading ? (
-                <div className="text-sm text-muted text-center py-6"><RefreshCw className="w-5 h-5 mx-auto mb-2 animate-spin opacity-60" /> Loading PM schedule...</div>
+                <div className="text-sm text-muted text-center py-6"><RefreshCw className="w-5 h-5 mx-auto mb-2 animate-spin opacity-60" /> {nj('pmLoading')}</div>
               ) : pm.error ? (
                 <div className="rounded-lg px-3 py-3 text-sm flex items-start gap-2" style={{ background: 'var(--surface-2)', color: 'var(--panel-ink)' }}>
                   <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: '#f59e0b' }} /> {pm.error}
@@ -329,8 +338,8 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
               ) : pm.rows.length === 0 ? (
                 <div className="text-sm text-muted text-center py-8">
                   <Wrench className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  Nothing due in the next 30 days.
-                  <div className="text-[11px] mt-1">Use the Manual tab to raise any job.</div>
+                  {nj('pmEmpty')}
+                  <div className="text-[11px] mt-1">{nj('pmEmptyHint')}</div>
                 </div>
               ) : (
                 pm.rows.map((r) => {
@@ -344,13 +353,13 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
                       style={{ background: 'var(--surface-2)', borderColor: 'var(--border-dim)' }}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-white font-medium truncate">{r.name || 'PM program'}</span>
+                        <span className="text-sm text-white font-medium truncate">{r.name || nj('pmProgram')}</span>
                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0" style={{ background: overdue ? 'rgba(239,68,68,0.16)' : 'rgba(245,158,11,0.16)', color: overdue ? '#ef4444' : '#f59e0b' }}>
-                          {r._days == null ? 'Due' : overdue ? `${Math.abs(r._days)}d overdue` : `${r._days}d`}
+                          {r._days == null ? nj('due') : overdue ? nj('daysOverdue', { n: Math.abs(r._days) }) : nj('days', { n: r._days })}
                         </span>
                       </div>
                       <div className="text-[11px] text-muted mt-0.5 truncate">
-                        {[r.asset_no || 'No asset', r.site, r.next_due ? `Due ${new Date(r.next_due).toLocaleDateString()}` : null].filter(Boolean).join(' | ')}
+                        {[r.asset_no || nj('noAsset'), r.site, r.next_due ? nj('dueOn', { date: new Date(r.next_due).toLocaleDateString() }) : null].filter(Boolean).join(' | ')}
                       </div>
                     </button>
                   )
@@ -362,11 +371,11 @@ export default function WorkshopNewJobModal({ technicians = [], busy = false, on
 
         {tab === 'manual' && (
           <div className="p-3 border-t flex items-center justify-between gap-2" style={{ borderColor: 'var(--border-dim)' }}>
-            <span className="text-[11px] text-muted">{assetValid ? 'Ready to create.' : 'An asset number is required.'}</span>
+            <span className="text-[11px] text-muted">{assetValid ? nj('ready') : nj('assetRequired')}</span>
             <div className="flex items-center gap-2">
-              <button type="button" onClick={onClose} className="btn-secondary text-sm px-3 py-2">Cancel</button>
+              <button type="button" onClick={onClose} className="btn-secondary text-sm px-3 py-2">{nj('cancel')}</button>
               <button type="submit" form="new-job-form" disabled={busy || !assetValid} className="btn-primary text-sm px-4 py-2 inline-flex items-center gap-1.5 disabled:opacity-40">
-                <Plus className="w-4 h-4" /> Create job
+                <Plus className="w-4 h-4" /> {nj('create')}
               </button>
             </div>
           </div>

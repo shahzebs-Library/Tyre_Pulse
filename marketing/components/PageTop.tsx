@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Photo, type PhotoKey } from "./art/Photos";
 import { DETAILS_ANCHOR } from "@/lib/nav";
 
@@ -8,16 +8,19 @@ import { DETAILS_ANCHOR } from "@/lib/nav";
  * With a photo, it sits beside the text at exactly the text block's height (like the home
  * hero), and the demo button moves under the lead.
  */
-export function PageTop({ crumbs, title, lead, cta = true, photo, photoPosition, visual }: {
+export function PageTop({ crumbs, title, lead, cta = true, photo, photoPosition, visual, locale = "en" }: {
   crumbs: { href?: string; label: string }[]; title: string; lead: string; cta?: boolean; photo?: PhotoKey; photoPosition?: string;
   /** A product screen shown beside the title instead of a photo. */
   visual?: React.ReactNode;
+  /** Arabic pages: Arabic button and labels, and the button goes to the Arabic contact page. */
+  locale?: "en" | "ar";
 }) {
-  const button = cta && <Link className="btn btn-primary" href="/contact">Book a demo <ArrowRight className="cta-arrow" size={17} aria-hidden="true" /></Link>;
+  const ar = locale === "ar";
+  const button = cta && <Link className="btn btn-primary" href={ar ? "/ar/contact" : "/contact"} data-source="page_top">{ar ? "احجز عرضاً" : "Book a demo"} {ar ? <ArrowLeft className="cta-arrow" size={17} aria-hidden="true" /> : <ArrowRight className="cta-arrow" size={17} aria-hidden="true" />}</Link>;
   return (
     <section className={`page-top${photo || visual ? " has-photo" : ""}`}>
       <div className="site-shell">
-        <nav aria-label="Breadcrumb">
+        <nav aria-label={ar ? "مسار التنقل" : "Breadcrumb"}>
           <ol className="crumbs">
             {crumbs.map((c, i) => (
               <li key={c.label}>

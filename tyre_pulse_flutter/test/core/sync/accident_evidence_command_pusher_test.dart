@@ -81,6 +81,8 @@ const SupabaseFailure _duplicateFailure = SupabaseFailure(
   ),
   cause: SupabaseFailureCause.uniqueViolation,
   code: '23505',
+  rawMessage: 'duplicate key value violates unique constraint '
+      '"ux_accidents_client_uuid"',
 );
 
 String _localPath(String fileName) =>
@@ -227,14 +229,21 @@ void main() {
 
     expect(delegate.calls, isEmpty);
     expect(summary.synced, 0);
-    expect(summary.failed, 1);
+    // Waiting on its photo is not a failed attempt: the report goes back
+    // to pending without spending a retry, so it can never dead-letter
+    // while offline.
+    expect(summary.failed, 0);
+    expect(summary.mediaPending, 1);
     final PendingCommand? command =
         await db.queueDao.commandById('accident-command');
     expect(command, isNotNull);
-    expect(command!.status, CommandStatus.retry);
+    expect(command!.status, CommandStatus.pending);
+    expect(command.retryCount, 0);
     final PendingMediaUpload media =
         (await db.mediaDao.mediaForCommand('accident-command')).single;
-    expect(media.state, MediaUploadState.failed);
+    // Offline never spends the attempt budget: still queued, backed off.
+    expect(media.state, MediaUploadState.queued);
+    expect(media.attempts, 0);
     expect(media.localPath, _localPath('offline.jpg'));
   });
 

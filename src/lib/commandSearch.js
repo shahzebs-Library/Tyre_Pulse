@@ -110,6 +110,7 @@ export const NAV_COMMANDS = [
   { id: 'alerts',         label: 'Alerts',               path: '/alerts',       icon: 'Bell',       adminOnly: true },
   { id: 'driver-management', label: 'Driver Intelligence', path: '/driver-management', icon: 'Users', adminOnly: true, moduleKey: 'fleet_master' },
   { id: 'driver-workspace', label: 'Driver Workspace', path: '/driver-workspace', icon: 'Users' },
+  { id: 'driver-concerns', label: 'Driver Concerns', path: '/driver-concerns', icon: 'ShieldAlert', keywords: ['grievance', 'complaint', 'driver concern', 'hr'] },
   { id: 'retread',        label: 'Retread Management',   path: '/retread',      icon: 'RefreshCw',  adminOnly: true },
   // Accident & Insurance
   { id: 'accidents',      label: 'Accidents',            path: '/accidents',    icon: 'AlertTriangle' },
@@ -161,7 +162,7 @@ export const NAV_COMMANDS = [
   { id: 'combinations', label: 'Combinations', path: '/combinations', icon: 'Combine', adminOnly: true },
   { id: 'dispatch', label: 'Dispatch Planning', path: '/dispatch', icon: 'Truck', adminOnly: true },
   { id: 'batteries', label: 'Battery Lifecycle', path: '/batteries', icon: 'BatteryCharging', adminOnly: true },
-  { id: 'telematics-devices', label: 'Telematics Devices', path: '/telematics-devices', icon: 'Router', adminOnly: true },
+  { id: 'telematics-devices', label: 'Devices & Integrations', path: '/telematics-devices', icon: 'Router', adminOnly: true, strictAdmin: true, keywords: ['telematics', 'device', 'tpms', 'gps', 'integration', 'ingest key', 'rfid reader', 'webhook'] },
   { id: 'shifts', label: 'Shift Scheduling', path: '/shifts', icon: 'CalendarClock', adminOnly: true },
   { id: 'speed-limiter', label: 'Speed Limiter', path: '/speed-limiter', icon: 'Gauge', adminOnly: true },
   { id: 'engine-hours', label: 'Engine Hours', path: '/engine-hours', icon: 'Gauge', adminOnly: true, keywords: ['hour meter', 'hourmeter', 'running hours', 'smr'] },
@@ -324,6 +325,8 @@ export function isCommandVisible(cmd, profile, hasPermission, grantedModules, is
   // A module switched Off in Module Control is out of every menu, for everyone.
   if (moduleStatus && isPathSwitchedOff(path, moduleStatus)) return false
   const perm = typeof hasPermission === 'function' ? hasPermission : null
+  // strictAdmin mirrors Layout: Admin / super admin only, no grant fallback.
+  if (cmd.strictAdmin) return role === 'Admin' || isSuperAdmin === true
 
   if (path === '/odometer-logs') return perm ? perm('odometer_logs') === true : false
 

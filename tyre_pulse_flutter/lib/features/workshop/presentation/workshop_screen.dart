@@ -9,6 +9,8 @@ import 'package:tyre_pulse/core/permissions/roles.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/work_orders/presentation/work_orders_list_screen.dart';
+import 'package:tyre_pulse/features/workshop/presentation/workshop_copy.dart';
+import 'package:tyre_pulse/features/workshop/presentation/workshop_jobs_to_check_screen.dart';
 import 'package:tyre_pulse/features/workshop/presentation/workshop_technician_screen.dart';
 
 /// The roles that DO the work and therefore get the technician screen
@@ -44,6 +46,24 @@ class WorkshopScreen extends ConsumerWidget {
     if (isWorkshopTechnician(ref.watch(workspaceContextProvider))) {
       return const WorkshopTechnicianScreen();
     }
-    return const WorkOrdersListScreen(route: WorkOrdersRoute());
+    // Supervisors check finished jobs from here; the data desk reads the
+    // returned ones in the same screen.
+    return WorkOrdersListScreen(
+      route: const WorkOrdersRoute(),
+      leadingActions: <Widget>[
+        Builder(
+          builder: (BuildContext context) => IconButton(
+            key: WorkshopScreenKeys.jobsToCheck,
+            icon: const Icon(Icons.fact_check_outlined),
+            tooltip: WorkshopCopy.of(context)('jc_title'),
+            onPressed: () => openWorkshopJobsToCheck(context),
+          ),
+        ),
+      ],
+    );
   }
+}
+
+abstract final class WorkshopScreenKeys {
+  static const Key jobsToCheck = Key('workshop.board.jobsToCheck');
 }

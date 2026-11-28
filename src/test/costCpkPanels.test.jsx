@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { ComparisonStrip, CpkPanel, EvidencePanel } from '../components/expense/CostCpkPanels'
 
+// English from the real locale file (the expense namespace is lazy at runtime).
+vi.mock('../contexts/LanguageContext', async () => {
+  const { expenseT } = await import('./expenseT.helpers.js')
+  return { useLanguage: () => ({ t: expenseT, isRTL: false }) }
+})
+
 // Icons are noise here; stub every named export the panels reach for.
 vi.mock('lucide-react', () => {
   const Icon = () => null

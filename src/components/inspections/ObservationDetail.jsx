@@ -21,16 +21,16 @@ import { observationPdfRequest } from '../../lib/pdfCache/reportRequests'
 import { applyExportPolicy } from '../../lib/exportUtils'
 import { toUserMessage } from '../../lib/safeError'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const fmtDay = (d) => {
   if (!d) return 'N/A'
   const x = new Date(`${d}T00:00:00`)
   return Number.isNaN(x.getTime()) ? d : x.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
-const KIND = { tyre: 'Tyre finding', note: 'Inspector note', observation: 'Site observation' }
-const val = (v, unit) => (v == null || v === '' ? 'Not recorded' : `${v}${unit ? ` ${unit}` : ''}`)
 
 function Photo({ refValue }) {
+  const { t } = useLanguage()
   const [state, setState] = useState({ status: refValue ? 'loading' : 'none', url: null })
   useEffect(() => {
     let alive = true
@@ -43,21 +43,25 @@ function Photo({ refValue }) {
   }, [refValue])
   const src = state.url ? safeImageSrc(state.url) : null
   if (state.status === 'ok' && src) {
-    return <a href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt="Photo of this tyre" className="iw-od-photo" /></a>
+    return <a href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={t('inspections.obsDetail.photo.alt')} className="iw-od-photo" /></a>
   }
   return (
     <div className="iw-od-nophoto">
       <ImageOff size={18} aria-hidden="true" />
       <span>
-        {state.status === 'loading' ? 'Loading photo...'
-          : state.status === 'failed' ? 'A photo was taken but could not be opened.'
-            : 'No photo was taken of this tyre.'}
+        {state.status === 'loading' ? t('inspections.obsDetail.photo.loading')
+          : state.status === 'failed' ? t('inspections.obsDetail.photo.failed')
+            : t('inspections.obsDetail.photo.none')}
       </span>
     </div>
   )
 }
 
 export default function ObservationDetail({ obs: first, observations = [], onClose, onOpenInspection, onRaiseAction }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`inspections.obsDetail.${k}`, v)
+  const notRec = p('notRecorded')
+  const val = (v, unit) => (v == null || v === '' ? notRec : `${v}${unit ? ` ${unit}` : ''}`)
   const diagramRef = useRef(null)
   const [selected, setSelected] = useState(null)
   const [checkedKeys, setCheckedKeys] = useState([])
@@ -113,9 +117,9 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
       open
       onClose={onClose}
       size="lg"
-      title={`${obs.asset_no || 'No asset'}${obs.position ? `, ${obs.position}` : ''}`}
-      subtitle={`${KIND[obs.kind]} on ${fmtDay(obs.day)}${obs.site ? `, ${obs.site}` : ''}`}
-      closeLabel="Close observation"
+      title={`${obs.asset_no || p('noAsset')}${obs.position ? `, ${obs.position}` : ''}`}
+      subtitle={`${p('kindOn', { kind: t(`inspections.obsDetail.kinds.${obs.kind}`), date: fmtDay(obs.day) })}${obs.site ? `, ${obs.site}` : ''}`}
+      closeLabel={p('close')}
       footer={(
         <div className="cc iw-od-foot">
           <button type="button" className="cc-btn" disabled={pdfBusy} onClick={async () => {
@@ -128,18 +132,18 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
               if (result.note) setPdfNote(result.note)
               setPdfRev((n) => n + 1)
             }
-            catch (e) { setPdfError(toUserMessage(e, 'Could not download the observation report. Retry.')) }
+            catch (e) { setPdfError(toUserMessage(e, p('pdfError'))) }
             finally { setPdfBusy(false) }
-          }}><Download size={14} aria-hidden="true" /> {pdfBusy ? 'Preparing PDF...' : 'Download observation PDF'}</button>
+          }}><Download size={14} aria-hidden="true" /> {pdfBusy ? p('pdfBusy') : p('pdfDownload')}</button>
           {eligible.length > 0 && onRaiseAction && (
             <button type="button" className="cc-btn-primary" disabled={!checked.length}
               onClick={() => onRaiseAction(obs.row, checked.map((f) => `damage:${f.rawPosition}`))}>
-              <Wrench size={14} aria-hidden="true" /> Create actions ({checked.length})
+              <Wrench size={14} aria-hidden="true" /> {p('createActions', { count: checked.length })}
             </button>
           )}
-          {obs.actionRaised && <Link className="cc-link" to="/actions">Action raised</Link>}
+          {obs.actionRaised && <Link className="cc-link" to="/actions">{p('actionRaised')}</Link>}
           <button type="button" className="cc-btn-primary" onClick={() => onOpenInspection(obs.row)}>
-            <ExternalLink size={14} aria-hidden="true" /> Open full inspection
+            <ExternalLink size={14} aria-hidden="true" /> {p('openFull')}
           </button>
         </div>
       )}
@@ -160,27 +164,27 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
             }}
           />
         )}
-        <section className="iw-od-block" aria-label="Inspection report reference">
-          <h4>Inspection details</h4>
+        <section className="iw-od-block" aria-label={p('refAria')}>
+          <h4>{p('details')}</h4>
           <dl className="iw-od-facts">
-            <div><dt>Report ID</dt><dd>{observationReportId(obs.row)}</dd></div>
-            <div><dt>PDF template version</dt><dd>1.0</dd></div>
-            <div><dt>Source revision</dt><dd>{observationRevision(obs.row)}</dd></div>
-            <div><dt>Asset</dt><dd>{obs.asset_no || 'Not recorded'}</dd></div>
-            <div><dt>Inspection date</dt><dd>{fmtDay(obs.day)}</dd></div>
-            <div><dt>Site</dt><dd>{obs.site || 'Not recorded'}</dd></div>
-            <div><dt>Inspection type</dt><dd>{obs.row?.inspection_type || 'Not recorded'}</dd></div>
-            <div><dt>Inspector</dt><dd>{obs.inspector || 'Not recorded'}</dd></div>
-            <div><dt>Status</dt><dd>{obs.row?.approval_status || obs.row?.status || 'Not recorded'}</dd></div>
+            <div><dt>{p('facts.reportId')}</dt><dd>{observationReportId(obs.row)}</dd></div>
+            <div><dt>{p('facts.templateVersion')}</dt><dd>1.0</dd></div>
+            <div><dt>{p('facts.revision')}</dt><dd>{observationRevision(obs.row)}</dd></div>
+            <div><dt>{p('facts.asset')}</dt><dd>{obs.asset_no || notRec}</dd></div>
+            <div><dt>{p('facts.date')}</dt><dd>{fmtDay(obs.day)}</dd></div>
+            <div><dt>{p('facts.site')}</dt><dd>{obs.site || notRec}</dd></div>
+            <div><dt>{p('facts.type')}</dt><dd>{obs.row?.inspection_type || notRec}</dd></div>
+            <div><dt>{p('facts.inspector')}</dt><dd>{obs.inspector || notRec}</dd></div>
+            <div><dt>{p('facts.status')}</dt><dd>{obs.row?.approval_status || obs.row?.status || notRec}</dd></div>
           </dl>
         </section>
-        <section className="iw-od-block" aria-label="Findings in this inspection">
-          <h4>Findings ({findings.length})</h4>
+        <section className="iw-od-block" aria-label={p('findingsAria')}>
+          <h4>{p('findings', { count: findings.length })}</h4>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <p className="iw-od-muted">{checked.length} of {eligible.length} actionable tyres selected</p>
+            <p className="iw-od-muted">{p('selected', { checked: checked.length, total: eligible.length })}</p>
             <div className="flex gap-2">
-              <button type="button" className="cc-btn" onClick={() => setCheckedKeys(eligible.map((f) => f.key))}>Select all</button>
-              <button type="button" className="cc-btn" onClick={() => setCheckedKeys([])}>Clear</button>
+              <button type="button" className="cc-btn" onClick={() => setCheckedKeys(eligible.map((f) => f.key))}>{p('selectAll')}</button>
+              <button type="button" className="cc-btn" onClick={() => setCheckedKeys([])}>{p('clear')}</button>
             </div>
           </div>
           <div className="space-y-2">
@@ -189,20 +193,20 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
               return (
                 <div key={f.key} className="flex items-center gap-3 rounded-lg border border-[var(--border)] p-3">
                   <input type="checkbox" className="h-4 w-4 accent-[var(--accent)]" disabled={!available}
-                    aria-label={`Select action for ${f.position || f.text}`}
+                    aria-label={p('selectFor', { name: f.position || f.text })}
                     checked={checkedKeys.includes(f.key) && available}
                     onChange={(e) => setCheckedKeys((old) => e.target.checked ? [...new Set([...old, f.key])] : old.filter((key) => key !== f.key))} />
                   <button type="button" className="flex-1 text-left text-sm" aria-pressed={f.key === obs.key}
                     onClick={() => setSelected(f.key)}>
-                    <span className="font-semibold">{i + 1}. {f.position || (f.kind === 'note' ? 'Inspector note' : 'Site observation')}</span>
+                    <span className="font-semibold">{i + 1}. {f.position || (f.kind === 'note' ? p('kinds.note') : p('kinds.observation'))}</span>
                     <span className="block text-[var(--text-secondary)]">{f.text}</span>
                   </button>
-                  <span className="text-xs text-[var(--text-muted)]">{f.actionRaised ? 'Action raised' : f.tyreNow?.state === 'replaced' ? 'Replaced' : !available ? 'Information only' : 'Needs action'}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{f.actionRaised ? p('actionRaised') : f.tyreNow?.state === 'replaced' ? p('state.replaced') : !available ? p('infoOnly') : p('needsAction')}</span>
                 </div>
               )
             })}
           </div>
-          <p className="iw-od-muted">Tick several tyres, then create their actions together. Click a tyre name to view its photos and readings below.</p>
+          <p className="iw-od-muted">{p('tickHint')}</p>
         </section>
         <section className="iw-od-head">
           <span className={`cc-pill ${obs.tone}`}>{obs.severity}</span>
@@ -213,34 +217,38 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
         {obs.kind === 'tyre' && (
           <>
             <dl className="iw-od-facts">
-              <div><dt>Position</dt><dd>{obs.position || 'Not recorded'}</dd></div>
-              <div><dt>Pressure</dt><dd>{val(obs.pressure, 'PSI')}</dd></div>
-              <div><dt>Tread</dt><dd>{val(obs.tread, 'mm')}</dd></div>
-              <div><dt>Inspector</dt><dd>{obs.inspector || 'N/A'}</dd></div>
+              <div><dt>{p('facts.position')}</dt><dd>{obs.position || notRec}</dd></div>
+              <div><dt>{p('facts.pressure')}</dt><dd>{val(obs.pressure, 'PSI')}</dd></div>
+              <div><dt>{p('facts.tread')}</dt><dd>{val(obs.tread, 'mm')}</dd></div>
+              <div><dt>{p('facts.inspector')}</dt><dd>{obs.inspector || p('na')}</dd></div>
             </dl>
 
             <section className="iw-od-block">
-              <h4>Is it fixed?</h4>
+              <h4>{p('fixed.title')}</h4>
               {!now ? (
-                <p className="iw-od-muted">Checking the tyre change records...</p>
+                <p className="iw-od-muted">{p('fixed.checking')}</p>
               ) : (
                 <div className={`iw-od-now ${meta.tone}`}>
-                  <span className={`cc-pill ${meta.tone}`}>{meta.label}</span>
+                  <span className={`cc-pill ${meta.tone}`}>{p(`state.${now.state}`)}</span>
                   <p>
                     {now.state === 'replaced' && (
-                      <>A new tyre{now.replacement?.serial ? ` (${now.replacement.serial}${now.replacement.brand ? `, ${now.replacement.brand}` : ''})` : ''} was fitted on this wheel on {fmtDay(now.replacement?.fittedOn)}
-                        {now.daysToReplace != null ? `, ${now.daysToReplace} ${now.daysToReplace === 1 ? 'day' : 'days'} after this inspection` : ''}{now.replacement?.jobCard ? `, on job card ${now.replacement.jobCard}` : ', no job card recorded'}. No action is needed.</>
+                      <>{p('fixed.replaced', {
+                        tyre: now.replacement?.serial ? (now.replacement.brand ? p('fixed.tyreBrand', { serial: now.replacement.serial, brand: now.replacement.brand }) : p('fixed.tyreSerial', { serial: now.replacement.serial })) : '',
+                        date: fmtDay(now.replacement?.fittedOn),
+                        days: now.daysToReplace != null ? (now.daysToReplace === 1 ? p('fixed.dayAfter') : p('fixed.daysAfter', { days: now.daysToReplace })) : '',
+                        job: now.replacement?.jobCard ? p('fixed.onJobCard', { jobCard: now.replacement.jobCard }) : p('fixed.noJobCard'),
+                      })}</>
                     )}
-                    {now.state === 'removed_not_replaced' && <>This tyre was taken off{now.removedOn ? ` on ${fmtDay(now.removedOn)}` : ''}, but no new tyre has been recorded on this wheel.</>}
-                    {now.state === 'on_vehicle' && <>The same tyre is still fitted on this wheel. It has not been changed since this inspection.</>}
-                    {now.state === 'unknown' && <>{now.reason || 'No tyre change record covers this wheel.'}</>}
+                    {now.state === 'removed_not_replaced' && <>{now.removedOn ? p('fixed.removedOn', { date: fmtDay(now.removedOn) }) : p('fixed.removed')}</>}
+                    {now.state === 'on_vehicle' && <>{p('fixed.onVehicle')}</>}
+                    {now.state === 'unknown' && <>{now.reason || p('fixed.unknown')}</>}
                   </p>
                 </div>
               )}
             </section>
 
             <section className="iw-od-block">
-              <h4>Inspection photo</h4>
+              <h4>{p('photoTitle')}</h4>
               <Photo refValue={obs.photo} />
             </section>
 
@@ -250,7 +258,7 @@ export default function ObservationDetail({ obs: first, observations = [], onClo
 
         {obs.row && (
           <section className="iw-od-block">
-            <h4>On the vehicle</h4>
+            <h4>{p('onVehicle')}</h4>
             <div ref={diagramRef}><InspectionDiagram inspection={obs.row} width={360} showReadings={false} variant="board" /></div>
           </section>
         )}

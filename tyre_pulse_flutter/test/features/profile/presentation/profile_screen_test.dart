@@ -40,8 +40,13 @@ import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
 import 'package:tyre_pulse/features/problem_report/presentation/report_problem_screen.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
+import 'package:tyre_pulse/features/profile/presentation/profile_drafts_screen.dart';
+import 'package:tyre_pulse/features/profile/presentation/profile_drafts_sheet.dart';
 import 'package:tyre_pulse/features/profile/presentation/profile_screen.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_screen.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_sheet.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
+import 'package:tyre_pulse/features/profile/sync_queue_providers.dart';
 
 import '../../../core/auth/auth_test_support.dart';
 
@@ -114,6 +119,8 @@ Future<_Pumped> _pumpSignedIn(
     ModuleKey.checklists,
   },
   Future<MyWorkSnapshot> Function()? assigned,
+  List<ProfileDraftEntry> draftEntries = const <ProfileDraftEntry>[],
+  List<SyncQueueEntry> queue = const <SyncQueueEntry>[],
 }) async {
   final FakeAuthRepository auth = FakeAuthRepository();
   final FakeProfileRepository profiles = FakeProfileRepository();
@@ -168,6 +175,20 @@ Future<_Pumped> _pumpSignedIn(
         signatureRepository ?? _FakeSignatureRepository(stored: savedSignature),
       ),
       allowedModulesProvider.overrideWithValue(modules),
+      // The two screens Profile opens. Overridden so a tap test never
+      // touches the offline database, connectivity or Workmanager.
+      syncQueueEntriesProvider.overrideWith(
+        (Ref ref) => Stream<List<SyncQueueEntry>>.value(queue),
+      ),
+      syncRunStateProvider.overrideWith(
+        (Ref ref) => Stream<SyncRunState>.value(const SyncRunState()),
+      ),
+      syncQueueOnlineProvider.overrideWith(
+        (Ref ref) => Stream<bool>.value(true),
+      ),
+      profileDraftEntriesProvider.overrideWith(
+        (Ref ref) async => draftEntries,
+      ),
       myWorkSnapshotProvider.overrideWith(
         (Ref ref) =>
             assigned?.call() ??
@@ -946,5 +967,110 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  group('pending work opens a quick sheet, not a page', () {
+    Future<void> tapTarget(
+      WidgetTester tester,
+      Key target, {
+      List<ProfileDraftEntry> draftEntries = const <ProfileDraftEntry>[],
+      List<SyncQueueEntry> queue = const <SyncQueueEntry>[],
+    }) async {
+      // Tall enough that every row is on screen without scrolling.
+      tester.view.physicalSize = const Size(800, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pumpSignedIn(tester, draftEntries: draftEntries, queue: queue);
+      await tester.ensureVisible(find.byKey(target));
+      await tester.pump();
+      await tester.tap(find.byKey(target));
+      await tester.pumpAndSettle();
+    }
+
+    final ProfileDraftEntry draft = ProfileDraftEntry(
+      kind: ProfileDraftKind.inspection,
+      draftKey: 'user-1|MP081',
+      assetNo: 'MP081',
+      filled: 4,
+      total: 14,
+      updatedAt: DateTime.utc(2026, 11, 19, 9),
+    );
+
+    testWidgets('the Pending drafts tile with no drafts only says so', (
+      WidgetTester tester,
+    ) async {
+      await tapTarget(tester, ProfileScreenKeys.draftsTile);
+      expect(find.text('No drafts'), findsOneWidget);
+      expect(find.byType(ProfileDraftsSheet), findsNothing);
+      expect(find.byType(ProfileDraftsScreen), findsNothing);
+    });
+
+    testWidgets('the Pending drafts tile opens the drafts sheet', (
+      WidgetTester tester,
+    ) async {
+      await tapTarget(
+        tester,
+        ProfileScreenKeys.draftsTile,
+        draftEntries: <ProfileDraftEntry>[draft],
+      );
+      expect(find.byType(ProfileDraftsSheet), findsOneWidget);
+      expect(find.byType(ProfileDraftsScreen), findsNothing);
+      expect(
+        find.byKey(ProfileDraftsSheetKeys.resume(draft.draftKey)),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the Offline drafts row opens the drafts sheet', (
+      WidgetTester tester,
+    ) async {
+      await tapTarget(
+        tester,
+        ProfileScreenKeys.offlineDraftsRow,
+        draftEntries: <ProfileDraftEntry>[draft],
+      );
+      expect(find.byType(ProfileDraftsSheet), findsOneWidget);
+    });
+
+    testWidgets('the Pending sync tile opens the sync sheet', (
+      WidgetTester tester,
+    ) async {
+      await tapTarget(tester, ProfileScreenKeys.pendingSyncTile);
+      expect(find.byType(SyncQueueSheet), findsOneWidget);
+      expect(find.byType(SyncQueueScreen), findsNothing);
+      expect(find.textContaining('All synced'), findsOneWidget);
+    });
+
+    testWidgets('the Pending sync row opens the sync sheet', (
+      WidgetTester tester,
+    ) async {
+      await tapTarget(tester, ProfileScreenKeys.pendingSyncRow);
+      expect(find.byType(SyncQueueSheet), findsOneWidget);
+      expect(find.byType(SyncQueueScreen), findsNothing);
+    });
+
+    testWidgets('See all in the sync sheet opens the full sync queue', (
+      WidgetTester tester,
+    ) async {
+      await tapTarget(
+        tester,
+        ProfileScreenKeys.pendingSyncTile,
+        queue: <SyncQueueEntry>[
+          for (int i = 0; i < 5; i++)
+            SyncQueueEntry(
+              id: 'q$i',
+              wireType: 'CHECKLIST_SUBMISSION',
+              commandType: null,
+              state: SyncQueueItemState.waiting,
+              queuedAt: DateTime.utc(2026, 11, 20, 8, i),
+              attempts: 0,
+            ),
+        ],
+      );
+      await tester.tap(find.byKey(SyncQueueSheetKeys.seeAll));
+      await tester.pumpAndSettle();
+      expect(find.byType(SyncQueueSheet), findsNothing);
+      expect(find.byType(SyncQueueScreen), findsOneWidget);
+    });
   });
 }

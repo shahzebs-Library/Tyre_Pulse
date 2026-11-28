@@ -24,10 +24,14 @@ const SINGLES = [
   ".anchor-sec", ".proof-head", ".ar-split", ".tp-feature", ".tp-prose", "[data-reveal]",
 ].join(",");
 
-/** Containers whose direct children rise one after another. */
+/**
+ * Containers whose direct children rise one after another.
+ * The proof figures are deliberately NOT here: on a fast scroll the stagger could leave a
+ * figure half faded while its count-up ran. The numbers are the point, so they never fade.
+ */
 const GROUPS = [
   ".bento", ".eco-grid", ".sec-list", ".ind-list", ".flow", ".faq-list",
-  ".price-grid", ".grid-3p", ".grid-4p", ".ar-steps", ".proof-stats", ".tp-caps", "[data-reveal-group]",
+  ".price-grid", ".grid-3p", ".grid-4p", ".ar-steps", ".tp-caps", "[data-reveal-group]",
 ].join(",");
 
 /** Endless animations that should only run while visible (see motion.css). */

@@ -8,7 +8,7 @@
  * Before the migration is applied the lister degrades to [] so the page can
  * surface an "apply MIGRATIONS_V270_WASH_MODULE.sql" hint instead of throwing.
  */
-import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, ServiceError } from './_client'
+import { supabase, unwrap, applyCountry, fetchAllPages, isMissingRelation, isMissingColumn, ServiceError } from './_client'
 import { toUserMessage } from '../safeError'
 import { validateWashDetails, canonicalWashValue, comparableWashDetails } from '../washDetails'
 import { mapSettled, settledValue, chunkArray } from '../concurrency'
@@ -22,6 +22,25 @@ export const COLS =
   'id,organisation_id,country,site,area,asset_no,vehicle_type,wash_date,wash_time,' +
   'wash_type,bay,washed_by,water_liters,cost,duration_min,status,odometer_km,notes,photos,' +
   'created_by,created_at,updated_at,wash_details,captured_at,entry_name,entry_username,completed_by,completed_at'
+
+/**
+ * Supervisor verification + next wash due
+ * (supabase/migrations/20261127182119_wash_supervisor_verification.sql).
+ * Read with a fallback to COLS: PostgREST refuses the whole request for an
+ * unknown column, so the page keeps working before that migration lands.
+ */
+export const VERIFICATION_COLS =
+  ',verification_status,verified_by,verified_at,verification_note,next_wash_due'
+
+/** Record a supervisor's verification. Server stamps who and when. */
+export async function verifyWashRecord(id, note = '') {
+  const { data, error } = await supabase.rpc('verify_wash_record', {
+    p_id: id,
+    p_note: textOrNull(note, 500),
+  })
+  if (error) throw new ServiceError(toUserMessage(error, 'Could not verify this wash.'), error.code, error)
+  return data
+}
 
 /** Controlled vocabularies (mirror the DB CHECK constraints). */
 export const WASH_TYPES = ['Exterior', 'Interior', 'Full', 'Engine Bay', 'Undercarriage', 'Steam', 'Waterless']
@@ -112,8 +131,8 @@ function textOrNull(v, max = 200) {
 export async function listWashRecords({
   country, from, to, site, area, type, assetNo, status, limit = Infinity,
 } = {}) {
-  const pageFn = (pFrom, pTo) => {
-    let q = supabase.from('wash_records').select(COLS)
+  const pageFn = (cols) => (pFrom, pTo) => {
+    let q = supabase.from('wash_records').select(cols)
     q = applyCountry(q, country)
     if (from) q = q.gte('wash_date', String(from).slice(0, 10))
     if (to) q = q.lte('wash_date', String(to).slice(0, 10))
@@ -129,7 +148,10 @@ export async function listWashRecords({
       .range(pFrom, pTo)
   }
   try {
-    const { data, error, truncated } = await fetchAllPages(pageFn, { pageSize: 1000, max: limit })
+    let { data, error, truncated } = await fetchAllPages(pageFn(COLS + VERIFICATION_COLS), { pageSize: 1000, max: limit })
+    if (error && isMissingColumn(error)) {
+      ({ data, error, truncated } = await fetchAllPages(pageFn(COLS), { pageSize: 1000, max: limit }))
+    }
     if (error) throw new ServiceError(toUserMessage(error), error.code, error)
     if (truncated) throw new Error('Wash history exceeds the reporting limit. Narrow the date range before reporting.')
     return data || []

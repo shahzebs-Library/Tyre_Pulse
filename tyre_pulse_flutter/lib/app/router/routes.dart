@@ -219,8 +219,12 @@ abstract final class TpRouteId {
   static const String newHandover = 'newHandover';
   static const String handoverDetail = 'handoverDetail';
 
+  /// Fleet Supervisor: my drivers, their vehicles, charges and fines.
+  static const String myDrivers = 'myDrivers';
+
   static const String accidentDashboard = 'accidentDashboard';
   static const String accidentReport = 'accidentReport';
+  static const String accidentTasks = 'accidentTasks';
   static const String accidentDetail = 'accidentDetail';
   static const String accidentCase = 'accidentCase';
 
@@ -302,8 +306,13 @@ abstract final class TpRoutePaths {
   /// record is `/handover/:handoverId`, both nested so Back returns here.
   static const String handover = '/handover';
 
+  /// Fleet Supervisor team. Driver detail and the charge form are pushed
+  /// screens on top of it, so Back returns to the list.
+  static const String myDrivers = '/my-drivers';
+
   static const String accidentDashboard = '/accidents';
   static const String accidentReport = '/accidents/report';
+  static const String accidentTasks = '/accidents/tasks';
 
   static const String meterLog = '/meter';
   static const String washing = '/washing';
@@ -1047,12 +1056,26 @@ final class NewInspectionRoute extends TpRoute {
   String get routeId => TpRouteId.newInspection;
 
   @override
-  String get location => _location(TpRoutePaths.newInspection, <String, String?>{
+  String get location =>
+      _location(TpRoutePaths.newInspection, <String, String?>{
         TpRoutePaths.qSiteName: siteName?.value,
         TpRoutePaths.qAssetNo: assetNo?.value,
         TpRoutePaths.qTyreSerial: tyreSerial?.value,
         TpRoutePaths.qTyrePosition: tyrePosition?.value,
       });
+}
+
+// --- Fleet Supervisor team ----------------------------------------------------
+
+/// The Fleet Supervisor's drivers.
+final class MyDriversRoute extends TpRoute {
+  const MyDriversRoute();
+
+  @override
+  String get routeId => TpRouteId.myDrivers;
+
+  @override
+  String get location => TpRoutePaths.myDrivers;
 }
 
 // --- Handover branch --------------------------------------------------------
@@ -1131,6 +1154,17 @@ final class AccidentReportRoute extends TpRoute {
 
   @override
   String get location => TpRoutePaths.accidentReport;
+}
+
+/// My accident tasks: the open case steps owned by me or by my role.
+final class AccidentTasksRoute extends TpRoute {
+  const AccidentTasksRoute();
+
+  @override
+  String get routeId => TpRouteId.accidentTasks;
+
+  @override
+  String get location => TpRoutePaths.accidentTasks;
 }
 
 /// One accident.

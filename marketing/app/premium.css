@@ -344,3 +344,53 @@ main:has(> .home-hero) > section.tp-section--dark { content-visibility: visible;
   .tp-steps-row li { grid-template-columns: minmax(0, 1fr); gap: 8px; border-top: 2px solid var(--ink); padding-top: 20px; }
   .tp-steps-row li::before { grid-row: auto; }
 }
+
+/* ---------- Pricing: models, quote form ---------- */
+.price-figure { margin: 4px 0 0; font-family: var(--font-display), var(--font-body), sans-serif; font-weight: 800; font-size: 1.05rem; color: #161616; }
+.quote-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); }
+.quote-intro .panel-text { margin: 10px 0 18px; }
+.quote-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.quote-points li { display: flex; gap: 10px; align-items: flex-start; }
+.quote-points svg { flex: none; margin-top: 3px; color: #161616; }
+@media (max-width: 900px) { .quote-layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Arabic platform areas ---------- */
+.ar-areas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-grid, 20px); }
+.ar-areas > li { display: flex; gap: 16px; padding: 22px; border: 1px solid var(--line, #e3e1da); border-radius: 14px; background: #fff; }
+.ar-areas > li > svg { flex: none; color: #161616; }
+.ar-areas h3 { margin: 0 0 6px; font-size: 1.2rem; }
+.ar-areas p { margin: 0 0 12px; color: var(--muted, #55554f); }
+.ar-areas .quote-points { margin-bottom: 12px; }
+.ar-incl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 760px) { .ar-areas, .ar-incl { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Home: fleets, video, ROI estimate ---------- */
+.tp-fleets { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tp-fleets li { display: grid; gap: 4px; padding: 16px 18px; border: 1px solid var(--line, #e3e1da); border-radius: 12px; background: #fff; }
+.tp-fleets li b { font-size: 1.02rem; }
+.tp-fleets li span { font-size: .875rem; color: var(--muted, #55554f); }
+.tp-fleets li.is-live { background: #161616; border-color: #161616; color: #fff; }
+.tp-fleets li.is-live span { color: #d6d6d0; }
+@media (max-width: 900px) { .tp-fleets { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.tp-video { margin: 0; display: grid; gap: 10px; justify-items: center; }
+.tp-video-frame { position: relative; width: min(100%, 560px); aspect-ratio: 1; border-radius: 16px; overflow: hidden; background: #161616; box-shadow: 0 24px 60px rgba(0,0,0,.18); }
+.tp-video-frame video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tp-video-play { position: absolute; inset: auto 50% 18px auto; transform: translateX(50%); display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--brand, #ffc629); color: #161616; font-weight: 800; cursor: pointer; }
+.tp-video-play:focus-visible { outline: 3px solid #161616; outline-offset: 3px; }
+.tp-video figcaption { font-size: .875rem; color: var(--muted, #55554f); text-align: center; max-width: 60ch; }
+
+.roi { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: stretch; }
+.roi-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.roi-field { display: grid; gap: 6px; align-content: start; }
+.roi-field label { font-weight: 700; }
+.roi-field input { min-height: 48px; padding: 0 14px; border: 1px solid #c9c9c2; border-radius: 10px; font: inherit; background: #fff; }
+.roi-field input:focus-visible { outline: 3px solid #161616; outline-offset: 1px; }
+.roi-field small { color: var(--muted, #55554f); font-size: .8125rem; }
+.roi-result { display: grid; align-content: center; gap: 6px; padding: 24px; border-radius: 14px; background: #161616; color: #fff; }
+.roi-k { margin: 0; font-weight: 700; color: #d6d6d0; }
+.roi-v { margin: 0; font-family: var(--font-display), var(--font-body), sans-serif; font-weight: 800; font-size: clamp(2rem, 4vw, 2.8rem); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.roi-s { margin: 0; color: #e8e8e2; }
+.roi-note { margin: 8px 0 0; font-size: .8125rem; color: #bdbdb6; }
+@media (max-width: 900px) { .roi { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .roi-inputs { grid-template-columns: minmax(0, 1fr); } }

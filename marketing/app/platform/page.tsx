@@ -40,16 +40,16 @@ const AREAS = [
 ];
 
 const ECO: CardProps[] = [
-  { icon: Truck, title: "Fleet and assets", text: "Asset records, lifecycle, meters and documents.", href: "/platform/fleet-assets", status: "available" },
-  { icon: Wrench, title: "Maintenance and workshop", text: "Work orders, technicians and parts. Preventive plans on request.", href: "/platform/maintenance", status: "available" },
-  { icon: ClipboardCheck, title: "Inspections and safety", text: "Checklists on the phone, defects, actions and sign-off.", href: "/platform/inspections", status: "available" },
-  { icon: CircleDot, title: "Tyre lifecycle", text: "Serial tracking, fitment to removal, cost per km and tyre life.", href: "/platform/tyre-lifecycle", status: "available" },
-  { icon: Box, title: "Stores and parts", text: "Stock by site and issues to job cards. Purchase requests on request.", href: "/platform/inventory", status: "available" },
-  { icon: BarChart3, title: "Reports and dashboards", text: "Dashboards, scheduled reports and shareable boards.", href: "/platform/reports", status: "available" },
-  { icon: ShieldAlert, title: "Accidents and claims", text: "Accident cases, damage, root cause and claim documents.", href: "/contact", linkLabel: "Ask in a demo", status: "available" },
+  { icon: Truck, title: "Fleet and assets", text: "Asset records, lifecycle, meters and documents.", href: "/platform/fleet-assets", linkLabel: "See fleet and assets", status: "available" },
+  { icon: Wrench, title: "Maintenance and workshop", text: "Work orders, technicians and parts. Preventive plans on request.", href: "/platform/maintenance", linkLabel: "See maintenance", status: "available" },
+  { icon: ClipboardCheck, title: "Inspections and safety", text: "Checklists on the phone, defects, actions and sign-off.", href: "/platform/inspections", linkLabel: "See inspections", status: "available" },
+  { icon: CircleDot, title: "Tyre lifecycle", text: "Serial tracking, fitment to removal, cost per km and tyre life.", href: "/platform/tyre-lifecycle", linkLabel: "See tyre lifecycle", status: "available" },
+  { icon: Box, title: "Stores and parts", text: "Stock by site and issues to job cards. Purchase requests on request.", href: "/platform/inventory", linkLabel: "See stores and parts", status: "available" },
+  { icon: BarChart3, title: "Reports and dashboards", text: "Dashboards, scheduled reports and shareable boards.", href: "/platform/reports", linkLabel: "See reports", status: "available" },
+  { icon: ShieldAlert, title: "Accidents and claims", text: "Accident cases, damage, root cause and claim documents.", href: "/contact", linkLabel: "Ask about accidents in a demo", status: "available" },
   { icon: FileCheck2, title: "Roles and sign-off", text: "Access by role and country, with sign-off on inspections, checklists and accident closure.", href: "/security", linkLabel: "See access control", status: "available" },
-  { icon: Fuel, title: "Fuel records", text: "Fuel use recorded against the asset, set up with your data source.", href: "/contact", linkLabel: "Ask in a demo", status: "on-request" },
-  { icon: Plug, title: "Integrations and API", text: "ERP file imports are built in. Direct connections are scoped with you.", href: "/contact", linkLabel: "Ask in a demo", status: "on-request" },
+  { icon: Fuel, title: "Fuel records", text: "Fuel use recorded against the asset, set up with your data source.", href: "/contact", linkLabel: "Ask about fuel records in a demo", status: "on-request" },
+  { icon: Plug, title: "Integrations and API", text: "ERP file imports are built in. Direct connections are scoped with you.", href: "/contact", linkLabel: "Ask about integrations in a demo", status: "on-request" },
 ];
 
 export default function PlatformPage() {
@@ -92,7 +92,7 @@ export default function PlatformPage() {
         <div className="site-shell">
           <h2 className="sec-h" id="eco">Every area, on the same asset record.</h2>
           <CardGrid cols={4}>
-            {ECO.map((c) => <Card key={c.title} {...c} linkAria={`${c.linkLabel ?? "Learn more"}: ${c.title.toLowerCase()}`} />)}
+            {ECO.map((c) => <Card key={c.title} {...c} />)}
           </CardGrid>
           <StatusLegend />
         </div>

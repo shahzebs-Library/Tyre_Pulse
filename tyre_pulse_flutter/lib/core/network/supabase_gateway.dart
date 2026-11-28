@@ -88,9 +88,15 @@ mixin class SupabaseGateway {
   /// including for an error it does not recognise, which becomes
   /// `SupabaseFailureCause.unknown` with a generic user-facing message rather
   /// than propagating unclassified.
-  Future<T> guard<T>(Future<T> Function() call) async {
+  ///
+  /// [timeout], when given, bounds the call: a request that gets no answer in
+  /// time (a half-dead link, or an auth refresh retrying while offline) fails
+  /// as a connectivity failure instead of leaving a screen spinning forever.
+  /// The request may still complete on the server, exactly as with any other
+  /// lost answer, so only pass it to idempotent calls or reads.
+  Future<T> guard<T>(Future<T> Function() call, {Duration? timeout}) async {
     try {
-      return await call();
+      return await (timeout == null ? call() : call().timeout(timeout));
     } on Object catch (error, stackTrace) {
       Error.throwWithStackTrace(classifySupabaseError(error), stackTrace);
     }

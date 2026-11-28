@@ -5,13 +5,14 @@ import { exportToExcel, exportToPdf, reportFileName } from '../../lib/exportUtil
 import { toUserMessage } from '../../lib/safeError'
 import { compareValues, isBlank } from '../../lib/consoleTable'
 import EnterpriseTable from '../ui/EnterpriseTable'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 const valueSort = (a, b, id) => compareValues(a.getValue(id), b.getValue(id))
 const blank = (v) => (isBlank(v) ? undefined : v)
 const num = (v) => (v == null || !Number.isFinite(Number(v)) ? undefined : Number(v))
 const sortable = { sortingFn: valueSort, sortUndefined: 'last' }
 const EXPORT_KEYS = ['site', 'country', 'currency', 'total', 'tyre', 'spare', 'oil', 'lines', 'assets']
-const EXPORT_HEADS = ['Site', 'Country', 'Currency', 'Total', 'Tyres', 'Spare parts', 'Oil', 'Lines', 'Assets']
+const EXPORT_HEAD_KEYS = ['site', 'country', 'currency', 'total', 'tyre', 'spare', 'oil', 'lines', 'assets']
 
 /**
  * What each site costs to RUN, as opposed to which store issued the parts.
@@ -27,6 +28,8 @@ const EXPORT_HEADS = ['Site', 'Country', 'Currency', 'Total', 'Tyres', 'Spare pa
  * that quietly omits unmatched lines is a figure nobody can reconcile.
  */
 export default function SiteOperatingCostPanel({ country, from, to, money }) {
+  const { t } = useLanguage()
+  const p = (k, v) => t(`expense.site.${k}`, v)
   const [state, setState] = useState({ loading: true, ok: false, error: '' })
   const [showStores, setShowStores] = useState(false)
 
@@ -50,8 +53,11 @@ export default function SiteOperatingCostPanel({ country, from, to, money }) {
         ? { loading: false, ok: true, error: '', coverage: block.coverage, bySite: block.bySite, byStore: block.byStore, currency: block.currency }
         : { loading: false, ok: false, error: '' })
     } catch (e) {
-      setState({ loading: false, ok: false, error: toUserMessage(e, 'Could not load the cost per site.') })
+      setState({ loading: false, ok: false, error: toUserMessage(e, t('expense.site.loadError')) })
     }
+  // `t` is left out on purpose: outside a provider it is a new function each
+  // render, and a reload must only follow the filters, never the translator.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [country, from, to, isAll])
 
   useEffect(() => { load() }, [load])
@@ -70,46 +76,48 @@ export default function SiteOperatingCostPanel({ country, from, to, money }) {
 
   const siteColumns = useMemo(() => [
     {
-      id: 'site', header: 'Site', accessorFn: (r) => blank(r.site), ...sortable,
+      id: 'site', header: p('col.site'), accessorFn: (r) => blank(r.site), ...sortable,
       cell: ({ row: { original: r } }) => (
         <span style={{ color: r.resolved ? 'var(--text-primary)' : 'var(--text-dim)' }}>
           {r.site}
-          {!r.resolved && <span className="ml-2 text-[11px]" style={{ color: 'var(--text-dim)' }}>no asset on the job card</span>}
+          {!r.resolved && <span className="ml-2 text-[11px]" style={{ color: 'var(--text-dim)' }}>{p('noAsset')}</span>}
         </span>
       ),
     },
-    ...[['total', 'Total'], ['tyre', 'Tyres'], ['spare', 'Spare parts'], ['oil', 'Oil']].map(([key, header]) => ({
-      id: key, header, accessorFn: (r) => num(r[key]), ...sortable,
+    ...['total', 'tyre', 'spare', 'oil'].map((key) => ({
+      id: key, header: p(`col.${key}`), accessorFn: (r) => num(r[key]), ...sortable,
       meta: { align: 'right', exportValue: (r) => num(r[key]) ?? 'N/A' },
       cell: ({ row: { original: r } }) => <span className="tabular-nums">{money(r[key])}</span>,
     })),
     {
-      id: 'assets', header: 'Assets', accessorFn: (r) => (r.assets ? Number(r.assets) : undefined), ...sortable,
+      id: 'assets', header: p('col.assets'), accessorFn: (r) => (r.assets ? Number(r.assets) : undefined), ...sortable,
       meta: { align: 'right', exportValue: (r) => (r.assets ? r.assets : 'N/A') },
       cell: ({ row: { original: r } }) => <span className="tabular-nums">{r.assets ? Number(r.assets).toLocaleString() : 'N/A'}</span>,
     },
-  ], [money])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [money, t])
 
   const storeColumns = useMemo(() => [
-    { id: 'name', header: 'Store', accessorFn: (g) => blank(g.name), ...sortable },
+    { id: 'name', header: p('col.store'), accessorFn: (g) => blank(g.name), ...sortable },
     {
-      id: 'issued', header: 'Issued from here', accessorFn: (g) => num(g.issued), ...sortable,
+      id: 'issued', header: p('col.issued'), accessorFn: (g) => num(g.issued), ...sortable,
       meta: { align: 'right' }, cell: ({ row: { original: g } }) => <span className="tabular-nums">{money(g.issued)}</span>,
     },
     {
-      id: 'worked', header: 'Work done here', accessorFn: (g) => num(g.worked), ...sortable,
-      meta: { align: 'right', exportValue: (g) => (g.worked == null ? 'Serves other sites' : g.worked) },
+      id: 'worked', header: p('col.worked'), accessorFn: (g) => num(g.worked), ...sortable,
+      meta: { align: 'right', exportValue: (g) => (g.worked == null ? p('servesOtherSitesExport') : g.worked) },
       // Null is not zero: no asset is registered at a site of this name at all,
       // so it serves other sites entirely.
       cell: ({ row: { original: g } }) => (g.worked == null
-        ? <span style={{ color: 'var(--text-dim)' }}>serves other sites</span>
+        ? <span style={{ color: 'var(--text-dim)' }}>{p('servesOtherSites')}</span>
         : <span className="tabular-nums">{money(g.worked)}</span>),
     },
-  ], [money])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [money, t])
 
   const heading = (
     <h2 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-      <MapPin size={15} aria-hidden="true" /> What each site costs to run
+      <MapPin size={15} aria-hidden="true" /> {p('title')}
     </h2>
   )
 
@@ -119,8 +127,7 @@ export default function SiteOperatingCostPanel({ country, from, to, money }) {
         {heading}
         <p className="card text-xs flex items-start gap-2" style={{ color: 'var(--text-secondary)' }}>
           <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-500" aria-hidden="true" />
-          Pick a single country. Each country reports in its own currency, so one
-          combined column would add SAR, AED and EGP together.
+          {p('pickCountry')}
         </p>
       </section>
     )
@@ -129,7 +136,7 @@ export default function SiteOperatingCostPanel({ country, from, to, money }) {
   if (state.loading) {
     return (
       <section className="card" aria-busy="true">
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Working out what each site costs...</p>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{p('loading')}</p>
       </section>
     )
   }
@@ -140,9 +147,9 @@ export default function SiteOperatingCostPanel({ country, from, to, money }) {
         {heading}
         <div role="alert" className="card flex flex-wrap items-center gap-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
           <AlertTriangle size={15} className="shrink-0 text-red-500" aria-hidden="true" />
-          <span className="flex-1 min-w-[12rem]">{state.error} The cost per site is not known, which is not the same as zero.</span>
+          <span className="flex-1 min-w-[12rem]">{state.error} {p('unknownNotZero')}</span>
           <button type="button" onClick={load} className="btn-secondary text-xs min-h-[44px] inline-flex items-center gap-1.5">
-            <RefreshCw size={13} aria-hidden="true" /> Retry
+            <RefreshCw size={13} aria-hidden="true" /> {t('expense.common.retry')}
           </button>
         </div>
       </section>
@@ -160,34 +167,33 @@ export default function SiteOperatingCostPanel({ country, from, to, money }) {
     total: num(r.total) ?? 'N/A', tyre: num(r.tyre) ?? 'N/A', spare: num(r.spare) ?? 'N/A', oil: num(r.oil) ?? 'N/A',
     lines: num(r.lines) ?? 'N/A', assets: r.assets ? r.assets : 'N/A',
   }))
-  const downloadExcel = () => exportToExcel(exportRows(), EXPORT_KEYS, EXPORT_HEADS, fileBase)
-  const downloadPdf = () => exportToPdf(exportRows(), EXPORT_KEYS.map((k, i) => ({ key: k, header: EXPORT_HEADS[i] })),
-    `What each site costs to run (${country})`, fileBase, 'landscape')
+  const exportHeads = EXPORT_HEAD_KEYS.map((k) => p(`col.${k}`))
+  const downloadExcel = () => exportToExcel(exportRows(), EXPORT_KEYS, exportHeads, fileBase)
+  const downloadPdf = () => exportToPdf(exportRows(), EXPORT_KEYS.map((k, i) => ({ key: k, header: exportHeads[i] })),
+    p('pdfTitle', { country }), fileBase, 'landscape')
 
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         {heading}
         <div className="flex gap-2">
-          <button type="button" onClick={downloadExcel} disabled={!rows.length} className="btn-secondary text-xs min-h-[44px]">Excel</button>
-          <button type="button" onClick={downloadPdf} disabled={!rows.length} className="btn-secondary text-xs min-h-[44px]">PDF</button>
+          <button type="button" onClick={downloadExcel} disabled={!rows.length} className="btn-secondary text-xs min-h-[44px]">{t('expense.common.excel')}</button>
+          <button type="button" onClick={downloadPdf} disabled={!rows.length} className="btn-secondary text-xs min-h-[44px]">{t('expense.common.pdf')}</button>
         </div>
       </div>
 
       <div className="card space-y-3">
         <p className="text-xs flex items-start gap-2" style={{ color: 'var(--text-secondary)' }}>
           <Info size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
-          Cost is counted against the site the machine works at, found through its job card.
-          The store on an expense line is where the parts were issued from, which is a different
-          question - a store can serve several sites.
+          {p('explain')}
         </p>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {[
-            ['Sites with traced cost', kpis.sites.toLocaleString()],
-            [`Total${cur ? ` (${cur})` : ''}`, kpis.total == null ? 'N/A' : money(kpis.total)],
-            ['Highest cost site', kpis.top ? kpis.top.site : 'N/A'],
-            ['Lines traced to an asset', cov?.pct == null ? 'N/A' : `${cov.pct}%`],
+            [p('kpi.sites'), kpis.sites.toLocaleString()],
+            [cur ? p('kpi.totalCur', { cur }) : p('kpi.total'), kpis.total == null ? t('expense.common.na') : money(kpis.total)],
+            [p('kpi.top'), kpis.top ? kpis.top.site : t('expense.common.na')],
+            [p('kpi.traced'), cov?.pct == null ? t('expense.common.na') : `${cov.pct}%`],
           ].map(([label, value]) => (
             <div key={label} className="rounded-lg p-3" style={{ background: 'var(--surface-raised)' }}>
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{label}</p>
@@ -198,28 +204,27 @@ export default function SiteOperatingCostPanel({ country, from, to, money }) {
 
         {cov?.pct != null && (
           <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
-            {Number(cov.resolved).toLocaleString()} of {Number(cov.lines).toLocaleString()} expense lines
-            ({cov.pct}%) could be traced to an asset.
+            {p('coverage', { resolved: Number(cov.resolved).toLocaleString(), lines: Number(cov.lines).toLocaleString(), pct: cov.pct })}
             {cov.unresolved > 0
-              ? ` ${Number(cov.unresolved).toLocaleString()} could not and are listed separately below.`
+              ? ` ${p('coverageUnresolved', { n: Number(cov.unresolved).toLocaleString() })}`
               : ''}
           </p>
         )}
 
         <EnterpriseTable columns={siteColumns} data={rows} getRowId={(r) => `${r.country}-${r.site}`}
-          searchPlaceholder="Search site..." enableColumnFilters={false} enableExport={false}
-          emptyMessage="No expense lines in this period." />
+          searchPlaceholder={p('searchSite')} enableColumnFilters={false} enableExport={false}
+          emptyMessage={p('empty')} />
 
         {gaps.length > 0 && (
           <div>
             <button type="button" onClick={() => setShowStores((v) => !v)} aria-expanded={showStores}
               className="btn-secondary text-xs min-h-[44px]">
-              {showStores ? 'Hide' : 'Show'} which store served which site
+              {showStores ? p('hideStores') : p('showStores')}
             </button>
             {showStores && (
               <div className="mt-3">
                 <EnterpriseTable columns={storeColumns} data={gaps} getRowId={(g) => String(g.name)}
-                  searchPlaceholder="Search store..." enableColumnFilters={false}
+                  searchPlaceholder={p('searchStore')} enableColumnFilters={false}
                   exportFileName={reportFileName('Store versus site cost', country)} />
               </div>
             )}

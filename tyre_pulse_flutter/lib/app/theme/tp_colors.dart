@@ -372,3 +372,91 @@ final class TpPaletteTheme extends ThemeExtension<TpPaletteTheme> {
   TpPaletteTheme lerp(covariant TpPaletteTheme? other, double t) =>
       t < 0.5 || other == null ? this : other;
 }
+
+/// The colour of ONE tyre condition (owner, 2026-11-27).
+///
+/// Severity bands ([TpStatus]) say how urgent a wheel is; these say WHAT is
+/// wrong with it, so Damaged, Puncture and Flat - all critical - no longer
+/// share one red. [fill] carries white ink at 4.5:1 or better in both
+/// themes (badges, legend dots, the selected tick). [accent] is the outline
+/// and tint colour for the ambient brightness: at least 3:1 against
+/// [TpPalette.surface] and [TpPalette.surfaceAlt] of that brightness.
+@immutable
+class TpConditionColor {
+  const TpConditionColor({
+    required this.fill,
+    required this.accentLight,
+    required this.accentDark,
+  });
+
+  /// Strong fill behind white ink, the same in both themes.
+  final Color fill;
+
+  /// Outline / tint colour on the light theme.
+  final Color accentLight;
+
+  /// Outline / tint colour on the dark theme.
+  final Color accentDark;
+
+  /// [accentLight] or [accentDark] for [brightness].
+  Color accent(Brightness brightness) =>
+      brightness == Brightness.dark ? accentDark : accentLight;
+}
+
+/// One colour per tyre condition, by severity and meaning: Good green,
+/// Worn amber, Damaged red, Puncture deep orange, Flat magenta, Missing
+/// grey. [notChecked] is the quiet slate of "nothing recorded".
+abstract final class TpConditionColors {
+  static const TpConditionColor good = TpConditionColor(
+    fill: Color(0xFF15803D),
+    accentLight: Color(0xFF15803D),
+    accentDark: Color(0xFF22C55E),
+  );
+
+  static const TpConditionColor worn = TpConditionColor(
+    fill: Color(0xFFA16207),
+    accentLight: Color(0xFFA16207),
+    accentDark: Color(0xFFFBBF24),
+  );
+
+  static const TpConditionColor damaged = TpConditionColor(
+    fill: Color(0xFFB91C1C),
+    accentLight: Color(0xFFB91C1C),
+    accentDark: Color(0xFFF87171),
+  );
+
+  static const TpConditionColor puncture = TpConditionColor(
+    fill: Color(0xFFC2410C),
+    accentLight: Color(0xFFEA580C),
+    accentDark: Color(0xFFF97316),
+  );
+
+  static const TpConditionColor flat = TpConditionColor(
+    fill: Color(0xFFA21CAF),
+    accentLight: Color(0xFFA21CAF),
+    accentDark: Color(0xFFE879F9),
+  );
+
+  static const TpConditionColor missing = TpConditionColor(
+    fill: Color(0xFF4B5563),
+    accentLight: Color(0xFF6B7280),
+    accentDark: Color(0xFF9CA3AF),
+  );
+
+  static const TpConditionColor notChecked = TpConditionColor(
+    fill: Color(0xFF64748B),
+    accentLight: Color(0xFF64748B),
+    accentDark: Color(0xFF94A3B8),
+  );
+
+  /// Every condition colour, for contrast tests.
+  static const List<TpConditionColor> all = <TpConditionColor>[
+    good,
+    worn,
+    damaged,
+    puncture,
+    flat,
+    missing,
+    notChecked,
+  ];
+}

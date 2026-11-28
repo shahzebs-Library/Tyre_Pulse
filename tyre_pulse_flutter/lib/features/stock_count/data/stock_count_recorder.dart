@@ -81,6 +81,8 @@ PendingCapture stockCountCapture({
   required String userId,
   required String sessionId,
   required DateTime capturedAt,
+  bool? genuine,
+  String? genuineNote,
 }) {
   final String? itemId = _blank(item.itemId);
   final String? description = _blank(item.description);
@@ -107,6 +109,8 @@ PendingCapture stockCountCapture({
         piOwnerships.contains(item.ownership) ? item.ownership! : 'owned',
     locationId: _blank(item.locationId),
     remarks: _blank(reason),
+    genuine: genuine,
+    genuineNote: _blank(genuineNote),
   );
 }
 
@@ -291,6 +295,8 @@ final class StockCountRecorder {
     required String? orgId,
     String? fallbackCountry,
     String? deviceId,
+    bool? genuine,
+    String? genuineNote,
   }) {
     return _send(
       site: item.site,
@@ -307,8 +313,77 @@ final class StockCountRecorder {
         userId: userId,
         sessionId: sessionId,
         capturedAt: _now(),
+        genuine: genuine,
+        genuineNote: genuineNote,
       ),
     );
+  }
+
+  /// Saves a count for [item] on the phone WITHOUT sending it yet, and
+  /// returns its client uuid. Used by the long-press "Matches" on a Stock
+  /// Count row: the count can be undone ([discardHeld]) for a few seconds,
+  /// then [send] sends it (the background flush sends it too). Same session,
+  /// capture and offline rules as [record].
+  Future<String> recordHeld({
+    required StockItem item,
+    required num count,
+    required String userId,
+    String? fallbackCountry,
+    bool? genuine,
+  }) async {
+    String? id;
+    await _send(
+      site: item.site,
+      country: item.country,
+      fallbackCountry: fallbackCountry,
+      userId: userId,
+      orgId: null,
+      deviceId: null,
+      build: (String sessionId, String clientUuid) {
+        id = clientUuid;
+        return stockCountCapture(
+          item: item,
+          count: count,
+          reason: null,
+          clientUuid: clientUuid,
+          userId: userId,
+          sessionId: sessionId,
+          capturedAt: _now(),
+          genuine: genuine,
+        );
+      },
+    );
+    return id!;
+  }
+
+  /// Takes back a held count that was not sent yet. False when it already
+  /// reached the server (it then stays for review, as every count does).
+  Future<bool> discardHeld(String userId, String clientUuid) async {
+    try {
+      return await _outbox.discardUnsent(userId, clientUuid);
+    } on Object {
+      return false;
+    }
+  }
+
+  /// Sends whatever waits in the outbox now. Never throws: anything not
+  /// confirmed stays on the phone for the next flush.
+  Future<void> send({
+    required String userId,
+    required String? orgId,
+    String? deviceId,
+  }) async {
+    if (orgId == null || orgId.isEmpty) return;
+    try {
+      await _outbox.flush(
+        userId: userId,
+        orgId: orgId,
+        repository: _repository,
+        deviceId: deviceId,
+      );
+    } on Object {
+      // Kept on the phone.
+    }
   }
 
   /// Records a NEW stock line ("Add stock") for approval. Nothing reaches the

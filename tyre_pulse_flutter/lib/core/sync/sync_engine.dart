@@ -23,10 +23,14 @@
 /// predicate a partial index needs for conflict inference, so an upsert can
 /// throw 42P10 even when the row genuinely already exists. A plain insert
 /// enforces the same uniqueness correctly regardless, and throws 23505 on a
-/// genuine duplicate. [_pushOne] resolves what a 23505 means using the
-/// CLAIMED command's own `retryCount`: zero means this is the first attempt
-/// and the conflict is real; more than zero means an earlier attempt already
-/// landed and this is a successful replay, not a failure.
+/// genuine duplicate. [_pushOne] resolves what a 23505 means using TWO
+/// facts: the CLAIMED command's own `retryCount` (zero means this is the
+/// first attempt and the conflict is real), and WHICH constraint refused it
+/// ([isClientUuidReplay]). A 23505 counts as a successful replay only when it
+/// names the command's `client_uuid` uniqueness. Business guards raise 23505
+/// too - `guard_tyre_active_fitment` refuses a second active tyre on one
+/// wheel with that code - and treating such a refusal as "already landed"
+/// deleted real, never-written work from the queue as synced.
 ///
 /// **A command's SET-clause payload is filtered against
 /// `CommandSpec.fieldAllowList` again here, at push time**, even though
@@ -48,6 +52,7 @@ import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/dao/media_dao.dart';
 import 'package:tyre_pulse/core/database/dao/queue_dao.dart';
 import 'package:tyre_pulse/core/database/database_constants.dart';
+import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/sync_outcome.dart';
@@ -82,6 +87,101 @@ CommandType? commandTypeFromWire(String wire) {
 /// before editing under this exact key inside the payload it hands to
 /// `QueuedCommandRepository.enqueue`.
 const String expectedPriorStatusPayloadKey = '_expectedPriorStatus';
+
+/// True when [failure] is a unique violation on the command's idempotency
+/// key (`client_uuid`), i.e. the row an earlier attempt wrote is already on
+/// the server.
+///
+/// Every `client_uuid` uniqueness in the live schema is named after the
+/// column (`ux_tyre_records_client_uuid`, `tech_activity_events_client_uuid_
+/// uidx`, `wo_cost_entries_client_uidx`, and Postgres' own default
+/// `<table>_client_uuid_key`), and Postgres puts the constraint name in the
+/// message: `duplicate key value violates unique constraint "<name>"`. Any
+/// other 23505 - a trigger guard raising with that code, a unique business
+/// key - is a genuine refusal and must surface as a failure.
+bool isClientUuidReplay(SupabaseFailure failure) {
+  if (!failure.isIdempotentReplay) {
+    return false;
+  }
+  final String raw = (failure.rawMessage ?? '').toLowerCase();
+  if (!raw.contains('unique constraint')) {
+    return false;
+  }
+  return raw.contains('client_uuid') || raw.contains('client_uid');
+}
+
+/// A refusal that will not change on retry: forbidden, too large, invalid,
+/// or the destination does not exist. Only these count against a photo's
+/// upload attempts.
+///
+/// An auth lapse is never one of them, whatever status it arrived with:
+/// Storage's legacy error body reports `InvalidJWT` as HTTP 400.
+bool isDefinitivePhotoRefusal(SupabaseFailure failure) {
+  if (isAuthFailure(failure)) return false;
+  switch (failure.code) {
+    case '400':
+    case '403':
+    case '404':
+    case '413':
+      return true;
+  }
+  switch (failure.cause) {
+    case SupabaseFailureCause.forbidden:
+    case SupabaseFailureCause.rowLevelSecurity:
+    case SupabaseFailureCause.checkViolation:
+    case SupabaseFailureCause.invalidInput:
+    case SupabaseFailureCause.storageNotFound:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// No usable connection: nothing can be learned about the photo, and the
+/// record could not be written either.
+bool isConnectivityFailure(SupabaseFailure failure) =>
+    failure.cause == SupabaseFailureCause.offline ||
+    failure.cause == SupabaseFailureCause.timeout;
+
+/// The session lapsed (no token, an expired or invalid JWT). A refresh or a
+/// fresh sign-in fixes it; it says nothing about the photo.
+bool isAuthFailure(SupabaseFailure failure) {
+  if (failure.cause == SupabaseFailureCause.unauthenticated ||
+      failure.cause == SupabaseFailureCause.jwtExpired) {
+    return true;
+  }
+  if (failure.code == '401') return true;
+  return isStorageAuthError(null, failure.rawMessage ?? '');
+}
+
+/// Marks a "this record is waiting for its photo to upload" answer from a
+/// pusher. It is not a failed attempt: the engine puts the command back
+/// without counting a retry, so a photo waiting out no signal, a 5xx, a 429
+/// or a lapsed session can never dead-letter its record or use up its wait
+/// budget. The photo's own backoff paces the retries.
+const String kPhotoWaitTechnical =
+    'A photo of this record has not finished uploading.';
+
+bool isPhotoWait(SupabaseFailure failure) =>
+    failure.rawMessage == kPhotoWaitTechnical;
+
+/// The failure a pusher throws while a record waits for its photos.
+SupabaseFailure photoWaitFailure({Object? cause}) => SupabaseFailure(
+      error: AppError(
+        kind: AppErrorKind.sync,
+        message: 'This record is waiting for its photos to upload. '
+            'It stays on this phone and will try again.',
+        technical: kPhotoWaitTechnical,
+        cause: cause,
+        isRetryable: true,
+      ),
+      cause: SupabaseFailureCause.unknown,
+      rawMessage: kPhotoWaitTechnical,
+    );
+
+/// Refreshes the signed-in session. Returns true when a usable session is
+/// back. Must not throw.
+typedef SessionRefresher = Future<bool> Function();
 
 /// What [SyncEngine] needs to push one command's business row to the server.
 ///
@@ -161,16 +261,21 @@ final class SyncEngine {
     required CommandPusher pusher,
     required MediaUploader uploader,
     required String holderId,
+    SessionRefresher? refreshSession,
   })  : _queueDao = queueDao,
         _mediaDao = mediaDao,
         _pusher = pusher,
         _uploader = uploader,
-        _holderId = holderId;
+        _holderId = holderId,
+        _refreshSession = refreshSession;
 
   final QueueDao _queueDao;
   final MediaDao _mediaDao;
   final CommandPusher _pusher;
   final MediaUploader _uploader;
+
+  /// Tried once per pass when an upload is refused for a lapsed session.
+  final SessionRefresher? _refreshSession;
 
   /// Identifies THIS run for [QueueDao.acquireSyncLock]. Every call site that
   /// constructs a [SyncEngine] should mint a fresh value per attempt (a UUID
@@ -233,9 +338,15 @@ final class SyncEngine {
   /// make sure that if something else DID block rows for the organisation
   /// that is active right now, they become claimable again the moment this
   /// run starts.
+  ///
+  /// [requeueFailedPhotos] is set when the pass was asked for because the
+  /// connection came back or a person pressed Sync now: photos a server
+  /// refused (`failed`) get one more bounded try, once their backoff has
+  /// passed, so a record waiting on them is not stuck for good.
   Future<SyncRunSummary> runOnce({
     required String workspaceId,
     required DateTime now,
+    bool requeueFailedPhotos = false,
   }) async {
     final bool acquired = await _queueDao.acquireSyncLock(
       holder: _holderId,
@@ -248,6 +359,14 @@ final class SyncEngine {
     try {
       await _queueDao.reclaimStaleClaims(now: now);
       await _queueDao.unblockForWorkspace(workspaceId: workspaceId, now: now);
+
+      // Photos that an older build marked `failed` for a transient reason
+      // (no signal, 5xx, an expired session) could never be retried, and a
+      // record that needs them stalled for good. Requeued once.
+      await _mediaDao.requeueLegacyTransientFailuresOnce(now: now);
+      if (requeueFailedPhotos) {
+        await _mediaDao.requeueFailedMedia(workspaceId: workspaceId, now: now);
+      }
 
       final (int photosUploaded, int photosFailed) =
           await _drainMediaUploads(now: now);
@@ -275,8 +394,7 @@ final class SyncEngine {
         }
       }
 
-      final List<String> filesToDelete =
-          await _queueDao.pruneSyncedCommands();
+      final List<String> filesToDelete = await _queueDao.pruneSyncedCommands();
       await _deleteFiles(filesToDelete);
 
       return SyncRunSummary(
@@ -305,15 +423,28 @@ final class SyncEngine {
   }) async {
     int uploaded = 0;
     int failed = 0;
+    // One try per photo per pass, and a photo still inside its backoff is
+    // skipped. Both are passed to the claim so a failing photo at the head
+    // of the queue cannot hide the photos behind it.
+    final Set<String> attempted = <String>{};
+    bool refreshTried = false;
 
     for (int round = 0; round < _maxMediaClaimRounds; round++) {
-      final List<PendingMediaUpload> claimed =
-          await _mediaDao.claimNextUploads();
+      final Set<String> backedOff = await _mediaDao.mediaIdsInBackoff(now);
+      final List<PendingMediaUpload> claimed = await _mediaDao.claimNextUploads(
+        excludeIds: <String>{...attempted, ...backedOff},
+      );
       if (claimed.isEmpty) {
         break;
       }
+      bool sawNew = false;
 
       for (final PendingMediaUpload media in claimed) {
+        if (!attempted.add(media.id)) {
+          await _mediaDao.releaseUploadClaim(media.id);
+          continue;
+        }
+        sawNew = true;
         final String? bucket = media.bucket;
         if (bucket == null || bucket.isEmpty) {
           // A media row with nowhere to go is a data problem, not a
@@ -328,31 +459,71 @@ final class SyncEngine {
           continue;
         }
 
-        try {
-          final MediaUploadResult result = await _uploader.upload(
-            bucket: bucket,
-            localPath: media.localPath,
-            fileName: media.fileName,
-          );
-          await _mediaDao.markUploaded(
-            media.id,
-            bucket: bucket,
-            remotePath: result.remotePath,
-            remoteRef: result.remoteRef,
-            at: now,
-          );
+        SupabaseFailure? failure = await _uploadOne(media, bucket, now: now);
+        if (failure != null &&
+            isAuthFailure(failure) &&
+            !refreshTried &&
+            _refreshSession != null) {
+          refreshTried = true;
+          if (await _refreshSession()) {
+            failure = await _uploadOne(media, bucket, now: now);
+          }
+        }
+
+        if (failure == null) {
           uploaded++;
-        } on SupabaseFailure catch (failure) {
+        } else if (isDefinitivePhotoRefusal(failure)) {
+          // Only a refusal that will not change on retry spends an attempt.
+          // It also backs off, so an under-budget refusal is not retried
+          // every pass.
           await _mediaDao.markUploadAttemptFailed(
             media.id,
             messageSafe: failure.error.message,
+            now: now,
+          );
+          failed++;
+        } else {
+          // No signal, 5xx, 429, an expired session: the photo waits with a
+          // growing backoff and never runs out of attempts, so evidence a
+          // record needs is never failed or abandoned for a passing reason.
+          await _mediaDao.recordTransientUploadFailure(
+            media.id,
+            messageSafe: failure.error.message,
+            now: now,
+            authLapse: isAuthFailure(failure),
           );
           failed++;
         }
       }
+      if (!sawNew) break;
     }
 
     return (uploaded, failed);
+  }
+
+  /// Uploads one claimed photo. Returns null on success, else the failure.
+  Future<SupabaseFailure?> _uploadOne(
+    PendingMediaUpload media,
+    String bucket, {
+    required DateTime now,
+  }) async {
+    try {
+      final MediaUploadResult result = await _uploader.upload(
+        bucket: bucket,
+        localPath: media.localPath,
+        fileName: media.fileName,
+      );
+      await _mediaDao.markUploaded(
+        media.id,
+        bucket: bucket,
+        remotePath: result.remotePath,
+        remoteRef: result.remoteRef,
+        at: now,
+      );
+      return null;
+    } on SupabaseFailure catch (failure) {
+      return failure;
+    }
   }
 
   // -- Commands -----------------------------------------------------------
@@ -453,7 +624,9 @@ final class SyncEngine {
       for (final MapEntry<String, Object?> entry in decoded.entries)
         if (entry.key != expectedPriorStatusPayloadKey &&
             entry.key != spec.matchColumn &&
-            spec.fieldAllowList.contains(entry.key))
+            spec.fieldAllowList.contains(entry.key) &&
+            !(generatedColumnsByTable[spec.table]?.contains(entry.key) ??
+                false))
           entry.key: entry.value,
     };
     if (spec.operation == CommandOperation.insert) {
@@ -491,12 +664,19 @@ final class SyncEngine {
       await _markCommandSynced(command, spec: spec, now: now);
       return _CommandOutcome.synced;
     } on SupabaseFailure catch (failure) {
+      if (isPhotoWait(failure)) {
+        // Waiting on a photo upload: not a failed attempt, so it must not
+        // count a retry or the record would dead-letter while offline.
+        await _queueDao.returnToPending(command.id);
+        return _CommandOutcome.mediaPending;
+      }
       // The idempotency judgement: a duplicate key on a RETRY of an
       // idempotent write means the earlier attempt already landed. A
       // duplicate key on the FIRST attempt (retryCount == 0) is a genuine
-      // conflict unrelated to retrying, and falls through to the failure
-      // path below like any other refusal.
-      if (failure.isIdempotentReplay && command.retryCount > 0) {
+      // conflict unrelated to retrying, and so is ANY duplicate key that
+      // does not name the client_uuid uniqueness (a trigger guard, a unique
+      // business key): both fall through to the failure path below.
+      if (command.retryCount > 0 && isClientUuidReplay(failure)) {
         await _markCommandSynced(command, spec: spec, now: now);
         return _CommandOutcome.synced;
       }

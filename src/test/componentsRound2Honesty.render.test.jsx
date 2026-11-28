@@ -13,6 +13,11 @@ const h = vi.hoisted(() => ({
   claims: vi.fn(),
 }))
 
+// English from the real locale files (namespaces are lazy at runtime).
+vi.mock('../contexts/LanguageContext', async () => {
+  const { expenseT } = await import('./expenseT.helpers.js')
+  return { useLanguage: () => ({ t: expenseT, isRTL: false, language: 'en' }) }
+})
 vi.mock('../lib/api/siteOperatingCost', () => ({
   getSiteOperatingCostMulti: (...a) => h.site(...a),
   storeVsOperating: () => [],

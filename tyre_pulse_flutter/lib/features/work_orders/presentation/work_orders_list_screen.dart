@@ -37,9 +37,17 @@ abstract final class WorkOrdersListScreenKeys {
 }
 
 class WorkOrdersListScreen extends ConsumerStatefulWidget {
-  const WorkOrdersListScreen({required this.route, super.key});
+  const WorkOrdersListScreen({
+    required this.route,
+    this.leadingActions = const <Widget>[],
+    super.key,
+  });
 
   final WorkOrdersRoute route;
+
+  /// Extra app-bar actions placed before the filter and add buttons (the
+  /// Workshop board adds "Jobs to check" here).
+  final List<Widget> leadingActions;
 
   @override
   ConsumerState<WorkOrdersListScreen> createState() =>
@@ -152,6 +160,7 @@ class _WorkOrdersListScreenState extends ConsumerState<WorkOrdersListScreen> {
         subtitle: _loading ? null : l10n.workOrdersActiveCount(_activeCount),
         backFallback: fallback,
         actions: <Widget>[
+          ...widget.leadingActions,
           IconButton(
             icon: const Icon(Icons.filter_alt_outlined),
             tooltip: l10n.workOrdersFilterAll,

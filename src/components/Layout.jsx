@@ -251,6 +251,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/driver-management',      label: 'Driver Intelligence', icon: Users, adminOnly: A },
       { to: '/driver-workspace',       label: 'Driver workspace', icon: Users, roles: ['Driver', 'Manager', 'Director'] },
+      { to: '/driver-concerns',        label: 'Driver Concerns',  icon: ShieldAlert, roles: ['Fleet Supervisor', 'Fleet Foreman', 'Fleet Incharge', 'HR Officer', 'Manager', 'Director'] },
       { to: '/driver-safety',          label: 'Driver Safety',       icon: ShieldAlert, adminOnly: A },
       { to: '/driver-training',        label: 'Driver Training',     icon: GraduationCap, adminOnly: A },
       { to: '/driver-coaching',        label: 'Driver Coaching',     icon: Award, adminOnly: A },
@@ -275,7 +276,7 @@ const NAV_GROUPS = [
       { to: '/geofencing',          label: 'Geofencing', parent: 'Journeys',         icon: MapPin, adminOnly: A },
       { to: '/dispatch',            label: 'Dispatch Planning', parent: 'Journeys',  icon: Truck, adminOnly: A },
       { to: '/load-planning',       label: 'Load Planning', parent: 'Journeys',      icon: Package, adminOnly: A },
-      { to: '/telematics-devices',  label: 'Telematics Devices', parent: 'Devices', icon: Router, adminOnly: A },
+      { to: '/telematics-devices',  label: 'Devices & Integrations', parent: 'Devices', icon: Router, adminOnly: A, strictAdmin: true },
       { to: '/cold-chain',             label: 'Cold-Chain Monitor', parent: 'Devices',  icon: Snowflake, adminOnly: A },
       { to: '/weighbridge',         label: 'Weighbridge', parent: 'Logistics',        icon: Scale, adminOnly: A },
       { to: '/proof-of-delivery',   label: 'Proof of Delivery', parent: 'Logistics',  icon: PackageCheck, adminOnly: A },
@@ -476,6 +477,9 @@ function shouldShowNavItem(item, profile, isFlagEnabled, hasPermission, grantedM
   // below, so a grant cannot open one. Mirrors isCommandVisible in commandSearch.
   if (REPORT_BUILDER_ROUTES.includes(item.to)
       && !canUseReportBuilder(profile, isSuperAdmin)) return false
+  // strictAdmin: Admin / super admin only, before any grant or custom-role
+  // rule (Devices & Integrations, owner rule 2026-11-27).
+  if (item.strictAdmin) return profile?.role === 'Admin' || isSuperAdmin === true
 
   // A context rule may remove an item entirely, but only when it explicitly says
   // to. Default is to keep it and dim it (see the render below).

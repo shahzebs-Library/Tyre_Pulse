@@ -48,14 +48,40 @@ import 'package:tyre_pulse/core/database/dao/queue_dao.dart'
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
+import 'package:tyre_pulse/core/sync/module_photo_command_pusher.dart'
+    show modulePhotoFileName;
 import 'package:tyre_pulse/core/sync/queued_command_repository.dart';
+import 'package:tyre_pulse/core/sync/supabase_command_pusher.dart'
+    show moduleMediaBucket, washMediaPrefix;
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/features/washing/data/wash_record.dart';
 import 'package:uuid/uuid.dart';
 
-const String _washColumns = 'id,asset_no,vehicle_type,wash_date,wash_time,'
+const String _washBaseColumns = 'id,asset_no,vehicle_type,wash_date,wash_time,'
     'wash_type,site,bay,washed_by,water_liters,cost,duration_min,'
     'odometer_km,status,notes,photos,created_at,created_by,entry_name,entry_username,wash_details,captured_at';
+
+/// Supervisor verification and next-due columns
+/// (`supabase/migrations/20261127182119_wash_supervisor_verification.sql`).
+/// Read with a fallback to [_washBaseColumns]: PostgREST refuses the whole
+/// request for an unknown column, so history keeps working on a database
+/// that has not received that migration yet.
+const String _washVerificationColumns =
+    ',verification_status,verified_by,verified_at,verification_note,next_wash_due';
+
+/// Roles allowed to verify a wash. Mirrors `wash_verifier_role()` in the
+/// migration above; the server re-checks every call.
+const Set<String> kWashVerifierRoleNames = <String>{
+  'admin',
+  'manager',
+  'director',
+  'fleet supervisor',
+  'maintenance supervisor',
+  'workshop supervisor',
+};
+
+bool isWashVerifierRole(String? roleName) =>
+    kWashVerifierRoleNames.contains((roleName ?? '').trim().toLowerCase());
 
 /// Local (device-timezone) `YYYY-MM-DD`. This feature's own copy of the same
 /// small technique `meter_log_repository.dart`'s `todayIsoDate` provides -
@@ -160,6 +186,11 @@ abstract interface class WashRepository {
   /// returns `null` on any failure or when nothing is found, and a missing
   /// display name must never block logging a wash.
   Future<String?> currentUserDisplayName(String userId);
+
+  /// Records a supervisor's verification through the `verify_wash_record`
+  /// RPC, which stamps the verifier and time server-side and refuses the
+  /// person who logged the wash. Throws on refusal or failure.
+  Future<void> verifyWash(String washId, {String? note});
 }
 
 final class SupabaseWashRepository
@@ -175,13 +206,21 @@ final class SupabaseWashRepository
   @override
   Future<List<WashRecord>> listRecentWashes({int limit = 200}) async {
     final rows = <Map<String, dynamic>>[];
+    String columns = _washBaseColumns + _washVerificationColumns;
+    try {
+      await guard<List<Map<String, dynamic>>>(
+        () => _client.from(SupabaseTables.washRecords).select(columns).limit(1),
+      );
+    } on Object {
+      columns = _washBaseColumns;
+    }
     // Fetch complete history; never derive due status or staff totals from a
     // silent 200-row cap. Bound runaway history explicitly.
     for (var start = 0; start < 20000; start += 500) {
       final batch = await guard<List<Map<String, dynamic>>>(
         () => _client
             .from(SupabaseTables.washRecords)
-            .select(_washColumns)
+            .select(columns)
             .order('wash_date', ascending: false, nullsFirst: false)
             .order('created_at', ascending: false)
             .order('id')
@@ -218,6 +257,34 @@ final class SupabaseWashRepository
       for (final row in missing.sublist(start, end)) {
         row['entry_name'] = people[row['created_by']]?['full_name'];
         row['entry_username'] = people[row['created_by']]?['username'];
+      }
+    }
+    final List<Object?> verifiers = <Object?>{
+      for (final Map<String, dynamic> r in rows)
+        if (r['verified_by'] != null) r['verified_by'],
+    }.toList();
+    if (verifiers.isNotEmpty) {
+      try {
+        // Verifier names come from `profiles` (bounded list); a reader who
+        // cannot see that profile simply gets no name.
+        final List<Map<String, dynamic>> people =
+            await guard<List<Map<String, dynamic>>>(
+          () => _client
+              .from(SupabaseTables.profiles)
+              .select('id,full_name,username')
+              .inFilter('id', verifiers.take(500).toList()),
+        );
+        final Map<Object?, String?> names = <Object?, String?>{
+          for (final Map<String, dynamic> p in people)
+            p['id']: (p['full_name'] as String?)?.trim().isNotEmpty == true
+                ? p['full_name'] as String
+                : p['username'] as String?,
+        };
+        for (final Map<String, dynamic> r in rows) {
+          r['verified_by_name'] = names[r['verified_by']];
+        }
+      } on Object {
+        // Names are a nicety; the verification status still shows.
       }
     }
     return <WashRecord>[
@@ -272,8 +339,17 @@ final class SupabaseWashRepository
         for (int i = 0; i < photos.length; i++)
           QueuedMediaAttachment(
             localPath: photos[i],
-            fileName: _basename(photos[i]),
+            // Lands under tyre-photos/modules/wash/<user>/ - the same place
+            // the web app uploads wash photos - and the payload's local path
+            // is swapped for its tp-storage reference at push time
+            // (`ModulePhotoCommandPusher`).
+            fileName: modulePhotoFileName(
+              prefix: washMediaPrefix,
+              unique: _uuid.v4(),
+              localName: _basename(photos[i]),
+            ),
             orderIndex: i,
+            bucket: moduleMediaBucket,
           ),
       ],
       country: input.country ?? workspace.activeCountry,
@@ -286,6 +362,16 @@ final class SupabaseWashRepository
     );
 
     return result.droppedFields;
+  }
+
+  @override
+  Future<void> verifyWash(String washId, {String? note}) async {
+    await guard<dynamic>(
+      () => _client.rpc(
+        'verify_wash_record',
+        params: <String, Object?>{'p_id': washId, 'p_note': note},
+      ),
+    );
   }
 
   @override

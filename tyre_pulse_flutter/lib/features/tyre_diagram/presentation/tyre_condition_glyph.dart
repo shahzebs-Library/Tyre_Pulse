@@ -1,6 +1,6 @@
 /// The ONE picture for a tyre condition, drawn from the shared tyre map.
 ///
-/// Each condition has a fixed colour (its band in the shared palette) and a
+/// Each condition has its own fixed colour ([tyreConditionColor]) and a
 /// fixed glyph (`conditions.kinds[].glyph` in
 /// `docs/document-specs/tyre-layouts.json`, generated into
 /// `tyre_layout_spec.g.dart`): a tick for Good, a tread wearing down for
@@ -16,7 +16,6 @@ import 'package:flutter/material.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_condition.dart';
 import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_layout_spec.g.dart';
-import 'package:tyre_pulse/features/tyre_diagram/presentation/tyre_risk_colors.dart';
 
 typedef _Glyph = (
   List<List<double>> strokes,
@@ -98,11 +97,32 @@ void paintTyreConditionGlyph(
 TpStatus tyreConditionTone(TyreCondition? condition) =>
     condition == null ? TpStatus.unknown : tyreConditionStatus(condition);
 
-/// The fill a SELECTED condition button uses: the spec's deep (light theme)
-/// colour in both themes, so white ink on it keeps at least 4.5:1 contrast
-/// even where the dark theme's bright band colour would not.
+/// The ONE mapping from a condition to its own colour (owner, 2026-11-27):
+/// Damaged red, Worn amber, Puncture deep orange, Flat magenta, Missing
+/// grey, Good green; `null` (Not checked) the quiet slate. The severity
+/// band ([tyreConditionTone]) still decides how urgent a wheel is; this
+/// decides the badge, legend dot and picker tint, so three different
+/// critical faults no longer look the same.
+TpConditionColor tyreConditionColor(TyreCondition? condition) =>
+    switch (condition) {
+      TyreCondition.good => TpConditionColors.good,
+      TyreCondition.worn => TpConditionColors.worn,
+      TyreCondition.damaged => TpConditionColors.damaged,
+      TyreCondition.puncture => TpConditionColors.puncture,
+      TyreCondition.flat => TpConditionColors.flat,
+      TyreCondition.missing => TpConditionColors.missing,
+      null => TpConditionColors.notChecked,
+    };
+
+/// The fill behind a condition's white glyph (badges, legend, the selected
+/// tick): the condition's own deep colour in both themes, so white ink on it
+/// keeps at least 4.5:1 contrast.
 Color tyreConditionSelectedFill(TyreCondition? condition) =>
-    tyreRiskBaseColor(tyreConditionTone(condition), Brightness.light);
+    tyreConditionColor(condition).fill;
+
+/// The outline / tint colour of [condition] in [brightness].
+Color tyreConditionAccent(TyreCondition? condition, Brightness brightness) =>
+    tyreConditionColor(condition).accent(brightness);
 
 /// The glyph for [condition] as a widget, in [color] or the band colour of
 /// the current theme.
@@ -123,11 +143,8 @@ class TyreConditionGlyph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color ink = color ??
-        tyreRiskBaseColor(
-          tyreConditionTone(condition),
-          Theme.of(context).brightness,
-        );
+    final Color ink =
+        color ?? tyreConditionAccent(condition, Theme.of(context).brightness);
     return ExcludeSemantics(
       child: SizedBox.square(
         dimension: size,

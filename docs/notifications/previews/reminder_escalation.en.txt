@@ -1,0 +1,18 @@
+Subject: 3 unanswered item(s) for Sample Technician
+
+Assigned work is waiting
+
+Sample Technician has not opened the items below after three reminders. Please follow up.
+
+Waiting items
+- Job card GCKR/JC/1021
+- Parts request PR-0412
+- Inspection approval TM514
+
+Open Tyre Pulse: https://tyrepulse.app/action-center
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

@@ -107,6 +107,26 @@ const KPI_TEXT_COLOR = {
   teal:   'text-teal-400',
 }
 
+// Display keys for the canonical vocabularies (stored values never change; only
+// what the reader sees is translated).
+const WO_STATUS_I18N = {
+  'New': 'new', 'Awaiting Assignment': 'awaitingAssignment', 'Assigned': 'assigned',
+  'In Progress': 'inProgress', 'Waiting for Parts': 'waitingParts', 'Waiting for Approval': 'waitingApproval',
+  'Quality Inspection': 'qualityInspection', 'Completed': 'completed', 'Overdue': 'overdue',
+  'Cancelled': 'cancelled', 'On Hold': 'onHold',
+}
+const PRIORITY_I18N = { Critical: 'critical', High: 'high', Medium: 'medium', Low: 'low' }
+const WORK_TYPE_I18N = {
+  'Tyre Change': 'tyreChange', 'Inspection': 'inspection', 'Repair': 'repair', 'Rotation': 'rotation',
+  'Balancing': 'balancing', 'Alignment': 'alignment', 'Retread': 'retread', 'Puncture Repair': 'punctureRepair',
+  'Pressure Check': 'pressureCheck', 'Emergency': 'emergency', 'Other': 'other',
+  'Service': 'service', 'Preventive Maintenance': 'preventiveMaintenance',
+}
+const SORT_I18N = {
+  opened_at: 'opened', work_order_no: 'workOrderNo', asset_no: 'asset', work_type: 'type', priority: 'priority',
+  status: 'status', technician_name: 'technician', target_completion: 'target', total_cost: 'totalCost',
+}
+
 const WORK_TYPES = [
   'Tyre Change','Inspection','Repair','Rotation',
   'Balancing','Alignment','Retread','Puncture Repair',
@@ -164,6 +184,10 @@ export default function WorkOrders() {
   const fmtCurrency = (v) => _fmtCurrencyBase(v, activeCurrency)
   const { user, profile, isSuperAdmin } = useAuth()
   const { t } = useLanguage()
+  const woStatusLabel = (s) => (WO_STATUS_I18N[s] ? t(`workorders.statusLabel.${WO_STATUS_I18N[s]}`) : s)
+  const priorityLabel = (p) => (PRIORITY_I18N[p] ? t(`workorders.priorityLabel.${PRIORITY_I18N[p]}`) : p)
+  const workTypeLabel = (w) => (WORK_TYPE_I18N[w] ? t(`workorders.workTypeLabel.${WORK_TYPE_I18N[w]}`) : w)
+  const filterOptionLabel = (o) => (o === 'All' ? t('workorders.filters.all') : (woStatusLabel(o) !== o ? woStatusLabel(o) : (priorityLabel(o) !== o ? priorityLabel(o) : workTypeLabel(o))))
   // Deleting a work order is an Admin-only action (matches the RLS policy).
   // Super-admins are always admitted (break-glass), consistent with the rest of the app.
   const isAdmin = isSuperAdmin || (profile?.role || '').toLowerCase() === 'admin'
@@ -339,12 +363,12 @@ export default function WorkOrders() {
     return {
       labels: entries.map(([k]) => k),
       datasets: [{
-        label: 'Count',
+        label: t('workorders.charts.count'),
         data: entries.map(([, v]) => v),
         backgroundColor: categorical(entries.length),
       }],
     }
-  }, [statsData])
+  }, [statsData, t])
 
   const statusChartData = useMemo(() => {
     const colors = {
@@ -425,21 +449,21 @@ export default function WorkOrders() {
     { id: 'asset_no', header: t('workorders.columns.asset'), accessorFn: o => o.asset_no, size: 110,
       cell: ({ getValue }) => <span className="text-[var(--text-primary)] font-medium">{getValue() || 'N/A'}</span> },
     { id: 'work_type', header: t('workorders.columns.type'), accessorFn: o => o.work_type, size: 130,
-      cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
+      cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() ? workTypeLabel(getValue()) : 'N/A'}</span> },
     { id: 'priority', header: t('workorders.columns.priority'), accessorFn: o => o.priority, size: 110,
       cell: ({ getValue }) => {
         const pc = PRIORITY_CONFIG[getValue()] || PRIORITY_CONFIG.Medium
         return (
           <span className={`flex items-center gap-1.5 ${pc.color}`}>
             <span className={`w-2 h-2 rounded-full ${pc.dot}`} aria-hidden="true" />
-            {getValue() || 'N/A'}
+            {getValue() ? priorityLabel(getValue()) : 'N/A'}
           </span>
         )
       } },
     { id: 'status', header: t('workorders.columns.status'), accessorFn: o => o.status, size: 150,
       cell: ({ getValue }) => {
         const sc = STATUS_CONFIG[getValue()] || STATUS_CONFIG.New
-        return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${sc.color} ${sc.bg} ${sc.border}`}>{getValue() || 'N/A'}</span>
+        return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${sc.color} ${sc.bg} ${sc.border}`}>{getValue() ? woStatusLabel(getValue()) : 'N/A'}</span>
       } },
     { id: 'technician_name', header: t('workorders.columns.technician'), accessorFn: o => o.technician_name, size: 140,
       cell: ({ getValue }) => <span className="text-[var(--text-secondary)]">{getValue() || 'N/A'}</span> },
@@ -456,13 +480,13 @@ export default function WorkOrders() {
         const btn = 'min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500'
         return (
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-            <button type="button" onClick={() => setViewOrder(order)} aria-label={`View work order ${label}`} title="View" className={btn}><Eye size={14} aria-hidden="true" /></button>
-            <button type="button" onClick={() => openEdit(order)} disabled={!woRights.can('edit', order)} aria-label={`Edit work order ${label}`} title={woRights.reason('edit', order) || 'Edit'} className={`${btn} disabled:opacity-40`}><Edit2 size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={() => setViewOrder(order)} aria-label={t('workorders.rowActions.viewAria', { no: label })} title={t('workorders.rowActions.view')} className={btn}><Eye size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={() => openEdit(order)} disabled={!woRights.can('edit', order)} aria-label={t('workorders.rowActions.editAria', { no: label })} title={woRights.reason('edit', order) || t('workorders.rowActions.edit')} className={`${btn} disabled:opacity-40`}><Edit2 size={14} aria-hidden="true" /></button>
             {isAdmin && (
-              <button type="button" onClick={() => { setDeleteTarget(order); setDeleteError('') }} aria-label={`Delete work order ${label}`} title="Delete work order (Admin only)"
+              <button type="button" onClick={() => { setDeleteTarget(order); setDeleteError('') }} aria-label={t('workorders.rowActions.deleteAria', { no: label })} title={t('workorders.rowActions.deleteTitle')}
                 className={`${btn} hover:text-red-400`}><Trash2 size={14} aria-hidden="true" /></button>
             )}
-            <button type="button" onClick={() => exportJobCard(order)} aria-label={`Download job card ${label}`} title="Job card PDF" className={btn}><FileText size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={() => exportJobCard(order)} aria-label={t('workorders.rowActions.jobCardAria', { no: label })} title={t('workorders.rowActions.jobCardTitle')} className={btn}><FileText size={14} aria-hidden="true" /></button>
           </div>
         )
       } },
@@ -807,8 +831,8 @@ export default function WorkOrders() {
 
       {/* Workshop analytics (formerly its own page at /workshop) is a view of this page. */}
       {canSeeAnalytics && (
-        <div role="tablist" aria-label="Work order views" className="flex flex-wrap gap-1 border-b border-[var(--border-subtle)]">
-          {[{ key: 'jobs', label: 'Job cards' }, { key: 'analytics', label: 'Workshop analytics' }].map((v) => (
+        <div role="tablist" aria-label={t('workorders.views.label')} className="flex flex-wrap gap-1 border-b border-[var(--border-subtle)]">
+          {[{ key: 'jobs', label: t('workorders.views.jobs') }, { key: 'analytics', label: t('workorders.views.analytics') }].map((v) => (
             <button key={v.key} type="button" role="tab" aria-selected={view === v.key} onClick={() => setView(v.key)}
               className={`min-h-[44px] px-3 py-2 text-sm border-b-2 -mb-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${view === v.key ? 'border-orange-500 font-semibold text-[var(--text-primary)]' : 'border-transparent text-[var(--text-secondary)]'}`}>
               {v.label}
@@ -818,7 +842,7 @@ export default function WorkOrders() {
       )}
 
       {view === 'analytics' && canSeeAnalytics && (
-        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">Loading...</p>}>
+        <Suspense fallback={<p role="status" className="py-10 text-center text-sm text-[var(--text-secondary)]">{t('workorders.loadingShort')}</p>}>
           <WorkshopAnalytics embedded />
         </Suspense>
       )}
@@ -831,7 +855,7 @@ export default function WorkOrders() {
           <AlertTriangle size={18} aria-hidden="true" />
           <span className="text-sm">{error}</span>
           <button type="button" onClick={load} className="ml-auto btn-secondary text-xs px-3 min-h-[36px] inline-flex items-center gap-1">
-            <RefreshCw size={13} aria-hidden="true" /> Retry
+            <RefreshCw size={13} aria-hidden="true" /> {t('workorders.retry')}
           </button>
         </div>
       )}
@@ -897,7 +921,7 @@ export default function WorkOrders() {
           <div className="relative flex-1 min-w-48">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
             <input
-              aria-label="Search work orders"
+              aria-label={t('workorders.filters.searchAria')}
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder={t('workorders.filters.searchPlaceholder')}
@@ -905,24 +929,24 @@ export default function WorkOrders() {
             />
           </div>
           {[
-            { label: 'Status', value: statusFilter, setter: setStatus, opts: ['All', ...WO_STATUSES.filter(s => s !== 'Overdue')] },
-            { label: 'Priority', value: priorityFilter, setter: setPriority, opts: ['All','Critical','High','Medium','Low'] },
-            { label: 'Type', value: typeFilter, setter: setType, opts: ['All', ...WORK_TYPES] },
-          ].map(({ label, value, setter, opts }) => (
+            { key: 'status', label: t('workorders.filters.status'), value: statusFilter, setter: setStatus, opts: ['All', ...WO_STATUSES.filter(s => s !== 'Overdue')] },
+            { key: 'priority', label: t('workorders.filters.priority'), value: priorityFilter, setter: setPriority, opts: ['All','Critical','High','Medium','Low'] },
+            { key: 'type', label: t('workorders.filters.type'), value: typeFilter, setter: setType, opts: ['All', ...WORK_TYPES] },
+          ].map(({ key, label, value, setter, opts }) => (
             <select
-              key={label}
-              aria-label={`Filter work orders by ${label.toLowerCase()}`}
+              key={key}
+              aria-label={t('workorders.filters.byAria', { field: label })}
               value={value}
               onChange={e => { setter(e.target.value); setPage(1) }}
               className="px-3 py-2 bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500"
             >
-              {opts.map(o => <option key={o}>{o}</option>)}
+              {opts.map(o => <option key={o} value={o}>{filterOptionLabel(o)}</option>)}
             </select>
           ))}
           <DateField className="text-sm w-40" value={dateFrom} onChange={v => { setDateFrom(v); setPage(1) }}
-            placeholder="From date" ariaLabel="From date" />
+            placeholder={t('workorders.filters.fromDate')} ariaLabel={t('workorders.filters.fromDate')} />
           <DateField className="text-sm w-40" value={dateTo} onChange={v => { setDateTo(v); setPage(1) }}
-            placeholder="To date" ariaLabel="To date" min={dateFrom || undefined} />
+            placeholder={t('workorders.filters.toDate')} ariaLabel={t('workorders.filters.toDate')} min={dateFrom || undefined} />
           {activeFilterCount({ search, status: statusFilter, priority: priorityFilter, type: typeFilter, from: dateFrom, to: dateTo }) > 0 && (
             <button type="button" onClick={() => { setSearch(''); setStatus('All'); setPriority('All'); setType('All'); setDateFrom(''); setDateTo(''); setPage(1) }}
               className="px-3 min-h-[40px] bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm hover:bg-red-900/50 transition-colors">
@@ -974,13 +998,13 @@ export default function WorkOrders() {
             viewKey="work-orders"
             toolbarExtras={(
               <div className="flex items-center gap-2">
-                <label className="sr-only" htmlFor="wo-sort-field">Sort work orders by</label>
+                <label className="sr-only" htmlFor="wo-sort-field">{t('workorders.sort.label')}</label>
                 <select id="wo-sort-field" value={sortField} onChange={e => setSortField(e.target.value)}
                   className="px-3 min-h-[40px] bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-primary)] text-sm focus:outline-none focus:border-blue-500">
-                  {SORT_FIELDS.map(f => <option key={f.key} value={f.key}>Sort: {f.label}</option>)}
+                  {SORT_FIELDS.map(f => <option key={f.key} value={f.key}>{t('workorders.sort.option', { field: SORT_I18N[f.key] ? t(`workorders.sort.fields.${SORT_I18N[f.key]}`) : f.label })}</option>)}
                 </select>
                 <button type="button" onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
-                  aria-label={sortDir === 'asc' ? 'Sorted ascending, switch to descending' : 'Sorted descending, switch to ascending'}
+                  aria-label={sortDir === 'asc' ? t('workorders.sort.ascAria') : t('workorders.sort.descAria')}
                   className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center bg-[var(--surface-2)] border border-[var(--border-bright)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
                   {sortDir === 'asc' ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
                 </button>
@@ -1095,7 +1119,7 @@ export default function WorkOrders() {
         onClose={() => setViewOrder(null)}
         size="md"
         busy={transitioning}
-        closeLabel="Close work order"
+        closeLabel={t('workorders.detail.closeLabel')}
         title={viewOrder?.work_order_no}
         subtitle={viewOrder ? `${viewOrder.work_type} · ${viewOrder.asset_no}` : null}
       >
@@ -1105,7 +1129,7 @@ export default function WorkOrders() {
                 <div className="flex items-center gap-3">
                   <StatusBadge status={viewOrder.status} size={30} />
                   {(() => { const pc = PRIORITY_CONFIG[viewOrder.priority] || PRIORITY_CONFIG.Medium
-                    return <span className={`flex items-center gap-1.5 text-sm ${pc.color}`}><span className={`w-2.5 h-2.5 rounded-full ${pc.dot}`} />{t('workorders.detail.priorityBadge', { priority: viewOrder.priority })}</span>
+                    return <span className={`flex items-center gap-1.5 text-sm ${pc.color}`}><span className={`w-2.5 h-2.5 rounded-full ${pc.dot}`} />{t('workorders.detail.priorityBadge', { priority: priorityLabel(viewOrder.priority) })}</span>
                   })()}
                 </div>
 
@@ -1116,12 +1140,12 @@ export default function WorkOrders() {
                     <div className="flex flex-wrap gap-2">
                       {STATUS_FLOW[viewOrder.status].map(ns => (
                         <button key={ns} onClick={() => transitionStatus(viewOrder, ns)} disabled={wfLocked || transitioning || !!woRights.statusReason(ns, viewOrder) || (!executionAllowed && ['In Progress', 'Waiting for Parts', 'Quality Inspection', 'Completed'].includes(ns))}
-                          title={wfLocked ? 'Locked, in approval' : (woRights.statusReason(ns, viewOrder) || undefined)}
+                          title={wfLocked ? t('workorders.detail.lockedInApproval') : (woRights.statusReason(ns, viewOrder) || undefined)}
                           className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                             ns === 'Cancelled' ? 'border-red-700 text-red-400 hover:bg-red-900/30' :
                             ns === 'Completed' ? 'border-green-700 text-green-400 hover:bg-green-900/30' :
                             'border-blue-700 text-blue-400 hover:bg-blue-900/30'
-                          }`}>{ns}</button>
+                          }`}>{woStatusLabel(ns)}</button>
                       ))}
                     </div>
                   </div>
@@ -1143,7 +1167,7 @@ export default function WorkOrders() {
                     site: viewOrder.site,
                   }}
                   onStateChange={({ isActive, isLocked }) => setWfLocked(!!(isActive || isLocked))}
-                  title="Work Order Approval"
+                  title={t('workorders.detail.approvalTitle')}
                 />} />
 
                 {wfLocked && (
@@ -1216,7 +1240,7 @@ export default function WorkOrders() {
 
                 <div className="flex gap-3 pt-2">
                   <button onClick={() => { setViewOrder(null); openEdit(viewOrder) }} disabled={wfLocked || !woRights.can('edit', viewOrder)}
-                    title={wfLocked ? 'Locked, in approval' : (woRights.reason('edit', viewOrder) || undefined)}
+                    title={wfLocked ? t('workorders.detail.lockedInApproval') : (woRights.reason('edit', viewOrder) || undefined)}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600">
                     {wfLocked ? <Lock size={15} /> : <Edit2 size={15} />}{t('workorders.detail.edit')}
                   </button>

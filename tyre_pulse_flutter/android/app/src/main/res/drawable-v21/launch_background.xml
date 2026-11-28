@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launch screen: the Tyre Pulse mark on white, the same as the production
-     (Expo) app's splash. -->
+<!-- Launch screen (Android 11 and below): the Tyre Pulse stacked lockup on
+     asphalt. Android 12+ uses the system splash set in values-v31/styles.xml. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+    <item android:drawable="@color/splash_background" />
     <item>
         <bitmap
             android:gravity="center"

@@ -58,6 +58,7 @@ import 'package:tyre_pulse/features/approvals/inspection_approvals_providers.dar
 import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_decision_bar.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/approval_signature_preview.dart';
 import 'package:tyre_pulse/features/approvals/presentation/widgets/inspection_approval_signature_pad.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_type_display.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/assets/presentation/widgets/vehicle_multiview_board.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
@@ -1008,7 +1009,10 @@ class _SummaryCard extends StatelessWidget {
     final String title = item.title?.trim().isNotEmpty == true
         ? item.title!.trim()
         : l10n.inspectionApprovalFallbackTitle;
-    final String identity = <String?>[item.assetNo, item.vehicleType]
+    final String identity = <String?>[
+      item.assetNo,
+      vehicleTypeDisplay(item.vehicleType),
+    ]
         .where((String? value) => value?.trim().isNotEmpty == true)
         .map((String? value) => value!.trim())
         .join(' - ');

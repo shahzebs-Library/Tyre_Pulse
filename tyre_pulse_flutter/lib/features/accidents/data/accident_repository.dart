@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/core/workspace/company_scope.dart';
 import 'package:tyre_pulse/features/accidents/data/accident_dto.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
 
@@ -17,6 +18,7 @@ abstract interface class AccidentRemoteSource {
     required int to,
     required String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   });
   Future<Map<String, dynamic>?> byId(String id);
   Future<List<Map<String, dynamic>>> workstreams({
@@ -28,8 +30,13 @@ abstract interface class AccidentRemoteSource {
 final class SupabaseAccidentRemoteSource
     with SupabaseGateway
     implements AccidentRemoteSource {
-  SupabaseAccidentRemoteSource(this._client);
+  SupabaseAccidentRemoteSource(this._client, {String? companyId})
+      : _companyId = companyId;
   final SupabaseClient _client;
+
+  /// The caller's active company. The register is pinned to it so a super
+  /// admin does not see another company's (e.g. a demo fleet's) cases.
+  final String? _companyId;
 
   @override
   Future<List<Map<String, dynamic>>> listPage({
@@ -37,11 +44,22 @@ final class SupabaseAccidentRemoteSource
     required int to,
     required String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   }) =>
       guard(() async {
-        var query = _client.from(SupabaseTables.accidents).select();
+        var query = pinCompany(
+          _client.from(SupabaseTables.accidents).select(),
+          _companyId,
+        );
         if (reporterId != null && reporterId.trim().isNotEmpty) {
-          query = query.eq('reported_by', reporterId);
+          // "Mine" = reported by me OR a step of the case is assigned to me.
+          final List<String> ids = assignedAccidentIds
+              .where((String id) => RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(id))
+              .take(200)
+              .toList();
+          query = ids.isEmpty
+              ? query.eq('reported_by', reporterId)
+              : query.or('reported_by.eq.$reporterId,id.in.(${ids.join(',')})');
         }
         if (country != null && country.trim().isNotEmpty) {
           query = query.or('country.eq.$country,country.is.null');
@@ -84,6 +102,7 @@ abstract interface class AccidentRepository {
     required int pageSize,
     String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   });
   Future<AccidentRecord?> byId(String id);
   Future<AccidentCaseSnapshot?> caseById(String id, {String? country});
@@ -99,6 +118,7 @@ final class SupabaseAccidentRepository implements AccidentRepository {
     required int pageSize,
     String? country,
     String? reporterId,
+    Set<String> assignedAccidentIds = const <String>{},
   }) async {
     final int safeSize = pageSize.clamp(1, 100);
     final List<Map<String, dynamic>> rows = await _source.listPage(
@@ -106,6 +126,7 @@ final class SupabaseAccidentRepository implements AccidentRepository {
       to: offset + safeSize,
       country: country,
       reporterId: reporterId,
+      assignedAccidentIds: assignedAccidentIds,
     );
     final bool hasMore = rows.length > safeSize;
     final Iterable<Map<String, dynamic>> page =

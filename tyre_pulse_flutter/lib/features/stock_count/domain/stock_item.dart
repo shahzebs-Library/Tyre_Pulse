@@ -19,6 +19,9 @@ final class StockItem {
     this.reserved,
     this.condition,
     this.ownership,
+    this.uom,
+    this.locationCode,
+    this.itemCode,
   });
 
   final String id;
@@ -40,6 +43,13 @@ final class StockItem {
   final num? reserved;
   final String? condition;
   final String? ownership;
+
+  /// What tells two lines with the same description apart on the shelf:
+  /// the unit, the store location (bin) code and the ERP item code. Read
+  /// through the `location_id` / `item_id` foreign keys; null when unknown.
+  final String? uom;
+  final String? locationCode;
+  final String? itemCode;
 
   /// On hand minus reserved, never below zero. A hint for the issue form;
   /// the server decides with the live balance.
@@ -73,6 +83,9 @@ final class StockItem {
         reserved: reserved,
         condition: condition,
         ownership: ownership,
+        uom: uom,
+        locationCode: locationCode,
+        itemCode: itemCode,
       );
 }
 

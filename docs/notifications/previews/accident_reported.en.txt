@@ -1,0 +1,23 @@
+Subject: New accident ACC-2026-0148 at NHC
+
+A new accident was reported
+
+Vehicle TM514 was in an accident. Please review the case and take the first step.
+
+Reference: ACC-2026-0148
+Vehicle: TM514
+Site: NHC
+Severity: Major
+Stage: Reported
+Incident date: 27 Nov 2026
+Driver: Sample Driver
+What happened: Rear-ended at the plant gate. No injuries.
+Next action: Site manager to review
+
+Open the accident: https://tyrepulse.app/accidents/sample
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

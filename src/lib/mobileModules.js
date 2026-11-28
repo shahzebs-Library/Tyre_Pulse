@@ -61,7 +61,7 @@ export const MOBILE_MODULES = [
   { key: 'stock',          label: 'Stock Count',      group: 'Maintenance', roles: ['manager', 'inspector', 'store_keeper'] },
   { key: 'pm',             label: 'Maintenance Due',  group: 'Maintenance', roles: ['manager', 'director'] },
   // My Jobs: the shop-floor roles plus supervisors; admin always sees it.
-  { key: 'workshop',       label: 'My Jobs',          group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician'] },
+  { key: 'workshop',       label: 'My Jobs',          group: 'Maintenance', roles: ['manager', 'director', 'inspector', 'tyre_man', 'mechanic', 'electrician', 'workshop_supervisor'] },
   { key: 'workshopStatus', label: 'Workshop Status',  group: 'Maintenance', roles: ['mechanic', 'electrician', 'inspector', 'tyre_man', 'tyre_data_collector', 'workshop_supervisor', 'maintenance_supervisor', 'workshop_area_manager', 'workshop_maintenance_area_manager', 'pmv_manager', 'manager', 'director', 'fleet_supervisor'] },
   // Management ----------------------------------------------------------------
   { key: 'overview',       label: 'Overview',         group: 'Management',  roles: [] },
@@ -78,6 +78,8 @@ export const MOBILE_MODULES = [
   // ADMIN ONLY (ModuleDef.adminOnly) - no leakage.
   { key: 'admin',          label: 'Admin Console',    group: 'Admin',       roles: [] },
   { key: 'users',          label: 'User Management',  group: 'Admin',       roles: [] },
+  // Field hardware (Flutter-only): admin-only until opened per user here.
+  { key: 'devices',        label: 'Devices',          group: 'Admin',       roles: [] },
 ]
 
 /** Lookup by mobile key. */

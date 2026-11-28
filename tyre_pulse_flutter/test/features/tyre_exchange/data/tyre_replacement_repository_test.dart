@@ -9,9 +9,9 @@
 /// `CommandRegistry.specFor(CommandType.tyreChange).fieldAllowList` (so
 /// nothing is silently dropped); the four literal constants the reference
 /// screen hard-codes (`qty: 1`, `risk_level: 'Low'`, `category: 'Tyre
-/// Change'`, `fitment_date == issue_date == today`); that `serial_no`/
-/// `serial_number`/`tyre_serial` always move together; that `tyre_position`
-/// is never populated (see the repository's own library comment on why);
+/// Change'`, `issue_date == today`, and NEVER the generated `fitment_date`);
+/// that `serial_no`/`serial_number`/`tyre_serial` always move together; that
+/// `tyre_position` mirrors `position`;
 /// that photos are a flat list, never a keyed map; and that the queue's own
 /// bookkeeping `country` column falls back to the workspace's active
 /// country independently of the stored BUSINESS `country` value, matching
@@ -125,8 +125,10 @@ void main() {
     expect(payload['qty'], 1);
     expect(payload['risk_level'], 'Low');
     expect(payload['category'], 'Tyre Change');
-    expect(payload['fitment_date'], isNotNull);
-    expect(payload['fitment_date'], payload['issue_date']);
+    expect(payload['issue_date'], isNotNull);
+    // fitment_date is a GENERATED column (= issue_date); naming it in an
+    // insert fails the whole write with 428C9.
+    expect(payload.containsKey('fitment_date'), isFalse);
   });
 
   test(
@@ -166,8 +168,7 @@ void main() {
   });
 
   test(
-    'tyre_position is never populated, even though it is a real '
-    'allow-listed column - the reference screen never writes it either',
+    'tyre_position carries the same canonical code as position',
     () async {
       await repository.submitTyreReplacement(
         workspace: _workspace(),
@@ -178,7 +179,8 @@ void main() {
       );
 
       final Map<String, Object?> payload = decode(await theOnlyQueuedCommand());
-      expect(payload.containsKey('tyre_position'), isFalse);
+      expect(payload['tyre_position'], 'LHF1');
+      expect(payload['tyre_position'], payload['position']);
     },
   );
 

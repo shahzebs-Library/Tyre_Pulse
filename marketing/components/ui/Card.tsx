@@ -31,12 +31,16 @@ export type CardProps = {
   linkAria?: string;
   children?: React.ReactNode;
   className?: string;
+  /** Language of the status badge. */
+  locale?: "en" | "ar";
 };
 
 export function Card({
   variant = "plain", as: Tag = "li", titleAs: Title = "h3", icon: Icon, photo, title, text, status, note,
-  href, linkLabel = "Learn more", linkAria, children, className,
+  href, linkLabel: linkLabelProp, linkAria, children, className, locale = "en",
 }: CardProps) {
+  // Never a bare "Learn more": without a label the link names its card ("See tyre lifecycle").
+  const linkLabel = linkLabelProp ?? `See ${/^[A-Z][a-z]/.test(title) ? title[0].toLowerCase() + title.slice(1) : title}`;
   const kind = photo ? "photo" : variant;
   const external = href?.startsWith("http");
   return (
@@ -50,7 +54,7 @@ export function Card({
         {(Icon || status) && (
           <div className="tp-card-top">
             {Icon && <Icon className="tp-card-icon" size={26} strokeWidth={1.7} aria-hidden="true" />}
-            {status && <StatusBadge status={status} />}
+            {status && <StatusBadge status={status} locale={locale} />}
           </div>
         )}
         {note && <span className="tp-card-note">{note}</span>}

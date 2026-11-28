@@ -194,6 +194,13 @@ class AppLocalizationsAr extends AppLocalizations {
       'حسابك بانتظار الموافقة أو تم قفله. يمكن لمسؤول النظام معالجة ذلك.';
 
   @override
+  String get accessBlockedCheckAgain => 'تحقق مرة أخرى';
+
+  @override
+  String get accessBlockedStillWaiting =>
+      'حسابك لا يزال غير مفعّل. اطلب من مسؤول النظام الموافقة عليه.';
+
+  @override
   String get routeNotFoundTitle => 'هذه الشاشة غير موجودة';
 
   @override
@@ -2173,6 +2180,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get homeStatUnavailableCaption => 'تعذر التحقق';
 
   @override
+  String get homeRoleCopyCatalog =>
+      'meterTitle=سجّل عداد اليوم~meterNotLogged=لم يُسجَّل اليوم~meterLogged=سُجّل %time%~problemTitle=أبلغ عن مشكلة أو عطل~problemHint=أخبر الورشة بما هو معطّل~exceptionsTitle=استثناءات اليوم~offRoad=خارج الخدمة~openAccidents=حوادث مفتوحة~maintenanceOverdue=صيانة متأخرة~tyresAttention=إطارات تحتاج انتباهاً~handoverTitle=تسليمات بانتظار توقيعك~reportAccident=أبلغ عن حادث~approvalsTitle=موافقات بانتظارك~approvalsSplit=%a% فحوصات • %b% قوائم تحقق~issueTitle=أبلغ عن مشكلة~issueHint=شيء معطّل أو غير آمن~teamTitle=الفريق الآن~working=يعمل~waiting=ينتظر~free=متاح~teamNote=متاح يعني سجّل الحضور ولا يعمل. لا يمكن حساب الغياب: لا يوجد سجل حضور.~assignTitle=إسناد الأعمال~assignHint=%count% بطاقات عمل مفتوحة بدون مسؤول~assignGap=يفتح قائمة بطاقات العمل. الإسناد من الهاتف غير متاح بعد.~myJobsTitle=أعمالي~myJobsCount=%count% مفتوحة~myJobsNone=لا توجد أعمال مفتوحة~plantTitle=فحوصات المحطة اليوم~sheetsDue=%count% نماذج مستحقة~allDone=تم كل شيء اليوم~dailyTitle=الفحص اليومي للورشة~dueToday=مستحق اليوم~signTitle=موافقات للتوقيع~signHint=%count% بانتظار توقيعك~tyresDueTitle=إطارات مستحقة للاستبدال~myVehicle=مركبتي~noVehicle=لم يُسجَّل عداد بعد~wash=سجّل غسيلاً~washDays=آخر غسيل قبل %count% أيام~washToday=غُسلت اليوم~washNever=لا يوجد غسيل مسجّل~dailyChecklist=قائمة التحقق اليومية~charges=مخالفاتي ورسومي~chargesHint=المخالفات والرسوم وتوقيعاتك~summary=الملخص اليومي والتقارير~alerts=التنبيهات~plan=خطة اليوم~planOpen=%count% مفتوحة اليوم~repair=طلب إصلاح~meter=سجل العداد~inspectionsDue=فحوصات مستحقة اليوم~checklistsToSign=قوائم تحقق للتوقيع~waitingParts=بانتظار قطع الغيار~blocked=متوقف أكثر من 30 دقيقة~requestParts=اطلب قطع غيار~recent=الفحوصات الأخيرة~reorder=مخزون لإعادة الطلب~sync=بانتظار المزامنة~more=المزيد~open=افتح';
+
+  @override
   String get homeNoQuickActionsMessage =>
       'لا يتوفر لك شيء هنا بعد. تواصل مع المسؤول إذا احتجت إلى الوصول إلى إحدى الميزات.';
 
@@ -2897,7 +2908,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص~myCounts=عمليات الجرد الخاصة بي~transfers=التحويلات~needsApproval=فرق الجرد يحتاج إلى موافقة. استخدم الجرد لتسجيل ما على الرف؛ ويقوم المعتمِد بترحيل التغيير.~countNote=يُسجَّل جردك للمراجعة. لا يتغير رصيد المخزون إلا عندما يرحّل المعتمِد الفرق.~countRecorded=تم تسجيل الجرد للمراجعة.~countSavedOnPhone=تم حفظ الجرد على هذا الهاتف. سيُرسل عند عودة الاتصال.~countNoPlace=لا يحتوي بند المخزون هذا على مخزن أو دولة، لذا لا يمكن تسجيل الجرد.~countNeedsConnection=أول جرد في هذا المخزن يحتاج إلى اتصال لفتح جلسة جرد.~countRefused=لم يُقبل الجرد:';
+      'title=جرد المخزون~items=الأصناف~reorder=تحتاج طلباً~notToday=لم تجرد~search=بحث بالوصف أو الموقع~all=الكل~low=مخزون منخفض~stale=لم يجرد اليوم~empty=لا توجد أصناف~emptyBody=لا توجد سجلات مخزون تطابق المرشحات.~count=جرد~stockItem=صنف مخزون~physicalCount=الكمية الفعلية~reason=السبب (اختياري)~cancel=إلغاء~save=حفظ الجرد~invalid=أدخل كمية صفر أو أكثر.~offlineSaved=حفظ الجرد دون اتصال ووضع في قائمة المزامنة.~saveFailed=تعذر حفظ جرد المخزون.~loadFailed=تعذر تحميل سجلات المخزون.~Critical=حرج~Low=منخفض~OK=جيد~onHand=متوفر~add=إضافة مخزون~addTitle=إضافة مخزون~size=مقاس الإطار~description=الوصف (اختياري)~site=الموقع~quantity=الكمية~minLevel=الحد الأدنى~criticalLevel=الحد الحرج~sizeRequired=أدخل مقاس الإطار لهذا المخزون.~siteRequired=أدخل الموقع لهذا المخزون.~addFailed=تعذّرت إضافة المخزون. يرجى المحاولة مرة أخرى.~increase=زيادة~decrease=إنقاص~myCounts=عمليات الجرد الخاصة بي~transfers=التحويلات~needsApproval=فرق الجرد يحتاج إلى موافقة. استخدم الجرد لتسجيل ما على الرف؛ ويقوم المعتمِد بترحيل التغيير.~countNote=يُسجَّل جردك للمراجعة. لا يتغير رصيد المخزون إلا عندما يرحّل المعتمِد الفرق.~countRecorded=تم تسجيل الجرد للمراجعة.~countSavedOnPhone=تم حفظ الجرد على هذا الهاتف. سيُرسل عند عودة الاتصال.~countNoPlace=لا يحتوي بند المخزون هذا على مخزن أو دولة، لذا لا يمكن تسجيل الجرد.~countNeedsConnection=أول جرد في هذا المخزن يحتاج إلى اتصال لفتح جلسة جرد.~countRefused=لم يُقبل الجرد:~matches=مطابق~notMatch=غير مطابق~matchesRecorded=تم التسجيل: الرف مطابق للنظام.~matchesSavedOnPhone=تم الحفظ على هذا الهاتف: الرف مطابق للنظام. سيُرسل عند عودة الاتصال.~genuineQuestion=هل القطعة أصلية؟~genuine=أصلية~notGenuine=غير أصلية~genuineNote=ملاحظة عن القطعة (اختياري)~countedToday=تم الجرد اليوم~bin=الموقع~code=الرمز~offlineShowingLast=غير متصل - تُعرض آخر بيانات محمّلة~refreshFailedShowingLast=تعذّر التحديث - تُعرض آخر بيانات محمّلة~movementsOffline=لا يمكن تحميل الحركات دون اتصال. ستظهر عند عودة الاتصال.~refreshing=جارٍ التحديث~aftermarket=بديلة~unchecked=لم يتم التحقق~countedItem=تم الجرد:~undo=تراجع~countUndone=أُزيل الجرد. لم يُرسل شيء.~undoTooLate=أُرسل بالفعل، لذا يبقى للمراجعة.~markMatches=تسجيل كمطابق';
+
+  @override
+  String get storeItemCopyCatalog =>
+      'title=صنف المخزن~addPhoto=إضافة صورة~camera=التقاط صورة~gallery=اختيار من الصور~noPhoto=لا توجد صورة بعد~photoAdded=أُضيفت الصورة. يمكن لكل من في الشركة رؤيتها.~photoNeedsConnection=يلزم اتصال. لم تُحفظ الصورة؛ حاول مرة أخرى عند الاتصال.~photoFailed=تعذّرت إضافة الصورة.~photoUnavailable=تعذّر تحميل الصورة~companySku=رمز الشركة~itemCode=رمز النظام~brand=العلامة التجارية~noBrand=لا توجد علامة تجارية مسجلة~category=الفئة~pendingApproval=بانتظار الموافقة~verified=موثّق~notLinked=غير موجود في كتالوج الشركة بعد~notLinkedBody=تُشارك أرقام القطع والباركود والصور عبر كتالوج الشركة. اقترح هذا الصنف وسيقوم مراجع بربطه.~propose=اقتراح للكتالوج~proposeTitle=اقتراح لكتالوج الشركة~proposeSent=أُرسل للمراجعة. سيضيفه مراجع إلى الكتالوج ويربط هذا الصنف.~description=الوصف~whereItIs=مكان وجوده~bin=الموقع~noBin=لا يوجد موقع مسجل~total=الإجمالي~reserved=محجوز~available=متاح~onHand=المتوفر~condition=الحالة~partNumbers=أرقام القطع~noPartNumbers=لا توجد أرقام قطع بعد~addPartNumber=إضافة رقم قطعة~partNumber=رقم القطعة~manufacturer=الشركة المصنعة (اختياري)~partNumberSent=أُرسل رقم القطعة للموافقة. بعد الموافقة يراه كل من في الشركة.~barcodes=الباركود والأرقام الأخرى~noBarcodes=لا يوجد باركود بعد~addBarcode=إضافة باركود~barcode=الباركود أو الرقم~numberType=النوع~typeBarcode=باركود~typeOem=رقم قطعة المصنع الأصلي~typeAlternative=رقم آخر~scan=مسح~barcodeSent=أُرسل للموافقة. يُضاف بعد موافقة المراجع.~setBrand=تصحيح العلامة التجارية~brandSent=أُرسل تغيير العلامة التجارية للموافقة.~reason=السبب~reasonRequired=اكتب سبباً قصيراً (3 أحرف على الأقل).~searchBrand=بحث في العلامات التجارية~newBrand=إضافة علامة تجارية جديدة~newBrandName=اسم العلامة التجارية الجديدة~brandRequired=اختر أو اكتب علامة تجارية.~partNumberRequired=اكتب رقم القطعة.~valueRequired=اكتب الرقم.~descriptionRequired=اكتب وصفاً.~send=إرسال~cancel=إلغاء~needsConnection=يلزم اتصال. لم يُرسل شيء؛ حاول مرة أخرى عند الاتصال.~failed=لم يُرسل:~moveBin=نقل إلى موقع آخر~pendingChanges=بانتظار الموافقة~recent=آخر الحركات~loadFailed=تعذّر تحميل هذا الصنف.~brandsFailed=تعذّر تحميل قائمة العلامات التجارية. لا يزال بإمكانك كتابة علامة جديدة.~defaultReason=أُضيف من المخزن~unit=الوحدة~levelsReceive=المستويات واستلام المخزون';
 
   @override
   String get calendarCopyCatalog =>
@@ -3016,7 +3031,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get workshopCopyCatalog =>
-      'title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب~photoLabel=صورة (اختياري)~takePhoto=الكاميرا~pickPhoto=المعرض~removePhoto=إزالة الصورة~photoLimit=حتى 3 صور~photoNotAttached=تم التسجيل. تعذّر إرفاق الصورة بدون اتصال.';
+      'title=مهامي~onDuty=في المناوبة~offDuty=خارج المناوبة~checkIn=تسجيل الحضور~checkOut=تسجيل الانصراف~checkInHint=سجّل حضورك للمناوبة قبل تسجيل العمل.~myJobs=مهامي~emptyTitle=لا توجد مهام مفتوحة~emptyMessage=لا توجد مهمة مفتوحة مسندة إليك حاليًا.~loadError=تعذر تحميل مهامك الآن.~selectJobTitle=اختر مهمة~selectJobMsg=اختر إحدى مهامك أولًا.~checkInFirstTitle=سجّل الحضور أولًا~selectTaskTitle=اختر خطوة~selectTaskMsg=اختر الخطوة التي تعمل عليها أولًا.~tasks=الخطوات~confirmTitle=إكمال الخطوة؟~confirmMsg=سيتم تسجيل الخطوة كمكتملة وإرسالها للفحص.~cancel=إلغاء~noteHint=أضف ملاحظة (اختياري)~record=تسجيل~queued=تم الحفظ على هذا الجهاز. ستتم المزامنة تلقائيًا.~saveFailed=تعذر حفظ النشاط على هذا الجهاز. حاول مرة أخرى.~todayTitle=إنتاجيتي اليوم~productive=منتج~blocked=متوقف~unassigned=غير مسند~breakTime=استراحة~completed=الخطوات المكتملة~due=الاستحقاق~ok=حسنًا~a_start_job=بدء العمل~a_pause_job=إيقاف مؤقت~a_resume_job=استئناف العمل~a_complete_task=إكمال الخطوة~a_request_parts=طلب قطع غيار~a_request_assistance=طلب مساعدة~a_waiting_approval=بانتظار الموافقة~a_waiting_vehicle=بانتظار المركبة~a_waiting_tools=بانتظار الأدوات~a_start_break=بدء الاستراحة~a_end_break=إنهاء الاستراحة~a_report_problem=الإبلاغ عن مشكلة~s_working=يعمل~s_available=متاح~s_waiting_parts=بانتظار القطع~s_waiting_approval=بانتظار الموافقة~s_waiting_tools=بانتظار الأدوات~s_waiting_vehicle=بانتظار المركبة~s_on_break=في استراحة~s_training=تدريب~s_awaiting_inspection=بانتظار الفحص~s_off_duty=خارج المناوبة~s_absent=غائب~photoLabel=صورة (اختياري)~takePhoto=الكاميرا~pickPhoto=المعرض~removePhoto=إزالة الصورة~photoLimit=حتى 3 صور~photoNotAttached=تم التسجيل. تعذّر إرفاق الصورة بدون اتصال.~c_whatDone=ما الذي تم إنجازه~c_parts=القطع المستخدمة~c_meters=قراءات العداد~c_km=عداد المسافة (كم)~c_hours=عداد الساعات~c_before=صور قبل العمل (اختياري)~c_after=صور بعد العمل~c_signature=توقيعك~returned=أعاده المشرف~waitingApproval=بانتظار موافقة المشرف~notAccepted=لم يُقبل:~c_queued=تم الحفظ على هذا الهاتف. يُرسل إلى المشرف فور توفر الاتصال.~c_stateQueued=في الانتظار على هذا الهاتف~c_stateFailed=تعذر الإرسال~c_stateSynced=تم الإرسال، بانتظار موافقة المشرف~jc_title=أعمال للمراجعة~jc_tabToCheck=للمراجعة~jc_tabReturned=المعادة~jc_emptyToCheck=لا يوجد عمل منجز بانتظارك.~jc_emptyReturned=لا يوجد عمل معاد.~jc_loadError=تعذر تحميل الأعمال.~jc_extra=دليل إضافي~jc_waiting=بانتظارك~jc_by=أنجزه~jc_returnReason=سبب الإعادة:~jc_noParts=لا توجد قطع مسجلة~jc_noMeters=لا توجد قراءة عداد~jc_photoUnavailable=الصورة غير متاحة~jc_pass=اعتماد وإغلاق~jc_return=إعادة العمل~jc_returnTitle=لماذا تتم الإعادة؟~jc_returnHint=اذكر ما الذي لا يزال يحتاج إلى إصلاح~jc_returnSend=إعادة العمل~jc_passed=تم اعتماد العمل وإغلاقه.~jc_returnedOk=تمت إعادة العمل. سيعيد مكتب البيانات إسناده.~jc_decideError=تعذر الحفظ. حاول مرة أخرى.~jc_signature=توقيع الفني';
 
   @override
   String get homeTodaysWork => 'عمل اليوم';
@@ -9387,4 +9402,1213 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'بدأت الخصومات، لذلك لم يعد ممكناً الاعتراض على هذه المطالبة هنا. يمكن للمدير أو المالية الإعفاء من المتبقي.';
+
+  @override
+  String get profileSyncQueueTitle => 'قائمة المزامنة';
+
+  @override
+  String get syncQueueStatPending => 'قيد الانتظار';
+
+  @override
+  String get syncQueueStatAttention => 'تحتاج إلى متابعة';
+
+  @override
+  String get syncQueueStatSent => 'تم الإرسال';
+
+  @override
+  String get syncQueueStatSentCaption => 'لا يزال على هذا الجهاز';
+
+  @override
+  String syncQueueLastAttempt(String time) {
+    return 'آخر محاولة مزامنة: $time';
+  }
+
+  @override
+  String get syncQueueNoAttempt =>
+      'لم تُسجَّل أي محاولة مزامنة على هذا الجهاز بعد';
+
+  @override
+  String get syncQueueRunning => 'تجري المزامنة الآن';
+
+  @override
+  String get syncQueueSyncNow => 'زامن الآن';
+
+  @override
+  String get syncQueueOfflineReason =>
+      'أنت غير متصل. عملك محفوظ على هذا الهاتف وسيُرسل عند عودة الاتصال.';
+
+  @override
+  String get syncQueueNothingToSend => 'لا يوجد شيء بانتظار الإرسال.';
+
+  @override
+  String get syncQueueRequested =>
+      'تم طلب المزامنة. تتحدّث هذه القائمة مع إرسال العناصر.';
+
+  @override
+  String get syncQueueRequestFailed => 'تعذّر بدء المزامنة. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueEmptyTitle => 'تمت مزامنة كل شيء';
+
+  @override
+  String get syncQueueEmptyMessage =>
+      'لا يوجد شيء من هذا الجهاز بانتظار الإرسال.';
+
+  @override
+  String get syncQueueLoadFailedTitle => 'تعذّرت قراءة قائمة المزامنة';
+
+  @override
+  String get syncQueueLoadFailedMessage =>
+      'عملك المنتظر لا يزال على هذا الهاتف. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueSectionItems => 'العناصر في القائمة';
+
+  @override
+  String syncTypeInspection(String asset) {
+    return 'فحص $asset';
+  }
+
+  @override
+  String syncQueueItemQueued(String time) {
+    return 'أُضيف إلى القائمة $time';
+  }
+
+  @override
+  String syncQueueAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count محاولة',
+      many: '$count محاولة',
+      few: '$count محاولات',
+      two: 'محاولتان',
+      one: 'محاولة واحدة',
+      zero: 'لم تتم المحاولة بعد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncQueueNextAttempt(String time) {
+    return 'المحاولة التالية $time';
+  }
+
+  @override
+  String get syncQueueStateWaiting => 'بانتظار الإرسال';
+
+  @override
+  String get syncQueueStateSending => 'يُرسل الآن';
+
+  @override
+  String get syncQueueStateRetrying => 'ستتم إعادة المحاولة';
+
+  @override
+  String get syncQueueStateOnHold => 'معلّق';
+
+  @override
+  String get syncQueueStateNeedsAttention => 'تحتاج إلى متابعة';
+
+  @override
+  String get syncQueueStateSent => 'تم الإرسال';
+
+  @override
+  String get syncQueueRetry => 'إعادة المحاولة';
+
+  @override
+  String get syncQueueRetried => 'أُعيد إلى القائمة.';
+
+  @override
+  String get syncQueueRetryNotNeeded =>
+      'لم يعد هذا العنصر بانتظار إعادة المحاولة.';
+
+  @override
+  String get syncQueueRetryFailed =>
+      'تعذّرت إعادة محاولة هذا العنصر. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueErrorFallback => 'تعذّر إرسال هذا العنصر.';
+
+  @override
+  String get syncTypeTyreChange => 'تغيير إطار';
+
+  @override
+  String get syncTypeWorkOrder => 'أمر عمل';
+
+  @override
+  String get syncTypeRca => 'تحليل السبب الجذري';
+
+  @override
+  String get syncTypeReportIssue => 'مشكلة مُبلَّغ عنها';
+
+  @override
+  String get syncTypeStockAdjust => 'جرد المخزون';
+
+  @override
+  String get syncTypeWorkOrderStatus => 'حالة أمر العمل';
+
+  @override
+  String get syncTypeCorrectiveActionStatus => 'حالة الإجراء التصحيحي';
+
+  @override
+  String get syncTypeChecklistSubmission => 'قائمة تحقق';
+
+  @override
+  String get syncTypeChecklistAssignmentStatus => 'تكليف قائمة التحقق';
+
+  @override
+  String get syncTypeOdometerLog => 'قراءة العدّاد';
+
+  @override
+  String get syncTypeEngineHoursLog => 'قراءة ساعات المحرك';
+
+  @override
+  String get syncTypeReportAccident => 'تقرير حادث';
+
+  @override
+  String get syncTypeWashRecord => 'غسيل مركبة';
+
+  @override
+  String get syncTypeWorkshopEvent => 'نشاط الورشة';
+
+  @override
+  String get syncTypeInventoryCountLine => 'بند جرد المخزون';
+
+  @override
+  String get syncTypeUnknown => 'إدخال غير معروف';
+
+  @override
+  String get profileDraftsTitle => 'المسودات';
+
+  @override
+  String get profileDraftsEmptyTitle => 'لا توجد مسودات';
+
+  @override
+  String get profileDraftsEmptyMessage =>
+      'تظهر هنا قوائم التحقق والفحوصات غير المكتملة التي تبدؤها على هذا الهاتف.';
+
+  @override
+  String get profileDraftsLoadFailedTitle => 'تعذّرت قراءة مسوداتك';
+
+  @override
+  String get profileDraftsLoadFailedMessage =>
+      'مسوداتك لا تزال على هذا الهاتف. حاول مرة أخرى.';
+
+  @override
+  String get profileDraftKindChecklist => 'قائمة تحقق';
+
+  @override
+  String get profileDraftKindInspection => 'فحص';
+
+  @override
+  String profileDraftEdited(String time) {
+    return 'آخر تعديل $time';
+  }
+
+  @override
+  String get profileDraftNoAsset => 'لم يتم اختيار أصل بعد';
+
+  @override
+  String get profileDraftResume => 'متابعة';
+
+  @override
+  String get profileDraftDiscard => 'تجاهل';
+
+  @override
+  String get profileDraftDiscardTitle => 'هل تريد تجاهل هذه المسودة؟';
+
+  @override
+  String get profileDraftDiscardMessage =>
+      'سيُحذف كل ما سُجِّل في هذه المسودة من هذا الهاتف، بما في ذلك الصور والتواقيع. لا يمكن التراجع عن ذلك.';
+
+  @override
+  String get profileDraftDiscarded => 'تم تجاهل المسودة.';
+
+  @override
+  String get profileDraftDiscardFailed => 'تعذّر تجاهل المسودة. حاول مرة أخرى.';
+
+  @override
+  String get syncQueueInspectionRetried =>
+      'تمت محاولة إرسال فحوصاتك مرة أخرى. الحالة أدناه محدّثة.';
+
+  @override
+  String get accidentTasksTitle => 'مهام الحوادث الخاصة بي';
+
+  @override
+  String get accidentTasksAssignedToMe => 'مسندة إليّ';
+
+  @override
+  String get accidentTasksForMyTeam => 'لفريقي';
+
+  @override
+  String get accidentTasksEmpty => 'لا يوجد ما ينتظرك في حالات الحوادث.';
+
+  @override
+  String get accidentTasksNotOn => 'تتبع مهام الحوادث غير مفعّل بعد.';
+
+  @override
+  String get accidentTasksLoading => 'جارٍ تحميل مهامك...';
+
+  @override
+  String get accidentTasksOverdue => 'متأخرة';
+
+  @override
+  String get accidentTasksDueSoon => 'مستحقة قريبًا';
+
+  @override
+  String get accidentTasksOnTime => 'في الوقت';
+
+  @override
+  String get accidentTasksNoTarget => 'بلا هدف زمني';
+
+  @override
+  String accidentTasksCase(String ref) {
+    return 'الحالة $ref';
+  }
+
+  @override
+  String accidentTasksInStep(String days) {
+    return '$days في هذه الخطوة';
+  }
+
+  @override
+  String accidentTasksDays(String count) {
+    return '$count يوم';
+  }
+
+  @override
+  String get accidentTasksToday => 'اليوم';
+
+  @override
+  String accidentTasksDue(String time) {
+    return 'مستحقة $time';
+  }
+
+  @override
+  String accidentTasksSummary(String open, String overdue) {
+    return '$open مفتوحة، $overdue متأخرة';
+  }
+
+  @override
+  String get accidentRegisterMine => 'الخاصة بي';
+
+  @override
+  String get accidentTasksRoleNames =>
+      'admin=مسؤول~manager=مدير~director=مدير تنفيذي~inspector=مفتّش~tyre_man=فنّي إطارات~reporter=معدّ تقارير~driver=سائق~mechanic=ميكانيكي~electrician=كهربائي~maintenance_supervisor=مشرف الصيانة~workshop_supervisor=مشرف الورشة~tyre_data_collector=جامع بيانات الإطارات~pmv_manager=مدير المعدات والمركبات~workshop_area_manager=مدير منطقة الورشة~workshop_maintenance_area_manager=مدير منطقة صيانة الورشة~fleet_supervisor=مشرف الأسطول~fleet_incharge=مسؤول الأسطول~store_keeper=أمين المستودع';
+
+  @override
+  String get devicesTitle => 'الأجهزة';
+
+  @override
+  String get devicesProfileRowValue => 'المقاييس والماسحات والطابعات';
+
+  @override
+  String get devicesIntro =>
+      'المقاييس والماسحات المحمولة وطابعات الملصقات المضافة على هذا الهاتف. أنت وحدك ترى هذه القائمة.';
+
+  @override
+  String get devicesEmptyTitle => 'لا توجد أجهزة بعد';
+
+  @override
+  String get devicesEmptyMessage =>
+      'أضف مقياس عمق المداس أو الضغط، أو ماسحاً محمولاً، أو طابعة ملصقات.';
+
+  @override
+  String get devicesLoadFailed =>
+      'تعذرت قراءة الأجهزة المحفوظة على هذا الهاتف.';
+
+  @override
+  String get devicesAdd => 'إضافة جهاز';
+
+  @override
+  String get devicesKindTread => 'مقياس عمق المداس';
+
+  @override
+  String get devicesKindPressure => 'مقياس ضغط الإطار';
+
+  @override
+  String get devicesKindCombined => 'مقياس المداس والضغط';
+
+  @override
+  String get devicesKindScanner => 'ماسح باركود أو RFID محمول';
+
+  @override
+  String get devicesKindRfid => 'قارئ RFID بتردد UHF';
+
+  @override
+  String get devicesKindPrinter => 'طابعة ملصقات';
+
+  @override
+  String get devicesTransportBle => 'بلوتوث';
+
+  @override
+  String get devicesTransportHid => 'وضع لوحة المفاتيح';
+
+  @override
+  String get devicesTransportNetwork => 'الشبكة';
+
+  @override
+  String get devicesTransportSimulator => 'محاكي (للاختبار فقط)';
+
+  @override
+  String get devicesBluetoothOff =>
+      'البلوتوث مغلق. شغّله لإضافة جهاز بلوتوث أو استخدامه.';
+
+  @override
+  String get devicesPermissionDenied =>
+      'لا يُسمح لتطبيق Tyre Pulse باستخدام البلوتوث. اسمح بذلك، أو فعّله من إعدادات الهاتف.';
+
+  @override
+  String get devicesBluetoothUnsupported =>
+      'لا يدعم هذا الهاتف البلوتوث منخفض الطاقة. ما زالت أجهزة وضع لوحة المفاتيح والشبكة تعمل.';
+
+  @override
+  String get devicesAllowBluetooth => 'السماح بالبلوتوث';
+
+  @override
+  String get devicesScanning => 'جارٍ البحث عن الأجهزة القريبة…';
+
+  @override
+  String get devicesScanNone =>
+      'لم يُعثر على أجهزة. أيقظ الجهاز وأبقه قريباً من الهاتف.';
+
+  @override
+  String get devicesScanAgain => 'البحث مجدداً';
+
+  @override
+  String get devicesUnnamed => 'جهاز بلا اسم';
+
+  @override
+  String get devicesChooseKind => 'ما نوع هذا الجهاز؟';
+
+  @override
+  String get devicesChooseConnection => 'كيف يتصل؟';
+
+  @override
+  String get devicesNameLabel => 'اسم الجهاز';
+
+  @override
+  String get devicesHostLabel => 'عنوان IP للطابعة';
+
+  @override
+  String get devicesPortLabel => 'المنفذ';
+
+  @override
+  String get devicesLanguageLabel => 'لغة الطابعة';
+
+  @override
+  String get devicesLabelSizeLabel => 'حجم الملصق';
+
+  @override
+  String get devicesSave => 'حفظ الجهاز';
+
+  @override
+  String get devicesFieldRequired => 'املأ هذا الحقل.';
+
+  @override
+  String get devicesHidHint =>
+      'اقرن الجهاز أولاً بالهاتف كلوحة مفاتيح من إعدادات البلوتوث في الهاتف، ثم احفظه هنا.';
+
+  @override
+  String get devicesTest => 'اختبار';
+
+  @override
+  String get devicesTestRead => 'قراءة مرة واحدة';
+
+  @override
+  String get devicesTestPrint => 'طباعة ملصق تجريبي';
+
+  @override
+  String get devicesTestLabelName => 'ملصق اختبار Tyre Pulse';
+
+  @override
+  String devicesTestReading(String value) {
+    return 'تمت القراءة: $value';
+  }
+
+  @override
+  String get devicesTestPrinted => 'أُرسل الملصق التجريبي إلى الطابعة.';
+
+  @override
+  String get devicesForget => 'إزالة';
+
+  @override
+  String devicesForgetConfirm(String name) {
+    return 'هل تريد إزالة $name؟ يمكنك إضافته لاحقاً.';
+  }
+
+  @override
+  String devicesBattery(int level) {
+    return 'البطارية $level%';
+  }
+
+  @override
+  String get devicesErrorNotConnected =>
+      'لم يتصل الجهاز. تأكد من تشغيله وقربه.';
+
+  @override
+  String get devicesErrorTimeout => 'لم يستجب الجهاز في الوقت المحدد.';
+
+  @override
+  String get devicesErrorNoReading =>
+      'لم تصل أي قراءة. خذ القياس على المقياس وحاول مجدداً.';
+
+  @override
+  String get devicesErrorUnreadable =>
+      'أرسل الجهاز بيانات لا يستطيع التطبيق قراءتها. تحتاج إعداداته إلى مواصفات الشركة المصنعة.';
+
+  @override
+  String get devicesErrorNotConfigured => 'تنقص هذا الجهاز إعدادات الاتصال.';
+
+  @override
+  String get devicesErrorPrintFailed =>
+      'تعذرت طباعة الملصق. تأكد من وجود ورق وأن الطابعة تعمل.';
+
+  @override
+  String get devicesErrorUnsupported => 'لا يستطيع هذا الجهاز القيام بذلك.';
+
+  @override
+  String get devicesErrorVendorSdk =>
+      'يحتاج هذا القارئ إلى برنامج الشركة المصنعة، وهو غير مثبت بعد. استخدمه في وضع لوحة المفاتيح حالياً.';
+
+  @override
+  String get gaugeReadPressure => 'قراءة الضغط من المقياس';
+
+  @override
+  String get gaugeReadTread => 'قراءة المداس من المقياس';
+
+  @override
+  String get gaugeNoGauge =>
+      'لا يوجد مقياس مُعد لهذه القراءة. أضف واحداً من الملف الشخصي > الأجهزة.';
+
+  @override
+  String get gaugePickTitle => 'اختر مقياساً';
+
+  @override
+  String gaugeReadingFrom(String device) {
+    return 'جارٍ القراءة من $device…';
+  }
+
+  @override
+  String get gaugeConfirmTitle => 'استخدام هذه القراءة؟';
+
+  @override
+  String gaugeConfirmBody(String device, String value, String position) {
+    return 'قاس $device القيمة $value على $position.';
+  }
+
+  @override
+  String gaugeConfirmReplace(String old) {
+    return 'سيحل هذا محل القيمة المُدخلة مسبقاً ($old).';
+  }
+
+  @override
+  String get gaugeUseReading => 'استخدام القراءة';
+
+  @override
+  String get gaugeHidTitle => 'أرسل القراءة';
+
+  @override
+  String gaugeHidMessage(String device) {
+    return 'اضغط زر الإرسال على $device. ستظهر القيمة أدناه.';
+  }
+
+  @override
+  String get gaugeHidField => 'القيمة من المقياس';
+
+  @override
+  String gaugeValuePsi(String value) {
+    return '$value psi';
+  }
+
+  @override
+  String gaugeValueMm(String value) {
+    return '$value مم';
+  }
+
+  @override
+  String get hidScannerReady =>
+      'الماسح المحمول جاهز: اضغط الزناد للبحث عن إطار أو أصل.';
+
+  @override
+  String get labelPrint => 'طباعة ملصق';
+
+  @override
+  String get labelChoosePrinter => 'طباعة الملصق على';
+
+  @override
+  String get labelPrintPdf => 'طابعة النظام أو PDF';
+
+  @override
+  String labelPrinted(String printer) {
+    return 'أُرسل الملصق إلى $printer.';
+  }
+
+  @override
+  String get labelUnicodeNote =>
+      'النص العربي أو الأردي على هذا الملصق يُطبع بشكل صحيح فقط عبر طابعة النظام أو PDF.';
+
+  @override
+  String syncQueuePhotoFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تعذّر رفع $count صور',
+      one: 'تعذّر رفع صورة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncQueuePhotoRetry => 'إعادة رفع الصورة';
+
+  @override
+  String get syncQueuePhotoRetried =>
+      'ستُعاد محاولة رفع الصورة في المزامنة التالية.';
+
+  @override
+  String get syncQueuePhotoRemove => 'إرسال بدون هذه الصورة';
+
+  @override
+  String get syncQueuePhotoRemoveTitle => 'الإرسال بدون هذه الصورة؟';
+
+  @override
+  String get syncQueuePhotoRemoveMessage =>
+      'هذه الصورة دليل على السجل. إذا أزلتها فسيُرسل السجل بدونها ولا يمكن استعادتها من القائمة. التقطها من جديد من السجل إن أمكن.';
+
+  @override
+  String get syncQueuePhotoRemoveConfirm => 'إزالة الصورة';
+
+  @override
+  String get syncQueuePhotoRemoved => 'أُزيلت الصورة. سيُرسل السجل بدونها.';
+
+  @override
+  String get syncQueuePhotoActionFailed => 'لم ينجح ذلك. حاول مرة أخرى.';
+
+  @override
+  String get fleetListOffRoadFilter => 'خارج الخدمة';
+
+  @override
+  String inspectionPickerCollapsedNote(int assets, int rows) {
+    return '$assets رقم أصل من $rows سجلا في السجل. الرقم المستخدم في أكثر من دولة يظهر مرة واحدة: اختر الدولة لفحص المعدة الصحيحة.';
+  }
+
+  @override
+  String get workshopIntakeCopyCatalog =>
+      'title=استقبال المركبات~subtitle=أضف المركبات وأكد المركبات الموجهة إليك~open=استقبال المركبات~waitingBanner=%n% مركبات بانتظار تأكيدك~waitingBannerOne=مركبة واحدة بانتظار تأكيدك~tabWaiting=بانتظاري~tabAdd=إضافة مركبة~noAccess=تحتاج صلاحية إضافة مركبات الورشة أو تأكيدها. اطلبها من المسؤول.~loading=جارٍ تحميل المركبات~loadFailed=تعذر تحميل المركبات.~emptyTitle=لا شيء بانتظارك~emptyMessage=تظهر هنا المركبات الجديدة الموجهة إليك. اسحب للأسفل للتحقق مجدداً.~enteredBy=أدخلها %name%~system=النظام~jobCard=بطاقة العمل~ownEntry=أنت من أدخلها. يؤكدها مشرف آخر.~confirm=تأكيد~return=إرجاع~confirmed=تم تأكيد المركبة.~confirmFailed=تعذر تأكيد المركبة.~notRouted=هذه المركبة غير موجهة إليك.~alreadyConfirmed=أكد شخص آخر هذه المركبة مسبقاً.~refused=لا يمكنك تأكيد مركبة أدخلتها بنفسك.~returnTitle=إرجاع إلى من أدخلها~reason=السبب~reasonHint=ما الذي يحتاج إلى تصحيح؟~reasonShort=اكتب 5 أحرف على الأقل.~returned=تم إرجاع المركبة.~returnFailed=تعذر إرجاع المركبة.~cancel=إلغاء~assetCode=رقم الأصل~assetRequired=أدخل رقم الأصل.~site=موقع الورشة~siteHint=اتركه فارغاً لاستخدام موقع المركبة~complaint=الشكوى~jobCardNo=رقم بطاقة العمل (اختياري)~workType=نوع العمل~priority=الأولوية~notSet=غير محدد~send=إرسال إلى المشرف~sent=تم الإرسال. يصل إشعار إلى المشرف المناوب.~updatedRow=تم التحديث.~sameRow=لم يتغير شيء.~listedRow=هذه المركبة موجودة في قائمة الورشة.~invalidRow=تحقق من رقم الأصل.~releasedRow=تم الإفراج عن هذه المركبة مسبقاً.~sendFailed=تعذر إرسال المركبة. تحقق من الشبكة وحاول مجدداً.~pickCountry=اختر دولة واحدة أولاً. تُدخل المركبات لكل دولة.~wt_Repair=إصلاح~wt_Emergency=عطل~wt_Preventive Maintenance=صيانة وقائية~wt_Service=خدمة~wt_Tyre Change=تغيير إطار~wt_Inspection=فحص~wt_Other=أخرى~pr_Low=منخفضة~pr_Medium=متوسطة~pr_High=عالية~pr_Critical=حرجة~src_sheet=الجدول المشترك~src_phone=الهاتف~src_manual=إدخال يدوي~src_erp=بطاقة عمل ERP~src_excel_upload=ملف Excel اليومي';
+
+  @override
+  String get washStepVehicle => 'المركبة';
+
+  @override
+  String get washStepType => 'نوع الغسيل';
+
+  @override
+  String get washStepChecklist => 'قائمة الفحص والمواد الكيميائية';
+
+  @override
+  String get washStepPhotos => 'الصور';
+
+  @override
+  String get washStepReview => 'المراجعة والحفظ';
+
+  @override
+  String get washStepOptional => 'اختياري';
+
+  @override
+  String washStepProgress(int done, int total) {
+    return 'تم إنجاز $done من $total خطوات';
+  }
+
+  @override
+  String washLoggedBy(String name, String time) {
+    return 'سجّله $name · اليوم $time';
+  }
+
+  @override
+  String get washLoggedByNote =>
+      'يُسجَّل تلقائيًا من حساب تسجيل الدخول ولا يمكن تغييره.';
+
+  @override
+  String get washLoggedBySelf => 'أنت';
+
+  @override
+  String get washMissingVehicle => 'اختر مركبة';
+
+  @override
+  String get washMissingType => 'اختر نوع الغسيل';
+
+  @override
+  String get washMissingEvidence => 'أكمل تفاصيل قائمة الفحص';
+
+  @override
+  String washLastWash(String date) {
+    return 'آخر غسيل $date';
+  }
+
+  @override
+  String washDaysSince(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'منذ $count يوم',
+      many: 'منذ $count يومًا',
+      few: 'منذ $count أيام',
+      two: 'منذ يومين',
+      one: 'منذ يوم واحد',
+      zero: 'غُسلت اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washNoHistoryForAsset => 'لا يوجد غسيل مسجل بعد';
+
+  @override
+  String get washDueBadge => 'مستحقة للغسيل';
+
+  @override
+  String washOverdueBadge(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'متأخرة $days يوم',
+      many: 'متأخرة $days يومًا',
+      few: 'متأخرة $days أيام',
+      two: 'متأخرة يومين',
+      one: 'متأخرة يومًا واحدًا',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washUpToDateBadge => 'محدّثة';
+
+  @override
+  String get washHistoryChecking => 'جارٍ التحقق من سجل الغسيل...';
+
+  @override
+  String get washHistoryUnavailable => 'تعذر التحقق من سجل الغسيل';
+
+  @override
+  String get washTypeExteriorDesc => 'غسيل الهيكل الخارجي';
+
+  @override
+  String get washTypeInteriorDesc => 'تنظيف المقصورة';
+
+  @override
+  String get washTypeFullDesc => 'من الداخل والخارج';
+
+  @override
+  String get washTypeEngineBayDesc => 'إزالة الشحوم من حجرة المحرك';
+
+  @override
+  String get washTypeUndercarriageDesc => 'الشاسيه والعجلات';
+
+  @override
+  String get washTypeSteamDesc => 'تنظيف بالبخار';
+
+  @override
+  String get washTypeWaterlessDesc => 'رشّ ومسح بدون ماء';
+
+  @override
+  String washChecklistProgress(int done, int total) {
+    return 'تم فحص $done من $total';
+  }
+
+  @override
+  String washIssuesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مشكلة',
+      many: '$count مشكلة',
+      few: '$count مشكلات',
+      two: 'مشكلتان',
+      one: 'مشكلة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String washProductsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مادة',
+      many: '$count مادة',
+      few: '$count مواد',
+      two: 'مادتان',
+      one: 'مادة واحدة',
+      zero: 'لا توجد مواد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washPhotosBefore => 'قبل الغسيل';
+
+  @override
+  String get washPhotosAfter => 'بعد الغسيل';
+
+  @override
+  String washPhotosCount(int count, int max) {
+    return '$count من $max صور';
+  }
+
+  @override
+  String get washPhotosOptional => 'اختياري. صور قبل وبعد تثبت أن الغسيل تم.';
+
+  @override
+  String get washReviewTitle => 'راجع قبل الحفظ';
+
+  @override
+  String get washMoreDetails => 'تفاصيل إضافية (اختياري)';
+
+  @override
+  String washReviewChecklistValue(int checked, int total, String products) {
+    return 'تم فحص $checked من $total · $products';
+  }
+
+  @override
+  String get washSavedTitle => 'تم حفظ الغسيل';
+
+  @override
+  String get washSavedOfflineMessage =>
+      'أنت غير متصل. تم حفظ الغسيل على هذا الهاتف وسيُرفع تلقائيًا عند توفر الشبكة.';
+
+  @override
+  String get washSavedOnlineMessage =>
+      'تم الحفظ على هذا الهاتف ويجري الرفع الآن. راجع المزامنة إن لم يظهر.';
+
+  @override
+  String get washLogAnother => 'تسجيل غسيل آخر';
+
+  @override
+  String get washHistoryTitle => 'سجل الغسيل';
+
+  @override
+  String get washStatLastSevenDays => 'آخر 7 أيام';
+
+  @override
+  String get washStatThisMonth => 'هذا الشهر';
+
+  @override
+  String get washStatTopAsset => 'الأكثر غسلًا هذا الشهر';
+
+  @override
+  String get washStatNone => 'لا يوجد بعد';
+
+  @override
+  String washCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count غسلة',
+      many: '$count غسلة',
+      few: '$count غسلات',
+      two: 'غسيلان',
+      one: 'غسيل واحد',
+      zero: 'لا غسيل',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washFilterAllDates => 'كل التواريخ';
+
+  @override
+  String get washFilterSevenDays => '7 أيام';
+
+  @override
+  String get washFilterThirtyDays => '30 يومًا';
+
+  @override
+  String get washFilterPickDates => 'اختر التواريخ';
+
+  @override
+  String get washFilterAllTypes => 'كل الأنواع';
+
+  @override
+  String get washFilterClear => 'مسح عوامل التصفية';
+
+  @override
+  String get washHistoryNoMatch => 'لا يوجد غسيل يطابق عوامل التصفية';
+
+  @override
+  String washPhotoCountShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count صورة',
+      many: '$count صورة',
+      few: '$count صور',
+      two: 'صورتان',
+      one: 'صورة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washChangeVehicle => 'تغيير المركبة';
+
+  @override
+  String get washStepAreas => 'ما الذي تم غسله';
+
+  @override
+  String get washAreasHint =>
+      'اضغط على جوانب المركبة في الصورة والأجزاء التي غسلتها.';
+
+  @override
+  String get washMissingAreas => 'اختر ما تم غسله';
+
+  @override
+  String get washAreaExterior => 'الهيكل الخارجي';
+
+  @override
+  String get washAreaExteriorDesc => 'الهيكل والزجاج والأضواء';
+
+  @override
+  String get washAreaEngineBay => 'حجرة المحرك';
+
+  @override
+  String get washAreaEngineBayDesc => 'غسل المحرك وإزالة الشحوم';
+
+  @override
+  String get washAreaUndercarriage => 'أسفل المركبة';
+
+  @override
+  String get washAreaUndercarriageDesc => 'الشاسيه والجزء السفلي';
+
+  @override
+  String get washAreaCabin => 'داخل المقصورة';
+
+  @override
+  String get washAreaCabinDesc => 'المقاعد والأرضية ولوحة القيادة';
+
+  @override
+  String get washAreaTyresRims => 'الإطارات والجنوط';
+
+  @override
+  String get washAreaTyresRimsDesc => 'الإطارات والجنوط وأقواس العجلات';
+
+  @override
+  String get washAreaDrumHopper => 'حلة الخلاطة والقمع';
+
+  @override
+  String get washAreaDrumHopperDesc => 'جسم الحلة والقمع والمزلق';
+
+  @override
+  String get washAreaSteam => 'إزالة الشحوم بالبخار';
+
+  @override
+  String get washAreaSteamDesc => 'بخار ساخن على الشحوم والزيوت';
+
+  @override
+  String get washViewsTitle => 'الجوانب المغسولة';
+
+  @override
+  String get washViewFront => 'الأمام';
+
+  @override
+  String get washViewLeft => 'اليسار';
+
+  @override
+  String get washViewRear => 'الخلف';
+
+  @override
+  String get washViewRight => 'اليمين';
+
+  @override
+  String get washViewTop => 'الأعلى';
+
+  @override
+  String get washViewsAll => 'كل الجوانب';
+
+  @override
+  String washViewsCount(int count, int total) {
+    return '$count من $total جوانب';
+  }
+
+  @override
+  String get washVehiclePictureNone =>
+      'لا توجد صورة لهذا النوع من المركبات بعد. حدّد الجوانب أدناه.';
+
+  @override
+  String get washVehiclePicturePending => 'اختر مركبة لعرض صورتها.';
+
+  @override
+  String get washWaterless => 'غسيل بدون ماء';
+
+  @override
+  String get washCostLabel => 'التكلفة';
+
+  @override
+  String get washCostNoCharge => 'بدون تكلفة · غسيل داخلي';
+
+  @override
+  String get washAreasLabel => 'المناطق المغسولة';
+
+  @override
+  String washRecordedAsType(String type) {
+    return 'يُسجَّل كـ $type';
+  }
+
+  @override
+  String get washAreaSelected => 'محدد';
+
+  @override
+  String get washMissingPhotos => 'التقط صور قبل وبعد';
+
+  @override
+  String get washPhotosRequired =>
+      'صورة واحدة على الأقل قبل الغسيل وأخرى بعده، تُلتقط بالكاميرا الآن. تُختم كل صورة بوقتها وموقعها.';
+
+  @override
+  String washPhotoStamp(String time, String place) {
+    return '$time · $place';
+  }
+
+  @override
+  String get washGpsNone => 'بدون موقع';
+
+  @override
+  String get washReadOnlyNote =>
+      'لا يمكن تعديل هذا السجل من الهاتف. تتم التصحيحات عبر الويب بواسطة مسؤول، ويُحفظ كل تغيير في سجل التدقيق.';
+
+  @override
+  String get washRecordIdLabel => 'رقم السجل';
+
+  @override
+  String get washCapturedOnDevice => 'وقت الالتقاط على الجهاز';
+
+  @override
+  String get washSiteFromVehicle => 'مأخوذ من سجل المركبة ولا يمكن تغييره هنا.';
+
+  @override
+  String get washAuditTitle => 'سجل التدقيق';
+
+  @override
+  String washNextDue(String date) {
+    return 'الغسيل التالي مستحق في $date';
+  }
+
+  @override
+  String get washVerificationLabel => 'تحقق المشرف';
+
+  @override
+  String get washVerificationPending => 'بانتظار تحقق المشرف';
+
+  @override
+  String washVerificationVerified(String name, String time) {
+    return 'تحقق منه $name في $time';
+  }
+
+  @override
+  String get washVerificationNotRequired => 'لا يلزم تحقق: سجّله مشرف';
+
+  @override
+  String get washVerificationUnknown => 'غير مفعّل على الخادم بعد';
+
+  @override
+  String get washVerifyAction => 'تحقق من هذا الغسيل';
+
+  @override
+  String get washVerifyNoteHint => 'ملاحظة (اختياري)';
+
+  @override
+  String get washVerifyDone => 'تم التحقق من الغسيل';
+
+  @override
+  String get washVerifyFailed => 'تعذر التحقق من هذا الغسيل. حاول مرة أخرى.';
+
+  @override
+  String get washVerifyOwnEntry =>
+      'أنت من سجّل هذا الغسيل، لذا يجب أن يتحقق منه مشرف آخر.';
+
+  @override
+  String get washPendingBadge => 'بانتظار التحقق';
+
+  @override
+  String get syncSheetAllSynced => 'تمت المزامنة بالكامل';
+
+  @override
+  String syncSheetLastAttempt(String ago) {
+    return 'آخر محاولة $ago';
+  }
+
+  @override
+  String get syncSheetNoAttempt => 'لا توجد محاولة مزامنة بعد';
+
+  @override
+  String syncSheetWaiting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count بالانتظار',
+      one: 'عنصر واحد بالانتظار',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncSheetNeedsAttention(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تحتاج إلى متابعة',
+      one: 'عنصر واحد يحتاج إلى متابعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sheetSeeAll(int count) {
+    return 'عرض الكل ($count)';
+  }
+
+  @override
+  String get timeAgoJustNow => 'الآن';
+
+  @override
+  String timeAgoMinutes(int count) {
+    return 'منذ $count دقيقة';
+  }
+
+  @override
+  String timeAgoHours(int count) {
+    return 'منذ $count ساعة';
+  }
+
+  @override
+  String timeAgoDays(int count) {
+    return 'منذ $count يوم';
+  }
+
+  @override
+  String get tyreEditorEyebrow => 'موضع الإطار';
+
+  @override
+  String tyrePosNameWithRole(String side, String axle, String role) {
+    return '$side، $axle، $role';
+  }
+
+  @override
+  String tyrePosNameNoRole(String side, String axle) {
+    return '$side، $axle';
+  }
+
+  @override
+  String get tyrePosSideLeft => 'يسار';
+
+  @override
+  String get tyrePosSideRight => 'يمين';
+
+  @override
+  String tyrePosAxleFront(String number) {
+    return 'المحور الأمامي $number';
+  }
+
+  @override
+  String tyrePosAxleRearNumbered(String number) {
+    return 'المحور الخلفي $number';
+  }
+
+  @override
+  String get tyrePosAxleRear => 'المحور الخلفي';
+
+  @override
+  String get tyrePosAxleCentre => 'المحور الأوسط';
+
+  @override
+  String get tyrePosAxleRearCentre => 'المحور الخلفي الأوسط';
+
+  @override
+  String get tyrePosAxleRearmost => 'المحور الخلفي الأخير';
+
+  @override
+  String get tyrePosRoleInner => 'داخلي';
+
+  @override
+  String get tyrePosRoleOuter => 'خارجي';
+
+  @override
+  String get tyreEditorSectionMeasurements => 'القياسات';
+
+  @override
+  String get tyreEditorSectionTyre => 'الإطار';
+
+  @override
+  String get tyreEditorFittedTitle => 'الإطار المركّب';
+
+  @override
+  String tyreEditorFittedOn(String date) {
+    return 'رُكّب في $date';
+  }
+
+  @override
+  String tyreEditorKmAtFitment(String km) {
+    return '$km كم عند التركيب';
+  }
+
+  @override
+  String tyreEditorKmRun(String km) {
+    return 'قطع $km كم منذ التركيب';
+  }
+
+  @override
+  String get tyreEditorFittedSerialMissing => 'الرقم التسلسلي غير مسجّل';
+
+  @override
+  String get tyreEditorFittedNotLoaded => 'لم يتم تحميل الإطار المركّب';
+
+  @override
+  String get tyreEditorFittedNotLoadedHint =>
+      'تعذّرت قراءة سجل الإطارات. لا يزال بإمكانك تسجيل هذه العجلة.';
+
+  @override
+  String get tyreEditorFittedNone => 'لا يوجد إطار مسجّل لهذا الموضع';
+
+  @override
+  String tyreEditorSerialDiffers(String serial) {
+    return 'يختلف عن الإطار المسجّل ($serial)';
+  }
+
+  @override
+  String get tyreEditorUnitPsi => 'psi';
+
+  @override
+  String get tyreEditorUnitMm => 'مم';
+
+  @override
+  String get tyreEditorNumberInvalid => 'أدخل رقماً.';
+
+  @override
+  String get tyreEditorPressureRange => 'أدخل ضغطاً من 0 إلى 200 psi.';
+
+  @override
+  String get tyreEditorTreadRange => 'أدخل عمق مداس من 0 إلى 30 مم.';
+
+  @override
+  String get tyreEditorPressureUnusual =>
+      'ضغط غير معتاد للإطار. تحقّق من القراءة.';
+
+  @override
+  String get tyreEditorTreadUnusual => 'عمق مداس غير معتاد. تحقّق من القراءة.';
+
+  @override
+  String tyreEditorPreviousReading(String date, String values) {
+    return 'آخر فحص $date: $values';
+  }
+
+  @override
+  String tyreEditorPreviousReadingUndated(String values) {
+    return 'آخر فحص: $values';
+  }
+
+  @override
+  String get tyreEditorConditionSelected => 'محدد';
+
+  @override
+  String get tyreEditorPositionMap => 'الموضع على المركبة';
 }

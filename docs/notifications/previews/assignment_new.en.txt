@@ -1,0 +1,17 @@
+Subject: Assigned to you: Job card GCKR/JC/1021 assigned to you
+
+Job card GCKR/JC/1021 assigned to you
+
+Replace the front left tyre on MP083 before the evening shift.
+
+Item: GCKR/JC/1021
+Site: DIRIYAH-G1
+Due: 28 Nov 2026, 17:00
+
+Open in Tyre Pulse: https://tyrepulse.app/work-orders?id=sample
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

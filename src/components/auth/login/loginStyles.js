@@ -77,7 +77,7 @@ html.light .tpl-shell {
 @keyframes tpl-settle { from { transform: scale(1.06); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
 .tpl-top { display: flex; align-items: center; gap: 16px; }
 .tpl-brand { display: flex; align-items: center; gap: 10px; }
-.tpl-slash { width: 14px; height: 30px; background: #ffc629; transform: skewX(-20deg); border-radius: 2px; }
+.tpl-lockup { height: 36px; width: auto; display: block; filter: drop-shadow(0 1px 6px rgba(0,0,0,.45)); }
 .tpl-emblem { width: 40px; height: 40px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: #fff; }
 .tpl-wordmark { font-family: 'Archivo', 'Inter', system-ui, sans-serif; font-size: 21px; font-weight: 800; letter-spacing: -0.02em; color: #fff; direction: ltr; unicode-bidi: isolate; }
 .tpl-lang { display: inline-flex; margin-inline-start: auto; gap: 2px; padding: 3px; border-radius: 10px; background: rgba(0,0,0,0.35); backdrop-filter: blur(6px); }

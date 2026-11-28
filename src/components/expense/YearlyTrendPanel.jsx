@@ -19,8 +19,9 @@ import {
 import { Bar } from 'react-chartjs-2'
 import { TrendingUp, TrendingDown, Sparkles, AlertTriangle } from 'lucide-react'
 import { useSettings } from '../../contexts/SettingsContext'
+import { useLanguage } from '../../contexts/LanguageContext'
 import { getExpensePeriodTrend } from '../../lib/api/expenseTrends'
-import { byCountry, buildCountryTrend, CATEGORIES, CATEGORY_LABEL, num, filterPeriods, availableYears, MONTHS } from '../../lib/expenseTrends'
+import { byCountry, buildCountryTrend, CATEGORIES, num, filterPeriods, availableYears, MONTHS } from '../../lib/expenseTrends'
 import { toUserMessage } from '../../lib/safeError'
 import { withAlpha } from '../../lib/reportColors'
 
@@ -31,6 +32,7 @@ const fmt = (v, cur) => (num(v) == null ? 'N/A' : `${cur ? cur + ' ' : ''}${Math
 const pct = (v) => (num(v) == null ? 'N/A' : `${v > 0 ? '+' : ''}${Math.round(v * 10) / 10}%`)
 
 function CountryBlock({ entry, compact, grain }) {
+  const { t: tr } = useLanguage()
   const t = useMemo(() => buildCountryTrend(entry, grain), [entry, grain])
   const cur = t.currency
   const histLabels = t.years.map((y) => y.label)
@@ -47,24 +49,24 @@ function CountryBlock({ entry, compact, grain }) {
     if (!histLabels.length) return ''
     const hist = histLabels.length === 1
       ? histLabels[0]
-      : `${histLabels[0]} to ${histLabels[histLabels.length - 1]}`
-    if (!fcLabels.length) return `Showing ${hist}`
+      : tr('expense.trend.range', { from: histLabels[0], to: histLabels[histLabels.length - 1] })
+    if (!fcLabels.length) return tr('expense.trend.showing', { hist })
     const fc = fcLabels.length === 1
       ? fcLabels[0]
-      : `${fcLabels[0]} to ${fcLabels[fcLabels.length - 1]}`
-    return `Showing ${hist}, projecting ${fc}`
+      : tr('expense.trend.range', { from: fcLabels[0], to: fcLabels[fcLabels.length - 1] })
+    return tr('expense.trend.showingProjecting', { hist, fc })
   })()
 
   const data = {
     labels,
     datasets: [
       ...CATEGORIES.map((k) => ({
-        label: CATEGORY_LABEL[k], stack: 'spend',
+        label: tr(`expense.category.${k}`), stack: 'spend',
         data: [...t.years.map((y) => y[k]), ...fcLabels.map(() => null)],
         backgroundColor: withAlpha(CAT_TONE[k], 0.85), borderWidth: 0,
       })),
       {
-        label: 'Forecast', type: 'line', data: [...histLabels.map(() => null), ...t.forecast.map((y) => y.total)],
+        label: tr('expense.trend.forecast'), type: 'line', data: [...histLabels.map(() => null), ...t.forecast.map((y) => y.total)],
         borderColor: '#475569', borderDash: [6, 4], pointRadius: 3, borderWidth: 2, fill: false,
       },
     ],
@@ -85,7 +87,7 @@ function CountryBlock({ entry, compact, grain }) {
         <div className="flex items-center gap-3 text-xs">
           <span className={`inline-flex items-center gap-1 ${yoyPct == null ? 'text-slate-400' : yoyPct > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
             {yoyPct != null && (yoyPct > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />)}
-            {grain === 'month' ? 'MoM' : grain === 'quarter' ? 'QoQ' : 'YoY'} {pct(yoyPct)}
+            {grain === 'month' ? tr('expense.trend.mom') : grain === 'quarter' ? tr('expense.trend.qoq') : tr('expense.trend.yoy')} {pct(yoyPct)}
           </span>
           {fc1 && (
             <span className="inline-flex items-center gap-1 text-slate-300"><Sparkles className="w-3.5 h-3.5" /> {fc1.label} ~ {fmt(fc1.total, cur)}</span>
@@ -103,10 +105,11 @@ function CountryBlock({ entry, compact, grain }) {
   )
 }
 
-const GRAIN_OPTS = [['year', 'Year'], ['quarter', 'Quarter'], ['month', 'Month']]
+const GRAIN_OPTS = ['year', 'quarter', 'month']
 
-export default function YearlyTrendPanel({ compact = false, country, title = 'Expense trend by year', defaultGrain = 'year' }) {
+export default function YearlyTrendPanel({ compact = false, country, title, defaultGrain = 'year' }) {
   const { activeCountry } = useSettings()
+  const { t } = useLanguage()
   const scope = country ?? activeCountry
   const [grain, setGrain] = useState(defaultGrain)
   const [fromYear, setFromYear] = useState('')
@@ -144,52 +147,52 @@ export default function YearlyTrendPanel({ compact = false, country, title = 'Ex
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-emerald-400" />
-          <h3 className="text-sm font-semibold" style={{color:'var(--text-primary)'}}>{title}</h3>
+          <h3 className="text-sm font-semibold" style={{color:'var(--text-primary)'}}>{title || t('expense.trend.title')}</h3>
         </div>
         <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--input-bg)', border: '1px solid var(--input-border)' }}>
-          {GRAIN_OPTS.map(([g, label]) => (
+          {GRAIN_OPTS.map((g) => (
             <button key={g} onClick={() => setGrain(g)}
               className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${grain === g ? 'bg-emerald-600 text-white' : ''}`}
               style={grain === g ? {} : { color: 'var(--text-muted)' }}>
-              {label}
+              {t(`expense.trend.grain.${g}`)}
             </button>
           ))}
         </div>
       </div>
       {!compact && yearOpts.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 text-xs" style={{ color: 'var(--text-muted)' }}>
-          <span>From</span>
+          <span>{t('expense.trend.from')}</span>
           <select value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} className="input py-0.5 text-xs">
-            <option value="">Any</option>
-            {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
+            <option value="">{t('expense.trend.any')}</option>
+            {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{t(`expense.month.${m}`)}</option>)}
           </select>
           <select value={fromYear} onChange={(e) => setFromYear(e.target.value)} className="input py-0.5 text-xs">
-            <option value="">Any</option>
+            <option value="">{t('expense.trend.any')}</option>
             {yearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
-          <span>To</span>
+          <span>{t('expense.trend.to')}</span>
           <select value={toMonth} onChange={(e) => setToMonth(e.target.value)} className="input py-0.5 text-xs">
-            <option value="">Any</option>
-            {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{m}</option>)}
+            <option value="">{t('expense.trend.any')}</option>
+            {MONTHS.map((m, i) => <option key={m} value={String(i + 1).padStart(2, '0')}>{t(`expense.month.${m}`)}</option>)}
           </select>
           <select value={toYear} onChange={(e) => setToYear(e.target.value)} className="input py-0.5 text-xs">
-            <option value="">Any</option>
+            <option value="">{t('expense.trend.any')}</option>
             {yearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
           {(fromYm || toYm) && (
-            <button onClick={() => { setFromYear(''); setFromMonth(''); setToYear(''); setToMonth('') }} className="underline">clear</button>
+            <button onClick={() => { setFromYear(''); setFromMonth(''); setToYear(''); setToMonth('') }} className="underline">{t('expense.trend.clear')}</button>
           )}
         </div>
       )}
       {loading ? (
-        <div style={{color:'var(--text-muted)'}} className="py-8 text-center text-sm">Loading…</div>
+        <div style={{color:'var(--text-muted)'}} className="py-8 text-center text-sm">{t('expense.common.loading')}</div>
       ) : error ? (
         <div className="py-4 text-sm text-red-300 flex items-center justify-between">
           <span className="flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> {error}</span>
-          <button onClick={load} className="btn-ghost">Retry</button>
+          <button onClick={load} className="btn-ghost">{t('expense.common.retry')}</button>
         </div>
       ) : countries.length === 0 ? (
-        <div style={{color:'var(--text-muted)'}} className="py-8 text-center text-sm">No multi-year expense data for this scope.</div>
+        <div style={{color:'var(--text-muted)'}} className="py-8 text-center text-sm">{t('expense.trend.empty')}</div>
       ) : (
         countries.map((c) => <CountryBlock key={c.country} entry={c} compact={compact} grain={grain} />)
       )}

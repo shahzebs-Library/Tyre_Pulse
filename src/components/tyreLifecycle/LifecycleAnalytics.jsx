@@ -10,6 +10,8 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 import { Card, fmtInt } from '../commandCenter/kit'
 import { colorAt, withAlpha, categorical } from '../../lib/reportColors'
 import { lifecycleKpis, stageFunnel, brandLife, costByCategory, kmBandCounts } from '../../lib/tyreLifecycleAnalytics'
+import { statusLabels } from '../../lib/tyreLifecycleLabels'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
@@ -35,9 +37,15 @@ const DONUT = {
   },
 }
 const STAGE_TONE = { 'In Service': 'good', 'Retread Eligible': 'info', Retreaded: 'info', Scrapped: 'bad', Removed: 'muted' }
-const pct = (v) => (v == null || !Number.isFinite(v) ? 'N/A' : `${v.toFixed(1)}%`)
+const fmtPct = (v, na) => (v == null || !Number.isFinite(v) ? na : `${v.toFixed(1)}%`)
 
 export default function LifecycleAnalytics({ records, currency, onStage }) {
+  const { t } = useLanguage()
+  const naText = t('tyrelifecycle.na')
+  const pct = (v) => fmtPct(v, naText)
+  const STAGE_LABEL = statusLabels(t)
+  const BUCKET_LABEL = { new: t('tyrelifecycle.analytics.bucketNew'), retread: t('tyrelifecycle.analytics.bucketRetread'), repair: t('tyrelifecycle.analytics.bucketRepair'), scrap: t('tyrelifecycle.analytics.bucketScrap') }
+  const bucketLabel = (b) => BUCKET_LABEL[b.key] || b.label
   const kpis = lifecycleKpis(records)
   const funnel = stageFunnel(records)
   const brands = brandLife(records)
@@ -47,63 +55,63 @@ export default function LifecycleAnalytics({ records, currency, onStage }) {
   const brandChart = {
     labels: brands.map((b) => b.brand),
     datasets: [
-      { label: 'New (avg km)', data: brands.map((b) => (b.newAvg == null ? null : Math.round(b.newAvg))), backgroundColor: withAlpha(colorAt(0), 0.75), borderRadius: 4 },
-      { label: 'Retread (avg km)', data: brands.map((b) => (b.retreadAvg == null ? null : Math.round(b.retreadAvg))), backgroundColor: withAlpha(colorAt(1), 0.75), borderRadius: 4 },
+      { label: t('tyrelifecycle.analytics.brandNew'), data: brands.map((b) => (b.newAvg == null ? null : Math.round(b.newAvg))), backgroundColor: withAlpha(colorAt(0), 0.75), borderRadius: 4 },
+      { label: t('tyrelifecycle.analytics.brandRetread'), data: brands.map((b) => (b.retreadAvg == null ? null : Math.round(b.retreadAvg))), backgroundColor: withAlpha(colorAt(1), 0.75), borderRadius: 4 },
     ],
   }
   const donutColors = categorical(cost.buckets.length)
   const costDonut = {
-    labels: cost.buckets.map((b) => b.label),
+    labels: cost.buckets.map(bucketLabel),
     datasets: [{ data: cost.buckets.map((b) => Math.round(b.total)), backgroundColor: donutColors.map((c) => withAlpha(c, 0.85)), borderWidth: 0 }],
   }
   const bandChart = {
     labels: bands.map((b) => b.label),
-    datasets: [{ label: 'Tyres', data: bands.map((b) => b.count), backgroundColor: bands.map((_, i) => withAlpha(colorAt(i), 0.75)), borderRadius: 4 }],
+    datasets: [{ label: t('tyrelifecycle.analytics.tyres'), data: bands.map((b) => b.count), backgroundColor: bands.map((_, i) => withAlpha(colorAt(i), 0.75)), borderRadius: 4 }],
   }
 
   return (
     <div className="tlc-analytics">
       <div className="cc-kpis tlc-mini">
-        <div className="cc-card tlc-stat"><b>{kpis.avgLifeKm == null ? 'N/A' : `${fmtInt(Math.round(kpis.avgLifeKm))} km`}</b><span>Average life ({fmtInt(kpis.measuredLife)} measured)</span></div>
-        <div className="cc-card tlc-stat"><b>{pct(kpis.retreadRate)}</b><span>{kpis.categorised ? `Retread rate of ${fmtInt(kpis.categorised)} categorised` : 'Retread rate: no category recorded'}</span></div>
-        <div className="cc-card tlc-stat"><b>{pct(kpis.scrapRate)}</b><span>{kpis.removed ? `Scrap rate: ${fmtInt(kpis.scrapped)} of ${fmtInt(kpis.removed)} removed` : 'Scrap rate: no removals recorded'}</span></div>
-        <div className="cc-card tlc-stat"><b>{kpis.avgCpk == null ? 'N/A' : kpis.avgCpk.toFixed(4)}</b><span>Avg cost per km ({kpis.measuredCpk ? `${fmtInt(kpis.measuredCpk)} priced and measured` : 'needs price and removal km'})</span></div>
-        <div className="cc-card tlc-stat"><b>{fmtInt(kpis.serials)}</b><span>Distinct serials{kpis.missingSerial ? `, ${fmtInt(kpis.missingSerial)} records without serial` : ''}</span></div>
+        <div className="cc-card tlc-stat"><b>{kpis.avgLifeKm == null ? naText : t('tyrelifecycle.hero.statKm', { value: fmtInt(Math.round(kpis.avgLifeKm)) })}</b><span>{t('tyrelifecycle.analytics.avgLife', { count: fmtInt(kpis.measuredLife) })}</span></div>
+        <div className="cc-card tlc-stat"><b>{pct(kpis.retreadRate)}</b><span>{kpis.categorised ? t('tyrelifecycle.analytics.retreadRate', { count: fmtInt(kpis.categorised) }) : t('tyrelifecycle.analytics.retreadRateNone')}</span></div>
+        <div className="cc-card tlc-stat"><b>{pct(kpis.scrapRate)}</b><span>{kpis.removed ? t('tyrelifecycle.analytics.scrapRate', { scrapped: fmtInt(kpis.scrapped), removed: fmtInt(kpis.removed) }) : t('tyrelifecycle.analytics.scrapRateNone')}</span></div>
+        <div className="cc-card tlc-stat"><b>{kpis.avgCpk == null ? naText : kpis.avgCpk.toFixed(4)}</b><span>{t('tyrelifecycle.analytics.avgCpk', { detail: kpis.measuredCpk ? t('tyrelifecycle.analytics.cpkMeasured', { count: fmtInt(kpis.measuredCpk) }) : t('tyrelifecycle.analytics.cpkNeeds') })}</span></div>
+        <div className="cc-card tlc-stat"><b>{fmtInt(kpis.serials)}</b><span>{kpis.missingSerial ? t('tyrelifecycle.analytics.serialsMissing', { count: fmtInt(kpis.missingSerial) }) : t('tyrelifecycle.analytics.serials')}</span></div>
       </div>
 
-      <Card title="Lifecycle stages" sub="Select a stage to filter the register. Stages are mutually exclusive and add up to the records in scope.">
+      <Card title={t('tyrelifecycle.analytics.stagesTitle')} sub={t('tyrelifecycle.analytics.stagesSub')}>
         <div className="tlc-funnel">
           {funnel.map((s) => (
             <button key={s.stage} type="button" className="tlc-stage" onClick={() => onStage?.(s.stage)}>
-              <span className={`cc-pill ${STAGE_TONE[s.stage]}`}>{s.stage}</span>
+              <span className={`cc-pill ${STAGE_TONE[s.stage]}`}>{STAGE_LABEL[s.stage] || s.stage}</span>
               <b>{fmtInt(s.count)}</b>
-              <small>{pct(s.pct)} of records</small>
-              <small>{!currency ? 'Avg price: pick one country' : s.avgCost == null ? 'Avg price N/A' : `Avg ${currency} ${fmtInt(Math.round(s.avgCost))}`}</small>
+              <small>{t('tyrelifecycle.analytics.ofRecords', { pct: pct(s.pct) })}</small>
+              <small>{!currency ? t('tyrelifecycle.analytics.avgPricePick') : s.avgCost == null ? t('tyrelifecycle.analytics.avgPriceNa') : t('tyrelifecycle.analytics.avgPrice', { currency, value: fmtInt(Math.round(s.avgCost)) })}</small>
             </button>
           ))}
         </div>
       </Card>
 
       <div className="tlc-an-grid">
-        <Card title="Brand lifecycle" sub="Average km run, new against retread">
+        <Card title={t('tyrelifecycle.analytics.brandTitle')} sub={t('tyrelifecycle.analytics.brandSub')}>
           <div className="tlc-chart">
             {brands.length ? (
-              <div className="tlc-fill" role="img" aria-label={`Average km run for ${brands.length} brands, new and retread`}><Bar data={brandChart} options={BASE} /></div>
-            ) : <div className="cc-empty">No tyre in scope has both a fitment and a removal km, so life cannot be measured.</div>}
+              <div className="tlc-fill" role="img" aria-label={t('tyrelifecycle.analytics.brandAria', { count: brands.length })}><Bar data={brandChart} options={BASE} /></div>
+            ) : <div className="cc-empty">{t('tyrelifecycle.analytics.brandEmpty')}</div>}
           </div>
         </Card>
-        <Card title="Spend by category" sub={`Priced tyre records only (${fmtInt(cost.priced)} priced). The authoritative total is the expense grid.`}>
+        <Card title={t('tyrelifecycle.analytics.spendTitle')} sub={t('tyrelifecycle.analytics.spendSub', { count: fmtInt(cost.priced) })}>
           <div className="tlc-chart">
-            {!currency ? <div className="cc-empty">Spend is kept per currency. Pick one country to see it.</div> : cost.total ? (
-              <div className="tlc-fill" role="img" aria-label={`Spend by category, ${cost.buckets.map((b) => `${b.label} ${Math.round(b.total)}`).join(', ')}`}><Doughnut data={costDonut} options={DONUT} /></div>
-            ) : <div className="cc-empty">No priced tyres in scope</div>}
+            {!currency ? <div className="cc-empty">{t('tyrelifecycle.analytics.spendPick')}</div> : cost.total ? (
+              <div className="tlc-fill" role="img" aria-label={t('tyrelifecycle.analytics.spendAria', { detail: cost.buckets.map((b) => `${bucketLabel(b)} ${Math.round(b.total)}`).join(', ') })}><Doughnut data={costDonut} options={DONUT} /></div>
+            ) : <div className="cc-empty">{t('tyrelifecycle.analytics.spendEmpty')}</div>}
           </div>
         </Card>
       </div>
 
-      <Card title="Life distribution" sub="Measured tyres per km-run band">
-        {kpis.measuredLife === 0 ? <div className="cc-empty">No measured tyre life in scope.</div> : (
-          <div className="tlc-chart tlc-chart-sm" role="img" aria-label={`Tyres per km band: ${bands.map((b) => `${b.label} ${b.count}`).join(', ')}`}>
+      <Card title={t('tyrelifecycle.analytics.distTitle')} sub={t('tyrelifecycle.analytics.distSub')}>
+        {kpis.measuredLife === 0 ? <div className="cc-empty">{t('tyrelifecycle.analytics.distEmpty')}</div> : (
+          <div className="tlc-chart tlc-chart-sm" role="img" aria-label={t('tyrelifecycle.analytics.distAria', { detail: bands.map((b) => `${b.label} ${b.count}`).join(', ') })}>
             <Bar data={bandChart} options={{ ...BASE, plugins: { legend: { display: false } } }} />
           </div>
         )}

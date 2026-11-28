@@ -1,0 +1,21 @@
+Subject: Accident ACC-2026-0148: Workshop assessment
+
+Accident ACC-2026-0148 moved to Workshop assessment
+
+The case was updated. The details below show where it stands now.
+
+Reference: ACC-2026-0148
+Vehicle: TM514
+Site: NHC
+Severity: Major
+Stage: Workshop assessment
+Incident date: 27 Nov 2026
+Next action: Workshop to assess damage
+
+Open the accident: https://tyrepulse.app/accidents/sample
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

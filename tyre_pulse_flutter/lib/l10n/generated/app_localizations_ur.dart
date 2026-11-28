@@ -189,6 +189,13 @@ class AppLocalizationsUr extends AppLocalizations {
       'آپ کا اکاؤنٹ منظوری کا منتظر ہے یا مقفل کر دیا گیا ہے۔ آپ کا ایڈمن اسے درست کر سکتا ہے۔';
 
   @override
+  String get accessBlockedCheckAgain => 'دوبارہ چیک کریں';
+
+  @override
+  String get accessBlockedStillWaiting =>
+      'آپ کا اکاؤنٹ ابھی تک فعال نہیں۔ اپنے ایڈمن سے اسے منظور کرنے کو کہیں۔';
+
+  @override
   String get routeNotFoundTitle => 'یہ اسکرین موجود نہیں';
 
   @override
@@ -2175,6 +2182,10 @@ class AppLocalizationsUr extends AppLocalizations {
   String get homeStatUnavailableCaption => 'جانچ نہیں ہو سکی';
 
   @override
+  String get homeRoleCopyCatalog =>
+      'meterTitle=آج کا میٹر درج کریں~meterNotLogged=آج درج نہیں ہوا~meterLogged=%time% درج ہوا~problemTitle=مسئلہ یا خرابی رپورٹ کریں~problemHint=ورکشاپ کو بتائیں کیا خراب ہے~exceptionsTitle=آج کے استثنات~offRoad=سڑک سے باہر~openAccidents=کھلے حادثات~maintenanceOverdue=تاخیر شدہ مرمت~tyresAttention=توجہ طلب ٹائر~handoverTitle=آپ کے دستخط کے منتظر حوالگیاں~reportAccident=حادثہ رپورٹ کریں~approvalsTitle=آپ کی منتظر منظوریاں~approvalsSplit=%a% معائنے • %b% چیک لسٹیں~issueTitle=مسئلہ رپورٹ کریں~issueHint=کچھ خراب یا غیر محفوظ ہے~teamTitle=ٹیم ابھی~working=کام پر~waiting=انتظار میں~free=فارغ~teamNote=فارغ کا مطلب حاضری لگائی اور کام نہیں کر رہا۔ غیر حاضری نہیں گنی جا سکتی: حاضری درج نہیں ہوتی۔~assignTitle=کام سونپیں~assignHint=%count% کھلے جاب کارڈ جن پر کوئی مقرر نہیں~assignGap=جاب کارڈ کی فہرست کھلتی ہے۔ فون سے کام سونپنا ابھی دستیاب نہیں۔~myJobsTitle=میرے کام~myJobsCount=%count% کھلے~myJobsNone=کوئی کھلا کام نہیں~plantTitle=آج کے پلانٹ چیک~sheetsDue=%count% شیٹس واجب~allDone=آج سب مکمل~dailyTitle=ورکشاپ ڈیلی~dueToday=آج واجب~signTitle=دستخط کے لیے منظوریاں~signHint=%count% آپ کے دستخط کے منتظر~tyresDueTitle=تبدیلی کے لیے واجب ٹائر~myVehicle=میری گاڑی~noVehicle=ابھی کوئی میٹر درج نہیں~wash=دھلائی درج کریں~washDays=آخری دھلائی %count% دن پہلے~washToday=آج دھلی~washNever=کوئی دھلائی درج نہیں~dailyChecklist=روزانہ چیک لسٹ~charges=میرے جرمانے اور چارجز~chargesHint=جرمانے، چارجز اور آپ کے دستخط~summary=روزانہ خلاصہ اور رپورٹس~alerts=الرٹس~plan=آج کا منصوبہ~planOpen=آج %count% کھلے~repair=مرمت کی درخواست~meter=میٹر لاگ~inspectionsDue=آج کے واجب معائنے~checklistsToSign=دستخط کے لیے چیک لسٹیں~waitingParts=پرزوں کے انتظار میں~blocked=30 منٹ سے زیادہ رکا ہوا~requestParts=پرزے منگوائیں~recent=حالیہ معائنے~reorder=دوبارہ آرڈر کے لیے اسٹاک~sync=ہم آہنگی باقی~more=مزید~open=کھولیں';
+
+  @override
   String get homeNoQuickActionsMessage =>
       'ابھی آپ کے لیے یہاں کچھ دستیاب نہیں ہے۔ اگر آپ کو کسی فیچر تک رسائی درکار ہو تو اپنے منتظم سے رابطہ کریں۔';
 
@@ -2905,7 +2916,11 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get stockCountCopyCatalog =>
-      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی~myCounts=میری گنتیاں~transfers=منتقلیاں~needsApproval=گنتی کے فرق کے لیے منظوری درکار ہے۔ شیلف پر موجود مقدار درج کرنے کے لیے گنتی استعمال کریں؛ منظور کنندہ تبدیلی درج کرے گا۔~countNote=آپ کی گنتی جائزے کے لیے درج ہوتی ہے۔ اسٹاک بیلنس صرف تب بدلتا ہے جب منظور کنندہ فرق درج کرے۔~countRecorded=گنتی جائزے کے لیے درج ہو گئی۔~countSavedOnPhone=گنتی اس فون پر محفوظ ہو گئی۔ کنکشن بحال ہونے پر بھیجی جائے گی۔~countNoPlace=اس اسٹاک لائن کا کوئی اسٹور یا ملک نہیں، اس لیے گنتی درج نہیں ہو سکتی۔~countNeedsConnection=اس اسٹور میں پہلی گنتی کے لیے سیشن کھولنے کو کنکشن ضروری ہے۔~countRefused=گنتی قبول نہیں ہوئی:';
+      'title=اسٹاک گنتی~items=اشیاء~reorder=دوبارہ آرڈر~notToday=آج نہیں گنا~search=تفصیل یا سائٹ تلاش کریں~all=تمام~low=کم اسٹاک~stale=آج نہیں گنا~empty=کوئی اسٹاک آئٹم نہیں~emptyBody=کوئی اسٹاک ریکارڈ ان فلٹرز سے میل نہیں کھاتا۔~count=گنتی~stockItem=اسٹاک آئٹم~physicalCount=اصل گنتی~reason=وجہ (اختیاری)~cancel=منسوخ~save=گنتی محفوظ کریں~invalid=صفر یا زیادہ گنتی درج کریں۔~offlineSaved=گنتی آف لائن محفوظ اور ہم وقت سازی کے لیے قطار میں ہے۔~saveFailed=اسٹاک گنتی محفوظ نہیں ہو سکی۔~loadFailed=اسٹاک ریکارڈ لوڈ نہیں ہو سکے۔~Critical=انتہائی کم~Low=کم~OK=درست~onHand=دستیاب~add=اسٹاک شامل کریں~addTitle=اسٹاک شامل کریں~size=ٹائر سائز~description=تفصیل (اختیاری)~site=مقام (سائٹ)~quantity=مقدار~minLevel=کم از کم سطح~criticalLevel=نازک سطح~sizeRequired=اس اسٹاک کے لیے ٹائر سائز درج کریں۔~siteRequired=اس اسٹاک کے لیے مقام درج کریں۔~addFailed=اسٹاک شامل نہیں ہو سکا۔ دوبارہ کوشش کریں۔~increase=اضافہ~decrease=کمی~myCounts=میری گنتیاں~transfers=منتقلیاں~needsApproval=گنتی کے فرق کے لیے منظوری درکار ہے۔ شیلف پر موجود مقدار درج کرنے کے لیے گنتی استعمال کریں؛ منظور کنندہ تبدیلی درج کرے گا۔~countNote=آپ کی گنتی جائزے کے لیے درج ہوتی ہے۔ اسٹاک بیلنس صرف تب بدلتا ہے جب منظور کنندہ فرق درج کرے۔~countRecorded=گنتی جائزے کے لیے درج ہو گئی۔~countSavedOnPhone=گنتی اس فون پر محفوظ ہو گئی۔ کنکشن بحال ہونے پر بھیجی جائے گی۔~countNoPlace=اس اسٹاک لائن کا کوئی اسٹور یا ملک نہیں، اس لیے گنتی درج نہیں ہو سکتی۔~countNeedsConnection=اس اسٹور میں پہلی گنتی کے لیے سیشن کھولنے کو کنکشن ضروری ہے۔~countRefused=گنتی قبول نہیں ہوئی:~matches=مطابق ہے~notMatch=مطابق نہیں~matchesRecorded=درج ہو گیا: شیلف سسٹم سے مطابق ہے۔~matchesSavedOnPhone=اس فون پر محفوظ ہو گیا: شیلف سسٹم سے مطابق ہے۔ کنکشن بحال ہونے پر بھیجا جائے گا۔~genuineQuestion=کیا پرزہ اصلی ہے؟~genuine=اصلی~notGenuine=اصلی نہیں~genuineNote=پرزے کے بارے میں نوٹ (اختیاری)~countedToday=آج گنا گیا~bin=خانہ~code=کوڈ~offlineShowingLast=آف لائن - آخری لوڈ شدہ ڈیٹا دکھایا جا رہا ہے~refreshFailedShowingLast=تازہ نہیں ہو سکا - آخری لوڈ شدہ ڈیٹا دکھایا جا رہا ہے~movementsOffline=آف لائن ہونے پر حرکات لوڈ نہیں ہو سکتیں۔ کنکشن بحال ہونے پر نظر آئیں گی۔~refreshing=تازہ ہو رہا ہے~aftermarket=متبادل~unchecked=جانچ نہیں ہوئی~countedItem=گنا گیا:~undo=واپس کریں~countUndone=گنتی ہٹا دی گئی۔ کچھ نہیں بھیجا گیا۔~undoTooLate=پہلے ہی بھیجا جا چکا ہے، اس لیے جائزے کے لیے رہے گا۔~markMatches=مطابق کے طور پر نشان لگائیں';
+
+  @override
+  String get storeItemCopyCatalog =>
+      'title=اسٹور آئٹم~addPhoto=تصویر شامل کریں~camera=تصویر لیں~gallery=تصاویر سے منتخب کریں~noPhoto=ابھی کوئی تصویر نہیں~photoAdded=تصویر شامل ہو گئی۔ کمپنی میں سب اسے دیکھ سکتے ہیں۔~photoNeedsConnection=کنکشن درکار ہے۔ تصویر محفوظ نہیں ہوئی؛ آن لائن ہونے پر دوبارہ کوشش کریں۔~photoFailed=تصویر شامل نہیں ہو سکی۔~photoUnavailable=تصویر لوڈ نہیں ہو سکی~companySku=کمپنی کوڈ~itemCode=ای آر پی کوڈ~brand=برانڈ~noBrand=کوئی برانڈ درج نہیں~category=زمرہ~pendingApproval=منظوری کا انتظار~verified=تصدیق شدہ~notLinked=ابھی کمپنی کیٹلاگ میں نہیں~notLinkedBody=پارٹ نمبر، بارکوڈ اور تصاویر کمپنی کیٹلاگ کے ذریعے شیئر ہوتے ہیں۔ یہ آئٹم تجویز کریں، جائزہ لینے والا اسے جوڑ دے گا۔~propose=کیٹلاگ کے لیے تجویز کریں~proposeTitle=کمپنی کیٹلاگ کے لیے تجویز~proposeSent=جائزے کے لیے بھیج دیا گیا۔ جائزہ لینے والا اسے کیٹلاگ میں شامل کر کے یہ آئٹم جوڑ دے گا۔~description=تفصیل~whereItIs=یہ کہاں ہے~bin=خانہ~noBin=کوئی خانہ درج نہیں~total=کل~reserved=محفوظ~available=دستیاب~onHand=موجود~condition=حالت~partNumbers=پارٹ نمبر~noPartNumbers=ابھی کوئی پارٹ نمبر نہیں~addPartNumber=پارٹ نمبر شامل کریں~partNumber=پارٹ نمبر~manufacturer=بنانے والا (اختیاری)~partNumberSent=پارٹ نمبر منظوری کے لیے بھیج دیا گیا۔ منظوری کے بعد کمپنی میں سب اسے دیکھیں گے۔~barcodes=بارکوڈ اور دیگر نمبر~noBarcodes=ابھی کوئی بارکوڈ نہیں~addBarcode=بارکوڈ شامل کریں~barcode=بارکوڈ یا نمبر~numberType=قسم~typeBarcode=بارکوڈ~typeOem=او ای ایم پارٹ نمبر~typeAlternative=دوسرا نمبر~scan=اسکین~barcodeSent=منظوری کے لیے بھیج دیا گیا۔ جائزہ لینے والے کی منظوری کے بعد شامل ہو گا۔~setBrand=برانڈ درست کریں~brandSent=برانڈ کی تبدیلی منظوری کے لیے بھیج دی گئی۔~reason=وجہ~reasonRequired=مختصر وجہ لکھیں (کم از کم 3 حروف)۔~searchBrand=برانڈ تلاش کریں~newBrand=نیا برانڈ شامل کریں~newBrandName=نئے برانڈ کا نام~brandRequired=برانڈ منتخب کریں یا لکھیں۔~partNumberRequired=پارٹ نمبر لکھیں۔~valueRequired=نمبر لکھیں۔~descriptionRequired=تفصیل لکھیں۔~send=بھیجیں~cancel=منسوخ~needsConnection=کنکشن درکار ہے۔ کچھ نہیں بھیجا گیا؛ آن لائن ہونے پر دوبارہ کوشش کریں۔~failed=نہیں بھیجا گیا:~moveBin=دوسرے خانے میں منتقل کریں~pendingChanges=منظوری کا انتظار~recent=حالیہ حرکات~loadFailed=یہ آئٹم لوڈ نہیں ہو سکا۔~brandsFailed=برانڈ کی فہرست لوڈ نہیں ہو سکی۔ آپ پھر بھی نیا برانڈ لکھ سکتے ہیں۔~defaultReason=اسٹور سے شامل کیا گیا~unit=اکائی~levelsReceive=سطحیں اور اسٹاک کی وصولی';
 
   @override
   String get calendarCopyCatalog =>
@@ -3024,7 +3039,7 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get workshopCopyCatalog =>
-      'title=میرے کام~onDuty=ڈیوٹی پر~offDuty=ڈیوٹی سے باہر~checkIn=حاضری لگائیں~checkOut=چھٹی لگائیں~checkInHint=کام درج کرنے سے پہلے اپنی شفٹ کی حاضری لگائیں۔~myJobs=میرے کام~emptyTitle=کوئی کھلا کام نہیں~emptyMessage=اس وقت آپ کو کوئی کھلا کام تفویض نہیں ہے۔~loadError=آپ کے کام ابھی لوڈ نہیں ہو سکے۔~selectJobTitle=کام منتخب کریں~selectJobMsg=پہلے اپنا ایک کام منتخب کریں۔~checkInFirstTitle=پہلے حاضری لگائیں~selectTaskTitle=مرحلہ منتخب کریں~selectTaskMsg=پہلے وہ مرحلہ منتخب کریں جس پر آپ کام کر رہے ہیں۔~tasks=مراحل~confirmTitle=مرحلہ مکمل کریں؟~confirmMsg=یہ مرحلے کو مکمل درج کر کے معائنے کے لیے بھیج دے گا۔~cancel=منسوخ~noteHint=نوٹ شامل کریں (اختیاری)~record=درج کریں~queued=اس ڈیوائس پر محفوظ ہے۔ یہ خود بخود ہم آہنگ ہو جائے گا۔~saveFailed=سرگرمی اس ڈیوائس پر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~todayTitle=آج میری کارکردگی~productive=پیداواری~blocked=رکا ہوا~unassigned=غیر تفویض~breakTime=وقفہ~completed=مکمل مراحل~due=مقررہ~ok=ٹھیک ہے~a_start_job=کام شروع کریں~a_pause_job=کام روکیں~a_resume_job=کام دوبارہ شروع کریں~a_complete_task=مرحلہ مکمل کریں~a_request_parts=پرزے طلب کریں~a_request_assistance=مدد طلب کریں~a_waiting_approval=منظوری کا انتظار~a_waiting_vehicle=گاڑی کا انتظار~a_waiting_tools=اوزار کا انتظار~a_start_break=وقفہ شروع کریں~a_end_break=وقفہ ختم کریں~a_report_problem=مسئلہ رپورٹ کریں~s_working=کام جاری~s_available=دستیاب~s_waiting_parts=پرزوں کا انتظار~s_waiting_approval=منظوری کا انتظار~s_waiting_tools=اوزار کا انتظار~s_waiting_vehicle=گاڑی کا انتظار~s_on_break=وقفے پر~s_training=تربیت~s_awaiting_inspection=معائنے کا انتظار~s_off_duty=ڈیوٹی سے باہر~s_absent=غیر حاضر~photoLabel=تصویر (اختیاری)~takePhoto=کیمرہ~pickPhoto=گیلری~removePhoto=تصویر ہٹائیں~photoLimit=زیادہ سے زیادہ 3 تصاویر~photoNotAttached=درج ہو گیا۔ کنکشن کے بغیر تصویر منسلک نہیں ہو سکی۔';
+      'title=میرے کام~onDuty=ڈیوٹی پر~offDuty=ڈیوٹی سے باہر~checkIn=حاضری لگائیں~checkOut=چھٹی لگائیں~checkInHint=کام درج کرنے سے پہلے اپنی شفٹ کی حاضری لگائیں۔~myJobs=میرے کام~emptyTitle=کوئی کھلا کام نہیں~emptyMessage=اس وقت آپ کو کوئی کھلا کام تفویض نہیں ہے۔~loadError=آپ کے کام ابھی لوڈ نہیں ہو سکے۔~selectJobTitle=کام منتخب کریں~selectJobMsg=پہلے اپنا ایک کام منتخب کریں۔~checkInFirstTitle=پہلے حاضری لگائیں~selectTaskTitle=مرحلہ منتخب کریں~selectTaskMsg=پہلے وہ مرحلہ منتخب کریں جس پر آپ کام کر رہے ہیں۔~tasks=مراحل~confirmTitle=مرحلہ مکمل کریں؟~confirmMsg=یہ مرحلے کو مکمل درج کر کے معائنے کے لیے بھیج دے گا۔~cancel=منسوخ~noteHint=نوٹ شامل کریں (اختیاری)~record=درج کریں~queued=اس ڈیوائس پر محفوظ ہے۔ یہ خود بخود ہم آہنگ ہو جائے گا۔~saveFailed=سرگرمی اس ڈیوائس پر محفوظ نہیں ہو سکی۔ دوبارہ کوشش کریں۔~todayTitle=آج میری کارکردگی~productive=پیداواری~blocked=رکا ہوا~unassigned=غیر تفویض~breakTime=وقفہ~completed=مکمل مراحل~due=مقررہ~ok=ٹھیک ہے~a_start_job=کام شروع کریں~a_pause_job=کام روکیں~a_resume_job=کام دوبارہ شروع کریں~a_complete_task=مرحلہ مکمل کریں~a_request_parts=پرزے طلب کریں~a_request_assistance=مدد طلب کریں~a_waiting_approval=منظوری کا انتظار~a_waiting_vehicle=گاڑی کا انتظار~a_waiting_tools=اوزار کا انتظار~a_start_break=وقفہ شروع کریں~a_end_break=وقفہ ختم کریں~a_report_problem=مسئلہ رپورٹ کریں~s_working=کام جاری~s_available=دستیاب~s_waiting_parts=پرزوں کا انتظار~s_waiting_approval=منظوری کا انتظار~s_waiting_tools=اوزار کا انتظار~s_waiting_vehicle=گاڑی کا انتظار~s_on_break=وقفے پر~s_training=تربیت~s_awaiting_inspection=معائنے کا انتظار~s_off_duty=ڈیوٹی سے باہر~s_absent=غیر حاضر~photoLabel=تصویر (اختیاری)~takePhoto=کیمرہ~pickPhoto=گیلری~removePhoto=تصویر ہٹائیں~photoLimit=زیادہ سے زیادہ 3 تصاویر~photoNotAttached=درج ہو گیا۔ کنکشن کے بغیر تصویر منسلک نہیں ہو سکی۔~c_whatDone=کیا کام کیا گیا~c_parts=استعمال شدہ پرزے~c_meters=میٹر ریڈنگ~c_km=اوڈومیٹر (کلومیٹر)~c_hours=آور میٹر~c_before=کام سے پہلے کی تصاویر (اختیاری)~c_after=کام کے بعد کی تصاویر~c_signature=آپ کے دستخط~returned=سپروائزر نے واپس کر دیا~waitingApproval=سپروائزر کی منظوری کا انتظار~notAccepted=قبول نہیں ہوا:~c_queued=اس فون پر محفوظ ہو گیا۔ سگنل ملتے ہی سپروائزر کو بھیج دیا جائے گا۔~c_stateQueued=اس فون پر قطار میں~c_stateFailed=ناکام، نہیں بھیجا گیا~c_stateSynced=بھیج دیا گیا، سپروائزر کی منظوری کا انتظار~jc_title=جانچنے کے کام~jc_tabToCheck=جانچنا ہے~jc_tabReturned=واپس کیے گئے~jc_emptyToCheck=کوئی مکمل کام آپ کا انتظار نہیں کر رہا۔~jc_emptyReturned=کوئی واپس کیا گیا کام نہیں۔~jc_loadError=کام لوڈ نہیں ہو سکے۔~jc_extra=اضافی ثبوت~jc_waiting=آپ کا انتظار~jc_by=مکمل کرنے والا~jc_returnReason=واپسی کی وجہ:~jc_noParts=کوئی پرزہ درج نہیں~jc_noMeters=کوئی میٹر ریڈنگ نہیں~jc_photoUnavailable=تصویر دستیاب نہیں~jc_pass=منظور کریں~jc_return=کام واپس کریں~jc_returnTitle=کیوں واپس کیا جا رہا ہے؟~jc_returnHint=بتائیں کہ ابھی کیا ٹھیک کرنا باقی ہے~jc_returnSend=کام واپس کریں~jc_passed=کام منظور اور بند ہو گیا۔~jc_returnedOk=کام واپس کر دیا گیا۔ ڈیٹا ڈیسک اسے دوبارہ تفویض کرے گا۔~jc_decideError=محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔~jc_signature=ٹیکنیشن کے دستخط';
 
   @override
   String get homeTodaysWork => 'آج کا کام';
@@ -9408,4 +9423,1203 @@ class AppLocalizationsUr extends AppLocalizations {
   @override
   String get driverChargeAppealClosedDeducted =>
       'کٹوتیاں شروع ہو چکی ہیں، اس لیے اب یہاں اس واجب الادا کے خلاف اپیل نہیں ہو سکتی۔ مینیجر یا فنانس باقی رقم معاف کر سکتے ہیں۔';
+
+  @override
+  String get profileSyncQueueTitle => 'سنک قطار';
+
+  @override
+  String get syncQueueStatPending => 'زیرِ التوا';
+
+  @override
+  String get syncQueueStatAttention => 'توجہ درکار';
+
+  @override
+  String get syncQueueStatSent => 'بھیج دیا گیا';
+
+  @override
+  String get syncQueueStatSentCaption => 'ابھی اس ڈیوائس پر';
+
+  @override
+  String syncQueueLastAttempt(String time) {
+    return 'آخری سنک کوشش: $time';
+  }
+
+  @override
+  String get syncQueueNoAttempt =>
+      'اس ڈیوائس پر ابھی تک کوئی سنک کوشش ریکارڈ نہیں ہوئی';
+
+  @override
+  String get syncQueueRunning => 'سنک ابھی چل رہا ہے';
+
+  @override
+  String get syncQueueSyncNow => 'ابھی سنک کریں';
+
+  @override
+  String get syncQueueOfflineReason =>
+      'آپ آف لائن ہیں۔ آپ کا کام اس فون پر محفوظ ہے اور آن لائن ہوتے ہی بھیج دیا جائے گا۔';
+
+  @override
+  String get syncQueueNothingToSend => 'بھیجنے کے لیے کچھ زیرِ التوا نہیں ہے۔';
+
+  @override
+  String get syncQueueRequested =>
+      'سنک کی درخواست کر دی گئی۔ اشیاء بھیجے جانے کے ساتھ یہ فہرست اپ ڈیٹ ہوتی رہے گی۔';
+
+  @override
+  String get syncQueueRequestFailed =>
+      'سنک شروع نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueEmptyTitle => 'سب کچھ سنک ہو چکا ہے';
+
+  @override
+  String get syncQueueEmptyMessage =>
+      'اس ڈیوائس سے کچھ بھی بھیجے جانے کا منتظر نہیں ہے۔';
+
+  @override
+  String get syncQueueLoadFailedTitle => 'سنک قطار پڑھی نہیں جا سکی';
+
+  @override
+  String get syncQueueLoadFailedMessage =>
+      'آپ کا قطار میں موجود کام ابھی اس فون پر ہے۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueSectionItems => 'قطار میں موجود اشیاء';
+
+  @override
+  String syncTypeInspection(String asset) {
+    return 'معائنہ $asset';
+  }
+
+  @override
+  String syncQueueItemQueued(String time) {
+    return 'قطار میں شامل $time';
+  }
+
+  @override
+  String syncQueueAttempts(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count کوششیں',
+      one: '1 کوشش',
+      zero: 'ابھی کوشش نہیں ہوئی',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncQueueNextAttempt(String time) {
+    return 'اگلی کوشش $time';
+  }
+
+  @override
+  String get syncQueueStateWaiting => 'بھیجے جانے کا منتظر';
+
+  @override
+  String get syncQueueStateSending => 'ابھی بھیجا جا رہا ہے';
+
+  @override
+  String get syncQueueStateRetrying => 'دوبارہ کوشش کی جائے گی';
+
+  @override
+  String get syncQueueStateOnHold => 'روکا گیا';
+
+  @override
+  String get syncQueueStateNeedsAttention => 'توجہ درکار';
+
+  @override
+  String get syncQueueStateSent => 'بھیج دیا گیا';
+
+  @override
+  String get syncQueueRetry => 'دوبارہ کوشش';
+
+  @override
+  String get syncQueueRetried => 'دوبارہ قطار میں ڈال دیا گیا۔';
+
+  @override
+  String get syncQueueRetryNotNeeded =>
+      'یہ چیز اب دوبارہ کوشش کی منتظر نہیں ہے۔';
+
+  @override
+  String get syncQueueRetryFailed =>
+      'اس چیز کی دوبارہ کوشش نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueErrorFallback => 'یہ چیز بھیجی نہیں جا سکی۔';
+
+  @override
+  String get syncTypeTyreChange => 'ٹائر کی تبدیلی';
+
+  @override
+  String get syncTypeWorkOrder => 'ورک آرڈر';
+
+  @override
+  String get syncTypeRca => 'بنیادی وجہ کا تجزیہ';
+
+  @override
+  String get syncTypeReportIssue => 'رپورٹ کردہ مسئلہ';
+
+  @override
+  String get syncTypeStockAdjust => 'اسٹاک گنتی';
+
+  @override
+  String get syncTypeWorkOrderStatus => 'ورک آرڈر کی حالت';
+
+  @override
+  String get syncTypeCorrectiveActionStatus => 'اصلاحی اقدام کی حالت';
+
+  @override
+  String get syncTypeChecklistSubmission => 'چیک لسٹ';
+
+  @override
+  String get syncTypeChecklistAssignmentStatus => 'چیک لسٹ تفویض';
+
+  @override
+  String get syncTypeOdometerLog => 'اوڈومیٹر ریڈنگ';
+
+  @override
+  String get syncTypeEngineHoursLog => 'انجن گھنٹوں کی ریڈنگ';
+
+  @override
+  String get syncTypeReportAccident => 'حادثے کی رپورٹ';
+
+  @override
+  String get syncTypeWashRecord => 'گاڑی کی دھلائی';
+
+  @override
+  String get syncTypeWorkshopEvent => 'ورکشاپ سرگرمی';
+
+  @override
+  String get syncTypeInventoryCountLine => 'انوینٹری گنتی کی لائن';
+
+  @override
+  String get syncTypeUnknown => 'نامعلوم اندراج';
+
+  @override
+  String get profileDraftsTitle => 'مسودے';
+
+  @override
+  String get profileDraftsEmptyTitle => 'کوئی مسودہ نہیں';
+
+  @override
+  String get profileDraftsEmptyMessage =>
+      'اس فون پر شروع کی گئی نامکمل چیک لسٹیں اور معائنے یہاں نظر آتے ہیں۔';
+
+  @override
+  String get profileDraftsLoadFailedTitle => 'آپ کے مسودے پڑھے نہیں جا سکے';
+
+  @override
+  String get profileDraftsLoadFailedMessage =>
+      'آپ کے مسودے ابھی اس فون پر ہیں۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get profileDraftKindChecklist => 'چیک لسٹ';
+
+  @override
+  String get profileDraftKindInspection => 'معائنہ';
+
+  @override
+  String profileDraftEdited(String time) {
+    return 'آخری ترمیم $time';
+  }
+
+  @override
+  String get profileDraftNoAsset => 'ابھی کوئی اثاثہ منتخب نہیں ہوا';
+
+  @override
+  String get profileDraftResume => 'دوبارہ شروع کریں';
+
+  @override
+  String get profileDraftDiscard => 'ختم کریں';
+
+  @override
+  String get profileDraftDiscardTitle => 'کیا یہ مسودہ ختم کرنا ہے؟';
+
+  @override
+  String get profileDraftDiscardMessage =>
+      'اس مسودے میں درج سب کچھ، بشمول تصاویر اور دستخط، اس فون سے ہٹا دیا جائے گا۔ اسے واپس نہیں کیا جا سکتا۔';
+
+  @override
+  String get profileDraftDiscarded => 'مسودہ ختم کر دیا گیا۔';
+
+  @override
+  String get profileDraftDiscardFailed =>
+      'مسودہ ختم نہیں ہو سکا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get syncQueueInspectionRetried =>
+      'آپ کے معائنے دوبارہ بھیجنے کی کوشش کی گئی۔ نیچے دی گئی حالت تازہ ترین ہے۔';
+
+  @override
+  String get accidentTasksTitle => 'میرے حادثے کے کام';
+
+  @override
+  String get accidentTasksAssignedToMe => 'مجھے سونپے گئے';
+
+  @override
+  String get accidentTasksForMyTeam => 'میری ٹیم کے لیے';
+
+  @override
+  String get accidentTasksEmpty =>
+      'حادثے کے کیسز میں آپ کے لیے کچھ زیر التوا نہیں۔';
+
+  @override
+  String get accidentTasksNotOn =>
+      'حادثے کے کاموں کی ٹریکنگ ابھی فعال نہیں ہوئی۔';
+
+  @override
+  String get accidentTasksLoading => 'آپ کے کام لوڈ ہو رہے ہیں...';
+
+  @override
+  String get accidentTasksOverdue => 'تاخیر شدہ';
+
+  @override
+  String get accidentTasksDueSoon => 'جلد واجب';
+
+  @override
+  String get accidentTasksOnTime => 'وقت پر';
+
+  @override
+  String get accidentTasksNoTarget => 'کوئی ہدف نہیں';
+
+  @override
+  String accidentTasksCase(String ref) {
+    return 'کیس $ref';
+  }
+
+  @override
+  String accidentTasksInStep(String days) {
+    return 'اس مرحلے میں $days';
+  }
+
+  @override
+  String accidentTasksDays(String count) {
+    return '$count دن';
+  }
+
+  @override
+  String get accidentTasksToday => 'آج';
+
+  @override
+  String accidentTasksDue(String time) {
+    return 'واجب $time';
+  }
+
+  @override
+  String accidentTasksSummary(String open, String overdue) {
+    return '$open کھلے، $overdue تاخیر شدہ';
+  }
+
+  @override
+  String get accidentRegisterMine => 'میرے';
+
+  @override
+  String get accidentTasksRoleNames =>
+      'admin=ایڈمن~manager=مینیجر~director=ڈائریکٹر~inspector=انسپکٹر~tyre_man=ٹائر ٹیکنیشن~reporter=رپورٹر~driver=ڈرائیور~mechanic=مکینک~electrician=الیکٹریشن~maintenance_supervisor=مینٹیننس سپروائزر~workshop_supervisor=ورکشاپ سپروائزر~tyre_data_collector=ٹائر ڈیٹا کلیکٹر~pmv_manager=پی ایم وی مینیجر~workshop_area_manager=ورکشاپ ایریا مینیجر~workshop_maintenance_area_manager=ورکشاپ مینٹیننس ایریا مینیجر~fleet_supervisor=فلیٹ سپروائزر~fleet_incharge=فلیٹ انچارج~store_keeper=اسٹور کیپر';
+
+  @override
+  String get devicesTitle => 'آلات';
+
+  @override
+  String get devicesProfileRowValue => 'گیجز، اسکینرز، پرنٹرز';
+
+  @override
+  String get devicesIntro =>
+      'اس فون پر شامل کیے گئے گیجز، ہینڈ ہیلڈ اسکینرز اور لیبل پرنٹرز۔ یہ فہرست صرف آپ دیکھتے ہیں۔';
+
+  @override
+  String get devicesEmptyTitle => 'ابھی کوئی آلہ نہیں';
+
+  @override
+  String get devicesEmptyMessage =>
+      'ٹریڈ یا پریشر گیج، ہینڈ ہیلڈ اسکینر یا لیبل پرنٹر شامل کریں۔';
+
+  @override
+  String get devicesLoadFailed => 'اس فون پر محفوظ آلات پڑھے نہیں جا سکے۔';
+
+  @override
+  String get devicesAdd => 'آلہ شامل کریں';
+
+  @override
+  String get devicesKindTread => 'ٹریڈ گہرائی گیج';
+
+  @override
+  String get devicesKindPressure => 'ٹائر پریشر گیج';
+
+  @override
+  String get devicesKindCombined => 'ٹریڈ اور پریشر گیج';
+
+  @override
+  String get devicesKindScanner => 'بارکوڈ یا RFID ہینڈ ہیلڈ';
+
+  @override
+  String get devicesKindRfid => 'UHF RFID ریڈر';
+
+  @override
+  String get devicesKindPrinter => 'لیبل پرنٹر';
+
+  @override
+  String get devicesTransportBle => 'بلوٹوتھ';
+
+  @override
+  String get devicesTransportHid => 'کی بورڈ موڈ';
+
+  @override
+  String get devicesTransportNetwork => 'نیٹ ورک';
+
+  @override
+  String get devicesTransportSimulator => 'سمیولیٹر (صرف ٹیسٹنگ کے لیے)';
+
+  @override
+  String get devicesBluetoothOff =>
+      'بلوٹوتھ بند ہے۔ بلوٹوتھ آلہ شامل یا استعمال کرنے کے لیے اسے آن کریں۔';
+
+  @override
+  String get devicesPermissionDenied =>
+      'Tyre Pulse کو بلوٹوتھ استعمال کرنے کی اجازت نہیں۔ اجازت دیں، یا فون کی سیٹنگز میں آن کریں۔';
+
+  @override
+  String get devicesBluetoothUnsupported =>
+      'اس فون میں بلوٹوتھ LE نہیں۔ کی بورڈ موڈ اور نیٹ ورک آلات پھر بھی کام کرتے ہیں۔';
+
+  @override
+  String get devicesAllowBluetooth => 'بلوٹوتھ کی اجازت دیں';
+
+  @override
+  String get devicesScanning => 'قریبی آلات تلاش کیے جا رہے ہیں…';
+
+  @override
+  String get devicesScanNone =>
+      'کوئی آلہ نہیں ملا۔ آلہ جگائیں اور فون کے قریب رکھیں۔';
+
+  @override
+  String get devicesScanAgain => 'دوبارہ تلاش کریں';
+
+  @override
+  String get devicesUnnamed => 'بے نام آلہ';
+
+  @override
+  String get devicesChooseKind => 'یہ کون سا آلہ ہے؟';
+
+  @override
+  String get devicesChooseConnection => 'یہ کیسے جڑتا ہے؟';
+
+  @override
+  String get devicesNameLabel => 'آلے کا نام';
+
+  @override
+  String get devicesHostLabel => 'پرنٹر کا IP پتہ';
+
+  @override
+  String get devicesPortLabel => 'پورٹ';
+
+  @override
+  String get devicesLanguageLabel => 'پرنٹر کی زبان';
+
+  @override
+  String get devicesLabelSizeLabel => 'لیبل کا سائز';
+
+  @override
+  String get devicesSave => 'آلہ محفوظ کریں';
+
+  @override
+  String get devicesFieldRequired => 'یہ خانہ بھریں۔';
+
+  @override
+  String get devicesHidHint =>
+      'پہلے فون کی بلوٹوتھ سیٹنگز میں آلے کو کی بورڈ کے طور پر جوڑیں، پھر یہاں محفوظ کریں۔';
+
+  @override
+  String get devicesTest => 'ٹیسٹ';
+
+  @override
+  String get devicesTestRead => 'ایک بار پڑھیں';
+
+  @override
+  String get devicesTestPrint => 'ٹیسٹ لیبل پرنٹ کریں';
+
+  @override
+  String get devicesTestLabelName => 'Tyre Pulse ٹیسٹ لیبل';
+
+  @override
+  String devicesTestReading(String value) {
+    return 'پڑھا گیا: $value';
+  }
+
+  @override
+  String get devicesTestPrinted => 'ٹیسٹ لیبل پرنٹر کو بھیج دیا گیا۔';
+
+  @override
+  String get devicesForget => 'ہٹائیں';
+
+  @override
+  String devicesForgetConfirm(String name) {
+    return '$name ہٹائیں؟ آپ اسے بعد میں دوبارہ شامل کر سکتے ہیں۔';
+  }
+
+  @override
+  String devicesBattery(int level) {
+    return 'بیٹری $level%';
+  }
+
+  @override
+  String get devicesErrorNotConnected =>
+      'آلہ نہیں جڑا۔ دیکھیں کہ یہ آن ہے اور قریب ہے۔';
+
+  @override
+  String get devicesErrorTimeout => 'آلے نے وقت پر جواب نہیں دیا۔';
+
+  @override
+  String get devicesErrorNoReading =>
+      'کوئی ریڈنگ نہیں آئی۔ گیج پر پیمائش لیں اور دوبارہ کوشش کریں۔';
+
+  @override
+  String get devicesErrorUnreadable =>
+      'آلے نے ایسا ڈیٹا بھیجا جو یہ ایپ نہیں پڑھ سکتی۔ اس کی سیٹنگز کو بنانے والے کی تفصیلات درکار ہیں۔';
+
+  @override
+  String get devicesErrorNotConfigured => 'اس آلے کی کنکشن سیٹنگز موجود نہیں۔';
+
+  @override
+  String get devicesErrorPrintFailed =>
+      'لیبل پرنٹ نہیں ہو سکا۔ دیکھیں کہ پرنٹر میں کاغذ ہے اور یہ آن ہے۔';
+
+  @override
+  String get devicesErrorUnsupported => 'یہ آلہ یہ کام نہیں کر سکتا۔';
+
+  @override
+  String get devicesErrorVendorSdk =>
+      'اس ریڈر کو بنانے والے کا سافٹ ویئر درکار ہے جو ابھی انسٹال نہیں۔ فی الحال اسے کی بورڈ موڈ میں استعمال کریں۔';
+
+  @override
+  String get gaugeReadPressure => 'گیج سے پریشر پڑھیں';
+
+  @override
+  String get gaugeReadTread => 'گیج سے ٹریڈ پڑھیں';
+
+  @override
+  String get gaugeNoGauge =>
+      'اس ریڈنگ کے لیے کوئی گیج سیٹ نہیں۔ پروفائل > آلات میں شامل کریں۔';
+
+  @override
+  String get gaugePickTitle => 'گیج منتخب کریں';
+
+  @override
+  String gaugeReadingFrom(String device) {
+    return '$device سے پڑھا جا رہا ہے…';
+  }
+
+  @override
+  String get gaugeConfirmTitle => 'یہ ریڈنگ استعمال کریں؟';
+
+  @override
+  String gaugeConfirmBody(String device, String value, String position) {
+    return '$device نے $position پر $value ناپا۔';
+  }
+
+  @override
+  String gaugeConfirmReplace(String old) {
+    return 'یہ پہلے سے درج قدر ($old) کی جگہ لے گا۔';
+  }
+
+  @override
+  String get gaugeUseReading => 'ریڈنگ استعمال کریں';
+
+  @override
+  String get gaugeHidTitle => 'ریڈنگ بھیجیں';
+
+  @override
+  String gaugeHidMessage(String device) {
+    return '$device پر بھیجنے کا بٹن دبائیں۔ قدر نیچے نظر آئے گی۔';
+  }
+
+  @override
+  String get gaugeHidField => 'گیج سے آنے والی قدر';
+
+  @override
+  String gaugeValuePsi(String value) {
+    return '$value psi';
+  }
+
+  @override
+  String gaugeValueMm(String value) {
+    return '$value ملی میٹر';
+  }
+
+  @override
+  String get hidScannerReady =>
+      'ہینڈ ہیلڈ اسکینر تیار ہے: ٹائر یا اثاثہ تلاش کرنے کے لیے ٹریگر دبائیں۔';
+
+  @override
+  String get labelPrint => 'لیبل پرنٹ کریں';
+
+  @override
+  String get labelChoosePrinter => 'لیبل اس پر پرنٹ کریں';
+
+  @override
+  String get labelPrintPdf => 'سسٹم پرنٹر یا PDF';
+
+  @override
+  String labelPrinted(String printer) {
+    return 'لیبل $printer کو بھیج دیا گیا۔';
+  }
+
+  @override
+  String get labelUnicodeNote =>
+      'اس لیبل پر عربی یا اردو متن صرف سسٹم پرنٹر یا PDF کے ذریعے درست پرنٹ ہوتا ہے۔';
+
+  @override
+  String syncQueuePhotoFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تصاویر اپ لوڈ نہیں ہو سکیں',
+      one: 'ایک تصویر اپ لوڈ نہیں ہو سکی',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncQueuePhotoRetry => 'تصویر دوبارہ بھیجیں';
+
+  @override
+  String get syncQueuePhotoRetried =>
+      'اگلی مطابقت پر تصویر دوبارہ بھیجی جائے گی۔';
+
+  @override
+  String get syncQueuePhotoRemove => 'اس تصویر کے بغیر بھیجیں';
+
+  @override
+  String get syncQueuePhotoRemoveTitle => 'اس تصویر کے بغیر بھیجیں؟';
+
+  @override
+  String get syncQueuePhotoRemoveMessage =>
+      'یہ تصویر ریکارڈ کا ثبوت ہے۔ اسے ہٹانے پر ریکارڈ اس کے بغیر بھیجا جائے گا اور تصویر قطار سے واپس نہیں آ سکے گی۔ ہو سکے تو ریکارڈ سے دوبارہ تصویر لیں۔';
+
+  @override
+  String get syncQueuePhotoRemoveConfirm => 'تصویر ہٹائیں';
+
+  @override
+  String get syncQueuePhotoRemoved =>
+      'تصویر ہٹا دی گئی۔ ریکارڈ اس کے بغیر بھیجا جائے گا۔';
+
+  @override
+  String get syncQueuePhotoActionFailed => 'یہ کام نہیں ہوا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get fleetListOffRoadFilter => 'سڑک سے باہر';
+
+  @override
+  String inspectionPickerCollapsedNote(int assets, int rows) {
+    return 'رجسٹر کی $rows قطاروں سے $assets اثاثہ نمبر۔ ایک سے زیادہ ملک میں استعمال ہونے والا نمبر ایک بار دکھایا گیا ہے: درست مشین کے معائنے کے لیے ملک منتخب کریں۔';
+  }
+
+  @override
+  String get workshopIntakeCopyCatalog =>
+      'title=گاڑیوں کی آمد~subtitle=گاڑیاں شامل کریں اور آپ کو بھیجی گئی گاڑیوں کی تصدیق کریں~open=گاڑیوں کی آمد~waitingBanner=%n% گاڑیاں آپ کی تصدیق کی منتظر ہیں~waitingBannerOne=ایک گاڑی آپ کی تصدیق کی منتظر ہے~tabWaiting=میرے منتظر~tabAdd=گاڑی شامل کریں~noAccess=آپ کو ورکشاپ گاڑیاں شامل کرنے یا ان کی تصدیق کی اجازت درکار ہے۔ اپنے ایڈمنسٹریٹر سے کہیں۔~loading=گاڑیاں لوڈ ہو رہی ہیں~loadFailed=گاڑیاں لوڈ نہیں ہو سکیں۔~emptyTitle=آپ کا کوئی انتظار نہیں~emptyMessage=آپ کو بھیجی گئی نئی گاڑیاں یہاں نظر آئیں گی۔ دوبارہ دیکھنے کے لیے نیچے کھینچیں۔~enteredBy=%name% نے درج کی~system=سسٹم~jobCard=جاب کارڈ~ownEntry=یہ آپ نے درج کی ہے۔ کوئی دوسرا سپروائزر تصدیق کرے گا۔~confirm=تصدیق~return=واپس کریں~confirmed=گاڑی کی تصدیق ہو گئی۔~confirmFailed=گاڑی کی تصدیق نہیں ہو سکی۔~notRouted=یہ گاڑی آپ کو نہیں بھیجی گئی۔~alreadyConfirmed=کسی اور نے پہلے ہی اس گاڑی کی تصدیق کر دی ہے۔~refused=آپ اپنی درج کی ہوئی گاڑی کی تصدیق نہیں کر سکتے۔~returnTitle=درج کرنے والے کو واپس کریں~reason=وجہ~reasonHint=کیا درست کرنا ہے؟~reasonShort=کم از کم 5 حروف لکھیں۔~returned=گاڑی واپس کر دی گئی۔~returnFailed=گاڑی واپس نہیں ہو سکی۔~cancel=منسوخ~assetCode=اثاثہ کوڈ~assetRequired=اثاثہ کوڈ درج کریں۔~site=ورکشاپ سائٹ~siteHint=گاڑی کی اپنی سائٹ کے لیے خالی چھوڑ دیں~complaint=شکایت~jobCardNo=جاب کارڈ نمبر (اختیاری)~workType=کام کی قسم~priority=ترجیح~notSet=مقرر نہیں~send=سپروائزر کو بھیجیں~sent=بھیج دیا گیا۔ ڈیوٹی پر موجود سپروائزر کو اطلاع ملے گی۔~updatedRow=اپ ڈیٹ ہو گیا۔~sameRow=کچھ نہیں بدلا۔~listedRow=یہ گاڑی پہلے سے ورکشاپ کی فہرست میں ہے۔~invalidRow=اثاثہ کوڈ چیک کریں۔~releasedRow=یہ گاڑی پہلے ہی ریلیز ہو چکی ہے۔~sendFailed=گاڑی نہیں بھیجی جا سکی۔ سگنل چیک کر کے دوبارہ کوشش کریں۔~pickCountry=پہلے ایک ملک منتخب کریں۔ گاڑیاں ہر ملک کے لیے الگ درج ہوتی ہیں۔~wt_Repair=مرمت~wt_Emergency=خرابی~wt_Preventive Maintenance=حفاظتی دیکھ بھال~wt_Service=سروس~wt_Tyre Change=ٹائر کی تبدیلی~wt_Inspection=معائنہ~wt_Other=دیگر~pr_Low=کم~pr_Medium=درمیانی~pr_High=زیادہ~pr_Critical=انتہائی~src_sheet=مشترکہ شیٹ~src_phone=فون~src_manual=دستی اندراج~src_erp=ERP جاب کارڈ~src_excel_upload=روزانہ Excel';
+
+  @override
+  String get washStepVehicle => 'گاڑی';
+
+  @override
+  String get washStepType => 'دھلائی کی قسم';
+
+  @override
+  String get washStepChecklist => 'چیک لسٹ اور کیمیکل';
+
+  @override
+  String get washStepPhotos => 'تصاویر';
+
+  @override
+  String get washStepReview => 'جائزہ لیں اور محفوظ کریں';
+
+  @override
+  String get washStepOptional => 'اختیاری';
+
+  @override
+  String washStepProgress(int done, int total) {
+    return '$total میں سے $done مراحل مکمل';
+  }
+
+  @override
+  String washLoggedBy(String name, String time) {
+    return 'درج کنندہ $name · آج $time';
+  }
+
+  @override
+  String get washLoggedByNote =>
+      'یہ آپ کے سائن اِن سے خود بخود درج ہوتا ہے اور تبدیل نہیں ہو سکتا۔';
+
+  @override
+  String get washLoggedBySelf => 'آپ';
+
+  @override
+  String get washMissingVehicle => 'گاڑی منتخب کریں';
+
+  @override
+  String get washMissingType => 'دھلائی کی قسم منتخب کریں';
+
+  @override
+  String get washMissingEvidence => 'چیک لسٹ کی تفصیلات مکمل کریں';
+
+  @override
+  String washLastWash(String date) {
+    return 'آخری دھلائی $date';
+  }
+
+  @override
+  String washDaysSince(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دن پہلے',
+      one: '1 دن پہلے',
+      zero: 'آج دھلی',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washNoHistoryForAsset => 'ابھی تک کوئی دھلائی درج نہیں';
+
+  @override
+  String get washDueBadge => 'دھلائی کا وقت ہو گیا';
+
+  @override
+  String washOverdueBadge(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days دن تاخیر',
+      one: '1 دن تاخیر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washUpToDateBadge => 'بروقت';
+
+  @override
+  String get washHistoryChecking => 'دھلائی کی تاریخ دیکھی جا رہی ہے...';
+
+  @override
+  String get washHistoryUnavailable => 'دھلائی کی تاریخ نہیں دیکھی جا سکی';
+
+  @override
+  String get washTypeExteriorDesc => 'باڈی کی دھلائی';
+
+  @override
+  String get washTypeInteriorDesc => 'کیبن کی صفائی';
+
+  @override
+  String get washTypeFullDesc => 'اندر اور باہر';
+
+  @override
+  String get washTypeEngineBayDesc => 'انجن کے خانے سے چکنائی صاف';
+
+  @override
+  String get washTypeUndercarriageDesc => 'چیسس اور پہیے';
+
+  @override
+  String get washTypeSteamDesc => 'بھاپ سے صفائی';
+
+  @override
+  String get washTypeWaterlessDesc => 'پانی کے بغیر اسپرے اور صفائی';
+
+  @override
+  String washChecklistProgress(int done, int total) {
+    return '$total میں سے $done چیک';
+  }
+
+  @override
+  String washIssuesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مسائل',
+      one: '1 مسئلہ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String washProductsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count پروڈکٹس',
+      one: '1 پروڈکٹ',
+      zero: 'کوئی پروڈکٹ نہیں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washPhotosBefore => 'دھلائی سے پہلے';
+
+  @override
+  String get washPhotosAfter => 'دھلائی کے بعد';
+
+  @override
+  String washPhotosCount(int count, int max) {
+    return '$max میں سے $count تصاویر';
+  }
+
+  @override
+  String get washPhotosOptional =>
+      'اختیاری۔ پہلے اور بعد کی تصاویر دھلائی کا ثبوت ہیں۔';
+
+  @override
+  String get washReviewTitle => 'محفوظ کرنے سے پہلے دیکھ لیں';
+
+  @override
+  String get washMoreDetails => 'مزید تفصیلات (اختیاری)';
+
+  @override
+  String washReviewChecklistValue(int checked, int total, String products) {
+    return '$total میں سے $checked چیک · $products';
+  }
+
+  @override
+  String get washSavedTitle => 'دھلائی محفوظ ہو گئی';
+
+  @override
+  String get washSavedOfflineMessage =>
+      'آپ آف لائن ہیں۔ دھلائی اس فون پر محفوظ ہے اور سگنل آنے پر خود بخود اپ لوڈ ہو جائے گی۔';
+
+  @override
+  String get washSavedOnlineMessage =>
+      'اس فون پر محفوظ ہے اور اب اپ لوڈ ہو رہی ہے۔ اگر نظر نہ آئے تو سنک دیکھیں۔';
+
+  @override
+  String get washLogAnother => 'ایک اور دھلائی درج کریں';
+
+  @override
+  String get washHistoryTitle => 'دھلائی کی تاریخ';
+
+  @override
+  String get washStatLastSevenDays => 'پچھلے 7 دن';
+
+  @override
+  String get washStatThisMonth => 'اس مہینے';
+
+  @override
+  String get washStatTopAsset => 'اس مہینے سب سے زیادہ دھلی';
+
+  @override
+  String get washStatNone => 'ابھی کوئی نہیں';
+
+  @override
+  String washCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دھلائیاں',
+      one: '1 دھلائی',
+      zero: 'کوئی دھلائی نہیں',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washFilterAllDates => 'تمام تاریخیں';
+
+  @override
+  String get washFilterSevenDays => '7 دن';
+
+  @override
+  String get washFilterThirtyDays => '30 دن';
+
+  @override
+  String get washFilterPickDates => 'تاریخیں منتخب کریں';
+
+  @override
+  String get washFilterAllTypes => 'تمام اقسام';
+
+  @override
+  String get washFilterClear => 'فلٹر صاف کریں';
+
+  @override
+  String get washHistoryNoMatch => 'ان فلٹرز سے کوئی دھلائی نہیں ملی';
+
+  @override
+  String washPhotoCountShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تصاویر',
+      one: '1 تصویر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washChangeVehicle => 'گاڑی تبدیل کریں';
+
+  @override
+  String get washStepAreas => 'کیا دھویا گیا';
+
+  @override
+  String get washAreasHint =>
+      'تصویر پر گاڑی کی سمتیں اور وہ حصے چنیں جو آپ نے دھوئے۔';
+
+  @override
+  String get washMissingAreas => 'منتخب کریں کیا دھویا گیا';
+
+  @override
+  String get washAreaExterior => 'بیرونی باڈی';
+
+  @override
+  String get washAreaExteriorDesc => 'باڈی، شیشے اور لائٹس';
+
+  @override
+  String get washAreaEngineBay => 'انجن کا حصہ';
+
+  @override
+  String get washAreaEngineBayDesc => 'انجن کی دھلائی اور چکنائی صاف';
+
+  @override
+  String get washAreaUndercarriage => 'گاڑی کا نچلا حصہ';
+
+  @override
+  String get washAreaUndercarriageDesc => 'چیسس اور نیچے کی باڈی';
+
+  @override
+  String get washAreaCabin => 'کیبن کا اندرونی حصہ';
+
+  @override
+  String get washAreaCabinDesc => 'سیٹیں، فرش اور ڈیش بورڈ';
+
+  @override
+  String get washAreaTyresRims => 'ٹائر اور رمز';
+
+  @override
+  String get washAreaTyresRimsDesc => 'ٹائر، رمز اور پہیوں کی محرابیں';
+
+  @override
+  String get washAreaDrumHopper => 'مکسر ڈرم اور ہاپر';
+
+  @override
+  String get washAreaDrumHopperDesc => 'ڈرم کا خول، ہاپر اور چُوٹ';
+
+  @override
+  String get washAreaSteam => 'بھاپ سے چکنائی صاف';
+
+  @override
+  String get washAreaSteamDesc => 'چکنائی اور تیل پر گرم بھاپ';
+
+  @override
+  String get washViewsTitle => 'دھوئی گئی سمتیں';
+
+  @override
+  String get washViewFront => 'آگے';
+
+  @override
+  String get washViewLeft => 'بائیں';
+
+  @override
+  String get washViewRear => 'پیچھے';
+
+  @override
+  String get washViewRight => 'دائیں';
+
+  @override
+  String get washViewTop => 'اوپر';
+
+  @override
+  String get washViewsAll => 'تمام سمتیں';
+
+  @override
+  String washViewsCount(int count, int total) {
+    return '$total میں سے $count سمتیں';
+  }
+
+  @override
+  String get washVehiclePictureNone =>
+      'اس قسم کی گاڑی کی تصویر ابھی نہیں ہے۔ نیچے سمتیں منتخب کریں۔';
+
+  @override
+  String get washVehiclePicturePending =>
+      'تصویر دیکھنے کے لیے گاڑی منتخب کریں۔';
+
+  @override
+  String get washWaterless => 'بغیر پانی کی دھلائی';
+
+  @override
+  String get washCostLabel => 'لاگت';
+
+  @override
+  String get washCostNoCharge => 'کوئی خرچ نہیں · اندرونِ ادارہ دھلائی';
+
+  @override
+  String get washAreasLabel => 'دھوئے گئے حصے';
+
+  @override
+  String washRecordedAsType(String type) {
+    return 'بطور $type درج ہوگا';
+  }
+
+  @override
+  String get washAreaSelected => 'منتخب';
+
+  @override
+  String get washMissingPhotos => 'پہلے اور بعد کی تصاویر لیں';
+
+  @override
+  String get washPhotosRequired =>
+      'کم از کم ایک تصویر دھلائی سے پہلے اور ایک بعد میں، ابھی کیمرے سے لیں۔ ہر تصویر پر اس کا وقت اور مقام درج ہوتا ہے۔';
+
+  @override
+  String washPhotoStamp(String time, String place) {
+    return '$time · $place';
+  }
+
+  @override
+  String get washGpsNone => 'GPS نہیں';
+
+  @override
+  String get washReadOnlyNote =>
+      'یہ ریکارڈ فون پر تبدیل نہیں ہو سکتا۔ درستگی ویب پر منتظم کرتا ہے، اور ہر تبدیلی آڈٹ ہسٹری میں محفوظ رہتی ہے۔';
+
+  @override
+  String get washRecordIdLabel => 'ریکارڈ آئی ڈی';
+
+  @override
+  String get washCapturedOnDevice => 'ڈیوائس پر محفوظ ہونے کا وقت';
+
+  @override
+  String get washSiteFromVehicle =>
+      'گاڑی کے ریکارڈ سے لیا گیا ہے۔ یہاں تبدیل نہیں ہو سکتا۔';
+
+  @override
+  String get washAuditTitle => 'آڈٹ ریکارڈ';
+
+  @override
+  String washNextDue(String date) {
+    return 'اگلی دھلائی کی تاریخ $date';
+  }
+
+  @override
+  String get washVerificationLabel => 'سپروائزر کی تصدیق';
+
+  @override
+  String get washVerificationPending => 'سپروائزر کی تصدیق کا انتظار';
+
+  @override
+  String washVerificationVerified(String name, String time) {
+    return '$name نے $time کو تصدیق کی';
+  }
+
+  @override
+  String get washVerificationNotRequired =>
+      'تصدیق کی ضرورت نہیں: سپروائزر نے درج کیا';
+
+  @override
+  String get washVerificationUnknown => 'سرور پر ابھی فعال نہیں';
+
+  @override
+  String get washVerifyAction => 'اس دھلائی کی تصدیق کریں';
+
+  @override
+  String get washVerifyNoteHint => 'نوٹ (اختیاری)';
+
+  @override
+  String get washVerifyDone => 'دھلائی کی تصدیق ہو گئی';
+
+  @override
+  String get washVerifyFailed =>
+      'اس دھلائی کی تصدیق نہیں ہو سکی۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get washVerifyOwnEntry =>
+      'یہ دھلائی آپ نے درج کی ہے، اس لیے کوئی اور سپروائزر اس کی تصدیق کرے گا۔';
+
+  @override
+  String get washPendingBadge => 'تصدیق باقی';
+
+  @override
+  String get syncSheetAllSynced => 'سب کچھ ہم آہنگ ہو گیا';
+
+  @override
+  String syncSheetLastAttempt(String ago) {
+    return 'آخری کوشش $ago';
+  }
+
+  @override
+  String get syncSheetNoAttempt => 'ابھی تک ہم آہنگی کی کوئی کوشش نہیں';
+
+  @override
+  String syncSheetWaiting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count منتظر',
+      one: '1 منتظر',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncSheetNeedsAttention(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count توجہ طلب',
+      one: '1 توجہ طلب',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sheetSeeAll(int count) {
+    return 'سب دیکھیں ($count)';
+  }
+
+  @override
+  String get timeAgoJustNow => 'ابھی';
+
+  @override
+  String timeAgoMinutes(int count) {
+    return '$count منٹ پہلے';
+  }
+
+  @override
+  String timeAgoHours(int count) {
+    return '$count گھنٹے پہلے';
+  }
+
+  @override
+  String timeAgoDays(int count) {
+    return '$count دن پہلے';
+  }
+
+  @override
+  String get tyreEditorEyebrow => 'ٹائر کی جگہ';
+
+  @override
+  String tyrePosNameWithRole(String side, String axle, String role) {
+    return '$side، $axle، $role';
+  }
+
+  @override
+  String tyrePosNameNoRole(String side, String axle) {
+    return '$side، $axle';
+  }
+
+  @override
+  String get tyrePosSideLeft => 'بائیں';
+
+  @override
+  String get tyrePosSideRight => 'دائیں';
+
+  @override
+  String tyrePosAxleFront(String number) {
+    return 'اگلا ایکسل $number';
+  }
+
+  @override
+  String tyrePosAxleRearNumbered(String number) {
+    return 'پچھلا ایکسل $number';
+  }
+
+  @override
+  String get tyrePosAxleRear => 'پچھلا ایکسل';
+
+  @override
+  String get tyrePosAxleCentre => 'درمیانی ایکسل';
+
+  @override
+  String get tyrePosAxleRearCentre => 'پچھلا درمیانی ایکسل';
+
+  @override
+  String get tyrePosAxleRearmost => 'سب سے پچھلا ایکسل';
+
+  @override
+  String get tyrePosRoleInner => 'اندرونی';
+
+  @override
+  String get tyrePosRoleOuter => 'بیرونی';
+
+  @override
+  String get tyreEditorSectionMeasurements => 'پیمائشیں';
+
+  @override
+  String get tyreEditorSectionTyre => 'ٹائر';
+
+  @override
+  String get tyreEditorFittedTitle => 'لگا ہوا ٹائر';
+
+  @override
+  String tyreEditorFittedOn(String date) {
+    return '$date کو لگایا گیا';
+  }
+
+  @override
+  String tyreEditorKmAtFitment(String km) {
+    return 'لگاتے وقت $km کلومیٹر';
+  }
+
+  @override
+  String tyreEditorKmRun(String km) {
+    return 'لگانے کے بعد $km کلومیٹر چلا';
+  }
+
+  @override
+  String get tyreEditorFittedSerialMissing => 'سیریل نمبر درج نہیں';
+
+  @override
+  String get tyreEditorFittedNotLoaded => 'لگا ہوا ٹائر لوڈ نہیں ہوا';
+
+  @override
+  String get tyreEditorFittedNotLoadedHint =>
+      'ٹائر رجسٹر نہیں پڑھا جا سکا۔ آپ پھر بھی یہ پہیہ درج کر سکتے ہیں۔';
+
+  @override
+  String get tyreEditorFittedNone => 'اس جگہ کے لیے کوئی ٹائر ریکارڈ میں نہیں';
+
+  @override
+  String tyreEditorSerialDiffers(String serial) {
+    return 'ریکارڈ والے ٹائر سے مختلف ($serial)';
+  }
+
+  @override
+  String get tyreEditorUnitPsi => 'psi';
+
+  @override
+  String get tyreEditorUnitMm => 'ملی میٹر';
+
+  @override
+  String get tyreEditorNumberInvalid => 'ایک عدد درج کریں۔';
+
+  @override
+  String get tyreEditorPressureRange => '0 سے 200 psi تک دباؤ درج کریں۔';
+
+  @override
+  String get tyreEditorTreadRange =>
+      '0 سے 30 ملی میٹر تک ٹریڈ کی گہرائی درج کریں۔';
+
+  @override
+  String get tyreEditorPressureUnusual =>
+      'ٹائر کے لیے غیر معمولی دباؤ۔ ریڈنگ چیک کریں۔';
+
+  @override
+  String get tyreEditorTreadUnusual =>
+      'ٹریڈ کی غیر معمولی گہرائی۔ ریڈنگ چیک کریں۔';
+
+  @override
+  String tyreEditorPreviousReading(String date, String values) {
+    return 'آخری معائنہ $date: $values';
+  }
+
+  @override
+  String tyreEditorPreviousReadingUndated(String values) {
+    return 'آخری معائنہ: $values';
+  }
+
+  @override
+  String get tyreEditorConditionSelected => 'منتخب';
+
+  @override
+  String get tyreEditorPositionMap => 'گاڑی پر جگہ';
 }

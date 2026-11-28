@@ -20,6 +20,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/sync/command_registry.dart';
 import 'package:tyre_pulse/core/sync/sync_engine.dart';
@@ -126,6 +127,33 @@ final class SupabaseMediaUploader extends SupabaseGateway
     required String bucket,
     required String localPath,
     required String fileName,
+  }) async {
+    String? remotePath;
+    try {
+      return await _upload(
+        bucket: bucket,
+        localPath: localPath,
+        fileName: fileName,
+        onPath: (String path) => remotePath = path,
+      );
+    } on SupabaseFailure catch (failure) {
+      // A 409 on a retry means an earlier attempt landed but its answer was
+      // lost: the object is already there under this exact name.
+      final MediaUploadResult? landed = alreadyUploadedResult(
+        failure,
+        bucket: bucket,
+        remotePath: remotePath,
+      );
+      if (landed != null) return landed;
+      rethrow;
+    }
+  }
+
+  Future<MediaUploadResult> _upload({
+    required String bucket,
+    required String localPath,
+    required String fileName,
+    required void Function(String path) onPath,
   }) {
     return guard(() async {
       final String remotePath = storageObjectPath(
@@ -133,6 +161,7 @@ final class SupabaseMediaUploader extends SupabaseGateway
         fileName: fileName,
         userId: _client.auth.currentUser?.id,
       );
+      onPath(remotePath);
       await _client.storage.from(bucket).upload(
             remotePath,
             File(localPath),
@@ -148,6 +177,52 @@ final class SupabaseMediaUploader extends SupabaseGateway
     });
   }
 }
+
+/// The result for an upload refused with 409 "already exists": every queued
+/// object name is unique to one photo, so the object is that photo, stored by
+/// an earlier attempt whose answer was lost. Null for any other failure.
+@visibleForTesting
+MediaUploadResult? alreadyUploadedResult(
+  SupabaseFailure failure, {
+  required String bucket,
+  required String? remotePath,
+}) {
+  if (remotePath == null || remotePath.isEmpty) return null;
+  if (failure.code != '409' &&
+      failure.cause != SupabaseFailureCause.uniqueViolation) {
+    return null;
+  }
+  return MediaUploadResult(
+    remotePath: remotePath,
+    remoteRef: 'tp-storage://$bucket/$remotePath',
+  );
+}
+
+/// Bucket of queued job completion photos.
+const String workshopCompletionMediaBucket = 'tyre-photos';
+
+/// File-name prefix that marks a queued photo as job completion evidence.
+const String workshopCompletionMediaPrefix = 'jobdone_';
+
+/// Bucket of queued wash and meter-log photos. The web app (`uploadWashPhoto`
+/// in `src/lib/api/washRecords.js`) and the released phone app
+/// (`uploadModulePhoto`) both write these to the private `tyre-photos`
+/// bucket under `modules/<module>/<user>/`, and store `tp-storage://` refs.
+const String moduleMediaBucket = 'tyre-photos';
+
+/// File-name prefix that marks a queued photo as wash evidence
+/// (`modules/wash/<user>/...`).
+const String washMediaPrefix = 'washrec_';
+
+/// File-name prefix that marks a queued photo as an odometer / engine-hours
+/// gauge photo (`modules/meter-log/<user>/...`).
+const String meterLogMediaPrefix = 'meterlog_';
+
+/// Storage module folder per module-photo prefix.
+const Map<String, String> _modulePhotoFolders = <String, String>{
+  washMediaPrefix: 'wash',
+  meterLogMediaPrefix: 'meter-log',
+};
 
 /// Builds the private Storage object path used by queued media uploads.
 ///
@@ -172,6 +247,36 @@ String storageObjectPath({
       'fileName',
       'must be one safe basename',
     );
+  }
+  if (bucket == workshopCompletionMediaBucket &&
+      name.startsWith(workshopCompletionMediaPrefix)) {
+    // Job completion photos land where the workshop uploader puts them, so
+    // `submit_job_completion` can check the object is the technician's own.
+    final String owner = userId?.trim() ?? '';
+    if (owner.isEmpty) {
+      throw StateError(
+        'Job completion photos cannot be uploaded without a signed-in owner.',
+      );
+    }
+    final String ownerSegment =
+        owner.length <= 8 ? owner : owner.substring(0, 8);
+    return 'modules/workshop/$ownerSegment/$name';
+  }
+  if (bucket == moduleMediaBucket) {
+    for (final MapEntry<String, String> module in _modulePhotoFolders.entries) {
+      if (!name.startsWith(module.key)) continue;
+      // Same namespace the web and the released app use, so web viewers
+      // resolve these refs exactly like their own.
+      final String owner = userId?.trim() ?? '';
+      if (owner.isEmpty) {
+        throw StateError(
+          'Module photos cannot be uploaded without a signed-in owner.',
+        );
+      }
+      final String ownerSegment =
+          owner.length <= 8 ? owner : owner.substring(0, 8);
+      return 'modules/${module.value}/$ownerSegment/$name';
+    }
   }
   if (bucket != 'accident-photos') return name;
 

@@ -1,85 +1,56 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { render, screen, within, cleanup } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+
+vi.mock('../lib/api/accidentOwnership', () => ({
+  listMyAccidentTasks: vi.fn(async () => ({ ok: true, rows: [] })),
+}))
+
 import CaseTeamInbox from '../components/accidents/CaseTeamInbox'
+import { LanguageProvider, useLanguage } from '../contexts/LanguageContext'
 
-// CaseTeamInbox is purely presentational (Phase 4 team inbox): it is fed a ready
-// `items` array and never fetches. These tests pin the three honest states
-// (loading / empty / rows), the overdue-first ordering, and that it never throws
-// on partial rows.
+// The accidentOwnership namespace loads lazily; warm it once so synchronous
+// queries see the real English strings rather than the humanised placeholder.
+function WarmLocale() { const { t } = useLanguage(); return <span>{t('accidentOwnership.common.na')}</span> }
+beforeAll(async () => { render(<LanguageProvider><WarmLocale /></LanguageProvider>); await screen.findByText('N/A'); cleanup() })
 
-const yesterday = () => {
-  const d = new Date()
-  d.setDate(d.getDate() - 1)
-  return d.toISOString()
-}
-const nextWeek = () => {
-  const d = new Date()
-  d.setDate(d.getDate() + 7)
-  return d.toISOString()
-}
+// CaseTeamInbox is built on accident_my_tasks(): "Assigned to me" and "For my
+// team", overdue first, with honest loading / empty states.
+const wrap = (ui) => render(<MemoryRouter>{ui}</MemoryRouter>)
 
-describe('CaseTeamInbox honest states + ordering', () => {
-  it('renders a loading state when items is null (nothing known yet)', () => {
-    render(<CaseTeamInbox items={null} />)
-    expect(screen.getByText("My team's accident cases")).toBeInTheDocument()
-    expect(screen.getByText('Loading cases...')).toBeInTheDocument()
+describe('CaseTeamInbox (my accident tasks)', () => {
+  it('shows loading when items is null', () => {
+    wrap(<CaseTeamInbox items={null} />)
+    expect(screen.getByText('Loading your tasks...')).toBeInTheDocument()
   })
 
-  it('renders an empty state for an empty array', () => {
-    render(<CaseTeamInbox items={[]} />)
-    expect(screen.getByText('No cases assigned to your team.')).toBeInTheDocument()
-    expect(screen.queryByText('Loading cases...')).not.toBeInTheDocument()
+  it('shows an honest empty state', () => {
+    wrap(<CaseTeamInbox items={[]} />)
+    expect(screen.getByText('Nothing waiting for you on accident cases.')).toBeInTheDocument()
   })
 
-  it('renders a row per case with a status pill and due badge', () => {
+  it('splits mine from my team and puts overdue first', () => {
     const items = [
-      {
-        accident_id: 'a1', case_no: 'ACC-2026-001', workstream_key: 'insurance_claim',
-        status: 'in_progress', owner_role: 'Insurance Officer', team: 'Insurance',
-        site: 'NHC', country: 'KSA', due_at: nextWeek(),
-      },
+      { workstream_id: '1', accident_id: 'a1', reference_no: 'ACC-OK', workstream_key: 'repair', workstream_name: 'Repair', assigned_to_me: true, overdue: false, sla_state: 'running', days_in_step: 2, site: 'NHC', country: 'KSA' },
+      { workstream_id: '2', accident_id: 'a2', reference_no: 'ACC-LATE', workstream_key: 'assessment', workstream_name: 'Technical Assessment', assigned_to_me: true, overdue: true, sla_state: 'breached', days_in_step: 5 },
+      { workstream_id: '3', accident_id: 'a3', reference_no: 'ACC-TEAM', workstream_key: 'insurance', workstream_name: 'Insurance & Claim', assigned_to_me: false, owner_role: 'Admin', overdue: false, sla_state: 'none', days_in_step: 1 },
     ]
-    render(<CaseTeamInbox items={items} />)
-    expect(screen.getByText('Case ACC-2026-001')).toBeInTheDocument()
-    expect(screen.getByText('Insurance claim')).toBeInTheDocument()
-    expect(screen.getByText('In progress')).toBeInTheDocument()
-    expect(screen.getByText('Insurance')).toBeInTheDocument()
-    expect(screen.getByText('NHC, KSA')).toBeInTheDocument()
-    // one <li> row
-    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    wrap(<CaseTeamInbox items={items} />)
+    const mine = screen.getByText(/Assigned to me/).closest('div')
+    const rows = within(mine).getAllByRole('listitem')
+    expect(rows[0]).toHaveTextContent('ACC-LATE')
+    expect(rows[0]).toHaveTextContent('Overdue')
+    expect(rows[1]).toHaveTextContent('ACC-OK')
+    const team = screen.getByText(/For my team/).closest('div')
+    expect(within(team).getByText('Case ACC-TEAM')).toBeInTheDocument()
+    expect(within(team).getByText('Admin')).toBeInTheDocument()
+    expect(screen.getByText(/3 open · 1 overdue/)).toBeInTheDocument()
+    expect(rows[0].querySelector('a').getAttribute('href')).toBe('/accidents/a2?tab=workstreams')
   })
 
-  it('sorts overdue cases first regardless of input order', () => {
-    const items = [
-      {
-        accident_id: 'ontime', case_no: 'ACC-OK', workstream_key: 'repair',
-        status: 'open', team: 'Workshop', country: 'UAE', due_at: nextWeek(),
-      },
-      {
-        accident_id: 'late', case_no: 'ACC-LATE', workstream_key: 'final_inspection',
-        status: 'open', team: 'Workshop', country: 'UAE', due_at: yesterday(),
-      },
-    ]
-    render(<CaseTeamInbox items={items} />)
-    const rows = screen.getAllByRole('listitem')
-    expect(rows).toHaveLength(2)
-    // The overdue case sorts to the top.
-    expect(within(rows[0]).getByText('Case ACC-LATE')).toBeInTheDocument()
-    expect(within(rows[1]).getByText('Case ACC-OK')).toBeInTheDocument()
-    // Overdue summary badge reflects the single overdue case.
-    expect(screen.getByText('1 overdue')).toBeInTheDocument()
-  })
-
-  it('never throws on partial / malformed rows and shows honest fallbacks', () => {
-    const items = [
-      {}, // no fields at all
-      { accident_id: 'a2', status: 'mystery_status', due_at: 'not-a-date' },
-    ]
-    expect(() => render(<CaseTeamInbox items={items} />)).not.toThrow()
-    // Unknown status renders its raw token honestly rather than being dropped.
-    expect(screen.getByText('mystery_status')).toBeInTheDocument()
-    // An unparseable / missing due date reads as "No due date", never overdue.
-    expect(screen.getAllByText('No due date').length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('listitem')).toHaveLength(2)
+  it('compact mode lists at most five rows', () => {
+    const items = Array.from({ length: 8 }, (_, i) => ({ workstream_id: String(i), accident_id: `a${i}`, reference_no: `R${i}`, workstream_key: 'repair', assigned_to_me: true, sla_state: 'none', days_in_step: i }))
+    wrap(<CaseTeamInbox items={items} compact />)
+    expect(screen.getAllByRole('listitem')).toHaveLength(5)
   })
 })

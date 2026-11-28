@@ -43,6 +43,8 @@ import {
   listTagEvents, assignTag, unassignTag, retireTag, reactivateTag,
 } from '../lib/api/rfid'
 import { useSettings } from '../contexts/SettingsContext'
+import { useAuth } from '../contexts/AuthContext'
+import useWedgeScanner from '../hooks/useWedgeScanner'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, exportToPdf, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { parseWorkbook } from '../lib/import/parseWorkbook'
@@ -435,6 +437,10 @@ export default function RfidRegistry() {
   const [scanBusy, setScanBusy] = useState(false)
   const [scanResults, setScanResults] = useState([])
   const scanInput = useRef(null)
+  // USB / keyboard-wedge RFID or barcode reader with no field focused: look
+  // the tag up straight away. Admin only for now (owner rule 2026-11-27).
+  const { profile: authProfile, isSuperAdmin: authSuper } = useAuth() || {}
+  useWedgeScanner((code) => { lookupScan(code) }, { enabled: authSuper || authProfile?.role === 'Admin' })
 
   const armScanner = (multi) => {
     setScanMulti(multi)

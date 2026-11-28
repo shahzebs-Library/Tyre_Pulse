@@ -5,7 +5,7 @@ publish_to: "none"
 # The Android versionCode is set by CI. Read docs/BOOTSTRAP.md before changing
 # this by hand: the production listing already has a version code and Play
 # rejects a lower one (spec section 69).
-version: 0.1.2+8
+version: 0.1.3+9
 
 environment:
   # Deliberately broad. CI pins the real SDK by using the Flutter stable
@@ -86,6 +86,7 @@ dependencies:
   # 4.14.x pulls webview_flutter_wkwebview 3.27, which needs Flutter >= 3.47
   # (CI pins 3.47.2).
   webview_flutter: ^4.14.1
+  universal_ble: ^3.4.2
 
   # Packages for later phases (PDF and sharing) are added at
   # the phase that needs them. Spec section 64: do not add a package to
@@ -108,4 +109,9 @@ flutter:
     - assets/vehicle_photos/
     - assets/vehicle_multiview/
     - assets/vehicle_multiview_views/
+    - assets/wash_types/
+    - assets/wash_vehicles/
     - assets/document_specs/
+    # Condition tile pictures for the inspection tyre editor (optional: the
+    # drawn glyph is the fallback). See the folder's README.
+    - assets/tyre_conditions/

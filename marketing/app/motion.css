@@ -733,8 +733,9 @@ main:has(> .home-hero) > section:nth-of-type(n + 3) {
   content-visibility: auto;
   contain-intrinsic-size: auto 900px;
 }
-@media print { main > section, .footer { content-visibility: visible; } }
-.footer { content-visibility: auto; contain-intrinsic-size: auto 420px; }
+@media print { main > section { content-visibility: visible; } }
+/* The footer is NOT skipped: it holds every site link, and audit tools and crawlers that read
+   the rendered page must see it. It is small, so rendering it costs almost nothing. */
 
 /* ---------- Home: field issue to closed job (pipeline) ---------- */
 .dark-lead { max-width: 680px; color: #c9c9c2; margin: 6px 0 22px; font-size: 1.02rem; }

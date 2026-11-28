@@ -25,6 +25,7 @@ abstract final class TpBottomSheet {
     String? title,
     bool isDismissible = true,
     bool isScrollControlled = true,
+    bool useSafeArea = true,
   }) {
     final TpPalette palette = TpPalette.of(context);
 
@@ -35,6 +36,11 @@ abstract final class TpBottomSheet {
       isDismissible: isDismissible,
       enableDrag: isDismissible,
       isScrollControlled: isScrollControlled,
+      // A scroll-controlled sheet can grow to full height. Without this the
+      // route strips the top inset (MediaQuery.removePadding removeTop), so
+      // the SafeArea below never sees it and a tall sheet's header is drawn
+      // under the iPhone status bar / Dynamic Island.
+      useSafeArea: useSafeArea,
       backgroundColor: palette.surface,
       barrierColor: palette.overlay,
       shape: const RoundedRectangleBorder(

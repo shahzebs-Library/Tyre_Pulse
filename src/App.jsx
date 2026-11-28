@@ -298,6 +298,7 @@ const WorkshopTv             = lazy(() => import('./pages/WorkshopTv'))
 const MaintenanceCalendar    = lazy(() => import('./pages/MaintenanceCalendar'))
 const DriverManagement       = lazy(() => import('./pages/DriverManagement'))
 const DriverWorkspace        = lazy(() => import('./pages/DriverWorkspace'))
+const DriverConcerns         = lazy(() => import('./pages/DriverConcerns'))
 const CostCenter             = lazy(() => import('./pages/CostCenter'))
 const PerformanceBenchmark   = lazy(() => import('./pages/PerformanceBenchmark'))
 const Procurement            = lazy(() => import('./pages/Procurement'))
@@ -751,6 +752,7 @@ function MainApp() {
                       <Route path="/vendor-intelligence"     element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ModuleRoute moduleKey="vendor_intelligence"><VendorIntelligence /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/driver-management"       element={<Safe><ModuleRoute moduleKey="fleet_master"><DriverManagement /></ModuleRoute></Safe>} />
                       <Route path="/driver-workspace" element={<Safe><RoleRoute allowed={['Driver', 'Manager', 'Director']}><DriverWorkspace /></RoleRoute></Safe>} />
+                      <Route path="/driver-concerns" element={<Safe><RoleRoute allowed={['Fleet Supervisor', 'Fleet Foreman', 'Fleet Incharge', 'HR Officer', 'Manager', 'Director', 'Admin']} moduleKey="driver_concerns"><DriverConcerns /></RoleRoute></Safe>} />
                       <Route path="/fleet-intelligence"      element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetIntelligence /></ModuleRoute></Safe>} />
                       <Route path="/fleet-health"            element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetHealthBoard /></ModuleRoute></Safe>} />
                       <Route path="/advanced-analytics"      element={<Safe><ModuleRoute moduleKey="analytics"><AdvancedAnalytics /></ModuleRoute></Safe>} />
@@ -847,7 +849,7 @@ function MainApp() {
                       <Route path="/vehicle-checkinout"    element={<Safe><RoleRoute allowed={['Admin']}><VehicleCheckInOut /></RoleRoute></Safe>} />
                       <Route path="/retread-claims"        element={<Safe><RoleRoute allowed={['Admin']}><RetreadClaims /></RoleRoute></Safe>} />
                       <Route path="/batteries"             element={<Safe><RoleRoute allowed={['Admin']}><Batteries /></RoleRoute></Safe>} />
-                      <Route path="/telematics-devices"    element={<Safe><RoleRoute allowed={['Admin']}><TelematicsDevices /></RoleRoute></Safe>} />
+                      <Route path="/telematics-devices"    element={<Safe><RoleRoute allowed={['Admin']} strict><TelematicsDevices /></RoleRoute></Safe>} />
                       <Route path="/fuel-delivery"         element={<Safe><RoleRoute allowed={['Admin']}><FuelDelivery /></RoleRoute></Safe>} />
                       <Route path="/shifts"                element={<Safe><RoleRoute allowed={['Admin']}><ModuleRoute moduleKey="shifts"><ShiftScheduling /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/workforce-daily" element={<Safe><WorkforceDailyWork /></Safe>} />

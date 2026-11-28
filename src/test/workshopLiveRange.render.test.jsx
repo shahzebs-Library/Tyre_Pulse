@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { LanguageProvider } from '../contexts/LanguageContext'
 
 vi.mock('../lib/supabase', () => {
   const channel = { on: () => channel, subscribe: () => channel }
@@ -13,7 +14,7 @@ vi.mock('../lib/api/workshopLive', () => ({
   loadLiveBoard: vi.fn(),
   listTechnicianSkills: vi.fn(async () => ({})),
 }))
-vi.mock('../lib/api/workshopAnalytics', () => ({ loadRangeActivity: vi.fn() }))
+vi.mock('../lib/api/workshopAnalytics', () => ({ loadRangeActivity: vi.fn(async () => ({ events: [], completedJobs: [], shifts: [] })) }))
 
 import * as live from '../lib/api/workshopLive'
 import * as hist from '../lib/api/workshopAnalytics'
@@ -30,7 +31,7 @@ const liveBoard = () => ({
   presentByUser: {},
 })
 
-const mount = () => render(<MemoryRouter><WorkshopLive /></MemoryRouter>)
+const mount = () => render(<LanguageProvider><MemoryRouter><WorkshopLive /></MemoryRouter></LanguageProvider>)
 
 describe('WorkshopLive date range', () => {
   it('defaults to today, reads nothing extra, and says when nothing was recorded', async () => {
@@ -42,7 +43,8 @@ describe('WorkshopLive date range', () => {
     expect(screen.getAllByText(rangeLabel(today.from, today.to)).length).toBeGreaterThan(0)
     expect(screen.getAllByText('Now').length).toBeGreaterThan(0)
     // No activity today: utilisation is N/A, not 0%.
-    expect(screen.getAllByText(/No technician activity recorded in/).length).toBeGreaterThan(0)
+    // The workshop strings load on demand; wait for them rather than read too early.
+    expect((await screen.findAllByText(/No technician activity recorded in/)).length).toBeGreaterThan(0)
     expect(screen.queryByText('0%')).toBeNull()
   })
 

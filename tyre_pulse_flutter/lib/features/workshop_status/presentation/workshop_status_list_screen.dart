@@ -24,7 +24,10 @@ import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/network/supabase_error_mapper.dart';
 import 'package:tyre_pulse/features/workshop_status/data/workshop_status_repository.dart';
+import 'package:tyre_pulse/features/workshop_status/domain/workshop_intake.dart';
 import 'package:tyre_pulse/features/workshop_status/domain/workshop_status_record.dart';
+import 'package:tyre_pulse/features/workshop_status/presentation/workshop_intake_copy.dart';
+import 'package:tyre_pulse/features/workshop_status/presentation/workshop_intake_screen.dart';
 import 'package:tyre_pulse/features/workshop_status/presentation/workshop_status_copy.dart';
 import 'package:tyre_pulse/features/workshop_status/presentation/workshop_status_detail_screen.dart';
 import 'package:tyre_pulse/features/workshop_status/workshop_status_providers.dart';
@@ -35,6 +38,7 @@ abstract final class WorkshopStatusKeys {
   static const Key scope = ValueKey<String>('workshopStatus.scope');
   static const Key list = ValueKey<String>('workshopStatus.list');
   static const Key truncated = ValueKey<String>('workshopStatus.truncated');
+  static const Key intake = ValueKey<String>('workshopStatus.intake');
   static Key row(String id) => ValueKey<String>('workshopStatus.row.$id');
   static Key staleBadge(String id) =>
       ValueKey<String>('workshopStatus.stale.$id');
@@ -172,6 +176,7 @@ class _WorkshopStatusListScreenState
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(TpSpace.lg),
             children: <Widget>[
+              const _IntakeEntry(),
               TpSearchField(
                 key: WorkshopStatusKeys.search,
                 controller: _search,
@@ -250,6 +255,51 @@ class _WorkshopStatusListScreenState
           ),
         );
       },
+    );
+  }
+}
+
+/// Entry to Vehicle intake: shows how many vehicles wait for me to confirm.
+/// Renders nothing when the server gives no intake permission.
+class _IntakeEntry extends ConsumerWidget {
+  const _IntakeEntry();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final WorkshopIntakePermissions? p =
+        ref.watch(workshopIntakePermissionsProvider).asData?.value;
+    if (p == null || !p.any) return const SizedBox.shrink();
+    final WorkshopIntakeCopy copy = WorkshopIntakeCopy.of(context);
+    final int waiting = p.intakeConfirm
+        ? (ref.watch(workshopIntakeWaitingProvider).asData?.value.length ?? 0)
+        : 0;
+    final TpPalette palette = TpPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: TpSpace.md),
+      child: TpCard(
+        key: WorkshopStatusKeys.intake,
+        borderColor:
+            waiting > 0 ? palette.forStatus(TpStatus.warning).base : null,
+        onTap: () => Navigator.of(context).push<void>(
+          MaterialPageRoute<void>(
+            builder: (BuildContext _) => const WorkshopIntakeScreen(),
+          ),
+        ),
+        padding: const EdgeInsets.all(TpSpace.md),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.move_to_inbox_outlined, color: palette.textSecondary),
+            const SizedBox(width: TpSpace.sm),
+            Expanded(
+              child: Text(
+                waiting > 0 ? copy.waiting(waiting) : copy('open'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            Icon(Icons.chevron_right, color: palette.textMuted),
+          ],
+        ),
+      ),
     );
   }
 }

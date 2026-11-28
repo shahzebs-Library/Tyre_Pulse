@@ -143,10 +143,24 @@ export default function TopBar({
           alone: a 360px bar has to fit menu, brand, context, search, bell and
           avatar, and the mark is the part that stays recognisable when small. */}
       <div className="tp-header-brand flex items-center gap-2 min-w-0 flex-shrink-0">
-        <BrandIcon src={appIcon} custom={hasCustomIcon} size={isMobile ? 20 : 18} className="flex-shrink-0" />
-        <span className="tp-wordmark font-extrabold text-sm tracking-tight hidden sm:inline">
-          TyrePulse
-        </span>
+        {hasCustomIcon ? (
+          <>
+            <BrandIcon src={appIcon} custom size={isMobile ? 20 : 18} className="flex-shrink-0" />
+            <span className="tp-wordmark font-extrabold text-sm tracking-tight hidden sm:inline">
+              TyrePulse
+            </span>
+          </>
+        ) : (
+          <>
+            {/* Narrow bars: the TP app mark alone. From 640px: the approved
+                lockup art (never re-typed), ink on light, reverse on dark. */}
+            <BrandIcon src={appIcon} size={isMobile ? 20 : 18} className="flex-shrink-0 sm:hidden" />
+            <img src="/brand/tyre-pulse-wordmark-ink.svg" alt="Tyre Pulse" width="92" height="20"
+              className="tp-brand-lockup tp-brand-lockup--ink hidden sm:block" />
+            <img src="/brand/tyre-pulse-wordmark-reverse.svg" alt="Tyre Pulse" width="92" height="20"
+              className="tp-brand-lockup tp-brand-lockup--reverse hidden sm:block" />
+          </>
+        )}
       </div>
 
       {/* ── Desktop: wide search trigger carrying its keyboard hint ─────────── */}

@@ -20,6 +20,7 @@ import 'package:tyre_pulse/features/inspections/data/inspection_photo_capture.da
 import 'package:tyre_pulse/features/inspections/data/inspection_photo_uploader.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_plan_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_previous_meters.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_previous_tyre_readings.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_remote_repository.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_submission_queue.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart';
@@ -137,5 +138,26 @@ final previousMetersProvider =
   (ref, assetNo) =>
       ref.watch(inspectionPreviousMetersRepositoryProvider).forAsset(assetNo),
   // A warning-only read must never schedule retry timers.
+  retry: (int retryCount, Object error) => null,
+);
+
+final Provider<InspectionPreviousTyreReadingsRepository>
+    inspectionPreviousTyreReadingsRepositoryProvider =
+    Provider<InspectionPreviousTyreReadingsRepository>(
+  (ref) => SupabaseInspectionPreviousTyreReadingsRepository(
+    ref.watch(supabaseClientProvider),
+    organisationId: ref.watch(workspaceContextProvider)?.companyId,
+  ),
+);
+
+/// The asset's last synced inspection, per wheel slot of the layout, for the
+/// tyre editor's "Last inspection" hint. Best-effort: never errors, empty
+/// when offline or there is no earlier inspection.
+final previousTyreReadingsProvider = FutureProvider.autoDispose.family<
+    Map<String, PreviousTyreReading>, ({String assetNo, String layoutKey})>(
+  (ref, key) => ref
+      .watch(inspectionPreviousTyreReadingsRepositoryProvider)
+      .latestForAsset(assetNo: key.assetNo, layoutKey: key.layoutKey),
+  // A hint-only read must never schedule retry timers.
   retry: (int retryCount, Object error) => null,
 );

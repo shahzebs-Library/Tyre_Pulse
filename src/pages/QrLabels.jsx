@@ -49,6 +49,8 @@ import QrPrintSheet from '../components/qr/QrPrintSheet'
 import { toUserMessage } from '../lib/safeError'
 import { exportToExcel, reportFileName, reportDateLabel } from '../lib/exportUtils'
 import { getCompanyLogo } from '../lib/api/brandLogo'
+import { buildZpl, buildEscPos, DEFAULT_LABEL_SIZE } from '../lib/thermalLabel'
+import { printerSupport, sendToUsbPrinter, sendToSerialPrinter } from '../lib/webDevicePrint'
 import './QrLabels.css'
 
 // Preview pixels per printed millimetre. The preview is a scaled picture of the
@@ -123,7 +125,9 @@ function LabelHeader({ showLogo, companyLogo, logoUrl, className, style, imgStyl
 }
 
 export default function QrLabels() {
-  const { profile } = useAuth()
+  const { profile, isSuperAdmin } = useAuth()
+  // Direct thermal printing is admin-only for now (owner rule 2026-11-27).
+  const canThermal = isSuperAdmin || profile?.role === 'Admin'
   const { activeCountry } = useSettings()
   const loadId = useRef(0)
 
@@ -470,6 +474,31 @@ export default function QrLabels() {
     setPrintEntries(entries)
     recordBatch('printed', entries, entries.length)
     setTimeout(() => { try { window.print() } catch { /* no print dialog here */ } }, 60)
+  }
+  // Admin: send the labels straight to a USB (WebUSB) or serial / Bluetooth
+  // serial (Web Serial) thermal printer. ZPL for Zebra-class printers, ESC/POS
+  // for receipt-style ones. A browser without either API gets the PDF sheet.
+  async function handleThermal(lang) {
+    const entries = expandCopies(readyEntries, copies)
+    if (!entries.length || !canThermal) return
+    const labels = entries.map((e) => ({ code: e.val, title: e.lines?.[0] || e.val, lines: (e.lines || []).slice(1) }))
+    const sup = printerSupport()
+    if (!sup.usb && !sup.serial) {
+      setNotice({ tone: 'warn', text: 'This browser cannot reach a thermal printer directly. Downloading the PDF sheet instead.' })
+      exportPDF(entries)
+      return
+    }
+    const data = lang === 'escpos' ? buildEscPos(labels) : buildZpl(labels, { size: DEFAULT_LABEL_SIZE })
+    try {
+      if (sup.usb) await sendToUsbPrinter(data)
+      else await sendToSerialPrinter(data)
+      recordBatch('printed', entries, entries.length)
+      setNotice({ tone: 'good', text: `Sent ${labels.length} label(s) to the printer.` })
+    } catch (err) {
+      // The user closing the device picker is not an error worth shouting about.
+      if (err?.name === 'NotFoundError') return
+      setNotice({ tone: 'warn', text: toUserMessage(err, 'The printer did not accept the labels. Check it is on and try again, or use the PDF sheet.') })
+    }
   }
   useEffect(() => {
     const done = () => setPrintEntries(null)
@@ -1068,6 +1097,18 @@ export default function QrLabels() {
                   <button type="button" className="cc-btn-ghost" disabled={readyItems.length === 0} onClick={() => handlePrint()}>
                     <Printer size={14} aria-hidden="true" /> Print
                   </button>
+                  {canThermal && (
+                    <>
+                      <button type="button" className="cc-btn-ghost" disabled={readyItems.length === 0} onClick={() => handleThermal('zpl')}
+                        title="Send to a USB or serial thermal label printer (ZPL)">
+                        <Printer size={14} aria-hidden="true" /> Thermal (ZPL)
+                      </button>
+                      <button type="button" className="cc-btn-ghost" disabled={readyItems.length === 0} onClick={() => handleThermal('escpos')}
+                        title="Send to an ESC/POS label or receipt printer">
+                        <Printer size={14} aria-hidden="true" /> Thermal (ESC/POS)
+                      </button>
+                    </>
+                  )}
                   <div className="ql-menu" ref={exportRef}>
                     <button type="button" className="cc-btn-ghost" aria-haspopup="menu" aria-expanded={exportMenu}
                       disabled={selectedItems.length === 0 || exporting} onClick={() => setExportMenu(v => !v)}>

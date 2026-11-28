@@ -660,6 +660,22 @@ SupabaseFailure _fromStorage(StorageException error) {
     return _offline(error, raw, code: status.isEmpty ? null : status);
   }
 
+  // Storage reports a bad or expired token as `InvalidJWT`. The current API
+  // sends 401, but the legacy error body carries HTTP 400 with the same code,
+  // and `StorageException.statusCode` then reads '400'. That is a lapsed
+  // session (refresh and retry), never a refusal of the file itself.
+  if (isStorageAuthError(error.error, raw)) {
+    return _failure(
+      error: error,
+      raw: raw,
+      code: status.isEmpty ? null : status,
+      cause: SupabaseFailureCause.unauthenticated,
+      kind: AppErrorKind.authentication,
+      message: 'Your session has ended. Sign in again to continue.',
+      retryable: true,
+    );
+  }
+
   switch (status) {
     case '404':
       return _failure(
@@ -728,6 +744,24 @@ SupabaseFailure _fromStorage(StorageException error) {
     message: 'That file could not be transferred. It is still on this device.',
     retryable: true,
   );
+}
+
+/// Whether a Storage error is about the caller's token rather than the file:
+/// the `InvalidJWT` code, or a message naming an expired / invalid JWT.
+bool isStorageAuthError(String? code, String message) {
+  final String c = (code ?? '').trim().toLowerCase();
+  if (c == 'invalidjwt' || c == 'unauthorized' || c == 'unauthorised') {
+    return true;
+  }
+  final String m = message.toLowerCase();
+  return m.contains('invalidjwt') ||
+      m.contains('jwt expired') ||
+      m.contains('invalid jwt') ||
+      m.contains('jwt malformed') ||
+      m.contains('exp claim') ||
+      m.contains('invalid compact jws') ||
+      m.contains('token has expired') ||
+      m.contains('token is expired');
 }
 
 // ---------------------------------------------------------------------------

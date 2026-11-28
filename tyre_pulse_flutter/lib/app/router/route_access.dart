@@ -189,6 +189,9 @@ abstract final class TpRouteGuards {
     TpRouteId.handover: ModuleGuarded(RouteModule.handover),
     TpRouteId.newHandover: ModuleGuarded(RouteModule.handover),
     TpRouteId.handoverDetail: ModuleGuarded(RouteModule.handover),
+    // Fleet Supervisor team. Uses the handover module the role already holds;
+    // the screen also asks the server, which refuses any other role (42501).
+    TpRouteId.myDrivers: ModuleGuarded(RouteModule.handover),
 
     // Checklists.
     TpRouteId.checklists: ModuleGuarded(RouteModule.checklists),
@@ -213,6 +216,7 @@ abstract final class TpRouteGuards {
 
     // Accidents. Filing one is a separate module from reading the register.
     TpRouteId.accidentDashboard: ModuleGuarded(RouteModule.accidents),
+    TpRouteId.accidentTasks: ModuleGuarded(RouteModule.accidents),
     TpRouteId.accidentDetail: ModuleGuarded(RouteModule.accidents),
     TpRouteId.accidentCase: ModuleGuarded(RouteModule.accidents),
     TpRouteId.accidentReport: ModuleGuarded(RouteModule.reportAccident),

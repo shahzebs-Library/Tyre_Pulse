@@ -22,6 +22,7 @@ import 'package:tyre_pulse/core/database/app_database.dart';
 import 'package:tyre_pulse/core/database/database_constants.dart';
 import 'package:tyre_pulse/core/network/supabase_gateway.dart';
 import 'package:tyre_pulse/core/network/supabase_tables.dart';
+import 'package:tyre_pulse/core/workspace/company_scope.dart';
 import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 
@@ -57,9 +58,13 @@ abstract interface class HomeRemoteRepository {
 final class SupabaseHomeRemoteRepository
     with SupabaseGateway
     implements HomeRemoteRepository {
-  SupabaseHomeRemoteRepository(this._client);
+  SupabaseHomeRemoteRepository(this._client, {String? companyId})
+      : _companyId = companyId;
 
   final SupabaseClient _client;
+
+  /// The caller's active company; counts are pinned to it (company_scope).
+  final String? _companyId;
 
   @override
   Future<HomePendingApprovals> pendingInspectionApprovals({
@@ -68,20 +73,26 @@ final class SupabaseHomeRemoteRepository
     final String? filter = homeCountryFilter(country);
 
     Future<int> count() => guard<int>(() async {
-          var query = _client
-              .from(SupabaseTables.inspections)
-              .count()
-              .eq('approval_status', 'pending_approval');
+          var query = pinCompany(
+            _client
+                .from(SupabaseTables.inspections)
+                .count()
+                .eq('approval_status', 'pending_approval'),
+            _companyId,
+          );
           if (filter != null) query = query.or(filter);
           return await query;
         });
 
     Future<List<Map<String, dynamic>>> newest() =>
         guard<List<Map<String, dynamic>>>(() async {
-          var query = _client
-              .from(SupabaseTables.inspections)
-              .select('created_at')
-              .eq('approval_status', 'pending_approval');
+          var query = pinCompany(
+            _client
+                .from(SupabaseTables.inspections)
+                .select('created_at')
+                .eq('approval_status', 'pending_approval'),
+            _companyId,
+          );
           if (filter != null) query = query.or(filter);
           return await query.order('created_at', ascending: false).limit(1);
         });

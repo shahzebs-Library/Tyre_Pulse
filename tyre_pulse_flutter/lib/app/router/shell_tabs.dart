@@ -26,9 +26,14 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
+import 'package:tyre_pulse/core/permissions/access_resolver.dart';
+import 'package:tyre_pulse/core/permissions/inspection_signers.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/core/permissions/roles.dart';
 
 /// The most destinations the bottom bar may carry.
 ///
@@ -217,14 +222,68 @@ abstract final class TpShell {
   }
 }
 
+/// The bar some roles get instead of the default priority order, as the
+/// non-anchored routeIds to show (Home and Profile are always added). Null
+/// keeps the default. Owner rule 2026-11-27:
+///
+/// - Driver: Home, Meter, Washing, Profile.
+/// - Tyre Man: Home, Inspect, Checklists, Profile (Washing off the bar).
+/// - Tyre Data Collector: Home, Approvals, Inspect, Profile.
+///
+/// A listed destination still has to pass its own guard, so a role whose
+/// module is off simply has one tab fewer; everything not on the bar goes to
+/// the overflow and stays reachable from Home.
+List<String>? preferredPrimaryTabsFor(UserRole role) => switch (role.id) {
+      RoleId.driver => const <String>[TpRouteId.meterLog, TpRouteId.washing],
+      RoleId.tyreMan => const <String>[
+          TpRouteId.newInspection,
+          TpRouteId.checklists,
+        ],
+      RoleId.tyreDataCollector => const <String>[
+          TpRouteId.inspectionApprovals,
+          TpRouteId.newInspection,
+        ],
+      _ => null,
+    };
+
+/// The role-dependent inputs to [resolveShellTabs].
+typedef TpShellTabPolicy = ({List<String>? preferred, bool canSignApprovals});
+
+/// [preferredPrimaryTabsFor] and the V606 signer test for the signed-in
+/// person. Before an [AccessState] exists (boot, or a shell test that only
+/// overrides the route resolver) it is the default bar: no preference, and
+/// Approvals left to its route guard.
+final Provider<TpShellTabPolicy> shellTabPolicyProvider =
+    Provider<TpShellTabPolicy>((ref) {
+  final AccessState access;
+  try {
+    access = ref.watch(accessStateProvider);
+  } on Object {
+    return (preferred: null, canSignApprovals: true);
+  }
+  return (
+    preferred: preferredPrimaryTabsFor(access.role),
+    canSignApprovals: canSignInspectionApprovals(access),
+  );
+});
+
 /// Works out what the bottom bar shows.
 ///
 /// Pure: it takes the destinations and an access predicate, so the rule can be
 /// tested without a router, a session or a permission service.
+///
+/// [preferredPrimary] (see [preferredPrimaryTabsFor]) replaces the default
+/// candidates with exactly those routeIds, in that priority. With
+/// [canSignApprovals] false the Approvals tab is never on the bar: reaching
+/// the queue is wider than being allowed to sign (V606), and a tab inviting
+/// a decision the server refuses is worse than one tap more to read it. It
+/// stays in the overflow.
 TpShellTabLayout resolveShellTabs({
   required List<TpShellDestination> destinations,
   required bool Function(RouteGuard guard) canAccess,
   int maxTabs = kMaxPrimaryTabs,
+  List<String>? preferredPrimary,
+  bool canSignApprovals = true,
 }) {
   final List<TpShellDestination> accessible =
       destinations.where((TpShellDestination d) => canAccess(d.guard)).toList();
@@ -232,9 +291,22 @@ TpShellTabLayout resolveShellTabs({
   final List<TpShellDestination> anchors = accessible
       .where((TpShellDestination d) => d.isPrimary && d.isAnchored)
       .toList();
-  final List<TpShellDestination> candidates = accessible
-      .where((TpShellDestination d) => d.isPrimary && !d.isAnchored)
-      .toList();
+  bool barEligible(TpShellDestination d) =>
+      canSignApprovals || d.routeId != TpRouteId.inspectionApprovals;
+  final List<TpShellDestination> candidates = preferredPrimary == null
+      ? accessible
+          .where(
+            (TpShellDestination d) =>
+                d.isPrimary && !d.isAnchored && barEligible(d),
+          )
+          .toList()
+      : <TpShellDestination>[
+          for (final String id in preferredPrimary)
+            ...accessible.where(
+              (TpShellDestination d) =>
+                  d.routeId == id && !d.isAnchored && barEligible(d),
+            ),
+        ];
 
   // Anchors are placed first so they can never be squeezed out, then the
   // remaining slots are filled in declaration order, which is the priority

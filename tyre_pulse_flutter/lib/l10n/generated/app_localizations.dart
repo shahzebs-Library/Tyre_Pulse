@@ -388,6 +388,18 @@ abstract class AppLocalizations {
   /// **'Your account is waiting for approval or has been locked. Your administrator can put this right.'**
   String get accessBlockedMessage;
 
+  /// Re-reads the account from the server on the not-active screen, so an account approved meanwhile goes straight in.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get accessBlockedCheckAgain;
+
+  /// No description provided for @accessBlockedStillWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Your account is still not active. Ask your administrator to approve it.'**
+  String get accessBlockedStillWaiting;
+
   /// No description provided for @routeNotFoundTitle.
   ///
   /// In en, this message translates to:
@@ -3886,6 +3898,12 @@ abstract class AppLocalizations {
   /// **'Could not check'**
   String get homeStatUnavailableCaption;
 
+  /// Per-role Home tiles and rows, key=value pairs separated by ~. %count% %time% %a% %b% are replaced at runtime.
+  ///
+  /// In en, this message translates to:
+  /// **'meterTitle=Log today\'s meter~meterNotLogged=Not logged today~meterLogged=Logged %time%~problemTitle=Report a problem or breakdown~problemHint=Tell the workshop what is wrong~exceptionsTitle=Today\'s exceptions~offRoad=Off road~openAccidents=Open accidents~maintenanceOverdue=Maintenance overdue~tyresAttention=Tyres need attention~handoverTitle=Handovers awaiting your sign-off~reportAccident=Report an accident~approvalsTitle=Approvals waiting on you~approvalsSplit=%a% inspections • %b% checklists~issueTitle=Report an issue~issueHint=Something broken or unsafe~teamTitle=Team now~working=Working~waiting=Waiting~free=Free~teamNote=Free means checked in and not working. Absent cannot be counted: no attendance is recorded.~assignTitle=Assign jobs~assignHint=%count% open job cards with nobody assigned~assignGap=Opens the job card list. Assigning from the phone is not built yet.~myJobsTitle=My jobs~myJobsCount=%count% open~myJobsNone=No open jobs~plantTitle=Today\'s plant checks~sheetsDue=%count% sheets due~allDone=All done today~dailyTitle=Workshop Daily~dueToday=Due today~signTitle=Approvals to sign~signHint=%count% awaiting your signature~tyresDueTitle=Tyres due for replacement~myVehicle=My vehicle~noVehicle=No meter logged yet~wash=Record a wash~washDays=Last washed %count% days ago~washToday=Washed today~washNever=No wash recorded~dailyChecklist=Daily checklist~charges=My fines & charges~chargesHint=Fines, charges and your own sign-offs~summary=Daily summary & reports~alerts=Alerts~plan=Today\'s plan~planOpen=%count% open today~repair=Repair request~meter=Meter log~inspectionsDue=Inspections due today~checklistsToSign=Checklists to sign~waitingParts=Waiting for parts~blocked=Blocked over 30 minutes~requestParts=Request parts~recent=Recent inspections~reorder=Stock to reorder~sync=Pending sync~more=More~open=Open'**
+  String get homeRoleCopyCatalog;
+
   /// No description provided for @homeNoQuickActionsMessage.
   ///
   /// In en, this message translates to:
@@ -5203,8 +5221,14 @@ abstract class AppLocalizations {
   /// No description provided for @stockCountCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease~myCounts=My counts~transfers=Transfers~needsApproval=A count difference needs approval. Use Count to record what is on the shelf; an approver posts the change.~countNote=Your count is recorded for review. The stock balance changes only when an approver posts the difference.~countRecorded=Count recorded for review.~countSavedOnPhone=Count saved on this phone. It is sent when the connection is back.~countNoPlace=This stock line has no store or country, so the count cannot be recorded.~countNeedsConnection=The first count in this store needs a connection to open a count session.~countRefused=The count was not accepted:'**
+  /// **'title=Stock Count~items=Items~reorder=Need reorder~notToday=Not counted~search=Search description or site~all=All~low=Low stock~stale=Not counted today~empty=No stock items~emptyBody=No stock records match these filters.~count=Count~stockItem=Stock item~physicalCount=Physical count~reason=Reason (optional)~cancel=Cancel~save=Save count~invalid=Enter a count of zero or more.~offlineSaved=Count saved offline and queued for sync.~saveFailed=The stock count could not be saved.~loadFailed=Stock records could not be loaded.~Critical=Critical~Low=Low~OK=OK~onHand=on hand~add=Add stock~addTitle=Add stock~size=Tyre size~description=Description (optional)~site=Location (site)~quantity=Quantity~minLevel=Minimum level~criticalLevel=Critical level~sizeRequired=Enter a tyre size for this stock.~siteRequired=Enter a location (site) for this stock.~addFailed=Could not add stock. Please try again.~increase=Increase~decrease=Decrease~myCounts=My counts~transfers=Transfers~needsApproval=A count difference needs approval. Use Count to record what is on the shelf; an approver posts the change.~countNote=Your count is recorded for review. The stock balance changes only when an approver posts the difference.~countRecorded=Count recorded for review.~countSavedOnPhone=Count saved on this phone. It is sent when the connection is back.~countNoPlace=This stock line has no store or country, so the count cannot be recorded.~countNeedsConnection=The first count in this store needs a connection to open a count session.~countRefused=The count was not accepted:~matches=Matches~notMatch=Doesn\'t match~matchesRecorded=Recorded: the shelf matches the system.~matchesSavedOnPhone=Saved on this phone: the shelf matches the system. It is sent when the connection is back.~genuineQuestion=Is the part genuine?~genuine=Genuine~notGenuine=Not genuine~genuineNote=Note on the part (optional)~countedToday=Counted today~bin=Bin~code=Code~offlineShowingLast=Offline - showing last loaded data~refreshFailedShowingLast=Could not refresh - showing last loaded data~movementsOffline=Movements cannot load while offline. They show when the connection is back.~refreshing=Refreshing~aftermarket=Aftermarket~unchecked=Unchecked~countedItem=Counted:~undo=Undo~countUndone=Count removed. Nothing was sent.~undoTooLate=Already sent, so it stays for review.~markMatches=Mark as matches'**
   String get stockCountCopyCatalog;
+
+  /// No description provided for @storeItemCopyCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Store item~addPhoto=Add photo~camera=Take photo~gallery=Choose from photos~noPhoto=No photo yet~photoAdded=Photo added. Everyone in the company can see it.~photoNeedsConnection=Needs a connection. The photo was not saved; try again when online.~photoFailed=The photo could not be added.~photoUnavailable=Could not load photo~companySku=Company SKU~itemCode=ERP code~brand=Brand~noBrand=No brand recorded~category=Category~pendingApproval=Pending approval~verified=Verified~notLinked=Not in the company catalogue yet~notLinkedBody=Part numbers, barcodes and photos are shared through the company catalogue. Propose this item and a reviewer links it.~propose=Propose to catalogue~proposeTitle=Propose to the company catalogue~proposeSent=Sent for review. A reviewer adds it to the catalogue and links this item.~description=Description~whereItIs=Where it is~bin=Bin~noBin=No bin recorded~total=Total~reserved=Reserved~available=Available~onHand=On hand~condition=Condition~partNumbers=Part numbers~noPartNumbers=No part numbers yet~addPartNumber=Add part number~partNumber=Part number~manufacturer=Manufacturer (optional)~partNumberSent=Part number sent for approval. Once approved everyone in the company sees it.~barcodes=Barcodes and other numbers~noBarcodes=No barcodes yet~addBarcode=Add barcode~barcode=Barcode or number~numberType=Type~typeBarcode=Barcode~typeOem=OEM part number~typeAlternative=Other number~scan=Scan~barcodeSent=Sent for approval. It is added once a reviewer approves it.~setBrand=Correct brand~brandSent=Brand change sent for approval.~reason=Reason~reasonRequired=Give a short reason (at least 3 letters).~searchBrand=Search brands~newBrand=Add new brand~newBrandName=New brand name~brandRequired=Pick or type a brand.~partNumberRequired=Type the part number.~valueRequired=Type the number.~descriptionRequired=Type a description.~send=Send~cancel=Cancel~needsConnection=Needs a connection. Nothing was sent; try again when online.~failed=Not sent:~moveBin=Move to another bin~pendingChanges=Waiting for approval~recent=Recent movements~loadFailed=Could not load this item.~brandsFailed=Could not load the brand list. You can still type a new brand.~defaultReason=Added from the store~unit=Unit~levelsReceive=Levels and receive stock'**
+  String get storeItemCopyCatalog;
 
   /// No description provided for @calendarCopyCatalog.
   ///
@@ -5425,7 +5449,7 @@ abstract class AppLocalizations {
   /// No description provided for @workshopCopyCatalog.
   ///
   /// In en, this message translates to:
-  /// **'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.'**
+  /// **'title=My Jobs~onDuty=On duty~offDuty=Off duty~checkIn=Check In~checkOut=Check Out~checkInHint=Check in for your shift before recording work.~myJobs=My jobs~emptyTitle=No open jobs~emptyMessage=No open job is assigned to you right now.~loadError=Your jobs could not be loaded right now.~selectJobTitle=Select a job~selectJobMsg=Pick one of your jobs first.~checkInFirstTitle=Check in first~selectTaskTitle=Select a task~selectTaskMsg=Pick the task you are working on first.~tasks=Tasks~confirmTitle=Complete task?~confirmMsg=This records the task as complete and sends it for inspection.~cancel=Cancel~noteHint=Add a note (optional)~record=Record~queued=Saved on this device. It will sync automatically.~saveFailed=The activity could not be saved on this device. Try again.~todayTitle=My productivity today~productive=Productive~blocked=Blocked~unassigned=Unassigned~breakTime=Break~completed=Tasks completed~due=Due~ok=OK~a_start_job=Start Job~a_pause_job=Pause Job~a_resume_job=Resume Job~a_complete_task=Complete Task~a_request_parts=Request Parts~a_request_assistance=Request Assistance~a_waiting_approval=Waiting for Approval~a_waiting_vehicle=Waiting for Vehicle~a_waiting_tools=Waiting for Tools~a_start_break=Start Break~a_end_break=End Break~a_report_problem=Report Problem~s_working=Working~s_available=Available~s_waiting_parts=Waiting for Parts~s_waiting_approval=Waiting for Approval~s_waiting_tools=Waiting for Tools~s_waiting_vehicle=Waiting for Vehicle~s_on_break=On Break~s_training=Training~s_awaiting_inspection=Awaiting Inspection~s_off_duty=Off Duty~s_absent=Absent~photoLabel=Photo (optional)~takePhoto=Camera~pickPhoto=Gallery~removePhoto=Remove photo~photoLimit=Up to 3 photos~photoNotAttached=Recorded. The photo could not be attached without a connection.~c_whatDone=What was done~c_parts=Parts used~c_meters=Meter readings~c_km=Odometer (km)~c_hours=Hour meter~c_before=Before photos (optional)~c_after=After photos~c_signature=Your signature~returned=Returned by supervisor~waitingApproval=Waiting for supervisor approval~notAccepted=Not accepted:~c_queued=Saved on this phone. It is sent to the supervisor as soon as there is signal.~c_stateQueued=Queued on this phone~c_stateFailed=Failed, not sent~c_stateSynced=Sent, waiting for supervisor approval~jc_title=Jobs to check~jc_tabToCheck=To check~jc_tabReturned=Returned~jc_emptyToCheck=No finished job is waiting for you.~jc_emptyReturned=No returned job.~jc_loadError=The jobs could not be loaded.~jc_extra=Extra evidence~jc_waiting=Waiting for you~jc_by=Finished by~jc_returnReason=Returned because:~jc_noParts=No parts recorded~jc_noMeters=No meter reading~jc_photoUnavailable=Photo not available~jc_pass=Pass and close~jc_return=Return the job~jc_returnTitle=Why is it returned?~jc_returnHint=Tell them what still needs fixing~jc_returnSend=Return the job~jc_passed=Job passed and closed.~jc_returnedOk=Job returned. The data desk will reassign it.~jc_decideError=This could not be saved. Try again.~jc_signature=Technician\'s signature'**
   String get workshopCopyCatalog;
 
   /// Home section heading for the work the signed-in user has today.
@@ -16385,6 +16409,1944 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deductions have started, so this charge can no longer be appealed here. A manager or finance can waive the remainder.'**
   String get driverChargeAppealClosedDeducted;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync queue'**
+  String get profileSyncQueueTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get syncQueueStatPending;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get syncQueueStatAttention;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get syncQueueStatSent;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Still on this device'**
+  String get syncQueueStatSentCaption;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Last sync attempt: {time}'**
+  String syncQueueLastAttempt(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'No sync attempt recorded on this device yet'**
+  String get syncQueueNoAttempt;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'A sync is running now'**
+  String get syncQueueRunning;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get syncQueueSyncNow;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'You are offline. Your work is safe on this phone and will be sent when you are back online.'**
+  String get syncQueueOfflineReason;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is waiting to be sent.'**
+  String get syncQueueNothingToSend;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync requested. This list updates as items are sent.'**
+  String get syncQueueRequested;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start a sync. Try again.'**
+  String get syncQueueRequestFailed;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything is synced'**
+  String get syncQueueEmptyTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing from this device is waiting to be sent.'**
+  String get syncQueueEmptyMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the sync queue'**
+  String get syncQueueLoadFailedTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Your queued work is still on this phone. Try again.'**
+  String get syncQueueLoadFailedMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued items'**
+  String get syncQueueSectionItems;
+
+  /// Sync queue item name for a submitted inspection; asset is the asset number.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection {asset}'**
+  String syncTypeInspection(String asset);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued {time}'**
+  String syncQueueItemQueued(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Not tried yet} =1{1 attempt} other{{count} attempts}}'**
+  String syncQueueAttempts(int count);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Next try {time}'**
+  String syncQueueNextAttempt(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to send'**
+  String get syncQueueStateWaiting;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sending now'**
+  String get syncQueueStateSending;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Will try again'**
+  String get syncQueueStateRetrying;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'On hold'**
+  String get syncQueueStateOnHold;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs attention'**
+  String get syncQueueStateNeedsAttention;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent'**
+  String get syncQueueStateSent;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get syncQueueRetry;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Put back in the queue.'**
+  String get syncQueueRetried;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'This item is no longer waiting for a retry.'**
+  String get syncQueueRetryNotNeeded;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not retry this item. Try again.'**
+  String get syncQueueRetryFailed;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'This item could not be sent.'**
+  String get syncQueueErrorFallback;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre change'**
+  String get syncTypeTyreChange;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Work order'**
+  String get syncTypeWorkOrder;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Root cause analysis'**
+  String get syncTypeRca;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Reported issue'**
+  String get syncTypeReportIssue;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Stock count'**
+  String get syncTypeStockAdjust;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Work order status'**
+  String get syncTypeWorkOrderStatus;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Corrective action status'**
+  String get syncTypeCorrectiveActionStatus;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get syncTypeChecklistSubmission;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist assignment'**
+  String get syncTypeChecklistAssignmentStatus;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Odometer reading'**
+  String get syncTypeOdometerLog;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine hours reading'**
+  String get syncTypeEngineHoursLog;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident report'**
+  String get syncTypeReportAccident;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle wash'**
+  String get syncTypeWashRecord;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Workshop activity'**
+  String get syncTypeWorkshopEvent;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Inventory count line'**
+  String get syncTypeInventoryCountLine;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrecognised entry'**
+  String get syncTypeUnknown;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Drafts'**
+  String get profileDraftsTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'No drafts'**
+  String get profileDraftsEmptyTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfinished checklists and inspections you start on this phone appear here.'**
+  String get profileDraftsEmptyMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read your drafts'**
+  String get profileDraftsLoadFailedTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Your drafts are still on this phone. Try again.'**
+  String get profileDraftsLoadFailedMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist'**
+  String get profileDraftKindChecklist;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspection'**
+  String get profileDraftKindInspection;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Last edited {time}'**
+  String profileDraftEdited(String time);
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'No asset picked yet'**
+  String get profileDraftNoAsset;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get profileDraftResume;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get profileDraftDiscard;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard this draft?'**
+  String get profileDraftDiscardTitle;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything recorded in this draft, including its photos and signatures, is removed from this phone. This cannot be undone.'**
+  String get profileDraftDiscardMessage;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft discarded.'**
+  String get profileDraftDiscarded;
+
+  /// Profile sync queue / drafts screens.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not discard the draft. Try again.'**
+  String get profileDraftDiscardFailed;
+
+  /// After Retry on a submitted inspection flushed the inspection queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Tried to send your inspections again. The status below is up to date.'**
+  String get syncQueueInspectionRetried;
+
+  /// Title of the screen listing the open accident case steps owned by the signed-in person or their role.
+  ///
+  /// In en, this message translates to:
+  /// **'My accident tasks'**
+  String get accidentTasksTitle;
+
+  /// Section: steps assigned to the person by name.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned to me'**
+  String get accidentTasksAssignedToMe;
+
+  /// Section: steps owned by the person's role in their country and site.
+  ///
+  /// In en, this message translates to:
+  /// **'For my team'**
+  String get accidentTasksForMyTeam;
+
+  /// Empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing waiting for you on accident cases.'**
+  String get accidentTasksEmpty;
+
+  /// Shown when the server does not have the task list yet.
+  ///
+  /// In en, this message translates to:
+  /// **'Accident task tracking is not switched on yet.'**
+  String get accidentTasksNotOn;
+
+  /// Loading state.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading your tasks...'**
+  String get accidentTasksLoading;
+
+  /// SLA badge: the target time has passed.
+  ///
+  /// In en, this message translates to:
+  /// **'Overdue'**
+  String get accidentTasksOverdue;
+
+  /// SLA badge: past the warning point.
+  ///
+  /// In en, this message translates to:
+  /// **'Due soon'**
+  String get accidentTasksDueSoon;
+
+  /// SLA badge: running and on time.
+  ///
+  /// In en, this message translates to:
+  /// **'On time'**
+  String get accidentTasksOnTime;
+
+  /// SLA badge: the owner has not set a target time for this step.
+  ///
+  /// In en, this message translates to:
+  /// **'No target'**
+  String get accidentTasksNoTarget;
+
+  /// Row title with the case reference.
+  ///
+  /// In en, this message translates to:
+  /// **'Case {ref}'**
+  String accidentTasksCase(String ref);
+
+  /// How long the step has been open, e.g. '3.5 days in this step'.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} in this step'**
+  String accidentTasksInStep(String days);
+
+  /// A number of days, e.g. '3.5 days'.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days'**
+  String accidentTasksDays(String count);
+
+  /// Less than a day.
+  ///
+  /// In en, this message translates to:
+  /// **'today'**
+  String get accidentTasksToday;
+
+  /// Due date and time of the step.
+  ///
+  /// In en, this message translates to:
+  /// **'Due {time}'**
+  String accidentTasksDue(String time);
+
+  /// Counts on the Home row and screen header.
+  ///
+  /// In en, this message translates to:
+  /// **'{open} open, {overdue} overdue'**
+  String accidentTasksSummary(String open, String overdue);
+
+  /// Register filter: cases I reported or that have a step assigned to me.
+  ///
+  /// In en, this message translates to:
+  /// **'Mine'**
+  String get accidentRegisterMine;
+
+  /// Role names shown on accident task rows, token=label pairs separated by ~. Unknown roles show as stored.
+  ///
+  /// In en, this message translates to:
+  /// **'admin=Admin~manager=Manager~director=Director~inspector=Inspector~tyre_man=Tyre Technician~reporter=Reporter~driver=Driver~mechanic=Mechanic~electrician=Electrician~maintenance_supervisor=Maintenance Supervisor~workshop_supervisor=Workshop Supervisor~tyre_data_collector=Tyre Data Collector~pmv_manager=PMV Manager~workshop_area_manager=Workshop Area Manager~workshop_maintenance_area_manager=Workshop Maintenance Area Manager~fleet_supervisor=Fleet Supervisor~fleet_incharge=Fleet Incharge~store_keeper=Store Keeper'**
+  String get accidentTasksRoleNames;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get devicesTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Gauges, scanners, printers'**
+  String get devicesProfileRowValue;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Gauges, handheld scanners and label printers added on this phone. Only you see this list.'**
+  String get devicesIntro;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'No devices yet'**
+  String get devicesEmptyTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Add a tread or pressure gauge, a handheld scanner or a label printer.'**
+  String get devicesEmptyMessage;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The saved devices could not be read on this phone.'**
+  String get devicesLoadFailed;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Add device'**
+  String get devicesAdd;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tread depth gauge'**
+  String get devicesKindTread;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre pressure gauge'**
+  String get devicesKindPressure;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tread and pressure gauge'**
+  String get devicesKindCombined;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Barcode or RFID handheld'**
+  String get devicesKindScanner;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'UHF RFID reader'**
+  String get devicesKindRfid;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Label printer'**
+  String get devicesKindPrinter;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get devicesTransportBle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Keyboard mode'**
+  String get devicesTransportHid;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get devicesTransportNetwork;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Simulator (testing only)'**
+  String get devicesTransportSimulator;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth is off. Turn it on to add or use a Bluetooth device.'**
+  String get devicesBluetoothOff;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre Pulse is not allowed to use Bluetooth. Allow it, or turn it on in the phone settings.'**
+  String get devicesPermissionDenied;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This phone has no Bluetooth LE. Keyboard-mode and network devices still work.'**
+  String get devicesBluetoothUnsupported;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Allow Bluetooth'**
+  String get devicesAllowBluetooth;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for nearby devices…'**
+  String get devicesScanning;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'No devices found. Wake the device and keep it close to the phone.'**
+  String get devicesScanNone;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Scan again'**
+  String get devicesScanAgain;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Unnamed device'**
+  String get devicesUnnamed;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'What is this device?'**
+  String get devicesChooseKind;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'How does it connect?'**
+  String get devicesChooseConnection;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Device name'**
+  String get devicesNameLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer IP address'**
+  String get devicesHostLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get devicesPortLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Printer language'**
+  String get devicesLanguageLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Label size'**
+  String get devicesLabelSizeLabel;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Save device'**
+  String get devicesSave;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in this field.'**
+  String get devicesFieldRequired;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'First pair the device with the phone as a keyboard in the phone\'s Bluetooth settings, then save it here.'**
+  String get devicesHidHint;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Test'**
+  String get devicesTest;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Read once'**
+  String get devicesTestRead;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Print test label'**
+  String get devicesTestPrint;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre Pulse test label'**
+  String get devicesTestLabelName;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Read {value}'**
+  String devicesTestReading(String value);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Test label sent to the printer.'**
+  String get devicesTestPrinted;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Forget'**
+  String get devicesForget;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Forget {name}? You can add it again later.'**
+  String devicesForgetConfirm(String name);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Battery {level}%'**
+  String devicesBattery(int level);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The device did not connect. Check it is switched on and close by.'**
+  String get devicesErrorNotConnected;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The device did not answer in time.'**
+  String get devicesErrorTimeout;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'No reading arrived. Take the measurement on the gauge and try again.'**
+  String get devicesErrorNoReading;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The device sent data this app cannot read. Its settings need the maker\'s specification.'**
+  String get devicesErrorUnreadable;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This device is missing its connection settings.'**
+  String get devicesErrorNotConfigured;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'The label could not be printed. Check the printer has paper and is on.'**
+  String get devicesErrorPrintFailed;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This device cannot do that.'**
+  String get devicesErrorUnsupported;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This reader needs its maker\'s software, which is not installed yet. Use it in keyboard mode for now.'**
+  String get devicesErrorVendorSdk;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Read pressure from gauge'**
+  String get gaugeReadPressure;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Read tread from gauge'**
+  String get gaugeReadTread;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'No gauge is set up for this reading. Add one under Profile > Devices.'**
+  String get gaugeNoGauge;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a gauge'**
+  String get gaugePickTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Reading from {device}…'**
+  String gaugeReadingFrom(String device);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Use this reading?'**
+  String get gaugeConfirmTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'{device} measured {value} on {position}.'**
+  String gaugeConfirmBody(String device, String value, String position);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'This replaces the value already entered ({old}).'**
+  String gaugeConfirmReplace(String old);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Use reading'**
+  String get gaugeUseReading;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Send the reading'**
+  String get gaugeHidTitle;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Press the send button on {device}. The value appears below.'**
+  String gaugeHidMessage(String device);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Value from the gauge'**
+  String get gaugeHidField;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'{value} psi'**
+  String gaugeValuePsi(String value);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'{value} mm'**
+  String gaugeValueMm(String value);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Handheld scanner ready: press the trigger to look up a tyre or asset.'**
+  String get hidScannerReady;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Print label'**
+  String get labelPrint;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Print label on'**
+  String get labelChoosePrinter;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'System printer or PDF'**
+  String get labelPrintPdf;
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Label sent to {printer}.'**
+  String labelPrinted(String printer);
+
+  /// Field hardware (lib/core/devices, features/devices).
+  ///
+  /// In en, this message translates to:
+  /// **'Arabic or Urdu text on this label prints correctly only through the system printer or PDF.'**
+  String get labelUnicodeNote;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{A photo could not upload} other{{count} photos could not upload}}'**
+  String syncQueuePhotoFailed(int count);
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry photo'**
+  String get syncQueuePhotoRetry;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'The photo will be tried again on the next sync.'**
+  String get syncQueuePhotoRetried;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Send without this photo'**
+  String get syncQueuePhotoRemove;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Send without this photo?'**
+  String get syncQueuePhotoRemoveTitle;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo is evidence for the record. If you remove it, the record is sent without it and the photo cannot be recovered from the queue. Retake it from the record if you can.'**
+  String get syncQueuePhotoRemoveMessage;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get syncQueuePhotoRemoveConfirm;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo removed. The record will be sent without it.'**
+  String get syncQueuePhotoRemoved;
+
+  /// Profile sync queue: a photo that could not upload.
+  ///
+  /// In en, this message translates to:
+  /// **'That did not work. Try again.'**
+  String get syncQueuePhotoActionFailed;
+
+  /// Fleet list chip: only assets whose operational status is breakdown (opened from Home's Off road tile)
+  ///
+  /// In en, this message translates to:
+  /// **'Off road'**
+  String get fleetListOffRoadFilter;
+
+  /// Inspect asset picker: why the All count is lower than the fleet register
+  ///
+  /// In en, this message translates to:
+  /// **'{assets} asset numbers from {rows} register rows. A number used in more than one country is listed once: choose a country to inspect the right machine.'**
+  String inspectionPickerCollapsedNote(int assets, int rows);
+
+  /// Workshop Status vehicle intake (waiting for me, add vehicle), key=value pairs separated by ~. %n% and %name% are replaced at runtime. Source: lib/l10n/fragments/workshop_intake.*.json.
+  ///
+  /// In en, this message translates to:
+  /// **'title=Vehicle intake~subtitle=Add vehicles and confirm the ones sent to you~open=Vehicle intake~waitingBanner=%n% vehicles waiting for you to confirm~waitingBannerOne=1 vehicle waiting for you to confirm~tabWaiting=Waiting for me~tabAdd=Add vehicle~noAccess=You need the Add workshop vehicles or Confirm workshop vehicles permission. Ask your administrator.~loading=Loading vehicles~loadFailed=The vehicles could not be loaded.~emptyTitle=Nothing is waiting for you~emptyMessage=New vehicles routed to you appear here. Pull down to check again.~enteredBy=Entered by %name%~system=System~jobCard=Job card~ownEntry=You entered this one. Another supervisor confirms it.~confirm=Confirm~return=Return~confirmed=Vehicle confirmed.~confirmFailed=The vehicle could not be confirmed.~notRouted=This vehicle is not routed to you.~alreadyConfirmed=Someone already confirmed this vehicle.~refused=You cannot confirm a vehicle you entered.~returnTitle=Return to the person who entered it~reason=Reason~reasonHint=What needs fixing?~reasonShort=Write at least 5 characters.~returned=Vehicle returned.~returnFailed=The vehicle could not be returned.~cancel=Cancel~assetCode=Asset code~assetRequired=Enter the asset code.~site=Workshop site~siteHint=Leave empty to use the vehicle\'s own site~complaint=Complaint~jobCardNo=Job card no (optional)~workType=Work type~priority=Priority~notSet=Not set~send=Send to supervisor~sent=Sent. The supervisor on shift gets a notice.~updatedRow=Updated.~sameRow=Nothing changed.~listedRow=This vehicle is already in the workshop list.~invalidRow=Check the asset code.~releasedRow=This vehicle was already released.~sendFailed=The vehicle could not be sent. Check the signal and try again.~pickCountry=Choose one country first. Vehicles are entered per country.~wt_Repair=Repair~wt_Emergency=Breakdown~wt_Preventive Maintenance=Preventive maintenance~wt_Service=Service~wt_Tyre Change=Tyre change~wt_Inspection=Inspection~wt_Other=Other~pr_Low=Low~pr_Medium=Medium~pr_High=High~pr_Critical=Critical~src_sheet=Shared sheet~src_phone=Phone~src_manual=Typed~src_erp=ERP job card~src_excel_upload=Daily Excel'**
+  String get workshopIntakeCopyCatalog;
+
+  /// No description provided for @washStepVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get washStepVehicle;
+
+  /// No description provided for @washStepType.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash type'**
+  String get washStepType;
+
+  /// No description provided for @washStepChecklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist and chemicals'**
+  String get washStepChecklist;
+
+  /// No description provided for @washStepPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get washStepPhotos;
+
+  /// No description provided for @washStepReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review and save'**
+  String get washStepReview;
+
+  /// No description provided for @washStepOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get washStepOptional;
+
+  /// No description provided for @washStepProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} steps done'**
+  String washStepProgress(int done, int total);
+
+  /// No description provided for @washLoggedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Logged by {name} · today {time}'**
+  String washLoggedBy(String name, String time);
+
+  /// No description provided for @washLoggedByNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded automatically from your sign-in. It cannot be changed.'**
+  String get washLoggedByNote;
+
+  /// No description provided for @washLoggedBySelf.
+  ///
+  /// In en, this message translates to:
+  /// **'you'**
+  String get washLoggedBySelf;
+
+  /// No description provided for @washMissingVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a vehicle'**
+  String get washMissingVehicle;
+
+  /// No description provided for @washMissingType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a wash type'**
+  String get washMissingType;
+
+  /// No description provided for @washMissingEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish the checklist details'**
+  String get washMissingEvidence;
+
+  /// No description provided for @washLastWash.
+  ///
+  /// In en, this message translates to:
+  /// **'Last wash {date}'**
+  String washLastWash(String date);
+
+  /// No description provided for @washDaysSince.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Washed today} =1{1 day ago} other{{count} days ago}}'**
+  String washDaysSince(int count);
+
+  /// No description provided for @washNoHistoryForAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'No wash recorded yet'**
+  String get washNoHistoryForAsset;
+
+  /// No description provided for @washDueBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Due for wash'**
+  String get washDueBadge;
+
+  /// No description provided for @washOverdueBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day overdue} other{{days} days overdue}}'**
+  String washOverdueBadge(int days);
+
+  /// No description provided for @washUpToDateBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get washUpToDateBadge;
+
+  /// No description provided for @washHistoryChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking wash history...'**
+  String get washHistoryChecking;
+
+  /// No description provided for @washHistoryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash history could not be checked'**
+  String get washHistoryUnavailable;
+
+  /// No description provided for @washTypeExteriorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Body wash'**
+  String get washTypeExteriorDesc;
+
+  /// No description provided for @washTypeInteriorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Cab cleaning'**
+  String get washTypeInteriorDesc;
+
+  /// No description provided for @washTypeFullDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Inside and out'**
+  String get washTypeFullDesc;
+
+  /// No description provided for @washTypeEngineBayDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine compartment degrease'**
+  String get washTypeEngineBayDesc;
+
+  /// No description provided for @washTypeUndercarriageDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Chassis and wheels'**
+  String get washTypeUndercarriageDesc;
+
+  /// No description provided for @washTypeSteamDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Steam clean'**
+  String get washTypeSteamDesc;
+
+  /// No description provided for @washTypeWaterlessDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Spray and wipe, no water'**
+  String get washTypeWaterlessDesc;
+
+  /// No description provided for @washChecklistProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} checked'**
+  String washChecklistProgress(int done, int total);
+
+  /// No description provided for @washIssuesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 issue} other{{count} issues}}'**
+  String washIssuesCount(int count);
+
+  /// No description provided for @washProductsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No products} =1{1 product} other{{count} products}}'**
+  String washProductsCount(int count);
+
+  /// No description provided for @washPhotosBefore.
+  ///
+  /// In en, this message translates to:
+  /// **'Before washing'**
+  String get washPhotosBefore;
+
+  /// No description provided for @washPhotosAfter.
+  ///
+  /// In en, this message translates to:
+  /// **'After washing'**
+  String get washPhotosAfter;
+
+  /// No description provided for @washPhotosCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {max} photos'**
+  String washPhotosCount(int count, int max);
+
+  /// No description provided for @washPhotosOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional. Before and after photos prove the wash was done.'**
+  String get washPhotosOptional;
+
+  /// No description provided for @washReviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check before saving'**
+  String get washReviewTitle;
+
+  /// No description provided for @washMoreDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'More details (optional)'**
+  String get washMoreDetails;
+
+  /// No description provided for @washReviewChecklistValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{checked} of {total} checked · {products}'**
+  String washReviewChecklistValue(int checked, int total, String products);
+
+  /// No description provided for @washSavedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash saved'**
+  String get washSavedTitle;
+
+  /// No description provided for @washSavedOfflineMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You are offline. The wash is saved on this phone and uploads automatically when there is a signal.'**
+  String get washSavedOfflineMessage;
+
+  /// No description provided for @washSavedOnlineMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved on this phone and uploading now. Check Sync if it does not appear.'**
+  String get washSavedOnlineMessage;
+
+  /// No description provided for @washLogAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Log another wash'**
+  String get washLogAnother;
+
+  /// No description provided for @washHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash history'**
+  String get washHistoryTitle;
+
+  /// No description provided for @washStatLastSevenDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get washStatLastSevenDays;
+
+  /// No description provided for @washStatThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get washStatThisMonth;
+
+  /// No description provided for @washStatTopAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'Most washed this month'**
+  String get washStatTopAsset;
+
+  /// No description provided for @washStatNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None yet'**
+  String get washStatNone;
+
+  /// No description provided for @washCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No washes} =1{1 wash} other{{count} washes}}'**
+  String washCount(int count);
+
+  /// No description provided for @washFilterAllDates.
+  ///
+  /// In en, this message translates to:
+  /// **'All dates'**
+  String get washFilterAllDates;
+
+  /// No description provided for @washFilterSevenDays.
+  ///
+  /// In en, this message translates to:
+  /// **'7 days'**
+  String get washFilterSevenDays;
+
+  /// No description provided for @washFilterThirtyDays.
+  ///
+  /// In en, this message translates to:
+  /// **'30 days'**
+  String get washFilterThirtyDays;
+
+  /// No description provided for @washFilterPickDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick dates'**
+  String get washFilterPickDates;
+
+  /// No description provided for @washFilterAllTypes.
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get washFilterAllTypes;
+
+  /// No description provided for @washFilterClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get washFilterClear;
+
+  /// No description provided for @washHistoryNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No washes match these filters'**
+  String get washHistoryNoMatch;
+
+  /// No description provided for @washPhotoCountShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo} other{{count} photos}}'**
+  String washPhotoCountShort(int count);
+
+  /// No description provided for @washChangeVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change vehicle'**
+  String get washChangeVehicle;
+
+  /// No description provided for @washStepAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'What was washed'**
+  String get washStepAreas;
+
+  /// No description provided for @washAreasHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the sides on the picture and the parts you washed.'**
+  String get washAreasHint;
+
+  /// No description provided for @washMissingAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick what was washed'**
+  String get washMissingAreas;
+
+  /// No description provided for @washAreaExterior.
+  ///
+  /// In en, this message translates to:
+  /// **'Exterior body'**
+  String get washAreaExterior;
+
+  /// No description provided for @washAreaExteriorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Body, glass and lights'**
+  String get washAreaExteriorDesc;
+
+  /// No description provided for @washAreaEngineBay.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine bay'**
+  String get washAreaEngineBay;
+
+  /// No description provided for @washAreaEngineBayDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine wash and degrease'**
+  String get washAreaEngineBayDesc;
+
+  /// No description provided for @washAreaUndercarriage.
+  ///
+  /// In en, this message translates to:
+  /// **'Undercarriage'**
+  String get washAreaUndercarriage;
+
+  /// No description provided for @washAreaUndercarriageDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Chassis and underbody'**
+  String get washAreaUndercarriageDesc;
+
+  /// No description provided for @washAreaCabin.
+  ///
+  /// In en, this message translates to:
+  /// **'Cabin interior'**
+  String get washAreaCabin;
+
+  /// No description provided for @washAreaCabinDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Seats, floor and dashboard'**
+  String get washAreaCabinDesc;
+
+  /// No description provided for @washAreaTyresRims.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres and rims'**
+  String get washAreaTyresRims;
+
+  /// No description provided for @washAreaTyresRimsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres, rims and wheel arches'**
+  String get washAreaTyresRimsDesc;
+
+  /// No description provided for @washAreaDrumHopper.
+  ///
+  /// In en, this message translates to:
+  /// **'Mixer drum and hopper'**
+  String get washAreaDrumHopper;
+
+  /// No description provided for @washAreaDrumHopperDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Drum shell, hopper and chute'**
+  String get washAreaDrumHopperDesc;
+
+  /// No description provided for @washAreaSteam.
+  ///
+  /// In en, this message translates to:
+  /// **'Steam degrease'**
+  String get washAreaSteam;
+
+  /// No description provided for @washAreaSteamDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Hot steam on grease and oil'**
+  String get washAreaSteamDesc;
+
+  /// No description provided for @washViewsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sides washed'**
+  String get washViewsTitle;
+
+  /// No description provided for @washViewFront.
+  ///
+  /// In en, this message translates to:
+  /// **'Front'**
+  String get washViewFront;
+
+  /// No description provided for @washViewLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get washViewLeft;
+
+  /// No description provided for @washViewRear.
+  ///
+  /// In en, this message translates to:
+  /// **'Rear'**
+  String get washViewRear;
+
+  /// No description provided for @washViewRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get washViewRight;
+
+  /// No description provided for @washViewTop.
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get washViewTop;
+
+  /// No description provided for @washViewsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All sides'**
+  String get washViewsAll;
+
+  /// No description provided for @washViewsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {total} sides'**
+  String washViewsCount(int count, int total);
+
+  /// No description provided for @washVehiclePictureNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No picture for this vehicle type yet. Mark the sides below.'**
+  String get washVehiclePictureNone;
+
+  /// No description provided for @washVehiclePicturePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a vehicle to see its picture.'**
+  String get washVehiclePicturePending;
+
+  /// No description provided for @washWaterless.
+  ///
+  /// In en, this message translates to:
+  /// **'Waterless wash (no water used)'**
+  String get washWaterless;
+
+  /// No description provided for @washCostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost'**
+  String get washCostLabel;
+
+  /// No description provided for @washCostNoCharge.
+  ///
+  /// In en, this message translates to:
+  /// **'No charge · washed in-house'**
+  String get washCostNoCharge;
+
+  /// No description provided for @washAreasLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Washed areas'**
+  String get washAreasLabel;
+
+  /// No description provided for @washRecordedAsType.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded as {type}'**
+  String washRecordedAsType(String type);
+
+  /// No description provided for @washAreaSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get washAreaSelected;
+
+  /// No description provided for @washMissingPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Take before and after photos'**
+  String get washMissingPhotos;
+
+  /// No description provided for @washPhotosRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'At least one before and one after photo, taken with the camera now. Each photo is stamped with its time and location.'**
+  String get washPhotosRequired;
+
+  /// No description provided for @washPhotoStamp.
+  ///
+  /// In en, this message translates to:
+  /// **'{time} · {place}'**
+  String washPhotoStamp(String time, String place);
+
+  /// No description provided for @washGpsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No GPS'**
+  String get washGpsNone;
+
+  /// No description provided for @washReadOnlyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This record cannot be changed on the phone. Corrections are made on the web by an administrator, and every change is kept in the audit history.'**
+  String get washReadOnlyNote;
+
+  /// No description provided for @washRecordIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Record ID'**
+  String get washRecordIdLabel;
+
+  /// No description provided for @washCapturedOnDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Captured on device'**
+  String get washCapturedOnDevice;
+
+  /// No description provided for @washSiteFromVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Taken from the vehicle record. It cannot be changed here.'**
+  String get washSiteFromVehicle;
+
+  /// No description provided for @washAuditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Audit record'**
+  String get washAuditTitle;
+
+  /// No description provided for @washNextDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Next wash due {date}'**
+  String washNextDue(String date);
+
+  /// No description provided for @washVerificationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisor check'**
+  String get washVerificationLabel;
+
+  /// No description provided for @washVerificationPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a supervisor to verify'**
+  String get washVerificationPending;
+
+  /// No description provided for @washVerificationVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified by {name} on {time}'**
+  String washVerificationVerified(String name, String time);
+
+  /// No description provided for @washVerificationNotRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'No check needed: logged by a supervisor'**
+  String get washVerificationNotRequired;
+
+  /// No description provided for @washVerificationUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set up on this server yet'**
+  String get washVerificationUnknown;
+
+  /// No description provided for @washVerifyAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify this wash'**
+  String get washVerifyAction;
+
+  /// No description provided for @washVerifyNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get washVerifyNoteHint;
+
+  /// No description provided for @washVerifyDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash verified'**
+  String get washVerifyDone;
+
+  /// No description provided for @washVerifyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not verify this wash. Try again.'**
+  String get washVerifyFailed;
+
+  /// No description provided for @washVerifyOwnEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'You logged this wash, so another supervisor must verify it.'**
+  String get washVerifyOwnEntry;
+
+  /// No description provided for @washPendingBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'To verify'**
+  String get washPendingBadge;
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'All synced'**
+  String get syncSheetAllSynced;
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'last attempt {ago}'**
+  String syncSheetLastAttempt(String ago);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'no sync attempt yet'**
+  String get syncSheetNoAttempt;
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 waiting} other{{count} waiting}}'**
+  String syncSheetWaiting(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 needs attention} other{{count} need attention}}'**
+  String syncSheetNeedsAttention(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'See all ({count})'**
+  String sheetSeeAll(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get timeAgoJustNow;
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} min ago'**
+  String timeAgoMinutes(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} h ago'**
+  String timeAgoHours(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} d ago'**
+  String timeAgoDays(int count);
+
+  /// No description provided for @tyreEditorEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre position'**
+  String get tyreEditorEyebrow;
+
+  /// No description provided for @tyrePosNameWithRole.
+  ///
+  /// In en, this message translates to:
+  /// **'{side}, {axle}, {role}'**
+  String tyrePosNameWithRole(String side, String axle, String role);
+
+  /// No description provided for @tyrePosNameNoRole.
+  ///
+  /// In en, this message translates to:
+  /// **'{side}, {axle}'**
+  String tyrePosNameNoRole(String side, String axle);
+
+  /// No description provided for @tyrePosSideLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get tyrePosSideLeft;
+
+  /// No description provided for @tyrePosSideRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get tyrePosSideRight;
+
+  /// No description provided for @tyrePosAxleFront.
+  ///
+  /// In en, this message translates to:
+  /// **'front axle {number}'**
+  String tyrePosAxleFront(String number);
+
+  /// No description provided for @tyrePosAxleRearNumbered.
+  ///
+  /// In en, this message translates to:
+  /// **'rear axle {number}'**
+  String tyrePosAxleRearNumbered(String number);
+
+  /// No description provided for @tyrePosAxleRear.
+  ///
+  /// In en, this message translates to:
+  /// **'rear axle'**
+  String get tyrePosAxleRear;
+
+  /// No description provided for @tyrePosAxleCentre.
+  ///
+  /// In en, this message translates to:
+  /// **'centre axle'**
+  String get tyrePosAxleCentre;
+
+  /// No description provided for @tyrePosAxleRearCentre.
+  ///
+  /// In en, this message translates to:
+  /// **'rear-centre axle'**
+  String get tyrePosAxleRearCentre;
+
+  /// No description provided for @tyrePosAxleRearmost.
+  ///
+  /// In en, this message translates to:
+  /// **'rearmost axle'**
+  String get tyrePosAxleRearmost;
+
+  /// No description provided for @tyrePosRoleInner.
+  ///
+  /// In en, this message translates to:
+  /// **'inner'**
+  String get tyrePosRoleInner;
+
+  /// No description provided for @tyrePosRoleOuter.
+  ///
+  /// In en, this message translates to:
+  /// **'outer'**
+  String get tyrePosRoleOuter;
+
+  /// No description provided for @tyreEditorSectionMeasurements.
+  ///
+  /// In en, this message translates to:
+  /// **'Measurements'**
+  String get tyreEditorSectionMeasurements;
+
+  /// No description provided for @tyreEditorSectionTyre.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyre'**
+  String get tyreEditorSectionTyre;
+
+  /// No description provided for @tyreEditorFittedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Fitted tyre'**
+  String get tyreEditorFittedTitle;
+
+  /// No description provided for @tyreEditorFittedOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Fitted {date}'**
+  String tyreEditorFittedOn(String date);
+
+  /// No description provided for @tyreEditorKmAtFitment.
+  ///
+  /// In en, this message translates to:
+  /// **'{km} km at fitment'**
+  String tyreEditorKmAtFitment(String km);
+
+  /// No description provided for @tyreEditorKmRun.
+  ///
+  /// In en, this message translates to:
+  /// **'{km} km run since fitment'**
+  String tyreEditorKmRun(String km);
+
+  /// No description provided for @tyreEditorFittedSerialMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Serial not recorded'**
+  String get tyreEditorFittedSerialMissing;
+
+  /// No description provided for @tyreEditorFittedNotLoaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Fitted tyre not loaded'**
+  String get tyreEditorFittedNotLoaded;
+
+  /// No description provided for @tyreEditorFittedNotLoadedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The tyre register could not be read. You can still record this wheel.'**
+  String get tyreEditorFittedNotLoadedHint;
+
+  /// No description provided for @tyreEditorFittedNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No tyre on record for this position'**
+  String get tyreEditorFittedNone;
+
+  /// No description provided for @tyreEditorSerialDiffers.
+  ///
+  /// In en, this message translates to:
+  /// **'Different from the tyre on record ({serial})'**
+  String tyreEditorSerialDiffers(String serial);
+
+  /// No description provided for @tyreEditorUnitPsi.
+  ///
+  /// In en, this message translates to:
+  /// **'psi'**
+  String get tyreEditorUnitPsi;
+
+  /// No description provided for @tyreEditorUnitMm.
+  ///
+  /// In en, this message translates to:
+  /// **'mm'**
+  String get tyreEditorUnitMm;
+
+  /// No description provided for @tyreEditorNumberInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number.'**
+  String get tyreEditorNumberInvalid;
+
+  /// No description provided for @tyreEditorPressureRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a pressure from 0 to 200 psi.'**
+  String get tyreEditorPressureRange;
+
+  /// No description provided for @tyreEditorTreadRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a tread depth from 0 to 30 mm.'**
+  String get tyreEditorTreadRange;
+
+  /// No description provided for @tyreEditorPressureUnusual.
+  ///
+  /// In en, this message translates to:
+  /// **'Unusual pressure for a tyre. Check the reading.'**
+  String get tyreEditorPressureUnusual;
+
+  /// No description provided for @tyreEditorTreadUnusual.
+  ///
+  /// In en, this message translates to:
+  /// **'Unusual tread depth. Check the reading.'**
+  String get tyreEditorTreadUnusual;
+
+  /// No description provided for @tyreEditorPreviousReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Last inspection {date}: {values}'**
+  String tyreEditorPreviousReading(String date, String values);
+
+  /// No description provided for @tyreEditorPreviousReadingUndated.
+  ///
+  /// In en, this message translates to:
+  /// **'Last inspection: {values}'**
+  String tyreEditorPreviousReadingUndated(String values);
+
+  /// No description provided for @tyreEditorConditionSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get tyreEditorConditionSelected;
+
+  /// No description provided for @tyreEditorPositionMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Position on the vehicle'**
+  String get tyreEditorPositionMap;
 }
 
 class _AppLocalizationsDelegate

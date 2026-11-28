@@ -100,48 +100,26 @@ class LoginCountryHero extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: palette.surface,
-                            borderRadius: BorderRadius.circular(TpRadius.md),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(TpSpace.sm),
-                            child: TpIcon(
-                              Icons.tire_repair_outlined,
-                              size: compact
-                                  ? TpSizing.iconLg
-                                  : TpSizing.iconState,
-                              color: palette.primaryDark,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: TpSpace.md),
-                        Expanded(
-                          child: Semantics(
-                            key: const Key('login.brand.title'),
-                            header: true,
-                            child: Text(
-                              l10n.appTitle,
-                              style: (compact
-                                      ? text.headlineSmall
-                                      : text.headlineMedium)
-                                  ?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                shadows: const <Shadow>[
-                                  Shadow(
-                                    color: Color(0xA6000000),
-                                    blurRadius: 8,
-                                  ),
-                                ],
-                              ),
-                            ),
+                    // The approved lockup in its reverse colourway (white
+                    // TYRE, yellow PULSE and mark) for the dark hero.
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Semantics(
+                          key: const Key('login.brand.title'),
+                          container: true,
+                          header: true,
+                          label: l10n.appTitle,
+                          child: Image.asset(
+                            TpBrandArt.reverse,
+                            height: compact ? 32 : 40,
+                            width: (compact ? 32 : 40) * TpBrandArt.aspectRatio,
+                            fit: BoxFit.contain,
+                            excludeFromSemantics: true,
                           ),
                         ),
-                      ],
+                      ),
                     ),
                     const Spacer(),
                     Text(

@@ -695,48 +695,26 @@ class _ExactLoginHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   textDirection: TextDirection.ltr,
                   children: <Widget>[
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      textDirection: TextDirection.ltr,
-                      children: <Widget>[
-                        Image.asset(
-                          'assets/login/figma_brand_pulse.png',
-                          width: 66,
-                          height: 34,
+                    // The approved lockup (TP mark + outlined wordmark, the
+                    // reverse colourway for a dark hero). scaleDown: it keeps
+                    // its size normally and shrinks, never overflows, under a
+                    // large accessibility text scale.
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Semantics(
+                        key: const Key('login.brand.title'),
+                        container: true,
+                        header: true,
+                        label: l10n.appTitle,
+                        child: Image.asset(
+                          TpBrandArt.reverse,
+                          height: 40,
+                          width: 40 * TpBrandArt.aspectRatio,
                           fit: BoxFit.contain,
                           excludeFromSemantics: true,
                         ),
-                        const SizedBox(width: 6),
-                        // Flexible + scaleDown: the wordmark keeps its size
-                        // normally and shrinks, never overflows, under a
-                        // large accessibility text scale.
-                        Flexible(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: AlignmentDirectional.centerStart,
-                            child: Semantics(
-                              key: const Key('login.brand.title'),
-                              container: true,
-                              header: true,
-                              label: l10n.appTitle,
-                              child: ExcludeSemantics(
-                                child: Text(
-                                  'TYRE\nPULSE',
-                                  textDirection: TextDirection.ltr,
-                                  style: text.titleLarge?.copyWith(
-                                    color: Colors.white,
-                                    fontSize: 27,
-                                    height: 0.94,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.6,
-                                    shadows: _kHeroTextShadow,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                     const SizedBox(height: 22),
                     const SizedBox(

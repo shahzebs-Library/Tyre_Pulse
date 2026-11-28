@@ -1,0 +1,18 @@
+Subject: 3 عنصر دون رد لدى Sample Technician
+
+عمل مُسند بانتظار الرد
+
+لم يفتح Sample Technician العناصر أدناه بعد ثلاثة تذكيرات. يرجى المتابعة.
+
+العناصر المنتظرة
+- Job card GCKR/JC/1021
+- Parts request PR-0412
+- Inspection approval TM514
+
+فتح Tyre Pulse: https://tyrepulse.app/action-center
+
+تصلك هذه الرسالة لأن عملًا أُسند إليك أو إلى فريقك. لا يمكن إيقاف هذه التنبيهات.
+
+tyrepulse.app | متوفر على Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+إدارة الإعدادات: https://tyrepulse.app/settings?tab=email
+أُرسلت من Tyre Pulse. الردود تصل إلى info@tyrepulse.app.

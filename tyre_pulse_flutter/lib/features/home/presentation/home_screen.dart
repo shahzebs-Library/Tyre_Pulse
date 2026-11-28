@@ -83,6 +83,8 @@
 /// screen are excluded so a Home control can never lead to a placeholder.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -92,24 +94,43 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/auth/auth_providers.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
+import 'package:tyre_pulse/core/navigation/list_drilldown.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
+import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
+import 'package:tyre_pulse/features/accidents/data/accident_tasks_repository.dart';
 import 'package:tyre_pulse/features/alerts/alerts_providers.dart';
 import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
+import 'package:tyre_pulse/features/checklists/data/checklist_remote_models.dart';
+import 'package:tyre_pulse/features/driver_concerns/presentation/driver_concerns_copy.dart';
+import 'package:tyre_pulse/features/driver_concerns/presentation/my_concerns_screen.dart';
+import 'package:tyre_pulse/features/driver_workspace/presentation/driver_workspace_panel.dart';
+import 'package:tyre_pulse/features/home/data/home_role_repository.dart';
+import 'package:tyre_pulse/features/home/domain/home_role_plan.dart';
 import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/home/home_layout.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
+import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
+import 'package:tyre_pulse/features/inventory/presentation/store_receipt_screen.dart';
 import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_board.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/my_work/presentation/my_work_widgets.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_sheet.dart';
+import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
+import 'package:tyre_pulse/features/stock_count/presentation/store_history_copy.dart';
+import 'package:tyre_pulse/features/stock_count/presentation/store_history_screen.dart';
+import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
+import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
+
+part 'home_role_panel.dart';
 
 /// Real local time in production; overridden for deterministic goldens.
 ///
@@ -142,6 +163,18 @@ abstract final class HomeScreenKeys {
   static Key recentAsset(String assetNo) => Key('home.recent.$assetNo');
 
   static Key action(String id) => Key('home.action.$id');
+
+  /// The per-role Home (`domain/home_role_plan.dart`).
+  static const Key rolePanel = Key('home.role');
+
+  /// One big tile, keyed by its [HomeBigTile] name.
+  static Key roleBig(String id) => Key('home.role.big.$id');
+
+  /// One compact row, keyed by its row id.
+  static Key roleRow(String id) => Key('home.role.row.$id');
+
+  /// One chip, keyed by its tile id (`more` for the catalogue).
+  static Key roleChip(String id) => Key('home.role.chip.$id');
 }
 
 /// The tile catalogue the "More" sheet lists, filtered by
@@ -166,6 +199,10 @@ const List<HomeSectionSpec> _kHomeSections = <HomeSectionSpec>[
       HomeTileSpec(id: 'checklists', module: ModuleKey.checklists),
       HomeTileSpec(id: 'checklistHistory', module: ModuleKey.checklists),
       HomeTileSpec(id: 'reportIssue', module: ModuleKey.reportIssue),
+      HomeTileSpec(id: 'repairRequest', module: ModuleKey.repairRequest),
+      // Fleet Supervisor and Fleet Incharge sign handovers; until this tile
+      // the handover list had no entry point on Home at all.
+      HomeTileSpec(id: 'handover', module: ModuleKey.handover),
     ],
   ),
   HomeSectionSpec(
@@ -263,7 +300,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ..invalidate(tyreAlertsProvider)
       ..invalidate(homePendingSyncCountProvider)
       ..invalidate(homeRecentAssetsProvider)
-      ..invalidate(myWorkSnapshotProvider);
+      ..invalidate(myWorkSnapshotProvider)
+      ..invalidate(stockItemsProvider)
+      ..invalidate(homeMeterTodayProvider)
+      ..invalidate(homeMyVehicleProvider)
+      ..invalidate(homeOffRoadCountProvider)
+      ..invalidate(homeOpenAccidentsCountProvider)
+      ..invalidate(homeMaintenanceOverdueCountProvider)
+      ..invalidate(homeChecklistsToSignCountProvider)
+      ..invalidate(homeChecklistsAllPendingCountProvider)
+      ..invalidate(homeUnassignedJobsProvider)
+      ..invalidate(homeTeamNowProvider)
+      ..invalidate(homeMyJobsProvider)
+      ..invalidate(homeHandoversToSignProvider)
+      ..invalidate(homeChecklistsDueProvider);
   }
 
   /// Pull-to-refresh: invalidate, then wait for the sources this role is
@@ -275,6 +325,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required bool alerts,
     required bool recent,
     required bool plan,
+    bool store = false,
   }) async {
     _refreshSources();
     Future<void> settle(Future<Object?> future) =>
@@ -287,6 +338,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (alerts) settle(ref.read(tyreAlertsProvider.future)),
       if (recent) settle(ref.read(homeRecentAssetsProvider.future)),
       if (plan) settle(ref.read(myWorkSnapshotProvider.future)),
+      if (store) settle(ref.read(stockItemsProvider.future)),
     ]);
   }
 
@@ -334,12 +386,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final bool canSeeAccidents = ref.watch(
       canAccessModuleProvider(ModuleKey.accidents),
     );
+    // The store is this person's main job when they reach Stock Count but
+    // not field inspection (a Store Keeper). Their Home then leads with the
+    // store tools and store figures instead of hiding them in More. Anyone
+    // who also inspects keeps the field Home unchanged.
+    final bool accessFailedEarly = ref.watch(accessLoadFailedProvider);
+    // The per-role Home (domain/home_role_plan.dart). A role without a plan,
+    // or a failed access read (whose retry lives on the timeline card),
+    // keeps the original layout below.
+    final HomeRolePlan? rolePlan = accessFailedEarly
+        ? null
+        : homeRolePlanForRole(ref.watch(accessStateProvider).role);
+    final bool storeHome = rolePlan == null &&
+        ref.watch(
+          canAccessModuleProvider(ModuleKey.stock),
+        ) &&
+        !canInspect;
+    final AsyncValue<List<StockItem>>? store =
+        storeHome ? ref.watch(stockItemsProvider) : null;
+    final Map<String, DateTime> countedToday = storeHome
+        ? ref.watch(stockCountedTodayProvider)
+        : const <String, DateTime>{};
     final List<HomeSectionSpec> sections = visibleHomeSections(
       _kHomeSections,
       (ModuleKey module) => ref.watch(canAccessModuleProvider(module)),
     );
     final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
     final DateTime now = ref.watch(homeHeaderClockProvider)();
+    if (rolePlan != null) {
+      return _buildRoleHome(
+        context: context,
+        l10n: l10n,
+        palette: palette,
+        plan: rolePlan,
+        workspace: workspace,
+        now: now,
+        sections: sections,
+      );
+    }
     final AsyncValue<InspectionDraftSummary?>? draft =
         canInspect ? ref.watch(homeLatestInspectionDraftProvider) : null;
     final AsyncValue<HomePendingApprovals>? approvals = canSignApprovals
@@ -389,6 +473,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           alerts: alerts != null,
           recent: recent != null,
           plan: plan != null,
+          store: store != null,
         ),
         child: ListView(
           padding: EdgeInsets.zero,
@@ -430,6 +515,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         pendingSync: pendingSync,
                         notificationCount: _scalarCountText(notificationCount),
                         onSiteTap: () => _showSite(workspace, l10n),
+                        onSyncTap: () => unawaited(showSyncQueueSheet(context)),
                         onNotifications: () =>
                             context.push(const NotificationsRoute().location),
                       ),
@@ -526,6 +612,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       pendingSync: pendingSync,
                       alerts: alerts,
                       approvals: approvals,
+                      store: store,
+                      countedToday: countedToday,
+                      now: now,
                       onOpenPlan: canSeeCalendar
                           ? () => context.push(const CalendarRoute().location)
                           : canSeeTasks
@@ -545,6 +634,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     canWash: canWash,
                     canSeeVehicles: canSeeVehicles,
                     canReportIssue: canReportIssue,
+                    canStore: storeHome,
+                    onStockCount: () =>
+                        context.push(const StockCountRoute().location),
+                    onReceiveGoods: () => Navigator.of(context)
+                        .push(StoreReceiptScreen.route())
+                        .then((_) => ref.invalidate(stockItemsProvider)),
+                    onStoreHistory: () =>
+                        Navigator.of(context).push(StoreHistoryScreen.route()),
                     onScanner: () =>
                         context.push(const ScannerRoute().location),
                     onWashing: () => context.go(const WashingRoute().location),
@@ -554,6 +651,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onMore: () => _showServices(sections, l10n),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Home for a role with a plan: the same header, then up to two big tiles,
+  /// compact rows and chips ([_RoleHomePanel]).
+  Widget _buildRoleHome({
+    required BuildContext context,
+    required AppLocalizations l10n,
+    required TpPalette palette,
+    required HomeRolePlan plan,
+    required WorkspaceContext? workspace,
+    required DateTime now,
+    required List<HomeSectionSpec> sections,
+  }) {
+    final AsyncValue<int> pendingSync = ref.watch(homePendingSyncCountProvider);
+    final AsyncValue<int> notificationCount =
+        ref.watch(unreadNotificationsCountProvider);
+    return TpScaffold(
+      backgroundColor: palette.background,
+      body: RefreshIndicator(
+        key: HomeScreenKeys.refresh,
+        color: palette.primary,
+        onRefresh: () async {
+          _refreshSources();
+          await ref
+              .read(homePendingSyncCountProvider.future)
+              .then<void>((_) {}, onError: (Object _) {});
+        },
+        child: ListView(
+          padding: EdgeInsets.zero,
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: <Widget>[
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[
+                    if (palette.brightness == Brightness.light)
+                      palette.primarySoft
+                    else
+                      palette.surface,
+                    palette.background,
+                  ],
+                ),
+              ),
+              child: _Band(
+                color: Colors.transparent,
+                padding: const EdgeInsetsDirectional.fromSTEB(16, 16, 12, 18),
+                child: _HomeHeader(
+                  l10n: l10n,
+                  workspace: workspace,
+                  now: now,
+                  pendingSync: pendingSync,
+                  notificationCount: _scalarCountText(notificationCount),
+                  onSiteTap: () => _showSite(workspace, l10n),
+                  onSyncTap: () => unawaited(showSyncQueueSheet(context)),
+                  onNotifications: () =>
+                      context.push(const NotificationsRoute().location),
+                ),
+              ),
+            ),
+            _Band(
+              color: palette.background,
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+              child: _RoleHomePanel(
+                plan: plan,
+                onMore: () => _showServices(sections, l10n),
               ),
             ),
           ],
@@ -798,6 +968,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required AsyncValue<List<TyreAlert>>? alerts,
     required AsyncValue<HomePendingApprovals>? approvals,
     required VoidCallback? onOpenPlan,
+    AsyncValue<List<StockItem>>? store,
+    Map<String, DateTime> countedToday = const <String, DateTime>{},
+    DateTime? now,
   }) {
     _SummaryTileData tile<T>({
       required String id,
@@ -847,7 +1020,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final bool planHasInspections = plan != null &&
         (snapshot == null ||
             snapshot.attempted.contains(MyWorkSource.inspectionPlans));
+    final DateTime today = now ?? DateTime.now();
+    // Each store tile opens Stock Count on its own filter.
+    void openStock(StockCountFilter filter) {
+      ref.read(stockCountRequestedFilterProvider.notifier).request(filter);
+      unawaited(context.push(const StockCountRoute().location));
+    }
+
+    String stockLabel(String key) =>
+        _catalogLabel(l10n.stockCountCopyCatalog, key);
     return <_SummaryTileData>[
+      // Store figures, from the same register Stock Count lists (one read,
+      // stockItemsProvider), so Home and the screen can never disagree.
+      if (store != null) ...<_SummaryTileData>[
+        tile<List<StockItem>>(
+          id: 'stockItems',
+          icon: Icons.inventory_2_outlined,
+          gem: TpGemSpec.stockItems,
+          tone: palette.info,
+          label: stockLabel('items'),
+          state: store,
+          value: (List<StockItem> v) => '${v.length}',
+          onTap: () => openStock(StockCountFilter.all),
+        ),
+        tile<List<StockItem>>(
+          id: 'stockReorder',
+          icon: Icons.production_quantity_limits_outlined,
+          gem: TpGemSpec.reportIssue,
+          tone: palette.warning,
+          label: stockLabel('reorder'),
+          state: store,
+          value: (List<StockItem> v) =>
+              '${v.where((StockItem i) => i.needsReorder).length}',
+          onTap: () => openStock(StockCountFilter.low),
+        ),
+        tile<List<StockItem>>(
+          id: 'stockNotCounted',
+          icon: Icons.pending_actions_outlined,
+          gem: TpGemSpec.stockNotCounted,
+          tone: palette.neutral,
+          label: stockLabel('notToday'),
+          state: store,
+          value: (List<StockItem> v) => '${v.where(
+                (StockItem i) => !stockLineCountedToday(i, today, countedToday),
+              ).length}',
+          onTap: () => openStock(StockCountFilter.stale),
+        ),
+      ],
       if (planHasInspections)
         tile<MyWorkSnapshot>(
           id: 'inspections',
@@ -887,7 +1106,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         label: l10n.homeSyncStatLabel,
         state: pendingSync,
         value: (int v) => '$v',
-        onTap: () => context.go(const ProfileRoute().location),
+        onTap: () => unawaited(showSyncQueueSheet(context)),
       ),
       if (alerts != null)
         tile<List<TyreAlert>>(
@@ -985,18 +1204,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SizedBox(height: 8),
               for (final HomeSectionSpec section in sections)
                 for (final HomeTileSpec tile in section.tiles)
-                  ListTile(
-                    leading: TpIcon(_tileMeta(l10n, tile.id).icon),
-                    title: Text(_tileMeta(l10n, tile.id).label),
-                    trailing: const Icon(
-                      // Mirrors itself under RTL (matchTextDirection).
-                      Icons.chevron_right_rounded,
+                  // Only a signer is offered the inspection sign-off queue
+                  // (V606); the rest of the approvals module is unchanged.
+                  if (tile.id != 'inspectionApprovals' ||
+                      ref.read(homeCanSignInspectionApprovalsProvider))
+                    ListTile(
+                      leading: TpIcon(_tileMeta(l10n, tile.id).icon),
+                      title: Text(_tileMeta(l10n, tile.id).label),
+                      trailing: const Icon(
+                        // Mirrors itself under RTL (matchTextDirection).
+                        Icons.chevron_right_rounded,
+                      ),
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        _openHomeTile(context, tile.id);
+                      },
                     ),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      _openHomeTile(context, tile.id);
-                    },
-                  ),
             ],
           ),
         ),
@@ -1152,6 +1375,7 @@ class _HomeHeader extends StatelessWidget {
     required this.pendingSync,
     required this.notificationCount,
     required this.onSiteTap,
+    required this.onSyncTap,
     required this.onNotifications,
   });
 
@@ -1161,6 +1385,9 @@ class _HomeHeader extends StatelessWidget {
   final AsyncValue<int> pendingSync;
   final String notificationCount;
   final VoidCallback onSiteTap;
+
+  /// Opens the quick sync sheet (the status chip).
+  final VoidCallback onSyncTap;
   final VoidCallback onNotifications;
 
   @override
@@ -1250,17 +1477,23 @@ class _HomeHeader extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        Row(
+        // A Wrap, not a Row: at a large text scale the sync pill took the
+        // whole row and squeezed the site name to nothing. Now the pill moves
+        // to its own line instead.
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: <Widget>[
-            Flexible(
-              child: _SiteChip(
-                site: site,
-                country: country,
-                onTap: onSiteTap,
-              ),
+            _SiteChip(
+              site: site,
+              country: country,
+              onTap: onSiteTap,
             ),
-            const SizedBox(width: 8),
-            _HomeSyncStatus(l10n: l10n, pending: pendingSync),
+            _HomeSyncStatus(
+              l10n: l10n,
+              pending: pendingSync,
+              onTap: onSyncTap,
+            ),
           ],
         ),
       ],
@@ -1421,10 +1654,15 @@ class _SiteChip extends StatelessWidget {
 /// "Online": it says all changes are synced, how many are waiting, or that
 /// the queue could not be read.
 class _HomeSyncStatus extends StatelessWidget {
-  const _HomeSyncStatus({required this.l10n, required this.pending});
+  const _HomeSyncStatus({
+    required this.l10n,
+    required this.pending,
+    required this.onTap,
+  });
 
   final AppLocalizations l10n;
   final AsyncValue<int> pending;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1451,30 +1689,32 @@ class _HomeSyncStatus extends StatelessWidget {
     return ConstrainedBox(
       key: HomeScreenKeys.syncStatus,
       constraints: const BoxConstraints(maxWidth: 240),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: tone.soft,
+      child: Material(
+        color: tone.soft,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(TpRadius.pill),
-        ),
-        child: Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(8, 6, 10, 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              TpIcon(icon, size: 16, color: tone.base),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: tone.onSoft,
-                        fontWeight: FontWeight.w800,
-                      ),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(8, 6, 10, 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TpIcon(icon, size: 16, color: tone.base),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: tone.onSoft,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -2123,6 +2363,10 @@ class _DashboardQuickActions extends StatelessWidget {
     required this.canSeeVehicles,
     required this.canReportIssue,
     required this.onScanner,
+    this.canStore = false,
+    this.onStockCount,
+    this.onReceiveGoods,
+    this.onStoreHistory,
     required this.onWashing,
     required this.onAsset,
     required this.onReportIssue,
@@ -2134,6 +2378,14 @@ class _DashboardQuickActions extends StatelessWidget {
   final bool canWash;
   final bool canSeeVehicles;
   final bool canReportIssue;
+
+  /// The store tools lead the grid for a person whose job is the store.
+  /// Each is gated on the same `stock` module the More sheet uses; Receive
+  /// goods and Store history are reached from Stock Count under that gate.
+  final bool canStore;
+  final VoidCallback? onStockCount;
+  final VoidCallback? onReceiveGoods;
+  final VoidCallback? onStoreHistory;
   final VoidCallback onScanner;
   final VoidCallback onWashing;
   final VoidCallback onAsset;
@@ -2152,6 +2404,27 @@ class _DashboardQuickActions extends StatelessWidget {
       TpGemSpec gem,
       VoidCallback onTap,
     })>[
+      if (canStore && onStockCount != null)
+        (
+          id: 'stockCount',
+          label: _catalogLabel(l10n.stockCountCopyCatalog, 'title'),
+          gem: TpGemSpec.stockCount,
+          onTap: onStockCount!,
+        ),
+      if (canStore && onReceiveGoods != null)
+        (
+          id: 'receiveGoods',
+          label: InventoryCopy.of(context)('sr_entry'),
+          gem: TpGemSpec.receiveGoods,
+          onTap: onReceiveGoods!,
+        ),
+      if (canStore && onStoreHistory != null)
+        (
+          id: 'storeHistory',
+          label: StoreHistoryCopy.of(context)('historyTitle'),
+          gem: TpGemSpec.storeHistory,
+          onTap: onStoreHistory!,
+        ),
       if (canScan)
         (
           id: 'scanner',
@@ -2228,6 +2501,7 @@ class _DashboardActionCard extends StatelessWidget {
     required this.label,
     required this.gem,
     required this.onTap,
+    this.gemTone,
     super.key,
   });
 
@@ -2235,6 +2509,10 @@ class _DashboardActionCard extends StatelessWidget {
 
   /// The gem tile's glyph and meaning colour (see [TpGemSpec]).
   final TpGemSpec gem;
+
+  /// Overrides [gem]'s colour when the same glyph means something else
+  /// (the per-role Home uses it, e.g. a teal workshop tile).
+  final TpGemTone? gemTone;
   final VoidCallback onTap;
 
   @override
@@ -2262,7 +2540,7 @@ class _DashboardActionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                TpGem.spec(gem, size: TpGemSize.md),
+                TpGem.spec(gem, tone: gemTone, size: TpGemSize.md),
                 const SizedBox(height: 12),
                 Text(
                   label,
@@ -2473,6 +2751,18 @@ class _DashboardActionCard extends StatelessWidget {
         label: l10n.checklistApprovalsTitle,
         icon: Icons.fact_check_outlined,
         approve: true,
+      );
+    case 'repairRequest':
+      return (
+        label: _catalogLabel(l10n.homeRoleCopyCatalog, 'repair'),
+        icon: Icons.build_outlined,
+        approve: false,
+      );
+    case 'handover':
+      return (
+        label: l10n.handoverNavTitle,
+        icon: Icons.assignment_turned_in_outlined,
+        approve: false,
       );
     default:
       return (label: id, icon: Icons.circle_outlined, approve: false);
@@ -2810,6 +3100,12 @@ void _openHomeTile(BuildContext context, String id) {
       return;
     case 'inspectionApprovals':
       context.go(const InspectionApprovalsRoute().location);
+      return;
+    case 'repairRequest':
+      context.push(const RepairRequestRoute().location);
+      return;
+    case 'handover':
+      context.push(const HandoverRoute().location);
       return;
   }
 }

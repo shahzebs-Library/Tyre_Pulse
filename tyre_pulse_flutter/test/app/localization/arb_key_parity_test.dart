@@ -695,10 +695,31 @@ void main() {
     // and Urdu font).
     // 2707 + 7 = 2714: the Article 91 fault finding (title, not recorded, four
     // findings) and the block when it was a third party or force majeure.
-    test('en, ar and ur each carry exactly 2714 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2714);
-      expect(_translatableKeys(ar).length, 2714);
-      expect(_translatableKeys(ur).length, 2714);
+    // 2714 + 65 = 2779: Profile's Sync queue and Drafts screens; + 2 = 2781:
+    // the not-active screen's "Check again" button and its "still not
+    // active" reply (accessBlockedCheckAgain / StillWaiting).
+    // 2781 + 1 = 2782: homeRoleCopyCatalog, the per-role Home tiles and rows
+    // (one catalog key, like the other *CopyCatalog keys).
+    // 2782 + 17 = 2799: My accident tasks (screen, Home row, register "Mine").
+    // 2799 + 1 = 2800: accidentTasksRoleNames, role names on task rows.
+    // 2800 + 72 = 2872: field hardware (devices*, gauge*, hidScannerReady,
+    // label*) - Settings > Devices, "Read from gauge", the handheld scanner
+    // line and "Print label".
+    // 2872 + 9 = 2881: the sync queue's "photo could not upload" line and
+    // its Retry / send-without-this-photo actions.
+    // 2881 + 2 = 2883: the fleet list's "Off road" drill-down chip
+    // (fleetListOffRoadFilter) and the Inspect picker's note on why its All
+    // count is lower than the register (inspectionPickerCollapsedNote).
+    // 2883 + 1 = 2884: workshopIntakeCopyCatalog, Workshop Status vehicle
+    // intake on the phone (waiting for me, add vehicle).
+    // 2884 -> 2995: merged branch keys.
+    // 2995 -> 2996: merged branch keys.
+    // 2996 -> 3006: merged branch keys.
+    // 3006 -> 3041: merged branch keys.
+    test('en, ar and ur each carry exactly 3041 translatable keys today', () {
+      expect(_translatableKeys(en).length, 3041);
+      expect(_translatableKeys(ar).length, 3041);
+      expect(_translatableKeys(ur).length, 3041);
     });
   });
 

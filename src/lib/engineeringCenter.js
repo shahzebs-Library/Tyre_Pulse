@@ -266,6 +266,8 @@ export const EDGE_FUNCTIONS = Object.freeze([
   { name: 'billing-checkout', what: 'Stripe checkout (billing not live)', auth: 'In code' },
   { name: 'billing-webhook', what: 'Stripe events (billing not live)', auth: 'Signature' },
   { name: 'chat-ai', what: 'Answers assistant questions', auth: 'In code' },
+  { name: 'device-ingest', what: 'Hardware and telematics readings (not deployed yet)', auth: 'Device key' },
+  { name: 'email-dispatch', what: 'Sends queued system emails (dry run until switched live; not deployed yet)', auth: 'Shared secret' },
   { name: 'embed-worker', what: 'Background document indexing', auth: 'Cron secret' },
   { name: 'generate-embedding', what: 'Turns documents into search vectors', auth: 'Gateway and in code' },
   { name: 'public-api', what: 'External API for customers', auth: 'API key' },
@@ -276,6 +278,7 @@ export const EDGE_FUNCTIONS = Object.freeze([
   { name: 'sentry-issues', what: 'Crash list for the Error Center', auth: 'In code' },
   { name: 'sign-in', what: 'Username sign-in for real-email accounts; never returns the email', auth: 'In code' },
   { name: 'tenant-export', what: 'Exports one company\'s data', auth: 'In code or cron secret' },
+  { name: 'workshop-sheet-ingest', what: 'Receives workshop intake rows from the shared Google Sheet (not deployed yet)', auth: 'Signed request' },
   { name: 'workflow-notify', what: 'Push and email for approvals', auth: 'Shared secret' },
 ])
 

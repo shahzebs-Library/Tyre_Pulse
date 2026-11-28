@@ -51,6 +51,11 @@ enum TpAssetIconKind {
   home,
   user,
   bell,
+
+  /// Store glyphs (2026-11-27): an item crate for "Items" and a clock with a
+  /// back arrow for "Store history", so neither reuses Count or Sync.
+  box,
+  history,
 }
 
 /// Placeholder for the stroke width, filled in per size so large icons do not
@@ -149,6 +154,15 @@ final Map<TpAssetIconKind, String> _sources = <TpAssetIconKind, String>{
   ),
   TpAssetIconKind.bell: _svg(
     '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5h4"/>',
+  ),
+  TpAssetIconKind.box: _svg(
+    '<path d="M3.5 7.5L12 3.5l8.5 4v9L12 20.5l-8.5-4z"/>'
+    '<path d="M3.5 7.5L12 11.5l8.5-4M12 11.5v9"/>'
+    '<path d="M7.8 5.5l8.4 4"/>',
+  ),
+  TpAssetIconKind.history: _svg(
+    '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/>'
+    '<path d="M4.2 3.8v3.4h3.4"/><path d="M12 8v4.3l2.8 1.7"/>',
   ),
 };
 
@@ -314,7 +328,18 @@ enum TpGemSpec {
   more(TpAssetIconKind.more, TpGemTone.slate),
   pump(TpAssetIconKind.pump, TpGemTone.amber),
   pressure(TpAssetIconKind.gauge, TpGemTone.violet),
-  tyre(TpAssetIconKind.tyre, TpGemTone.tyre);
+  tyre(TpAssetIconKind.tyre, TpGemTone.tyre),
+
+  /// Store work on Home for a person whose job is the store: count the
+  /// shelf, receive goods in, look back at the movements.
+  stockCount(TpAssetIconKind.inspection, TpGemTone.green),
+  receiveGoods(TpAssetIconKind.scan, TpGemTone.teal),
+  storeHistory(TpAssetIconKind.history, TpGemTone.blue),
+
+  /// Store summary tiles on Home: every item, and items not counted today.
+  /// Distinct glyphs from Count (clipboard) and Sync.
+  stockItems(TpAssetIconKind.box, TpGemTone.blue),
+  stockNotCounted(TpAssetIconKind.inspection, TpGemTone.slate);
 
   const TpGemSpec(this.glyph, this.tone);
 

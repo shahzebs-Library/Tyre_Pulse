@@ -92,7 +92,14 @@ enum ModuleKey {
   // Admin
   approvals,
   admin,
-  users;
+  users,
+
+  /// Field hardware (Settings > Devices, "Read from gauge", handheld
+  /// scanner routing and "Print label"). Flutter-only - listed in
+  /// [flutterOnlyModules] - and ADMIN-ONLY for now (owner, 2026-11-27): it is
+  /// opened to one person at a time from the web Access Manager with a
+  /// `mobile:devices` grant.
+  devices;
 
   /// The string the server stores, without the `mobile:` prefix.
   String get wireKey => name;
@@ -246,6 +253,8 @@ const Set<ModuleKey> flutterOnlyModules = <ModuleKey>{
   // such module - so the drift guard skips it rather than comparing it against
   // a phone registry that cannot contain it.
   ModuleKey.handover,
+  // Field hardware is born in Flutter (lib/core/devices/); Expo never had it.
+  ModuleKey.devices,
 };
 
 /// Parses a `mobile:<webKey>` row to the phone module it means, via
@@ -386,6 +395,11 @@ const Map<ModuleKey, Set<RoleId>> flutterRoleDefaultExtensions =
   // inventory contract (docs/inventory/07) names it as a counting role. The
   // server is still the boundary: every `inv_*` RPC re-checks the capability.
   ModuleKey.stock: <RoleId>{RoleId.storeKeeper},
+  // Workshop: the Workshop Supervisor runs the floor. Their Home leads with
+  // "Team now" and "Assign jobs" (2026-11-27), both of which open the
+  // workshop route, which for a non-technician is the job-card board. The
+  // Expo registry never listed this role on `workshop`.
+  ModuleKey.workshop: <RoleId>{RoleId.workshopSupervisor},
 };
 
 /// The registry itself.
@@ -745,6 +759,13 @@ abstract final class ModuleRegistry {
     ModuleDef.adminOnly(
       key: ModuleKey.users,
       defaultLabel: 'User Management',
+      group: ModuleGroup.admin,
+    ),
+    // Flutter-only (see [flutterOnlyModules]). Admin-only until the owner
+    // opens it per user from the web Access Manager.
+    ModuleDef.adminOnly(
+      key: ModuleKey.devices,
+      defaultLabel: 'Devices',
       group: ModuleGroup.admin,
     ),
   ];

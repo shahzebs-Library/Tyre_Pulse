@@ -128,6 +128,19 @@ enum CommandType {
   /// lines have no client write grant). Idempotent on the line's
   /// `client_uuid`, which is also the command's idempotency key.
   inventoryCountLine,
+
+  /// A technician's job completion, sent through the
+  /// `submit_job_completion` RPC (migration
+  /// `20261127150000_workshop_job_completion.sql`). It records what was done,
+  /// parts, photos, meters and the technician's signature, and moves the job
+  /// to Quality Inspection for a SUPERVISOR to pass or return - never straight
+  /// to closed. Idempotent per technician on `client_uuid` (the command's
+  /// idempotency key). Works offline: the before / after photos are queued
+  /// as media attachments ([CommandSpec.requiresMediaReady]) and
+  /// `JobCompletionEvidenceCommandPusher` swaps their local paths for the
+  /// uploaded `tp-storage://` references at push time. Country, site and
+  /// asset are read by the server from the work order, never sent.
+  jobCompletion,
 }
 
 /// `pending_commands.commandType` values.
@@ -168,6 +181,8 @@ extension CommandTypeWireName on CommandType {
         return 'WORKSHOP_EVENT';
       case CommandType.inventoryCountLine:
         return 'INVENTORY_COUNT_LINE';
+      case CommandType.jobCompletion:
+        return 'JOB_COMPLETION';
     }
   }
 }
@@ -272,10 +287,22 @@ final class CommandSpec {
   final bool requiresOptimisticStatusMatch;
 }
 
+/// Columns the database computes itself (`GENERATED ALWAYS AS ...`), per
+/// table. Postgres refuses any INSERT or UPDATE that names one (SQLSTATE
+/// 428C9), and that refusal fails the WHOLE write, so the sync engine strips
+/// these from every payload immediately before the push - whatever an
+/// allow-list or an older queued row says.
+///
+/// `tyre_records.fitment_date` always equals `issue_date`;
+/// `work_orders.total_cost` is computed from the cost columns.
+const Map<String, Set<String>> generatedColumnsByTable = <String, Set<String>>{
+  SupabaseTables.tyreRecords: <String>{'fitment_date'},
+  SupabaseTables.workOrders: <String>{'total_cost'},
+};
+
 /// The single table-name registry. See the library comment.
 abstract final class CommandRegistry {
-  static const Map<CommandType, CommandSpec> specs =
-      <CommandType, CommandSpec>{
+  static const Map<CommandType, CommandSpec> specs = <CommandType, CommandSpec>{
     // ---- Inserts (observations - safe to queue outright) ----
     CommandType.tyreChange: CommandSpec(
       type: CommandType.tyreChange,
@@ -301,7 +328,8 @@ abstract final class CommandRegistry {
         'tread_depth',
         'removal_reason',
         'removal_date',
-        'fitment_date',
+        // NOT 'fitment_date': it is a GENERATED column (= issue_date) and
+        // naming it in an insert fails the whole write with 428C9.
         'issue_date',
         'status',
         'risk_level',
@@ -546,6 +574,10 @@ abstract final class CommandRegistry {
         'country',
         'foreman_confirmed',
         'confirmed_by',
+        // The local TAP time (ISO UTC). Without it an event captured offline
+        // is stamped by the server default at SYNC time, so productive time
+        // and pauses are measured from when the phone reconnected.
+        'at',
       },
     ),
 
@@ -578,6 +610,31 @@ abstract final class CommandRegistry {
       // its photos are uploaded (or it has none); a line with local photos
       // stays in the encrypted draft for the manual Send.
       fieldAllowList: <String>{'audit_id', 'device_id', 'lines'},
+    ),
+    CommandType.jobCompletion: CommandSpec(
+      type: CommandType.jobCompletion,
+      // The RPC writes `work_order_completions` and moves `work_orders` to
+      // Quality Inspection; the entity this command changes is the job.
+      table: SupabaseTables.workOrders,
+      operation: CommandOperation.rpc,
+      rpc: 'submit_job_completion',
+      // The after photo is the evidence the supervisor approves against:
+      // the RPC is not called until every queued photo is on the server.
+      requiresMediaReady: true,
+      fieldAllowList: <String>{
+        'client_uuid',
+        'job_id',
+        'task_id',
+        'work_done',
+        'quick_picks',
+        'parts_used',
+        'before_photos',
+        'after_photos',
+        'km',
+        'engine_hours',
+        'signature',
+        'completed_at',
+      },
     ),
     CommandType.workOrderStatus: CommandSpec(
       type: CommandType.workOrderStatus,

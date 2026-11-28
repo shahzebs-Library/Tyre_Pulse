@@ -37,6 +37,7 @@ import {
   CASE_SLA_LABELS,
 } from '../lib/accidentCaseAnalytics'
 import CaseTeamInbox from '../components/accidents/CaseTeamInbox'
+import AccidentHoldingsBoard from '../components/accidents/AccidentHoldingsBoard'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
 
@@ -576,7 +577,10 @@ export default function AccidentCases() {
       </div>
 
       {/* team inbox — overdue-first handled inside the component */}
-      <CaseTeamInbox items={board.inbox} />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <CaseTeamInbox />
+        <AccidentHoldingsBoard />
+      </div>
     </div>
   )
 }

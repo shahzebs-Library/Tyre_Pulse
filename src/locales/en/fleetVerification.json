@@ -1,0 +1,102 @@
+{
+  "action": {
+    "verify": "Verify on site",
+    "approve": "Approve",
+    "reject": "Reject",
+    "submit": "Save verification",
+    "cancel": "Cancel",
+    "retry": "Try again",
+    "close": "Close"
+  },
+  "modal": {
+    "title": "Verify on site",
+    "subtitle": "{asset} - check the machine in front of you",
+    "outcome": "What did you find?",
+    "present": "The machine is here",
+    "notFound": "Not found here",
+    "otherCountry": "It is in another country",
+    "whichCountry": "Which country?",
+    "assetCode": "Asset code on the machine",
+    "plate": "Plate number",
+    "chassis": "Chassis number",
+    "onFile": "On file: {value}",
+    "blank": "blank",
+    "photo": "Photo of the machine",
+    "photoHint": "Take a clear photo. On approval it replaces the class picture.",
+    "note": "Note (optional)",
+    "gps": "Location is recorded if your device allows it. It never blocks saving.",
+    "willFill": "Will be filled now: {fields}",
+    "willWait": "Will wait for a manager: {reasons}",
+    "willApply": "Everything matches. It will be saved straight away.",
+    "notFoundHint": "A manager confirms before the machine is marked Inactive.",
+    "otherCountryHint": "A manager confirms before the machine is marked Transferred.",
+    "saving": "Saving...",
+    "savedApplied": "Saved and applied.",
+    "savedPending": "Saved. A manager will review it.",
+    "notAllowed": "Only a Fleet Supervisor, Fleet Incharge or Admin can verify machines on site.",
+    "needCountry": "Choose the country the machine is in.",
+    "choosePhoto": "Take or choose photo",
+    "changePhoto": "Change photo",
+    "noPhotoYet": "No photo yet"
+  },
+  "fields": {
+    "registration_no": "plate",
+    "chassis_no": "chassis",
+    "image_path": "photo",
+    "status": "status"
+  },
+  "flags": {
+    "asset_code_mismatch": "asset code differs",
+    "chassis_invalid_chars": "chassis has I, O or Q",
+    "duplicate_plate": "plate already on another machine",
+    "duplicate_chassis": "chassis already on another machine",
+    "plate_changed": "plate differs from file",
+    "chassis_changed": "chassis differs from file",
+    "not_found": "not found on site",
+    "other_country": "reported in another country"
+  },
+  "status": {
+    "verified": "Verified",
+    "pending": "Waiting for review",
+    "notFound": "Not found",
+    "otherCountry": "In another country",
+    "rejected": "Rejected",
+    "never": "Not verified"
+  },
+  "column": {
+    "title": "Site check",
+    "lastOn": "Checked {date}"
+  },
+  "progress": {
+    "title": "Verified on site",
+    "value": "{done} of {total} verified",
+    "pending": "{n} waiting for review",
+    "empty": "No machines in this view"
+  },
+  "pending": {
+    "title": "Verifications waiting for review",
+    "empty": "Nothing waiting for review.",
+    "by": "By {name} on {date}",
+    "old": "File",
+    "new": "Seen",
+    "reasonPrompt": "Reason (required to reject)",
+    "ownSubmission": "You submitted this one. Another Admin or Manager must decide it.",
+    "noPhoto": "No photo",
+    "gps": "GPS {lat}, {lng}"
+  },
+  "transfers": {
+    "title": "Possible transfers to review",
+    "intro": "Inactive machines whose asset code also exists in another country. The same code is often a different machine, so nothing changes here; check each one on site.",
+    "empty": "No inactive machines share a code with another country.",
+    "asset": "Asset",
+    "here": "Here",
+    "there": "Other country",
+    "typeMatch": "Same type",
+    "lastJob": "Last job card there",
+    "yes": "Yes",
+    "no": "No",
+    "none": "None"
+  },
+  "notSetUp": "On-site verification is not set up on the server yet.",
+  "loadError": "Could not load. Check the connection and try again."
+}

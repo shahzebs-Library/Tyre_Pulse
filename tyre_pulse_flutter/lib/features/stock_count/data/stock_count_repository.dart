@@ -91,28 +91,37 @@ final class DefaultStockCountRepository
 
   @override
   Future<List<StockItem>> list({String? country}) {
-    return guard<List<StockItem>>(() async {
-      final String scope = country?.trim() ?? '';
-      final List<Map<String, dynamic>> rows = await fetchStockPages(
-        (int from, int to) {
-          var query = _client.from(SupabaseTables.stockRecords).select(
-                'id,site,description,stock_qty,min_level,critical_level,'
-                'stock_status,updated_at,country,item_id,location_id,'
-                'qty_reserved,condition,ownership',
-              );
-          if (scope.isNotEmpty && scope != 'All') {
-            query = query.or('country.eq.$scope,country.is.null');
-          }
-          // The id tiebreak is load-bearing: ordering a paged read on a
-          // non-unique key (site) drops or repeats rows at a page boundary.
-          return query.order('site').order('id').range(from, to);
-        },
-      );
-      return rows
-          .map(_fromRow)
-          .where((StockItem item) => item.id.isNotEmpty)
-          .toList(growable: false);
-    });
+    return guard<List<StockItem>>(
+      () async {
+        final String scope = country?.trim() ?? '';
+        final List<Map<String, dynamic>> rows = await fetchStockPages(
+          (int from, int to) {
+            var query = _client.from(SupabaseTables.stockRecords).select(
+                  'id,site,description,stock_qty,min_level,critical_level,'
+                  'stock_status,updated_at,country,item_id,location_id,'
+                  'qty_reserved,condition,ownership,uom,'
+                  // Both foreign keys are single (stock_records_location_fk,
+                  // stock_records_item_id_fkey), so the embeds are unambiguous.
+                  'location:inventory_locations(code),'
+                  'item:material_master(item_code)',
+                );
+            if (scope.isNotEmpty && scope != 'All') {
+              query = query.or('country.eq.$scope,country.is.null');
+            }
+            // The id tiebreak is load-bearing: ordering a paged read on a
+            // non-unique key (site) drops or repeats rows at a page boundary.
+            return query.order('site').order('id').range(from, to);
+          },
+        );
+        return rows
+            .map(_fromRow)
+            .where((StockItem item) => item.id.isNotEmpty)
+            .toList(growable: false);
+        // Bounded: offline, an auth refresh can hold a request open for
+        // minutes; the screen then keeps the last loaded list on view.
+      },
+      timeout: const Duration(seconds: 25),
+    );
   }
 
   @override
@@ -157,7 +166,15 @@ StockItem _fromRow(Map<String, dynamic> row) => StockItem(
           row['qty_reserved'] == null ? null : _number(row['qty_reserved']),
       condition: _text(row['condition']),
       ownership: _text(row['ownership']),
+      uom: _text(row['uom']),
+      locationCode: _embedded(row['location'], 'code'),
+      itemCode: _embedded(row['item'], 'item_code'),
     );
+
+/// A PostgREST to-one embed is a map (or null when the FK is null or the row
+/// is not readable).
+String? _embedded(Object? value, String key) =>
+    value is Map ? _text(value[key]) : null;
 
 String? _text(Object? value) {
   final String text = value?.toString().trim() ?? '';

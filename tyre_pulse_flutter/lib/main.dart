@@ -12,6 +12,7 @@ import 'package:tyre_pulse/app/router/app_router.dart';
 import 'package:tyre_pulse/app/router/module_access_resolver_impl.dart';
 import 'package:tyre_pulse/app/router/route_access.dart';
 import 'package:tyre_pulse/app/router/screen_registry.dart';
+import 'package:tyre_pulse/app/sync/photo_retry_binding.dart';
 import 'package:tyre_pulse/app/telemetry/telemetry_user_binding.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings_prefs_store.dart';
@@ -49,6 +50,9 @@ import 'package:tyre_pulse/features/calendar/calendar_screen_registrations.dart'
 import 'package:tyre_pulse/features/checklists/'
     'checklists_screen_registrations.dart';
 import 'package:tyre_pulse/features/extras/extras_screen_registrations.dart';
+import 'package:tyre_pulse/features/fleet_supervisor/'
+    'fleet_supervisor_screen_registrations.dart';
+import 'package:tyre_pulse/features/fleet_verification/fleet_verification_sync_binding.dart';
 import 'package:tyre_pulse/features/handover/'
     'handover_screen_registrations.dart';
 import 'package:tyre_pulse/features/home/home_screen_registrations.dart';
@@ -377,6 +381,7 @@ Future<void> main() async {
               .withAll(meterLogsScreenRegistrations)
               .withAll(washingScreenRegistrations)
               .withAll(handoverScreenRegistrations)
+              .withAll(fleetSupervisorScreenRegistrations)
               .withAll(homeScreenRegistrations)
               .withAll(workOrdersScreenRegistrations)
               .withAll(workshopScreenRegistrations)
@@ -435,7 +440,11 @@ class TyrePulseApp extends ConsumerWidget {
           child: PushBinding(
             child: WorkforceSyncBinding(
               child: PhysicalOutboxSyncBinding(
-                child: child ?? const SizedBox.shrink(),
+                child: FleetVerificationSyncBinding(
+                  child: PhotoRetryBinding(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
+                ),
               ),
             ),
           ),

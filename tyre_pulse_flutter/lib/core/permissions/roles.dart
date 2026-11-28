@@ -149,6 +149,18 @@ enum RoleId {
     token: 'store_keeper',
     databaseName: 'Store Keeper',
     isBuiltIn: false,
+  ),
+
+  /// A real `custom_roles` row seeded by
+  /// `supabase/migrations/20261127190000_driver_concerns_roles.sql` (not yet
+  /// applied; the owner assigns it later). Handles SENSITIVE driver concerns:
+  /// the fleet pool roles never see those. It has no phone module defaults on
+  /// purpose - HR works the concern inbox on the web; the server decides what
+  /// an HR Officer may see (private.dc_visible).
+  hrOfficer(
+    token: 'hr_officer',
+    databaseName: 'HR Officer',
+    isBuiltIn: false,
   );
 
   const RoleId({

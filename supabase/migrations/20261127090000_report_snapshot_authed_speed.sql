@@ -1,6 +1,6 @@
 -- get_report_snapshot_authed: stop reading all history for 12-month trends.
 --
--- STATUS: NOT APPLIED. Needs the owner's explicit yes.
+-- STATUS: APPLIED LIVE 2026-11-27 (recorded as 20261127153903 report_snapshot_authed_speed).
 --
 -- Why: the phone Financial report failed with "the server did not answer in
 -- time". As the super admin (all countries, last 90 days) the function took

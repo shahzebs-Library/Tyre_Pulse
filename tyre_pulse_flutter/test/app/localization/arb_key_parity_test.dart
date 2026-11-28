@@ -715,10 +715,11 @@ void main() {
     // 2884 -> 2995: merged branch keys.
     // 2995 -> 2996: merged branch keys.
     // 2996 -> 3006: merged branch keys.
-    test('en, ar and ur each carry exactly 3006 translatable keys today', () {
-      expect(_translatableKeys(en).length, 3006);
-      expect(_translatableKeys(ar).length, 3006);
-      expect(_translatableKeys(ur).length, 3006);
+    // 3006 -> 3041: merged branch keys.
+    test('en, ar and ur each carry exactly 3041 translatable keys today', () {
+      expect(_translatableKeys(en).length, 3041);
+      expect(_translatableKeys(ar).length, 3041);
+      expect(_translatableKeys(ur).length, 3041);
     });
   });
 

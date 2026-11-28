@@ -27,6 +27,7 @@ import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_previous_meters.dart';
+import 'package:tyre_pulse/features/inspections/data/inspection_previous_tyre_readings.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_sync_engine.dart'
     show InspectionSubmitOutcome;
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
@@ -1894,6 +1895,22 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
           final TyrePositionReading reading =
               liveState.tyreConditions[position] ??
                   TyrePositionReading.seed(position);
+          final String assetNo = liveState.selectedAssetNo.trim();
+          final String layoutKey = resolveVehicleType(
+            liveState.effectiveLayoutType,
+            assetNo,
+          );
+          // Hint-only: offline or a failed read simply shows no previous
+          // value (the provider never errors).
+          final PreviousTyreReading? previous = assetNo.isEmpty
+              ? null
+              : sheetRef
+                  .watch(
+                    previousTyreReadingsProvider(
+                      (assetNo: assetNo, layoutKey: layoutKey),
+                    ),
+                  )
+                  .value?[position];
           return TyrePositionEditorSheet(
             reading: reading,
             positionLabel: tyrePositionDisplayCode(
@@ -1901,6 +1918,13 @@ class _TyresStepState extends ConsumerState<_TyresStep> {
               position,
               assetNo: liveState.selectedAssetNo,
             ),
+            vehicleType: liveState.effectiveLayoutType,
+            assetNo: assetNo.isEmpty ? null : assetNo,
+            currentOdometerKm: double.tryParse(
+              liveState.odometerText.trim().replaceAll(',', ''),
+            ),
+            previousReading: previous,
+            installedTyreUnavailable: liveState.installedTyresLoadFailed,
             installedTyre: liveState.installedTyres[position],
             isCapturingPhoto: liveState.isCapturingPhoto,
             onChanged: (updated) => sheetRef

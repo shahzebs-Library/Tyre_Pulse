@@ -112,3 +112,6 @@ flutter:
     - assets/wash_types/
     - assets/wash_vehicles/
     - assets/document_specs/
+    # Condition tile pictures for the inspection tyre editor (optional: the
+    # drawn glyph is the fallback). See the folder's README.
+    - assets/tyre_conditions/

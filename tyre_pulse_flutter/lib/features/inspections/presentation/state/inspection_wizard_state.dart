@@ -34,6 +34,7 @@ class InspectionWizardState {
     this.positions = const <String>[],
     this.tyreConditions = const <String, TyrePositionReading>{},
     this.installedTyres = const <String, TyreFitment>{},
+    this.installedTyresLoadFailed = false,
     this.activePosition,
     this.inspectorSignature,
     this.gpsStatus = InspectionGpsStatus.idle,
@@ -77,6 +78,11 @@ class InspectionWizardState {
   final List<String> positions;
   final Map<String, TyrePositionReading> tyreConditions;
   final Map<String, TyreFitment> installedTyres;
+
+  /// True when the fitted-tyre register could not be read for this asset
+  /// (offline, or the read failed). Lets the tyre editor say "Fitted tyre
+  /// not loaded" instead of the wrong claim "No tyre on record".
+  final bool installedTyresLoadFailed;
   final String? activePosition;
 
   final String? inspectorSignature;
@@ -179,6 +185,7 @@ class InspectionWizardState {
     List<String>? positions,
     Map<String, TyrePositionReading>? tyreConditions,
     Map<String, TyreFitment>? installedTyres,
+    bool? installedTyresLoadFailed,
     String? activePosition,
     bool clearActivePosition = false,
     String? inspectorSignature,
@@ -215,6 +222,8 @@ class InspectionWizardState {
       positions: positions ?? this.positions,
       tyreConditions: tyreConditions ?? this.tyreConditions,
       installedTyres: installedTyres ?? this.installedTyres,
+      installedTyresLoadFailed:
+          installedTyresLoadFailed ?? this.installedTyresLoadFailed,
       activePosition:
           clearActivePosition ? null : (activePosition ?? this.activePosition),
       inspectorSignature: clearInspectorSignature

@@ -299,6 +299,7 @@ final class InspectionWizardController extends Notifier<InspectionWizardState> {
       positions: positions,
       tyreConditions: seeded,
       installedTyres: installedTyres,
+      installedTyresLoadFailed: fitmentError != null,
       loadError: fitmentError,
       clearLoadError: fitmentError == null,
       inspectorSignature: existingSignature?.payload,

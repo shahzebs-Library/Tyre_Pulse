@@ -16,6 +16,7 @@ class TyreFitment {
     this.assetNo,
     this.status,
     this.issueDate,
+    this.kmAtFitment,
   });
 
   factory TyreFitment.fromRow(Map<String, Object?> row) {
@@ -34,6 +35,7 @@ class TyreFitment {
       assetNo: _text(row['asset_no']),
       status: _text(row['status']),
       issueDate: DateTime.tryParse(_text(row['issue_date']) ?? ''),
+      kmAtFitment: _number(row['km_at_fitment']),
     );
   }
 
@@ -45,6 +47,10 @@ class TyreFitment {
   final String? assetNo;
   final String? status;
   final DateTime? issueDate;
+
+  /// The vehicle's odometer when this tyre was fitted (`km_at_fitment`),
+  /// exactly as recorded. Null when the register does not carry it.
+  final double? kmAtFitment;
 }
 
 /// Maps V2 `tyre_records` position codes onto the V1 inspection slots without
@@ -76,6 +82,11 @@ Map<String, TyreFitment> fitmentsByInspectionSlot({
     if (slot != null) result[slot] = fitment;
   }
   return Map<String, TyreFitment>.unmodifiable(result);
+}
+
+double? _number(Object? raw) {
+  if (raw is num) return raw.toDouble();
+  return double.tryParse(_text(raw) ?? '');
 }
 
 String? _text(Object? raw) {

@@ -116,7 +116,7 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(emitted, isNull);
-      expect(find.widgetWithText(TextField, '9.0'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '9'), findsOneWidget);
     });
 
     testWidgets('no gauge set up says so and changes nothing',

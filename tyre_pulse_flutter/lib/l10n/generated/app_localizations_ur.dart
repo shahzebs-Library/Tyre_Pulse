@@ -10493,4 +10493,133 @@ class AppLocalizationsUr extends AppLocalizations {
   String timeAgoDays(int count) {
     return '$count دن پہلے';
   }
+
+  @override
+  String get tyreEditorEyebrow => 'ٹائر کی جگہ';
+
+  @override
+  String tyrePosNameWithRole(String side, String axle, String role) {
+    return '$side، $axle، $role';
+  }
+
+  @override
+  String tyrePosNameNoRole(String side, String axle) {
+    return '$side، $axle';
+  }
+
+  @override
+  String get tyrePosSideLeft => 'بائیں';
+
+  @override
+  String get tyrePosSideRight => 'دائیں';
+
+  @override
+  String tyrePosAxleFront(String number) {
+    return 'اگلا ایکسل $number';
+  }
+
+  @override
+  String tyrePosAxleRearNumbered(String number) {
+    return 'پچھلا ایکسل $number';
+  }
+
+  @override
+  String get tyrePosAxleRear => 'پچھلا ایکسل';
+
+  @override
+  String get tyrePosAxleCentre => 'درمیانی ایکسل';
+
+  @override
+  String get tyrePosAxleRearCentre => 'پچھلا درمیانی ایکسل';
+
+  @override
+  String get tyrePosAxleRearmost => 'سب سے پچھلا ایکسل';
+
+  @override
+  String get tyrePosRoleInner => 'اندرونی';
+
+  @override
+  String get tyrePosRoleOuter => 'بیرونی';
+
+  @override
+  String get tyreEditorSectionMeasurements => 'پیمائشیں';
+
+  @override
+  String get tyreEditorSectionTyre => 'ٹائر';
+
+  @override
+  String get tyreEditorFittedTitle => 'لگا ہوا ٹائر';
+
+  @override
+  String tyreEditorFittedOn(String date) {
+    return '$date کو لگایا گیا';
+  }
+
+  @override
+  String tyreEditorKmAtFitment(String km) {
+    return 'لگاتے وقت $km کلومیٹر';
+  }
+
+  @override
+  String tyreEditorKmRun(String km) {
+    return 'لگانے کے بعد $km کلومیٹر چلا';
+  }
+
+  @override
+  String get tyreEditorFittedSerialMissing => 'سیریل نمبر درج نہیں';
+
+  @override
+  String get tyreEditorFittedNotLoaded => 'لگا ہوا ٹائر لوڈ نہیں ہوا';
+
+  @override
+  String get tyreEditorFittedNotLoadedHint =>
+      'ٹائر رجسٹر نہیں پڑھا جا سکا۔ آپ پھر بھی یہ پہیہ درج کر سکتے ہیں۔';
+
+  @override
+  String get tyreEditorFittedNone => 'اس جگہ کے لیے کوئی ٹائر ریکارڈ میں نہیں';
+
+  @override
+  String tyreEditorSerialDiffers(String serial) {
+    return 'ریکارڈ والے ٹائر سے مختلف ($serial)';
+  }
+
+  @override
+  String get tyreEditorUnitPsi => 'psi';
+
+  @override
+  String get tyreEditorUnitMm => 'ملی میٹر';
+
+  @override
+  String get tyreEditorNumberInvalid => 'ایک عدد درج کریں۔';
+
+  @override
+  String get tyreEditorPressureRange => '0 سے 200 psi تک دباؤ درج کریں۔';
+
+  @override
+  String get tyreEditorTreadRange =>
+      '0 سے 30 ملی میٹر تک ٹریڈ کی گہرائی درج کریں۔';
+
+  @override
+  String get tyreEditorPressureUnusual =>
+      'ٹائر کے لیے غیر معمولی دباؤ۔ ریڈنگ چیک کریں۔';
+
+  @override
+  String get tyreEditorTreadUnusual =>
+      'ٹریڈ کی غیر معمولی گہرائی۔ ریڈنگ چیک کریں۔';
+
+  @override
+  String tyreEditorPreviousReading(String date, String values) {
+    return 'آخری معائنہ $date: $values';
+  }
+
+  @override
+  String tyreEditorPreviousReadingUndated(String values) {
+    return 'آخری معائنہ: $values';
+  }
+
+  @override
+  String get tyreEditorConditionSelected => 'منتخب';
+
+  @override
+  String get tyreEditorPositionMap => 'گاڑی پر جگہ';
 }

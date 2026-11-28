@@ -10471,4 +10471,132 @@ class AppLocalizationsEn extends AppLocalizations {
   String timeAgoDays(int count) {
     return '$count d ago';
   }
+
+  @override
+  String get tyreEditorEyebrow => 'Tyre position';
+
+  @override
+  String tyrePosNameWithRole(String side, String axle, String role) {
+    return '$side, $axle, $role';
+  }
+
+  @override
+  String tyrePosNameNoRole(String side, String axle) {
+    return '$side, $axle';
+  }
+
+  @override
+  String get tyrePosSideLeft => 'Left';
+
+  @override
+  String get tyrePosSideRight => 'Right';
+
+  @override
+  String tyrePosAxleFront(String number) {
+    return 'front axle $number';
+  }
+
+  @override
+  String tyrePosAxleRearNumbered(String number) {
+    return 'rear axle $number';
+  }
+
+  @override
+  String get tyrePosAxleRear => 'rear axle';
+
+  @override
+  String get tyrePosAxleCentre => 'centre axle';
+
+  @override
+  String get tyrePosAxleRearCentre => 'rear-centre axle';
+
+  @override
+  String get tyrePosAxleRearmost => 'rearmost axle';
+
+  @override
+  String get tyrePosRoleInner => 'inner';
+
+  @override
+  String get tyrePosRoleOuter => 'outer';
+
+  @override
+  String get tyreEditorSectionMeasurements => 'Measurements';
+
+  @override
+  String get tyreEditorSectionTyre => 'Tyre';
+
+  @override
+  String get tyreEditorFittedTitle => 'Fitted tyre';
+
+  @override
+  String tyreEditorFittedOn(String date) {
+    return 'Fitted $date';
+  }
+
+  @override
+  String tyreEditorKmAtFitment(String km) {
+    return '$km km at fitment';
+  }
+
+  @override
+  String tyreEditorKmRun(String km) {
+    return '$km km run since fitment';
+  }
+
+  @override
+  String get tyreEditorFittedSerialMissing => 'Serial not recorded';
+
+  @override
+  String get tyreEditorFittedNotLoaded => 'Fitted tyre not loaded';
+
+  @override
+  String get tyreEditorFittedNotLoadedHint =>
+      'The tyre register could not be read. You can still record this wheel.';
+
+  @override
+  String get tyreEditorFittedNone => 'No tyre on record for this position';
+
+  @override
+  String tyreEditorSerialDiffers(String serial) {
+    return 'Different from the tyre on record ($serial)';
+  }
+
+  @override
+  String get tyreEditorUnitPsi => 'psi';
+
+  @override
+  String get tyreEditorUnitMm => 'mm';
+
+  @override
+  String get tyreEditorNumberInvalid => 'Enter a number.';
+
+  @override
+  String get tyreEditorPressureRange => 'Enter a pressure from 0 to 200 psi.';
+
+  @override
+  String get tyreEditorTreadRange => 'Enter a tread depth from 0 to 30 mm.';
+
+  @override
+  String get tyreEditorPressureUnusual =>
+      'Unusual pressure for a tyre. Check the reading.';
+
+  @override
+  String get tyreEditorTreadUnusual =>
+      'Unusual tread depth. Check the reading.';
+
+  @override
+  String tyreEditorPreviousReading(String date, String values) {
+    return 'Last inspection $date: $values';
+  }
+
+  @override
+  String tyreEditorPreviousReadingUndated(String values) {
+    return 'Last inspection: $values';
+  }
+
+  @override
+  String get tyreEditorConditionSelected => 'Selected';
+
+  @override
+  String get tyreEditorPositionMap => 'Position on the vehicle';
 }

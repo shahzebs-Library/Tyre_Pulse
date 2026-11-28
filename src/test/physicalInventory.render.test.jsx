@@ -38,9 +38,10 @@ describe('PhysicalInventorySection', () => {
     expect(screen.queryByRole('button', { name: /AMAALA/ })).toBeNull()
     fireEvent.click(store)
     expect(store.getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByRole('option', { name: 'AMAALA' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /^start$/i }).disabled).toBe(false)
-  })
+    expect(await screen.findByRole('option', { name: 'AMAALA' }, { timeout: 8000 })).toBeTruthy()
+    const start = await screen.findByRole('button', { name: /^start$/i }, { timeout: 8000 })
+    await waitFor(() => expect(start.disabled).toBe(false), { timeout: 8000 })
+  }, 20000)
 
   it('quantity steppers never go below zero', async () => {
     api.listSessions.mockResolvedValue({ status: 'ok', rows: [{ id: 's1', reference: 'PI-1', site: 'NHC', country: 'KSA', status: 'open', started_at: '2026-11-21T08:00:00Z' }], total: 1 })

@@ -38,6 +38,7 @@ import {
 } from '../lib/accidentCaseAnalytics'
 import CaseTeamInbox from '../components/accidents/CaseTeamInbox'
 import AccidentHoldingsBoard from '../components/accidents/AccidentHoldingsBoard'
+import CaseTeamList from '../components/accidents/CaseTeamList'
 import { colorAt, categorical, withAlpha } from '../lib/reportColors'
 import { toUserMessage } from '../lib/safeError'
 
@@ -581,6 +582,10 @@ export default function AccidentCases() {
         <CaseTeamInbox />
         <AccidentHoldingsBoard />
       </div>
+
+      {/* every open case step routed to the teams, kept under the board (owner, 2026-11-28) */}
+      {/* A failed board read returns the error screen above, so this only renders with data or while loading. */}
+      <CaseTeamList items={loading && !board ? null : (board?.inbox ?? [])} />
     </div>
   )
 }

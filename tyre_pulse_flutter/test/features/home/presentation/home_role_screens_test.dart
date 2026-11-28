@@ -383,7 +383,12 @@ void main() {
       testWidgets(slug, (WidgetTester tester) async {
         await _pump(tester, access, size: const Size(360, 640), textScale: 2);
         expect(tester.takeException(), isNull);
-        expect(find.byKey(HomeScreenKeys.rolePanel), findsOneWidget);
+        // Admin keeps the full original Home (owner 2026-11-28); it must
+        // fit too, but it has no role panel.
+        expect(
+          find.byKey(HomeScreenKeys.rolePanel),
+          slug == 'admin' ? findsNothing : findsOneWidget,
+        );
         await tester.drag(find.byType(ListView).first, const Offset(0, -1600));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
@@ -439,6 +444,72 @@ void main() {
       findsOneWidget,
     );
     expect(find.descendant(of: row, matching: find.text('0')), findsNothing);
+  });
+
+  testWidgets('a super admin with the Manager role gets the full Home', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      const AccessState(
+        role: UserRole.known(RoleId.manager),
+        isSuperAdmin: true,
+      ),
+      size: const Size(360, 1400),
+    );
+    expect(find.byKey(HomeScreenKeys.rolePanel), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a non-signer Manager still opens Inspection Approvals in More', (
+    WidgetTester tester,
+  ) async {
+    // A Manager reaches Approvals through the role matrix, but is not a
+    // V606 signer.
+    await _pump(
+      tester,
+      const AccessState(
+        role: UserRole.known(RoleId.manager),
+        roleMatrix: <ModuleKey, bool>{ModuleKey.approvals: true},
+      ),
+      size: const Size(360, 1400),
+    );
+    expect(find.byKey(HomeScreenKeys.rolePanel), findsOneWidget);
+    final Finder more = find.byKey(HomeScreenKeys.roleChip('more'));
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await tester.pumpAndSettle();
+    final Finder tile =
+        find.byKey(const Key('home.services.tile.inspectionApprovals'));
+    await tester.scrollUntilVisible(
+      tile,
+      200,
+      scrollable: find.descendant(
+        of: find.byKey(HomeScreenKeys.action('servicesSheet')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(tile, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the role Home header menu icon opens All services', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      const AccessState(
+        role: UserRole.known(RoleId.manager),
+        roleMatrix: <ModuleKey, bool>{ModuleKey.approvals: true},
+      ),
+      size: const Size(360, 1400),
+    );
+    expect(find.byKey(HomeScreenKeys.rolePanel), findsOneWidget);
+    await tester.tap(find.byKey(HomeScreenKeys.action('menu')));
+    await tester.pumpAndSettle();
+    expect(find.text('All services'), findsOneWidget);
+    expect(find.byKey(HomeScreenKeys.action('servicesSheet')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   // Review screenshots, only when asked.

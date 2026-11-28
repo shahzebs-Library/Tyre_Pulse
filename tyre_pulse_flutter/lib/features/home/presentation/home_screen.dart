@@ -95,6 +95,7 @@ import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/auth/auth_providers.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/navigation/list_drilldown.dart';
+import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/module_registry.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
@@ -114,6 +115,7 @@ import 'package:tyre_pulse/features/home/domain/home_role_plan.dart';
 import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/home/home_layout.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
+import 'package:tyre_pulse/features/home/presentation/home_services_menu.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/inventory/presentation/inventory_copy.dart';
 import 'package:tyre_pulse/features/inventory/presentation/store_receipt_screen.dart';
@@ -394,9 +396,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // The per-role Home (domain/home_role_plan.dart). A role without a plan,
     // or a failed access read (whose retry lives on the timeline card),
     // keeps the original layout below.
-    final HomeRolePlan? rolePlan = accessFailedEarly
+    // A super admin always gets the full Home, whatever their role.
+    final AccessState access = ref.watch(accessStateProvider);
+    final HomeRolePlan? rolePlan = accessFailedEarly || access.isSuperAdmin
         ? null
-        : homeRolePlanForRole(ref.watch(accessStateProvider).role);
+        : homeRolePlanForRole(access.role);
     final bool storeHome = rolePlan == null &&
         ref.watch(
           canAccessModuleProvider(ModuleKey.stock),
@@ -518,6 +522,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         onSyncTap: () => unawaited(showSyncQueueSheet(context)),
                         onNotifications: () =>
                             context.push(const NotificationsRoute().location),
+                        onMenu: () => _showServices(sections, l10n),
                       ),
                     ),
                     if (canInspect ||
@@ -715,6 +720,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onSyncTap: () => unawaited(showSyncQueueSheet(context)),
                   onNotifications: () =>
                       context.push(const NotificationsRoute().location),
+                  onMenu: () => _showServices(sections, l10n),
                 ),
               ),
             ),
@@ -1184,44 +1190,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     List<HomeSectionSpec> sections,
     AppLocalizations l10n,
   ) {
-    return showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (BuildContext sheetContext) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
-          ),
-          child: ListView(
-            key: HomeScreenKeys.action('servicesSheet'),
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            children: <Widget>[
-              Text(
-                l10n.homeMenuTooltip,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              for (final HomeSectionSpec section in sections)
-                for (final HomeTileSpec tile in section.tiles)
-                  // Only a signer is offered the inspection sign-off queue
-                  // (V606); the rest of the approvals module is unchanged.
-                  if (tile.id != 'inspectionApprovals' ||
-                      ref.read(homeCanSignInspectionApprovalsProvider))
-                    ListTile(
-                      leading: TpIcon(_tileMeta(l10n, tile.id).icon),
-                      title: Text(_tileMeta(l10n, tile.id).label),
-                      trailing: const Icon(
-                        // Mirrors itself under RTL (matchTextDirection).
-                        Icons.chevron_right_rounded,
-                      ),
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        _openHomeTile(context, tile.id);
-                      },
-                    ),
-            ],
-          ),
+    // A full page rather than a sheet: the catalogue outgrew one. Pushed with
+    // Navigator (no route of its own); a tap closes the menu, then opens the
+    // tile exactly as Home does, so Back from the opened screen lands on Home.
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext _) => HomeServicesMenuScreen(
+          sections: sections,
+          metaFor: (String id) {
+            final ({String label, IconData icon, bool approve}) meta =
+                _tileMeta(l10n, id);
+            return (label: meta.label, icon: meta.icon);
+          },
+          onOpen: (String id) {
+            if (mounted) _openHomeTile(context, id);
+          },
         ),
       ),
     );
@@ -1377,6 +1360,7 @@ class _HomeHeader extends StatelessWidget {
     required this.onSiteTap,
     required this.onSyncTap,
     required this.onNotifications,
+    required this.onMenu,
   });
 
   final AppLocalizations l10n;
@@ -1389,6 +1373,9 @@ class _HomeHeader extends StatelessWidget {
   /// Opens the quick sync sheet (the status chip).
   final VoidCallback onSyncTap;
   final VoidCallback onNotifications;
+
+  /// Opens the full "All services" menu (the hamburger icon).
+  final VoidCallback onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -1414,6 +1401,14 @@ class _HomeHeader extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            // The start side of the top bar (mirrors under RTL with the Row).
+            _HeaderIconButton(
+              key: HomeScreenKeys.action('menu'),
+              tooltip: l10n.homeMenuButton,
+              onPressed: onMenu,
+              icon: Icons.menu_rounded,
+            ),
+            const SizedBox(width: 10),
             SizedBox(
               width: 56,
               height: 56,
@@ -1508,6 +1503,7 @@ class _HeaderIconButton extends StatelessWidget {
     required this.onPressed,
     required this.icon,
     this.badge,
+    super.key,
   });
 
   final String tooltip;
@@ -2143,16 +2139,21 @@ class _WorkTimelineRow extends StatelessWidget {
                                       ),
                                       if (time != null) ...<Widget>[
                                         const SizedBox(width: 8),
-                                        Text(
-                                          time,
-                                          maxLines: 1,
-                                          style: text.labelSmall?.copyWith(
-                                            color: data.timeIsAlert
-                                                ? data.tone.base
-                                                : palette.textMuted,
-                                            fontWeight: data.timeIsAlert
-                                                ? FontWeight.w800
-                                                : FontWeight.w600,
+                                        // Shrinks with large text instead of
+                                        // pushing the row off the screen.
+                                        Flexible(
+                                          child: Text(
+                                            time,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: text.labelSmall?.copyWith(
+                                              color: data.timeIsAlert
+                                                  ? data.tone.base
+                                                  : palette.textMuted,
+                                              fontWeight: data.timeIsAlert
+                                                  ? FontWeight.w800
+                                                  : FontWeight.w600,
+                                            ),
                                           ),
                                         ),
                                       ],

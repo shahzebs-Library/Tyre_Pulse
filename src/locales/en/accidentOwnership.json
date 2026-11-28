@@ -207,5 +207,28 @@
     "colOpen": "Open",
     "colOverdue": "Overdue",
     "colOldest": "Oldest"
+  },
+  "teamList": {
+    "title": "All open case steps by team",
+    "hint": "Every open step on accident cases in your scope, across all teams. Overdue first.",
+    "loading": "Loading case steps...",
+    "empty": "No open case steps for any team.",
+    "count": "{n} steps",
+    "countOne": "1 step",
+    "overdueCount": "{n} overdue",
+    "dueOn": "Due {date}",
+    "overdueOn": "Overdue {date}",
+    "noDue": "No due date",
+    "status": {
+      "open": "Open",
+      "in_progress": "In progress",
+      "blocked": "Blocked",
+      "waiting": "Waiting",
+      "on_hold": "On hold",
+      "review": "In review",
+      "done": "Done",
+      "closed": "Closed",
+      "unknown": "Unknown"
+    }
   }
 }

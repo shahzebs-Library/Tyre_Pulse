@@ -34,6 +34,7 @@ Future<void> _pumpQueue(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
+        inspectionApprovalCanSignProvider.overrideWithValue(true),
         inspectionApprovalRepositoryProvider.overrideWithValue(
           repository,
         ),

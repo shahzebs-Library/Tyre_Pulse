@@ -265,7 +265,10 @@ class _InspectionApprovalsQueueScreenState
         title: l10n.inspectionApprovalsTitle,
         backFallback: fallback,
         actions: <Widget>[
-          if (_tab == InspectionApprovalTab.pending &&
+          // Reading the queue is wider than signing it (V606): only a
+          // signer is offered bulk approve.
+          if (ref.watch(inspectionApprovalCanSignProvider) &&
+              _tab == InspectionApprovalTab.pending &&
               _items.isNotEmpty &&
               _bulkProgress == null)
             Padding(

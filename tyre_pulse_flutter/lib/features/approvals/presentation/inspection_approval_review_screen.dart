@@ -360,7 +360,9 @@ class _InspectionApprovalReviewScreenState
     return TpScaffold(
       backFallback: fallback,
       appBar: TpAppBar(title: title, backFallback: fallback),
-      bottomNavigationBar: item?.isPending == true
+      // A non-signer (V606) reads the sheet with no approve/return bar.
+      bottomNavigationBar: item?.isPending == true &&
+              ref.watch(inspectionApprovalCanSignProvider)
           ? _ApprovalDecisionActionBar(
               busy: _busy,
               canApprove: evidence!.canApprove,

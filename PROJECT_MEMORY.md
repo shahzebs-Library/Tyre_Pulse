@@ -5,6 +5,15 @@ current. Read it before adding/changing modules. Governing spec: `Tyre pulse ent
 
 ---
 
+# ⚑ 2026-11-28 — TWO RELEASES TO PRODUCTION (0.1.3+9, 0.1.4+10), ICON B + INTRO, REGRESSION AUDIT, PR #623 PENDING.
+- **#620** (squash b4fc019f): release batch (accidents ownership, driver concerns, fleet verify, devices, workshop intake, email outbox, WMS put-away, simulator fixes) + forgotten finished branches (washing redesign, store-keeper phone, profile sync sheet, tyre-sheet redesign). Migrations 20261128090000/091000/110000/111000/120000/121000/130000 APPLIED LIVE (owner OK). Edge fns email-dispatch, workshop-sheet-ingest deployed; workflow-notify redeployed. Android 0.1.3+9 Play PRODUCTION 100% (owner: "we are in production"), iOS TestFlight.
+- **#621** (ed340d7f): app icon B (TP mark + TYRE PULSE; tiny sizes mark-only; generator scripts/brand/generate_app_icon.py) + 6 s first-run intro (Flutter lib/app/intro, web src/components/brand/BrandIntro.jsx; once, Skip, reduce motion, ar/ur, Replay in Profile). Android 0.1.4+10 production, iOS TestFlight.
+- **REGRESSION (owner angry): the per-role Home gave Admin a 1-tile Home, hiding New inspection / Today's work / plan / recent vehicles.** Fixed in #623: Admin and every super admin keep the full Home. RULE: before any release audit branches ([[memory check-unmerged-branches-first]]) AND compare menus vs the pre-release base; tests now pin Admin tabs (test/app/router/shell_tabs_roles_test.dart) and web nav/route parity (src/test/navAdminRolesParity.test.js).
+- **#623 (open, all checks green before the menu addition): needs owner "yes, merge and release" (auto-mode refuses Play production without it).** Contains Admin/super-admin full Home, tyre pictures bigger with ONE order Good, Worn, Damaged, Puncture, Flat, Missing (phone kTyreConditionDisplayOrder + web PositionSheet), web position sheet scrolls on short screens, approvals list readable for non-signers (approve/return only for V606 signers), Driver Concerns + Driver workspace in Admin web menu, old accident team list back (CaseTeamList), Urdu login button, full-screen More menu with hamburger icon, version 0.1.5+11.
+- Apple ITMS-90725: from April 2027 uploads need the iOS 27 SDK; PR #622 makes the iOS job use the newest Xcode and fail from 2027-03-01 if SDK < 27.
+- Workshop intake: owner chose in-app intake (no Google Sheet); shift roster EMPTY, so everything routes to the Area Manager until the owner fills it.
+- Release steps live in memory release-checklist (bump pubspec version, goldens on Windows, format then analyze, release commands).
+
 # ⚑ 2026-11-23 (night) — WMS SPEC: AUDIT DONE, WP0 (REGISTER = MATERIAL MASTER DETAIL + REAL USAGE) + PAGE EMOJI. Branch claude/wms-wp0-register. No migration, no production write.
 - **OWNER WMS SPEC RULES (standing):** no merge / deploy / production change without the owner's explicit OK per item; no automatic
   fuzzy match that changes production; never widen Store Keeper site access for testing; never replace a missing cost with 0; keep

@@ -13,6 +13,8 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
+import 'package:tyre_pulse/core/permissions/inspection_signers.dart';
+import 'package:tyre_pulse/core/permissions/permission_providers.dart';
 import 'package:tyre_pulse/core/storage/storage_providers.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/approvals/data/inspection_approval_repository.dart';
@@ -37,4 +39,11 @@ final inspectionApprovalEvidenceUrlProvider =
   // automatic retry would keep this tile on "loading" while repeatedly
   // signing a reference that Storage RLS has definitively denied.
   retry: (int retryCount, Object error) => null,
+);
+
+/// Whether the signed-in person may approve or return an inspection: the
+/// V606 signer rule (`core/permissions/inspection_signers.dart`). Anyone with
+/// the approvals module can READ the queue; only a signer gets the controls.
+final inspectionApprovalCanSignProvider = Provider<bool>(
+  (ref) => canSignInspectionApprovals(ref.watch(accessStateProvider)),
 );

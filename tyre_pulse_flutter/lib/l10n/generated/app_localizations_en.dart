@@ -2121,6 +2121,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeMenuTooltip => 'Open services';
 
   @override
+  String get homeMenuButton => 'Menu';
+
+  @override
+  String get homeServicesTitle => 'All services';
+
+  @override
+  String get homeServicesSearchHint => 'Search services';
+
+  @override
+  String get homeServicesClearSearch => 'Clear search';
+
+  @override
+  String get homeServicesEmpty => 'No services match';
+
+  @override
+  String get homeServicesSectionField => 'Field work';
+
+  @override
+  String get homeServicesSectionFleet => 'Fleet';
+
+  @override
+  String get homeServicesSectionMaintenance => 'Maintenance and workshop';
+
+  @override
+  String get homeServicesSectionManagement => 'Management';
+
+  @override
+  String get homeServicesSectionApprovals => 'Approvals';
+
+  @override
   String get homeNotificationsTooltip => 'Open tyre alerts';
 
   @override

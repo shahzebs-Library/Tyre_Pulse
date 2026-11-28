@@ -89,6 +89,7 @@ final class _MutableRepository implements InspectionApprovalRepository {
 Widget _app(_MutableRepository repository, Widget home) {
   return ProviderScope(
     overrides: <Override>[
+      inspectionApprovalCanSignProvider.overrideWithValue(true),
       inspectionApprovalRepositoryProvider.overrideWithValue(repository),
     ],
     child: MaterialApp(

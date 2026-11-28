@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tyre_pulse/app/intro/intro_seen_store.dart';
@@ -74,6 +75,22 @@ void main() {
     await tester.pump();
     expect(find.byKey(TpIntroKeys.overlay), findsNothing);
     expect(store.readSeen(), isTrue);
+  });
+
+  testWidgets('a screen reader can activate Skip', (WidgetTester tester) async {
+    final SemanticsHandle handle = tester.ensureSemantics();
+    final InMemoryIntroSeenStore store = InMemoryIntroSeenStore(seen: false);
+    await tester.pumpWidget(_app(store));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final SemanticsNode node =
+        tester.getSemantics(find.bySemanticsLabel('Skip the intro'));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    tester.semantics.tap(find.semantics.byLabel('Skip the intro'));
+    await tester.pump();
+    expect(find.byKey(TpIntroKeys.overlay), findsNothing);
+    expect(store.readSeen(), isTrue);
+    handle.dispose();
   });
 
   testWidgets('Skip sits top-left in Arabic and the tagline is localised',

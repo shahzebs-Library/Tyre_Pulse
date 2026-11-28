@@ -498,6 +498,9 @@ class _SkipButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: semanticsLabel,
+      // excludeSemantics drops the button's own tap action, so give the
+      // replacement node one: TalkBack / VoiceOver users must be able to skip.
+      onTap: onPressed,
       excludeSemantics: true,
       child: OutlinedButton(
         key: TpIntroKeys.skip,

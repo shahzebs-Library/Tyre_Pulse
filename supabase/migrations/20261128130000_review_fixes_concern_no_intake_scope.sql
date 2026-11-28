@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Review fixes on PR #620 (2026-11-28).
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's OK.
+-- STATUS: APPLIED LIVE 2026-11-28 (owner OK). Verified: constraint present, guard in function body.
 --
 -- 1. driver_concerns.case_no was unique across ALL companies, while the number
 --    is minted per company and year (driver_concern_counters keyed on

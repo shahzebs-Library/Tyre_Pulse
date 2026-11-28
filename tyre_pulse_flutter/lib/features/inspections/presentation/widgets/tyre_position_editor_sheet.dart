@@ -53,7 +53,7 @@ String tyreConditionImageAsset(TyreCondition condition) =>
 
 /// The stored `TyreReadingCondition` value a picker tile writes for
 /// [condition]. The tiles are laid out in [kTyreConditionDisplayOrder]
-/// (problems first); the value each one stores never depends on its place.
+/// (Good first, Missing last); the value each one stores never depends on its place.
 String tyreReadingConditionValue(TyreCondition condition) =>
     switch (condition) {
       TyreCondition.good => TyreReadingCondition.good,
@@ -1021,14 +1021,16 @@ class _ConditionGrid extends StatelessWidget {
           spacing: TpSpace.sm,
           runSpacing: TpSpace.sm,
           children: <Widget>[
-            // Problems first, Good last (kTyreConditionDisplayOrder). Only
-            // the order on screen changes: each tile still stores its own
-            // TyreReadingCondition value.
+            // Good first, Missing last (kTyreConditionDisplayOrder, owner
+            // 2026-11-28). Only the order on screen changes: each tile still
+            // stores its own TyreReadingCondition value.
             for (final TyreCondition condition in kTyreConditionDisplayOrder)
               SizedBox(
                 width: itemWidth,
                 child: _ConditionTile(
                   condition: condition,
+                  // The picture fills most of the tile (owner: "too small").
+                  pictureSize: (itemWidth * 0.62).clamp(52.0, 92.0),
                   label: tyreConditionLabel(l10n, condition),
                   statusLabel: statusLabel(tyreConditionStatus(condition)),
                   isSelected: reading.checked &&
@@ -1056,9 +1058,11 @@ class _ConditionTile extends StatelessWidget {
     required this.statusLabel,
     required this.isSelected,
     required this.onTap,
+    this.pictureSize = 52,
   });
 
   final TyreCondition? condition;
+  final double pictureSize;
   final String label;
   final String statusLabel;
   final bool isSelected;
@@ -1104,7 +1108,7 @@ class _ConditionTile extends StatelessWidget {
             children: <Widget>[
               ConstrainedBox(
                 constraints: const BoxConstraints(
-                  minHeight: 100,
+                  minHeight: 120,
                   minWidth: double.infinity,
                 ),
                 child: Padding(
@@ -1118,7 +1122,7 @@ class _ConditionTile extends StatelessWidget {
                     children: <Widget>[
                       _ConditionPicture(
                         condition: condition,
-                        size: 52,
+                        size: pictureSize,
                         color: band,
                       ),
                       const SizedBox(height: TpSpace.xs),

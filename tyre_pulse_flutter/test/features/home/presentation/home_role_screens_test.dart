@@ -383,7 +383,12 @@ void main() {
       testWidgets(slug, (WidgetTester tester) async {
         await _pump(tester, access, size: const Size(360, 640), textScale: 2);
         expect(tester.takeException(), isNull);
-        expect(find.byKey(HomeScreenKeys.rolePanel), findsOneWidget);
+        // Admin keeps the full original Home (owner 2026-11-28); it must
+        // fit too, but it has no role panel.
+        expect(
+          find.byKey(HomeScreenKeys.rolePanel),
+          slug == 'admin' ? findsNothing : findsOneWidget,
+        );
         await tester.drag(find.byType(ListView).first, const Offset(0, -1600));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);

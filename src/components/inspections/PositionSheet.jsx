@@ -105,7 +105,7 @@ export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCoun
           <p className="text-[11px] font-bold uppercase tracking-widest mb-2.5 text-[var(--text-muted)]" id={`${titleId}-cond`}>
             {L.condition}
           </p>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4" role="group" aria-labelledby={`${titleId}-cond`}>
+          <div className="grid grid-cols-3 gap-2 mb-4" role="group" aria-labelledby={`${titleId}-cond`}>
             {CONDITIONS.map((cond) => {
               const on = pos.condition === cond
               const kind = conditionKind(cond)
@@ -123,7 +123,7 @@ export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCoun
                   aria-label={label}
                   data-kind={kind}
                   onClick={() => handleConditionSelect(cond)}
-                  className="py-2.5 min-h-[72px] rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95"
+                  className="py-3 min-h-[112px] rounded-2xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95"
                   style={{
                     background: on ? deep : 'var(--surface-2)',
                     border: `${on ? 3 : 2}px solid ${on ? 'var(--text-primary)' : band}`,
@@ -135,8 +135,8 @@ export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCoun
                     // The same realistic picture the phone app shows for this
                     // condition (tyre_pulse_flutter/assets/tyre_conditions), on a
                     // light disc so it reads on the selected colour too.
-                    <span className="rounded-full flex items-center justify-center" style={{ width: 44, height: 44, background: '#ffffff' }} aria-hidden>
-                      <img src={`/tyre-conditions/${kind}.png`} srcSet={`/tyre-conditions/${kind}.png 1x, /tyre-conditions/${kind}@2x.png 2x`} width={40} height={40} alt="" draggable={false} />
+                    <span className="rounded-full flex items-center justify-center" style={{ width: 72, height: 72, background: '#ffffff' }} aria-hidden>
+                      <img src={`/tyre-conditions/${kind}.png`} srcSet={`/tyre-conditions/${kind}.png 1x, /tyre-conditions/${kind}@2x.png 2x`} width={66} height={66} alt="" draggable={false} />
                     </span>
                   ) : (
                     <TyreConditionGlyph kind={kind} size={30} color={on ? '#ffffff' : band} strokeWidth={2.6} />

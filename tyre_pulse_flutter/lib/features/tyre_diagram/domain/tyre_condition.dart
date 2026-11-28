@@ -20,16 +20,16 @@ import 'package:tyre_pulse/features/tyre_diagram/domain/tyre_layout_spec.g.dart'
 enum TyreCondition { good, worn, damaged, puncture, flat, missing }
 
 /// The order a person is SHOWN the conditions in (owner, 2026-11-27):
-/// problems first, Good last, so the inspector looks at what can be wrong
-/// before ticking the easy answer. Display only - the stored values
+/// Good first, then the problems, Missing last (owner, 2026-11-28; was
+/// problems-first on 2026-11-27). Display only - the stored values
 /// (`TyreReadingCondition`) and the enum order do not change.
 const List<TyreCondition> kTyreConditionDisplayOrder = <TyreCondition>[
-  TyreCondition.damaged,
+  TyreCondition.good,
   TyreCondition.worn,
+  TyreCondition.damaged,
   TyreCondition.puncture,
   TyreCondition.flat,
   TyreCondition.missing,
-  TyreCondition.good,
 ];
 
 final Map<String, RegExp> _bandRe = <String, RegExp>{

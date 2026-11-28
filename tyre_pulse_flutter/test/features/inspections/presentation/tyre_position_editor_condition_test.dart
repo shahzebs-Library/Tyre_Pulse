@@ -60,14 +60,14 @@ void main() {
     expect(find.text('Puncture'), findsOneWidget);
   });
 
-  test('display order puts problems first and keeps stored values', () {
+  test('display order puts Good first, Missing last, keeps stored values', () {
     expect(kTyreConditionDisplayOrder, <TyreCondition>[
-      TyreCondition.damaged,
+      TyreCondition.good,
       TyreCondition.worn,
+      TyreCondition.damaged,
       TyreCondition.puncture,
       TyreCondition.flat,
       TyreCondition.missing,
-      TyreCondition.good,
     ]);
     // Every condition appears exactly once.
     expect(kTyreConditionDisplayOrder.toSet(), TyreCondition.values.toSet());
@@ -111,7 +111,7 @@ void main() {
     }
   });
 
-  testWidgets('tiles are laid out problems first, Good last', (
+  testWidgets('tiles are laid out Good first, Missing last', (
     WidgetTester tester,
   ) async {
     await _pumpEditor(tester, onChanged: (_) {});
@@ -209,14 +209,14 @@ void main() {
   );
 }
 
-// The order on screen: problems first, Good last (owner, 2026-11-27).
+// The order on screen: Good first, Missing last (owner, 2026-11-28).
 const List<String> _kShownOrder = <String>[
-  'Damaged',
+  'Good',
   'Worn',
+  'Damaged',
   'Puncture',
   'Flat',
   'Missing',
-  'Good',
 ];
 
 Future<void> _pumpEditor(

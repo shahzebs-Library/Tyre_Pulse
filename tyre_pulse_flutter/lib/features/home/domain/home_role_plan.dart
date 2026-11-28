@@ -181,7 +181,10 @@ HomePersona? homePersonaFor(UserRole role) {
     case RoleId.fleetSupervisor:
       return HomePersona.fleetSupervisor;
     case RoleId.admin:
-      return HomePersona.admin;
+      // Owner 2026-11-28: Admin keeps the full original Home (New inspection,
+      // Today's work, today's plan, recent vehicles). The short admin plan
+      // hid all of that.
+      return null;
     case RoleId.reporter:
       return HomePersona.reporter;
     case RoleId.inspector:

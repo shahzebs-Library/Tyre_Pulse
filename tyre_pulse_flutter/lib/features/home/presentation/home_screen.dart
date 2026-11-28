@@ -2143,16 +2143,21 @@ class _WorkTimelineRow extends StatelessWidget {
                                       ),
                                       if (time != null) ...<Widget>[
                                         const SizedBox(width: 8),
-                                        Text(
-                                          time,
-                                          maxLines: 1,
-                                          style: text.labelSmall?.copyWith(
-                                            color: data.timeIsAlert
-                                                ? data.tone.base
-                                                : palette.textMuted,
-                                            fontWeight: data.timeIsAlert
-                                                ? FontWeight.w800
-                                                : FontWeight.w600,
+                                        // Shrinks with large text instead of
+                                        // pushing the row off the screen.
+                                        Flexible(
+                                          child: Text(
+                                            time,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: text.labelSmall?.copyWith(
+                                              color: data.timeIsAlert
+                                                  ? data.tone.base
+                                                  : palette.textMuted,
+                                              fontWeight: data.timeIsAlert
+                                                  ? FontWeight.w800
+                                                  : FontWeight.w600,
+                                            ),
                                           ),
                                         ),
                                       ],

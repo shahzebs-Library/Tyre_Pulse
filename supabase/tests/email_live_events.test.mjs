@@ -243,11 +243,11 @@ test('daily summary: yesterday in Riyadh, scoped to the reader, a failed read is
 test('daily summary honours personal opt-out and the org switch', async () => {
   await withDb(async db => {
     await db.exec(`INSERT INTO notification_preferences(user_id, organisation_id, channel_email) VALUES ('${id(5)}','${ORG_A}', false);`)
-    let r = (await db.query(`SELECT email_daily_summary_enqueue('2026-11-27') r`)).rows[0].r
+    const r = (await db.query(`SELECT email_daily_summary_enqueue('2026-11-27') r`)).rows[0].r
     assert.equal(r.opted_out, 1)
     assert.deepEqual((await outbox(db, 'summary.daily')).map(x => x.to_address), ['mgr@other.com', 'owner@example.com'])
     await db.exec(`DELETE FROM email_outbox; INSERT INTO email_event_settings(organisation_id, event_key, enabled) VALUES ('${ORG_A}','summary.daily', false);`)
-    r = (await db.query(`SELECT email_daily_summary_enqueue('2026-11-28') r`)).rows[0].r
+    await db.query(`SELECT email_daily_summary_enqueue('2026-11-28')`)
     assert.deepEqual((await outbox(db, 'summary.daily')).map(x => x.to_address), ['mgr@other.com'], 'org A switched off, org B still on')
   })
 })

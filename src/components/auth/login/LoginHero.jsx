@@ -32,7 +32,7 @@ export default function LoginHero({ logoSrc, customLogo }) {
             <button key={l.code} type="button" lang={l.code}
               aria-pressed={language === l.code}
               onClick={() => setLanguage(l.code)}>
-              {l.code === 'ar' ? 'عربي' : 'English'}
+              {l.code === 'ar' ? 'عربي' : l.code === 'en' ? 'English' : (l.native || l.label)}
             </button>
           ))}
         </div>

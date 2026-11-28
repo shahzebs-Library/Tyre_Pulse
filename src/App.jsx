@@ -751,7 +751,7 @@ function MainApp() {
                       <Route path="/predictive-maintenance"  element={<Safe><ModuleRoute moduleKey="predictive_maintenance"><PredictiveMaintenance /></ModuleRoute></Safe>} />
                       <Route path="/vendor-intelligence"     element={<Safe><RoleRoute allowed={['Admin', 'Manager', 'Director']}><ModuleRoute moduleKey="vendor_intelligence"><VendorIntelligence /></ModuleRoute></RoleRoute></Safe>} />
                       <Route path="/driver-management"       element={<Safe><ModuleRoute moduleKey="fleet_master"><DriverManagement /></ModuleRoute></Safe>} />
-                      <Route path="/driver-workspace" element={<Safe><RoleRoute allowed={['Driver', 'Manager', 'Director']}><DriverWorkspace /></RoleRoute></Safe>} />
+                      <Route path="/driver-workspace" element={<Safe><RoleRoute allowed={['Driver', 'Admin', 'Manager', 'Director']}><DriverWorkspace /></RoleRoute></Safe>} />
                       <Route path="/driver-concerns" element={<Safe><RoleRoute allowed={['Fleet Supervisor', 'Fleet Foreman', 'Fleet Incharge', 'HR Officer', 'Manager', 'Director', 'Admin']} moduleKey="driver_concerns"><DriverConcerns /></RoleRoute></Safe>} />
                       <Route path="/fleet-intelligence"      element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetIntelligence /></ModuleRoute></Safe>} />
                       <Route path="/fleet-health"            element={<Safe><ModuleRoute moduleKey="fleet_intelligence"><FleetHealthBoard /></ModuleRoute></Safe>} />

@@ -2,7 +2,7 @@
  * Board-level read for the accident CASE model — the org-wide view over every
  * case (accidents case spine + workstreams + open tasks) that feeds the
  * AccidentCases page: the case analytics KPIs (src/lib/accidentCaseAnalytics.js)
- * and the team inbox (src/components/accidents/CaseTeamInbox.jsx).
+ * and the team list (src/components/accidents/CaseTeamList.jsx).
  *
  * Distinct from accidentCase.js, which loads ONE case for the detail screen.
  * This module loads the whole set for reporting, so it favours a lean, PII-light
@@ -69,7 +69,7 @@ async function readOrEmpty(fn, empty = []) {
  * Returns:
  *   - cases:       accidents rows carrying the case columns (analytics source)
  *   - workstreams: accident_case_workstreams rows (bottleneck source)
- *   - inbox:       open tasks reshaped for <CaseTeamInbox> (case_no enriched)
+ *   - inbox:       open tasks reshaped for <CaseTeamList> (case_no enriched)
  *   - ok:          true when the case model is provisioned; false when the case
  *                  columns are absent (pre-V417) so the page shows a not-enabled
  *                  state rather than an error. NEVER throws for a missing relation.
@@ -126,7 +126,7 @@ export async function loadAccidentCaseBoard({ country } = {}) {
     }, []),
   ])
 
-  // Reshape open tasks into the read-only inbox shape <CaseTeamInbox> renders,
+  // Reshape open tasks into the read-only list shape <CaseTeamList> renders,
   // enriching each with its case reference so a row reads "Case ACC-..." rather
   // than a raw id when the case is in scope.
   const caseByAccident = new Map(caseList.map((c) => [c.id, c]))

@@ -37,4 +37,9 @@ describe('nav roles list Admin whenever the route admits Admin', () => {
   it('Driver Concerns is in the Admin menu', () => {
     expect(items.find((it) => it.to === '/driver-concerns')?.roles).toContain('Admin')
   })
+
+  it('Driver workspace is in the Admin menu and its route admits Admin', () => {
+    expect(items.find((it) => it.to === '/driver-workspace')?.roles).toContain('Admin')
+    expect(routeAllowed('/driver-workspace')).toContain('Admin')
+  })
 })

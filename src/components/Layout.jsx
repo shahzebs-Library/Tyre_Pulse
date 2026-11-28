@@ -250,7 +250,7 @@ const NAV_GROUPS = [
     label: 'Drivers & Safety',
     items: [
       { to: '/driver-management',      label: 'Driver Intelligence', icon: Users, adminOnly: A },
-      { to: '/driver-workspace',       label: 'Driver workspace', icon: Users, roles: ['Driver', 'Manager', 'Director'] },
+      { to: '/driver-workspace',       label: 'Driver workspace', icon: Users, roles: ['Driver', 'Admin', 'Manager', 'Director'] },
       { to: '/driver-concerns',        label: 'Driver Concerns',  icon: ShieldAlert, roles: ['Admin', 'Fleet Supervisor', 'Fleet Foreman', 'Fleet Incharge', 'HR Officer', 'Manager', 'Director'] },
       { to: '/driver-safety',          label: 'Driver Safety',       icon: ShieldAlert, adminOnly: A },
       { to: '/driver-training',        label: 'Driver Training',     icon: GraduationCap, adminOnly: A },

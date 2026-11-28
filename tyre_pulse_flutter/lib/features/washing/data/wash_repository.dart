@@ -62,7 +62,7 @@ const String _washBaseColumns = 'id,asset_no,vehicle_type,wash_date,wash_time,'
     'odometer_km,status,notes,photos,created_at,created_by,entry_name,entry_username,wash_details,captured_at';
 
 /// Supervisor verification and next-due columns
-/// (`supabase/migrations/20261127190000_wash_supervisor_verification.sql`).
+/// (`supabase/migrations/20261127182119_wash_supervisor_verification.sql`).
 /// Read with a fallback to [_washBaseColumns]: PostgREST refuses the whole
 /// request for an unknown column, so history keeps working on a database
 /// that has not received that migration yet.

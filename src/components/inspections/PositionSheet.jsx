@@ -22,6 +22,8 @@ import { conditionKind, CONDITION_KIND, kindHex, currentTheme } from '../../lib/
 // tyre map (conditions.kinds), so a tyre man who cannot read still knows each
 // button: green tick, amber worn tread, red nail, red flat tyre, red warning.
 const CONDITIONS = ['Good', 'Wear', 'Damage', 'Puncture', 'Flat', 'Missing']
+// Conditions that have a realistic picture shared with the phone app.
+const TYRE_PICTURE_KINDS = new Set(['good', 'worn', 'puncture', 'flat', 'damaged', 'missing'])
 
 export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCount, allFilled, lang, onUpdate, onNext, onPrev, onClose }) {
   const { t } = useLanguage()
@@ -129,7 +131,16 @@ export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCoun
                     boxShadow: on ? '0 4px 12px rgba(0,0,0,0.25)' : 'none',
                   }}
                 >
-                  <TyreConditionGlyph kind={kind} size={30} color={on ? '#ffffff' : band} strokeWidth={2.6} />
+                  {TYRE_PICTURE_KINDS.has(kind) ? (
+                    // The same realistic picture the phone app shows for this
+                    // condition (tyre_pulse_flutter/assets/tyre_conditions), on a
+                    // light disc so it reads on the selected colour too.
+                    <span className="rounded-full flex items-center justify-center" style={{ width: 44, height: 44, background: '#ffffff' }} aria-hidden>
+                      <img src={`/tyre-conditions/${kind}.png`} srcSet={`/tyre-conditions/${kind}.png 1x, /tyre-conditions/${kind}@2x.png 2x`} width={40} height={40} alt="" draggable={false} />
+                    </span>
+                  ) : (
+                    <TyreConditionGlyph kind={kind} size={30} color={on ? '#ffffff' : band} strokeWidth={2.6} />
+                  )}
                   <span className="text-xs font-extrabold">{label}</span>
                 </button>
               )

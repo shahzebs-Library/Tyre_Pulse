@@ -1,7 +1,7 @@
 /**
  * Pure helpers for wash supervisor verification and the next wash due date.
  * Mirrors the Flutter `wash_record.dart` / `wash_repository.dart` helpers and
- * the SQL in supabase/migrations/20261127190000_wash_supervisor_verification.sql.
+ * the SQL in supabase/migrations/20261127182119_wash_supervisor_verification.sql.
  * The server is the authority; these only decide what the screen offers.
  */
 

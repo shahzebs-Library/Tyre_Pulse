@@ -25,7 +25,7 @@ export const COLS =
 
 /**
  * Supervisor verification + next wash due
- * (supabase/migrations/20261127190000_wash_supervisor_verification.sql).
+ * (supabase/migrations/20261127182119_wash_supervisor_verification.sql).
  * Read with a fallback to COLS: PostgREST refuses the whole request for an
  * unknown column, so the page keeps working before that migration lands.
  */

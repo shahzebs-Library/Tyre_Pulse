@@ -2,7 +2,7 @@
 
 Status: APPROVED by the owner on 2026-11-27 with two additions (a supervisor's
 own entry is `not_required`, and `next_wash_due` = wash date + 7). The final
-SQL is `supabase/migrations/20261127190000_wash_supervisor_verification.sql`,
+SQL is `supabase/migrations/20261127182119_wash_supervisor_verification.sql`,
 which supersedes the draft below. It is not applied yet: the apply call was
 refused by the session's permission check.
 

@@ -10599,4 +10599,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tyreEditorPositionMap => 'Position on the vehicle';
+
+  @override
+  String get introTagline => 'FLEET TYRE OPERATIONS';
+
+  @override
+  String get introSkip => 'Skip';
+
+  @override
+  String get introSkipSemantics => 'Skip the intro';
+
+  @override
+  String get profileReplayIntro => 'Replay intro';
 }

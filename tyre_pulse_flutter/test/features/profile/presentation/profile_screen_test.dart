@@ -20,6 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:signature/signature.dart';
+import 'package:tyre_pulse/app/intro/intro_seen_store.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_display_settings.dart';
@@ -636,6 +637,26 @@ void main() {
             .sourceScreen,
         '/profile',
       );
+    },
+  );
+
+  testWidgets(
+    'the Help section offers Replay intro, which asks the app to play it',
+    (WidgetTester tester) async {
+      final p = await _pumpSignedIn(tester);
+      expect(p.container.read(introVisibleProvider), isFalse);
+
+      final Finder row = find.byKey(ProfileScreenKeys.replayIntroRow);
+      await tester.ensureVisible(row);
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(of: row, matching: find.text('Replay intro')),
+        findsOneWidget,
+      );
+      await tester.tap(row);
+      await tester.pump();
+
+      expect(p.container.read(introVisibleProvider), isTrue);
     },
   );
 

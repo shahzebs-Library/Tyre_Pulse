@@ -10611,4 +10611,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get tyreEditorPositionMap => 'الموضع على المركبة';
+
+  @override
+  String get introTagline => 'إدارة إطارات الأسطول';
+
+  @override
+  String get introSkip => 'تخطي';
+
+  @override
+  String get introSkipSemantics => 'تخطي المقدمة';
+
+  @override
+  String get profileReplayIntro => 'إعادة عرض المقدمة';
 }

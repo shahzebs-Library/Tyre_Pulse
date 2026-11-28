@@ -4038,5 +4038,9 @@
   "tyreEditorPreviousReading": "آخر فحص {date}: {values}",
   "tyreEditorPreviousReadingUndated": "آخر فحص: {values}",
   "tyreEditorConditionSelected": "محدد",
-  "tyreEditorPositionMap": "الموضع على المركبة"
+  "tyreEditorPositionMap": "الموضع على المركبة",
+  "introTagline": "إدارة إطارات الأسطول",
+  "introSkip": "تخطي",
+  "introSkipSemantics": "تخطي المقدمة",
+  "profileReplayIntro": "إعادة عرض المقدمة"
 }

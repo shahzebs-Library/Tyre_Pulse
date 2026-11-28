@@ -121,6 +121,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart' show DateFormat;
+import 'package:tyre_pulse/app/intro/intro_seen_store.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/router/routes.dart';
 import 'package:tyre_pulse/app/theme/tp_colors.dart';
@@ -190,6 +191,7 @@ abstract final class ProfileScreenKeys {
   static const Key signatureRemove = Key('profile.signatureSheet.remove');
   static const Key signatureRetry = Key('profile.signatureSheet.retry');
   static const Key reportProblemRow = Key('profile.reportProblem');
+  static const Key replayIntroRow = Key('profile.replayIntro');
   static const Key signInOnComputerRow = Key('profile.signInOnComputer');
 }
 
@@ -548,6 +550,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                         onSignInOnComputer: () =>
                             unawaited(openQrLogin(context)),
+                        onReplayIntro: () =>
+                            ref.read(introVisibleProvider.notifier).replay(),
                         onOpenDevices: ref.watch(devicesAccessProvider)
                             ? () => unawaited(
                                   Navigator.of(context)
@@ -1224,6 +1228,7 @@ class _SettingsColumn extends StatelessWidget {
     required this.onOpenDrafts,
     required this.onReportProblem,
     required this.onSignInOnComputer,
+    required this.onReplayIntro,
     this.onOpenDevices,
   });
 
@@ -1255,6 +1260,9 @@ class _SettingsColumn extends StatelessWidget {
   /// Opens "Sign in on a computer" (scan the web sign-in QR). Offered to
   /// every signed-in role: it only ever signs the SAME person in on the web.
   final VoidCallback onSignInOnComputer;
+
+  /// Plays the first-run intro again over Profile.
+  final VoidCallback onReplayIntro;
 
   /// Opens Settings > Devices. Null hides the row: devices are admin-only
   /// until opened per person from the web Access Manager.
@@ -1453,6 +1461,13 @@ class _SettingsColumn extends StatelessWidget {
               tone: palette.info,
               label: l10n.problemReportAction,
               onTap: onReportProblem,
+            ),
+            _SettingsRow(
+              key: ProfileScreenKeys.replayIntroRow,
+              icon: Icons.play_circle_outline_rounded,
+              tone: palette.info,
+              label: l10n.profileReplayIntro,
+              onTap: onReplayIntro,
             ),
           ],
         ),

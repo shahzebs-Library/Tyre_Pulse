@@ -70,5 +70,12 @@
     "damaged": "Damaged",
     "missing": "Missing",
     "none": "Not checked"
+  },
+  "intro": {
+    "label": "Tyre Pulse intro",
+    "skip": "Skip",
+    "skipLabel": "Skip intro",
+    "tagline": "FLEET TYRE OPERATIONS",
+    "secondary": "إدارة إطارات الأسطول"
   }
 }

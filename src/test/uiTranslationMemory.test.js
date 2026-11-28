@@ -23,6 +23,16 @@ describe('legacy Arabic UI translation memory', () => {
     expect(host.querySelector('button').title).toBe('Sign In')
   })
 
+  it('leaves a translate="no" subtree (brand wordmark) untouched', () => {
+    const host = document.createElement('section')
+    host.innerHTML = '<span translate="no"> Sign In </span><b> Sign In </b>'
+    localiseLegacyDom(host, true)
+    expect(host.querySelector('span').textContent.trim()).toBe('Sign In')
+    expect(host.querySelector('b').textContent.trim()).toBe('تسجيل الدخول')
+    localiseLegacyDom(host.querySelector('span').firstChild, true)
+    expect(host.querySelector('span').textContent.trim()).toBe('Sign In')
+  })
+
   it('does not restore stale render values while English observation is enabled', async () => {
     const host = document.createElement('section')
     host.innerHTML = '<span title="Title">Title</span>'

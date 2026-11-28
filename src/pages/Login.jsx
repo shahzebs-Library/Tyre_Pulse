@@ -20,6 +20,7 @@ import ThemeToggle from '../components/ui/ThemeToggle'
 import TurnstileWidget, { captchaEnabled } from '../components/auth/TurnstileWidget'
 import LoginHero from '../components/auth/login/LoginHero'
 import QrLoginPanel from '../components/auth/login/QrLoginPanel'
+import BrandIntro from '../components/brand/BrandIntro'
 import { LOGIN_PAGE_CSS } from '../components/auth/login/loginStyles'
 import { MARKETING_URL, readRememberedId, writeRememberedId } from '../components/auth/login/loginContent'
 import {
@@ -460,6 +461,8 @@ export default function Login() {
   return (
     <>
       <style>{LOGIN_PAGE_CSS}</style>
+      {/* First visit only: an overlay above the already-mounted form, never for a signed-in user. */}
+      {!authLoading && !user && <BrandIntro />}
 
       {/* Brand panel (fixed palette) + the sign-in panel, which follows the
           light/dark theme through the tokens in loginStyles.js. */}

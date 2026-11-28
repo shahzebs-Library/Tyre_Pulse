@@ -43,7 +43,8 @@ describe('WorkshopLive date range', () => {
     expect(screen.getAllByText(rangeLabel(today.from, today.to)).length).toBeGreaterThan(0)
     expect(screen.getAllByText('Now').length).toBeGreaterThan(0)
     // No activity today: utilisation is N/A, not 0%.
-    expect(screen.getAllByText(/No technician activity recorded in/).length).toBeGreaterThan(0)
+    // The workshop strings load on demand; wait for them rather than read too early.
+    expect((await screen.findAllByText(/No technician activity recorded in/)).length).toBeGreaterThan(0)
     expect(screen.queryByText('0%')).toBeNull()
   })
 

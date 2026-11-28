@@ -584,7 +584,8 @@ export default function AccidentCases() {
       </div>
 
       {/* every open case step routed to the teams, kept under the board (owner, 2026-11-28) */}
-      {!error && <CaseTeamList items={loading && !board ? null : (board?.inbox ?? [])} />}
+      {/* A failed board read returns the error screen above, so this only renders with data or while loading. */}
+      <CaseTeamList items={loading && !board ? null : (board?.inbox ?? [])} />
     </div>
   )
 }

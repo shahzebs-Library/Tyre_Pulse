@@ -1,4 +1,4 @@
--- 20261128110000_wms_putaway
+-- 20261128120000_wms_putaway
 --
 -- One-call put-away: move free stock from one location to another storage
 -- location of the SAME site, as ONE ledger move (transfer_out + transfer_in in
@@ -177,7 +177,7 @@ end
 $$;
 
 comment on function public.inv_putaway(jsonb) is
-  'Same-site put-away as one ledger move (transfer_out + transfer_in), storage targets only. 20261128110000.';
+  'Same-site put-away as one ledger move (transfer_out + transfer_in), storage targets only. 20261128120000.';
 
 revoke all on function public.inv_putaway(jsonb) from public;
 revoke all on function public.inv_putaway(jsonb) from anon;

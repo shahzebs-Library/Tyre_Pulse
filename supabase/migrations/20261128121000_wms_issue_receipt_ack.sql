@@ -1,4 +1,4 @@
--- 20261128111000_wms_issue_receipt_ack
+-- 20261128121000_wms_issue_receipt_ack
 --
 -- "Who received the parts": a slim acknowledgement record per ISSUE movement.
 -- The store keeper who issued names the receiver (a real person, not free text);

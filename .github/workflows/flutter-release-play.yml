@@ -2,8 +2,8 @@ name: Flutter Release - Play Closed Testing
 
 # Builds the signed AAB for com.shahzebrahman.tyrepulse (a SEPARATE Play
 # listing from the retired Expo app com.shahzebrahman.tyrepulseinspector) and,
-# ONLY when the "upload_to_play" input is ticked, publishes it to Play Closed
-# testing (track 'alpha'). Unticked (the default) the run builds and
+# ONLY when the "upload_to_play" input is ticked, publishes it to the chosen
+# Play track (alpha = Closed testing by default; production needs PRODUCTION typed). Unticked (the default) the run builds and
 # validates the AAB and keeps it as a GitHub artifact - nothing reaches Play.
 #
 # workflow_dispatch ONLY - must never fire on push or PR.
@@ -23,9 +23,18 @@ on:
   workflow_dispatch:
     inputs:
       upload_to_play:
-        description: "Upload the AAB to Play Closed testing (alpha). Leave unticked to build and validate only."
+        description: "Upload the AAB to Google Play. Leave unticked to build and validate only."
         type: boolean
         default: false
+      play_track:
+        description: "Play track: alpha (Closed testing) or production."
+        type: choice
+        options: [alpha, production]
+        default: alpha
+      confirm_production:
+        description: "Type PRODUCTION to publish to all production users (required for the production track)."
+        type: string
+        default: ""
 
 # Least privilege: this workflow only reads the repository.
 permissions:
@@ -66,34 +75,36 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      # OWNER RULE 2026-09-29: Flutter publishes to Closed testing (Play track
-      # 'alpha') only. Production stays the owner's call. The guard fails the
-      # run if the track or the package is ever changed.
-      - name: Guard - Closed testing only, never production
+      # OWNER RULE (2026-11-28): the Flutter app is live in production on its
+      # own listing com.shahzebrahman.tyrepulse. A run publishes to Closed
+      # testing (alpha) by default; production needs the owner to pick it AND
+      # type PRODUCTION. The Expo listing (...tyrepulseinspector) is never touched.
+      - name: Guard - track, confirmation and package
         if: ${{ inputs.upload_to_play }}
         env:
-          PLAY_TRACK: alpha
+          PLAY_TRACK: ${{ inputs.play_track }}
+          CONFIRM: ${{ inputs.confirm_production }}
           PLAY_PACKAGE: com.shahzebrahman.tyrepulse
         run: |
-          if [ "$PLAY_TRACK" != "alpha" ]; then echo "::error::Flutter releases go to Closed testing (alpha) only (owner rule)."; exit 1; fi
-          if [ "$PLAY_PACKAGE" = "com.shahzebrahman.tyrepulseinspector" ]; then echo "::error::Never publish Flutter into the production app listing."; exit 1; fi
-          if ! grep -q '^          track: alpha$' .github/workflows/flutter-release-play.yml; then echo "::error::Publish step track is not alpha (Closed testing)."; exit 1; fi
+          case "$PLAY_TRACK" in alpha|production) ;; *) echo "::error::Unknown Play track '$PLAY_TRACK'."; exit 1 ;; esac
+          if [ "$PLAY_TRACK" = "production" ] && [ "$CONFIRM" != "PRODUCTION" ]; then echo "::error::Production needs confirm_production = PRODUCTION."; exit 1; fi
+          if [ "$PLAY_PACKAGE" = "com.shahzebrahman.tyrepulseinspector" ]; then echo "::error::Never publish Flutter into the Expo app listing."; exit 1; fi
           if ! grep -q '^          packageName: com.shahzebrahman.tyrepulse$' .github/workflows/flutter-release-play.yml; then echo "::error::Publish step package is not com.shahzebrahman.tyrepulse."; exit 1; fi
 
-      - name: Publish to Play Console Closed Testing
+      - name: Publish to Google Play
         if: ${{ inputs.upload_to_play }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY_F }}
           packageName: com.shahzebrahman.tyrepulse
           releaseFiles: tyre_pulse_flutter/build/app/outputs/bundle/release/app-release.aab
-          track: alpha
+          track: ${{ inputs.play_track }}
           status: completed
 
       - name: Report upload decision
         run: |
           if [ "${{ inputs.upload_to_play }}" = "true" ]; then
-            echo "Uploaded to Play Closed testing (alpha)." >> "$GITHUB_STEP_SUMMARY"
+            echo "Uploaded to Google Play track: ${{ inputs.play_track }}." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Build and validation only - NOT uploaded to Google Play." >> "$GITHUB_STEP_SUMMARY"
           fi

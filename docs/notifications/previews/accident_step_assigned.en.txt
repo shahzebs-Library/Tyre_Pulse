@@ -1,0 +1,24 @@
+Subject: Accident ACC-2026-0148: a step is assigned to you
+
+You own work on accident ACC-2026-0148
+
+Vehicle TM514 at NHC. Please open the case and complete your step.
+
+Reference: ACC-2026-0148
+Vehicle: TM514
+Site: NHC
+Severity: Moderate
+Stage: Workshop assessment
+Incident date: 27 Nov 2026
+
+Your steps on this case
+- Workshop assessment
+- Repair
+
+Open the accident: https://tyrepulse.app/accidents/sample
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

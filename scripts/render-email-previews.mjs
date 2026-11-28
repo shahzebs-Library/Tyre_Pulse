@@ -19,6 +19,9 @@ const SAMPLE = {
     { key: 'low_stock', count: 2, items: ['315/80R22.5 at NHC store: 3 left (min 10)', 'Engine oil 15W-40: 40 L left (min 200 L)'] },
     { key: 'workshop_delays', count: 1, items: ['TM673 waiting parts for 9 days'] },
   ] } },
+  'accident.step_assigned': { entityType: 'accident', entityId: 'sample', data: { reference_no: 'ACC-2026-0148', asset_no: 'TM514', site: 'NHC', severity: 'moderate', stage: 'workshop_assessment', incident_date: '2026-11-27T08:15:00Z', steps: ['assessment', 'repair'] } },
+  'workshop.waiting': { entityType: 'workshop_intake', data: { count: 3, assets: ['TM514', 'MP083', 'GN103'] } },
+  'summary.daily': { entityType: 'digest', data: { summary_label: '27 Nov 2026', inspections_done: 18, accidents_reported: 1, workshop_in: 6, workshop_released: 4, tyres_attention: 41, approvals_waiting: null } },
   test: { data: {} },
 }
 

@@ -272,6 +272,7 @@ export const EDGE_FUNCTIONS = Object.freeze([
   { name: 'generate-embedding', what: 'Turns documents into search vectors', auth: 'Gateway and in code' },
   { name: 'public-api', what: 'External API for customers', auth: 'API key' },
   { name: 'qr-login', what: 'Finishes a QR sign-in approved on a phone', auth: 'One-time code' },
+  { name: 'resend-webhook', what: 'Email delivery and bounce reports from Resend', auth: 'Webhook signature' },
   { name: 'send-email', what: 'Sends report and case emails', auth: 'In code' },
   { name: 'send-scheduled-reports', what: 'Builds and mails scheduled reports', auth: 'In code or cron secret' },
   { name: 'sentry-crash-alert', what: 'Fatal crash alerts', auth: 'Cron secret' },

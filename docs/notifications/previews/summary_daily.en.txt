@@ -1,0 +1,20 @@
+Subject: Tyre Pulse summary for 27 Nov 2026
+
+Your morning summary
+
+What happened yesterday (27 Nov 2026) at your sites, and what is waiting now.
+
+Inspections done yesterday: 18
+Accidents reported yesterday: 1
+Vehicles into the workshop yesterday: 6
+Vehicles released yesterday: 4
+Tyres needing attention now: 41
+Approvals waiting now: Could not be read
+
+Open Tyre Pulse: https://tyrepulse.app/
+
+You can turn the daily summary off in your notification settings.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

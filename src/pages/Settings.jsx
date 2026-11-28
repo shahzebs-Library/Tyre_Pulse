@@ -9,6 +9,7 @@ import UpdateHistory from '../components/ReleaseNotes'
 import AppearancePanel from '../components/settings/AppearancePanel'
 import MySignaturePanel from '../components/settings/MySignaturePanel'
 import FeatureFlagsPanel from '../components/settings/FeatureFlagsPanel'
+import EmailAlertsPanel from '../components/settings/EmailAlertsPanel'
 import OrgInvitationsPanel from '../components/admin/OrgInvitationsPanel'
 import { useSettings, COUNTRIES } from '../contexts/SettingsContext'
 import { Save, User, Settings2, Bell, BellRing, Database, Info, Target, Clock, Mail, Phone, Calendar, Trash2, Plus, Play, Lock, Shield, ShieldCheck, ShieldOff, AlertTriangle, Sparkles, Moon, Search } from 'lucide-react'
@@ -146,6 +147,7 @@ const TAB_ICONS = {
   notifications: BellRing,
   alerts: Target,
   reports: Clock,
+  email: Mail,
   security: Shield,
   about: Info,
 }
@@ -1710,6 +1712,12 @@ export default function Settings() {
       </Card>
 
       </>
+      )}
+
+      {tab === 'email' && (
+        isAdmin
+          ? <EmailAlertsPanel canEdit />
+          : <Card><CardBody><p className="text-sm text-[var(--text-muted)]">{t('emailAlerts.adminOnly')}</p></CardBody></Card>
       )}
 
       {tab === 'security' && (

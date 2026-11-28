@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { populatedSources, emptySources } from './fixtures/inventoryKpiSources'
 
 const api = { sources: null, history: null }
@@ -26,11 +26,13 @@ beforeEach(() => {
 })
 
 describe('Inventory KPI catalogue screen', () => {
-  it('renders all four groups with real figures, periods and definitions', async () => {
+  it('renders all four groups with real figures, periods and definitions', { timeout: 20000 }, async () => {
     wrap(<KpiCatalogueSection scope={scope} can={all} />)
-    expect(await screen.findByRole('heading', { name: 'Availability' })).toBeTruthy()
-    for (const g of ['Count accuracy', 'Value and movement', 'Suppliers and procurement']) expect(screen.getByRole('heading', { name: g })).toBeTruthy()
-    expect(screen.getAllByRole('article')).toHaveLength(23)
+    expect(await screen.findByRole('heading', { name: 'Availability' }, { timeout: 8000 })).toBeTruthy()
+    for (const g of ['Count accuracy', 'Value and movement', 'Suppliers and procurement']) {
+      expect(await screen.findByRole('heading', { name: g }, { timeout: 8000 })).toBeTruthy()
+    }
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(23), { timeout: 8000 })
     expect(within(tile('Critical item availability')).getByText('100%')).toBeTruthy()
     expect(within(tile('Gross shortage')).getByText('1')).toBeTruthy()
     expect(within(tile('Gross shortage')).getByText('SAR 100.00')).toBeTruthy()

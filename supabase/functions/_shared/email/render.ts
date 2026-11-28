@@ -4,7 +4,7 @@
 import { BRAND } from './brand.ts'
 import { appLink, safeLink, settingsLink } from './links.ts'
 import { cleanText, escapeHtml, stripCrLf } from './escape.ts'
-import { COMMON, DIGEST_SECTIONS, TEMPLATES, severityLabel, stageLabel, type Audience, type FieldDef, type Locale } from './templates.ts'
+import { COMMON, DIGEST_SECTIONS, TEMPLATES, severityLabel, stageLabel, stepLabel, type Audience, type FieldDef, type Locale } from './templates.ts'
 
 export type RenderInput = {
   template: string
@@ -24,6 +24,11 @@ export function normaliseLocale(raw: unknown): Locale {
 }
 
 function formatValue(field: FieldDef, raw: unknown, locale: Locale): string {
+  // A count that could not be read is said so; it is never shown as 0 or hidden.
+  if (field.format === 'count') {
+    const n = typeof raw === 'number' ? raw : (raw === null || raw === undefined || raw === '' ? NaN : Number(raw))
+    return Number.isFinite(n) ? String(Math.trunc(n)) : COMMON.unreadable[locale]
+  }
   if (raw === null || raw === undefined || raw === '') return ''
   if (field.format === 'date' || field.format === 'datetime') {
     const d = new Date(String(raw))
@@ -40,6 +45,7 @@ function enrich(data: Record<string, unknown>, locale: Locale): Record<string, u
   const out: Record<string, unknown> = { ...data }
   if (out.stage !== undefined && out.stage_label === undefined) out.stage_label = stageLabel(out.stage, locale)
   if (out.severity !== undefined && out.severity_label === undefined) out.severity_label = severityLabel(out.severity, locale)
+  if (Array.isArray(out.steps) && out.step_labels === undefined) out.step_labels = (out.steps as unknown[]).map(v => stepLabel(v, locale))
   return out
 }
 
@@ -56,7 +62,10 @@ export function renderEmail(input: RenderInput): RenderedEmail {
   const appStore = input.appStoreUrl ? safeLink(input.appStoreUrl) : null
   const appStoreOk = !!appStore && appStore !== BRAND.site
 
-  const subject = stripCrLf(tpl.subject[locale](data)).slice(0, 180)
+  // An organisation may set a subject prefix (e.g. "[GCC Fleet]") for its mailbox rules.
+  const prefix = stripCrLf(data.subject_prefix ?? '').slice(0, 40)
+  const rawSubject = stripCrLf(tpl.subject[locale](data))
+  const subject = (prefix && !rawSubject.startsWith(prefix) ? `${prefix} ${rawSubject}` : rawSubject).slice(0, 180)
   const heading = cleanText(tpl.heading[locale](data), 200)
   const intro = cleanText(tpl.intro[locale](data), 600)
 

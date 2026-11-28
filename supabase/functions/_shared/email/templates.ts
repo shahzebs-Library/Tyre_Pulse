@@ -7,7 +7,7 @@
 export type Locale = 'en' | 'ar'
 export type Audience = 'staff' | 'external' | 'owner'
 
-export type FieldDef = { key: string; label: Record<Locale, string>; external?: boolean; format?: 'date' | 'datetime' | 'money' }
+export type FieldDef = { key: string; label: Record<Locale, string>; external?: boolean; format?: 'date' | 'datetime' | 'money' | 'count' }
 
 export type TemplateDef = {
   key: string
@@ -54,6 +54,22 @@ const SEVERITY: Record<string, Record<Locale, string>> = {
 export function severityLabel(v: unknown, locale: Locale): string {
   const k = s(v).toLowerCase()
   return SEVERITY[k]?.[locale] ?? s(v)
+}
+
+const STEPS: Record<string, Record<Locale, string>> = {
+  incident_evidence: { en: 'Incident evidence', ar: 'أدلة الحادث' },
+  fleet_validation: { en: 'Fleet validation', ar: 'تحقق الأسطول' },
+  liability: { en: 'Liability', ar: 'المسؤولية' },
+  insurance: { en: 'Insurance claim', ar: 'مطالبة التأمين' },
+  assessment: { en: 'Workshop assessment', ar: 'تقييم الورشة' },
+  repair: { en: 'Repair', ar: 'الإصلاح' },
+  handover: { en: 'Vehicle handover', ar: 'تسليم المركبة' },
+  finance: { en: 'Finance and cost recovery', ar: 'المالية واسترداد التكلفة' },
+  closure: { en: 'Case closure', ar: 'إغلاق الحالة' },
+}
+export function stepLabel(step: unknown, locale: Locale): string {
+  const k = s(step).toLowerCase()
+  return STEPS[k]?.[locale] ?? s(step).replace(/_/g, ' ')
 }
 
 const accidentFields: FieldDef[] = [
@@ -133,6 +149,65 @@ export const TEMPLATES: Record<string, TemplateDef> = {
       { key: 'due_at', label: { en: 'Due', ar: 'الموعد' }, format: 'datetime' },
     ],
     cta: { en: 'Open in Tyre Pulse', ar: 'فتح في Tyre Pulse' },
+  },
+  'accident.step_assigned': {
+    key: 'accident.step_assigned',
+    optional: false,
+    subject: {
+      en: d => `Accident ${ref(d)}: a step is assigned to you`,
+      ar: d => `الحادث ${ref(d)}: أُسندت إليك خطوة`,
+    },
+    heading: { en: d => `You own work on accident ${ref(d)}`, ar: d => `لديك عمل في الحادث ${ref(d)}` },
+    intro: {
+      en: d => `Vehicle ${s(d.asset_no)} at ${s(d.site)}. Please open the case and complete your step.`,
+      ar: d => `المركبة ${s(d.asset_no)} في ${s(d.site)}. يرجى فتح الحالة وإكمال خطوتك.`,
+    },
+    fields: [
+      { key: 'reference_no', label: { en: 'Reference', ar: 'المرجع' } },
+      { key: 'asset_no', label: { en: 'Vehicle', ar: 'المركبة' } },
+      { key: 'site', label: { en: 'Site', ar: 'الموقع' } },
+      { key: 'severity_label', label: { en: 'Severity', ar: 'الخطورة' } },
+      { key: 'stage_label', label: { en: 'Stage', ar: 'المرحلة' } },
+      { key: 'incident_date', label: { en: 'Incident date', ar: 'تاريخ الحادث' }, format: 'date' },
+    ],
+    listKey: 'step_labels',
+    listTitle: { en: 'Your steps on this case', ar: 'خطواتك في هذه الحالة' },
+    cta: { en: 'Open the accident', ar: 'فتح الحادث' },
+  },
+  'workshop.waiting': {
+    key: 'workshop.waiting',
+    optional: false,
+    subject: {
+      en: d => (Number(d.count) === 1 ? '1 vehicle is waiting for you to confirm' : `${s(d.count)} vehicles are waiting for you to confirm`),
+      ar: d => (Number(d.count) === 1 ? 'مركبة واحدة بانتظار تأكيدك' : `${s(d.count)} مركبات بانتظار تأكيدك`),
+    },
+    heading: { en: () => 'Vehicles are waiting at your workshop', ar: () => 'مركبات بانتظارك في الورشة' },
+    intro: {
+      en: () => 'These vehicles were sent to your workshop and need you to confirm them in Tyre Pulse.',
+      ar: () => 'أُرسلت هذه المركبات إلى ورشتك وتحتاج إلى تأكيدك في Tyre Pulse.',
+    },
+    listKey: 'assets',
+    listTitle: { en: 'Waiting vehicles', ar: 'المركبات المنتظرة' },
+    cta: { en: 'Confirm the vehicles', ar: 'تأكيد المركبات' },
+  },
+  'summary.daily': {
+    key: 'summary.daily',
+    optional: true,
+    subject: { en: d => `Tyre Pulse summary for ${s(d.summary_label)}`, ar: d => `ملخص Tyre Pulse ليوم ${s(d.summary_label)}` },
+    heading: { en: () => 'Your morning summary', ar: () => 'ملخصك الصباحي' },
+    intro: {
+      en: d => `What happened yesterday (${s(d.summary_label)}) at your sites, and what is waiting now.`,
+      ar: d => `ما حدث أمس (${s(d.summary_label)}) في مواقعك، وما ينتظر الآن.`,
+    },
+    fields: [
+      { key: 'inspections_done', label: { en: 'Inspections done yesterday', ar: 'الفحوصات المنجزة أمس' }, format: 'count' },
+      { key: 'accidents_reported', label: { en: 'Accidents reported yesterday', ar: 'الحوادث المبلغ عنها أمس' }, format: 'count' },
+      { key: 'workshop_in', label: { en: 'Vehicles into the workshop yesterday', ar: 'المركبات الداخلة إلى الورشة أمس' }, format: 'count' },
+      { key: 'workshop_released', label: { en: 'Vehicles released yesterday', ar: 'المركبات المُفرج عنها أمس' }, format: 'count' },
+      { key: 'tyres_attention', label: { en: 'Tyres needing attention now', ar: 'إطارات تحتاج إلى متابعة الآن' }, format: 'count' },
+      { key: 'approvals_waiting', label: { en: 'Approvals waiting now', ar: 'موافقات بانتظار القرار الآن' }, format: 'count' },
+    ],
+    cta: { en: 'Open Tyre Pulse', ar: 'فتح Tyre Pulse' },
   },
   'reminder.escalation': {
     key: 'reminder.escalation',
@@ -237,4 +312,5 @@ export const COMMON: Record<string, Record<Locale, string>> = {
   },
   footer: { en: 'Sent by Tyre Pulse. Replies go to info@tyrepulse.app.', ar: 'أُرسلت من Tyre Pulse. الردود تصل إلى info@tyrepulse.app.' },
   more: { en: 'and {n} more', ar: 'و{n} أخرى' },
+  unreadable: { en: 'Could not be read', ar: 'تعذرت القراءة' },
 }

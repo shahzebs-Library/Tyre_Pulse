@@ -28,6 +28,7 @@ export const SETTINGS_TABS = [
   { id: 'notifications', label: 'Notifications' },
   { id: 'alerts', label: 'Alerts & targets' },
   { id: 'reports', label: 'Reports & data' },
+  { id: 'email', label: 'Email & alerts' },
   { id: 'security', label: 'Security & account' },
   { id: 'about', label: 'About' },
 ]

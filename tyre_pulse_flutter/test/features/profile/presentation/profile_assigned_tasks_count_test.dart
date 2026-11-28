@@ -60,7 +60,7 @@ void main() {
       return calls == 1
           ? Future<MyWorkSnapshot>.value(empty)
           : Future<MyWorkSnapshot>.error(Exception('offline'));
-    }, retry: (int _, Object __) => null);
+    }, retry: (int _, Object __) => null,);
     final ProviderContainer container = ProviderContainer();
     addTearDown(container.dispose);
     final ProviderSubscription<AsyncValue<MyWorkSnapshot>> sub =

@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Workshop Status -> Vehicle intake (shared sheet, phone, manual, ERP-first)
 -- ============================================================================
--- STATUS: AUTHORED, NOT APPLIED. Apply only on an explicit owner go-ahead.
+-- STATUS: APPLIED LIVE 2026-11-28 (owner OK). Apply only on an explicit owner go-ahead.
 --         Verified live with a rolled-back DO block (see VERIFY at the end).
 --
 -- WHAT: vehicles coming into the workshop are entered as rows (web shared

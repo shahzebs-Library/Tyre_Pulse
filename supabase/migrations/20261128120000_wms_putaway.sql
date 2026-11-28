@@ -1,4 +1,5 @@
 -- 20261128120000_wms_putaway
+-- STATUS: APPLIED LIVE 2026-11-28 (owner OK).
 --
 -- One-call put-away: move free stock from one location to another storage
 -- location of the SAME site, as ONE ledger move (transfer_out + transfer_in in

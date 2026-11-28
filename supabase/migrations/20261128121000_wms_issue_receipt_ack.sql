@@ -1,4 +1,5 @@
 -- 20261128121000_wms_issue_receipt_ack
+-- STATUS: APPLIED LIVE 2026-11-28 (owner OK).
 --
 -- "Who received the parts": a slim acknowledgement record per ISSUE movement.
 -- The store keeper who issued names the receiver (a real person, not free text);

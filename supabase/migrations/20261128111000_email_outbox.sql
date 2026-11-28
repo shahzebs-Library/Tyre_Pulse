@@ -1,6 +1,6 @@
 -- =============================================================================
 -- P1: one email outbox for every system email.
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's OK.
+-- STATUS: APPLIED LIVE 2026-11-28 (owner OK). Apply only on the owner's OK.
 --
 -- WHY A SIBLING TABLE, NOT workflow_notifications:
 --   workflow_notifications is one payload fanned out to MANY recipients across

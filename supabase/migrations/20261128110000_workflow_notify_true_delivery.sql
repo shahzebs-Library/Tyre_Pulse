@@ -1,6 +1,6 @@
 -- =============================================================================
 -- P0b: workflow-notify true delivery.
--- STATUS: AUTHORED, NOT APPLIED. Apply only on the owner's OK.
+-- STATUS: APPLIED LIVE 2026-11-28 (owner OK). Apply only on the owner's OK.
 --
 -- 1. notify_allowed_emails(): the ONLY answer to "may we email this person".
 --    A staff member is emailable only at a REAL, VERIFIED address:

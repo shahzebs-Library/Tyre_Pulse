@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Workshop intake: ERP-first job cards wait for the supervisor too
 -- ============================================================================
--- STATUS: AUTHORED, NOT APPLIED. Depends on 20261128090000_workshop_intake.sql.
+-- STATUS: APPLIED LIVE 2026-11-28 (owner OK). Depends on 20261128090000_workshop_intake.sql.
 --         Kept separate because it patches the LIVE hot path
 --         process_stg_job_cards (every ERP job card import runs it).
 --

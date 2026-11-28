@@ -140,7 +140,7 @@ alter table public.driver_concern_counters enable row level security; -- deny-al
 create table if not exists public.driver_concerns (
   id                    uuid primary key default gen_random_uuid(),
   organisation_id       uuid not null,
-  case_no               text unique,
+  case_no               text,  -- unique per company: see 20261128130000
   driver_id             uuid not null references public.drivers(id),
   raised_by             uuid default auth.uid(),
   logged_on_behalf_by   uuid,

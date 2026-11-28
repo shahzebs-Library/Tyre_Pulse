@@ -64,6 +64,7 @@ final class ConcernDraft {
     String? clientUuid,
     DateTime? createdAt,
     this.error,
+    this.ownerId,
   })  : localPhotos = localPhotos ?? <String>[],
         clientUuid = clientUuid ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
@@ -79,6 +80,7 @@ final class ConcernDraft {
         clientUuid: '${j['client_uuid']}',
         createdAt: DateTime.tryParse('${j['created_at']}'),
         error: j['error'] as String?,
+        ownerId: j['owner_id'] as String?,
       );
 
   final String category;
@@ -93,6 +95,24 @@ final class ConcernDraft {
   /// it is simply waiting for signal.
   final String? error;
 
+  /// The signed-in account that wrote this draft. The outbox is shared
+  /// storage on the phone, so a draft is only ever shown to, or sent by, the
+  /// account that wrote it; another person signing in on the same phone
+  /// never sees or submits it.
+  final String? ownerId;
+
+  ConcernDraft withOwner(String? owner) => ConcernDraft(
+        category: category,
+        subtype: subtype,
+        text: text,
+        lang: lang,
+        localPhotos: localPhotos,
+        clientUuid: clientUuid,
+        createdAt: createdAt,
+        error: error,
+        ownerId: owner,
+      );
+
   ConcernDraft withError(String? e) => ConcernDraft(
         category: category,
         subtype: subtype,
@@ -102,6 +122,7 @@ final class ConcernDraft {
         clientUuid: clientUuid,
         createdAt: createdAt,
         error: e,
+        ownerId: ownerId,
       );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -113,6 +134,7 @@ final class ConcernDraft {
         'client_uuid': clientUuid,
         'created_at': createdAt.toIso8601String(),
         'error': error,
+        'owner_id': ownerId,
       };
 }
 
@@ -340,17 +362,31 @@ final class SupabaseDriverConcernRepository implements DriverConcernRepository {
     return null;
   }
 
+  /// Drafts written by the account signed in now. Drafts of anyone else who
+  /// used this phone stay stored, untouched, until that person signs in.
+  /// A draft with no owner (none exist outside tests) is never shown or sent.
+  Future<List<ConcernDraft>> _mine() async {
+    final String? uid = _client.auth.currentUser?.id;
+    if (uid == null) return <ConcernDraft>[];
+    return (await _outbox.read())
+        .where((ConcernDraft d) => d.ownerId == uid)
+        .toList();
+  }
+
   @override
   Future<String?> raise(ConcernDraft draft) async {
+    final String? uid = _client.auth.currentUser?.id;
+    if (uid == null) throw const ConcernRefused('Not signed in');
+    final ConcernDraft mine = draft.withOwner(uid);
     // Saved first so nothing is lost if the app dies mid-send.
-    await _outbox.put(draft);
-    return _attempt(draft);
+    await _outbox.put(mine);
+    return _attempt(mine);
   }
 
   @override
   Future<int> flushOutbox() async {
     int sent = 0;
-    for (final ConcernDraft d in await _outbox.read()) {
+    for (final ConcernDraft d in await _mine()) {
       // One item never stops the others.
       if (await _attempt(d) != null) sent++;
     }
@@ -358,10 +394,14 @@ final class SupabaseDriverConcernRepository implements DriverConcernRepository {
   }
 
   @override
-  Future<List<ConcernDraft>> pending() => _outbox.read();
+  Future<List<ConcernDraft>> pending() => _mine();
 
   @override
-  Future<void> discard(String clientUuid) => _outbox.remove(clientUuid);
+  Future<void> discard(String clientUuid) async {
+    final bool own =
+        (await _mine()).any((ConcernDraft d) => d.clientUuid == clientUuid);
+    if (own) await _outbox.remove(clientUuid);
+  }
 
   @override
   Future<String?> retry(String clientUuid) async {

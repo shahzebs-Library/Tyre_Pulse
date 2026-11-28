@@ -55,12 +55,15 @@ void main() {
   test('a failed refresh keeps the old count but marks it stale', () async {
     int calls = 0;
     final FutureProvider<MyWorkSnapshot> provider =
-        FutureProvider<MyWorkSnapshot>((Ref ref) {
-      calls++;
-      return calls == 1
-          ? Future<MyWorkSnapshot>.value(empty)
-          : Future<MyWorkSnapshot>.error(Exception('offline'));
-    }, retry: (int _, Object __) => null,);
+        FutureProvider<MyWorkSnapshot>(
+      (Ref ref) {
+        calls++;
+        return calls == 1
+            ? Future<MyWorkSnapshot>.value(empty)
+            : Future<MyWorkSnapshot>.error(Exception('offline'));
+      },
+      retry: (int _, Object __) => null,
+    );
     final ProviderContainer container = ProviderContainer();
     addTearDown(container.dispose);
     final ProviderSubscription<AsyncValue<MyWorkSnapshot>> sub =

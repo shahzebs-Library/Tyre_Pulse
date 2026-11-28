@@ -62,8 +62,10 @@ void main() {
       TpIconSize.xl,
     ]) {
       await pumpTp(tester, _row(size));
-      expect(find.byType(SvgPicture),
-          findsNWidgets(TpAssetIconKind.values.length));
+      expect(
+        find.byType(SvgPicture),
+        findsNWidgets(TpAssetIconKind.values.length),
+      );
       expect(
         tester.getSize(find.byType(SvgPicture).first),
         Size(size, size),

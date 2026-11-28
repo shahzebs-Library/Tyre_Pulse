@@ -32,12 +32,19 @@ export default function PendingVerificationsPanel({ country, onChanged }) {
   const [busyId, setBusyId] = useState(null)
   const [rowError, setRowError] = useState({})
 
+  // Only the newest read may write state, and never after the panel is gone:
+  // a slow answer for a previous country (or after unmount) is dropped.
+  const loadId = useRef(0)
+  useEffect(() => () => { loadId.current += 1 }, [])
   const load = useCallback(async () => {
+    const id = ++loadId.current
     setState((s) => ({ ...s, loading: true, error: null }))
     try {
       const r = await listPendingFleetVerifications(country)
+      if (id !== loadId.current) return
       setState({ loading: false, rows: r.rows, notSetUp: r.notSetUp, error: null })
     } catch (e) {
+      if (id !== loadId.current) return
       setState({ loading: false, rows: [], notSetUp: false, error: toUserMessage(e, tRef.current('fleetVerification.loadError')) })
     }
   }, [country])

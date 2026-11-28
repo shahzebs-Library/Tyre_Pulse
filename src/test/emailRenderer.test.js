@@ -161,3 +161,27 @@ describe('dispatcher', () => {
     expect(r[0].outcome).toBe('permanent')
   })
 })
+
+describe('svix webhook verification', async () => {
+  const { verifySvix, svixSign } = await import('../../supabase/functions/_shared/email/svix.ts')
+  const secret = 'whsec_' + btoa('0123456789abcdef0123456789abcdef')
+  const body = '{"type":"email.bounced"}'
+  it('accepts a valid signature inside the tolerance', async () => {
+    const sig = await svixSign(secret, 'msg_1', '1000', body)
+    expect(await verifySvix(secret, { id: 'msg_1', timestamp: '1000', signature: `v1,${sig}` }, body, 1100)).toEqual({ ok: true })
+  })
+  it('rejects a tampered body, a stale timestamp and a missing secret', async () => {
+    const sig = await svixSign(secret, 'msg_1', '1000', body)
+    expect((await verifySvix(secret, { id: 'msg_1', timestamp: '1000', signature: `v1,${sig}` }, body + ' ', 1100)).ok).toBe(false)
+    expect((await verifySvix(secret, { id: 'msg_1', timestamp: '1000', signature: `v1,${sig}` }, body, 2000)).ok).toBe(false)
+    expect((await verifySvix('', { id: 'msg_1', timestamp: '1000', signature: `v1,${sig}` }, body, 1100)).ok).toBe(false)
+  })
+})
+
+describe('subject prefix', () => {
+  it('prepends an org subject prefix once and strips CR/LF from it', () => {
+    const r = renderEmail({ template: 'accident.update', locale: 'en', data: { reference_no: 'A1', stage: 'closed', subject_prefix: '[GCC]\r\nBcc: x' } })
+    expect(r.subject.startsWith('[GCC] Bcc: x Accident A1')).toBe(true)
+    expect(r.subject).not.toMatch(/[\r\n]/)
+  })
+})

@@ -46,6 +46,7 @@ import {
 import { compareValues } from '../lib/consoleTable'
 import { reportFileName } from '../lib/exportUtils'
 import { toUserMessage } from '../lib/safeError'
+import EmailAlertsPanel from '../components/settings/EmailAlertsPanel'
 
 const WRITE_ROLES = new Set(['Admin', 'Manager', 'Director'])
 
@@ -223,6 +224,9 @@ export default function AccidentWorkflowSettings() {
             loading={loading} error={errors.delivery} onRetry={load} setSectionError={(v) => setSectionError('delivery', v)}
             cfgInitial={emailCfg} cfgLoadError={errors.config} onCfgSaved={setEmailCfg}
           />
+        )}
+        {tab === 'delivery' && (isSuperAdmin === true || profile?.role === 'Admin') && (
+          <div className="mt-6"><EmailAlertsPanel eventPrefix="accident." canEdit /></div>
         )}
       </div>
     </div>

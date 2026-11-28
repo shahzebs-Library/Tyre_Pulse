@@ -56,7 +56,10 @@ export function renderEmail(input: RenderInput): RenderedEmail {
   const appStore = input.appStoreUrl ? safeLink(input.appStoreUrl) : null
   const appStoreOk = !!appStore && appStore !== BRAND.site
 
-  const subject = stripCrLf(tpl.subject[locale](data)).slice(0, 180)
+  // An organisation may set a subject prefix (e.g. "[GCC Fleet]") for its mailbox rules.
+  const prefix = stripCrLf(data.subject_prefix ?? '').slice(0, 40)
+  const rawSubject = stripCrLf(tpl.subject[locale](data))
+  const subject = (prefix && !rawSubject.startsWith(prefix) ? `${prefix} ${rawSubject}` : rawSubject).slice(0, 180)
   const heading = cleanText(tpl.heading[locale](data), 200)
   const intro = cleanText(tpl.intro[locale](data), 600)
 

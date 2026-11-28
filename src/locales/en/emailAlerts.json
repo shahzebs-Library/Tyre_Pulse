@@ -1,0 +1,55 @@
+{
+  "title": "Email & alerts",
+  "subtitle": "Choose who receives each email. Staff are emailed only at a verified personal address; everyone else gets the alert on their phone and in the bell.",
+  "loading": "Loading email settings...",
+  "loadError": "Could not load email settings.",
+  "retry": "Retry",
+  "adminOnly": "Only an administrator can change who receives emails.",
+  "enabled": "Send this email",
+  "mandatory": "Cannot be turned off by staff",
+  "optional": "Staff can turn this off",
+  "roles": "Roles",
+  "people": "Named people",
+  "external": "External addresses",
+  "externalHint": "Up to 10, separated by commas. For example an insurer or the accident mailbox. They see no driver names, notes or money.",
+  "includeAssignee": "Also email the person the work is assigned to",
+  "save": "Save",
+  "saving": "Saving...",
+  "saved": "Saved",
+  "saveError": "Could not save. Check the addresses and try again.",
+  "tooMany": "At most 10 external addresses.",
+  "badAddress": "This address cannot receive email: {address}",
+  "testSend": "Send me a test email",
+  "testSent": "Test queued to your verified address.",
+  "testNoAddress": "You do not have a verified email address yet. Add one under Security & account.",
+  "testError": "Could not queue the test email.",
+  "searchPeople": "Search people",
+  "noPeople": "No one selected",
+  "remove": "Remove",
+  "events": {
+    "accident_reported": {
+      "label": "Accident reported",
+      "help": "Sent at once when an accident is logged."
+    },
+    "accident_update": {
+      "label": "Accident updates",
+      "help": "Each stage change and claim decision."
+    },
+    "accident_escalation": {
+      "label": "Accident overdue",
+      "help": "Vehicle off the road too long, or the case passed its target date."
+    },
+    "assignment_new": {
+      "label": "Work assigned to someone",
+      "help": "Approvals, workshop jobs, accident steps, driver concerns, parts requests."
+    },
+    "user_signup_pending": {
+      "label": "New sign-up waiting",
+      "help": "Someone created an account and needs approval."
+    },
+    "digest_daily": {
+      "label": "Daily morning summary",
+      "help": "05:45 Riyadh: missed uploads, maintenance due, tyres due, low stock, workshop delays."
+    }
+  }
+}

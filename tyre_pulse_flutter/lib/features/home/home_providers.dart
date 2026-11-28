@@ -38,9 +38,9 @@ import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_submission_queue_reads.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
+import 'package:tyre_pulse/features/inventory/physical_inventory_providers.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
 import 'package:tyre_pulse/features/workshop/workshop_providers.dart';
-import 'package:tyre_pulse/features/inventory/physical_inventory_providers.dart';
 
 /// The number Home's sync indicator shows: every queued command not yet
 /// marked `synced` for the active workspace, [QueueDao.pendingCount]'s own

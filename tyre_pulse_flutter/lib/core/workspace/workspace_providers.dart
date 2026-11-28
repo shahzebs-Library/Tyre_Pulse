@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/permissions/access_resolver.dart';
 import 'package:tyre_pulse/core/permissions/permission_providers.dart';
+import 'package:tyre_pulse/core/workspace/company_scope.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_scope.dart';
 import 'package:tyre_pulse/core/workspace/workspace_state.dart';
@@ -133,6 +134,15 @@ final workspaceContextProvider = Provider<WorkspaceContext?>(
 /// has no country. Their scope is [countryScopeProvider].
 final activeCountryProvider = Provider<String?>(
   (ref) => ref.watch(workspaceContextProvider)?.activeCountry,
+);
+
+/// The caller's active company id, or null when the profile carries none.
+///
+/// List and count reads pin `organisation_id` to it (see `company_scope.dart`)
+/// so a super admin, whose RLS spans every company, sees their own company's
+/// register rather than a mix with a demo or other tenant.
+final activeCompanyIdProvider = Provider<String?>(
+  (ref) => activeCompanyIdFor(ref.watch(workspaceContextProvider)),
 );
 
 /// The country scope from `profiles.country`, the ARRAY.

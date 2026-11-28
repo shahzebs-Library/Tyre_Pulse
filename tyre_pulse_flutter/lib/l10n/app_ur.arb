@@ -3924,5 +3924,7 @@
   "syncQueuePhotoRemoveMessage": "یہ تصویر ریکارڈ کا ثبوت ہے۔ اسے ہٹانے پر ریکارڈ اس کے بغیر بھیجا جائے گا اور تصویر قطار سے واپس نہیں آ سکے گی۔ ہو سکے تو ریکارڈ سے دوبارہ تصویر لیں۔",
   "syncQueuePhotoRemoveConfirm": "تصویر ہٹائیں",
   "syncQueuePhotoRemoved": "تصویر ہٹا دی گئی۔ ریکارڈ اس کے بغیر بھیجا جائے گا۔",
-  "syncQueuePhotoActionFailed": "یہ کام نہیں ہوا۔ دوبارہ کوشش کریں۔"
+  "syncQueuePhotoActionFailed": "یہ کام نہیں ہوا۔ دوبارہ کوشش کریں۔",
+  "fleetListOffRoadFilter": "سڑک سے باہر",
+  "inspectionPickerCollapsedNote": "رجسٹر کی {rows} قطاروں سے {assets} اثاثہ نمبر۔ ایک سے زیادہ ملک میں استعمال ہونے والا نمبر ایک بار دکھایا گیا ہے: درست مشین کے معائنے کے لیے ملک منتخب کریں۔"
 }

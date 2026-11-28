@@ -38,6 +38,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/navigation/list_drilldown.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/fleet_signals_repository.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
@@ -47,6 +48,7 @@ import 'package:tyre_pulse/features/assets/domain/asset_financials.dart'
 import 'package:tyre_pulse/features/assets/domain/fleet_class_groups.dart';
 import 'package:tyre_pulse/features/assets/domain/fleet_signals.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_type_display.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_detail_screen.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_photo_resolver.dart';
@@ -84,6 +86,7 @@ abstract final class VehiclesListScreenKeys {
   static const Key dueSoon = Key('vehicles.due_soon');
   static const Key filterSheet = Key('vehicles.filter_sheet');
   static const Key sort = Key('vehicles.sort');
+  static const Key opsStatusChip = Key('vehicles.ops_status_chip');
   static Key serviceDue(String id) => Key('vehicles.asset.$id.service_due');
   static Key tyreActions(String id) => Key('vehicles.asset.$id.tyre_actions');
   static Key groupTab(FleetClassGroup? group) =>
@@ -101,6 +104,11 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
   String? _siteFilter;
   String? _statusFilter;
 
+  /// Exact `vehicle_fleet.ops_status` (e.g. `breakdown` = off road). Set
+  /// only by a Home drill-down so "Off road 30" opens those 30 machines -
+  /// the same rule `countOffRoad` counts by. Cleared from its chip.
+  String? _opsStatusFilter;
+
   /// The browse group tab. Null is All. Like the vehicle-type chips, it is a
   /// BROWSE filter: a typed search looks across the whole register.
   FleetClassGroup? _group;
@@ -115,6 +123,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
         _vehicleTypeFilter,
         _siteFilter,
         _statusFilter,
+        _opsStatusFilter,
         if (_dueSoonOnly) true,
       ].whereType<Object>().length;
 
@@ -124,6 +133,9 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
     final String initial = widget.initialSearchTerm?.trim() ?? '';
     _searchController = TextEditingController(text: initial);
     _searchTerm = initial;
+    if (ref.read(listDrilldownProvider.notifier).take(ListDrilldown.offRoad)) {
+      _opsStatusFilter = kFleetOpsStatusOffRoad;
+    }
   }
 
   @override
@@ -209,6 +221,7 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
                                     _vehicleTypeFilter = null;
                                     _siteFilter = null;
                                     _statusFilter = null;
+                                    _opsStatusFilter = null;
                                     _dueSoonOnly = false;
                                   },
                                 ),
@@ -410,7 +423,8 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
           asset.status?.trim().toLowerCase() == _statusFilter!.toLowerCase();
       final bool matchesDue =
           !_dueSoonOnly || (signalById[asset.id]?.isDueSoon ?? false);
-      return matchesSite && matchesStatus && matchesDue;
+      final bool matchesOps = fleetOpsStatusMatches(asset, _opsStatusFilter);
+      return matchesSite && matchesStatus && matchesDue && matchesOps;
     }).toList();
     // Dart's List.sort is not stable: ties fall back to the register order.
     final Map<String, int> registerOrder = <String, int>{
@@ -642,6 +656,25 @@ class _VehiclesListScreenState extends ConsumerState<VehiclesListScreen> {
           },
         ),
       ),
+      if (_opsStatusFilter != null)
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            TpSpace.lg,
+            0,
+            TpSpace.lg,
+            TpSpace.sm,
+          ),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: InputChip(
+              key: VehiclesListScreenKeys.opsStatusChip,
+              label: Text(l10n.fleetListOffRoadFilter),
+              selected: true,
+              onDeleted: () => setState(() => _opsStatusFilter = null),
+              deleteButtonTooltipMessage: l10n.recordsClearFilters,
+            ),
+          ),
+        ),
       _ScopeLine(
         key: VehiclesListScreenKeys.scope,
         country: ref.watch(activeCountryProvider),
@@ -1214,7 +1247,7 @@ class _FleetAssetCard extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
     final String identity = asset.displayIdentity ?? unknownAssetLabel;
     final String? description = _joinNonEmpty(
-      <String?>[asset.make, asset.model, asset.vehicleType],
+      <String?>[asset.make, asset.model, vehicleTypeDisplay(asset.vehicleType)],
       separator: ' · ',
     );
     final String? displayStatus = asset.opsStatus?.trim().isNotEmpty == true

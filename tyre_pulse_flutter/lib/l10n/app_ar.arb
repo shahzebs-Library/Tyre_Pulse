@@ -3924,5 +3924,7 @@
   "syncQueuePhotoRemoveMessage": "هذه الصورة دليل على السجل. إذا أزلتها فسيُرسل السجل بدونها ولا يمكن استعادتها من القائمة. التقطها من جديد من السجل إن أمكن.",
   "syncQueuePhotoRemoveConfirm": "إزالة الصورة",
   "syncQueuePhotoRemoved": "أُزيلت الصورة. سيُرسل السجل بدونها.",
-  "syncQueuePhotoActionFailed": "لم ينجح ذلك. حاول مرة أخرى."
+  "syncQueuePhotoActionFailed": "لم ينجح ذلك. حاول مرة أخرى.",
+  "fleetListOffRoadFilter": "خارج الخدمة",
+  "inspectionPickerCollapsedNote": "{assets} رقم أصل من {rows} سجلا في السجل. الرقم المستخدم في أكثر من دولة يظهر مرة واحدة: اختر الدولة لفحص المعدة الصحيحة."
 }

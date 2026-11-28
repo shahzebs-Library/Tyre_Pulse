@@ -26,6 +26,7 @@ import 'package:tyre_pulse/core/errors/app_error.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/assets/data/vehicle_fleet_repository.dart';
 import 'package:tyre_pulse/features/assets/domain/vehicle_asset.dart';
+import 'package:tyre_pulse/features/assets/domain/vehicle_type_display.dart';
 import 'package:tyre_pulse/features/assets/presentation/vehicle_fleet_providers.dart';
 import 'package:tyre_pulse/features/handover/data/handover_photo_capture.dart';
 import 'package:tyre_pulse/features/handover/data/handover_remote_repository.dart';
@@ -1119,7 +1120,11 @@ class _SelectedAssetCard extends StatelessWidget {
     final TpPalette palette = TpPalette.of(context);
     final String? sub = asset == null
         ? null
-        : <String?>[asset!.make, asset!.model, asset!.vehicleType]
+        : <String?>[
+            asset!.make,
+            asset!.model,
+            vehicleTypeDisplay(asset!.vehicleType),
+          ]
             .where((String? v) => v != null && v.trim().isNotEmpty)
             .map((String? v) => v!.trim())
             .join(' - ');
@@ -1232,7 +1237,11 @@ class _AssetResults extends StatelessWidget {
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
                             Text(
-                              <String?>[a.make, a.model, a.vehicleType]
+                              <String?>[
+                                a.make,
+                                a.model,
+                                vehicleTypeDisplay(a.vehicleType),
+                              ]
                                   .where(
                                     (String? v) =>
                                         v != null && v.trim().isNotEmpty,

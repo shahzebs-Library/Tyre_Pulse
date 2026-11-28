@@ -105,6 +105,8 @@ abstract final class NewInspectionScreenKeys {
       Key('inspection.header.selected_continue');
   static const Key pickerClassFilters = Key('inspection.picker.class_filters');
   static const Key pickerTruncated = Key('inspection.picker.truncated');
+  static const Key pickerCollapsedNote =
+      Key('inspection.picker.collapsed_note');
 
   static Key pickerClassChip(String assetClass) =>
       ValueKey<String>('inspection.picker.class.$assetClass');
@@ -1115,6 +1117,7 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
           orElse: () => false,
         );
     final List<VehicleAsset> unique = _uniqueNavigableAssets(asyncFleet);
+    final int registerRows = _navigableRowCount(asyncFleet);
     final List<AssetClassChip> chips = classChips(
       unique.map((VehicleAsset asset) => asset.assetNo),
     );
@@ -1173,6 +1176,16 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
             allLabel: '${l10n.vehiclesAllFilter} (${unique.length})',
             onSelect: (String? value) => setState(() => _classFilter = value),
           ),
+          // "All (1383)" beside a fleet of 1619 reads as missing assets. The
+          // picker lists each asset NUMBER once; say why the counts differ.
+          if (registerRows > unique.length) ...<Widget>[
+            const SizedBox(height: TpSpace.xs),
+            Text(
+              l10n.inspectionPickerCollapsedNote(unique.length, registerRows),
+              key: NewInspectionScreenKeys.pickerCollapsedNote,
+              style: text.labelSmall,
+            ),
+          ],
         ],
         const SizedBox(height: TpSpace.md),
         if (isLoading)
@@ -1231,6 +1244,19 @@ class _VehiclePickerState extends ConsumerState<_VehiclePicker> {
 /// number. An inspector must never see two identical choices and risk
 /// starting the draft against an arbitrary duplicate, so rows are collapsed
 /// by the normalised asset number while preserving the repository's order.
+/// The loaded fleet rows that carry a usable asset number, before
+/// [_uniqueNavigableAssets] collapses them by number.
+int _navigableRowCount(AsyncValue<VehicleFleetListOutcome> fleet) =>
+    fleet.maybeWhen(
+      data: (VehicleFleetListOutcome outcome) => switch (outcome) {
+        VehicleFleetListLoaded(:final assets) ||
+        VehicleFleetListFromCache(:final assets) =>
+          assets.where((VehicleAsset a) => a.hasNavigableAssetNo).length,
+        VehicleFleetListFailed() => 0,
+      },
+      orElse: () => 0,
+    );
+
 List<VehicleAsset> _uniqueNavigableAssets(
   AsyncValue<VehicleFleetListOutcome> fleet,
 ) {

@@ -9982,4 +9982,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get syncQueuePhotoActionFailed => 'That did not work. Try again.';
+
+  @override
+  String get fleetListOffRoadFilter => 'Off road';
+
+  @override
+  String inspectionPickerCollapsedNote(int assets, int rows) {
+    return '$assets asset numbers from $rows register rows. A number used in more than one country is listed once: choose a country to inspect the right machine.';
+  }
 }

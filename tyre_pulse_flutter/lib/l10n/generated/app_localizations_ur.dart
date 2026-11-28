@@ -10002,4 +10002,12 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get syncQueuePhotoActionFailed => 'یہ کام نہیں ہوا۔ دوبارہ کوشش کریں۔';
+
+  @override
+  String get fleetListOffRoadFilter => 'سڑک سے باہر';
+
+  @override
+  String inspectionPickerCollapsedNote(int assets, int rows) {
+    return 'رجسٹر کی $rows قطاروں سے $assets اثاثہ نمبر۔ ایک سے زیادہ ملک میں استعمال ہونے والا نمبر ایک بار دکھایا گیا ہے: درست مشین کے معائنے کے لیے ملک منتخب کریں۔';
+  }
 }

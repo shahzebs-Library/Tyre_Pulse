@@ -76,7 +76,10 @@ final FutureProvider<int> homePendingSyncCountProvider = FutureProvider<int>((
 /// Home's server reads (exact approvals count, recent inspected assets).
 final Provider<HomeRemoteRepository> homeRemoteRepositoryProvider =
     Provider<HomeRemoteRepository>(
-  (ref) => SupabaseHomeRemoteRepository(ref.watch(supabaseClientProvider)),
+  (ref) => SupabaseHomeRemoteRepository(
+    ref.watch(supabaseClientProvider),
+    companyId: ref.watch(activeCompanyIdProvider),
+  ),
 );
 
 /// Whether the signed-in role would pass `decide_inspection_approval`'s own
@@ -156,7 +159,10 @@ final Provider<DateTime Function()> homeRoleClockProvider =
 
 final Provider<HomeRoleRepository> homeRoleRepositoryProvider =
     Provider<HomeRoleRepository>(
-  (ref) => SupabaseHomeRoleRepository(ref.watch(supabaseClientProvider)),
+  (ref) => SupabaseHomeRoleRepository(
+    ref.watch(supabaseClientProvider),
+    companyId: ref.watch(activeCompanyIdProvider),
+  ),
 );
 
 String _homeUserId(Ref ref) =>

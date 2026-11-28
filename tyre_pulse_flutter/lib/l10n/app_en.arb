@@ -9722,5 +9722,21 @@
   "syncQueuePhotoActionFailed": "That did not work. Try again.",
   "@syncQueuePhotoActionFailed": {
     "description": "Profile sync queue: a photo that could not upload."
+  },
+  "fleetListOffRoadFilter": "Off road",
+  "@fleetListOffRoadFilter": {
+    "description": "Fleet list chip: only assets whose operational status is breakdown (opened from Home's Off road tile)"
+  },
+  "inspectionPickerCollapsedNote": "{assets} asset numbers from {rows} register rows. A number used in more than one country is listed once: choose a country to inspect the right machine.",
+  "@inspectionPickerCollapsedNote": {
+    "description": "Inspect asset picker: why the All count is lower than the fleet register",
+    "placeholders": {
+      "assets": {
+        "type": "int"
+      },
+      "rows": {
+        "type": "int"
+      }
+    }
   }
 }

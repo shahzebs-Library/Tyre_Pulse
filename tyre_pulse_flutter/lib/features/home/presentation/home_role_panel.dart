@@ -96,6 +96,8 @@ class _RoleHomePanel extends ConsumerWidget {
     final AppLocalizations l10n = AppLocalizations.of(context);
     String c(String key) => _catalogLabel(l10n.homeRoleCopyCatalog, key);
     bool can(ModuleKey m) => ref.watch(canAccessModuleProvider(m));
+    final ListDrilldownController drill =
+        ref.read(listDrilldownProvider.notifier);
     final DateTime now = ref.watch(homeHeaderClockProvider)();
     final bool canSign = can(ModuleKey.approvals) &&
         ref.watch(homeCanSignInspectionApprovalsProvider);
@@ -130,7 +132,10 @@ class _RoleHomePanel extends ConsumerWidget {
             title: c('offRoad'),
             state: ref.watch(homeOffRoadCountProvider),
             text: (int v) => '$v',
-            onTap: () => context.push(const VehiclesRoute().location),
+            onTap: () {
+              drill.request(ListDrilldown.offRoad);
+              context.push(const VehiclesRoute().location);
+            },
           )
         : null;
     _RoleRowData? openAccidents() => can(ModuleKey.accidents)
@@ -139,7 +144,10 @@ class _RoleHomePanel extends ConsumerWidget {
             title: c('openAccidents'),
             state: ref.watch(homeOpenAccidentsCountProvider),
             text: (int v) => '$v',
-            onTap: () => context.go(const AccidentDashboardRoute().location),
+            onTap: () {
+              drill.request(ListDrilldown.openAccidents);
+              context.go(const AccidentDashboardRoute().location);
+            },
           )
         : null;
     // C1: my open accident steps. Shown only when there is something to do,
@@ -171,8 +179,10 @@ class _RoleHomePanel extends ConsumerWidget {
             title: c('maintenanceOverdue'),
             state: ref.watch(homeMaintenanceOverdueCountProvider),
             text: (int v) => '$v',
-            onTap: () =>
-                context.push(const PreventiveMaintenanceRoute().location),
+            onTap: () {
+              drill.request(ListDrilldown.maintenanceOverdue);
+              context.push(const PreventiveMaintenanceRoute().location);
+            },
           )
         : null;
     String alertsText(List<TyreAlert> v) =>

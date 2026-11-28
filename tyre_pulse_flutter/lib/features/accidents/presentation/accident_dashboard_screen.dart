@@ -19,6 +19,7 @@ import 'package:tyre_pulse/app/theme/tp_colors.dart';
 import 'package:tyre_pulse/app/theme/tp_spacing.dart';
 import 'package:tyre_pulse/core/design_system/design_system.dart';
 import 'package:tyre_pulse/core/errors/app_error.dart';
+import 'package:tyre_pulse/core/navigation/list_drilldown.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/accidents/accidents_providers.dart';
 import 'package:tyre_pulse/features/accidents/domain/accident_models.dart';
@@ -66,11 +67,38 @@ class _AccidentDashboardScreenState
   @override
   void initState() {
     super.initState();
+    // Home's "Open accidents" tile opens this register on the Open filter,
+    // the same closed-token rule its count uses (`accidentRecordIsClosed`).
+    // This screen is a shell branch root kept alive by the indexed stack, so
+    // it must react to EVERY tap while mounted, not only the first build.
+    _drilldown = ListDrilldownController.watch(
+      ref,
+      ListDrilldown.openAccidents,
+      _applyOpenDrilldown,
+    );
+    _initialised = true;
     unawaited(_load(reset: true));
+  }
+
+  ProviderSubscription<ListDrilldownRequest?>? _drilldown;
+  bool _initialised = false;
+
+  void _applyOpenDrilldown() {
+    void apply() {
+      _status = _StatusFilter.open;
+      _search.clear();
+    }
+
+    if (!_initialised) {
+      apply(); // fired immediately from initState: no setState yet
+      return;
+    }
+    if (mounted) setState(apply);
   }
 
   @override
   void dispose() {
+    _drilldown?.close();
     _search.dispose();
     super.dispose();
   }

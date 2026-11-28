@@ -4,7 +4,7 @@
  * through the DEFINER RPCs get_email_event_settings / set_email_event_setting,
  * which check Admin + organisation and validate every address server side.
  */
-import { supabase, unwrap } from './_client'
+import { supabase, unwrap, fetchAllPages } from './_client'
 
 export const MAX_EXTERNAL = 10
 const EMAIL_RE = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/
@@ -46,11 +46,13 @@ export async function sendTestEmail() {
 
 /** People in the caller's organisation (RLS scopes the read) for the named-person picker. */
 export async function listOrgPeople() {
-  const data = unwrap(await supabase.from('profiles')
+  const { data, error } = await fetchAllPages((from, to) => supabase.from('profiles')
     .select('id, full_name, username, role')
     .eq('approved', true)
     .order('full_name', { ascending: true })
-    .limit(1000))
+    .order('id', { ascending: true })
+    .range(from, to), { max: 5000 })
+  if (error) unwrap({ data: null, error })
   return data || []
 }
 

@@ -6,13 +6,13 @@ import { EMAIL_STUBS, SEED_USERS, id, ORG_A, ORG_B } from './fixtures/email_stub
 
 const read = f => readFile(new URL(`../migrations/${f}`, import.meta.url), 'utf8')
 const MIGS = [await read('20261128110000_workflow_notify_true_delivery.sql'), await read('20261128111000_email_outbox.sql')]
-const P2 = await read('20261128112000_email_event_settings.sql')
+const P2 = await read('20261128140000_email_event_settings.sql')
 
 const ACCIDENT_STUBS = `
   CREATE TABLE net._http_response(id bigint, status_code int, content text, error_msg text);
   CREATE TABLE public.organisations(id uuid primary key);
   INSERT INTO public.organisations VALUES ('${ORG_A}'),('${ORG_B}');
-  CREATE TABLE public.domain_events(id bigint primary key, event_type text, entity_type text, entity_id text, organisation_id uuid, created_at timestamptz default now());
+  CREATE TABLE public.domain_events(id bigint primary key, event_type text, entity_type text, entity_id text, organisation_id uuid, created_at timestamptz default now(), payload jsonb default '{}', actor_id uuid);
   CREATE TABLE public.accidents(id uuid primary key, organisation_id uuid, reference_no text, asset_no text, site text, country text, severity text,
     injuries boolean default false, workflow_stage text default 'reported', claim_status text, accident_type text, estimated_damage_cost numeric,
     final_amount numeric, repair_cost numeric, vor boolean default false, third_party_involved boolean default false, department text,
@@ -23,7 +23,10 @@ const ACCIDENT_STUBS = `
   CREATE TABLE public.notifications(id uuid default gen_random_uuid() primary key, user_id uuid, type text, title text, body text,
     entity_type text, entity_id uuid, read boolean default false, created_at timestamptz default now(), dedupe_key text unique);
   CREATE FUNCTION public._user_push_tokens(uuid) RETURNS SETOF text LANGUAGE sql AS $$ SELECT 'ExponentPushToken[x-' || $1 || ']' $$;
-  CREATE FUNCTION public.accident_notify_configured(uuid, text) RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
+  CREATE TABLE public.test_rule_cfg(org uuid, targets uuid[]);
+  CREATE FUNCTION public.accident_notify_configured(p uuid, e text) RETURNS boolean LANGUAGE sql AS $$ SELECT exists (SELECT 1 FROM public.test_rule_cfg WHERE org = p) $$;
+  CREATE FUNCTION public._accident_notify_targets(a uuid, e text, pl jsonb, actor uuid) RETURNS uuid[] LANGUAGE sql AS $$
+    SELECT coalesce((SELECT array_agg(x) FROM public.test_rule_cfg c, unnest(c.targets) x WHERE x IS DISTINCT FROM actor), '{}') $$;
   CREATE FUNCTION public._accident_is_test_profile(uuid) RETURNS boolean LANGUAGE sql AS $$ SELECT false $$;
   CREATE FUNCTION public.accident_severity_label(text) RETURNS text LANGUAGE sql AS $$ SELECT initcap($1) $$;
   CREATE FUNCTION public.accident_stage_label(text) RETURNS text LANGUAGE sql AS $$ SELECT initcap($1) $$;
@@ -117,5 +120,18 @@ test('webhook record: replay ignored, bounce suppresses the address', async () =
     for (const fn of ['public.email_webhook_record(text,text,text,text,jsonb)', 'public.email_event_recipients(uuid,text,text,text,text[])']) {
       assert.equal((await db.query(`SELECT has_function_privilege('authenticated','${fn}','EXECUTE') ok`)).rows[0].ok, false)
     }
+  })
+})
+
+test('owner rule configured: email goes to the rule people (step owners), not the routing roles', async () => {
+  await withDb(async db => {
+    await db.exec(`
+      INSERT INTO test_rule_cfg VALUES ('${ORG_A}', ARRAY['${id(5)}','${id(2)}']::uuid[]);
+      INSERT INTO accidents(id, organisation_id, reference_no, asset_no, site, country, severity) VALUES ('${id(52)}','${ORG_A}','ACC-3','TM1','NHC','KSA','minor');
+      INSERT INTO domain_events(id, event_type, entity_type, entity_id, organisation_id, actor_id) VALUES (9, 'accident.reported', 'accident', '${id(52)}', '${ORG_A}', '${id(1)}');`)
+    await db.query(`SELECT consume_event_accident_notify(d) FROM domain_events d WHERE id=9`)
+    const to = (await db.query(`SELECT to_address FROM email_outbox WHERE audience='staff' ORDER BY to_address`)).rows.map(r => r.to_address)
+    // sara is a rule target with a real address; the synthetic driver is a target but has none; owner is not a target.
+    assert.deepEqual(to, ['sara@example.com'])
   })
 })

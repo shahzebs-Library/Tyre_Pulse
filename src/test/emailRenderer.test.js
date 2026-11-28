@@ -75,6 +75,39 @@ describe('email renderer', () => {
     expect(renderEmail({ template: 'accident.reported', locale: 'en', data: accident }).optional).toBe(false)
   })
 
+  it('daily summary shows real numbers, a real 0, and says when a number could not be read', () => {
+    const data = { summary_label: '27 Nov 2026', inspections_done: 12, accidents_reported: 0, workshop_in: 3,
+      workshop_released: null, tyres_attention: 41, approvals_waiting: 5 }
+    const en = renderEmail({ template: 'summary.daily', locale: 'en', data, entityType: 'digest' })
+    expect(en.subject).toBe('Tyre Pulse summary for 27 Nov 2026')
+    expect(en.optional).toBe(true)
+    expect(en.text).toContain('Inspections done yesterday: 12')
+    expect(en.text).toContain('Accidents reported yesterday: 0')
+    expect(en.text).toContain('Vehicles released yesterday: Could not be read')
+    const ar = renderEmail({ template: 'summary.daily', locale: 'ar', data })
+    expect(ar.text).toContain('تعذرت القراءة')
+  })
+
+  it('accident step email lists the steps by name and links to the case', () => {
+    const r = renderEmail({ template: 'accident.step_assigned', locale: 'en', entityType: 'accident', entityId: 'a1b2',
+      data: { ...accident, steps: ['assessment', 'finance'] } })
+    expect(r.subject).toBe('Accident ACC-2026-0148: a step is assigned to you')
+    expect(r.optional).toBe(false)
+    expect(r.text).toContain('- Workshop assessment')
+    expect(r.text).toContain('- Finance and cost recovery')
+    expect(r.text).toContain('/accidents/a1b2')
+  })
+
+  it('workshop waiting email counts vehicles and opens the waiting list', () => {
+    const one = renderEmail({ template: 'workshop.waiting', locale: 'en', entityType: 'workshop_intake', data: { count: 1, assets: ['TM514'] } })
+    expect(one.subject).toBe('1 vehicle is waiting for you to confirm')
+    const many = renderEmail({ template: 'workshop.waiting', locale: 'en', entityType: 'workshop_intake', data: { count: 3, assets: ['TM1', 'TM2', 'TM3'] } })
+    expect(many.subject).toBe('3 vehicles are waiting for you to confirm')
+    expect(many.text).toContain('- TM2')
+    expect(many.text).toContain('/daily-ops/workshop?tab=intake&view=waiting')
+    expect(many.optional).toBe(false)
+  })
+
   it('falls back to English for ur/hi', () => {
     expect(normaliseLocale('ur')).toBe('en')
     expect(normaliseLocale('ar-SA')).toBe('ar')

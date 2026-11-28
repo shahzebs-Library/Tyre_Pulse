@@ -1,0 +1,18 @@
+Subject: 3 مركبات بانتظار تأكيدك
+
+مركبات بانتظارك في الورشة
+
+أُرسلت هذه المركبات إلى ورشتك وتحتاج إلى تأكيدك في Tyre Pulse.
+
+المركبات المنتظرة
+- TM514
+- MP083
+- GN103
+
+تأكيد المركبات: https://tyrepulse.app/daily-ops/workshop?tab=intake&view=waiting
+
+تصلك هذه الرسالة لأن عملًا أُسند إليك أو إلى فريقك. لا يمكن إيقاف هذه التنبيهات.
+
+tyrepulse.app | متوفر على Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+إدارة الإعدادات: https://tyrepulse.app/settings?tab=email
+أُرسلت من Tyre Pulse. الردود تصل إلى info@tyrepulse.app.

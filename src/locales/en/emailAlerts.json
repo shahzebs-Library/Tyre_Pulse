@@ -50,6 +50,14 @@
     "digest_daily": {
       "label": "Daily morning summary",
       "help": "05:45 Riyadh: missed uploads, maintenance due, tyres due, low stock, workshop delays."
+    },
+    "workshop_waiting": {
+      "label": "Vehicles waiting at the workshop",
+      "help": "Sent to the supervisor a vehicle is routed to: at once, then at most every 30 minutes, with the full waiting count."
+    },
+    "summary_daily": {
+      "label": "Morning summary (07:00)",
+      "help": "07:00 Riyadh: yesterday's inspections, accidents and workshop in/out, plus tyres and approvals waiting now."
     }
   }
 }

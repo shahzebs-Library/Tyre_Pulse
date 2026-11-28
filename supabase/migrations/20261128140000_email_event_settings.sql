@@ -490,10 +490,27 @@ begin
     'reason', case when ev.event_type = 'accident.vor_sla_breach' then 'vor_sla_breach' else 'overdue' end,
     'department', v_dept, 'subject_prefix', nullif(v_prefix, ''));
 
+  -- Turned off for this org: no email at all (in-app and push above still run).
+  if exists (select 1 from public.email_event_settings s
+              where s.organisation_id = acc.organisation_id and s.event_key = v_set_key and not s.enabled) then
+    return;
+  end if;
+
+  -- Recipients: the email settings (roles, named people, external mailboxes),
+  -- plus the routing-rule roles when the org has no owner rule for this event,
+  -- plus the owner-rule people (step owners, roles, named people, the reporting
+  -- driver) when it does, so the people who handle the case get the email.
   for r in
-    select distinct e.user_id, e.address
-      from public.email_event_recipients(acc.organisation_id, v_set_key, acc.site, acc.country,
-                                         case when v_cfg then '{}'::text[] else v_all end) e
+    select distinct x.user_id, x.address from (
+      select e.user_id, e.address
+        from public.email_event_recipients(acc.organisation_id, v_set_key, acc.site, acc.country,
+                                           case when v_cfg then '{}'::text[] else v_all end) e
+      union
+      select t, null::text
+        from unnest(case when v_cfg
+                         then public._accident_notify_targets(acc.id, ev.event_type, coalesce(ev.payload, '{}'::jsonb), ev.actor_id)
+                         else '{}'::uuid[] end) t
+    ) x
   loop
     if r.user_id is not null and public._accident_is_test_profile(r.user_id) then continue; end if;
     if public.enqueue_email(acc.organisation_id, ev.event_type, v_tpl, r.user_id, r.address, 'accident', acc.id::text,

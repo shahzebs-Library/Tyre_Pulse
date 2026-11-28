@@ -1,0 +1,18 @@
+Subject: 3 vehicles are waiting for you to confirm
+
+Vehicles are waiting at your workshop
+
+These vehicles were sent to your workshop and need you to confirm them in Tyre Pulse.
+
+Waiting vehicles
+- TM514
+- MP083
+- GN103
+
+Confirm the vehicles: https://tyrepulse.app/daily-ops/workshop?tab=intake&view=waiting
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

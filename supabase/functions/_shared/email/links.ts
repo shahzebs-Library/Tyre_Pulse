@@ -5,6 +5,7 @@ import { ALLOWED_LINK_HOSTS, BRAND } from './brand.ts'
 const ENTITY_PATHS: Record<string, (id: string | null) => string> = {
   accident: id => (id ? `/accidents/${id}` : '/accidents'),
   work_order: id => (id ? `/work-orders?id=${id}` : '/work-orders'),
+  workshop_intake: () => '/daily-ops/workshop?tab=intake&view=waiting',
   workshop_job: id => (id ? `/work-orders?id=${id}` : '/daily-ops/workshop'),
   inspection: id => (id ? `/inspections?view=${id}` : '/inspections'),
   checklist: id => (id ? `/checklists/submission/${id}` : '/checklists'),

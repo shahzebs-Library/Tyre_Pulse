@@ -25,8 +25,12 @@
 //                                     TWILIO_WHATSAPP_FROM)
 // One channel failing never blocks the others.
 //
-// Response (200): { email: n, push: n, push_expo: n, push_fcm: n, whatsapp: n,
+// Response (200): { email, push, push_expo, push_fcm, whatsapp (sent counts),
+//                  channels: { <channel>: { sent, failed, transient } },
+//                  sent_total, failed_total, transient_total, retry_after_seconds,
 //                  skipped: string[] }   (push = push_expo + push_fcm)
+// Email goes ONLY to verified real addresses (notify_allowed_emails); synthetic
+// @users.tyrepulse.app login addresses are never mailed.
 //
 // user_devices has no provider column, so the provider is decided by the token
 // form alone. An FCM token FCM reports as UNREGISTERED / invalid is soft-revoked
@@ -82,18 +86,74 @@ function buildMessage(p: NotifyPayload): { title: string; body: string } {
   }
 }
 
-async function sendEmails(recipients: Recipient[], subject: string, html: string, skipped: string[]): Promise<number> {
+// Per-request delivery tally. The deliverer (deliver_workflow_notifications) reads
+// sent_total / transient_total / failed_total: sent_total = 0 is never "delivered",
+// and a row where nothing went out but something failed transiently is retried.
+type ChannelStat = { sent: number; failed: number; transient: number }
+type Stats = { email: ChannelStat; push_expo: ChannelStat; push_fcm: ChannelStat; whatsapp: ChannelStat; retryAfter: number }
+function newStats(): Stats {
+  const z = () => ({ sent: 0, failed: 0, transient: 0 })
+  return { email: z(), push_expo: z(), push_fcm: z(), whatsapp: z(), retryAfter: 0 }
+}
+function isTransientStatus(status: number): boolean { return status === 429 || status === 408 || status >= 500 }
+function noteRetryAfter(stats: Stats, res: Response): void {
+  const raw = res.headers.get('retry-after')
+  const n = raw ? Number(raw) : NaN
+  if (Number.isFinite(n) && n > stats.retryAfter) stats.retryAfter = Math.min(Math.ceil(n), 3600)
+}
+
+// Synthetic login addresses can never receive mail; sending to them bounces.
+const SYNTHETIC_EMAIL_RE = /@users\.tyrepulse\.app$/i
+function cleanEmail(raw: string | null | undefined): string | null {
+  const e = (raw || '').replace(/[\r\n]/g, '').trim().toLowerCase()
+  if (!EMAIL_RE.test(e) || SYNTHETIC_EMAIL_RE.test(e)) return null
+  return e
+}
+
+// Staff recipients (user_id set) are emailed ONLY at their verified real address
+// (notify_allowed_emails, service role). The address a caller put in the payload is
+// ignored for them. Recipients without a user_id are admin-configured external
+// mailboxes (e.g. the accident mailbox) and are kept after syntax checks.
+// Fails CLOSED: if the lookup fails, staff get no email (push is unaffected).
+async function allowedEmails(recipients: Recipient[], skipped: string[]): Promise<string[]> {
+  const out = new Set<string>()
+  const userIds = Array.from(new Set(recipients.map(r => r.user_id).filter((u): u is string => !!u)))
+  for (const r of recipients) {
+    if (r.user_id) continue
+    const e = cleanEmail(r.email)
+    if (e) out.add(e)
+  }
+  if (userIds.length) {
+    try {
+      const url = Deno.env.get('SUPABASE_URL'); const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+      if (!url || !key) throw new Error('service role not available')
+      const { data, error } = await createClient(url, key).rpc('notify_allowed_emails', { p_users: userIds })
+      if (error) throw new Error(error.message)
+      for (const row of (data || []) as Array<{ email?: string }>) { const e = cleanEmail(row.email); if (e) out.add(e) }
+    } catch (err) { skipped.push(`email: verified address lookup failed (${errMsg(err)})`) }
+  }
+  return Array.from(out)
+}
+
+async function sendEmails(recipients: Recipient[], subject: string, html: string, skipped: string[], stats: Stats): Promise<number> {
   const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
   const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'reports@tyrepulse.app'
-  const emails = Array.from(new Set(recipients.map(r => (r.email || '').trim().toLowerCase()).filter(e => EMAIL_RE.test(e))))
+  const emails = await allowedEmails(recipients, skipped)
   if (!RESEND_API_KEY) { if (emails.length) skipped.push('email: RESEND_API_KEY not configured'); return 0 }
-  if (!emails.length) { skipped.push('email: no valid recipient addresses'); return 0 }
+  if (!emails.length) { skipped.push('email: no verified recipient addresses'); return 0 }
+  const safeSubject = subject.replace(/[\r\n]+/g, ' ').slice(0, 200)
   let sent = 0
   for (const to of emails) {
     try {
-      const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject, html }) })
-      if (res.ok) { sent++ } else { const data = await res.json().catch(() => ({})); skipped.push(`email(${to}): ${data?.message || `HTTP ${res.status}`}`) }
-    } catch (err) { skipped.push(`email(${to}): ${errMsg(err)}`) }
+      const res = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ from: FROM_EMAIL, to: [to], subject: safeSubject, html }) })
+      if (res.ok) { sent++; stats.email.sent++ } else {
+        const data = await res.json().catch(() => ({}))
+        if (isTransientStatus(res.status)) { stats.email.transient++; noteRetryAfter(stats, res) } else { stats.email.failed++ }
+        skipped.push(`email(${to.replace(/^(.).*(@.*)$/, '$1***$2')}): ${data?.message || `HTTP ${res.status}`}`)
+      }
+      // Resend allows 2 requests/second.
+      await new Promise(r => setTimeout(r, 550))
+    } catch (err) { stats.email.transient++; skipped.push(`email: ${errMsg(err)}`) }
   }
   return sent
 }
@@ -126,7 +186,7 @@ async function recordReceipts(receipts: Receipt[], recipients: Recipient[], payl
   } catch { /* best effort */ }
 }
 
-async function sendPush(recipients: Recipient[], msg: { title: string; body: string }, instanceId: string | undefined, skipped: string[], payload: NotifyPayload = {}): Promise<number> {
+async function sendPush(recipients: Recipient[], msg: { title: string; body: string }, instanceId: string | undefined, skipped: string[], payload: NotifyPayload = {}, stats: Stats = newStats()): Promise<number> {
   const tokens = Array.from(new Set(recipients.map(r => (r.push_token || '').trim()).filter(t => EXPO_TOKEN_RE.test(t))))
   if (!tokens.length) return 0
   const messages = tokens.map(to => ({ to, sound: 'default', title: msg.title, body: msg.body, data: { type: 'workflow', instance_id: instanceId || null } }))
@@ -134,6 +194,7 @@ async function sendPush(recipients: Recipient[], msg: { title: string; body: str
     const res = await fetch('https://exp.host/--/api/v2/push/send', { method: 'POST', headers: { 'Accept': 'application/json', 'Accept-Encoding': 'gzip, deflate', 'Content-Type': 'application/json' }, body: JSON.stringify(messages) })
     if (!res.ok) {
       const text = await res.text().catch(() => ''); skipped.push(`push: HTTP ${res.status}${text ? ` ${text.slice(0, 200)}` : ''}`)
+      if (isTransientStatus(res.status)) { stats.push_expo.transient += tokens.length; noteRetryAfter(stats, res) } else { stats.push_expo.failed += tokens.length }
       await recordReceipts(tokens.map(token => ({ channel: 'expo' as const, token, status: 'failed' as const, error: `HTTP ${res.status}` })), recipients, payload)
       return 0
     }
@@ -142,15 +203,18 @@ async function sendPush(recipients: Recipient[], msg: { title: string; body: str
     let ok = 0
     const receipts: Receipt[] = []
     tickets.forEach((t, i) => {
-      if (t?.status === 'ok') { ok++; receipts.push({ channel: 'expo', token: tokens[i], status: 'accepted', provider_ref: t.id ?? null }) }
+      if (t?.status === 'ok') { ok++; stats.push_expo.sent++; receipts.push({ channel: 'expo', token: tokens[i], status: 'accepted', provider_ref: t.id ?? null }) }
       else {
-        if (t?.message) skipped.push(`push(${tokens[i]}): ${t.message}`)
+        if (t?.message) skipped.push(`push(${tokens[i].slice(0, 22)}...): ${t.message}`)
+        stats.push_expo.failed++
         receipts.push({ channel: 'expo', token: tokens[i], status: t?.details?.error === 'DeviceNotRegistered' ? 'invalid_token' : 'failed', error: t?.details?.error || t?.message || 'error' })
       }
     })
     await recordReceipts(receipts, recipients, payload)
-    return tickets.length ? ok : tokens.length
+    if (!tickets.length) stats.push_expo.transient += tokens.length
+    return ok
   } catch (err) {
+    stats.push_expo.transient += tokens.length
     skipped.push(`push: ${errMsg(err)}`)
     await recordReceipts(tokens.map(token => ({ channel: 'expo' as const, token, status: 'failed' as const, error: errMsg(err) })), recipients, payload)
     return 0
@@ -255,7 +319,7 @@ async function resetFcmFailures(token: string): Promise<void> {
   } catch { /* best effort */ }
 }
 
-async function sendFcm(recipients: Recipient[], msg: { title: string; body: string }, payload: NotifyPayload, skipped: string[]): Promise<number> {
+async function sendFcm(recipients: Recipient[], msg: { title: string; body: string }, payload: NotifyPayload, skipped: string[], stats: Stats = newStats()): Promise<number> {
   const tokens = Array.from(new Set(recipients.map(r => (r.push_token || '').trim()).filter(isFcmToken)))
   if (!tokens.length) return 0
   const sa = readServiceAccount(skipped)
@@ -264,7 +328,7 @@ async function sendFcm(recipients: Recipient[], msg: { title: string; body: stri
     return 0
   }
   let accessToken: string
-  try { accessToken = await fcmAccessToken(sa) } catch (err) { skipped.push(`push(fcm): ${errMsg(err)}`); return 0 }
+  try { accessToken = await fcmAccessToken(sa) } catch (err) { stats.push_fcm.transient += tokens.length; skipped.push(`push(fcm): ${errMsg(err)}`); return 0 }
   const url = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(sa.project_id)}/messages:send`
   const data = fcmData(payload)
   let sent = 0
@@ -281,10 +345,11 @@ async function sendFcm(recipients: Recipient[], msg: { title: string; body: stri
           android: { priority: 'HIGH', notification: { channel_id: 'alerts', sound: 'default' } },
         } }),
       })
-      if (res.ok) { sent++; receipts.push({ channel: 'fcm', token, status: 'accepted' }); await resetFcmFailures(token); return }
+      if (res.ok) { sent++; stats.push_fcm.sent++; receipts.push({ channel: 'fcm', token, status: 'accepted' }); await resetFcmFailures(token); return }
       const err = await res.json().catch(() => ({})) as { error?: { status?: string; message?: string; details?: Array<{ errorCode?: string }> } }
       const code = err.error?.details?.find(d => d.errorCode)?.errorCode || err.error?.status || `HTTP ${res.status}`
       skipped.push(`push(fcm ${token.slice(0, 12)}...): ${code}`)
+      if (isTransientStatus(res.status) || code === 'UNAVAILABLE' || code === 'INTERNAL' || code === 'QUOTA_EXCEEDED') { stats.push_fcm.transient++; noteRetryAfter(stats, res) } else { stats.push_fcm.failed++ }
       if (code === 'UNREGISTERED' || (res.status === 404) || (code === 'INVALID_ARGUMENT' && /registration token/i.test(err.error?.message || ''))) {
         await revokeDeadFcmToken(token)
         receipts.push({ channel: 'fcm', token, status: 'invalid_token', error: code })
@@ -292,7 +357,7 @@ async function sendFcm(recipients: Recipient[], msg: { title: string; body: stri
         if (code === 'THIRD_PARTY_AUTH_ERROR') await noteFcmAuthFailure(token)
         receipts.push({ channel: 'fcm', token, status: 'failed', error: code })
       }
-    } catch (e) { skipped.push(`push(fcm ${token.slice(0, 12)}...): ${errMsg(e)}`); receipts.push({ channel: 'fcm', token, status: 'failed', error: errMsg(e) }) }
+    } catch (e) { stats.push_fcm.transient++; skipped.push(`push(fcm ${token.slice(0, 12)}...): ${errMsg(e)}`); receipts.push({ channel: 'fcm', token, status: 'failed', error: errMsg(e) }) }
   }
   // Bounded concurrency: 10 requests in flight.
   for (let i = 0; i < tokens.length; i += 10) await Promise.all(tokens.slice(i, i + 10).map(sendOne))
@@ -300,7 +365,7 @@ async function sendFcm(recipients: Recipient[], msg: { title: string; body: stri
   return sent
 }
 
-async function sendWhatsApp(recipients: Recipient[], msg: { title: string; body: string }, skipped: string[]): Promise<number> {
+async function sendWhatsApp(recipients: Recipient[], msg: { title: string; body: string }, skipped: string[], stats: Stats = newStats()): Promise<number> {
   const SID = Deno.env.get('TWILIO_ACCOUNT_SID'); const TOKEN = Deno.env.get('TWILIO_AUTH_TOKEN'); const FROM = Deno.env.get('TWILIO_WHATSAPP_FROM')
   const phones = Array.from(new Set(recipients.map(r => normalisePhone(r.phone)).filter((p): p is string => !!p)))
   if (!SID || !TOKEN || !FROM) { if (phones.length) skipped.push('whatsapp: Twilio env not configured'); return 0 }
@@ -314,8 +379,12 @@ async function sendWhatsApp(recipients: Recipient[], msg: { title: string; body:
     try {
       const form = new URLSearchParams(); form.set('To', `whatsapp:${phone}`); form.set('From', from); form.set('Body', bodyText)
       const res = await fetch(url, { method: 'POST', headers: { 'Authorization': authHeader, 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString() })
-      if (res.ok) { sent++ } else { const data = await res.json().catch(() => ({})); skipped.push(`whatsapp(${phone}): ${data?.message || `HTTP ${res.status}`}`) }
-    } catch (err) { skipped.push(`whatsapp(${phone}): ${errMsg(err)}`) }
+      if (res.ok) { sent++; stats.whatsapp.sent++ } else {
+        const data = await res.json().catch(() => ({}))
+        if (isTransientStatus(res.status)) { stats.whatsapp.transient++; noteRetryAfter(stats, res) } else { stats.whatsapp.failed++ }
+        skipped.push(`whatsapp(${phone.slice(0, 4)}***): ${data?.message || `HTTP ${res.status}`}`)
+      }
+    } catch (err) { stats.whatsapp.transient++; skipped.push(`whatsapp: ${errMsg(err)}`) }
   }
   return sent
 }
@@ -401,16 +470,26 @@ serve(async (req) => {
     ? payload.email.html
     : `<div style="font-family:system-ui,Segoe UI,Arial,sans-serif;font-size:14px;color:#111"><h2 style="margin:0 0 12px">${escapeHtml(msg.title)}</h2><p style="margin:0 0 16px;line-height:1.5">${escapeHtml(msg.body)}</p><p style="margin:0;color:#666;font-size:12px">Tyre Pulse &mdash; Approval &amp; Workflow Engine</p></div>`
   const skipped: string[] = []
+  const stats = newStats()
   // Global push switch: when explicitly off, skip ONLY the push channel (email +
   // WhatsApp still go out). Fail-safe: a read error leaves push enabled.
   const pushDisabled = await pushNotificationsDisabled()
   if (pushDisabled) skipped.push('push: push_notifications disabled')
   const [email, pushExpo, pushFcm, whatsapp] = await Promise.all([
-    sendEmails(recipients, emailSubject, emailHtml, skipped).catch(err => { skipped.push(`email: ${errMsg(err)}`); return 0 }),
-    pushDisabled ? Promise.resolve(0) : sendPush(recipients, msg, payload.instance_id || payload.entity_id, skipped, payload).catch(err => { skipped.push(`push: ${errMsg(err)}`); return 0 }),
+    sendEmails(recipients, emailSubject, emailHtml, skipped, stats).catch(err => { stats.email.transient++; skipped.push(`email: ${errMsg(err)}`); return 0 }),
+    pushDisabled ? Promise.resolve(0) : sendPush(recipients, msg, payload.instance_id || payload.entity_id, skipped, payload, stats).catch(err => { stats.push_expo.transient++; skipped.push(`push: ${errMsg(err)}`); return 0 }),
     // FCM runs independently: a missing secret or an FCM outage never touches Expo.
-    pushDisabled ? Promise.resolve(0) : sendFcm(recipients, msg, payload, skipped).catch(err => { skipped.push(`push(fcm): ${errMsg(err)}`); return 0 }),
-    sendWhatsApp(recipients, msg, skipped).catch(err => { skipped.push(`whatsapp: ${errMsg(err)}`); return 0 }),
+    pushDisabled ? Promise.resolve(0) : sendFcm(recipients, msg, payload, skipped, stats).catch(err => { stats.push_fcm.transient++; skipped.push(`push(fcm): ${errMsg(err)}`); return 0 }),
+    sendWhatsApp(recipients, msg, skipped, stats).catch(err => { stats.whatsapp.transient++; skipped.push(`whatsapp: ${errMsg(err)}`); return 0 }),
   ])
-  return jsonResponse(req, { email, push: pushExpo + pushFcm, push_expo: pushExpo, push_fcm: pushFcm, whatsapp, skipped })
+  const chans = [stats.email, stats.push_expo, stats.push_fcm, stats.whatsapp]
+  return jsonResponse(req, {
+    email, push: pushExpo + pushFcm, push_expo: pushExpo, push_fcm: pushFcm, whatsapp,
+    channels: { email: stats.email, push_expo: stats.push_expo, push_fcm: stats.push_fcm, whatsapp: stats.whatsapp },
+    sent_total: chans.reduce((a, c) => a + c.sent, 0),
+    failed_total: chans.reduce((a, c) => a + c.failed, 0),
+    transient_total: chans.reduce((a, c) => a + c.transient, 0),
+    retry_after_seconds: stats.retryAfter,
+    skipped,
+  })
 })

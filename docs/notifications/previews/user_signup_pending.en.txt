@@ -1,0 +1,19 @@
+Subject: New sign-up waiting for approval: Sample Person
+
+Someone is waiting to join
+
+A new account was created and cannot use Tyre Pulse until an administrator approves it.
+
+Name: Sample Person
+Username: sample.person
+Requested role: Inspector
+Country: KSA
+Signed up: 28 Nov 2026, 09:10
+
+Review sign-ups: https://tyrepulse.app/users
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

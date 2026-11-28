@@ -1,0 +1,20 @@
+Subject: Website enquiry from Sample Buyer, Sample Logistics
+
+New enquiry from tyrepulse.app
+
+Someone filled in the contact form. Reply to them directly; they have not received an automatic answer.
+
+Name: Sample Buyer
+Company: Sample Logistics
+Email: buyer@example.com
+Phone: +966 50 000 0000
+Fleet size: 120
+Message: We run 120 mixers in Riyadh and want a demo on our own data.
+
+Open Tyre Pulse: https://tyrepulse.app/
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.

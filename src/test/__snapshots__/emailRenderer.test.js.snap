@@ -1,0 +1,55 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`email renderer > matches the AR accident snapshot and is right-to-left 1`] = `
+{
+  "subject": "الحادث ACC-2026-0148: تقييم الورشة",
+  "text": "انتقل الحادث ACC-2026-0148 إلى تقييم الورشة
+
+تم تحديث الحالة. توضح التفاصيل أدناه وضعها الحالي.
+
+المرجع: ACC-2026-0148
+المركبة: TM514
+الموقع: NHC
+الخطورة: كبيرة
+المرحلة: تقييم الورشة
+تاريخ الحادث: 27 نوفمبر 2026
+السائق: Ahmed Ali
+ماذا حدث: Rear-ended at the plant gate
+الإجراء التالي: Workshop to assess
+
+فتح الحادث: https://tyrepulse.app/accidents/a1b2
+
+تصلك هذه الرسالة لأن عملًا أُسند إليك أو إلى فريقك. لا يمكن إيقاف هذه التنبيهات.
+
+tyrepulse.app | متوفر على Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+إدارة الإعدادات: https://tyrepulse.app/settings?tab=email
+أُرسلت من Tyre Pulse. الردود تصل إلى info@tyrepulse.app.",
+}
+`;
+
+exports[`email renderer > matches the EN accident snapshot 1`] = `
+{
+  "subject": "New accident ACC-2026-0148 at NHC",
+  "text": "A new accident was reported
+
+Vehicle TM514 was in an accident. Please review the case and take the first step.
+
+Reference: ACC-2026-0148
+Vehicle: TM514
+Site: NHC
+Severity: Major
+Stage: Workshop assessment
+Incident date: 27 Nov 2026
+Driver: Ahmed Ali
+What happened: Rear-ended at the plant gate
+Next action: Workshop to assess
+
+Open the accident: https://tyrepulse.app/accidents/a1b2
+
+You receive this because work was assigned to you or your team. These alerts cannot be turned off.
+
+tyrepulse.app | Get it on Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+Manage settings: https://tyrepulse.app/settings?tab=email
+Sent by Tyre Pulse. Replies go to info@tyrepulse.app.",
+}
+`;

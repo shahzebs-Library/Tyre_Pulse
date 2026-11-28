@@ -1,0 +1,20 @@
+Subject: متأخر: الحادث ACC-2026-0148 يحتاج إلى إجراء
+
+الحادث ACC-2026-0148 متأخر
+
+المركبة TM514 خارج الخدمة لمدة أطول من المسموح.
+
+المرجع: ACC-2026-0148
+المركبة: TM514
+الموقع: NHC
+الخطورة: كبيرة
+المرحلة: الإصلاح جارٍ
+الإجراء التالي: Workshop manager to confirm release date
+
+فتح الحادث: https://tyrepulse.app/accidents/sample
+
+تصلك هذه الرسالة لأن عملًا أُسند إليك أو إلى فريقك. لا يمكن إيقاف هذه التنبيهات.
+
+tyrepulse.app | متوفر على Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+إدارة الإعدادات: https://tyrepulse.app/settings?tab=email
+أُرسلت من Tyre Pulse. الردود تصل إلى info@tyrepulse.app.

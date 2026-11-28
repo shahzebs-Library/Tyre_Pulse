@@ -1,0 +1,19 @@
+Subject: تسجيل جديد بانتظار الموافقة: Sample Person
+
+شخص ينتظر الانضمام
+
+تم إنشاء حساب جديد ولا يمكنه استخدام Tyre Pulse حتى يوافق عليه أحد المسؤولين.
+
+الاسم: Sample Person
+اسم المستخدم: sample.person
+الدور المطلوب: Inspector
+الدولة: KSA
+تاريخ التسجيل: 28 نوفمبر 2026، 09:10 ص
+
+مراجعة التسجيلات: https://tyrepulse.app/users
+
+تصلك هذه الرسالة لأن عملًا أُسند إليك أو إلى فريقك. لا يمكن إيقاف هذه التنبيهات.
+
+tyrepulse.app | متوفر على Google Play: https://play.google.com/store/apps/details?id=com.shahzebrahman.tyrepulse
+إدارة الإعدادات: https://tyrepulse.app/settings?tab=email
+أُرسلت من Tyre Pulse. الردود تصل إلى info@tyrepulse.app.

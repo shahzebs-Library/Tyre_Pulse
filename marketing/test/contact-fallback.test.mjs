@@ -49,8 +49,8 @@ test('no WhatsApp number means no WhatsApp link, and the email link still works'
   assert.ok(links.mail.includes('mailto:'));
 });
 
-test('the contact page uses the shared fallback for 429 as well as 5xx', () => {
-  const page = readFileSync(new URL('../app/contact/page.tsx', import.meta.url), 'utf8');
+test('the contact form uses the shared fallback for 429 as well as 5xx', () => {
+  const page = readFileSync(new URL('../components/ContactForm.tsx', import.meta.url), 'utf8');
   assert.match(page, /shouldOfferFallback\(res\.status\)/);
   assert.doesNotMatch(page, /WHATSAPP_URL\}\?text=/, 'never append a second ?text= to WHATSAPP_URL');
 });

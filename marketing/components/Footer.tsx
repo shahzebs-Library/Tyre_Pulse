@@ -2,7 +2,7 @@ import Link from "next/link";
 import { APP_STORE_URL } from "@/app/schema";
 import { APP_URL, CONTACT_EMAIL, IOS_STATEMENT, IOS_STATEMENT_AR, IOS_STATUS, LEGAL_LINKS, WHATSAPP_URL } from "@/lib/site";
 import { StatusBadge } from "./ui/StatusBadge";
-import { MENU_GROUPS, menuHref } from "@/lib/nav";
+import { MENU_GROUPS, arHref, menuHref } from "@/lib/nav";
 import { Logo } from "./Logo";
 import { StoreBadges } from "./StoreBadges";
 
@@ -10,7 +10,7 @@ const COPY = {
   en: {
     about: "One operational workspace for plant, machinery and vehicles: assets, workshop, field teams and stores.",
     mobile: "Mobile app",
-    mobileText: "Inspections, meter readings and job cards from the yard, online or offline. On Android today. The iPhone app is not on the App Store yet.",
+    mobileText: "Inspections, meter readings and job cards from the yard, online or offline. On Android today.",
     access: "Access",
     login: "Customer login",
     whatsapp: "WhatsApp sales",
@@ -22,7 +22,7 @@ const COPY = {
   ar: {
     about: "مساحة عمل تشغيلية واحدة للمعدات والآليات والمركبات: الأصول والورشة والفرق الميدانية والمستودعات.",
     mobile: "تطبيق الجوال",
-    mobileText: "الفحوصات وقراءات العدادات وبطاقات العمل من الموقع، مع الاتصال أو بدونه. متاح اليوم على أندرويد، وتطبيق آيفون غير متاح على App Store بعد.",
+    mobileText: "الفحوصات وقراءات العدادات وبطاقات العمل من الموقع، مع الاتصال أو بدونه. متاح اليوم على أندرويد.",
     access: "الدخول",
     login: "دخول العملاء",
     whatsapp: "المبيعات عبر واتساب",
@@ -57,7 +57,7 @@ export function Footer({ locale = "en" }: { locale?: "en" | "ar" }) {
             <nav key={g.id} aria-label={ar ? g.labelAr : g.label}>
               <p className="footer-heading" aria-hidden="true">{ar ? g.labelAr : g.label}</p>
               <div className="footer-links">
-                {g.items.map((p) => <Link key={p.href} href={menuHref(p.href)} prefetch={false}>{ar ? p.labelAr : p.label}</Link>)}
+                {g.items.map((p) => <Link key={p.href} href={menuHref(ar ? arHref(p.href) : p.href)} prefetch={false}>{ar ? p.labelAr : p.label}</Link>)}
                 {g.id === "resources" && (ar ? <Link href="/" lang="en" prefetch={false}>English</Link> : <Link href="/ar" lang="ar" prefetch={false}>العربية</Link>)}
               </div>
             </nav>
@@ -67,7 +67,7 @@ export function Footer({ locale = "en" }: { locale?: "en" | "ar" }) {
             <div className="footer-links">
               <a href={APP_URL}>{c.login}</a>
               <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
-              {WHATSAPP_URL && <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">{c.whatsapp}</a>}
+              {WHATSAPP_URL && <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" data-source="footer">{c.whatsapp}</a>}
               <span className="footer-note">{c.adminNote}</span>
             </div>
           </nav>

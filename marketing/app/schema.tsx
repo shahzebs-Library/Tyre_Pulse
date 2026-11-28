@@ -17,6 +17,7 @@
 export { SITE_URL, APP_URL } from "@/lib/site";
 import { SITE_URL, APP_URL, IOS_STATEMENT, WHATSAPP_URL } from "@/lib/site";
 import type { Faq } from "@/lib/faqs";
+import { AR_PAGES, englishPathOf } from "@/lib/nav";
 
 export const ANDROID_PACKAGE = "com.shahzebrahman.tyrepulseinspector";
 export const ANDROID_APP_NAME = "Tyre Pulse Inspector";
@@ -47,6 +48,7 @@ export const PLATFORM_SENTENCE = HAS_IOS_APP
   : `It is available as a web application and as an Android app. ${IOS_STATEMENT}`;
 
 export const BRAND_NAME = "Tyre Pulse";
+export const BRAND_TAGLINE = "Your Fleet. Safer. Smarter. Longer.";
 export const BRAND_COLOR = "#161616";
 
 export const PRODUCT_DESCRIPTION =
@@ -82,6 +84,7 @@ export function organizationSchema(): Json {
     "@id": `${SITE_URL}/#organization`,
     name: BRAND_NAME,
     alternateName: "TyrePulse",
+    slogan: BRAND_TAGLINE,
     url: SITE_URL,
     logo: {
       "@type": "ImageObject",
@@ -227,18 +230,16 @@ export function faqSchema(items: ReadonlyArray<Faq>, path: string): Json {
 }
 
 /**
- * Canonical for every page, plus the en/ar hreflang pair for the two pages that
- * genuinely are translations of each other. Only the home page has an Arabic
- * counterpart, so inner pages deliberately declare no language alternates:
- * pointing /pricing at /ar would claim a translation that does not exist and the
- * pair would not be reciprocal.
+ * Canonical URL plus hreflang alternates for a page. Every page declares its English
+ * version and x-default; a page that has an Arabic translation (lib/nav AR_PAGES) also
+ * declares it, from both sides, so each pair is reciprocal. A page with no translation never
+ * points at a different page as its "Arabic version".
  */
 export function alternatesFor(path: string) {
-  const isHome = path === "/" || path === "/ar";
+  const en = englishPathOf(path || "/");
+  const ar = AR_PAGES[en];
   return {
     canonical: path || "/",
-    ...(isHome
-      ? { languages: { en: "/", ar: "/ar", "x-default": "/" } }
-      : {}),
+    languages: ar ? { en, ar, "x-default": en } : { en, "x-default": en },
   };
 }

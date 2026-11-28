@@ -98,6 +98,7 @@ export default defineConfig(({ mode }) => {
       injectRegister: 'auto',
       includeAssets: [
         'favicon.svg',
+        'favicon.ico',
         'apple-touch-icon.png',
         'robots.txt',
         'browserconfig.xml',
@@ -113,8 +114,8 @@ export default defineConfig(({ mode }) => {
         scope: '/',
         display: 'standalone',
         display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
-        background_color: '#0f172a',
-        theme_color: '#1e3a5f',
+        background_color: '#161616',
+        theme_color: '#161616',
         orientation: 'any',
         categories: ['business', 'fleet', 'management'],
         lang: 'en',

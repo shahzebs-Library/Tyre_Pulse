@@ -1,28 +1,19 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "./schema";
-
-/** The English home page and the Arabic home page are a real translation pair. */
-const HOME_ALTERNATES = {
-  languages: {
-    en: `${SITE_URL}/`,
-    ar: `${SITE_URL}/ar`,
-    "x-default": `${SITE_URL}/`,
-  },
-};
+import { AR_PAGES, englishPathOf } from "@/lib/nav";
 
 type Entry = {
   path: string;
   changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
   priority: number;
-  alternates?: typeof HOME_ALTERNATES;
 };
 
 /**
- * Only routes that genuinely exist. Inner pages carry no language alternates
- * because they have no Arabic counterpart yet.
+ * Only routes that genuinely exist. A page that has an Arabic translation (lib/nav AR_PAGES)
+ * lists both language versions as alternates; the others list their English URL only.
  */
 const ENTRIES: Entry[] = [
-  { path: "/", changeFrequency: "weekly", priority: 1, alternates: HOME_ALTERNATES },
+  { path: "/", changeFrequency: "weekly", priority: 1 },
   { path: "/platform", changeFrequency: "monthly", priority: 0.9 },
   { path: "/platform/fleet-assets", changeFrequency: "monthly", priority: 0.8 },
   { path: "/platform/maintenance", changeFrequency: "monthly", priority: 0.8 },
@@ -40,19 +31,35 @@ const ENTRIES: Entry[] = [
   { path: "/faq", changeFrequency: "monthly", priority: 0.7 },
   { path: "/about", changeFrequency: "monthly", priority: 0.6 },
   { path: "/contact", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/ar", changeFrequency: "weekly", priority: 0.9, alternates: HOME_ALTERNATES },
+  { path: "/ar", changeFrequency: "weekly", priority: 0.9 },
+  { path: "/ar/platform", changeFrequency: "monthly", priority: 0.8 },
+  { path: "/ar/pricing", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/ar/security", changeFrequency: "monthly", priority: 0.6 },
+  { path: "/ar/contact", changeFrequency: "monthly", priority: 0.6 },
+  { path: "/ar/solutions", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/ar/industries", changeFrequency: "monthly", priority: 0.7 },
   // Plain-text summaries for AI assistants, listed so crawlers can find them.
   { path: "/llms.txt", changeFrequency: "monthly", priority: 0.5 },
   { path: "/llms-full.txt", changeFrequency: "monthly", priority: 0.5 },
 ];
 
+function alternatesOf(path: string) {
+  const en = englishPathOf(path);
+  const ar = AR_PAGES[en];
+  if (!ar) return undefined;
+  return { languages: { en: `${SITE_URL}${en}`, ar: `${SITE_URL}${ar}`, "x-default": `${SITE_URL}${en}` } };
+}
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
-  return ENTRIES.map(({ path, changeFrequency, priority, alternates }) => ({
-    url: `${SITE_URL}${path}`,
-    lastModified,
-    changeFrequency,
-    priority,
-    ...(alternates ? { alternates } : {}),
-  }));
+  return ENTRIES.map(({ path, changeFrequency, priority }) => {
+    const alternates = alternatesOf(path);
+    return {
+      url: `${SITE_URL}${path}`,
+      lastModified,
+      changeFrequency,
+      priority,
+      ...(alternates ? { alternates } : {}),
+    };
+  });
 }

@@ -20,9 +20,12 @@ export default function LoginHero({ logoSrc, customLogo }) {
       <header className="tpl-top">
         <div className="tpl-brand">
           {customLogo
-            ? <span className="tpl-emblem"><BrandIcon src={logoSrc} custom chip size={24} /></span>
-            : <span className="tpl-slash" aria-hidden="true" />}
-          <span className="tpl-wordmark">Tyre Pulse</span>
+            ? <>
+                <span className="tpl-emblem"><BrandIcon src={logoSrc} custom chip size={24} /></span>
+                <span className="tpl-wordmark">Tyre Pulse</span>
+              </>
+            : <img className="tpl-lockup" src="/brand/tyre-pulse-wordmark-reverse.svg"
+                alt="Tyre Pulse" width="166" height="36" />}
         </div>
         <div className="tpl-lang" role="group" aria-label={p('language')}>
           {languages.map(l => (

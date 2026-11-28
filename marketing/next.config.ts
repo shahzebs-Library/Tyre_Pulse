@@ -56,6 +56,17 @@ const nextConfig: NextConfig = {
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
         ],
       },
+      /**
+       * Preview and project hosts (tyre-pulse-eezl.vercel.app and every *.vercel.app deployment
+       * URL) serve the same pages as www.tyrepulse.app. They must never be indexed, or search
+       * engines see duplicate copies of the site. The header is sent only on those hosts, so
+       * the real domain is unaffected and no Vercel dashboard change is needed.
+       */
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "(?<vercelhost>.+\\.vercel\\.app)" }],
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
     ];
   },
 

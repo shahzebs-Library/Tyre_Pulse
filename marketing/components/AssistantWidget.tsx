@@ -22,6 +22,8 @@ type Intent = { id: IntentId; label: string; keywords: string[]; answer: string;
 
 const SEEN_KEY = "tp-anum-greeted";
 const GREET_DELAY_MS = 6000;
+/** How long the greeting stays before it leaves by itself. */
+const GREET_VISIBLE_MS = 7000;
 
 function readSeen(): boolean {
   try { return window.sessionStorage.getItem(SEEN_KEY) === "1"; } catch { return false; }
@@ -95,7 +97,7 @@ const COPY = {
 
 function buildIntents(lang: Lang, wa: string | null): Intent[] {
   const ar = lang === "ar";
-  const contact: LinkOut = { href: "/contact", label: ar ? "احجز عرضًا" : "Book a demo" };
+  const contact: LinkOut = { href: ar ? "/ar/contact" : "/contact", label: ar ? "احجز عرضًا" : "Book a demo" };
   const list: Intent[] = [
     {
       id: "demo",
@@ -113,7 +115,7 @@ function buildIntents(lang: Lang, wa: string | null): Intent[] {
       answer: ar
         ? "لا توجد أسعار منشورة، لأن الأساطيل تختلف في عدد المعدات والمواقع والدول والتكاملات. يُبنى السعر على حجم الأسطول وعدد المستخدمين والوحدات والدول. أرسل حجم أسطولك ونرد عليك برقم. ويمكنك البدء بموقع واحد ومجال عمل واحد. يتولى فريقنا إعداد كل عميل، ولا يوجد تسجيل ذاتي."
         : "There is no published price, because fleets differ by machine count, sites, countries and integrations. Pricing is based on fleet size, users, modules, countries and integrations. Send your fleet size and we reply with a figure. You can also start small, with one site and one area of work. Our team sets up each customer; there is no self sign-up.",
-      links: [{ href: "/pricing", label: ar ? "صفحة الأسعار" : "See pricing" }, contact],
+      links: [{ href: ar ? "/ar/pricing" : "/pricing", label: ar ? "صفحة الأسعار" : "See pricing" }, contact],
     },
     {
       id: "offline",
@@ -149,7 +151,7 @@ function buildIntents(lang: Lang, wa: string | null): Intent[] {
       answer: ar
         ? "قاعدة البيانات تفحص كل قراءة، فلا يرى المستخدم إلا الدول المسموح له بها، مع إمكانية التقييد حسب الموقع. الأدوار والصلاحيات تحدد الوحدات التي يفتحها كل مستخدم ومن يعتمد، وسجل التدقيق يحفظ تسجيلات الدخول والاعتمادات والتصدير. المسؤولون يسجلون الدخول بعامل ثانٍ."
         : "The database checks every read, so a user sees only the countries they are assigned, and site scoping is available. Roles and per-user grants decide which modules a person can open and who can approve, and an audit trail records sign-ins, approvals and exports. Administrators sign in with a second factor.",
-      links: [{ href: "/security", label: ar ? "صفحة الأمان" : "See security" }],
+      links: [{ href: ar ? "/ar/security" : "/security", label: ar ? "صفحة الأمان" : "See security" }],
     },
   ];
   if (wa) {
@@ -214,6 +216,16 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
     const id = window.setTimeout(() => setBubble(true), GREET_DELAY_MS);
     return () => window.clearTimeout(id);
   }, []);
+
+  // Once shown, the greeting leaves by itself: after a few seconds, or as soon as the visitor
+  // scrolls, so it never sits over content they are trying to read. It then counts as seen.
+  useEffect(() => {
+    if (!bubble) return;
+    const hide = () => { setBubble(false); markSeen(); };
+    const id = window.setTimeout(hide, GREET_VISIBLE_MS);
+    window.addEventListener("scroll", hide, { passive: true, once: true });
+    return () => { window.clearTimeout(id); window.removeEventListener("scroll", hide); };
+  }, [bubble]);
 
   useEffect(() => {
     if (open) closeRef.current?.focus();
@@ -310,7 +322,7 @@ export function AssistantWidget({ arabic, tucked, whatsappUrl, children }: Props
     setDraft("");
     const it = matchIntent(text, intents);
     if (it) return answer(it, text);
-    const links: LinkOut[] = [{ href: "/contact", label: t.contactLabel }];
+    const links: LinkOut[] = [{ href: arabic ? "/ar/contact" : "/contact", label: t.contactLabel }];
     if (whatsappUrl) links.unshift({ href: whatsappUrl, label: t.waLabel, external: true });
     push([{ from: "user", text }, { from: "bot", text: whatsappUrl ? t.fallback : t.fallbackNoWa, links }]);
   };

@@ -2151,3 +2151,9 @@ html.light .nav-emoji { background: #f1f4f3; }
    pages) hides the shell's copy, so the reader never sees the path twice. The
    shell Back button stays. */
 body:has(main nav[aria-label="Breadcrumb"]:not(.tp-shell-crumb)) .tp-shell-crumb { display: none; }
+
+/* Bundled brand lockup (TP mark + TYRE PULSE): one file per surface tone.
+   A tenant logo replaces it entirely (see TopBar). */
+.tp-brand-lockup { height: 20px; width: auto; flex-shrink: 0; }
+html.light .tp-brand-lockup--reverse { display: none !important; }
+html:not(.light) .tp-brand-lockup--ink { display: none !important; }

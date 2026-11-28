@@ -69,7 +69,7 @@ export function ProductStory() {
         <div className="ps-stage-pin">
           <div className="ps-rail" role="group" aria-label="Story steps">
             {STORY.map((s, i) => (
-              <button key={s.id} type="button" aria-current={i === active ? "step" : undefined} className={i === active ? "is-on" : undefined} onClick={() => go(i)}>
+              <button key={s.id} type="button" aria-label={`Step ${i + 1} of ${STORY.length}: ${s.label}`} aria-current={i === active ? "step" : undefined} className={i === active ? "is-on" : undefined} onClick={() => go(i)}>
                 <i aria-hidden="true">{i + 1}</i><span>{s.label}</span>
               </button>
             ))}

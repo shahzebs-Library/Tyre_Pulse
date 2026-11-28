@@ -18,7 +18,7 @@ export const HOME_FAQ: ReadonlyArray<Faq> = [
 
 /** Pricing page: "Questions before a quote." */
 export const PRICING_FAQ: ReadonlyArray<Faq> = [
-  ["Why is there no published price?", "Fleets differ by machine count, sites, countries and integrations. A quote on your numbers is cheaper than a list price padded to cover everyone."],
+  ["Why is there no published price?", "Prices are agreed per contract. Fleets differ by machine count, sites, countries and integrations. A quote on your numbers is cheaper than a list price padded to cover everyone."],
   ["Can we start small?", "Yes. Most fleets start with one site and one area of work, such as tyres or inspections, and add the rest when it earns its place."],
   ["What do you need from us to quote?", "Fleet size, number of users, the countries you run in and the systems you want connected. A short message is enough."],
 ];

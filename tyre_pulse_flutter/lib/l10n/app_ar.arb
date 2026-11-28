@@ -1,8 +1,6 @@
 {
   "@@locale": "ar",
-
   "appTitle": "Tyre Pulse",
-
   "actionBack": "رجوع",
   "actionRetry": "أعد المحاولة",
   "actionClose": "إغلاق",
@@ -12,10 +10,8 @@
   "actionSignOut": "تسجيل الخروج",
   "actionOpenStore": "افتح المتجر",
   "actionClear": "مسح",
-
   "valueUnavailable": "غير متاح",
   "valueNotMeasured": "-",
-
   "stateLoading": "جارٍ التحميل",
   "stateEmptyTitle": "لا يوجد شيء بعد",
   "stateEmptyMessage": "عند توفر بيانات سوف تظهر هنا.",
@@ -30,13 +26,11 @@
   "stateNotConfiguredMessage": "لم يتم تفعيل هذا الجزء من التطبيق لمؤسستك. يمكن لمسؤول النظام تفعيله.",
   "stateScreenNotAvailableTitle": "هذه الشاشة غير جاهزة بعد",
   "stateScreenNotAvailableMessage": "التنقل إليها يعمل، لكن الشاشة نفسها لم تُبنَ بعد. هذا عمل قيد التطوير وليس خطأ في حسابك.",
-
   "deniedTitle": "لا تملك صلاحية الوصول إلى هذه الشاشة",
   "deniedNotGranted": "لا تملك صلاحية الوصول إلى هذه الوحدة. تواصل مع مسؤول النظام.",
   "deniedAdminOnly": "هذه الشاشة لمسؤولي النظام فقط.",
   "deniedSuperAdminOnly": "هذه الشاشة لمالك المنصة فقط.",
   "deniedPermissionsUnavailable": "تعذرت قراءة صلاحياتك، لذلك أُغلقت هذه الشاشة حتى يمكن قراءتها. بقية التطبيق تعمل.",
-
   "offlineTitle": "غير متصل",
   "offlineMessage": "يمكنك متابعة العمل. كل شيء محفوظ على هذا الجهاز.",
   "syncPendingChanges": "{count, plural, zero{لا توجد تغييرات بانتظار المزامنة} one{تغيير واحد بانتظار المزامنة} two{تغييران بانتظار المزامنة} few{{count} تغييرات بانتظار المزامنة} many{{count} تغييرًا بانتظار المزامنة} other{{count} تغيير بانتظار المزامنة}}",
@@ -44,26 +38,20 @@
   "syncAllSynced": "تمت مزامنة جميع التغييرات",
   "syncNeedsAttention": "{count, plural, zero{لا يوجد ما يحتاج انتباهًا} one{عنصر واحد يحتاج انتباهًا} two{عنصران يحتاجان انتباهًا} few{{count} عناصر تحتاج انتباهًا} many{{count} عنصرًا يحتاج انتباهًا} other{{count} عنصر يحتاج انتباهًا}}",
   "syncStatusUnknown": "حالة الاتصال غير معروفة",
-
   "sessionRestoringTitle": "جارٍ فتح Tyre Pulse",
   "sessionTimedOutTitle": "الأمر يستغرق وقتًا أطول من المعتاد",
   "sessionTimedOutMessage": "تعذر فتح تسجيل دخولك المحفوظ. يمكنك إعادة المحاولة أو تسجيل الدخول من جديد.",
-
   "updateRequiredTitle": "التحديث مطلوب",
   "updateRequiredMessage": "هذه النسخة من Tyre Pulse قديمة جدًا للاستمرار. ثبّت التحديث للمتابعة.",
   "updateRequiredMessageAppStore": "هذه النسخة من Tyre Pulse قديمة جدًا للاستمرار. حدّث Tyre Pulse من App Store للمتابعة.",
-
   "profileUnavailableTitle": "تعذر تحميل ملفك الشخصي",
   "profileUnavailableMessage": "لم تُحمّل بيانات حسابك، لذلك لا يستطيع التطبيق تحديد صلاحياتك. أعد المحاولة أو سجّل الخروج ثم الدخول.",
-
   "accessBlockedTitle": "حسابك غير مفعّل",
   "accessBlockedMessage": "حسابك بانتظار الموافقة أو تم قفله. يمكن لمسؤول النظام معالجة ذلك.",
   "accessBlockedCheckAgain": "تحقق مرة أخرى",
   "accessBlockedStillWaiting": "حسابك لا يزال غير مفعّل. اطلب من مسؤول النظام الموافقة عليه.",
-
   "routeNotFoundTitle": "هذه الشاشة غير موجودة",
   "routeNotFoundMessage": "الرابط الذي فتحته لا يشير إلى أي مكان في هذا التطبيق.",
-
   "tabHome": "الرئيسية",
   "tabInspect": "الفحص",
   "tabAccidents": "الحوادث",
@@ -73,18 +61,15 @@
   "tabHistory": "السجل",
   "tabChecklists": "قوائم الفحص",
   "tabApprovals": "الاعتمادات",
-
   "searchHint": "بحث",
   "dropdownHint": "اختر",
   "fieldRequired": "مطلوب",
-
   "statusOk": "سليم",
   "statusWarning": "يحتاج انتباه",
   "statusCritical": "حرج",
   "statusInfo": "معلومة",
   "statusNeutral": "محايد",
   "statusUnknown": "لم يُقَس",
-
   "vehiclesTitle": "المركبات",
   "vehiclesCount": "{count, plural, zero{لا توجد مركبات في الأسطول} one{مركبة واحدة في الأسطول} two{مركبتان في الأسطول} few{{count} مركبات في الأسطول} many{{count} مركبةً في الأسطول} other{{count} مركبة في الأسطول}}",
   "vehiclesSearchHint": "ابحث بالأصل أو الرقم التسلسلي أو الصنع أو النوع أو الموقع",
@@ -117,7 +102,6 @@
   "vehiclesNotFoundTitle": "المركبة غير موجودة",
   "vehiclesNotFoundMessage": "تعذّر العثور على هذه المركبة في سجل الأسطول. ربما تمت إزالتها أو نقلها إلى دولة أخرى.",
   "vehiclesTruncatedNotice": "يتم عرض جزء من الأسطول. ضيّق نطاق البحث للعثور على مركبة معيّنة.",
-
   "serialSearchTitle": "البحث بالرقم التسلسلي",
   "serialSearchSubtitle": "ابحث عن إطار برقمه التسلسلي",
   "serialSearchLabel": "الرقم التسلسلي للإطار",
@@ -146,7 +130,6 @@
   "serialSearchConfirmScrap": "تأكيد الشطب",
   "serialSearchUndoConfirmTitle": "التراجع عن هذا الشطب؟",
   "serialSearchUndoConfirmMessage": "سيتم تعيين هذا الإطار كنشط مرة أخرى.",
-
   "scannerTitle": "مسح ضوئي",
   "scannerCameraUnavailableTitle": "المسح بالكاميرا غير متاح في هذا الإصدار",
   "scannerCameraUnavailableMessage": "اكتب أو الصق الرمز الموجود على الملصق بدلاً من ذلك. كل ما يلي يعمل تمامًا كما لو تم مسحه.",
@@ -162,7 +145,6 @@
   "scannerViewAssetAction": "عرض الأصل",
   "scannerStartInspectionAction": "بدء الفحص",
   "scannerViewTyreAction": "عرض الإطار",
-
   "recordsTitle": "سجلات الإطارات",
   "recordsShownCount": "{count, plural, zero{لا توجد سجلات إطارات} one{يُعرض سجل إطار واحد} two{يُعرض سجلا إطار} few{تُعرض {count} سجلات إطارات} many{يُعرض {count} سجل إطار} other{يُعرض {count} سجل إطار}}",
   "recordsSearchHint": "البحث برقم الأصل أو الرقم التسلسلي أو العلامة التجارية",
@@ -187,7 +169,6 @@
   "recordsDescription": "الوصف",
   "recordsRemarks": "ملاحظات",
   "recordsDetailFallbackTitle": "سجل إطار",
-
   "tyreDiagramFrontLabel": "الأمام",
   "tyreDiagramTapHint": "اضغط على إطار لتسجيل حالته",
   "tyreDiagramTyreCount": "{count, plural, zero{لا إطارات} one{إطار واحد} two{إطاران} few{{count} إطارات} many{{count} إطارًا} other{{count} إطار}}",
@@ -202,7 +183,6 @@
   "tyreConditionFlat": "فارغ من الهواء",
   "tyreConditionMissing": "مفقود",
   "tyreConditionNotChecked": "لم يُفحص",
-
   "inspectionNavTitle": "فحص جديد",
   "inspectionStep1Label": "1",
   "inspectionStep2Label": "2",
@@ -302,7 +282,6 @@
   "inspectionHistoryEmptyMessage": "ستظهر هنا الفحوصات التي تبدأها أو ترسلها.",
   "inspectionHistoryInProgressSection": "قيد التنفيذ",
   "inspectionHistorySubmittedSection": "تم الإرسال",
-
   "checklistAddPhotoTitle": "إضافة صورة",
   "checklistPhotoSourceCamera": "التقاط صورة",
   "checklistPhotoSourceGallery": "الاختيار من المعرض",
@@ -312,7 +291,6 @@
   "checklistNo": "لا",
   "checklistSignatureSavedLabel": "تم حفظ التوقيع",
   "checklistSignatureRedraw": "رسم توقيع جديد",
-
   "checklistsHomeTitle": "قوائم التحقق",
   "checklistWorkspaceLoadingMessage": "لا تزال مساحة العمل قيد التحميل. حاول مرة أخرى بعد قليل.",
   "checklistsLoadErrorMessage": "تعذر تحميل قوائم الفحص. اسحب لأسفل للمحاولة مرة أخرى.",
@@ -341,7 +319,6 @@
   "checklistsAvailableSection": "قوائم التحقق المتاحة",
   "checklistNoAssetLabel": "لم يتم اختيار أصل بعد",
   "checklistResumeProgress": "تمت الإجابة عن {filled} من {total}",
-
   "checklistHistoryTitle": "سجل قوائم التحقق",
   "myPlansNavTitle": "فحوصاتي المجدولة",
   "myPlansSubtitle": "فحوصات مُسندة إليك",
@@ -377,7 +354,6 @@
   "checklistHistoryStatusSentBack": "أُعيد",
   "checklistHistoryStatusWaiting": "بانتظار الموافقة",
   "checklistHistoryStatusNoApproval": "لا حاجة إلى موافقة",
-
   "checklistFillLoadingTitle": "قائمة التحقق",
   "checklistFillNotFoundMessage": "تعذر العثور على قائمة الفحص هذه. ربما أُلغي نشرها.",
   "checklistFillSaveFailedMessage": "تعذر حفظ قائمة الفحص هذه. لم تُفقد—حاول مرة أخرى.",
@@ -395,7 +371,6 @@
   "checklistGateMissingNotes": "يحتاج {count} عنصر (عناصر) إلى ملاحظة توضح العلامة",
   "checklistGateUnsatisfiedGroups": "تحتاج {count} مجموعة قراءات إلى قيمة واحدة على الأقل",
   "checklistGatePrimarySignature": "التوقيع مطلوب لإرسال هذه الاستمارة",
-
   "inspectionApprovalsTitle": "اعتمادات الفحوصات",
   "inspectionApprovalsAwaitingCount": "{count} بانتظار الموافقة",
   "inspectionApprovalsEmptyTitle": "لا شيء بانتظار الموافقة",
@@ -447,7 +422,6 @@
   "inspectionApprovalDecideGenericError": "يرجى المحاولة مرة أخرى.",
   "inspectionApprovalSignatureSavedLabel": "تم حفظ التوقيع",
   "inspectionApprovalSignatureRedraw": "رسم توقيع جديد",
-
   "checklistApprovalsTitle": "اعتماد قوائم التحقق",
   "checklistApprovalsAwaitingCount": "{count} بانتظار التوقيع",
   "checklistApprovalsLoadErrorMessage": "تعذّر تحميل الموافقات. تحقق من اتصالك وحاول مرة أخرى.",
@@ -467,7 +441,6 @@
   "checklistApprovalsStatusWaitingSupervisor": "بانتظار المشرف",
   "checklistApprovalsStatusWaitingApproval": "بانتظار الموافقة",
   "checklistApprovalsStatusNoApproval": "لا حاجة إلى موافقة",
-
   "checklistApprovalReviewTitle": "الموافقة على قائمة التحقق",
   "checklistApprovalLoadErrorMessage": "تعذّر تحميل قائمة التحقق هذه. تحقق من اتصالك وحاول مرة أخرى.",
   "checklistApprovalNotFoundTitle": "قائمة التحقق غير موجودة",
@@ -514,10 +487,8 @@
   "checklistApprovalScoreLine": "النتيجة: {pct}٪ ({status})",
   "checklistApprovalScorePassed": "ناجح",
   "checklistApprovalScoreFailed": "راسب",
-
   "checklistApprovalSignatureSavedLabel": "تم حفظ التوقيع",
   "checklistApprovalSignatureRedraw": "ارسم توقيعًا جديدًا",
-
   "meterLogNavTitle": "تسجيل قراءة العداد",
   "meterLogWorkspaceLoadingMessage": "لا تزال بيانات مساحة العمل قيد التحميل. يرجى المحاولة مرة أخرى بعد لحظات.",
   "meterLogAssetLabel": "الأصل",
@@ -569,7 +540,6 @@
   "meterLogRecentEmptyMessage": "لم تُسجَّل أي قراءات بعد.",
   "meterLogRecentLoadErrorMessage": "تعذّر تحميل القراءات الأخيرة.",
   "meterLogRecentKmValue": "{km} كم",
-
   "washNavTitle": "تسجيل غسيل المركبة",
   "washWorkspaceLoadingMessage": "لا تزال بيانات مساحة العمل قيد التحميل. يرجى المحاولة مرة أخرى بعد لحظات.",
   "washDueTitle": "بحاجة إلى الغسيل",
@@ -620,7 +590,6 @@
   "washRecentTitle": "عمليات الغسيل الأخيرة",
   "washRecentEmptyMessage": "لم تُسجَّل أي عمليات غسيل بعد.",
   "washRecentLoadErrorMessage": "تعذّر تحميل عمليات الغسيل الأخيرة.",
-
   "homeNavTitle": "الرئيسية",
   "homeGreeting": "مرحبًا بعودتك",
   "homeGoodMorning": "صباح الخير،",
@@ -666,7 +635,6 @@
   "homeStatUnavailableCaption": "تعذر التحقق",
   "homeRoleCopyCatalog": "meterTitle=سجّل عداد اليوم~meterNotLogged=لم يُسجَّل اليوم~meterLogged=سُجّل %time%~problemTitle=أبلغ عن مشكلة أو عطل~problemHint=أخبر الورشة بما هو معطّل~exceptionsTitle=استثناءات اليوم~offRoad=خارج الخدمة~openAccidents=حوادث مفتوحة~maintenanceOverdue=صيانة متأخرة~tyresAttention=إطارات تحتاج انتباهاً~handoverTitle=تسليمات بانتظار توقيعك~reportAccident=أبلغ عن حادث~approvalsTitle=موافقات بانتظارك~approvalsSplit=%a% فحوصات • %b% قوائم تحقق~issueTitle=أبلغ عن مشكلة~issueHint=شيء معطّل أو غير آمن~teamTitle=الفريق الآن~working=يعمل~waiting=ينتظر~free=متاح~teamNote=متاح يعني سجّل الحضور ولا يعمل. لا يمكن حساب الغياب: لا يوجد سجل حضور.~assignTitle=إسناد الأعمال~assignHint=%count% بطاقات عمل مفتوحة بدون مسؤول~assignGap=يفتح قائمة بطاقات العمل. الإسناد من الهاتف غير متاح بعد.~myJobsTitle=أعمالي~myJobsCount=%count% مفتوحة~myJobsNone=لا توجد أعمال مفتوحة~plantTitle=فحوصات المحطة اليوم~sheetsDue=%count% نماذج مستحقة~allDone=تم كل شيء اليوم~dailyTitle=الفحص اليومي للورشة~dueToday=مستحق اليوم~signTitle=موافقات للتوقيع~signHint=%count% بانتظار توقيعك~tyresDueTitle=إطارات مستحقة للاستبدال~myVehicle=مركبتي~noVehicle=لم يُسجَّل عداد بعد~wash=سجّل غسيلاً~washDays=آخر غسيل قبل %count% أيام~washToday=غُسلت اليوم~washNever=لا يوجد غسيل مسجّل~dailyChecklist=قائمة التحقق اليومية~charges=مخالفاتي ورسومي~chargesHint=المخالفات والرسوم وتوقيعاتك~summary=الملخص اليومي والتقارير~alerts=التنبيهات~plan=خطة اليوم~planOpen=%count% مفتوحة اليوم~repair=طلب إصلاح~meter=سجل العداد~inspectionsDue=فحوصات مستحقة اليوم~checklistsToSign=قوائم تحقق للتوقيع~waitingParts=بانتظار قطع الغيار~blocked=متوقف أكثر من 30 دقيقة~requestParts=اطلب قطع غيار~recent=الفحوصات الأخيرة~reorder=مخزون لإعادة الطلب~sync=بانتظار المزامنة~more=المزيد~open=افتح",
   "homeNoQuickActionsMessage": "لا يتوفر لك شيء هنا بعد. تواصل مع المسؤول إذا احتجت إلى الوصول إلى إحدى الميزات.",
-
   "workOrdersNavTitle": "أوامر العمل",
   "workOrdersActiveCount": "{count} نشطة",
   "workOrdersFilterActive": "نشطة",
@@ -676,7 +644,6 @@
   "workOrdersLoadErrorMessage": "تعذّر تحميل أوامر العمل الآن.",
   "workOrdersStatusOpenFallback": "مفتوح",
   "workOrdersWorkTypeFallback": "عمل عام",
-
   "workOrderNewTitle": "أمر عمل جديد",
   "workOrderAssetLabel": "الأصل",
   "workOrderAssetHint": "مثال: TM514",
@@ -689,23 +656,19 @@
   "workOrderSavedMessage": "تم تسجيل أمر العمل. ستتم مزامنته تلقائيًا.",
   "workOrderSaveFailedMessage": "تعذّر الحفظ. حاول مرة أخرى.",
   "workOrderWorkspaceLoadingMessage": "لا يزال يتم تحميل مساحة عملك. حاول مرة أخرى بعد قليل.",
-
   "workOrderWorkTypeTyreChange": "تغيير الإطار",
   "workOrderWorkTypeRepair": "إصلاح",
   "workOrderWorkTypeRotation": "تدوير",
   "workOrderWorkTypeAlignment": "ضبط الزوايا",
   "workOrderWorkTypeInspection": "فحص",
   "workOrderWorkTypeOther": "أخرى",
-
   "workOrderPriorityLow": "منخفضة",
   "workOrderPriorityMedium": "متوسطة",
   "workOrderPriorityHigh": "عالية",
   "workOrderPriorityCritical": "حرجة",
-
   "workOrderAdvanceToInProgress": "قيد التنفيذ",
   "workOrderAdvanceToCompleted": "مكتمل",
   "workOrderStatusQueuedMessage": "تم حفظ تحديث الحالة. ستتم مزامنته تلقائيًا.",
-
   "workOrderDetailTitle": "أمر العمل",
   "workOrderNotFoundTitle": "أمر العمل غير موجود",
   "workOrderNotFoundMessage": "تعذّر العثور على أمر العمل هذا، أو لم يعد لديك صلاحية الوصول إليه.",
@@ -758,7 +721,6 @@
   "tyreReplaceDoneAction": "تم",
   "tyreReplaceSaveFailedTitle": "تعذّر حفظ تبديل الإطار",
   "tyreReplaceTryAgainFallback": "حدث خطأ ما. حاول مرة أخرى.",
-
   "tyreDiagramModeLayout": "عرض التخطيط",
   "tyreDiagramModeList": "عرض القائمة",
   "tyreDiagramStatTotal": "إجمالي الإطارات",
@@ -771,7 +733,6 @@
   "tyreDiagramListNotRecorded": "لم يُسجَّل",
   "tyreDiagramListEmptyTitle": "لم يتم تسجيل أي شيء بعد",
   "tyreDiagramListEmptyMessage": "بدّل إلى عرض التخطيط واضغط على إطار لتسجيل حالته.",
-
   "tyreDetailTitle": "تفاصيل الإطار",
   "tyreDetailStatTread": "عمق النقش",
   "tyreDetailStatPressure": "الضغط",
@@ -793,7 +754,6 @@
   "tyreDetailRemainingKmCaption": "تقدير عمر الأسطول",
   "tyreDetailRemainingKmUnavailable": "لا يتوفر تقدير مقاس للعمر",
   "tyreDetailNoEvidenceMessage": "لم يسجل أحد أي شيء لهذا الإطار بعد.",
-
   "takeActionTitle": "اتخاذ إجراء",
   "takeActionReplaceTyre": "استبدال الإطار",
   "takeActionReplaceTyreSubtitle": "سجّل الإطار الجديد المركّب على هذا الإطار",
@@ -807,7 +767,6 @@
   "takeActionSendToRetread": "إرسال لإعادة التلبيس",
   "takeActionMarkAsSpare": "وضع علامة كإطار احتياطي",
   "takeActionComingSoonCaption": "غير متاح في هذا الإصدار بعد",
-
   "reportDefectTitle": "الإبلاغ عن عطل",
   "reportDefectTitleFieldLabel": "العنوان",
   "reportDefectTitleFieldHint": "مثال: ثقب في الإطار الخلفي الخارجي",
@@ -822,14 +781,12 @@
   "reportDefectSavedTitle": "تم حفظ طلب الإصلاح",
   "reportDefectSavedMessage": "سيتم مزامنته تلقائيًا.",
   "reportDefectSaveFailedTitle": "تعذر حفظ طلب الإصلاح",
-
   "damageReasonPuncture": "ثقب",
   "damageReasonSidewall": "تلف الجانب",
   "damageReasonTreadWear": "تآكل النقش",
   "damageReasonBlowout": "انفجار",
   "damageReasonImpact": "تلف نتيجة اصطدام",
   "damageReasonOther": "أخرى",
-
   "globalSearchTitle": "بحث",
   "globalSearchSubtitle": "ابحث عن أصل أو إطار أو أمر عمل أو تفتيش",
   "globalSearchPlaceholder": "الأصل، رقم اللوحة، الشاسيه، رقم الأسطول، الرقم التسلسلي، أمر العمل...",
@@ -846,7 +803,6 @@
   "globalSearchSectionWorkOrders": "أوامر العمل",
   "globalSearchSectionInspections": "عمليات التفتيش",
   "globalSearchSourceFailedNotice": "تعذّر التحقق من بعض النتائج الآن. اسحب للتحديث أو حاول مجدداً.",
-
   "loginAppSubtitle": "تطبيق المفتش",
   "loginTagline": "الأسطول · الورشة · الفحوصات · الإطارات · السلامة",
   "loginCardTitle": "تسجيل الدخول",
@@ -859,7 +815,6 @@
   "loginHidePassword": "إخفاء كلمة المرور",
   "loginErrorRequired": "يرجى إدخال بيانات تسجيل الدخول وكلمة المرور.",
   "loginErrorLocked": "{minutes, plural, =1{محاولات فاشلة كثيرة. يرجى المحاولة مرة أخرى بعد دقيقة واحدة.} other{محاولات فاشلة كثيرة. يرجى المحاولة مرة أخرى بعد {minutes} دقيقة.}}",
-
   "loginOperationsTitle": "منصة واحدة لكل معدة PMV",
   "loginWelcomeTitle": "مرحبًا بعودتك",
   "loginWelcomeSubtitle": "الوصول إلى الأسطول والورشة والمهام الميدانية المعيّنة لك",
@@ -875,7 +830,6 @@
   "loginScopeInspectionsChecklists": "عمليات التفتيش وقوائم التحقق",
   "loginScopeMaintenanceWorkshop": "الصيانة والورشة",
   "loginSecurityCopyCatalog": "secure=مساحة عمل شركة آمنة · %country%~forgot=هل نسيت كلمة المرور؟~access=تحتاج إلى صلاحية؟ تواصل مع مسؤول النظام~or=أو~biometric=استخدام بصمة الجهاز~authorized=سجّل الدخول بالحساب الذي قدمته لك شركتك~audited=يتم تدقيق النشاط~version=الإصدار %version%~biometricReason=أكد هويتك لتسجيل الدخول إلى Tyre Pulse~biometricUnavailable=بصمة الجهاز غير متاحة أو غير مسجلة.~biometricLocked=بصمة الجهاز مقفلة مؤقتًا. استخدم كلمة المرور.~biometricFailed=تعذر إكمال التحقق من الجهاز.~credentialsRequired=أدخل بريدك الإلكتروني أو رقم الموظف وكلمة المرور قبل استخدام بصمة الجهاز.~helpTitle=مساعدة تسجيل الدخول~forgotHelp=يدير مسؤول Tyre Pulse إعادة تعيين كلمات المرور. تواصل معه لاستعادة الوصول.~accessHelp=يدير مسؤول Tyre Pulse صلاحية الهاتف واعتماد الحساب.",
-
   "profileNavTitle": "حسابي",
   "profileRoleLabel": "الدور",
   "profileSuperAdminBadge": "مسؤول المنصة",
@@ -3926,5 +3880,6 @@
   "syncQueuePhotoRemoved": "أُزيلت الصورة. سيُرسل السجل بدونها.",
   "syncQueuePhotoActionFailed": "لم ينجح ذلك. حاول مرة أخرى.",
   "fleetListOffRoadFilter": "خارج الخدمة",
-  "inspectionPickerCollapsedNote": "{assets} رقم أصل من {rows} سجلا في السجل. الرقم المستخدم في أكثر من دولة يظهر مرة واحدة: اختر الدولة لفحص المعدة الصحيحة."
+  "inspectionPickerCollapsedNote": "{assets} رقم أصل من {rows} سجلا في السجل. الرقم المستخدم في أكثر من دولة يظهر مرة واحدة: اختر الدولة لفحص المعدة الصحيحة.",
+  "workshopIntakeCopyCatalog": "title=استقبال المركبات~subtitle=أضف المركبات وأكد المركبات الموجهة إليك~open=استقبال المركبات~waitingBanner=%n% مركبات بانتظار تأكيدك~waitingBannerOne=مركبة واحدة بانتظار تأكيدك~tabWaiting=بانتظاري~tabAdd=إضافة مركبة~noAccess=تحتاج صلاحية إضافة مركبات الورشة أو تأكيدها. اطلبها من المسؤول.~loading=جارٍ تحميل المركبات~loadFailed=تعذر تحميل المركبات.~emptyTitle=لا شيء بانتظارك~emptyMessage=تظهر هنا المركبات الجديدة الموجهة إليك. اسحب للأسفل للتحقق مجدداً.~enteredBy=أدخلها %name%~system=النظام~jobCard=بطاقة العمل~ownEntry=أنت من أدخلها. يؤكدها مشرف آخر.~confirm=تأكيد~return=إرجاع~confirmed=تم تأكيد المركبة.~confirmFailed=تعذر تأكيد المركبة.~notRouted=هذه المركبة غير موجهة إليك.~alreadyConfirmed=أكد شخص آخر هذه المركبة مسبقاً.~refused=لا يمكنك تأكيد مركبة أدخلتها بنفسك.~returnTitle=إرجاع إلى من أدخلها~reason=السبب~reasonHint=ما الذي يحتاج إلى تصحيح؟~reasonShort=اكتب 5 أحرف على الأقل.~returned=تم إرجاع المركبة.~returnFailed=تعذر إرجاع المركبة.~cancel=إلغاء~assetCode=رقم الأصل~assetRequired=أدخل رقم الأصل.~site=موقع الورشة~siteHint=اتركه فارغاً لاستخدام موقع المركبة~complaint=الشكوى~jobCardNo=رقم بطاقة العمل (اختياري)~workType=نوع العمل~priority=الأولوية~notSet=غير محدد~send=إرسال إلى المشرف~sent=تم الإرسال. يصل إشعار إلى المشرف المناوب.~updatedRow=تم التحديث.~sameRow=لم يتغير شيء.~listedRow=هذه المركبة موجودة في قائمة الورشة.~invalidRow=تحقق من رقم الأصل.~releasedRow=تم الإفراج عن هذه المركبة مسبقاً.~sendFailed=تعذر إرسال المركبة. تحقق من الشبكة وحاول مجدداً.~pickCountry=اختر دولة واحدة أولاً. تُدخل المركبات لكل دولة.~wt_Repair=إصلاح~wt_Emergency=عطل~wt_Preventive Maintenance=صيانة وقائية~wt_Service=خدمة~wt_Tyre Change=تغيير إطار~wt_Inspection=فحص~wt_Other=أخرى~pr_Low=منخفضة~pr_Medium=متوسطة~pr_High=عالية~pr_Critical=حرجة~src_sheet=الجدول المشترك~src_phone=الهاتف~src_manual=إدخال يدوي~src_erp=بطاقة عمل ERP~src_excel_upload=ملف Excel اليومي"
 }

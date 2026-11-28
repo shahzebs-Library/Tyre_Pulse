@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tyre_pulse/core/network/supabase_client_provider.dart';
 import 'package:tyre_pulse/core/workspace/workspace_context.dart';
 import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
+import 'package:tyre_pulse/features/workshop_status/data/workshop_intake_repository.dart';
 import 'package:tyre_pulse/features/workshop_status/data/workshop_status_repository.dart';
+import 'package:tyre_pulse/features/workshop_status/domain/workshop_intake.dart';
 import 'package:tyre_pulse/features/workshop_status/domain/workshop_status_record.dart';
 
 /// The clock days-down and "updated today" are judged against. Overridden in
@@ -43,3 +45,25 @@ final Provider<String> workshopStatusUserIdProvider = Provider<String>(
     return workspace?.userId.trim() ?? '';
   },
 );
+
+final Provider<WorkshopIntakeRepository> workshopIntakeRepositoryProvider =
+    Provider<WorkshopIntakeRepository>(
+  (Ref ref) =>
+      SupabaseWorkshopIntakeRepository(ref.watch(supabaseClientProvider)),
+);
+
+/// The caller's intake flags (fail closed).
+final FutureProvider<WorkshopIntakePermissions>
+    workshopIntakePermissionsProvider =
+    FutureProvider<WorkshopIntakePermissions>(
+  (Ref ref) => ref.watch(workshopIntakeRepositoryProvider).myPermissions(),
+);
+
+/// Vehicles routed to me and still waiting for confirmation.
+final FutureProvider<List<WorkshopIntakeRecord>> workshopIntakeWaitingProvider =
+    FutureProvider<List<WorkshopIntakeRecord>>((Ref ref) {
+  return ref.watch(workshopIntakeRepositoryProvider).listWaiting(
+        userId: ref.watch(workshopStatusUserIdProvider),
+        country: ref.watch(activeCountryProvider),
+      );
+});

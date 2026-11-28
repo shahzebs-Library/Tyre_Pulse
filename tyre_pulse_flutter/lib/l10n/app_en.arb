@@ -1,11 +1,9 @@
 {
   "@@locale": "en",
-
   "appTitle": "Tyre Pulse",
   "@appTitle": {
     "description": "Application name. Shown in the task switcher."
   },
-
   "actionBack": "Back",
   "@actionBack": {
     "description": "Leaves the current screen and returns to where the user came from."
@@ -32,7 +30,6 @@
   "@actionClear": {
     "description": "Clears the text typed into a search field."
   },
-
   "valueUnavailable": "Unavailable",
   "@valueUnavailable": {
     "description": "Shown where a number would be, when the number was never measured. Spec section 32: never show 0 for something that was not measured."
@@ -41,7 +38,6 @@
   "@valueNotMeasured": {
     "description": "The placeholder that stands in for an unmeasured value. A hyphen, not a zero."
   },
-
   "stateLoading": "Loading",
   "@stateLoading": {
     "description": "The only state that is allowed to show a spinner."
@@ -80,7 +76,6 @@
   "@stateScreenNotAvailableTitle": {},
   "stateScreenNotAvailableMessage": "The navigation to it works, but the screen itself has not been written. This is a build in progress, not a fault with your account.",
   "@stateScreenNotAvailableMessage": {},
-
   "deniedTitle": "No access to this screen",
   "@deniedTitle": {
     "description": "A refusal, never a spinner. The production test deniedIsNotASpinner exists because this was got wrong once."
@@ -95,7 +90,6 @@
   "@deniedPermissionsUnavailable": {
     "description": "Ported from the production rule: sensitive modules fail closed when the permission lookup fails, everything else fails open."
   },
-
   "offlineTitle": "Offline",
   "@offlineTitle": {},
   "offlineMessage": "You can keep working. Everything is saved on this device.",
@@ -133,7 +127,6 @@
   "@syncStatusUnknown": {
     "description": "We could not read connectivity. Different from being offline, and said differently."
   },
-
   "sessionRestoringTitle": "Opening Tyre Pulse",
   "@sessionRestoringTitle": {},
   "sessionTimedOutTitle": "This is taking longer than usual",
@@ -142,7 +135,6 @@
   },
   "sessionTimedOutMessage": "We could not open your saved sign in. You can try again, or sign in from the start.",
   "@sessionTimedOutMessage": {},
-
   "updateRequiredTitle": "Update required",
   "@updateRequiredTitle": {},
   "updateRequiredMessage": "This version of Tyre Pulse is too old to keep using. Install the update to carry on.",
@@ -151,26 +143,24 @@
   "@updateRequiredMessageAppStore": {
     "description": "Update-required screen on an iPhone when no store button can be shown: tells the user to update from the App Store."
   },
-
   "profileUnavailableTitle": "We could not load your profile",
   "@profileUnavailableTitle": {},
   "profileUnavailableMessage": "Your account details did not load, so the app cannot tell what you are allowed to do. Try again, or sign out and back in.",
   "@profileUnavailableMessage": {},
-
   "accessBlockedTitle": "Your account is not active",
   "@accessBlockedTitle": {},
   "accessBlockedMessage": "Your account is waiting for approval or has been locked. Your administrator can put this right.",
   "@accessBlockedMessage": {},
   "accessBlockedCheckAgain": "Check again",
-  "@accessBlockedCheckAgain": {"description": "Re-reads the account from the server on the not-active screen, so an account approved meanwhile goes straight in."},
+  "@accessBlockedCheckAgain": {
+    "description": "Re-reads the account from the server on the not-active screen, so an account approved meanwhile goes straight in."
+  },
   "accessBlockedStillWaiting": "Your account is still not active. Ask your administrator to approve it.",
   "@accessBlockedStillWaiting": {},
-
   "routeNotFoundTitle": "That screen does not exist",
   "@routeNotFoundTitle": {},
   "routeNotFoundMessage": "The link you followed does not point anywhere in this app.",
   "@routeNotFoundMessage": {},
-
   "tabHome": "Home",
   "@tabHome": {},
   "tabInspect": "Inspect",
@@ -189,14 +179,12 @@
   "@tabChecklists": {},
   "tabApprovals": "Approvals",
   "@tabApprovals": {},
-
   "searchHint": "Search",
   "@searchHint": {},
   "dropdownHint": "Select",
   "@dropdownHint": {},
   "fieldRequired": "Required",
   "@fieldRequired": {},
-
   "statusOk": "OK",
   "@statusOk": {},
   "statusWarning": "Attention",
@@ -211,7 +199,6 @@
   "@statusUnknown": {
     "description": "Deliberately not the word Unknown on its own. It says that nobody took the reading, which is different from a reading that came back neutral."
   },
-
   "vehiclesTitle": "Vehicles",
   "@vehiclesTitle": {},
   "vehiclesCount": "{count, plural, =0{No vehicles in fleet} =1{1 vehicle in fleet} other{{count} vehicles in fleet}}",
@@ -297,7 +284,6 @@
   "@vehiclesTruncatedNotice": {
     "description": "Shown when the paged read hit its row cap, so the list may not be the whole fleet. Must never be silently dropped."
   },
-
   "serialSearchTitle": "Serial Number Search",
   "@serialSearchTitle": {},
   "serialSearchSubtitle": "Find a tyre by its serial number",
@@ -358,7 +344,6 @@
   "@serialSearchUndoConfirmTitle": {},
   "serialSearchUndoConfirmMessage": "This tyre will be marked active again.",
   "@serialSearchUndoConfirmMessage": {},
-
   "scannerTitle": "Scan",
   "@scannerTitle": {
     "description": "The scanner screen's app bar title."
@@ -405,7 +390,6 @@
   "@scannerStartInspectionAction": {},
   "scannerViewTyreAction": "View tyre",
   "@scannerViewTyreAction": {},
-
   "recordsTitle": "Tyre Records",
   "@recordsTitle": {
     "description": "Title of the admin-only tyre records register."
@@ -476,7 +460,6 @@
   "@recordsDetailFallbackTitle": {
     "description": "Detail sheet title when the record has no asset number."
   },
-
   "tyreDiagramFrontLabel": "FRONT",
   "@tyreDiagramFrontLabel": {
     "description": "Compass label above the vehicle tyre diagram."
@@ -530,7 +513,6 @@
   "@tyreConditionNotChecked": {
     "description": "Picker/legend label for a wheel nobody has checked yet (grey question mark)."
   },
-
   "inspectionNavTitle": "New inspection",
   "@inspectionNavTitle": {
     "description": "App bar title on the header step of the inspection capture wizard."
@@ -631,7 +613,6 @@
   "@inspectionManualAssetLabel": {},
   "inspectionManualUseButton": "Use this asset",
   "@inspectionManualUseButton": {},
-
   "inspectionTyrePositionsTitle": "Tyre positions",
   "@inspectionTyrePositionsTitle": {},
   "inspectionDraftLabel": "Draft",
@@ -714,7 +695,6 @@
   "@inspectionGpsRetry": {
     "description": "Retries capturing the GPS fix. Never blocks the wizard when this is not pressed."
   },
-
   "inspectionReviewTitle": "Review",
   "@inspectionReviewTitle": {},
   "inspectionPositionsRecorded": "{touched} of {total} tyre positions recorded",
@@ -738,7 +718,6 @@
   "@inspectionSubmitForApproval": {},
   "inspectionSignatureRequiredMsg": "A signature is required before this inspection can be submitted.",
   "@inspectionSignatureRequiredMsg": {},
-
   "inspectionSubmittedForApprovalTitle": "Submitted for approval",
   "@inspectionSubmittedForApprovalTitle": {},
   "inspectionQueuedTitle": "Saved on this device",
@@ -753,7 +732,6 @@
   "@inspectionBackHome": {},
   "inspectionNewInspection": "New inspection",
   "@inspectionNewInspection": {},
-
   "inspectionConditionLabel": "Condition",
   "@inspectionConditionLabel": {},
   "inspectionPressureLabel": "Pressure (psi)",
@@ -776,14 +754,12 @@
   "@inspectionPhotoGallery": {},
   "inspectionNotesLabel": "Notes",
   "@inspectionNotesLabel": {},
-
   "inspectionSignatureSavedLabel": "Signature saved",
   "@inspectionSignatureSavedLabel": {},
   "inspectionSignatureRedraw": "Draw a new signature",
   "@inspectionSignatureRedraw": {
     "description": "Replaces a previously-saved signature preview with a live drawing surface. Drawing again is required before the new mark counts."
   },
-
   "inspectionDetailTitle": "Inspection",
   "@inspectionDetailTitle": {},
   "inspectionDetailLoadErrorMessage": "This inspection could not be loaded. Check your connection and try again.",
@@ -820,7 +796,6 @@
   "@inspectionRetrySyncButton": {},
   "inspectionStatusSynced": "Synced",
   "@inspectionStatusSynced": {},
-
   "inspectionHistoryTitle": "My Inspections",
   "@inspectionHistoryTitle": {},
   "inspectionHistoryQueueReadErrorMessage": "Some queued inspections could not be read from this device. They have not been lost—try again shortly.",
@@ -835,7 +810,6 @@
   "@inspectionHistoryInProgressSection": {},
   "inspectionHistorySubmittedSection": "Submitted",
   "@inspectionHistorySubmittedSection": {},
-
   "checklistAddPhotoTitle": "Add a photo",
   "@checklistAddPhotoTitle": {},
   "checklistPhotoSourceCamera": "Take a photo",
@@ -860,7 +834,6 @@
   "@checklistSignatureSavedLabel": {},
   "checklistSignatureRedraw": "Draw a new signature",
   "@checklistSignatureRedraw": {},
-
   "checklistsHomeTitle": "Checklists",
   "@checklistsHomeTitle": {},
   "checklistWorkspaceLoadingMessage": "Your workspace is still loading. Try again in a moment.",
@@ -951,7 +924,6 @@
       }
     }
   },
-
   "checklistHistoryTitle": "Checklist history",
   "@checklistHistoryTitle": {},
   "myPlansNavTitle": "My plans",
@@ -1040,7 +1012,6 @@
   "@checklistHistoryStatusWaiting": {},
   "checklistHistoryStatusNoApproval": "No approval needed",
   "@checklistHistoryStatusNoApproval": {},
-
   "checklistFillLoadingTitle": "Checklist",
   "@checklistFillLoadingTitle": {},
   "checklistFillNotFoundMessage": "This checklist could not be found. It may have been unpublished.",
@@ -1107,7 +1078,6 @@
   },
   "checklistGatePrimarySignature": "A signature is required to submit this sheet",
   "@checklistGatePrimarySignature": {},
-
   "inspectionApprovalsTitle": "Inspection Approvals",
   "@inspectionApprovalsTitle": {},
   "inspectionApprovalsAwaitingCount": "{count} awaiting sign-off",
@@ -1240,7 +1210,6 @@
   "@inspectionApprovalSignatureSavedLabel": {},
   "inspectionApprovalSignatureRedraw": "Draw a new signature",
   "@inspectionApprovalSignatureRedraw": {},
-
   "checklistApprovalsTitle": "Checklist Approvals",
   "@checklistApprovalsTitle": {},
   "checklistApprovalsAwaitingCount": "{count} awaiting sign-off",
@@ -1291,7 +1260,6 @@
   "@checklistApprovalsStatusWaitingApproval": {},
   "checklistApprovalsStatusNoApproval": "No approval needed",
   "@checklistApprovalsStatusNoApproval": {},
-
   "checklistApprovalReviewTitle": "Checklist approval",
   "@checklistApprovalReviewTitle": {},
   "checklistApprovalLoadErrorMessage": "This checklist could not be loaded. Check your connection and try again.",
@@ -1399,12 +1367,10 @@
   "@checklistApprovalScorePassed": {},
   "checklistApprovalScoreFailed": "Failed",
   "@checklistApprovalScoreFailed": {},
-
   "checklistApprovalSignatureSavedLabel": "Signature saved",
   "@checklistApprovalSignatureSavedLabel": {},
   "checklistApprovalSignatureRedraw": "Draw a new signature",
   "@checklistApprovalSignatureRedraw": {},
-
   "meterLogNavTitle": "Record meter reading",
   "@meterLogNavTitle": {},
   "meterLogWorkspaceLoadingMessage": "Your workspace is still loading. Try again in a moment.",
@@ -1534,7 +1500,6 @@
       }
     }
   },
-
   "washNavTitle": "Log vehicle wash",
   "@washNavTitle": {},
   "washWorkspaceLoadingMessage": "Your workspace is still loading. Try again in a moment.",
@@ -1653,7 +1618,6 @@
   "@washRecentEmptyMessage": {},
   "washRecentLoadErrorMessage": "Recent washes could not be loaded.",
   "@washRecentLoadErrorMessage": {},
-
   "homeNavTitle": "Home",
   "@homeNavTitle": {},
   "homeGreeting": "Welcome back",
@@ -1740,11 +1704,12 @@
   "@homeStatLoadingCaption": {},
   "homeStatUnavailableCaption": "Could not check",
   "homeRoleCopyCatalog": "meterTitle=Log today's meter~meterNotLogged=Not logged today~meterLogged=Logged %time%~problemTitle=Report a problem or breakdown~problemHint=Tell the workshop what is wrong~exceptionsTitle=Today's exceptions~offRoad=Off road~openAccidents=Open accidents~maintenanceOverdue=Maintenance overdue~tyresAttention=Tyres need attention~handoverTitle=Handovers awaiting your sign-off~reportAccident=Report an accident~approvalsTitle=Approvals waiting on you~approvalsSplit=%a% inspections • %b% checklists~issueTitle=Report an issue~issueHint=Something broken or unsafe~teamTitle=Team now~working=Working~waiting=Waiting~free=Free~teamNote=Free means checked in and not working. Absent cannot be counted: no attendance is recorded.~assignTitle=Assign jobs~assignHint=%count% open job cards with nobody assigned~assignGap=Opens the job card list. Assigning from the phone is not built yet.~myJobsTitle=My jobs~myJobsCount=%count% open~myJobsNone=No open jobs~plantTitle=Today's plant checks~sheetsDue=%count% sheets due~allDone=All done today~dailyTitle=Workshop Daily~dueToday=Due today~signTitle=Approvals to sign~signHint=%count% awaiting your signature~tyresDueTitle=Tyres due for replacement~myVehicle=My vehicle~noVehicle=No meter logged yet~wash=Record a wash~washDays=Last washed %count% days ago~washToday=Washed today~washNever=No wash recorded~dailyChecklist=Daily checklist~charges=My fines & charges~chargesHint=Fines, charges and your own sign-offs~summary=Daily summary & reports~alerts=Alerts~plan=Today's plan~planOpen=%count% open today~repair=Repair request~meter=Meter log~inspectionsDue=Inspections due today~checklistsToSign=Checklists to sign~waitingParts=Waiting for parts~blocked=Blocked over 30 minutes~requestParts=Request parts~recent=Recent inspections~reorder=Stock to reorder~sync=Pending sync~more=More~open=Open",
-  "@homeRoleCopyCatalog": {"description": "Per-role Home tiles and rows, key=value pairs separated by ~. %count% %time% %a% %b% are replaced at runtime."},
+  "@homeRoleCopyCatalog": {
+    "description": "Per-role Home tiles and rows, key=value pairs separated by ~. %count% %time% %a% %b% are replaced at runtime."
+  },
   "@homeStatUnavailableCaption": {},
   "homeNoQuickActionsMessage": "Nothing is available to you here yet. Contact your administrator if you need access to a feature.",
   "@homeNoQuickActionsMessage": {},
-
   "workOrdersNavTitle": "Work Orders",
   "@workOrdersNavTitle": {},
   "workOrdersActiveCount": "{count} active",
@@ -1773,7 +1738,6 @@
   "@workOrdersWorkTypeFallback": {
     "description": "Shown in place of work_orders.work_type when it is blank or null."
   },
-
   "workOrderNewTitle": "New work order",
   "@workOrderNewTitle": {},
   "workOrderAssetLabel": "Asset",
@@ -1798,7 +1762,6 @@
   "@workOrderSaveFailedMessage": {},
   "workOrderWorkspaceLoadingMessage": "Your workspace is still loading. Try again in a moment.",
   "@workOrderWorkspaceLoadingMessage": {},
-
   "workOrderWorkTypeTyreChange": "Tyre Change",
   "@workOrderWorkTypeTyreChange": {
     "description": "Create-form work type option. The saved value is this exact English word - see work_order_badges.dart's own library comment."
@@ -1813,7 +1776,6 @@
   "@workOrderWorkTypeInspection": {},
   "workOrderWorkTypeOther": "Other",
   "@workOrderWorkTypeOther": {},
-
   "workOrderPriorityLow": "Low",
   "@workOrderPriorityLow": {
     "description": "Create-form priority option. The saved value is this exact English word."
@@ -1824,7 +1786,6 @@
   "@workOrderPriorityHigh": {},
   "workOrderPriorityCritical": "Critical",
   "@workOrderPriorityCritical": {},
-
   "workOrderAdvanceToInProgress": "In Progress",
   "@workOrderAdvanceToInProgress": {
     "description": "The advance button's label when the next status is In Progress - names the state it moves the work order to, matching the reference button's own wording."
@@ -1833,7 +1794,6 @@
   "@workOrderAdvanceToCompleted": {},
   "workOrderStatusQueuedMessage": "Status update saved. It will sync automatically.",
   "@workOrderStatusQueuedMessage": {},
-
   "workOrderDetailTitle": "Work order",
   "@workOrderDetailTitle": {
     "description": "Detail screen app bar title fallback, used only when the work order carries no asset number."
@@ -1946,7 +1906,6 @@
   "@tyreReplaceSaveFailedTitle": {},
   "tyreReplaceTryAgainFallback": "Something went wrong. Try again.",
   "@tyreReplaceTryAgainFallback": {},
-
   "tyreDiagramModeLayout": "Layout view",
   "@tyreDiagramModeLayout": {},
   "tyreDiagramModeList": "List view",
@@ -1992,7 +1951,6 @@
   "@tyreDiagramListEmptyTitle": {},
   "tyreDiagramListEmptyMessage": "Switch to Layout view and tap a tyre to record its condition.",
   "@tyreDiagramListEmptyMessage": {},
-
   "tyreDetailTitle": "Tyre detail",
   "@tyreDetailTitle": {},
   "tyreDetailStatTread": "Tread depth",
@@ -2035,7 +1993,6 @@
   "@tyreDetailRemainingKmUnavailable": {},
   "tyreDetailNoEvidenceMessage": "Nobody has recorded anything for this wheel yet.",
   "@tyreDetailNoEvidenceMessage": {},
-
   "takeActionTitle": "Take action",
   "@takeActionTitle": {},
   "takeActionReplaceTyre": "Replace tyre",
@@ -2062,7 +2019,6 @@
   "@takeActionMarkAsSpare": {},
   "takeActionComingSoonCaption": "Not available in this build yet",
   "@takeActionComingSoonCaption": {},
-
   "reportDefectTitle": "Report a defect",
   "@reportDefectTitle": {},
   "reportDefectTitleFieldLabel": "Title",
@@ -2091,7 +2047,6 @@
   "@reportDefectSavedMessage": {},
   "reportDefectSaveFailedTitle": "Could not save the repair request",
   "@reportDefectSaveFailedTitle": {},
-
   "damageReasonPuncture": "Puncture",
   "@damageReasonPuncture": {},
   "damageReasonSidewall": "Sidewall damage",
@@ -2104,7 +2059,6 @@
   "@damageReasonImpact": {},
   "damageReasonOther": "Other",
   "@damageReasonOther": {},
-
   "globalSearchTitle": "Search",
   "@globalSearchTitle": {},
   "globalSearchSubtitle": "Find an asset, tyre, work order or inspection",
@@ -2146,7 +2100,6 @@
   "@globalSearchSourceFailedNotice": {
     "description": "Shown when one of the four identifier-type lookups failed while at least one other succeeded - see GlobalSearchState.failedSources."
   },
-
   "loginAppSubtitle": "Inspector App",
   "@loginAppSubtitle": {
     "description": "Small line under the app name on the sign-in screen."
@@ -2189,7 +2142,6 @@
       }
     }
   },
-
   "loginOperationsTitle": "One platform for every PMV asset",
   "@loginOperationsTitle": {
     "description": "Generic product description on every country-specific login screen. PMV is the product's established operational acronym."
@@ -2240,7 +2192,6 @@
   "@loginSecurityCopyCatalog": {
     "description": "Complete copy catalogue for the security and help controls on the latest login composition."
   },
-
   "profileNavTitle": "Profile",
   "@profileNavTitle": {},
   "profileRoleLabel": "Role",
@@ -9027,12 +8978,24 @@
   "driverChargeSectionTitle": "My charges",
   "driverChargeNone": "No charges recorded for this driver.",
   "driverChargeOutstanding": "Outstanding: {amount}",
-  "@driverChargeOutstanding": {"placeholders": {"amount": {"type": "String"}}},
+  "@driverChargeOutstanding": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeFilterAll": "All",
   "driverChargeLoadError": "Charges could not be loaded. Check your connection and try again.",
   "driverChargeLoadMore": "Load more",
   "driverChargeDetailTitle": "Charge {number}",
-  "@driverChargeDetailTitle": {"placeholders": {"number": {"type": "String"}}},
+  "@driverChargeDetailTitle": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeAmount": "Amount",
   "driverChargeDeducted": "Deducted so far",
   "driverChargeStatusLabel": "Status",
@@ -9047,22 +9010,61 @@
   "driverChargeNoEvidence": "No evidence listed. The charge relies on the linked record.",
   "driverChargeSignatures": "Signatures",
   "driverChargeSignedBy": "Signed by {name} at {time} (server time)",
-  "@driverChargeSignedBy": {"placeholders": {"name": {"type": "String"}, "time": {"type": "String"}}},
+  "@driverChargeSignedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeSignatureHidden": "The signature image is not shown for your access level.",
   "driverChargeDecisions": "Reviews and decisions",
   "driverChargeNoDecisions": "No review recorded yet.",
   "driverChargeSchedule": "Deduction schedule",
   "driverChargeNoSchedule": "No deduction scheduled.",
   "driverChargeInstalmentLine": "{month}: {amount} ({status})",
-  "@driverChargeInstalmentLine": {"placeholders": {"month": {"type": "String"}, "amount": {"type": "String"}, "status": {"type": "String"}}},
+  "@driverChargeInstalmentLine": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeCapLine": "No monthly instalment may exceed {percent}% of the wage.",
-  "@driverChargeCapLine": {"placeholders": {"percent": {"type": "String"}}},
+  "@driverChargeCapLine": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeAppealTitle": "Appeal",
   "driverChargeNoAppeal": "No appeal filed.",
   "driverChargeAppealFiled": "Appeal filed at {time}",
-  "@driverChargeAppealFiled": {"placeholders": {"time": {"type": "String"}}},
+  "@driverChargeAppealFiled": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeAppealOutcome": "Outcome: {outcome}",
-  "@driverChargeAppealOutcome": {"placeholders": {"outcome": {"type": "String"}}},
+  "@driverChargeAppealOutcome": {
+    "placeholders": {
+      "outcome": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeAppealPending": "Waiting for a decision by someone who did not issue or review this charge.",
   "driverChargeTimeline": "Full timeline",
   "driverChargeSharePdf": "Share notice PDF",
@@ -9093,7 +9095,13 @@
   "driverChargePhotosBlocked": "A photo could not be loaded. You must see every photo before you sign. Tap Retry.",
   "driverChargeOtherRuleDriver": "The company deduction limit applies to this charge.",
   "driverChargeObjectionUntil": "You can object until {date}.",
-  "@driverChargeObjectionUntil": {"placeholders": {"date": {"type": "String"}}},
+  "@driverChargeObjectionUntil": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeLangEnglish": "English",
   "driverChargeLangArabic": "العربية",
   "driverChargeLangUrdu": "اردو",
@@ -9111,9 +9119,21 @@
   "driverChargeBlockConsent": "Saudi Labour Law (Article 92): this charge can be taken from the salary only with the driver’s written consent. The driver did not agree, so it cannot be deducted.",
   "driverChargeBlockObjection": "An objection is open. It must be decided first.",
   "driverChargeBlockWindow": "The driver can still object until {date}. Nothing can be scheduled before then.",
-  "@driverChargeBlockWindow": {"placeholders": {"date": {"type": "String"}}},
+  "@driverChargeBlockWindow": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeBlockWindowKsa": "Saudi Labour Law (Article 91): the driver has 15 working days to object, until {date}. Nothing can be scheduled before then.",
-  "@driverChargeBlockWindowKsa": {"placeholders": {"date": {"type": "String"}}},
+  "@driverChargeBlockWindowKsa": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "driverChargeStatementMissing": "The statement could not be loaded. Refresh before signing.",
   "driverChargeAcknowledge": "I have read this statement and I agree to sign it.",
   "driverChargeExplanation": "Why do you dispute this charge?",
@@ -9163,7 +9183,16 @@
   "handoverAuthReceiving": "Receiving",
   "handoverAuthNotSigned": "Not signed",
   "handoverAuthSignedLine": "{name}, signed {time} (server time)",
-  "@handoverAuthSignedLine": {"placeholders": {"name": {"type": "String"}, "time": {"type": "String"}}},
+  "@handoverAuthSignedLine": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "handoverAuthSignHanding": "Sign as the handing driver",
   "handoverAuthSignReceiving": "Sign as the receiving driver",
   "handoverAuthSignerName": "Name of the person signing",
@@ -9172,7 +9201,13 @@
   "handoverAuthFrozen": "Signed record. The content is locked and can no longer be changed.",
   "handoverAuthLocation": "Handover location",
   "handoverAuthLocationCaptured": "Recorded by the device: {coords}",
-  "@handoverAuthLocationCaptured": {"placeholders": {"coords": {"type": "String"}}},
+  "@handoverAuthLocationCaptured": {
+    "placeholders": {
+      "coords": {
+        "type": "String"
+      }
+    }
+  },
   "handoverAuthLocationDenied": "Location permission was refused.",
   "handoverAuthLocationUnavailable": "Location could not be read.",
   "handoverAuthLocationNone": "No location recorded yet. It is recorded with each signature.",
@@ -9182,7 +9217,13 @@
   "handoverAuthOffline": "You are offline. A handover signature is recorded only online, so nothing was saved. Connect and try again.",
   "handoverAuthSigned": "Signature recorded with the server time.",
   "handoverAuthDocumentNo": "Document no. {number}",
-  "@handoverAuthDocumentNo": {"placeholders": {"number": {"type": "String"}}},
+  "@handoverAuthDocumentNo": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
   "handoverAuthHourMeter": "Hour meter (hours)",
   "handoverAuthSite": "Site",
   "handoverAuthDriverRegister": "Pick from the driver register",
@@ -9196,7 +9237,13 @@
     "description": "Store history and stock item detail screens: packed key=value catalog separated by ~, read through StoreHistoryCopy. Keep keys; translate values only."
   },
   "handoverAuthOnBehalf": "I am signing on behalf of {name}",
-  "@handoverAuthOnBehalf": {"placeholders": {"name": {"type": "String"}}},
+  "@handoverAuthOnBehalf": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "handoverAuthOnBehalfRequired": "Confirm that you are signing on behalf of this person.",
   "handoverAuthBlocked": "Your account is linked to the other driver on this handover, so you cannot sign for this party. Leave this signature for the driver or a supervisor.",
   "handoverAuthSignedOnBehalf": "Signed on their behalf by a supervisor",
@@ -9503,185 +9550,449 @@
     "description": "After Retry on a submitted inspection flushed the inspection queue."
   },
   "accidentTasksTitle": "My accident tasks",
-  "@accidentTasksTitle": {"description": "Title of the screen listing the open accident case steps owned by the signed-in person or their role."},
+  "@accidentTasksTitle": {
+    "description": "Title of the screen listing the open accident case steps owned by the signed-in person or their role."
+  },
   "accidentTasksAssignedToMe": "Assigned to me",
-  "@accidentTasksAssignedToMe": {"description": "Section: steps assigned to the person by name."},
+  "@accidentTasksAssignedToMe": {
+    "description": "Section: steps assigned to the person by name."
+  },
   "accidentTasksForMyTeam": "For my team",
-  "@accidentTasksForMyTeam": {"description": "Section: steps owned by the person's role in their country and site."},
+  "@accidentTasksForMyTeam": {
+    "description": "Section: steps owned by the person's role in their country and site."
+  },
   "accidentTasksEmpty": "Nothing waiting for you on accident cases.",
-  "@accidentTasksEmpty": {"description": "Empty state."},
+  "@accidentTasksEmpty": {
+    "description": "Empty state."
+  },
   "accidentTasksNotOn": "Accident task tracking is not switched on yet.",
-  "@accidentTasksNotOn": {"description": "Shown when the server does not have the task list yet."},
+  "@accidentTasksNotOn": {
+    "description": "Shown when the server does not have the task list yet."
+  },
   "accidentTasksLoading": "Loading your tasks...",
-  "@accidentTasksLoading": {"description": "Loading state."},
+  "@accidentTasksLoading": {
+    "description": "Loading state."
+  },
   "accidentTasksOverdue": "Overdue",
-  "@accidentTasksOverdue": {"description": "SLA badge: the target time has passed."},
+  "@accidentTasksOverdue": {
+    "description": "SLA badge: the target time has passed."
+  },
   "accidentTasksDueSoon": "Due soon",
-  "@accidentTasksDueSoon": {"description": "SLA badge: past the warning point."},
+  "@accidentTasksDueSoon": {
+    "description": "SLA badge: past the warning point."
+  },
   "accidentTasksOnTime": "On time",
-  "@accidentTasksOnTime": {"description": "SLA badge: running and on time."},
+  "@accidentTasksOnTime": {
+    "description": "SLA badge: running and on time."
+  },
   "accidentTasksNoTarget": "No target",
-  "@accidentTasksNoTarget": {"description": "SLA badge: the owner has not set a target time for this step."},
+  "@accidentTasksNoTarget": {
+    "description": "SLA badge: the owner has not set a target time for this step."
+  },
   "accidentTasksCase": "Case {ref}",
-  "@accidentTasksCase": {"description": "Row title with the case reference.", "placeholders": {"ref": {"type": "String"}}},
+  "@accidentTasksCase": {
+    "description": "Row title with the case reference.",
+    "placeholders": {
+      "ref": {
+        "type": "String"
+      }
+    }
+  },
   "accidentTasksInStep": "{days} in this step",
-  "@accidentTasksInStep": {"description": "How long the step has been open, e.g. '3.5 days in this step'.", "placeholders": {"days": {"type": "String"}}},
+  "@accidentTasksInStep": {
+    "description": "How long the step has been open, e.g. '3.5 days in this step'.",
+    "placeholders": {
+      "days": {
+        "type": "String"
+      }
+    }
+  },
   "accidentTasksDays": "{count} days",
-  "@accidentTasksDays": {"description": "A number of days, e.g. '3.5 days'.", "placeholders": {"count": {"type": "String"}}},
+  "@accidentTasksDays": {
+    "description": "A number of days, e.g. '3.5 days'.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
   "accidentTasksToday": "today",
-  "@accidentTasksToday": {"description": "Less than a day."},
+  "@accidentTasksToday": {
+    "description": "Less than a day."
+  },
   "accidentTasksDue": "Due {time}",
-  "@accidentTasksDue": {"description": "Due date and time of the step.", "placeholders": {"time": {"type": "String"}}},
+  "@accidentTasksDue": {
+    "description": "Due date and time of the step.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "accidentTasksSummary": "{open} open, {overdue} overdue",
-  "@accidentTasksSummary": {"description": "Counts on the Home row and screen header.", "placeholders": {"open": {"type": "String"}, "overdue": {"type": "String"}}},
+  "@accidentTasksSummary": {
+    "description": "Counts on the Home row and screen header.",
+    "placeholders": {
+      "open": {
+        "type": "String"
+      },
+      "overdue": {
+        "type": "String"
+      }
+    }
+  },
   "accidentRegisterMine": "Mine",
-  "@accidentRegisterMine": {"description": "Register filter: cases I reported or that have a step assigned to me."},
+  "@accidentRegisterMine": {
+    "description": "Register filter: cases I reported or that have a step assigned to me."
+  },
   "accidentTasksRoleNames": "admin=Admin~manager=Manager~director=Director~inspector=Inspector~tyre_man=Tyre Technician~reporter=Reporter~driver=Driver~mechanic=Mechanic~electrician=Electrician~maintenance_supervisor=Maintenance Supervisor~workshop_supervisor=Workshop Supervisor~tyre_data_collector=Tyre Data Collector~pmv_manager=PMV Manager~workshop_area_manager=Workshop Area Manager~workshop_maintenance_area_manager=Workshop Maintenance Area Manager~fleet_supervisor=Fleet Supervisor~fleet_incharge=Fleet Incharge~store_keeper=Store Keeper",
-  "@accidentTasksRoleNames": {"description": "Role names shown on accident task rows, token=label pairs separated by ~. Unknown roles show as stored."},
+  "@accidentTasksRoleNames": {
+    "description": "Role names shown on accident task rows, token=label pairs separated by ~. Unknown roles show as stored."
+  },
   "devicesTitle": "Devices",
-  "@devicesTitle": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTitle": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesProfileRowValue": "Gauges, scanners, printers",
-  "@devicesProfileRowValue": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesProfileRowValue": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesIntro": "Gauges, handheld scanners and label printers added on this phone. Only you see this list.",
-  "@devicesIntro": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesIntro": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesEmptyTitle": "No devices yet",
-  "@devicesEmptyTitle": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesEmptyTitle": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesEmptyMessage": "Add a tread or pressure gauge, a handheld scanner or a label printer.",
-  "@devicesEmptyMessage": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesEmptyMessage": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesLoadFailed": "The saved devices could not be read on this phone.",
-  "@devicesLoadFailed": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesLoadFailed": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesAdd": "Add device",
-  "@devicesAdd": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesAdd": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesKindTread": "Tread depth gauge",
-  "@devicesKindTread": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesKindTread": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesKindPressure": "Tyre pressure gauge",
-  "@devicesKindPressure": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesKindPressure": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesKindCombined": "Tread and pressure gauge",
-  "@devicesKindCombined": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesKindCombined": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesKindScanner": "Barcode or RFID handheld",
-  "@devicesKindScanner": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesKindScanner": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesKindRfid": "UHF RFID reader",
-  "@devicesKindRfid": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesKindRfid": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesKindPrinter": "Label printer",
-  "@devicesKindPrinter": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesKindPrinter": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesTransportBle": "Bluetooth",
-  "@devicesTransportBle": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTransportBle": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesTransportHid": "Keyboard mode",
-  "@devicesTransportHid": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTransportHid": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesTransportNetwork": "Network",
-  "@devicesTransportNetwork": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTransportNetwork": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesTransportSimulator": "Simulator (testing only)",
-  "@devicesTransportSimulator": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTransportSimulator": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesBluetoothOff": "Bluetooth is off. Turn it on to add or use a Bluetooth device.",
-  "@devicesBluetoothOff": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesBluetoothOff": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesPermissionDenied": "Tyre Pulse is not allowed to use Bluetooth. Allow it, or turn it on in the phone settings.",
-  "@devicesPermissionDenied": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesPermissionDenied": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesBluetoothUnsupported": "This phone has no Bluetooth LE. Keyboard-mode and network devices still work.",
-  "@devicesBluetoothUnsupported": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesBluetoothUnsupported": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesAllowBluetooth": "Allow Bluetooth",
-  "@devicesAllowBluetooth": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesAllowBluetooth": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesScanning": "Looking for nearby devices…",
-  "@devicesScanning": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesScanning": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesScanNone": "No devices found. Wake the device and keep it close to the phone.",
-  "@devicesScanNone": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesScanNone": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesScanAgain": "Scan again",
-  "@devicesScanAgain": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesScanAgain": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesUnnamed": "Unnamed device",
-  "@devicesUnnamed": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesUnnamed": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesChooseKind": "What is this device?",
-  "@devicesChooseKind": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesChooseKind": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesChooseConnection": "How does it connect?",
-  "@devicesChooseConnection": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesChooseConnection": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesNameLabel": "Device name",
-  "@devicesNameLabel": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesNameLabel": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesHostLabel": "Printer IP address",
-  "@devicesHostLabel": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesHostLabel": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesPortLabel": "Port",
-  "@devicesPortLabel": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesPortLabel": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesLanguageLabel": "Printer language",
-  "@devicesLanguageLabel": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesLanguageLabel": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesLabelSizeLabel": "Label size",
-  "@devicesLabelSizeLabel": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesLabelSizeLabel": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesSave": "Save device",
-  "@devicesSave": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesSave": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesFieldRequired": "Fill in this field.",
-  "@devicesFieldRequired": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesFieldRequired": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesHidHint": "First pair the device with the phone as a keyboard in the phone's Bluetooth settings, then save it here.",
-  "@devicesHidHint": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesHidHint": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesTest": "Test",
-  "@devicesTest": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTest": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesTestRead": "Read once",
-  "@devicesTestRead": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTestRead": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesTestPrint": "Print test label",
-  "@devicesTestPrint": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTestPrint": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesTestLabelName": "Tyre Pulse test label",
-  "@devicesTestLabelName": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTestLabelName": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesTestReading": "Read {value}",
-  "@devicesTestReading": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"value": {"type": "String"}}},
+  "@devicesTestReading": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "devicesTestPrinted": "Test label sent to the printer.",
-  "@devicesTestPrinted": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesTestPrinted": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesForget": "Forget",
-  "@devicesForget": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesForget": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesForgetConfirm": "Forget {name}? You can add it again later.",
-  "@devicesForgetConfirm": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"name": {"type": "String"}}},
+  "@devicesForgetConfirm": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "devicesBattery": "Battery {level}%",
-  "@devicesBattery": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"level": {"type": "int"}}},
+  "@devicesBattery": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "level": {
+        "type": "int"
+      }
+    }
+  },
   "devicesErrorNotConnected": "The device did not connect. Check it is switched on and close by.",
-  "@devicesErrorNotConnected": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesErrorNotConnected": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesErrorTimeout": "The device did not answer in time.",
-  "@devicesErrorTimeout": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesErrorTimeout": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesErrorNoReading": "No reading arrived. Take the measurement on the gauge and try again.",
-  "@devicesErrorNoReading": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesErrorNoReading": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesErrorUnreadable": "The device sent data this app cannot read. Its settings need the maker's specification.",
-  "@devicesErrorUnreadable": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesErrorUnreadable": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesErrorNotConfigured": "This device is missing its connection settings.",
-  "@devicesErrorNotConfigured": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesErrorNotConfigured": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesErrorPrintFailed": "The label could not be printed. Check the printer has paper and is on.",
-  "@devicesErrorPrintFailed": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesErrorPrintFailed": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesErrorUnsupported": "This device cannot do that.",
-  "@devicesErrorUnsupported": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesErrorUnsupported": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "devicesErrorVendorSdk": "This reader needs its maker's software, which is not installed yet. Use it in keyboard mode for now.",
-  "@devicesErrorVendorSdk": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@devicesErrorVendorSdk": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "gaugeReadPressure": "Read pressure from gauge",
-  "@gaugeReadPressure": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@gaugeReadPressure": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "gaugeReadTread": "Read tread from gauge",
-  "@gaugeReadTread": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@gaugeReadTread": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "gaugeNoGauge": "No gauge is set up for this reading. Add one under Profile > Devices.",
-  "@gaugeNoGauge": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@gaugeNoGauge": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "gaugePickTitle": "Choose a gauge",
-  "@gaugePickTitle": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@gaugePickTitle": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "gaugeReadingFrom": "Reading from {device}…",
-  "@gaugeReadingFrom": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"device": {"type": "String"}}},
+  "@gaugeReadingFrom": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
   "gaugeConfirmTitle": "Use this reading?",
-  "@gaugeConfirmTitle": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@gaugeConfirmTitle": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "gaugeConfirmBody": "{device} measured {value} on {position}.",
-  "@gaugeConfirmBody": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"device": {"type": "String"}, "value": {"type": "String"}, "position": {"type": "String"}}},
+  "@gaugeConfirmBody": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      },
+      "position": {
+        "type": "String"
+      }
+    }
+  },
   "gaugeConfirmReplace": "This replaces the value already entered ({old}).",
-  "@gaugeConfirmReplace": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"old": {"type": "String"}}},
+  "@gaugeConfirmReplace": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "old": {
+        "type": "String"
+      }
+    }
+  },
   "gaugeUseReading": "Use reading",
-  "@gaugeUseReading": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@gaugeUseReading": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "gaugeHidTitle": "Send the reading",
-  "@gaugeHidTitle": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@gaugeHidTitle": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "gaugeHidMessage": "Press the send button on {device}. The value appears below.",
-  "@gaugeHidMessage": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"device": {"type": "String"}}},
+  "@gaugeHidMessage": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
   "gaugeHidField": "Value from the gauge",
-  "@gaugeHidField": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@gaugeHidField": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "gaugeValuePsi": "{value} psi",
-  "@gaugeValuePsi": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"value": {"type": "String"}}},
+  "@gaugeValuePsi": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "gaugeValueMm": "{value} mm",
-  "@gaugeValueMm": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"value": {"type": "String"}}},
+  "@gaugeValueMm": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
   "hidScannerReady": "Handheld scanner ready: press the trigger to look up a tyre or asset.",
-  "@hidScannerReady": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@hidScannerReady": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "labelPrint": "Print label",
-  "@labelPrint": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@labelPrint": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "labelChoosePrinter": "Print label on",
-  "@labelChoosePrinter": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@labelChoosePrinter": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "labelPrintPdf": "System printer or PDF",
-  "@labelPrintPdf": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@labelPrintPdf": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "labelPrinted": "Label sent to {printer}.",
-  "@labelPrinted": {"description": "Field hardware (lib/core/devices, features/devices).", "placeholders": {"printer": {"type": "String"}}},
+  "@labelPrinted": {
+    "description": "Field hardware (lib/core/devices, features/devices).",
+    "placeholders": {
+      "printer": {
+        "type": "String"
+      }
+    }
+  },
   "labelUnicodeNote": "Arabic or Urdu text on this label prints correctly only through the system printer or PDF.",
-  "@labelUnicodeNote": {"description": "Field hardware (lib/core/devices, features/devices)."},
+  "@labelUnicodeNote": {
+    "description": "Field hardware (lib/core/devices, features/devices)."
+  },
   "syncQueuePhotoFailed": "{count, plural, =1{A photo could not upload} other{{count} photos could not upload}}",
   "@syncQueuePhotoFailed": {
     "description": "Profile sync queue: a photo that could not upload.",
@@ -9738,5 +10049,9 @@
         "type": "int"
       }
     }
+  },
+  "workshopIntakeCopyCatalog": "title=Vehicle intake~subtitle=Add vehicles and confirm the ones sent to you~open=Vehicle intake~waitingBanner=%n% vehicles waiting for you to confirm~waitingBannerOne=1 vehicle waiting for you to confirm~tabWaiting=Waiting for me~tabAdd=Add vehicle~noAccess=You need the Add workshop vehicles or Confirm workshop vehicles permission. Ask your administrator.~loading=Loading vehicles~loadFailed=The vehicles could not be loaded.~emptyTitle=Nothing is waiting for you~emptyMessage=New vehicles routed to you appear here. Pull down to check again.~enteredBy=Entered by %name%~system=System~jobCard=Job card~ownEntry=You entered this one. Another supervisor confirms it.~confirm=Confirm~return=Return~confirmed=Vehicle confirmed.~confirmFailed=The vehicle could not be confirmed.~notRouted=This vehicle is not routed to you.~alreadyConfirmed=Someone already confirmed this vehicle.~refused=You cannot confirm a vehicle you entered.~returnTitle=Return to the person who entered it~reason=Reason~reasonHint=What needs fixing?~reasonShort=Write at least 5 characters.~returned=Vehicle returned.~returnFailed=The vehicle could not be returned.~cancel=Cancel~assetCode=Asset code~assetRequired=Enter the asset code.~site=Workshop site~siteHint=Leave empty to use the vehicle's own site~complaint=Complaint~jobCardNo=Job card no (optional)~workType=Work type~priority=Priority~notSet=Not set~send=Send to supervisor~sent=Sent. The supervisor on shift gets a notice.~updatedRow=Updated.~sameRow=Nothing changed.~listedRow=This vehicle is already in the workshop list.~invalidRow=Check the asset code.~releasedRow=This vehicle was already released.~sendFailed=The vehicle could not be sent. Check the signal and try again.~pickCountry=Choose one country first. Vehicles are entered per country.~wt_Repair=Repair~wt_Emergency=Breakdown~wt_Preventive Maintenance=Preventive maintenance~wt_Service=Service~wt_Tyre Change=Tyre change~wt_Inspection=Inspection~wt_Other=Other~pr_Low=Low~pr_Medium=Medium~pr_High=High~pr_Critical=Critical~src_sheet=Shared sheet~src_phone=Phone~src_manual=Typed~src_erp=ERP job card~src_excel_upload=Daily Excel",
+  "@workshopIntakeCopyCatalog": {
+    "description": "Workshop Status vehicle intake (waiting for me, add vehicle), key=value pairs separated by ~. %n% and %name% are replaced at runtime. Source: lib/l10n/fragments/workshop_intake.*.json."
   }
 }

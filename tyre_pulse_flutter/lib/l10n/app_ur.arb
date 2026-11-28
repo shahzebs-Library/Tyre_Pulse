@@ -1,8 +1,6 @@
 {
   "@@locale": "ur",
-
   "appTitle": "Tyre Pulse",
-
   "actionBack": "واپس",
   "actionRetry": "دوبارہ کوشش کریں",
   "actionClose": "بند کریں",
@@ -12,10 +10,8 @@
   "actionSignOut": "سائن آؤٹ",
   "actionOpenStore": "اسٹور کھولیں",
   "actionClear": "صاف کریں",
-
   "valueUnavailable": "دستیاب نہیں",
   "valueNotMeasured": "-",
-
   "stateLoading": "لوڈ ہو رہا ہے",
   "stateEmptyTitle": "ابھی یہاں کچھ نہیں",
   "stateEmptyMessage": "جب دکھانے کے لیے کچھ ہوگا تو یہاں آ جائے گا۔",
@@ -30,13 +26,11 @@
   "stateNotConfiguredMessage": "آپ کے ادارے کے لیے یہ حصہ ترتیب نہیں دیا گیا۔ آپ کا ایڈمن اسے فعال کر سکتا ہے۔",
   "stateScreenNotAvailableTitle": "یہ اسکرین ابھی تیار نہیں",
   "stateScreenNotAvailableMessage": "اس تک پہنچنا کام کرتا ہے، مگر اسکرین خود ابھی نہیں بنی۔ یہ زیرِ تعمیر ہے، آپ کے اکاؤنٹ کا مسئلہ نہیں۔",
-
   "deniedTitle": "اس اسکرین تک رسائی نہیں",
   "deniedNotGranted": "آپ کو اس ماڈیول تک رسائی نہیں۔ اپنے ایڈمن سے رابطہ کریں۔",
   "deniedAdminOnly": "یہ اسکرین صرف ایڈمن کے لیے ہے۔",
   "deniedSuperAdminOnly": "یہ اسکرین صرف پلیٹ فارم مالک کے لیے ہے۔",
   "deniedPermissionsUnavailable": "آپ کی اجازتیں پڑھی نہیں جا سکیں، اس لیے یہ اسکرین بند ہے۔ باقی ایپ کام کر رہی ہے۔",
-
   "offlineTitle": "آف لائن",
   "offlineMessage": "آپ کام جاری رکھ سکتے ہیں۔ سب کچھ اسی ڈیوائس پر محفوظ ہے۔",
   "syncPendingChanges": "{count, plural, =0{کوئی تبدیلی زیرِ التوا نہیں} =1{1 تبدیلی سِنک ہونا باقی ہے} other{{count} تبدیلیاں سِنک ہونا باقی ہیں}}",
@@ -44,26 +38,20 @@
   "syncAllSynced": "تمام تبدیلیاں سِنک ہو گئیں",
   "syncNeedsAttention": "{count, plural, =0{کسی چیز پر توجہ درکار نہیں} =1{1 آئٹم پر توجہ درکار ہے} other{{count} آئٹمز پر توجہ درکار ہے}}",
   "syncStatusUnknown": "رابطے کی حالت معلوم نہیں",
-
   "sessionRestoringTitle": "Tyre Pulse کھل رہا ہے",
   "sessionTimedOutTitle": "معمول سے زیادہ وقت لگ رہا ہے",
   "sessionTimedOutMessage": "آپ کا محفوظ سائن اِن نہیں کھل سکا۔ دوبارہ کوشش کریں یا نئے سرے سے سائن اِن کریں۔",
-
   "updateRequiredTitle": "اپ ڈیٹ ضروری ہے",
   "updateRequiredMessage": "Tyre Pulse کا یہ ورژن بہت پرانا ہے۔ جاری رکھنے کے لیے اپ ڈیٹ انسٹال کریں۔",
   "updateRequiredMessageAppStore": "Tyre Pulse کا یہ ورژن بہت پرانا ہے۔ جاری رکھنے کے لیے App Store سے Tyre Pulse اپ ڈیٹ کریں۔",
-
   "profileUnavailableTitle": "آپ کی پروفائل لوڈ نہیں ہو سکی",
   "profileUnavailableMessage": "آپ کے اکاؤنٹ کی تفصیل لوڈ نہیں ہوئی، اس لیے ایپ آپ کی اجازتیں نہیں جان سکتی۔ دوبارہ کوشش کریں یا سائن آؤٹ کر کے دوبارہ سائن اِن کریں۔",
-
   "accessBlockedTitle": "آپ کا اکاؤنٹ فعال نہیں",
   "accessBlockedMessage": "آپ کا اکاؤنٹ منظوری کا منتظر ہے یا مقفل کر دیا گیا ہے۔ آپ کا ایڈمن اسے درست کر سکتا ہے۔",
   "accessBlockedCheckAgain": "دوبارہ چیک کریں",
   "accessBlockedStillWaiting": "آپ کا اکاؤنٹ ابھی تک فعال نہیں۔ اپنے ایڈمن سے اسے منظور کرنے کو کہیں۔",
-
   "routeNotFoundTitle": "یہ اسکرین موجود نہیں",
   "routeNotFoundMessage": "جو لنک آپ نے کھولا وہ اس ایپ میں کہیں نہیں جاتا۔",
-
   "tabHome": "ہوم",
   "tabInspect": "معائنہ",
   "tabAccidents": "حادثات",
@@ -73,18 +61,15 @@
   "tabHistory": "تاریخ",
   "tabChecklists": "چیک لسٹ",
   "tabApprovals": "منظوریاں",
-
   "searchHint": "تلاش",
   "dropdownHint": "منتخب کریں",
   "fieldRequired": "لازمی",
-
   "statusOk": "ٹھیک",
   "statusWarning": "توجہ درکار",
   "statusCritical": "نازک",
   "statusInfo": "معلومات",
   "statusNeutral": "غیر جانبدار",
   "statusUnknown": "ناپا نہیں گیا",
-
   "vehiclesTitle": "گاڑیاں",
   "vehiclesCount": "{count, plural, =0{فلیٹ میں کوئی گاڑی نہیں} =1{فلیٹ میں 1 گاڑی} other{فلیٹ میں {count} گاڑیاں}}",
   "vehiclesSearchHint": "اثاثہ، سیریل، ساخت، قسم یا سائٹ تلاش کریں",
@@ -117,7 +102,6 @@
   "vehiclesNotFoundTitle": "گاڑی نہیں ملی",
   "vehiclesNotFoundMessage": "یہ گاڑی فلیٹ رجسٹر میں نہیں ملی۔ ہو سکتا ہے اسے ہٹا دیا گیا ہو یا کسی دوسرے ملک میں منتقل کر دیا گیا ہو۔",
   "vehiclesTruncatedNotice": "فلیٹ کا کچھ حصہ دکھایا جا رہا ہے۔ مخصوص گاڑی تلاش کرنے کے لیے تلاش کو محدود کریں۔",
-
   "serialSearchTitle": "سیریل نمبر تلاش",
   "serialSearchSubtitle": "سیریل نمبر سے ٹائر تلاش کریں",
   "serialSearchLabel": "ٹائر کا سیریل نمبر",
@@ -146,7 +130,6 @@
   "serialSearchConfirmScrap": "ضائع کرنے کی تصدیق کریں",
   "serialSearchUndoConfirmTitle": "کیا ضائع شدہ نشان ہٹا دیں؟",
   "serialSearchUndoConfirmMessage": "یہ ٹائر دوبارہ فعال کے طور پر نشان زد ہو جائے گا۔",
-
   "scannerTitle": "اسکین",
   "scannerCameraUnavailableTitle": "اس ورژن میں کیمرہ اسکیننگ دستیاب نہیں",
   "scannerCameraUnavailableMessage": "اس کے بجائے لیبل سے کوڈ لکھیں یا پیسٹ کریں۔ نیچے دیا گیا سب کچھ اسکین کی طرح کام کرتا ہے۔",
@@ -162,7 +145,6 @@
   "scannerViewAssetAction": "اثاثہ دیکھیں",
   "scannerStartInspectionAction": "معائنہ شروع کریں",
   "scannerViewTyreAction": "ٹائر دیکھیں",
-
   "recordsTitle": "ٹائر ریکارڈز",
   "recordsShownCount": "{count, plural, =0{کوئی ٹائر ریکارڈ موجود نہیں} =1{1 ٹائر ریکارڈ دکھایا گیا} other{{count} ٹائر ریکارڈز دکھائے گئے}}",
   "recordsSearchHint": "اثاثہ نمبر، سیریل یا برانڈ تلاش کریں",
@@ -187,7 +169,6 @@
   "recordsDescription": "تفصیل",
   "recordsRemarks": "تبصرے",
   "recordsDetailFallbackTitle": "ٹائر ریکارڈ",
-
   "tyreDiagramFrontLabel": "سامنے",
   "tyreDiagramTapHint": "ٹائر کی حالت درج کرنے کے لیے اسے ٹیپ کریں",
   "tyreDiagramTyreCount": "{count, plural, =0{کوئی ٹائر نہیں} =1{1 ٹائر} other{{count} ٹائر}}",
@@ -202,7 +183,6 @@
   "tyreConditionFlat": "ہوا نکلی ہوئی",
   "tyreConditionMissing": "غائب",
   "tyreConditionNotChecked": "چیک نہیں ہوا",
-
   "inspectionNavTitle": "نیا معائنہ",
   "inspectionStep1Label": "1",
   "inspectionStep2Label": "2",
@@ -302,7 +282,6 @@
   "inspectionHistoryEmptyMessage": "آپ کے شروع یا جمع کروائے گئے معائنے یہاں دکھائی دیں گے۔",
   "inspectionHistoryInProgressSection": "جاری ہے",
   "inspectionHistorySubmittedSection": "جمع کروا دیا گیا",
-
   "checklistAddPhotoTitle": "تصویر شامل کریں",
   "checklistPhotoSourceCamera": "تصویر کھینچیں",
   "checklistPhotoSourceGallery": "گیلری سے منتخب کریں",
@@ -312,7 +291,6 @@
   "checklistNo": "نہیں",
   "checklistSignatureSavedLabel": "دستخط محفوظ ہو گئے",
   "checklistSignatureRedraw": "نیا دستخط بنائیں",
-
   "checklistsHomeTitle": "چیک لسٹیں",
   "checklistWorkspaceLoadingMessage": "آپ کا ورک اسپیس ابھی لوڈ ہو رہا ہے۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔",
   "checklistsLoadErrorMessage": "چیک لسٹس لوڈ نہیں ہو سکیں۔ دوبارہ کوشش کے لیے نیچے کھینچیں۔",
@@ -341,7 +319,6 @@
   "checklistsAvailableSection": "دستیاب چیک لسٹیں",
   "checklistNoAssetLabel": "ابھی تک کوئی اثاثہ منتخب نہیں کیا گیا",
   "checklistResumeProgress": "{total} میں سے {filled} کا جواب دیا گیا",
-
   "checklistHistoryTitle": "چیک لسٹ کی تاریخ",
   "myPlansNavTitle": "میرے شیڈول شدہ معائنے",
   "myPlansSubtitle": "آپ کو تفویض کیے گئے معائنے",
@@ -377,7 +354,6 @@
   "checklistHistoryStatusSentBack": "واپس بھیجا گیا",
   "checklistHistoryStatusWaiting": "منظوری کا منتظر",
   "checklistHistoryStatusNoApproval": "منظوری کی ضرورت نہیں",
-
   "checklistFillLoadingTitle": "چیک لسٹ",
   "checklistFillNotFoundMessage": "یہ چیک لسٹ نہیں مل سکی۔ ممکن ہے اسے غیر شائع کر دیا گیا ہو۔",
   "checklistFillSaveFailedMessage": "یہ چیک لسٹ محفوظ نہیں ہو سکی۔ یہ ضائع نہیں ہوئی—دوبارہ کوشش کریں۔",
@@ -395,7 +371,6 @@
   "checklistGateMissingNotes": "{count} آئٹمز کو نشان کی وضاحت کے لیے ریمارک درکار ہے",
   "checklistGateUnsatisfiedGroups": "{count} ریڈنگ گروپس کو کم از کم ایک ویلیو درکار ہے",
   "checklistGatePrimarySignature": "اس شیٹ کو جمع کرانے کے لیے دستخط درکار ہیں",
-
   "inspectionApprovalsTitle": "معائنہ کی منظوریاں",
   "inspectionApprovalsAwaitingCount": "{count} منظوری کے منتظر ہیں",
   "inspectionApprovalsEmptyTitle": "منظوری کا منتظر کچھ نہیں",
@@ -447,7 +422,6 @@
   "inspectionApprovalDecideGenericError": "براہ کرم دوبارہ کوشش کریں۔",
   "inspectionApprovalSignatureSavedLabel": "دستخط محفوظ ہو گئے",
   "inspectionApprovalSignatureRedraw": "نئے دستخط بنائیں",
-
   "checklistApprovalsTitle": "چیک لسٹ کی منظوریاں",
   "checklistApprovalsAwaitingCount": "{count} دستخط کے منتظر",
   "checklistApprovalsLoadErrorMessage": "منظوریاں لوڈ نہیں ہو سکیں۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
@@ -467,7 +441,6 @@
   "checklistApprovalsStatusWaitingSupervisor": "سپروائزر کی منتظر",
   "checklistApprovalsStatusWaitingApproval": "منظوری کی منتظر",
   "checklistApprovalsStatusNoApproval": "منظوری کی ضرورت نہیں",
-
   "checklistApprovalReviewTitle": "چیک لسٹ کی منظوری",
   "checklistApprovalLoadErrorMessage": "یہ چیک لسٹ لوڈ نہیں ہو سکی۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔",
   "checklistApprovalNotFoundTitle": "چیک لسٹ نہیں ملی",
@@ -514,10 +487,8 @@
   "checklistApprovalScoreLine": "اسکور: {pct}% ({status})",
   "checklistApprovalScorePassed": "کامیاب",
   "checklistApprovalScoreFailed": "ناکام",
-
   "checklistApprovalSignatureSavedLabel": "دستخط محفوظ ہو گئے",
   "checklistApprovalSignatureRedraw": "نیا دستخط بنائیں",
-
   "meterLogNavTitle": "میٹر ریڈنگ ریکارڈ کریں",
   "meterLogWorkspaceLoadingMessage": "آپ کا ورک اسپیس ابھی لوڈ ہو رہا ہے۔ براہ کرم تھوڑی دیر بعد دوبارہ کوشش کریں۔",
   "meterLogAssetLabel": "اثاثہ",
@@ -569,7 +540,6 @@
   "meterLogRecentEmptyMessage": "ابھی تک کوئی ریڈنگ درج نہیں کی گئی۔",
   "meterLogRecentLoadErrorMessage": "حالیہ ریڈنگز لوڈ نہیں ہو سکیں۔",
   "meterLogRecentKmValue": "{km} کلومیٹر",
-
   "washNavTitle": "گاڑی کی دھلائی درج کریں",
   "washWorkspaceLoadingMessage": "آپ کا ورک اسپیس ابھی لوڈ ہو رہا ہے۔ براہ کرم تھوڑی دیر بعد دوبارہ کوشش کریں۔",
   "washDueTitle": "دھلائی کے لیے واجب",
@@ -620,7 +590,6 @@
   "washRecentTitle": "حالیہ دھلائیاں",
   "washRecentEmptyMessage": "ابھی تک کوئی دھلائی درج نہیں کی گئی۔",
   "washRecentLoadErrorMessage": "حالیہ دھلائیاں لوڈ نہیں ہو سکیں۔",
-
   "homeNavTitle": "ہوم",
   "homeGreeting": "خوش آمدید",
   "homeGoodMorning": "صبح بخیر،",
@@ -666,7 +635,6 @@
   "homeStatUnavailableCaption": "جانچ نہیں ہو سکی",
   "homeRoleCopyCatalog": "meterTitle=آج کا میٹر درج کریں~meterNotLogged=آج درج نہیں ہوا~meterLogged=%time% درج ہوا~problemTitle=مسئلہ یا خرابی رپورٹ کریں~problemHint=ورکشاپ کو بتائیں کیا خراب ہے~exceptionsTitle=آج کے استثنات~offRoad=سڑک سے باہر~openAccidents=کھلے حادثات~maintenanceOverdue=تاخیر شدہ مرمت~tyresAttention=توجہ طلب ٹائر~handoverTitle=آپ کے دستخط کے منتظر حوالگیاں~reportAccident=حادثہ رپورٹ کریں~approvalsTitle=آپ کی منتظر منظوریاں~approvalsSplit=%a% معائنے • %b% چیک لسٹیں~issueTitle=مسئلہ رپورٹ کریں~issueHint=کچھ خراب یا غیر محفوظ ہے~teamTitle=ٹیم ابھی~working=کام پر~waiting=انتظار میں~free=فارغ~teamNote=فارغ کا مطلب حاضری لگائی اور کام نہیں کر رہا۔ غیر حاضری نہیں گنی جا سکتی: حاضری درج نہیں ہوتی۔~assignTitle=کام سونپیں~assignHint=%count% کھلے جاب کارڈ جن پر کوئی مقرر نہیں~assignGap=جاب کارڈ کی فہرست کھلتی ہے۔ فون سے کام سونپنا ابھی دستیاب نہیں۔~myJobsTitle=میرے کام~myJobsCount=%count% کھلے~myJobsNone=کوئی کھلا کام نہیں~plantTitle=آج کے پلانٹ چیک~sheetsDue=%count% شیٹس واجب~allDone=آج سب مکمل~dailyTitle=ورکشاپ ڈیلی~dueToday=آج واجب~signTitle=دستخط کے لیے منظوریاں~signHint=%count% آپ کے دستخط کے منتظر~tyresDueTitle=تبدیلی کے لیے واجب ٹائر~myVehicle=میری گاڑی~noVehicle=ابھی کوئی میٹر درج نہیں~wash=دھلائی درج کریں~washDays=آخری دھلائی %count% دن پہلے~washToday=آج دھلی~washNever=کوئی دھلائی درج نہیں~dailyChecklist=روزانہ چیک لسٹ~charges=میرے جرمانے اور چارجز~chargesHint=جرمانے، چارجز اور آپ کے دستخط~summary=روزانہ خلاصہ اور رپورٹس~alerts=الرٹس~plan=آج کا منصوبہ~planOpen=آج %count% کھلے~repair=مرمت کی درخواست~meter=میٹر لاگ~inspectionsDue=آج کے واجب معائنے~checklistsToSign=دستخط کے لیے چیک لسٹیں~waitingParts=پرزوں کے انتظار میں~blocked=30 منٹ سے زیادہ رکا ہوا~requestParts=پرزے منگوائیں~recent=حالیہ معائنے~reorder=دوبارہ آرڈر کے لیے اسٹاک~sync=ہم آہنگی باقی~more=مزید~open=کھولیں",
   "homeNoQuickActionsMessage": "ابھی آپ کے لیے یہاں کچھ دستیاب نہیں ہے۔ اگر آپ کو کسی فیچر تک رسائی درکار ہو تو اپنے منتظم سے رابطہ کریں۔",
-
   "workOrdersNavTitle": "ورک آرڈرز",
   "workOrdersActiveCount": "{count} فعال",
   "workOrdersFilterActive": "فعال",
@@ -676,7 +644,6 @@
   "workOrdersLoadErrorMessage": "ورک آرڈرز ابھی لوڈ نہیں ہو سکے۔",
   "workOrdersStatusOpenFallback": "کھلا",
   "workOrdersWorkTypeFallback": "عمومی کام",
-
   "workOrderNewTitle": "نیا ورک آرڈر",
   "workOrderAssetLabel": "اثاثہ",
   "workOrderAssetHint": "مثال: TM514",
@@ -689,23 +656,19 @@
   "workOrderSavedMessage": "ورک آرڈر درج ہو گیا۔ یہ خودکار طور پر مطابقت پذیر ہو جائے گا۔",
   "workOrderSaveFailedMessage": "محفوظ نہیں ہو سکا۔ دوبارہ کوشش کریں۔",
   "workOrderWorkspaceLoadingMessage": "آپ کا ورک اسپیس ابھی لوڈ ہو رہا ہے۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔",
-
   "workOrderWorkTypeTyreChange": "ٹائر تبدیلی",
   "workOrderWorkTypeRepair": "مرمت",
   "workOrderWorkTypeRotation": "گردش",
   "workOrderWorkTypeAlignment": "الائنمنٹ",
   "workOrderWorkTypeInspection": "معائنہ",
   "workOrderWorkTypeOther": "دیگر",
-
   "workOrderPriorityLow": "کم",
   "workOrderPriorityMedium": "درمیانی",
   "workOrderPriorityHigh": "زیادہ",
   "workOrderPriorityCritical": "نازک",
-
   "workOrderAdvanceToInProgress": "جاری ہے",
   "workOrderAdvanceToCompleted": "مکمل",
   "workOrderStatusQueuedMessage": "حالت کی تازہ کاری محفوظ ہو گئی۔ یہ خودکار طور پر مطابقت پذیر ہو جائے گی۔",
-
   "workOrderDetailTitle": "ورک آرڈر",
   "workOrderNotFoundTitle": "ورک آرڈر نہیں ملا",
   "workOrderNotFoundMessage": "یہ ورک آرڈر نہیں مل سکا، یا اب آپ کو اس تک رسائی حاصل نہیں ہے۔",
@@ -758,7 +721,6 @@
   "tyreReplaceDoneAction": "ہو گیا",
   "tyreReplaceSaveFailedTitle": "ٹائر کی تبدیلی محفوظ نہیں ہو سکی",
   "tyreReplaceTryAgainFallback": "کچھ غلط ہو گیا۔ دوبارہ کوشش کریں۔",
-
   "tyreDiagramModeLayout": "لے آؤٹ ویو",
   "tyreDiagramModeList": "فہرست ویو",
   "tyreDiagramStatTotal": "کل ٹائر",
@@ -771,7 +733,6 @@
   "tyreDiagramListNotRecorded": "ریکارڈ نہیں ہوا",
   "tyreDiagramListEmptyTitle": "ابھی تک کچھ ریکارڈ نہیں ہوا",
   "tyreDiagramListEmptyMessage": "لے آؤٹ ویو پر جائیں اور حالت ریکارڈ کرنے کے لیے ٹائر پر ٹیپ کریں۔",
-
   "tyreDetailTitle": "ٹائر کی تفصیل",
   "tyreDetailStatTread": "ٹریڈ کی گہرائی",
   "tyreDetailStatPressure": "دباؤ",
@@ -793,7 +754,6 @@
   "tyreDetailRemainingKmCaption": "فلیٹ عمر کا تخمینہ",
   "tyreDetailRemainingKmUnavailable": "پیمائش شدہ عمر کا تخمینہ دستیاب نہیں",
   "tyreDetailNoEvidenceMessage": "اس ٹائر کے لیے ابھی تک کچھ ریکارڈ نہیں کیا گیا۔",
-
   "takeActionTitle": "کارروائی کریں",
   "takeActionReplaceTyre": "ٹائر تبدیل کریں",
   "takeActionReplaceTyreSubtitle": "اس پہیے پر لگائے گئے نئے ٹائر کا اندراج کریں",
@@ -807,7 +767,6 @@
   "takeActionSendToRetread": "ری ٹریڈ کے لیے بھیجیں",
   "takeActionMarkAsSpare": "اسپیئر کے طور پر نشان زد کریں",
   "takeActionComingSoonCaption": "یہ سہولت ابھی اس ورژن میں دستیاب نہیں ہے",
-
   "reportDefectTitle": "خرابی کی اطلاع دیں",
   "reportDefectTitleFieldLabel": "عنوان",
   "reportDefectTitleFieldHint": "مثلاً: پچھلے بیرونی ٹائر میں پنکچر",
@@ -822,14 +781,12 @@
   "reportDefectSavedTitle": "مرمت کی درخواست محفوظ ہو گئی",
   "reportDefectSavedMessage": "یہ خودکار طور پر مطابقت پذیر ہو جائے گی۔",
   "reportDefectSaveFailedTitle": "مرمت کی درخواست محفوظ نہیں ہو سکی",
-
   "damageReasonPuncture": "پنکچر",
   "damageReasonSidewall": "سائیڈ وال کو نقصان",
   "damageReasonTreadWear": "ٹریڈ کی گھساوٹ",
   "damageReasonBlowout": "پھٹ جانا",
   "damageReasonImpact": "ٹکراؤ سے نقصان",
   "damageReasonOther": "دیگر",
-
   "globalSearchTitle": "تلاش",
   "globalSearchSubtitle": "اثاثہ، ٹائر، ورک آرڈر یا معائنہ تلاش کریں",
   "globalSearchPlaceholder": "اثاثہ، رجسٹریشن، چیسس، فلیٹ نمبر، سیریل، ورک آرڈر...",
@@ -846,7 +803,6 @@
   "globalSearchSectionWorkOrders": "ورک آرڈرز",
   "globalSearchSectionInspections": "معائنے",
   "globalSearchSourceFailedNotice": "کچھ نتائج ابھی چیک نہیں ہو سکے۔ ریفریش کرنے کے لیے نیچے کھینچیں یا دوبارہ کوشش کریں۔",
-
   "loginAppSubtitle": "انسپکٹر ایپ",
   "loginTagline": "فلیٹ · ورکشاپ · معائنے · ٹائر · حفاظت",
   "loginCardTitle": "سائن ان کریں",
@@ -859,7 +815,6 @@
   "loginHidePassword": "پاس ورڈ چھپائیں",
   "loginErrorRequired": "براہ کرم لاگ ان اور پاس ورڈ درج کریں۔",
   "loginErrorLocked": "{minutes, plural, =1{بہت زیادہ ناکام کوششیں۔ براہ کرم 1 منٹ بعد دوبارہ کوشش کریں۔} other{بہت زیادہ ناکام کوششیں۔ براہ کرم {minutes} منٹ بعد دوبارہ کوشش کریں۔}}",
-
   "loginOperationsTitle": "ہر PMV اثاثے کے لیے ایک پلیٹ فارم",
   "loginWelcomeTitle": "دوبارہ خوش آمدید",
   "loginWelcomeSubtitle": "اپنے تفویض کردہ فلیٹ، ورکشاپ اور فیلڈ کاموں تک رسائی حاصل کریں",
@@ -875,7 +830,6 @@
   "loginScopeInspectionsChecklists": "معائنے اور چیک لسٹس",
   "loginScopeMaintenanceWorkshop": "دیکھ بھال اور ورکشاپ",
   "loginSecurityCopyCatalog": "secure=محفوظ کمپنی ورک اسپیس · %country%~forgot=پاس ورڈ بھول گئے؟~access=رسائی چاہیے؟ اپنے منتظم سے رابطہ کریں~or=یا~biometric=ڈیوائس بایومیٹرکس استعمال کریں~authorized=اپنی کمپنی کے دیے ہوئے اکاؤنٹ سے سائن ان کریں~audited=سرگرمی کا آڈٹ کیا جاتا ہے~version=ورژن %version%~biometricReason=Tyre Pulse میں سائن ان کے لیے اپنی شناخت کی تصدیق کریں~biometricUnavailable=ڈیوائس بایومیٹرکس دستیاب یا رجسٹرڈ نہیں ہیں۔~biometricLocked=ڈیوائس بایومیٹرکس عارضی طور پر مقفل ہیں۔ اپنا پاس ورڈ استعمال کریں۔~biometricFailed=ڈیوائس کی تصدیق مکمل نہیں ہو سکی۔~credentialsRequired=ڈیوائس بایومیٹرکس استعمال کرنے سے پہلے ای میل یا ملازم نمبر اور پاس ورڈ درج کریں۔~helpTitle=سائن ان مدد~forgotHelp=پاس ورڈ ری سیٹ Tyre Pulse منتظم سنبھالتا ہے۔ رسائی بحال کرنے کے لیے منتظم سے رابطہ کریں۔~accessHelp=Tyre Pulse منتظم موبائل رسائی اور اکاؤنٹ کی منظوری سنبھالتا ہے۔",
-
   "profileNavTitle": "پروفائل",
   "profileRoleLabel": "کردار",
   "profileSuperAdminBadge": "پلیٹ فارم ایڈمنسٹریٹر",
@@ -3926,5 +3880,6 @@
   "syncQueuePhotoRemoved": "تصویر ہٹا دی گئی۔ ریکارڈ اس کے بغیر بھیجا جائے گا۔",
   "syncQueuePhotoActionFailed": "یہ کام نہیں ہوا۔ دوبارہ کوشش کریں۔",
   "fleetListOffRoadFilter": "سڑک سے باہر",
-  "inspectionPickerCollapsedNote": "رجسٹر کی {rows} قطاروں سے {assets} اثاثہ نمبر۔ ایک سے زیادہ ملک میں استعمال ہونے والا نمبر ایک بار دکھایا گیا ہے: درست مشین کے معائنے کے لیے ملک منتخب کریں۔"
+  "inspectionPickerCollapsedNote": "رجسٹر کی {rows} قطاروں سے {assets} اثاثہ نمبر۔ ایک سے زیادہ ملک میں استعمال ہونے والا نمبر ایک بار دکھایا گیا ہے: درست مشین کے معائنے کے لیے ملک منتخب کریں۔",
+  "workshopIntakeCopyCatalog": "title=گاڑیوں کی آمد~subtitle=گاڑیاں شامل کریں اور آپ کو بھیجی گئی گاڑیوں کی تصدیق کریں~open=گاڑیوں کی آمد~waitingBanner=%n% گاڑیاں آپ کی تصدیق کی منتظر ہیں~waitingBannerOne=ایک گاڑی آپ کی تصدیق کی منتظر ہے~tabWaiting=میرے منتظر~tabAdd=گاڑی شامل کریں~noAccess=آپ کو ورکشاپ گاڑیاں شامل کرنے یا ان کی تصدیق کی اجازت درکار ہے۔ اپنے ایڈمنسٹریٹر سے کہیں۔~loading=گاڑیاں لوڈ ہو رہی ہیں~loadFailed=گاڑیاں لوڈ نہیں ہو سکیں۔~emptyTitle=آپ کا کوئی انتظار نہیں~emptyMessage=آپ کو بھیجی گئی نئی گاڑیاں یہاں نظر آئیں گی۔ دوبارہ دیکھنے کے لیے نیچے کھینچیں۔~enteredBy=%name% نے درج کی~system=سسٹم~jobCard=جاب کارڈ~ownEntry=یہ آپ نے درج کی ہے۔ کوئی دوسرا سپروائزر تصدیق کرے گا۔~confirm=تصدیق~return=واپس کریں~confirmed=گاڑی کی تصدیق ہو گئی۔~confirmFailed=گاڑی کی تصدیق نہیں ہو سکی۔~notRouted=یہ گاڑی آپ کو نہیں بھیجی گئی۔~alreadyConfirmed=کسی اور نے پہلے ہی اس گاڑی کی تصدیق کر دی ہے۔~refused=آپ اپنی درج کی ہوئی گاڑی کی تصدیق نہیں کر سکتے۔~returnTitle=درج کرنے والے کو واپس کریں~reason=وجہ~reasonHint=کیا درست کرنا ہے؟~reasonShort=کم از کم 5 حروف لکھیں۔~returned=گاڑی واپس کر دی گئی۔~returnFailed=گاڑی واپس نہیں ہو سکی۔~cancel=منسوخ~assetCode=اثاثہ کوڈ~assetRequired=اثاثہ کوڈ درج کریں۔~site=ورکشاپ سائٹ~siteHint=گاڑی کی اپنی سائٹ کے لیے خالی چھوڑ دیں~complaint=شکایت~jobCardNo=جاب کارڈ نمبر (اختیاری)~workType=کام کی قسم~priority=ترجیح~notSet=مقرر نہیں~send=سپروائزر کو بھیجیں~sent=بھیج دیا گیا۔ ڈیوٹی پر موجود سپروائزر کو اطلاع ملے گی۔~updatedRow=اپ ڈیٹ ہو گیا۔~sameRow=کچھ نہیں بدلا۔~listedRow=یہ گاڑی پہلے سے ورکشاپ کی فہرست میں ہے۔~invalidRow=اثاثہ کوڈ چیک کریں۔~releasedRow=یہ گاڑی پہلے ہی ریلیز ہو چکی ہے۔~sendFailed=گاڑی نہیں بھیجی جا سکی۔ سگنل چیک کر کے دوبارہ کوشش کریں۔~pickCountry=پہلے ایک ملک منتخب کریں۔ گاڑیاں ہر ملک کے لیے الگ درج ہوتی ہیں۔~wt_Repair=مرمت~wt_Emergency=خرابی~wt_Preventive Maintenance=حفاظتی دیکھ بھال~wt_Service=سروس~wt_Tyre Change=ٹائر کی تبدیلی~wt_Inspection=معائنہ~wt_Other=دیگر~pr_Low=کم~pr_Medium=درمیانی~pr_High=زیادہ~pr_Critical=انتہائی~src_sheet=مشترکہ شیٹ~src_phone=فون~src_manual=دستی اندراج~src_erp=ERP جاب کارڈ~src_excel_upload=روزانہ Excel"
 }

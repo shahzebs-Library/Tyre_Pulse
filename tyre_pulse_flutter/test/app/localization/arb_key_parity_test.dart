@@ -710,10 +710,12 @@ void main() {
     // 2881 + 2 = 2883: the fleet list's "Off road" drill-down chip
     // (fleetListOffRoadFilter) and the Inspect picker's note on why its All
     // count is lower than the register (inspectionPickerCollapsedNote).
-    test('en, ar and ur each carry exactly 2883 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2883);
-      expect(_translatableKeys(ar).length, 2883);
-      expect(_translatableKeys(ur).length, 2883);
+    // 2883 + 1 = 2884: workshopIntakeCopyCatalog, Workshop Status vehicle
+    // intake on the phone (waiting for me, add vehicle).
+    test('en, ar and ur each carry exactly 2884 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2884);
+      expect(_translatableKeys(ar).length, 2884);
+      expect(_translatableKeys(ur).length, 2884);
     });
   });
 

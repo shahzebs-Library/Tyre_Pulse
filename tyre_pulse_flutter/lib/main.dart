@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tyre_pulse/app/config/app_config.dart';
+import 'package:tyre_pulse/app/intro/intro_seen_store.dart';
+import 'package:tyre_pulse/app/intro/tp_intro.dart';
 import 'package:tyre_pulse/app/inventory/physical_outbox_sync_binding.dart';
 import 'package:tyre_pulse/app/localization/tp_localizations.dart';
 import 'package:tyre_pulse/app/push/push_binding.dart';
@@ -206,10 +208,16 @@ Future<void> main() async {
     ),
   );
 
+  // The first-run intro flag, read before the first frame for the same
+  // reason. An unreadable flag counts as "seen" (never blocks the app).
+  final IntroSeenStore introSeenStore =
+      await SharedPreferencesIntroSeenStore.load();
+
   runApp(
     ProviderScope(
       overrides: [
         displaySettingsStoreProvider.overrideWithValue(displaySettingsStore),
+        introSeenStoreProvider.overrideWithValue(introSeenStore),
         ...authLayerOverrides,
         secureStoreProvider.overrideWithValue(secureStore),
         telemetryReporterProvider.overrideWithValue(telemetry),
@@ -442,7 +450,11 @@ class TyrePulseApp extends ConsumerWidget {
               child: PhysicalOutboxSyncBinding(
                 child: FleetVerificationSyncBinding(
                   child: PhotoRetryBinding(
-                    child: child ?? const SizedBox.shrink(),
+                    // The first-run intro lies over whatever the router
+                    // shows; it never decides where the app goes.
+                    child: TpIntroGate(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               ),

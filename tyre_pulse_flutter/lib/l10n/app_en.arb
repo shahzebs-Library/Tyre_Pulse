@@ -10623,5 +10623,21 @@
   "tyreEditorConditionSelected": "Selected",
   "@tyreEditorConditionSelected": {},
   "tyreEditorPositionMap": "Position on the vehicle",
-  "@tyreEditorPositionMap": {}
+  "@tyreEditorPositionMap": {},
+  "introTagline": "FLEET TYRE OPERATIONS",
+  "@introTagline": {
+    "description": "First-run intro tagline under the TYRE PULSE wordmark."
+  },
+  "introSkip": "Skip",
+  "@introSkip": {
+    "description": "Button on the first-run intro that ends it."
+  },
+  "introSkipSemantics": "Skip the intro",
+  "@introSkipSemantics": {
+    "description": "Screen reader label of the intro Skip button."
+  },
+  "profileReplayIntro": "Replay intro",
+  "@profileReplayIntro": {
+    "description": "Profile row that plays the first-run intro again."
+  }
 }

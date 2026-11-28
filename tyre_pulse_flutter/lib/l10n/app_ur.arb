@@ -4038,5 +4038,9 @@
   "tyreEditorPreviousReading": "آخری معائنہ {date}: {values}",
   "tyreEditorPreviousReadingUndated": "آخری معائنہ: {values}",
   "tyreEditorConditionSelected": "منتخب",
-  "tyreEditorPositionMap": "گاڑی پر جگہ"
+  "tyreEditorPositionMap": "گاڑی پر جگہ",
+  "introTagline": "فلیٹ ٹائر آپریشنز",
+  "introSkip": "چھوڑیں",
+  "introSkipSemantics": "تعارف چھوڑیں",
+  "profileReplayIntro": "تعارف دوبارہ دیکھیں"
 }

@@ -716,10 +716,12 @@ void main() {
     // 2995 -> 2996: merged branch keys.
     // 2996 -> 3006: merged branch keys.
     // 3006 -> 3041: merged branch keys.
-    test('en, ar and ur each carry exactly 3041 translatable keys today', () {
-      expect(_translatableKeys(en).length, 3041);
-      expect(_translatableKeys(ar).length, 3041);
-      expect(_translatableKeys(ur).length, 3041);
+    // 3041 + 4 = 3045: first-run intro (introTagline, introSkip,
+    // introSkipSemantics) and Profile's profileReplayIntro row.
+    test('en, ar and ur each carry exactly 3045 translatable keys today', () {
+      expect(_translatableKeys(en).length, 3045);
+      expect(_translatableKeys(ar).length, 3045);
+      expect(_translatableKeys(ur).length, 3045);
     });
   });
 

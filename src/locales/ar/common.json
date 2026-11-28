@@ -70,5 +70,12 @@
     "damaged": "تالف",
     "missing": "مفقود",
     "none": "لم يُفحص"
+  },
+  "intro": {
+    "label": "مقدمة تاير بلس",
+    "skip": "تخطي",
+    "skipLabel": "تخطي المقدمة",
+    "tagline": "إدارة إطارات الأسطول",
+    "secondary": "FLEET TYRE OPERATIONS"
   }
 }

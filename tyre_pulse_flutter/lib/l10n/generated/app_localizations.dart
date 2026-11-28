@@ -18347,6 +18347,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Position on the vehicle'**
   String get tyreEditorPositionMap;
+
+  /// First-run intro tagline under the TYRE PULSE wordmark.
+  ///
+  /// In en, this message translates to:
+  /// **'FLEET TYRE OPERATIONS'**
+  String get introTagline;
+
+  /// Button on the first-run intro that ends it.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get introSkip;
+
+  /// Screen reader label of the intro Skip button.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip the intro'**
+  String get introSkipSemantics;
+
+  /// Profile row that plays the first-run intro again.
+  ///
+  /// In en, this message translates to:
+  /// **'Replay intro'**
+  String get profileReplayIntro;
 }
 
 class _AppLocalizationsDelegate

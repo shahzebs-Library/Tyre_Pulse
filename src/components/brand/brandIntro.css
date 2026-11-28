@@ -1,0 +1,106 @@
+/* First-visit brand intro. Fixed brand palette (asphalt #161616, signal yellow
+   #FFC629) whatever the light/dark theme, because it is the brand moment. */
+.tp-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background: #161616;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: "Archivo", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+  opacity: 1;
+  transition: opacity 450ms ease;
+}
+.tp-intro--leaving { opacity: 0; pointer-events: none; }
+
+.tp-intro__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(10px, 2.2vmin, 26px);
+  padding: 0 24px;
+  text-align: center;
+}
+
+.tp-intro__mark {
+  width: clamp(130px, 30vmin, 300px);
+  height: auto;
+  transform-origin: 50% 50%;
+  overflow: visible;
+}
+.tp-intro__blk { fill: #FFC629; }
+
+.tp-intro__word {
+  font-weight: 800;
+  font-size: clamp(34px, 8vmin, 92px);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.tp-intro__word-a { color: #fff; }
+.tp-intro__word-b { color: #FFC629; }
+
+.tp-intro__pulse {
+  width: clamp(220px, 60vmin, 560px);
+  height: auto;
+}
+
+.tp-intro__tags { display: flex; flex-direction: column; gap: 0.5em; }
+.tp-intro__tag {
+  color: #9a9a9a;
+  font-size: clamp(11px, 2.1vmin, 20px);
+  font-weight: 600;
+  letter-spacing: 0.35em;
+}
+.tp-intro[dir="rtl"] .tp-intro__tag { letter-spacing: 0; font-size: clamp(14px, 2.6vmin, 24px); }
+.tp-intro__tag2 {
+  color: #9a9a9a;
+  font-size: clamp(12px, 2.2vmin, 22px);
+  font-family: "IBM Plex Sans Arabic", "Geeza Pro", "Noto Naskh Arabic", sans-serif;
+}
+.tp-intro[dir="rtl"] .tp-intro__tag2 {
+  font-family: "Archivo", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.3em;
+  font-size: clamp(10px, 1.8vmin, 17px);
+}
+
+/* Skip sits at the inline end: right in LTR, left in RTL. */
+.tp-intro__skip {
+  position: absolute;
+  top: max(20px, env(safe-area-inset-top));
+  inset-inline-end: 24px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.tp-intro__skip:hover { border-color: #FFC629; }
+.tp-intro__skip:focus-visible { outline: 3px solid #FFC629; outline-offset: 3px; }
+
+.tp-intro__bar {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.tp-intro[dir="rtl"] .tp-intro__bar { transform: scaleX(-1); }
+.tp-intro__bar i { display: block; height: 100%; width: 0; background: #FFC629; border-radius: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-intro { transition-duration: 200ms; }
+}

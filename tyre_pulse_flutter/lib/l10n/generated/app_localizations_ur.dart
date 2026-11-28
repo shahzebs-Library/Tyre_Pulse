@@ -10622,4 +10622,16 @@ class AppLocalizationsUr extends AppLocalizations {
 
   @override
   String get tyreEditorPositionMap => 'گاڑی پر جگہ';
+
+  @override
+  String get introTagline => 'فلیٹ ٹائر آپریشنز';
+
+  @override
+  String get introSkip => 'چھوڑیں';
+
+  @override
+  String get introSkipSemantics => 'تعارف چھوڑیں';
+
+  @override
+  String get profileReplayIntro => 'تعارف دوبارہ دیکھیں';
 }

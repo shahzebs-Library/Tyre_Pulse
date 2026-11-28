@@ -70,5 +70,12 @@
     "damaged": "خراب",
     "missing": "غائب",
     "none": "چیک نہیں ہوا"
+  },
+  "intro": {
+    "label": "ٹائر پلس تعارف",
+    "skip": "چھوڑیں",
+    "skipLabel": "تعارف چھوڑیں",
+    "tagline": "فلیٹ ٹائر آپریشنز",
+    "secondary": "FLEET TYRE OPERATIONS"
   }
 }

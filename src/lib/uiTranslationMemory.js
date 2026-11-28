@@ -104,11 +104,23 @@ function localiseElement(element, enabled) {
   }
 }
 
+// The standard HTML translate="no" opts a subtree out (brand wordmarks such as
+// TYRE PULSE must stay Latin in every language).
+const NO_TRANSLATE = '[translate="no"]'
+function optedOut(node) {
+  const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement
+  return !!el?.closest?.(NO_TRANSLATE)
+}
+
 export function localiseLegacyDom(root, enabled) {
   if (!root) return
+  if (enabled && optedOut(root)) return
   if (root.nodeType === Node.TEXT_NODE) localiseTextNode(root, enabled)
   if (root.nodeType === Node.ELEMENT_NODE) localiseElement(root, enabled)
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (enabled && n.nodeType === Node.ELEMENT_NODE && n.matches?.(NO_TRANSLATE)
+      ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  })
   let node = walker.nextNode()
   while (node) {
     if (node.nodeType === Node.TEXT_NODE) localiseTextNode(node, enabled)

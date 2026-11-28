@@ -118,6 +118,12 @@ class _TpIntroState extends State<TpIntro> with SingleTickerProviderStateMixin {
     final String tagline = l10n.introTagline;
     // Letter spacing breaks Arabic script joining; only Latin is tracked.
     final bool latinTagline = RegExp(r'^[\x00-\x7F]*$').hasMatch(tagline);
+    // Second line in the other script, same as the website intro: Arabic
+    // under English or Urdu, English under Arabic.
+    final String secondary =
+        Localizations.localeOf(context).languageCode == 'ar'
+            ? _taglineEnglish
+            : _taglineArabic;
 
     return Material(
       key: TpIntroKeys.overlay,
@@ -145,6 +151,7 @@ class _TpIntroState extends State<TpIntro> with SingleTickerProviderStateMixin {
                             frame: f,
                             tagline: tagline,
                             latinTagline: latinTagline,
+                            secondary: secondary,
                           ),
                         ),
                       ),
@@ -224,17 +231,23 @@ class _IntroFrame {
   double get progress => _clamp01(t / 6);
 }
 
+// Brand tagline lines shown together (not translations of each other's UI).
+const String _taglineEnglish = 'FLEET TYRE OPERATIONS';
+const String _taglineArabic = 'إدارة إطارات الأسطول';
+
 /// The 1080x1920 design canvas, scaled to the screen by a [FittedBox].
 class _Stage extends StatelessWidget {
   const _Stage({
     required this.frame,
     required this.tagline,
     required this.latinTagline,
+    required this.secondary,
   });
 
   final _IntroFrame frame;
   final String tagline;
   final bool latinTagline;
+  final String secondary;
 
   @override
   Widget build(BuildContext context) {
@@ -310,6 +323,24 @@ class _Stage extends StatelessWidget {
                 fontSize: latinTagline ? 40 : 48,
                 fontWeight: FontWeight.w600,
                 letterSpacing: latinTagline ? 14 : 0,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 40,
+          right: 40,
+          top: 1480,
+          child: Opacity(
+            opacity: f.tagline,
+            child: Text(
+              secondary,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              style: TextStyle(
+                color: _IntroColors.muted,
+                fontSize: secondary == _taglineEnglish ? 34 : 44,
+                letterSpacing: secondary == _taglineEnglish ? 10 : 0,
               ),
             ),
           ),

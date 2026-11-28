@@ -34,6 +34,7 @@ import 'package:tyre_pulse/core/workspace/workspace_providers.dart';
 import 'package:tyre_pulse/features/inspections/data/inspection_submission_queue_reads.dart';
 import 'package:tyre_pulse/features/inspections/domain/queued_inspection.dart';
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
+import 'package:tyre_pulse/features/inventory/physical_inventory_providers.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
 import 'package:tyre_pulse/features/profile/domain/combine_latest.dart';
 
@@ -68,6 +69,14 @@ final StreamProvider<int> profilePendingSyncCountProvider =
     StreamProvider<int>((ref) {
   final WorkspaceContext? workspace = ref.watch(workspaceContextProvider);
   if (workspace == null) return Stream<int>.value(0);
+  // Physical counts (Stock Count) wait in their own encrypted outbox, not in
+  // pending_commands; they are added in so an offline count is never "0".
+  final AsyncValue<int> captures =
+      ref.watch(physicalOutboxPendingCountProvider);
+  if (captures case AsyncError<int>(:final Object error)) {
+    return Stream<int>.error(error);
+  }
+  final int extra = captures.value ?? 0;
   final AppDatabase db = ref.watch(appDatabaseProvider);
   final Stream<int> commands = db.queueDao.watchPendingCount(
     workspaceId: workspaceIdFor(workspace),
@@ -79,7 +88,7 @@ final StreamProvider<int> profilePendingSyncCountProvider =
   return combineLatestPair<int, int, int>(
     commands,
     inspections,
-    (int a, int b) => a + b,
+    (int a, int b) => a + b + extra,
   ).distinct();
 });
 

@@ -20,11 +20,68 @@ final Provider<StockCountRepository> stockCountRepositoryProvider =
 );
 
 final FutureProvider<List<StockItem>> stockItemsProvider =
-    FutureProvider<List<StockItem>>((Ref ref) {
-  return ref.watch(stockCountRepositoryProvider).list(
-        country: ref.watch(activeCountryProvider),
-      );
-});
+    FutureProvider<List<StockItem>>(
+  (Ref ref) async {
+    final String? country = ref.watch(activeCountryProvider);
+    final List<StockItem> rows =
+        await ref.watch(stockCountRepositoryProvider).list(country: country);
+    ref.read(lastStockItemsProvider.notifier).remember(country, rows);
+    return rows;
+    // No automatic retry: offline the screen keeps the last list with an
+    // "Offline" banner; a retry loop would only turn that into an endless
+    // "Refreshing". Pull to refresh (or the next visit) reads again.
+  },
+  retry: (int retryCount, Object error) => null,
+);
+
+/// The last stock list that loaded, per country, for this app session. When
+/// a reload fails (offline) or is still running, Stock Count keeps showing
+/// this list with a banner instead of a full screen spinner or error: a Store
+/// Keeper counting offline must still see the shelf they are counting.
+final NotifierProvider<LastStockItemsNotifier, Map<String, List<StockItem>>>
+    lastStockItemsProvider =
+    NotifierProvider<LastStockItemsNotifier, Map<String, List<StockItem>>>(
+  LastStockItemsNotifier.new,
+);
+
+final class LastStockItemsNotifier
+    extends Notifier<Map<String, List<StockItem>>> {
+  @override
+  Map<String, List<StockItem>> build() => const <String, List<StockItem>>{};
+
+  static String keyFor(String? country) => (country ?? '').trim();
+
+  void remember(String? country, List<StockItem> rows) {
+    state = <String, List<StockItem>>{...state, keyFor(country): rows};
+  }
+}
+
+/// The Stock Count filters. Home's store tiles open the screen on one.
+enum StockCountFilter { all, low, stale }
+
+/// A filter asked for by whoever opens Stock Count next (Home's "Need
+/// reorder" / "Not counted" / "Items" tiles). The screen applies it once and
+/// clears it. A provider rather than a route parameter because the route
+/// files are reserved wiring.
+final NotifierProvider<RequestedStockFilterNotifier, StockCountFilter?>
+    stockCountRequestedFilterProvider =
+    NotifierProvider<RequestedStockFilterNotifier, StockCountFilter?>(
+  RequestedStockFilterNotifier.new,
+);
+
+final class RequestedStockFilterNotifier extends Notifier<StockCountFilter?> {
+  @override
+  StockCountFilter? build() => null;
+
+  void request(StockCountFilter filter) => state = filter;
+
+  /// Returns the requested filter (if any) and clears it.
+  StockCountFilter? take() {
+    final StockCountFilter? f = state;
+    if (f != null) state = null;
+    return f;
+  }
+}
 
 /// Records a count as physical count evidence (never a stock change).
 final Provider<StockCountRecorder> stockCountRecorderProvider =
@@ -78,6 +135,17 @@ final class CountedTodayNotifier extends Notifier<Map<String, DateTime>> {
 
   void mark(String stockId, DateTime at) {
     state = <String, DateTime>{...state, stockId: at};
+  }
+
+  /// Puts back what was there before a count that was undone.
+  void restore(String stockId, DateTime? previous) {
+    final Map<String, DateTime> next = <String, DateTime>{...state};
+    if (previous == null) {
+      next.remove(stockId);
+    } else {
+      next[stockId] = previous;
+    }
+    state = next;
   }
 }
 

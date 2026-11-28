@@ -713,10 +713,11 @@ void main() {
     // 2883 + 1 = 2884: workshopIntakeCopyCatalog, Workshop Status vehicle
     // intake on the phone (waiting for me, add vehicle).
     // 2884 -> 2995: merged branch keys.
-    test('en, ar and ur each carry exactly 2995 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2995);
-      expect(_translatableKeys(ar).length, 2995);
-      expect(_translatableKeys(ur).length, 2995);
+    // 2995 -> 2996: merged branch keys.
+    test('en, ar and ur each carry exactly 2996 translatable keys today', () {
+      expect(_translatableKeys(en).length, 2996);
+      expect(_translatableKeys(ar).length, 2996);
+      expect(_translatableKeys(ur).length, 2996);
     });
   });
 

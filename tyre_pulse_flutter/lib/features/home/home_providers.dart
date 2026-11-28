@@ -40,6 +40,7 @@ import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.
 import 'package:tyre_pulse/features/inspections/inspections_providers.dart';
 import 'package:tyre_pulse/features/workshop/data/workshop_repository.dart';
 import 'package:tyre_pulse/features/workshop/workshop_providers.dart';
+import 'package:tyre_pulse/features/inventory/physical_inventory_providers.dart';
 
 /// The number Home's sync indicator shows: every queued command not yet
 /// marked `synced` for the active workspace, [QueueDao.pendingCount]'s own
@@ -70,7 +71,11 @@ final FutureProvider<int> homePendingSyncCountProvider = FutureProvider<int>((
       userId: workspace.userId,
     ).then(pendingInspectionCount),
   ]);
-  return counts[0] + counts[1];
+  // Physical counts (Stock Count) wait in their own encrypted outbox, not in
+  // pending_commands; leaving them out made an offline count read "0".
+  final int captures =
+      await ref.watch(physicalOutboxPendingCountProvider.future);
+  return counts[0] + counts[1] + captures;
 });
 
 /// Home's server reads (exact approvals count, recent inspected assets).

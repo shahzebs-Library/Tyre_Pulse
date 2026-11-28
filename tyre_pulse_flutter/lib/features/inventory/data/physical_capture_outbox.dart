@@ -32,6 +32,7 @@
 /// (docs/inventory/102_PHYSICAL_INVENTORY_GUIDE.md section 6).
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -103,6 +104,18 @@ final class PhysicalCaptureOutbox {
   final OutboxLock _lock;
   bool _flushing = false;
 
+  /// Fires after every change this instance makes to any user's outbox, so
+  /// a "Pending sync" count can re-read without polling. A change made by
+  /// another isolate (the background worker) is picked up on the next read.
+  final StreamController<void> _changes = StreamController<void>.broadcast();
+  Stream<void> get changes => _changes.stream;
+
+  /// How many captures are still waiting for [userId] (not yet confirmed by
+  /// the server, including ones the server refused and that wait for the
+  /// person). Throws [StorageReadFailure] when the store could not be read.
+  Future<int> pendingCount(String userId) async =>
+      (await pending(userId)).length;
+
   static String slotFor(String userId) => 'inventory_pi_outbox_v1:$userId';
 
   /// Every capture still waiting for [userId]. Throws [StorageReadFailure]
@@ -122,12 +135,16 @@ final class PhysicalCaptureOutbox {
     String userId,
     List<PendingCapture> Function(List<PendingCapture> current) change,
   ) =>
-      _lock.run(
+      _lock
+          .run(
         () => _store.updateValue(slotFor(userId), (String? raw) {
           final List<PendingCapture> next = change(_decode(raw, userId));
           return next.isEmpty ? null : _encode(next);
         }),
-      );
+      )
+          .whenComplete(() {
+        if (!_changes.isClosed) _changes.add(null);
+      });
 
   /// Adds [capture] (a replay of the same client_uuid replaces nothing).
   Future<void> add(PendingCapture capture) =>
@@ -208,6 +225,22 @@ final class PhysicalCaptureOutbox {
         }
       }
       return next;
+    });
+    return removed;
+  }
+
+  /// Removes a capture the server does NOT have yet (an Undo right after
+  /// recording it). Returns false when it was already sent (or is gone), so
+  /// sent evidence is never taken back from here.
+  Future<bool> discardUnsent(String userId, String clientUuid) async {
+    bool removed = false;
+    await _mutate(userId, (List<PendingCapture> all) {
+      final List<PendingCapture> keep = <PendingCapture>[
+        for (final PendingCapture c in all)
+          if (!(c.clientUuid == clientUuid && !c.captureSent)) c,
+      ];
+      removed = keep.length != all.length;
+      return keep;
     });
     return removed;
   }

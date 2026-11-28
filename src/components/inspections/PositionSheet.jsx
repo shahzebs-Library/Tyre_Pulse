@@ -60,6 +60,12 @@ export default function PositionSheet({ pos, posIdx, total, isLast, unfilledCoun
           borderTop: '1px solid var(--border-subtle)',
           boxShadow: '0 -8px 40px rgba(0,0,0,0.18)',
           paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))',
+          // Never taller than the screen: on short landscape screens the sheet
+          // scrolls (pan-y overrides the dialog's touchAction none).
+          maxHeight: '100dvh',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          touchAction: 'pan-y',
         }}
       >
         <div className="flex justify-center pt-3 pb-1" aria-hidden>

@@ -56,6 +56,27 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Apple (ITMS-90725, 2026-11-28): from April 2027 uploads must be built
+      # with the iOS 27 SDK or later. macos-latest keeps an older Xcode as its
+      # default, so pick the newest installed Xcode, print the SDK, and refuse
+      # to build with an SDK older than 27 once the deadline is near.
+      - name: Use the newest installed Xcode
+        run: |
+          NEWEST="$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -v -i beta | sort -V | tail -1)"
+          if [ -n "$NEWEST" ]; then sudo xcode-select -s "$NEWEST/Contents/Developer"; fi
+          xcodebuild -version
+          SDK="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "iOS SDK: $SDK"
+          echo "Built with iOS SDK $SDK ($(xcodebuild -version | head -1))" >> "$GITHUB_STEP_SUMMARY"
+          MAJOR="${SDK%%.*}"
+          if [ "$MAJOR" -lt 27 ]; then
+            if [ "$(date -u +%Y%m%d)" -ge 20270301 ]; then
+              echo "::error::iOS SDK $SDK is too old: Apple refuses uploads built below iOS 27 SDK from April 2027. Use a runner image with Xcode 27 or later."
+              exit 1
+            fi
+            echo "::warning::iOS SDK $SDK. Apple requires the iOS 27 SDK (Xcode 27) for uploads from April 2027."
+          fi
+
       - name: Check the Apple secrets exist
         env:
           ISSUER: ${{ secrets.APPSTORE_ISSUER_ID }}

@@ -36,6 +36,7 @@ import 'package:tyre_pulse/features/alerts/domain/tyre_alert.dart';
 import 'package:tyre_pulse/features/home/domain/home_work.dart';
 import 'package:tyre_pulse/features/home/home_providers.dart';
 import 'package:tyre_pulse/features/home/presentation/home_screen.dart';
+import 'package:tyre_pulse/features/home/presentation/home_services_menu.dart';
 import 'package:tyre_pulse/features/inspections/domain/inspection_draft_summary.dart';
 import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
@@ -1233,6 +1234,154 @@ void main() {
           findsNothing,
         );
       }
+    });
+  });
+
+  group('All services menu', () {
+    Future<void> openMenu(WidgetTester tester) async {
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(HomeScreenKeys.action('menu')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the header menu icon opens a full page with grouped sections',
+        (WidgetTester tester) async {
+      await _pumpHome(tester, access: _admin);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Menu'), findsOneWidget);
+      await openMenu(tester);
+
+      expect(find.text('All services'), findsOneWidget);
+      expect(find.byKey(HomeServicesMenuKeys.search), findsOneWidget);
+      expect(find.byKey(HomeServicesMenuKeys.list), findsOneWidget);
+      expect(find.text('Field work'), findsOneWidget);
+      expect(find.byKey(HomeServicesMenuKeys.tile('scanner')), findsOneWidget);
+      // A pushed page, not a sheet: there is no modal bottom sheet.
+      expect(find.byType(BottomSheet), findsNothing);
+      final Finder scroll = find.descendant(
+        of: find.byKey(HomeServicesMenuKeys.list),
+        matching: find.byType(Scrollable),
+      );
+      for (final String heading in <String>[
+        'Fleet',
+        'Maintenance and workshop',
+        'Management',
+        'Approvals',
+      ]) {
+        await tester.scrollUntilVisible(
+          find.descendant(
+            of: find.byKey(HomeServicesMenuKeys.list),
+            matching: find.text(heading),
+          ),
+          200,
+          scrollable: scroll,
+        );
+      }
+      expect(tester.takeException(), isNull);
+
+      // Back returns to Home.
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byKey(HomeScreenKeys.hero), findsOneWidget);
+    });
+
+    testWidgets('More opens the same page', (WidgetTester tester) async {
+      await _pumpHome(tester, access: _admin);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(HomeScreenKeys.action('more')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(HomeScreenKeys.action('more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(HomeScreenKeys.action('more')));
+      await tester.pumpAndSettle();
+      expect(find.text('All services'), findsOneWidget);
+    });
+
+    testWidgets('search filters tiles and shows an empty state',
+        (WidgetTester tester) async {
+      await _pumpHome(tester, access: _admin);
+      await openMenu(tester);
+
+      await tester.enterText(find.byKey(HomeServicesMenuKeys.search), 'TEAM');
+      await tester.pumpAndSettle();
+      expect(find.byKey(HomeServicesMenuKeys.tile('team')), findsOneWidget);
+      expect(find.byKey(HomeServicesMenuKeys.tile('scanner')), findsNothing);
+      expect(find.text('Field work'), findsNothing);
+      expect(find.text('Management'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(HomeServicesMenuKeys.search),
+        'zzzz-nothing',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(HomeServicesMenuKeys.empty), findsOneWidget);
+      expect(find.text('No services match'), findsOneWidget);
+    });
+
+    testWidgets('tapping a tile closes the menu and opens it',
+        (WidgetTester tester) async {
+      final GoRouter router = GoRouter(
+        initialLocation: '/',
+        routes: <RouteBase>[
+          GoRoute(
+            path: '/',
+            builder: (BuildContext context, GoRouterState state) =>
+                const HomeScreen(route: HomeRoute()),
+          ),
+          GoRoute(
+            path: TpRoutePaths.scanner,
+            builder: (BuildContext context, GoRouterState state) =>
+                const Text('scanner-screen'),
+          ),
+        ],
+      );
+      await _pumpHome(tester, access: _admin, router: router);
+      await openMenu(tester);
+      await tester.tap(find.byKey(HomeServicesMenuKeys.tile('scanner')));
+      await tester.pumpAndSettle();
+      expect(find.text('scanner-screen'), findsOneWidget);
+      expect(find.text('All services'), findsNothing);
+    });
+
+    testWidgets('fits 360x640 at 2x text with no overflow',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pumpHome(tester, access: _admin);
+      await openMenu(tester);
+      expect(find.text('All services'), findsOneWidget);
+      final Finder scroll = find.descendant(
+        of: find.byKey(HomeServicesMenuKeys.list),
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(HomeServicesMenuKeys.tile('checklistApprovals')),
+        200,
+        scrollable: scroll,
+      );
+      expect(tester.takeException(), isNull);
+      expect(homeServicesColumns(360, 2), 2);
+      expect(homeServicesColumns(390, 1), 3);
+      expect(homeServicesColumns(700, 1), 4);
+    });
+
+    testWidgets('Arabic renders right-to-left with Arabic headings',
+        (WidgetTester tester) async {
+      await _pumpHome(tester, access: _admin, locale: const Locale('ar'));
+      await openMenu(tester);
+      expect(find.text('جميع الخدمات'), findsOneWidget);
+      expect(find.text('العمل الميداني'), findsOneWidget);
+      final BuildContext ctx =
+          tester.element(find.byKey(HomeServicesMenuKeys.list));
+      expect(Directionality.of(ctx), TextDirection.rtl);
+      await tester.enterText(find.byKey(HomeServicesMenuKeys.search), 'zzzz');
+      await tester.pumpAndSettle();
+      expect(find.text('لا توجد خدمات مطابقة'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

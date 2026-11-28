@@ -2131,6 +2131,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get homeMenuTooltip => 'فتح الخدمات';
 
   @override
+  String get homeMenuButton => 'القائمة';
+
+  @override
+  String get homeServicesTitle => 'جميع الخدمات';
+
+  @override
+  String get homeServicesSearchHint => 'ابحث في الخدمات';
+
+  @override
+  String get homeServicesClearSearch => 'مسح البحث';
+
+  @override
+  String get homeServicesEmpty => 'لا توجد خدمات مطابقة';
+
+  @override
+  String get homeServicesSectionField => 'العمل الميداني';
+
+  @override
+  String get homeServicesSectionFleet => 'الأسطول';
+
+  @override
+  String get homeServicesSectionMaintenance => 'الصيانة والورشة';
+
+  @override
+  String get homeServicesSectionManagement => 'الإدارة';
+
+  @override
+  String get homeServicesSectionApprovals => 'الموافقات';
+
+  @override
   String get homeNotificationsTooltip => 'فتح تنبيهات الإطارات';
 
   @override

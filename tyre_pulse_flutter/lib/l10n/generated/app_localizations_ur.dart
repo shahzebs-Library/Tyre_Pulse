@@ -2133,6 +2133,36 @@ class AppLocalizationsUr extends AppLocalizations {
   String get homeMenuTooltip => 'خدمات کھولیں';
 
   @override
+  String get homeMenuButton => 'مینو';
+
+  @override
+  String get homeServicesTitle => 'تمام خدمات';
+
+  @override
+  String get homeServicesSearchHint => 'خدمات تلاش کریں';
+
+  @override
+  String get homeServicesClearSearch => 'تلاش صاف کریں';
+
+  @override
+  String get homeServicesEmpty => 'کوئی خدمت مماثل نہیں';
+
+  @override
+  String get homeServicesSectionField => 'فیلڈ کا کام';
+
+  @override
+  String get homeServicesSectionFleet => 'بیڑا';
+
+  @override
+  String get homeServicesSectionMaintenance => 'مرمت اور ورکشاپ';
+
+  @override
+  String get homeServicesSectionManagement => 'انتظامیہ';
+
+  @override
+  String get homeServicesSectionApprovals => 'منظوریاں';
+
+  @override
   String get homeNotificationsTooltip => 'ٹائر الرٹس کھولیں';
 
   @override

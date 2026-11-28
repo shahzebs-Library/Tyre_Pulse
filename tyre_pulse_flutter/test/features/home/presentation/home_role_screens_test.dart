@@ -479,7 +479,8 @@ void main() {
     await tester.ensureVisible(more);
     await tester.tap(more);
     await tester.pumpAndSettle();
-    final Finder tile = find.widgetWithText(ListTile, 'Inspection Approvals');
+    final Finder tile =
+        find.byKey(const Key('home.services.tile.inspectionApprovals'));
     await tester.scrollUntilVisible(
       tile,
       200,
@@ -489,6 +490,25 @@ void main() {
       ),
     );
     expect(tile, findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the role Home header menu icon opens All services', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      const AccessState(
+        role: UserRole.known(RoleId.manager),
+        roleMatrix: <ModuleKey, bool>{ModuleKey.approvals: true},
+      ),
+      size: const Size(360, 1400),
+    );
+    expect(find.byKey(HomeScreenKeys.rolePanel), findsOneWidget);
+    await tester.tap(find.byKey(HomeScreenKeys.action('menu')));
+    await tester.pumpAndSettle();
+    expect(find.text('All services'), findsOneWidget);
+    expect(find.byKey(HomeScreenKeys.action('servicesSheet')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

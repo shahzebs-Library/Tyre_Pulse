@@ -3802,6 +3802,66 @@ abstract class AppLocalizations {
   /// **'Open services'**
   String get homeMenuTooltip;
 
+  /// No description provided for @homeMenuButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Menu'**
+  String get homeMenuButton;
+
+  /// No description provided for @homeServicesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'All services'**
+  String get homeServicesTitle;
+
+  /// No description provided for @homeServicesSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search services'**
+  String get homeServicesSearchHint;
+
+  /// No description provided for @homeServicesClearSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get homeServicesClearSearch;
+
+  /// No description provided for @homeServicesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No services match'**
+  String get homeServicesEmpty;
+
+  /// No description provided for @homeServicesSectionField.
+  ///
+  /// In en, this message translates to:
+  /// **'Field work'**
+  String get homeServicesSectionField;
+
+  /// No description provided for @homeServicesSectionFleet.
+  ///
+  /// In en, this message translates to:
+  /// **'Fleet'**
+  String get homeServicesSectionFleet;
+
+  /// No description provided for @homeServicesSectionMaintenance.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance and workshop'**
+  String get homeServicesSectionMaintenance;
+
+  /// No description provided for @homeServicesSectionManagement.
+  ///
+  /// In en, this message translates to:
+  /// **'Management'**
+  String get homeServicesSectionManagement;
+
+  /// No description provided for @homeServicesSectionApprovals.
+  ///
+  /// In en, this message translates to:
+  /// **'Approvals'**
+  String get homeServicesSectionApprovals;
+
   /// No description provided for @homeNotificationsTooltip.
   ///
   /// In en, this message translates to:

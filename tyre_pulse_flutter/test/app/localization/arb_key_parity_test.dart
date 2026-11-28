@@ -718,10 +718,12 @@ void main() {
     // 3006 -> 3041: merged branch keys.
     // 3041 + 4 = 3045: first-run intro (introTagline, introSkip,
     // introSkipSemantics) and Profile's profileReplayIntro row.
-    test('en, ar and ur each carry exactly 3045 translatable keys today', () {
-      expect(_translatableKeys(en).length, 3045);
-      expect(_translatableKeys(ar).length, 3045);
-      expect(_translatableKeys(ur).length, 3045);
+    // 3045 + 10 = 3055: the full "All services" menu (homeMenuButton,
+    // homeServicesTitle, search hint/clear/empty and five section headings).
+    test('en, ar and ur each carry exactly 3055 translatable keys today', () {
+      expect(_translatableKeys(en).length, 3055);
+      expect(_translatableKeys(ar).length, 3055);
+      expect(_translatableKeys(ur).length, 3055);
     });
   });
 

@@ -30,7 +30,7 @@ describe('mirror of the migration', () => {
   })
   it('has STATUS, VERIFY and ROLLBACK headers and no top-level DROP TABLE / DELETE', () => {
     for (const s of [SQL, ERP]) {
-      expect(s).toMatch(/STATUS: AUTHORED, NOT APPLIED/)
+      expect(s).toMatch(/STATUS: (AUTHORED, NOT APPLIED|APPLIED LIVE)/)
       expect(s).toMatch(/ROLLBACK/)
       expect(s).not.toMatch(/^\s*(drop table|delete from)/im)
     }

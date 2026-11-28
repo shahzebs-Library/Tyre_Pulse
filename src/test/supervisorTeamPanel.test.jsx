@@ -45,7 +45,7 @@ describe('SupervisorTeamPanel', () => {
     expect(screen.queryByText('Remove from my team')).toBeNull()
     fireEvent.click(screen.getByRole('tab', { name: 'No vehicle' }))
     await waitFor(() => expect(screen.queryByText('ADIL ABBAS SYED')).toBeNull())
-    expect(screen.getByText('SARFARAJ TASLIM')).toBeInTheDocument()
+    expect(await screen.findByText('SARFARAJ TASLIM')).toBeInTheDocument()
   })
 
   it('filters by driver type on the server', async () => {

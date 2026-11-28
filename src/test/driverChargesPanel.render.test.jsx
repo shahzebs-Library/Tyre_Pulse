@@ -41,6 +41,10 @@ describe('driver charges panel', () => {
     fireEvent.click(await screen.findByText(/DC-2026-00001/))
     fireEvent.click(await screen.findByRole('button', { name: 'Respond and sign' }))
     expect(screen.getByText(/take this amount from my salary/)).toBeInTheDocument()
+    // The driverCharges strings load on demand; under a busy test run they can
+    // arrive after the dialog opens. Wait for them before the validation
+    // message (which is stored as text when Submit is pressed) is produced.
+    await screen.findByText(/ask your supervisor to read it to you/)
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Read and confirm')
     fireEvent.click(screen.getByRole('checkbox'))

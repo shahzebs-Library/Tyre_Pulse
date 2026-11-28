@@ -14,7 +14,7 @@ vi.mock('../lib/api/workshopLive', () => ({
   loadLiveBoard: vi.fn(),
   listTechnicianSkills: vi.fn(async () => ({})),
 }))
-vi.mock('../lib/api/workshopAnalytics', () => ({ loadRangeActivity: vi.fn() }))
+vi.mock('../lib/api/workshopAnalytics', () => ({ loadRangeActivity: vi.fn(async () => ({ events: [], completedJobs: [], shifts: [] })) }))
 
 import * as live from '../lib/api/workshopLive'
 import * as hist from '../lib/api/workshopAnalytics'

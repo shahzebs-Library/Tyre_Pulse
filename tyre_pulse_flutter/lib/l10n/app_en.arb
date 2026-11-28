@@ -10053,5 +10053,356 @@
   "workshopIntakeCopyCatalog": "title=Vehicle intake~subtitle=Add vehicles and confirm the ones sent to you~open=Vehicle intake~waitingBanner=%n% vehicles waiting for you to confirm~waitingBannerOne=1 vehicle waiting for you to confirm~tabWaiting=Waiting for me~tabAdd=Add vehicle~noAccess=You need the Add workshop vehicles or Confirm workshop vehicles permission. Ask your administrator.~loading=Loading vehicles~loadFailed=The vehicles could not be loaded.~emptyTitle=Nothing is waiting for you~emptyMessage=New vehicles routed to you appear here. Pull down to check again.~enteredBy=Entered by %name%~system=System~jobCard=Job card~ownEntry=You entered this one. Another supervisor confirms it.~confirm=Confirm~return=Return~confirmed=Vehicle confirmed.~confirmFailed=The vehicle could not be confirmed.~notRouted=This vehicle is not routed to you.~alreadyConfirmed=Someone already confirmed this vehicle.~refused=You cannot confirm a vehicle you entered.~returnTitle=Return to the person who entered it~reason=Reason~reasonHint=What needs fixing?~reasonShort=Write at least 5 characters.~returned=Vehicle returned.~returnFailed=The vehicle could not be returned.~cancel=Cancel~assetCode=Asset code~assetRequired=Enter the asset code.~site=Workshop site~siteHint=Leave empty to use the vehicle's own site~complaint=Complaint~jobCardNo=Job card no (optional)~workType=Work type~priority=Priority~notSet=Not set~send=Send to supervisor~sent=Sent. The supervisor on shift gets a notice.~updatedRow=Updated.~sameRow=Nothing changed.~listedRow=This vehicle is already in the workshop list.~invalidRow=Check the asset code.~releasedRow=This vehicle was already released.~sendFailed=The vehicle could not be sent. Check the signal and try again.~pickCountry=Choose one country first. Vehicles are entered per country.~wt_Repair=Repair~wt_Emergency=Breakdown~wt_Preventive Maintenance=Preventive maintenance~wt_Service=Service~wt_Tyre Change=Tyre change~wt_Inspection=Inspection~wt_Other=Other~pr_Low=Low~pr_Medium=Medium~pr_High=High~pr_Critical=Critical~src_sheet=Shared sheet~src_phone=Phone~src_manual=Typed~src_erp=ERP job card~src_excel_upload=Daily Excel",
   "@workshopIntakeCopyCatalog": {
     "description": "Workshop Status vehicle intake (waiting for me, add vehicle), key=value pairs separated by ~. %n% and %name% are replaced at runtime. Source: lib/l10n/fragments/workshop_intake.*.json."
-  }
+  },
+  "washStepVehicle": "Vehicle",
+  "@washStepVehicle": {},
+  "washStepType": "Wash type",
+  "@washStepType": {},
+  "washStepChecklist": "Checklist and chemicals",
+  "@washStepChecklist": {},
+  "washStepPhotos": "Photos",
+  "@washStepPhotos": {},
+  "washStepReview": "Review and save",
+  "@washStepReview": {},
+  "washStepOptional": "Optional",
+  "@washStepOptional": {},
+  "washStepProgress": "{done} of {total} steps done",
+  "@washStepProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "washLoggedBy": "Logged by {name} · today {time}",
+  "@washLoggedBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "washLoggedByNote": "Recorded automatically from your sign-in. It cannot be changed.",
+  "@washLoggedByNote": {},
+  "washLoggedBySelf": "you",
+  "@washLoggedBySelf": {},
+  "washMissingVehicle": "Pick a vehicle",
+  "@washMissingVehicle": {},
+  "washMissingType": "Choose a wash type",
+  "@washMissingType": {},
+  "washMissingEvidence": "Finish the checklist details",
+  "@washMissingEvidence": {},
+  "washLastWash": "Last wash {date}",
+  "@washLastWash": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "washDaysSince": "{count, plural, =0{Washed today} =1{1 day ago} other{{count} days ago}}",
+  "@washDaysSince": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "washNoHistoryForAsset": "No wash recorded yet",
+  "@washNoHistoryForAsset": {},
+  "washDueBadge": "Due for wash",
+  "@washDueBadge": {},
+  "washOverdueBadge": "{days, plural, =1{1 day overdue} other{{days} days overdue}}",
+  "@washOverdueBadge": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "washUpToDateBadge": "Up to date",
+  "@washUpToDateBadge": {},
+  "washHistoryChecking": "Checking wash history...",
+  "@washHistoryChecking": {},
+  "washHistoryUnavailable": "Wash history could not be checked",
+  "@washHistoryUnavailable": {},
+  "washTypeExteriorDesc": "Body wash",
+  "@washTypeExteriorDesc": {},
+  "washTypeInteriorDesc": "Cab cleaning",
+  "@washTypeInteriorDesc": {},
+  "washTypeFullDesc": "Inside and out",
+  "@washTypeFullDesc": {},
+  "washTypeEngineBayDesc": "Engine compartment degrease",
+  "@washTypeEngineBayDesc": {},
+  "washTypeUndercarriageDesc": "Chassis and wheels",
+  "@washTypeUndercarriageDesc": {},
+  "washTypeSteamDesc": "Steam clean",
+  "@washTypeSteamDesc": {},
+  "washTypeWaterlessDesc": "Spray and wipe, no water",
+  "@washTypeWaterlessDesc": {},
+  "washChecklistProgress": "{done} of {total} checked",
+  "@washChecklistProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "washIssuesCount": "{count, plural, =1{1 issue} other{{count} issues}}",
+  "@washIssuesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "washProductsCount": "{count, plural, =0{No products} =1{1 product} other{{count} products}}",
+  "@washProductsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "washPhotosBefore": "Before washing",
+  "@washPhotosBefore": {},
+  "washPhotosAfter": "After washing",
+  "@washPhotosAfter": {},
+  "washPhotosCount": "{count} of {max} photos",
+  "@washPhotosCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "washPhotosOptional": "Optional. Before and after photos prove the wash was done.",
+  "@washPhotosOptional": {},
+  "washReviewTitle": "Check before saving",
+  "@washReviewTitle": {},
+  "washMoreDetails": "More details (optional)",
+  "@washMoreDetails": {},
+  "washReviewChecklistValue": "{checked} of {total} checked · {products}",
+  "@washReviewChecklistValue": {
+    "placeholders": {
+      "checked": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "products": {
+        "type": "String"
+      }
+    }
+  },
+  "washSavedTitle": "Wash saved",
+  "@washSavedTitle": {},
+  "washSavedOfflineMessage": "You are offline. The wash is saved on this phone and uploads automatically when there is a signal.",
+  "@washSavedOfflineMessage": {},
+  "washSavedOnlineMessage": "Saved on this phone and uploading now. Check Sync if it does not appear.",
+  "@washSavedOnlineMessage": {},
+  "washLogAnother": "Log another wash",
+  "@washLogAnother": {},
+  "washHistoryTitle": "Wash history",
+  "@washHistoryTitle": {},
+  "washStatLastSevenDays": "Last 7 days",
+  "@washStatLastSevenDays": {},
+  "washStatThisMonth": "This month",
+  "@washStatThisMonth": {},
+  "washStatTopAsset": "Most washed this month",
+  "@washStatTopAsset": {},
+  "washStatNone": "None yet",
+  "@washStatNone": {},
+  "washCount": "{count, plural, =0{No washes} =1{1 wash} other{{count} washes}}",
+  "@washCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "washFilterAllDates": "All dates",
+  "@washFilterAllDates": {},
+  "washFilterSevenDays": "7 days",
+  "@washFilterSevenDays": {},
+  "washFilterThirtyDays": "30 days",
+  "@washFilterThirtyDays": {},
+  "washFilterPickDates": "Pick dates",
+  "@washFilterPickDates": {},
+  "washFilterAllTypes": "All types",
+  "@washFilterAllTypes": {},
+  "washFilterClear": "Clear filters",
+  "@washFilterClear": {},
+  "washHistoryNoMatch": "No washes match these filters",
+  "@washHistoryNoMatch": {},
+  "washPhotoCountShort": "{count, plural, =1{1 photo} other{{count} photos}}",
+  "@washPhotoCountShort": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "washChangeVehicle": "Change vehicle",
+  "@washChangeVehicle": {},
+  "washStepAreas": "What was washed",
+  "@washStepAreas": {},
+  "washAreasHint": "Tap the sides on the picture and the parts you washed.",
+  "@washAreasHint": {},
+  "washMissingAreas": "Pick what was washed",
+  "@washMissingAreas": {},
+  "washAreaExterior": "Exterior body",
+  "@washAreaExterior": {},
+  "washAreaExteriorDesc": "Body, glass and lights",
+  "@washAreaExteriorDesc": {},
+  "washAreaEngineBay": "Engine bay",
+  "@washAreaEngineBay": {},
+  "washAreaEngineBayDesc": "Engine wash and degrease",
+  "@washAreaEngineBayDesc": {},
+  "washAreaUndercarriage": "Undercarriage",
+  "@washAreaUndercarriage": {},
+  "washAreaUndercarriageDesc": "Chassis and underbody",
+  "@washAreaUndercarriageDesc": {},
+  "washAreaCabin": "Cabin interior",
+  "@washAreaCabin": {},
+  "washAreaCabinDesc": "Seats, floor and dashboard",
+  "@washAreaCabinDesc": {},
+  "washAreaTyresRims": "Tyres and rims",
+  "@washAreaTyresRims": {},
+  "washAreaTyresRimsDesc": "Tyres, rims and wheel arches",
+  "@washAreaTyresRimsDesc": {},
+  "washAreaDrumHopper": "Mixer drum and hopper",
+  "@washAreaDrumHopper": {},
+  "washAreaDrumHopperDesc": "Drum shell, hopper and chute",
+  "@washAreaDrumHopperDesc": {},
+  "washAreaSteam": "Steam degrease",
+  "@washAreaSteam": {},
+  "washAreaSteamDesc": "Hot steam on grease and oil",
+  "@washAreaSteamDesc": {},
+  "washViewsTitle": "Sides washed",
+  "@washViewsTitle": {},
+  "washViewFront": "Front",
+  "@washViewFront": {},
+  "washViewLeft": "Left",
+  "@washViewLeft": {},
+  "washViewRear": "Rear",
+  "@washViewRear": {},
+  "washViewRight": "Right",
+  "@washViewRight": {},
+  "washViewTop": "Top",
+  "@washViewTop": {},
+  "washViewsAll": "All sides",
+  "@washViewsAll": {},
+  "washViewsCount": "{count} of {total} sides",
+  "@washViewsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "washVehiclePictureNone": "No picture for this vehicle type yet. Mark the sides below.",
+  "@washVehiclePictureNone": {},
+  "washVehiclePicturePending": "Pick a vehicle to see its picture.",
+  "@washVehiclePicturePending": {},
+  "washWaterless": "Waterless wash (no water used)",
+  "@washWaterless": {},
+  "washCostLabel": "Cost",
+  "@washCostLabel": {},
+  "washCostNoCharge": "No charge · washed in-house",
+  "@washCostNoCharge": {},
+  "washAreasLabel": "Washed areas",
+  "@washAreasLabel": {},
+  "washRecordedAsType": "Recorded as {type}",
+  "@washRecordedAsType": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "washAreaSelected": "Selected",
+  "@washAreaSelected": {},
+  "washMissingPhotos": "Take before and after photos",
+  "@washMissingPhotos": {},
+  "washPhotosRequired": "At least one before and one after photo, taken with the camera now. Each photo is stamped with its time and location.",
+  "@washPhotosRequired": {},
+  "washPhotoStamp": "{time} · {place}",
+  "@washPhotoStamp": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      },
+      "place": {
+        "type": "String"
+      }
+    }
+  },
+  "washGpsNone": "No GPS",
+  "@washGpsNone": {},
+  "washReadOnlyNote": "This record cannot be changed on the phone. Corrections are made on the web by an administrator, and every change is kept in the audit history.",
+  "@washReadOnlyNote": {},
+  "washRecordIdLabel": "Record ID",
+  "@washRecordIdLabel": {},
+  "washCapturedOnDevice": "Captured on device",
+  "@washCapturedOnDevice": {},
+  "washSiteFromVehicle": "Taken from the vehicle record. It cannot be changed here.",
+  "@washSiteFromVehicle": {},
+  "washAuditTitle": "Audit record",
+  "@washAuditTitle": {},
+  "washNextDue": "Next wash due {date}",
+  "@washNextDue": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "washVerificationLabel": "Supervisor check",
+  "@washVerificationLabel": {},
+  "washVerificationPending": "Waiting for a supervisor to verify",
+  "@washVerificationPending": {},
+  "washVerificationVerified": "Verified by {name} on {time}",
+  "@washVerificationVerified": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "washVerificationNotRequired": "No check needed: logged by a supervisor",
+  "@washVerificationNotRequired": {},
+  "washVerificationUnknown": "Not set up on this server yet",
+  "@washVerificationUnknown": {},
+  "washVerifyAction": "Verify this wash",
+  "@washVerifyAction": {},
+  "washVerifyNoteHint": "Note (optional)",
+  "@washVerifyNoteHint": {},
+  "washVerifyDone": "Wash verified",
+  "@washVerifyDone": {},
+  "washVerifyFailed": "Could not verify this wash. Try again.",
+  "@washVerifyFailed": {},
+  "washVerifyOwnEntry": "You logged this wash, so another supervisor must verify it.",
+  "@washVerifyOwnEntry": {},
+  "washPendingBadge": "To verify",
+  "@washPendingBadge": {}
 }

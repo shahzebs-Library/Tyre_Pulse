@@ -70,7 +70,7 @@ const List<({int maxDimension, int quality})> _kResizeLadder =
 ///
 /// Returns `null` when the user cancelled the picker - not an error, and
 /// callers must not report a failure for it.
-final class WashPhotoCapture {
+class WashPhotoCapture {
   WashPhotoCapture({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
 
   final ImagePicker _picker;

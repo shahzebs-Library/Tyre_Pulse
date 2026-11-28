@@ -9994,4 +9994,421 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get workshopIntakeCopyCatalog =>
       'title=Vehicle intake~subtitle=Add vehicles and confirm the ones sent to you~open=Vehicle intake~waitingBanner=%n% vehicles waiting for you to confirm~waitingBannerOne=1 vehicle waiting for you to confirm~tabWaiting=Waiting for me~tabAdd=Add vehicle~noAccess=You need the Add workshop vehicles or Confirm workshop vehicles permission. Ask your administrator.~loading=Loading vehicles~loadFailed=The vehicles could not be loaded.~emptyTitle=Nothing is waiting for you~emptyMessage=New vehicles routed to you appear here. Pull down to check again.~enteredBy=Entered by %name%~system=System~jobCard=Job card~ownEntry=You entered this one. Another supervisor confirms it.~confirm=Confirm~return=Return~confirmed=Vehicle confirmed.~confirmFailed=The vehicle could not be confirmed.~notRouted=This vehicle is not routed to you.~alreadyConfirmed=Someone already confirmed this vehicle.~refused=You cannot confirm a vehicle you entered.~returnTitle=Return to the person who entered it~reason=Reason~reasonHint=What needs fixing?~reasonShort=Write at least 5 characters.~returned=Vehicle returned.~returnFailed=The vehicle could not be returned.~cancel=Cancel~assetCode=Asset code~assetRequired=Enter the asset code.~site=Workshop site~siteHint=Leave empty to use the vehicle\'s own site~complaint=Complaint~jobCardNo=Job card no (optional)~workType=Work type~priority=Priority~notSet=Not set~send=Send to supervisor~sent=Sent. The supervisor on shift gets a notice.~updatedRow=Updated.~sameRow=Nothing changed.~listedRow=This vehicle is already in the workshop list.~invalidRow=Check the asset code.~releasedRow=This vehicle was already released.~sendFailed=The vehicle could not be sent. Check the signal and try again.~pickCountry=Choose one country first. Vehicles are entered per country.~wt_Repair=Repair~wt_Emergency=Breakdown~wt_Preventive Maintenance=Preventive maintenance~wt_Service=Service~wt_Tyre Change=Tyre change~wt_Inspection=Inspection~wt_Other=Other~pr_Low=Low~pr_Medium=Medium~pr_High=High~pr_Critical=Critical~src_sheet=Shared sheet~src_phone=Phone~src_manual=Typed~src_erp=ERP job card~src_excel_upload=Daily Excel';
+
+  @override
+  String get washStepVehicle => 'Vehicle';
+
+  @override
+  String get washStepType => 'Wash type';
+
+  @override
+  String get washStepChecklist => 'Checklist and chemicals';
+
+  @override
+  String get washStepPhotos => 'Photos';
+
+  @override
+  String get washStepReview => 'Review and save';
+
+  @override
+  String get washStepOptional => 'Optional';
+
+  @override
+  String washStepProgress(int done, int total) {
+    return '$done of $total steps done';
+  }
+
+  @override
+  String washLoggedBy(String name, String time) {
+    return 'Logged by $name · today $time';
+  }
+
+  @override
+  String get washLoggedByNote =>
+      'Recorded automatically from your sign-in. It cannot be changed.';
+
+  @override
+  String get washLoggedBySelf => 'you';
+
+  @override
+  String get washMissingVehicle => 'Pick a vehicle';
+
+  @override
+  String get washMissingType => 'Choose a wash type';
+
+  @override
+  String get washMissingEvidence => 'Finish the checklist details';
+
+  @override
+  String washLastWash(String date) {
+    return 'Last wash $date';
+  }
+
+  @override
+  String washDaysSince(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days ago',
+      one: '1 day ago',
+      zero: 'Washed today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washNoHistoryForAsset => 'No wash recorded yet';
+
+  @override
+  String get washDueBadge => 'Due for wash';
+
+  @override
+  String washOverdueBadge(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days overdue',
+      one: '1 day overdue',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washUpToDateBadge => 'Up to date';
+
+  @override
+  String get washHistoryChecking => 'Checking wash history...';
+
+  @override
+  String get washHistoryUnavailable => 'Wash history could not be checked';
+
+  @override
+  String get washTypeExteriorDesc => 'Body wash';
+
+  @override
+  String get washTypeInteriorDesc => 'Cab cleaning';
+
+  @override
+  String get washTypeFullDesc => 'Inside and out';
+
+  @override
+  String get washTypeEngineBayDesc => 'Engine compartment degrease';
+
+  @override
+  String get washTypeUndercarriageDesc => 'Chassis and wheels';
+
+  @override
+  String get washTypeSteamDesc => 'Steam clean';
+
+  @override
+  String get washTypeWaterlessDesc => 'Spray and wipe, no water';
+
+  @override
+  String washChecklistProgress(int done, int total) {
+    return '$done of $total checked';
+  }
+
+  @override
+  String washIssuesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count issues',
+      one: '1 issue',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String washProductsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count products',
+      one: '1 product',
+      zero: 'No products',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washPhotosBefore => 'Before washing';
+
+  @override
+  String get washPhotosAfter => 'After washing';
+
+  @override
+  String washPhotosCount(int count, int max) {
+    return '$count of $max photos';
+  }
+
+  @override
+  String get washPhotosOptional =>
+      'Optional. Before and after photos prove the wash was done.';
+
+  @override
+  String get washReviewTitle => 'Check before saving';
+
+  @override
+  String get washMoreDetails => 'More details (optional)';
+
+  @override
+  String washReviewChecklistValue(int checked, int total, String products) {
+    return '$checked of $total checked · $products';
+  }
+
+  @override
+  String get washSavedTitle => 'Wash saved';
+
+  @override
+  String get washSavedOfflineMessage =>
+      'You are offline. The wash is saved on this phone and uploads automatically when there is a signal.';
+
+  @override
+  String get washSavedOnlineMessage =>
+      'Saved on this phone and uploading now. Check Sync if it does not appear.';
+
+  @override
+  String get washLogAnother => 'Log another wash';
+
+  @override
+  String get washHistoryTitle => 'Wash history';
+
+  @override
+  String get washStatLastSevenDays => 'Last 7 days';
+
+  @override
+  String get washStatThisMonth => 'This month';
+
+  @override
+  String get washStatTopAsset => 'Most washed this month';
+
+  @override
+  String get washStatNone => 'None yet';
+
+  @override
+  String washCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count washes',
+      one: '1 wash',
+      zero: 'No washes',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washFilterAllDates => 'All dates';
+
+  @override
+  String get washFilterSevenDays => '7 days';
+
+  @override
+  String get washFilterThirtyDays => '30 days';
+
+  @override
+  String get washFilterPickDates => 'Pick dates';
+
+  @override
+  String get washFilterAllTypes => 'All types';
+
+  @override
+  String get washFilterClear => 'Clear filters';
+
+  @override
+  String get washHistoryNoMatch => 'No washes match these filters';
+
+  @override
+  String washPhotoCountShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos',
+      one: '1 photo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get washChangeVehicle => 'Change vehicle';
+
+  @override
+  String get washStepAreas => 'What was washed';
+
+  @override
+  String get washAreasHint =>
+      'Tap the sides on the picture and the parts you washed.';
+
+  @override
+  String get washMissingAreas => 'Pick what was washed';
+
+  @override
+  String get washAreaExterior => 'Exterior body';
+
+  @override
+  String get washAreaExteriorDesc => 'Body, glass and lights';
+
+  @override
+  String get washAreaEngineBay => 'Engine bay';
+
+  @override
+  String get washAreaEngineBayDesc => 'Engine wash and degrease';
+
+  @override
+  String get washAreaUndercarriage => 'Undercarriage';
+
+  @override
+  String get washAreaUndercarriageDesc => 'Chassis and underbody';
+
+  @override
+  String get washAreaCabin => 'Cabin interior';
+
+  @override
+  String get washAreaCabinDesc => 'Seats, floor and dashboard';
+
+  @override
+  String get washAreaTyresRims => 'Tyres and rims';
+
+  @override
+  String get washAreaTyresRimsDesc => 'Tyres, rims and wheel arches';
+
+  @override
+  String get washAreaDrumHopper => 'Mixer drum and hopper';
+
+  @override
+  String get washAreaDrumHopperDesc => 'Drum shell, hopper and chute';
+
+  @override
+  String get washAreaSteam => 'Steam degrease';
+
+  @override
+  String get washAreaSteamDesc => 'Hot steam on grease and oil';
+
+  @override
+  String get washViewsTitle => 'Sides washed';
+
+  @override
+  String get washViewFront => 'Front';
+
+  @override
+  String get washViewLeft => 'Left';
+
+  @override
+  String get washViewRear => 'Rear';
+
+  @override
+  String get washViewRight => 'Right';
+
+  @override
+  String get washViewTop => 'Top';
+
+  @override
+  String get washViewsAll => 'All sides';
+
+  @override
+  String washViewsCount(int count, int total) {
+    return '$count of $total sides';
+  }
+
+  @override
+  String get washVehiclePictureNone =>
+      'No picture for this vehicle type yet. Mark the sides below.';
+
+  @override
+  String get washVehiclePicturePending => 'Pick a vehicle to see its picture.';
+
+  @override
+  String get washWaterless => 'Waterless wash (no water used)';
+
+  @override
+  String get washCostLabel => 'Cost';
+
+  @override
+  String get washCostNoCharge => 'No charge · washed in-house';
+
+  @override
+  String get washAreasLabel => 'Washed areas';
+
+  @override
+  String washRecordedAsType(String type) {
+    return 'Recorded as $type';
+  }
+
+  @override
+  String get washAreaSelected => 'Selected';
+
+  @override
+  String get washMissingPhotos => 'Take before and after photos';
+
+  @override
+  String get washPhotosRequired =>
+      'At least one before and one after photo, taken with the camera now. Each photo is stamped with its time and location.';
+
+  @override
+  String washPhotoStamp(String time, String place) {
+    return '$time · $place';
+  }
+
+  @override
+  String get washGpsNone => 'No GPS';
+
+  @override
+  String get washReadOnlyNote =>
+      'This record cannot be changed on the phone. Corrections are made on the web by an administrator, and every change is kept in the audit history.';
+
+  @override
+  String get washRecordIdLabel => 'Record ID';
+
+  @override
+  String get washCapturedOnDevice => 'Captured on device';
+
+  @override
+  String get washSiteFromVehicle =>
+      'Taken from the vehicle record. It cannot be changed here.';
+
+  @override
+  String get washAuditTitle => 'Audit record';
+
+  @override
+  String washNextDue(String date) {
+    return 'Next wash due $date';
+  }
+
+  @override
+  String get washVerificationLabel => 'Supervisor check';
+
+  @override
+  String get washVerificationPending => 'Waiting for a supervisor to verify';
+
+  @override
+  String washVerificationVerified(String name, String time) {
+    return 'Verified by $name on $time';
+  }
+
+  @override
+  String get washVerificationNotRequired =>
+      'No check needed: logged by a supervisor';
+
+  @override
+  String get washVerificationUnknown => 'Not set up on this server yet';
+
+  @override
+  String get washVerifyAction => 'Verify this wash';
+
+  @override
+  String get washVerifyNoteHint => 'Note (optional)';
+
+  @override
+  String get washVerifyDone => 'Wash verified';
+
+  @override
+  String get washVerifyFailed => 'Could not verify this wash. Try again.';
+
+  @override
+  String get washVerifyOwnEntry =>
+      'You logged this wash, so another supervisor must verify it.';
+
+  @override
+  String get washPendingBadge => 'To verify';
 }

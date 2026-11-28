@@ -530,6 +530,89 @@ String _normalise(String? value) => (value ?? '')
     .replaceAll(RegExp(r'\s+'), ' ')
     .trim();
 
+/// The owner-supplied wash illustration for a vehicle class, or `null` when
+/// no sample exists for that class (generators, plants, trailers, line pumps
+/// and unknown classes), in which case callers keep the real fleet photo.
+///
+/// It uses the SAME classification as [vehiclePhotoAssetFor] and
+/// [vehicleMultiViewAssetFor] so the wash screen never disagrees with the
+/// rest of the app about what a vehicle is. Unlike those, it does not need a
+/// brand match: the wash drawings are unbranded class illustrations.
+/// Forklifts and light trucks are recognised from the description because
+/// the photo classifier has no class of its own for them.
+String? vehicleWashSampleAssetFor({
+  String? assetNo,
+  String? vehicleType,
+  String? make,
+  String? model,
+}) {
+  final String description = _searchableVehicleDescriptionFor(
+    vehicleType: vehicleType,
+    make: make,
+    model: model,
+  );
+  if (description.contains('forklift') || description.contains('fork lift')) {
+    return 'assets/wash_vehicles/forklift.png';
+  }
+  switch (_vehicleVisualKindFor(
+    assetNo: assetNo,
+    vehicleType: vehicleType,
+    make: make,
+    model: model,
+  )) {
+    case _VehicleVisualKind.mixer:
+      return 'assets/wash_types/exterior.png';
+    case _VehicleVisualKind.concretePump:
+      return 'assets/wash_vehicles/concrete_pump.png';
+    case _VehicleVisualKind.wheelLoader:
+      return 'assets/wash_vehicles/wheel_loader.png';
+    case _VehicleVisualKind.skidLoader:
+      return 'assets/wash_vehicles/skid_loader.png';
+    case _VehicleVisualKind.pickup:
+      return 'assets/wash_vehicles/pickup.png';
+    case _VehicleVisualKind.bus:
+      if (description.contains('hiace') || description.contains('hi ace')) {
+        return 'assets/wash_vehicles/hiace_van.png';
+      }
+      const List<String> short = <String>[
+        'coaster',
+        'rosa',
+        'mini',
+        'short',
+        '26 seater',
+        '30 seater',
+        '32 seater',
+      ];
+      return short.any(description.contains)
+          ? 'assets/wash_vehicles/short_bus.png'
+          : 'assets/wash_vehicles/long_bus.png';
+    case _VehicleVisualKind.genericRoadVehicle:
+      const List<String> light = <String>[
+        'isuzu',
+        'canter',
+        'light truck',
+        'npr',
+        'nqr',
+        'box truck',
+        'dyna',
+      ];
+      return light.any(description.contains)
+          ? 'assets/wash_vehicles/light_truck.png'
+          : null;
+    case _VehicleVisualKind.linePump:
+    case _VehicleVisualKind.trailer:
+    case _VehicleVisualKind.generator:
+    case _VehicleVisualKind.chiller:
+    case _VehicleVisualKind.batchingPlant:
+    case _VehicleVisualKind.placingBoom:
+    case _VehicleVisualKind.stationaryPump:
+    case _VehicleVisualKind.towablePump:
+    case _VehicleVisualKind.tyrelessEquipment:
+    case _VehicleVisualKind.unknown:
+      return null;
+  }
+}
+
 String? _multiViewCatalogPath(String id) =>
     vehicleMultiViewCatalogEntry(id)?.assetPath;
 

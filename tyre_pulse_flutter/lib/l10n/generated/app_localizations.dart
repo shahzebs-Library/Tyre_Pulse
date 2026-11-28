@@ -17405,6 +17405,672 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'title=Vehicle intake~subtitle=Add vehicles and confirm the ones sent to you~open=Vehicle intake~waitingBanner=%n% vehicles waiting for you to confirm~waitingBannerOne=1 vehicle waiting for you to confirm~tabWaiting=Waiting for me~tabAdd=Add vehicle~noAccess=You need the Add workshop vehicles or Confirm workshop vehicles permission. Ask your administrator.~loading=Loading vehicles~loadFailed=The vehicles could not be loaded.~emptyTitle=Nothing is waiting for you~emptyMessage=New vehicles routed to you appear here. Pull down to check again.~enteredBy=Entered by %name%~system=System~jobCard=Job card~ownEntry=You entered this one. Another supervisor confirms it.~confirm=Confirm~return=Return~confirmed=Vehicle confirmed.~confirmFailed=The vehicle could not be confirmed.~notRouted=This vehicle is not routed to you.~alreadyConfirmed=Someone already confirmed this vehicle.~refused=You cannot confirm a vehicle you entered.~returnTitle=Return to the person who entered it~reason=Reason~reasonHint=What needs fixing?~reasonShort=Write at least 5 characters.~returned=Vehicle returned.~returnFailed=The vehicle could not be returned.~cancel=Cancel~assetCode=Asset code~assetRequired=Enter the asset code.~site=Workshop site~siteHint=Leave empty to use the vehicle\'s own site~complaint=Complaint~jobCardNo=Job card no (optional)~workType=Work type~priority=Priority~notSet=Not set~send=Send to supervisor~sent=Sent. The supervisor on shift gets a notice.~updatedRow=Updated.~sameRow=Nothing changed.~listedRow=This vehicle is already in the workshop list.~invalidRow=Check the asset code.~releasedRow=This vehicle was already released.~sendFailed=The vehicle could not be sent. Check the signal and try again.~pickCountry=Choose one country first. Vehicles are entered per country.~wt_Repair=Repair~wt_Emergency=Breakdown~wt_Preventive Maintenance=Preventive maintenance~wt_Service=Service~wt_Tyre Change=Tyre change~wt_Inspection=Inspection~wt_Other=Other~pr_Low=Low~pr_Medium=Medium~pr_High=High~pr_Critical=Critical~src_sheet=Shared sheet~src_phone=Phone~src_manual=Typed~src_erp=ERP job card~src_excel_upload=Daily Excel'**
   String get workshopIntakeCopyCatalog;
+
+  /// No description provided for @washStepVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Vehicle'**
+  String get washStepVehicle;
+
+  /// No description provided for @washStepType.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash type'**
+  String get washStepType;
+
+  /// No description provided for @washStepChecklist.
+  ///
+  /// In en, this message translates to:
+  /// **'Checklist and chemicals'**
+  String get washStepChecklist;
+
+  /// No description provided for @washStepPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get washStepPhotos;
+
+  /// No description provided for @washStepReview.
+  ///
+  /// In en, this message translates to:
+  /// **'Review and save'**
+  String get washStepReview;
+
+  /// No description provided for @washStepOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional'**
+  String get washStepOptional;
+
+  /// No description provided for @washStepProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} steps done'**
+  String washStepProgress(int done, int total);
+
+  /// No description provided for @washLoggedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Logged by {name} · today {time}'**
+  String washLoggedBy(String name, String time);
+
+  /// No description provided for @washLoggedByNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded automatically from your sign-in. It cannot be changed.'**
+  String get washLoggedByNote;
+
+  /// No description provided for @washLoggedBySelf.
+  ///
+  /// In en, this message translates to:
+  /// **'you'**
+  String get washLoggedBySelf;
+
+  /// No description provided for @washMissingVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a vehicle'**
+  String get washMissingVehicle;
+
+  /// No description provided for @washMissingType.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a wash type'**
+  String get washMissingType;
+
+  /// No description provided for @washMissingEvidence.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish the checklist details'**
+  String get washMissingEvidence;
+
+  /// No description provided for @washLastWash.
+  ///
+  /// In en, this message translates to:
+  /// **'Last wash {date}'**
+  String washLastWash(String date);
+
+  /// No description provided for @washDaysSince.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Washed today} =1{1 day ago} other{{count} days ago}}'**
+  String washDaysSince(int count);
+
+  /// No description provided for @washNoHistoryForAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'No wash recorded yet'**
+  String get washNoHistoryForAsset;
+
+  /// No description provided for @washDueBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Due for wash'**
+  String get washDueBadge;
+
+  /// No description provided for @washOverdueBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day overdue} other{{days} days overdue}}'**
+  String washOverdueBadge(int days);
+
+  /// No description provided for @washUpToDateBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get washUpToDateBadge;
+
+  /// No description provided for @washHistoryChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking wash history...'**
+  String get washHistoryChecking;
+
+  /// No description provided for @washHistoryUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash history could not be checked'**
+  String get washHistoryUnavailable;
+
+  /// No description provided for @washTypeExteriorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Body wash'**
+  String get washTypeExteriorDesc;
+
+  /// No description provided for @washTypeInteriorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Cab cleaning'**
+  String get washTypeInteriorDesc;
+
+  /// No description provided for @washTypeFullDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Inside and out'**
+  String get washTypeFullDesc;
+
+  /// No description provided for @washTypeEngineBayDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine compartment degrease'**
+  String get washTypeEngineBayDesc;
+
+  /// No description provided for @washTypeUndercarriageDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Chassis and wheels'**
+  String get washTypeUndercarriageDesc;
+
+  /// No description provided for @washTypeSteamDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Steam clean'**
+  String get washTypeSteamDesc;
+
+  /// No description provided for @washTypeWaterlessDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Spray and wipe, no water'**
+  String get washTypeWaterlessDesc;
+
+  /// No description provided for @washChecklistProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total} checked'**
+  String washChecklistProgress(int done, int total);
+
+  /// No description provided for @washIssuesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 issue} other{{count} issues}}'**
+  String washIssuesCount(int count);
+
+  /// No description provided for @washProductsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No products} =1{1 product} other{{count} products}}'**
+  String washProductsCount(int count);
+
+  /// No description provided for @washPhotosBefore.
+  ///
+  /// In en, this message translates to:
+  /// **'Before washing'**
+  String get washPhotosBefore;
+
+  /// No description provided for @washPhotosAfter.
+  ///
+  /// In en, this message translates to:
+  /// **'After washing'**
+  String get washPhotosAfter;
+
+  /// No description provided for @washPhotosCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {max} photos'**
+  String washPhotosCount(int count, int max);
+
+  /// No description provided for @washPhotosOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Optional. Before and after photos prove the wash was done.'**
+  String get washPhotosOptional;
+
+  /// No description provided for @washReviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check before saving'**
+  String get washReviewTitle;
+
+  /// No description provided for @washMoreDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'More details (optional)'**
+  String get washMoreDetails;
+
+  /// No description provided for @washReviewChecklistValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{checked} of {total} checked · {products}'**
+  String washReviewChecklistValue(int checked, int total, String products);
+
+  /// No description provided for @washSavedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash saved'**
+  String get washSavedTitle;
+
+  /// No description provided for @washSavedOfflineMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You are offline. The wash is saved on this phone and uploads automatically when there is a signal.'**
+  String get washSavedOfflineMessage;
+
+  /// No description provided for @washSavedOnlineMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved on this phone and uploading now. Check Sync if it does not appear.'**
+  String get washSavedOnlineMessage;
+
+  /// No description provided for @washLogAnother.
+  ///
+  /// In en, this message translates to:
+  /// **'Log another wash'**
+  String get washLogAnother;
+
+  /// No description provided for @washHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash history'**
+  String get washHistoryTitle;
+
+  /// No description provided for @washStatLastSevenDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get washStatLastSevenDays;
+
+  /// No description provided for @washStatThisMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get washStatThisMonth;
+
+  /// No description provided for @washStatTopAsset.
+  ///
+  /// In en, this message translates to:
+  /// **'Most washed this month'**
+  String get washStatTopAsset;
+
+  /// No description provided for @washStatNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None yet'**
+  String get washStatNone;
+
+  /// No description provided for @washCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No washes} =1{1 wash} other{{count} washes}}'**
+  String washCount(int count);
+
+  /// No description provided for @washFilterAllDates.
+  ///
+  /// In en, this message translates to:
+  /// **'All dates'**
+  String get washFilterAllDates;
+
+  /// No description provided for @washFilterSevenDays.
+  ///
+  /// In en, this message translates to:
+  /// **'7 days'**
+  String get washFilterSevenDays;
+
+  /// No description provided for @washFilterThirtyDays.
+  ///
+  /// In en, this message translates to:
+  /// **'30 days'**
+  String get washFilterThirtyDays;
+
+  /// No description provided for @washFilterPickDates.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick dates'**
+  String get washFilterPickDates;
+
+  /// No description provided for @washFilterAllTypes.
+  ///
+  /// In en, this message translates to:
+  /// **'All types'**
+  String get washFilterAllTypes;
+
+  /// No description provided for @washFilterClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get washFilterClear;
+
+  /// No description provided for @washHistoryNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No washes match these filters'**
+  String get washHistoryNoMatch;
+
+  /// No description provided for @washPhotoCountShort.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo} other{{count} photos}}'**
+  String washPhotoCountShort(int count);
+
+  /// No description provided for @washChangeVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change vehicle'**
+  String get washChangeVehicle;
+
+  /// No description provided for @washStepAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'What was washed'**
+  String get washStepAreas;
+
+  /// No description provided for @washAreasHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the sides on the picture and the parts you washed.'**
+  String get washAreasHint;
+
+  /// No description provided for @washMissingAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick what was washed'**
+  String get washMissingAreas;
+
+  /// No description provided for @washAreaExterior.
+  ///
+  /// In en, this message translates to:
+  /// **'Exterior body'**
+  String get washAreaExterior;
+
+  /// No description provided for @washAreaExteriorDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Body, glass and lights'**
+  String get washAreaExteriorDesc;
+
+  /// No description provided for @washAreaEngineBay.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine bay'**
+  String get washAreaEngineBay;
+
+  /// No description provided for @washAreaEngineBayDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine wash and degrease'**
+  String get washAreaEngineBayDesc;
+
+  /// No description provided for @washAreaUndercarriage.
+  ///
+  /// In en, this message translates to:
+  /// **'Undercarriage'**
+  String get washAreaUndercarriage;
+
+  /// No description provided for @washAreaUndercarriageDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Chassis and underbody'**
+  String get washAreaUndercarriageDesc;
+
+  /// No description provided for @washAreaCabin.
+  ///
+  /// In en, this message translates to:
+  /// **'Cabin interior'**
+  String get washAreaCabin;
+
+  /// No description provided for @washAreaCabinDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Seats, floor and dashboard'**
+  String get washAreaCabinDesc;
+
+  /// No description provided for @washAreaTyresRims.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres and rims'**
+  String get washAreaTyresRims;
+
+  /// No description provided for @washAreaTyresRimsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Tyres, rims and wheel arches'**
+  String get washAreaTyresRimsDesc;
+
+  /// No description provided for @washAreaDrumHopper.
+  ///
+  /// In en, this message translates to:
+  /// **'Mixer drum and hopper'**
+  String get washAreaDrumHopper;
+
+  /// No description provided for @washAreaDrumHopperDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Drum shell, hopper and chute'**
+  String get washAreaDrumHopperDesc;
+
+  /// No description provided for @washAreaSteam.
+  ///
+  /// In en, this message translates to:
+  /// **'Steam degrease'**
+  String get washAreaSteam;
+
+  /// No description provided for @washAreaSteamDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Hot steam on grease and oil'**
+  String get washAreaSteamDesc;
+
+  /// No description provided for @washViewsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sides washed'**
+  String get washViewsTitle;
+
+  /// No description provided for @washViewFront.
+  ///
+  /// In en, this message translates to:
+  /// **'Front'**
+  String get washViewFront;
+
+  /// No description provided for @washViewLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get washViewLeft;
+
+  /// No description provided for @washViewRear.
+  ///
+  /// In en, this message translates to:
+  /// **'Rear'**
+  String get washViewRear;
+
+  /// No description provided for @washViewRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get washViewRight;
+
+  /// No description provided for @washViewTop.
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get washViewTop;
+
+  /// No description provided for @washViewsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All sides'**
+  String get washViewsAll;
+
+  /// No description provided for @washViewsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} of {total} sides'**
+  String washViewsCount(int count, int total);
+
+  /// No description provided for @washVehiclePictureNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No picture for this vehicle type yet. Mark the sides below.'**
+  String get washVehiclePictureNone;
+
+  /// No description provided for @washVehiclePicturePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a vehicle to see its picture.'**
+  String get washVehiclePicturePending;
+
+  /// No description provided for @washWaterless.
+  ///
+  /// In en, this message translates to:
+  /// **'Waterless wash (no water used)'**
+  String get washWaterless;
+
+  /// No description provided for @washCostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost'**
+  String get washCostLabel;
+
+  /// No description provided for @washCostNoCharge.
+  ///
+  /// In en, this message translates to:
+  /// **'No charge · washed in-house'**
+  String get washCostNoCharge;
+
+  /// No description provided for @washAreasLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Washed areas'**
+  String get washAreasLabel;
+
+  /// No description provided for @washRecordedAsType.
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded as {type}'**
+  String washRecordedAsType(String type);
+
+  /// No description provided for @washAreaSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get washAreaSelected;
+
+  /// No description provided for @washMissingPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Take before and after photos'**
+  String get washMissingPhotos;
+
+  /// No description provided for @washPhotosRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'At least one before and one after photo, taken with the camera now. Each photo is stamped with its time and location.'**
+  String get washPhotosRequired;
+
+  /// No description provided for @washPhotoStamp.
+  ///
+  /// In en, this message translates to:
+  /// **'{time} · {place}'**
+  String washPhotoStamp(String time, String place);
+
+  /// No description provided for @washGpsNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No GPS'**
+  String get washGpsNone;
+
+  /// No description provided for @washReadOnlyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'This record cannot be changed on the phone. Corrections are made on the web by an administrator, and every change is kept in the audit history.'**
+  String get washReadOnlyNote;
+
+  /// No description provided for @washRecordIdLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Record ID'**
+  String get washRecordIdLabel;
+
+  /// No description provided for @washCapturedOnDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Captured on device'**
+  String get washCapturedOnDevice;
+
+  /// No description provided for @washSiteFromVehicle.
+  ///
+  /// In en, this message translates to:
+  /// **'Taken from the vehicle record. It cannot be changed here.'**
+  String get washSiteFromVehicle;
+
+  /// No description provided for @washAuditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Audit record'**
+  String get washAuditTitle;
+
+  /// No description provided for @washNextDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Next wash due {date}'**
+  String washNextDue(String date);
+
+  /// No description provided for @washVerificationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Supervisor check'**
+  String get washVerificationLabel;
+
+  /// No description provided for @washVerificationPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for a supervisor to verify'**
+  String get washVerificationPending;
+
+  /// No description provided for @washVerificationVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified by {name} on {time}'**
+  String washVerificationVerified(String name, String time);
+
+  /// No description provided for @washVerificationNotRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'No check needed: logged by a supervisor'**
+  String get washVerificationNotRequired;
+
+  /// No description provided for @washVerificationUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set up on this server yet'**
+  String get washVerificationUnknown;
+
+  /// No description provided for @washVerifyAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify this wash'**
+  String get washVerifyAction;
+
+  /// No description provided for @washVerifyNoteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Note (optional)'**
+  String get washVerifyNoteHint;
+
+  /// No description provided for @washVerifyDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Wash verified'**
+  String get washVerifyDone;
+
+  /// No description provided for @washVerifyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not verify this wash. Try again.'**
+  String get washVerifyFailed;
+
+  /// No description provided for @washVerifyOwnEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'You logged this wash, so another supervisor must verify it.'**
+  String get washVerifyOwnEntry;
+
+  /// No description provided for @washPendingBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'To verify'**
+  String get washPendingBadge;
 }
 
 class _AppLocalizationsDelegate

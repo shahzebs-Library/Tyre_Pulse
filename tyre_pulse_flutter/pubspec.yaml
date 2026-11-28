@@ -109,4 +109,6 @@ flutter:
     - assets/vehicle_photos/
     - assets/vehicle_multiview/
     - assets/vehicle_multiview_views/
+    - assets/wash_types/
+    - assets/wash_vehicles/
     - assets/document_specs/

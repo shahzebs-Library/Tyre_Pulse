@@ -714,10 +714,11 @@ void main() {
     // intake on the phone (waiting for me, add vehicle).
     // 2884 -> 2995: merged branch keys.
     // 2995 -> 2996: merged branch keys.
-    test('en, ar and ur each carry exactly 2996 translatable keys today', () {
-      expect(_translatableKeys(en).length, 2996);
-      expect(_translatableKeys(ar).length, 2996);
-      expect(_translatableKeys(ur).length, 2996);
+    // 2996 -> 3006: merged branch keys.
+    test('en, ar and ur each carry exactly 3006 translatable keys today', () {
+      expect(_translatableKeys(en).length, 3006);
+      expect(_translatableKeys(ar).length, 3006);
+      expect(_translatableKeys(ur).length, 3006);
     });
   });
 

@@ -71,6 +71,39 @@ String profileDraftResumeLocation(ProfileDraftEntry entry) {
   }
 }
 
+/// Opens [entry] where it resumes, through [router]. Shared with the quick
+/// drafts sheet.
+Future<void> resumeProfileDraft(
+  GoRouter router,
+  ProfileDraftEntry entry,
+) async {
+  final String location = profileDraftResumeLocation(entry);
+  switch (entry.kind) {
+    case ProfileDraftKind.checklist:
+      // Same call the checklists hub makes; back returns here.
+      await router.push<Object?>(location);
+    case ProfileDraftKind.inspection:
+      // Same call Home's "Resume inspection" row makes: the wizard lives on
+      // the Inspect branch.
+      router.go(location);
+  }
+}
+
+/// The title a draft is listed under: the checklist's own title, else its
+/// template, else the kind; an inspection's asset.
+String profileDraftTitle(AppLocalizations l10n, ProfileDraftEntry entry) {
+  final String asset = entry.assetNo.trim();
+  if (entry.kind == ProfileDraftKind.inspection) {
+    return asset.isEmpty ? l10n.profileDraftKindInspection : asset;
+  }
+  final String customTitle = entry.title?.trim() ?? '';
+  if (customTitle.isNotEmpty) return customTitle;
+  final String templateName = entry.templateName?.trim() ?? '';
+  return templateName.isNotEmpty
+      ? templateName
+      : l10n.profileDraftKindChecklist;
+}
+
 class ProfileDraftsScreen extends ConsumerStatefulWidget {
   const ProfileDraftsScreen({super.key});
 
@@ -91,16 +124,7 @@ class _ProfileDraftsScreenState extends ConsumerState<ProfileDraftsScreen> {
   }
 
   Future<void> _resume(ProfileDraftEntry entry) async {
-    final String location = profileDraftResumeLocation(entry);
-    switch (entry.kind) {
-      case ProfileDraftKind.checklist:
-        // Same call the checklists hub makes; back returns here.
-        await GoRouter.of(context).push<Object?>(location);
-      case ProfileDraftKind.inspection:
-        // Same call Home's "Resume inspection" row makes: the wizard lives
-        // on the Inspect branch.
-        GoRouter.of(context).go(location);
-    }
+    await resumeProfileDraft(GoRouter.of(context), entry);
     if (mounted) _refresh();
   }
 
@@ -216,15 +240,7 @@ class _DraftCard extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
     final bool isChecklist = entry.kind == ProfileDraftKind.checklist;
     final String asset = entry.assetNo.trim();
-    final String customTitle = entry.title?.trim() ?? '';
-    final String templateName = entry.templateName?.trim() ?? '';
-    final String title = isChecklist
-        ? (customTitle.isNotEmpty
-            ? customTitle
-            : templateName.isNotEmpty
-                ? templateName
-                : l10n.profileDraftKindChecklist)
-        : (asset.isEmpty ? l10n.profileDraftKindInspection : asset);
+    final String title = profileDraftTitle(l10n, entry);
     final List<String> detail = <String>[
       if (isChecklist) (asset.isEmpty ? l10n.profileDraftNoAsset : asset),
       if (!isChecklist && (entry.vehicleType?.trim().isNotEmpty ?? false))

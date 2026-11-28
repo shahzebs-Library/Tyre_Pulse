@@ -3993,5 +3993,15 @@
   "washVerifyDone": "دھلائی کی تصدیق ہو گئی",
   "washVerifyFailed": "اس دھلائی کی تصدیق نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
   "washVerifyOwnEntry": "یہ دھلائی آپ نے درج کی ہے، اس لیے کوئی اور سپروائزر اس کی تصدیق کرے گا۔",
-  "washPendingBadge": "تصدیق باقی"
+  "washPendingBadge": "تصدیق باقی",
+  "syncSheetAllSynced": "سب کچھ ہم آہنگ ہو گیا",
+  "syncSheetLastAttempt": "آخری کوشش {ago}",
+  "syncSheetNoAttempt": "ابھی تک ہم آہنگی کی کوئی کوشش نہیں",
+  "syncSheetWaiting": "{count, plural, =1{1 منتظر} other{{count} منتظر}}",
+  "syncSheetNeedsAttention": "{count, plural, =1{1 توجہ طلب} other{{count} توجہ طلب}}",
+  "sheetSeeAll": "سب دیکھیں ({count})",
+  "timeAgoJustNow": "ابھی",
+  "timeAgoMinutes": "{count} منٹ پہلے",
+  "timeAgoHours": "{count} گھنٹے پہلے",
+  "timeAgoDays": "{count} دن پہلے"
 }

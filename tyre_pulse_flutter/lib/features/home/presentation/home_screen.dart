@@ -123,6 +123,7 @@ import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/my_work/presentation/my_work_widgets.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_sheet.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/store_history_copy.dart';
 import 'package:tyre_pulse/features/stock_count/presentation/store_history_screen.dart';
@@ -514,6 +515,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         pendingSync: pendingSync,
                         notificationCount: _scalarCountText(notificationCount),
                         onSiteTap: () => _showSite(workspace, l10n),
+                        onSyncTap: () => unawaited(showSyncQueueSheet(context)),
                         onNotifications: () =>
                             context.push(const NotificationsRoute().location),
                       ),
@@ -710,6 +712,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   pendingSync: pendingSync,
                   notificationCount: _scalarCountText(notificationCount),
                   onSiteTap: () => _showSite(workspace, l10n),
+                  onSyncTap: () => unawaited(showSyncQueueSheet(context)),
                   onNotifications: () =>
                       context.push(const NotificationsRoute().location),
                 ),
@@ -1103,7 +1106,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         label: l10n.homeSyncStatLabel,
         state: pendingSync,
         value: (int v) => '$v',
-        onTap: () => context.go(const ProfileRoute().location),
+        onTap: () => unawaited(showSyncQueueSheet(context)),
       ),
       if (alerts != null)
         tile<List<TyreAlert>>(
@@ -1372,6 +1375,7 @@ class _HomeHeader extends StatelessWidget {
     required this.pendingSync,
     required this.notificationCount,
     required this.onSiteTap,
+    required this.onSyncTap,
     required this.onNotifications,
   });
 
@@ -1381,6 +1385,9 @@ class _HomeHeader extends StatelessWidget {
   final AsyncValue<int> pendingSync;
   final String notificationCount;
   final VoidCallback onSiteTap;
+
+  /// Opens the quick sync sheet (the status chip).
+  final VoidCallback onSyncTap;
   final VoidCallback onNotifications;
 
   @override
@@ -1482,7 +1489,11 @@ class _HomeHeader extends StatelessWidget {
               country: country,
               onTap: onSiteTap,
             ),
-            _HomeSyncStatus(l10n: l10n, pending: pendingSync),
+            _HomeSyncStatus(
+              l10n: l10n,
+              pending: pendingSync,
+              onTap: onSyncTap,
+            ),
           ],
         ),
       ],
@@ -1643,10 +1654,15 @@ class _SiteChip extends StatelessWidget {
 /// "Online": it says all changes are synced, how many are waiting, or that
 /// the queue could not be read.
 class _HomeSyncStatus extends StatelessWidget {
-  const _HomeSyncStatus({required this.l10n, required this.pending});
+  const _HomeSyncStatus({
+    required this.l10n,
+    required this.pending,
+    required this.onTap,
+  });
 
   final AppLocalizations l10n;
   final AsyncValue<int> pending;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1673,30 +1689,32 @@ class _HomeSyncStatus extends StatelessWidget {
     return ConstrainedBox(
       key: HomeScreenKeys.syncStatus,
       constraints: const BoxConstraints(maxWidth: 240),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: tone.soft,
+      child: Material(
+        color: tone.soft,
+        borderRadius: BorderRadius.circular(TpRadius.pill),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(TpRadius.pill),
-        ),
-        child: Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(8, 6, 10, 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              TpIcon(icon, size: 16, color: tone.base),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: tone.onSoft,
-                        fontWeight: FontWeight.w800,
-                      ),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(8, 6, 10, 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TpIcon(icon, size: 16, color: tone.base),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: tone.onSoft,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

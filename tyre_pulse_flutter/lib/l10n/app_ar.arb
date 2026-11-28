@@ -3993,5 +3993,15 @@
   "washVerifyDone": "تم التحقق من الغسيل",
   "washVerifyFailed": "تعذر التحقق من هذا الغسيل. حاول مرة أخرى.",
   "washVerifyOwnEntry": "أنت من سجّل هذا الغسيل، لذا يجب أن يتحقق منه مشرف آخر.",
-  "washPendingBadge": "بانتظار التحقق"
+  "washPendingBadge": "بانتظار التحقق",
+  "syncSheetAllSynced": "تمت المزامنة بالكامل",
+  "syncSheetLastAttempt": "آخر محاولة {ago}",
+  "syncSheetNoAttempt": "لا توجد محاولة مزامنة بعد",
+  "syncSheetWaiting": "{count, plural, =1{عنصر واحد بالانتظار} other{{count} بالانتظار}}",
+  "syncSheetNeedsAttention": "{count, plural, =1{عنصر واحد يحتاج إلى متابعة} other{{count} تحتاج إلى متابعة}}",
+  "sheetSeeAll": "عرض الكل ({count})",
+  "timeAgoJustNow": "الآن",
+  "timeAgoMinutes": "منذ {count} دقيقة",
+  "timeAgoHours": "منذ {count} ساعة",
+  "timeAgoDays": "منذ {count} يوم"
 }

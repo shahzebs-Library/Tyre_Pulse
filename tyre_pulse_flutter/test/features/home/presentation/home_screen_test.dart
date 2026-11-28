@@ -41,6 +41,8 @@ import 'package:tyre_pulse/features/my_work/data/my_work_loader.dart';
 import 'package:tyre_pulse/features/my_work/domain/my_work_item.dart';
 import 'package:tyre_pulse/features/my_work/my_work_providers.dart';
 import 'package:tyre_pulse/features/notifications/notifications_providers.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_sheet.dart';
+import 'package:tyre_pulse/features/profile/sync_queue_providers.dart';
 import 'package:tyre_pulse/features/stock_count/domain/stock_item.dart';
 import 'package:tyre_pulse/features/stock_count/stock_count_providers.dart';
 
@@ -180,6 +182,15 @@ Future<void> _pumpHome(
           ? Future<List<HomeRecentAsset>>.value(const <HomeRecentAsset>[])
           : recent(),
     ),
+    // The quick sync sheet the sync chip and tile open. Overridden so a tap
+    // test never touches the offline database, connectivity or Workmanager.
+    syncQueueEntriesProvider.overrideWith(
+      (Ref ref) => Stream<List<SyncQueueEntry>>.value(const <SyncQueueEntry>[]),
+    ),
+    syncRunStateProvider.overrideWith(
+      (Ref ref) => Stream<SyncRunState>.value(const SyncRunState()),
+    ),
+    syncQueueOnlineProvider.overrideWith((Ref ref) => Stream<bool>.value(true)),
   ];
 
   final Widget app = router == null
@@ -409,6 +420,30 @@ void main() {
       expect(find.text('Online'), findsNothing);
     },
   );
+
+  testWidgets('tapping the sync status opens the quick sync sheet', (
+    WidgetTester tester,
+  ) async {
+    await _pumpHome(tester, access: _admin);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(HomeScreenKeys.syncStatus));
+    await tester.pumpAndSettle();
+    expect(find.byType(SyncQueueSheet), findsOneWidget);
+    expect(find.textContaining('All synced'), findsOneWidget);
+  });
+
+  testWidgets('the Pending sync summary tile opens the quick sync sheet', (
+    WidgetTester tester,
+  ) async {
+    await _pumpHome(tester, access: _admin);
+    await tester.pumpAndSettle();
+    final Finder tile = find.byKey(HomeScreenKeys.summaryTile('sync'));
+    await tester.ensureVisible(tile);
+    await tester.pumpAndSettle();
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+    expect(find.byType(SyncQueueSheet), findsOneWidget);
+  });
 
   testWidgets('an empty queue reads as all synced', (
     WidgetTester tester,

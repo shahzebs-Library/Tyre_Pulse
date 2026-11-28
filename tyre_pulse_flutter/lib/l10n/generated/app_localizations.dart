@@ -18077,6 +18077,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'To verify'**
   String get washPendingBadge;
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'All synced'**
+  String get syncSheetAllSynced;
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'last attempt {ago}'**
+  String syncSheetLastAttempt(String ago);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'no sync attempt yet'**
+  String get syncSheetNoAttempt;
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 waiting} other{{count} waiting}}'**
+  String syncSheetWaiting(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 needs attention} other{{count} need attention}}'**
+  String syncSheetNeedsAttention(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'See all ({count})'**
+  String sheetSeeAll(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get timeAgoJustNow;
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} min ago'**
+  String timeAgoMinutes(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} h ago'**
+  String timeAgoHours(int count);
+
+  /// Quick sync / drafts sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} d ago'**
+  String timeAgoDays(int count);
 }
 
 class _AppLocalizationsDelegate

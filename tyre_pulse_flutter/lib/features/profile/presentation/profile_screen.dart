@@ -150,8 +150,8 @@ import 'package:tyre_pulse/features/notifications/presentation/notifications_cop
 import 'package:tyre_pulse/features/problem_report/presentation/report_problem_screen.dart';
 import 'package:tyre_pulse/features/profile/data/account_deletion_repository.dart';
 import 'package:tyre_pulse/features/profile/data/saved_signature_repository.dart';
-import 'package:tyre_pulse/features/profile/presentation/profile_drafts_screen.dart';
-import 'package:tyre_pulse/features/profile/presentation/sync_queue_screen.dart';
+import 'package:tyre_pulse/features/profile/presentation/profile_drafts_sheet.dart';
+import 'package:tyre_pulse/features/profile/presentation/sync_queue_sheet.dart';
 import 'package:tyre_pulse/features/profile/profile_providers.dart';
 import 'package:tyre_pulse/features/qr_login/presentation/qr_login_screen.dart';
 
@@ -510,8 +510,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       onRetryAssigned: () =>
                           ref.invalidate(myWorkSnapshotProvider),
                       profileStale: authState.profileStale,
-                      onOpenDrafts: () => unawaited(openProfileDrafts(context)),
-                      onOpenSyncQueue: () => unawaited(openSyncQueue(context)),
+                      onOpenDrafts: () =>
+                          unawaited(openProfileDraftsQuick(context, ref)),
+                      onOpenSyncQueue: () =>
+                          unawaited(showSyncQueueSheet(context)),
                     ),
                     const SizedBox(height: TpSpace.lg),
                     _ProfileGroups(
@@ -535,9 +537,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                         onOpenSignature: () => unawaited(_openSavedSignature()),
                         onOpenSyncQueue: () =>
-                            unawaited(openSyncQueue(context)),
+                            unawaited(showSyncQueueSheet(context)),
                         onOpenDrafts: () =>
-                            unawaited(openProfileDrafts(context)),
+                            unawaited(openProfileDraftsQuick(context, ref)),
                         onReportProblem: () => unawaited(
                           openReportProblem(
                             context,
